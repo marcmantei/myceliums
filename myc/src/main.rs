@@ -617,9 +617,7 @@ async fn main() -> Result<()> {
                 console::style("✦").cyan().bold()
             );
             eprintln!();
-            if prompt_yes_no("  Run the setup wizard to configure your editors?")
-                .unwrap_or(false)
-            {
+            if prompt_yes_no("  Run the setup wizard to configure your editors?").unwrap_or(false) {
                 let _ = setup::wizard::run_wizard(&data_dir()).await;
             } else {
                 // Create data dir so we don't ask again
@@ -813,9 +811,7 @@ async fn cmd_init() -> Result<()> {
 fn is_interactive_command(cmd: &Commands) -> bool {
     !matches!(
         cmd,
-        Commands::Mcp { .. }
-            | Commands::FormatHook
-            | Commands::Session { yes: true, .. }
+        Commands::Mcp { .. } | Commands::FormatHook | Commands::Session { yes: true, .. }
     )
 }
 
@@ -1218,7 +1214,10 @@ async fn cmd_status() -> Result<()> {
     if repos.is_empty() {
         println!("  No repositories analyzed yet.");
     } else {
-        println!("  {:<24} {:>6} {:>8} {:>10}  Last Analyzed", "Name", "Files", "Symbols", "Size");
+        println!(
+            "  {:<24} {:>6} {:>8} {:>10}  Last Analyzed",
+            "Name", "Files", "Symbols", "Size"
+        );
         println!("  {}", "\u{2500}".repeat(74));
 
         let mut total_size = 0u64;

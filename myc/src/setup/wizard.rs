@@ -51,10 +51,7 @@ pub async fn run_wizard(data_dir: &Path) -> Result<bool> {
             style("!").yellow().bold()
         );
         println!("  You can configure editors manually later with:");
-        println!(
-            "    {}",
-            style("myc setup --editor <name>").cyan()
-        );
+        println!("    {}", style("myc setup --editor <name>").cyan());
         println!();
     } else {
         println!(
@@ -83,7 +80,11 @@ pub async fn run_wizard(data_dir: &Path) -> Result<bool> {
     let mut configured_editors = Vec::new();
     if configure_editors {
         for editor in &detected {
-            let editor_name = editor.name.to_lowercase().replace(" ide", "").replace(" code", "");
+            let editor_name = editor
+                .name
+                .to_lowercase()
+                .replace(" ide", "")
+                .replace(" code", "");
             match SetupOrchestrator::setup_editor(&editor_name, &myc_path) {
                 Ok(_) => {
                     println!(
@@ -114,12 +115,8 @@ pub async fn run_wizard(data_dir: &Path) -> Result<bool> {
     );
     println!("  {}", style("─".repeat(50)).dim());
     println!();
-    println!(
-        "  Myceliums can instruct your AI agent to prefer graph-based"
-    );
-    println!(
-        "  tools over grep/file search, improving token efficiency."
-    );
+    println!("  Myceliums can instruct your AI agent to prefer graph-based");
+    println!("  tools over grep/file search, improving token efficiency.");
     println!();
 
     let instructions_enabled = Confirm::new()
@@ -209,23 +206,13 @@ fn print_banner() {
     eprintln!("{}", style(BANNER).cyan());
 }
 
-fn print_summary(
-    configured_editors: &[String],
-    instructions_enabled: bool,
-    analysis_mode: &str,
-) {
+fn print_summary(configured_editors: &[String], instructions_enabled: bool, analysis_mode: &str) {
     println!("  {}", style("═".repeat(54)).dim());
-    println!(
-        "  {}",
-        style("Setup Complete!").green().bold()
-    );
+    println!("  {}", style("Setup Complete!").green().bold());
     println!("  {}", style("═".repeat(54)).dim());
     println!();
     if configured_editors.is_empty() {
-        println!(
-            "    {} No editors configured",
-            style("○").dim()
-        );
+        println!("    {} No editors configured", style("○").dim());
     } else {
         println!(
             "    {} {} editor(s) configured ({})",

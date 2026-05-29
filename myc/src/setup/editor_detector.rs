@@ -239,9 +239,8 @@ impl EditorDetector {
         let home = dirs::home_dir()?;
         let config_path = home.join(".cursor").join("mcp.json");
 
-        let is_installed = config_path.exists()
-            || home.join(".cursor").exists()
-            || Self::has_executable("cursor");
+        let is_installed =
+            config_path.exists() || home.join(".cursor").exists() || Self::has_executable("cursor");
 
         if is_installed {
             Some(DetectedEditor {

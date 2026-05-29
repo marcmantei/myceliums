@@ -97,7 +97,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
       - name: Run verified metrics benchmark
-        run: cargo bench --release -p myceliums-benchmarks -- --bench verified_metrics
+        run: cargo bench --release -p myceliums-benchmarks --bench verified_metrics
       - name: Commit benchmark results
         run: |
           git config user.name "github-actions[bot]"

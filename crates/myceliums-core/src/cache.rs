@@ -94,7 +94,10 @@ pub fn check_cache(
         Ok(files) => files,
         Err(e) => {
             // Git not available (non-git directory) — fall back to timestamp-based check
-            info!("Git unavailable, falling back to timestamp-based cache: {}", e);
+            info!(
+                "Git unavailable, falling back to timestamp-based cache: {}",
+                e
+            );
             return check_cache_by_mtime(repo_info, repo_path, config);
         }
     };
