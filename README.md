@@ -71,6 +71,8 @@ claude
 
 That's it. Claude Code will automatically use the knowledge graph for code exploration.
 
+For the full walkthrough, see the [Getting Started guide](docs/getting-started.md).
+
 ```bash
 # Search symbols
 myc search "authentication"
@@ -255,6 +257,8 @@ On the very first `myc analyze` or semantic/hybrid search, the fastembed model (
 | `myc doctor` | Verify the installation, check all components, detect orphans and stale locks |
 | `myc configure` | View or update global configuration |
 | `myc delete <repo>` | Remove a repository's analysis data |
+
+Full command reference: [docs/reference/commands.md](docs/reference/commands.md)
 
 </details>
 
@@ -548,6 +552,25 @@ The workspace has six crates:
 
 ---
 
+## Documentation
+
+| Topic | Link |
+|-------|------|
+| Getting started | [docs/getting-started.md](docs/getting-started.md) |
+| Editor setup (all 14 editors) | [docs/editors/overview.md](docs/editors/overview.md) |
+| Token savings | [docs/guides/token-savings.md](docs/guides/token-savings.md) |
+| Cypher query guide | [docs/guides/cypher-queries.md](docs/guides/cypher-queries.md) |
+| Search modes | [docs/guides/search-modes.md](docs/guides/search-modes.md) |
+| Large codebases | [docs/guides/large-codebases.md](docs/guides/large-codebases.md) |
+| Non-git projects | [docs/guides/non-git-projects.md](docs/guides/non-git-projects.md) |
+| CLI reference | [docs/reference/commands.md](docs/reference/commands.md) |
+| MCP tools reference | [docs/reference/mcp-tools.md](docs/reference/mcp-tools.md) |
+| Configuration | [docs/reference/config.md](docs/reference/config.md) |
+| Data management | [docs/reference/data-management.md](docs/reference/data-management.md) |
+| FAQ | [docs/faq.md](docs/faq.md) |
+
+---
+
 ## License
 
-AGPL-3.0 — see [LICENSE](LICENSE).
+AGPL-3.0 -- see [LICENSE](LICENSE).

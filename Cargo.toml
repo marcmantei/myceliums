@@ -11,7 +11,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "AGPL-3.0"
 authors = ["Marc Mantei"]
@@ -20,11 +20,11 @@ homepage = "https://github.com/marcmantei/myceliums"
 
 [workspace.dependencies]
 # Internal crates
-myceliums-core = { version = "0.2.0", path = "crates/myceliums-core" }
-myceliums-storage = { version = "0.2.0", path = "crates/myceliums-storage" }
-myceliums-mcp = { version = "0.2.0", path = "crates/myceliums-mcp" }
-myceliums-cypher = { version = "0.2.0", path = "crates/myceliums-cypher" }
-myceliums-http = { version = "0.2.0", path = "crates/myceliums-http" }
+myceliums-core = { version = "0.3.0", path = "crates/myceliums-core" }
+myceliums-storage = { version = "0.3.0", path = "crates/myceliums-storage" }
+myceliums-mcp = { version = "0.3.0", path = "crates/myceliums-mcp" }
+myceliums-cypher = { version = "0.3.0", path = "crates/myceliums-cypher" }
+myceliums-http = { version = "0.3.0", path = "crates/myceliums-http" }
 
 # Core
 tokio = { version = "1", features = ["full"] }
