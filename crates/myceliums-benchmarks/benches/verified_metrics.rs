@@ -76,6 +76,7 @@ fn generate_verified_metrics(_c: &mut Criterion) {
     // Save to file if in release build
     #[cfg(not(debug_assertions))]
     {
+        use std::path::PathBuf;
         let metrics_dir = PathBuf::from("benchmarks/metrics");
         let metrics_file = metrics_dir.join(format!("v{}.json", version));
         if let Err(e) = metrics.save_to_file(&metrics_file) {
