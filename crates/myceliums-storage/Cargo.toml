@@ -1,0 +1,28 @@
+[package]
+name = "myceliums-storage"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "LanceDB-backed persistent store for symbols, files, and relationships in the Myceliums code intelligence engine"
+readme = "../../README.md"
+keywords = ["code-analysis", "knowledge-graph", "lancedb", "vector-database", "developer-tools"]
+categories = ["development-tools", "database-implementations"]
+
+[dependencies]
+lancedb = { workspace = true }
+arrow-array = { workspace = true }
+arrow-data = { workspace = true }
+arrow-schema = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+dirs = { workspace = true }
+futures = "0.3"

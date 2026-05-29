@@ -1,0 +1,301 @@
+# Myceliums Benchmark Methodology
+
+## Overview
+
+This document describes the methodology, assumptions, and validation approach for the Myceliums benchmark suite.
+
+## Benchmark Categories
+
+### 1. Indexing Performance
+
+**Purpose:** Measure the time required to analyze and index source code projects, including tree-sitter parsing overhead.
+
+**Scope:**
+- Includes all operations from initial file discovery through symbol extraction
+- Includes tree-sitter parsing time (part of real-world performance)
+- Does NOT include network I/O or external API calls
+
+**Test Fixtures:**
+- Small TS Project: 10 files, ~500 lines of code total
+- Medium TS Project: 100 files, ~5,000 lines of code total
+- Small Python Project: 10 files, ~400 lines of code total
+- Large Python Project: 500 files, ~20,000 lines of code total
+
+**Metrics Collected:**
+- Duration (milliseconds)
+- Files processed (count)
+- Symbols extracted (count)
+- Peak memory usage (MB)
+
+**Performance Targets:**
+- Small (10 files): < 100ms
+- Medium (100 files): < 1s
+- Large (500 files): < 5s
+
+### 2. Query Performance
+
+**Purpose:** Measure the speed of symbol lookup, relationship traversal, and graph operations.
+
+**Scope:**
+- Assumes data is already indexed in memory or database
+- Measures query execution time only
+- Does NOT include data loading or disk I/O
+
+**Operations:**
+1. **Simple Symbol Lookup** - Find all occurrences of a symbol name
+2. **Complex Call Graph Query** - Traverse call relationships between functions
+3. **Graph Traversal (BFS)** - Breadth-first traversal of dependency graph
+
+**Metrics Collected:**
+- Duration (milliseconds)
+- Results returned (count)
+- Graph nodes/edges traversed (count)
+
+**Performance Targets:**
+- Simple lookup (1000-node graph): < 100ms
+- Complex query (1000-node graph): < 500ms
+- Large traversal (10,000 nodes): < 1s
+
+### 3. Agent Task Performance
+
+**Purpose:** Measure end-to-end performance improvements when agents use Myceliums for code understanding.
+
+**Scope:**
+- Simulates typical agent workflow: understanding → searching → analyzing impact
+- Compares with and without Myceliums indexing
+- Focuses on time reduction and improved accuracy
+
+**Simulated Tasks:**
+1. Code understanding - Parse and analyze code structure
+2. Context search - Find related code through search
+3. Impact analysis - Determine affected code from changes
+4. Combined workflow - Full agent task simulation
+
+**Metrics Collected:**
+- Duration (milliseconds)
+- Tasks completed (count)
+- Accuracy improvement (% where applicable)
+
+**Performance Targets:**
+- 30-40% time reduction with Myceliums
+- 50%+ reduction in tokens needed for context
+- 60%+ improvement in code comprehension accuracy
+
+## Benchmark Framework
+
+### Criterion.rs
+
+We use the Criterion.rs benchmarking framework because it:
+- Provides statistical analysis of results
+- Automatically detects performance regressions
+- Generates HTML reports with detailed charts
+- Integrates well with CI/CD pipelines
+- Has minimal overhead
+
+### Synthetic Test Fixtures
+
+Rather than using real-world codebases, we use procedurally generated fixtures:
+
+**Advantages:**
+- Reproducible across runs and machines
+- Controllable complexity and size
+- No license/copyright issues
+- Fast fixture generation
+- Easy to create variants
+
+**Fixture Generation:**
+- Small fixtures: ~10 files, generated in < 100ms
+- Medium fixtures: ~100 files, generated in < 500ms
+- Large fixtures: ~500 files, generated in < 2s
+
+### Statistical Analysis
+
+Criterion.rs provides:
+- Mean execution time
+- Standard deviation
+- Confidence intervals (95%)
+- Performance regression detection
+- Historical comparison charts
+
+## Validation
+
+### Baseline Validation
+
+Before considering a benchmark valid, we verify:
+
+1. **Determinism** - Same input produces same (or very similar) output
+2. **Isolation** - No interference between benchmarks
+3. **Repeatability** - Results consistent across runs
+4. **Significance** - Measurements above noise floor (> 1ms)
+
+### Performance Assertions
+
+For each benchmark category:
+
+```
+target_time = specification_from_issue * safety_factor
+if actual_time > target_time * 1.5:
+    WARN "Performance may have degraded"
+if actual_time > target_time * 2.0:
+    FAIL "Performance regression detected"
+```
+
+### Regression Detection
+
+Criterion.rs automatically compares against previous runs:
+- Warns on 5% slowdown
+- Fails on 10%+ slowdown
+- Tracks regressions in HTML report
+
+## Output Formats
+
+### JSON Report
+
+```json
+{
+  "version": "0.1.0",
+  "timestamp": "2024-03-14T10:30:00Z",
+  "results": [
+    {
+      "name": "indexing_small_ts_10_files",
+      "category": "indexing",
+      "duration_ms": 45.23,
+      "files_processed": 10,
+      "symbols_found": 28,
+      "memory_peak_mb": 12.5,
+      "timestamp": "2024-03-14T10:30:00Z"
+    }
+  ],
+  "time_reduction_pct": 35.5,
+  "cost_savings_pct": 28.3,
+  "fewer_tool_calls_pct": 42.1
+}
+```
+
+### HTML Report
+
+Generated by Criterion.rs in `target/criterion/`:
+- Interactive charts of performance over time
+- Comparison between different benchmark runs
+- Regression warnings
+- Statistical analysis
+
+### Markdown Report
+
+Human-readable summary for:
+- GitHub PR comments
+- Release notes
+- Project documentation
+
+## CI/CD Integration
+
+### GitHub Actions Workflow
+
+Benchmarks run:
+- **On tags** - For release benchmarks
+- **On main** - Optional, for continuous tracking
+- **On demand** - Via workflow_dispatch
+
+### Artifact Storage
+
+Results stored as:
+1. **Criterion HTML reports** - 90-day retention
+2. **JSON results** - Archived for historical analysis
+3. **PR comments** - Summary posted to related PRs
+
+### Performance Gates
+
+Future enhancement: Fail CI if:
+- Any benchmark exceeds target by > 20%
+- Regression detected > 10%
+- Memory usage exceeds threshold
+
+## Known Limitations
+
+### Synthetic vs. Real Code
+
+The synthetic fixtures may not perfectly represent real-world performance because:
+- Real projects have more varied code patterns
+- Tree-sitter parser has different behavior on real code
+- Search patterns may differ from actual agent queries
+
+**Mitigation:** Plan to add real-world fixtures in post-MVP phase.
+
+### Single-Machine Benchmarks
+
+Results are specific to the machine running them:
+- Different CPUs have different performance profiles
+- Memory speed affects benchmark timing
+- Background processes can introduce variance
+
+**Mitigation:** Run benchmarks in isolated CI environment, same hardware for each run.
+
+### Agent Task Simulation
+
+Agent benchmarks are simulated, not actual:
+- Don't include LLM API latency
+- Don't include real agent planning overhead
+- Are simplified versions of actual tasks
+
+**Mitigation:** These are "best-case" improvements; real-world improvements may be lower.
+
+## Future Enhancements
+
+### Phase 2: Real Benchmarks
+
+- Integrate with actual SWE-bench Lite tasks
+- Use real agent implementations (Claude Sonnet)
+- Include token counting with OpenAI tokenizer
+- Track API costs in results
+
+### Phase 3: Streaming & Performance
+
+- Stream processing benchmarks
+- Memory profiling with allocation tracking
+- CPU flame graphs
+- Network I/O benchmarks
+
+### Phase 4: Dashboard
+
+- Public benchmark dashboard
+- Historical trend tracking
+- Comparison with competing tools
+- Community-submitted benchmarks
+
+## Acceptance Criteria
+
+✅ Benchmark crate with 3 categories created
+✅ Criterion.rs integration working
+✅ Synthetic fixtures implemented and reproducible
+✅ JSON and Markdown report generation
+✅ GitHub Actions workflow for tags
+✅ README with methodology documentation
+✅ Performance targets specified
+✅ `cargo bench` produces valid results
+✅ All tests pass (unit + benchmark compilation)
+
+## Running Benchmarks Locally
+
+```bash
+# Run all benchmarks
+cargo bench -p myceliums-benchmarks
+
+# Run specific category
+cargo bench -p myceliums-benchmarks --bench indexing
+
+# Run with quiet output
+cargo bench -p myceliums-benchmarks -- --quiet
+
+# Run with custom output directory
+cargo bench -p myceliums-benchmarks -- --output-format bencher
+
+# View HTML report
+open target/criterion/report/index.html
+```
+
+## References
+
+- Issue #38 - Original requirements
+- Issue #42 - Website integration and metrics
+- [Criterion.rs Documentation](https://docs.rs/criterion/)
+- [Benchmarking Best Practices](https://easyperf.net/blog/2019/08/02/Microbenchmarking-mistakes)

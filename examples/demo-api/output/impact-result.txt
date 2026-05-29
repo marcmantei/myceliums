@@ -1,0 +1,28 @@
+Impact Report for demo-api
+============================================================
+
+Directly changed symbols (3):
+  [Modified] hash_password (Function) -- auth.py
+  [Modified] verify_password (Function) -- auth.py
+  [Modified] generate_jwt_token (Function) -- auth.py
+
+Indirectly affected symbols (9):
+  [caller at distance 1] login (Function) -- routes/auth_routes.py
+  [caller at distance 1] refresh_token (Function) -- routes/auth_routes.py
+  [caller at distance 1] register (Function) -- routes/auth_routes.py
+  [callee at distance 2] log_request (Function) -- middleware.py
+  [callee at distance 2] get_user_by_username (Function) -- database.py
+  [callee at distance 2] Comment.to_dict (Method) -- models.py
+  [callee at distance 2] get_user (Function) -- routes/user_routes.py
+  [callee at distance 2] get_user_by_email (Function) -- database.py
+  [callee at distance 2] create_user (Function) -- database.py
+
+Affected files (6):
+  auth.py
+  database.py
+  middleware.py
+  models.py
+  routes/auth_routes.py
+  routes/user_routes.py
+
+Risk score: 2.04 / 10.00

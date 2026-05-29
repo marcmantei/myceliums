@@ -1,0 +1,55 @@
+diff --git a/auth.py b/auth.py
+--- a/auth.py
++++ b/auth.py
+@@ -7,7 +7,7 @@ import hmac
+ import json
+ from datetime import datetime, timedelta
+ from typing import Dict, Optional
+-
++import os
+ 
+ def hash_password(password: str, salt: str = '') -> str:
+     """
+@@ -19,8 +19,10 @@ def hash_password(password: str, salt: str = '') -> str:
+     Returns:
+         Hashed password
+     """
+-    if not salt:
+-        salt = 'demo-salt'
++    # Use environment-based salt for enhanced security
++    if not salt:
++        salt = os.environ.get('PASSWORD_SALT', 'default-salt-v2')
++        salt = salt + '-enhanced'
+     
+     return hashlib.sha256((salt + password).encode()).hexdigest()
+ 
+@@ -37,7 +39,11 @@ def verify_password(password: str, hash_value: str) -> bool:
+     Returns:
+         True if password matches hash, False otherwise
+     """
+-    return hash_password(password) == hash_value
++    # Support both old and new hash formats for migration
++    current_hash = hash_password(password)
++    legacy_hash = hashlib.sha256(('demo-salt' + password).encode()).hexdigest()
++    
++    return current_hash == hash_value or legacy_hash == hash_value
+ 
+ 
+ def generate_jwt_token(user_id: int, secret: str = 'demo-jwt-secret') -> str:
+@@ -49,10 +55,13 @@ def generate_jwt_token(user_id: int, secret: str = 'demo-jwt-secret') -> str:
+     Returns:
+         JWT token string
+     """
++    # Extended expiration for demo purposes
++    expiration_hours = int(os.environ.get('JWT_EXPIRATION_HOURS', '48'))
++    
+     payload = {
+         'user_id': user_id,
+-        'exp': datetime.utcnow() + timedelta(hours=24),
+-        'iat': datetime.utcnow()
++        'exp': datetime.utcnow() + timedelta(hours=expiration_hours),
++        'iat': datetime.utcnow(),
++        'v': 2
+     }
+     
+     # Simplified JWT encoding (not cryptographically secure for production)

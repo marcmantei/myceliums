@@ -1,0 +1,38 @@
+From: John Doe <john.doe@example.com>
+To: jane.smith@example.com
+Cc: alice.johnson@example.com
+Subject: Project Status Update
+Date: Mon, 21 Apr 2026 14:30:00 +0200
+Message-ID: <CADc-_xZaBc1234567890@mail.gmail.com>
+In-Reply-To: <CADc-_xYaBc1234567889@mail.gmail.com>
+References: <CADc-_xWaBc1234567888@mail.gmail.com> <CADc-_xYaBc1234567889@mail.gmail.com>
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="boundary123"
+Content-Transfer-Encoding: 7bit
+
+--boundary123
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 7bit
+
+Hi Jane,
+
+I wanted to provide a quick update on the project status. Everything is progressing well and we're on track to meet the deadline.
+
+Key highlights:
+- Core module implementation completed
+- Tests all passing
+- Ready for integration next week
+
+Let me know if you have any questions!
+
+Best regards,
+John
+
+--boundary123
+Content-Type: application/pdf; name="ProjectPlan.pdf"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="ProjectPlan.pdf"
+
+JVBERi0xLjQKJeLjz9MNCjEgMCBvYmo8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+Pg0K
+ZW5kb2JqDQoyIDAgb2JqPDwvVHlwZS9QYWdlcy9LaWRzWzMgMCBSXS9Db3VudCAxPj4NCmVu
+ZG9iag0K--boundary123--

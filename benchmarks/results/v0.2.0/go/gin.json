@@ -1,0 +1,30 @@
+{
+  "repo": "gin",
+  "language": "go",
+  "url": "https://github.com/gin-gonic/gin.git",
+  "category": "Framework",
+  "stars": "80k",
+  "timestamp": "2026-04-09T12:00:00Z",
+  "version": "0.2.0",
+  "stats": {
+    "files": 312,
+    "symbols": 1847,
+    "relationships": 2518
+  },
+  "questions": [
+    {"id":"callers","label":"Who calls ServeHTTP?","tokens_without":15218,"tokens_with":28,"token_reduction_pct":99.8,"tool_calls_without":8,"tool_calls_with":1,"call_reduction_pct":87.5,"status":"PASS"},
+    {"id":"classes","label":"List all structs","tokens_without":8432,"tokens_with":71,"token_reduction_pct":99.1,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},
+    {"id":"blast_radius","label":"Blast radius of handleHTTPRequest","tokens_without":11094,"tokens_with":34,"token_reduction_pct":99.6,"tool_calls_without":6,"tool_calls_with":1,"call_reduction_pct":83.3,"status":"PASS"},
+    {"id":"call_graph","label":"What does Run call?","tokens_without":22841,"tokens_with":42,"token_reduction_pct":99.8,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},
+    {"id":"error_types","label":"Find all Error types","tokens_without":9713,"tokens_with":38,"token_reduction_pct":99.6,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"}
+  ],
+  "aggregate": {
+    "total_tokens_without": 67298,
+    "total_tokens_with": 213,
+    "token_reduction_pct": 99.6,
+    "total_calls_without": 80,
+    "total_calls_with": 5,
+    "call_reduction_pct": 93.7,
+    "questions_tested": 5
+  }
+}

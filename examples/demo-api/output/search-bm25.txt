@@ -1,0 +1,7 @@
+Search results for 'authenticate' in demo-api:
+
+  1. get_current_user (Function) — routes/__init__.py:92-100  [score: 3.82]
+     def get_current_user():
+  2. get_current_user (Function) — routes/auth_routes.py:92-100  [score: 3.82]
+     def get_current_user():
+  3. Demo API - Myceliums Impact Analysis Example (Document) — README.md:1-144  [score: 1.42]

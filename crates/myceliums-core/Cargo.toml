@@ -1,0 +1,75 @@
+[package]
+name = "myceliums-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Code intelligence core — tree-sitter parsing, call-graph construction, community detection, and hybrid search for the Myceliums knowledge engine"
+readme = "README.md"
+keywords = ["code-analysis", "knowledge-graph", "tree-sitter", "call-graph", "developer-tools"]
+categories = ["development-tools", "parser-implementations"]
+
+[features]
+default = ["embeddings"]
+## Enable fastembed-based semantic search and cross-encoder reranking.
+## Disable this feature for a lighter build that only supports BM25 text search.
+embeddings = ["dep:fastembed"]
+## Enable PDF-to-markdown conversion via the opendataloader-pdf CLI tool.
+pdf = []
+## Enable cross-repository comparison and adaptation planning (premium feature).
+cross_repo = ["embeddings"]
+
+[dependencies]
+myceliums-storage = { workspace = true }
+tree-sitter = { workspace = true }
+tree-sitter-typescript = { workspace = true }
+tree-sitter-javascript = { workspace = true }
+tree-sitter-python = { workspace = true }
+tree-sitter-go = { workspace = true }
+tree-sitter-rust = { workspace = true }
+tree-sitter-java = { workspace = true }
+tree-sitter-c-sharp = { workspace = true }
+tree-sitter-c = { workspace = true }
+tree-sitter-cpp = { workspace = true }
+tree-sitter-ruby = { workspace = true }
+tree-sitter-kotlin = { workspace = true }
+tree-sitter-swift = { workspace = true }
+tree-sitter-php = { workspace = true }
+tree-sitter-lua = { workspace = true }
+tree-sitter-zig = { workspace = true }
+tree-sitter-powershell = { workspace = true }
+tree-sitter-elixir = { workspace = true }
+tree-sitter-scala = { workspace = true }
+tree-sitter-objc = { workspace = true }
+tree-sitter-dart = { workspace = true }
+rayon = { workspace = true }
+dashmap = { workspace = true }
+rustc-hash = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+anyhow = { workspace = true }
+fastembed = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+walkdir = { workspace = true }
+regex = { workspace = true }
+graphrs = { workspace = true }
+toml = { workspace = true }
+globset = { workspace = true }
+chrono = { workspace = true }
+notify = { workspace = true }
+notify-debouncer-mini = { workspace = true }
+mail-parser = "0.9"
+reqwest = { workspace = true }
+async-trait = { workspace = true }
+async-imap = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
+async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
+futures = "0.3"
+
+[dev-dependencies]
+tempfile = { workspace = true }

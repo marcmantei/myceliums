@@ -1,0 +1,30 @@
+From: lead-dev@example.com
+To: dev-team@example.com
+Subject: Re: Auth refactoring plan for Q3
+Date: Tue, 15 Apr 2026 14:30:00 +0200
+Message-ID: <refactor-002@example.com>
+In-Reply-To: <audit-001@example.com>
+
+Team,
+
+Following up on the security audit, here is the refactoring plan:
+
+Phase 1 (this sprint):
+- Refactor hash_password to use argon2 instead of SHA256
+- Update verify_password to support both old and new hash formats
+  during the migration period
+- Move JWT secret to environment config
+
+Phase 2 (next sprint):
+- Redesign generate_jwt_token to support refresh token rotation
+- Add rate limiting to the login function in auth_routes
+- Update register to enforce stronger password requirements
+
+The create_user function in database.py will need a migration to
+store the new hash format. The User model in models.py should add
+a hash_version field.
+
+Note: The require_admin decorator needs to be audited separately
+since it chains through require_auth and verify_jwt_token.
+
+Let me know if you have questions.

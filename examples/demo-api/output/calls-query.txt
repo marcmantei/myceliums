@@ -1,0 +1,24 @@
+n.name | m.name
+----------------------------------------
+verify_password | hash_password
+get_user_from_token | verify_jwt_token
+create_user | User
+update_user | get_user
+create_post | Post
+update_post | get_post
+increment_view_count | get_post
+create_comment | Comment
+update_comment | get_comment
+create_app | setup_logging
+create_app | setup_error_handlers
+list_users | log_request
+list_users | get_pagination_params
+list_users | paginate
+list_users | to_dict
+get_user | log_request
+get_user | get_user
+get_user | to_dict
+update_user | log_request
+update_user | update_user
+
+20 row(s)

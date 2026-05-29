@@ -1,0 +1,13 @@
+target/
+.git/
+.github/
+.claude/
+.fastembed_cache/
+website/
+docs/
+benchmarks/
+tests/
+*.md
+!README.md
+.DS_Store
+.gitignore

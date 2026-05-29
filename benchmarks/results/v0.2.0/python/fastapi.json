@@ -1,0 +1,24 @@
+{
+  "repo": "fastapi",
+  "language": "python",
+  "url": "https://github.com/fastapi/fastapi.git",
+  "category": "Framework",
+  "stars": "82k",
+  "timestamp": "2026-03-14T18:10:46Z",
+  "version": "0.2.0",
+  "stats": {
+    "files": 1118,
+    "symbols": 5330,
+    "relationships": 8089
+  },
+  "questions": [{"id":"callers","label":"Who calls solve_dependencies?","tokens_without":29963,"tokens_with":27,"token_reduction_pct":99.9,"tool_calls_without":4,"tool_calls_with":1,"call_reduction_pct":75.0,"status":"PASS"},{"id":"classes","label":"List all classes","tokens_without":51901,"tokens_with":251,"token_reduction_pct":99.5,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"blast_radius","label":"Blast radius of get_request_handler","tokens_without":28223,"tokens_with":23,"token_reduction_pct":99.9,"tool_calls_without":3,"tool_calls_with":1,"call_reduction_pct":66.6,"status":"PASS"},{"id":"error_types","label":"Find all Exception types","tokens_without":38336,"tokens_with":239,"token_reduction_pct":99.3,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"call_graph","label":"What does get_openapi call?","tokens_without":92048,"tokens_with":73,"token_reduction_pct":99.9,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"semantic","label":"Search dependency injection code","tokens_without":48634,"tokens_with":317,"token_reduction_pct":99.3,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"process_flow","label":"Trace request handler flow","tokens_without":28223,"tokens_with":8,"token_reduction_pct":99.9,"tool_calls_without":3,"tool_calls_with":1,"call_reduction_pct":66.6,"status":"PASS"}],
+  "aggregate": {
+    "total_tokens_without": 317328,
+    "total_tokens_with": 938,
+    "token_reduction_pct": 99.7,
+    "total_calls_without": 98,
+    "total_calls_with": 7,
+    "call_reduction_pct": 92.8,
+    "questions_tested": 7
+  }
+}

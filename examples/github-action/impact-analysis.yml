@@ -1,0 +1,27 @@
+# Example workflow: Myceliums Impact Analysis on every PR
+#
+# This workflow automatically analyzes the blast radius of code changes
+# and posts a structured comment on the PR showing what's affected.
+#
+# Copy this file to .github/workflows/impact-analysis.yml in your repo.
+
+name: Impact Analysis
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  impact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for diff
+
+      - uses: marcmantei/myceliums/.github/actions/myceliums-action@main
+        with:
+          depth: 2  # How deep to trace the blast radius (1-5)

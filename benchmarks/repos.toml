@@ -1,0 +1,161 @@
+# Benchmark Repository Registry
+# Used by benchmarks/run.sh to clone, analyze, and validate token reduction
+#
+# Usage:
+#   ./benchmarks/run.sh                          # Run all repos
+#   ./benchmarks/run.sh --language typescript     # Run all TypeScript repos
+#   ./benchmarks/run.sh --repo zod               # Run single repo
+#   ./benchmarks/run.sh --language python --repo fastapi  # Specific
+
+[typescript.zod]
+url = "https://github.com/colinhacks/zod.git"
+branch = "main"
+stars = "35k"
+category = "Validation"
+questions = [
+    { id = "callers", label = "Who calls safeParse?", grep_pattern = "safeParse", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'safeParse' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of addIssueToContext", grep_pattern = "addIssueToContext", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'addIssueToContext' RETURN s.name, s.kind" },
+    { id = "call_graph", label = "What does parse call?", grep_pattern = "parse", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'parse' RETURN s.name, t.name LIMIT 20" },
+    { id = "error_types", label = "Find all Error interfaces", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' AND s.kind = 'Interface' RETURN s.name, s.kind" },
+    { id = "process_flow", label = "Trace parse execution flow", grep_pattern = "parse", processes_entry = "parse" },
+]
+
+[typescript.next]
+url = "https://github.com/vercel/next.js.git"
+branch = "canary"
+stars = "130k"
+category = "Framework"
+questions = [
+    { id = "callers", label = "Who calls renderToHTML?", grep_pattern = "renderToHTML", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'renderToHTML' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of createRouter", grep_pattern = "createRouter", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'createRouter' RETURN s.name, s.kind" },
+    { id = "call_graph", label = "What does build call?", grep_pattern = "build", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'build' RETURN s.name, t.name LIMIT 20" },
+    { id = "error_types", label = "Find all Error types", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' AND s.kind = 'Class' RETURN s.name, s.kind" },
+]
+
+[typescript.trpc]
+url = "https://github.com/trpc/trpc.git"
+branch = "main"
+stars = "36k"
+category = "API Framework"
+questions = [
+    { id = "callers", label = "Who calls createCaller?", grep_pattern = "createCaller", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'createCaller' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of createMiddleware", grep_pattern = "createMiddleware", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'createMiddleware' RETURN s.name, s.kind" },
+    { id = "call_graph", label = "What does router call?", grep_pattern = "router", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'router' RETURN s.name, t.name LIMIT 20" },
+    { id = "error_types", label = "Find all Error types", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20" },
+]
+
+[typescript.prisma]
+url = "https://github.com/prisma/prisma.git"
+branch = "main"
+stars = "41k"
+category = "ORM"
+questions = [
+    { id = "callers", label = "Who calls createClient?", grep_pattern = "createClient", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'createClient' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of migrate", grep_pattern = "migrate", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'migrate' RETURN s.name, s.kind" },
+    { id = "call_graph", label = "What does generate call?", grep_pattern = "generate", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'generate' RETURN s.name, t.name LIMIT 20" },
+    { id = "error_types", label = "Find all Error types", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20" },
+]
+
+[python.fastapi]
+url = "https://github.com/fastapi/fastapi.git"
+branch = "master"
+stars = "82k"
+category = "Framework"
+questions = [
+    { id = "callers", label = "Who calls solve_dependencies?", grep_pattern = "solve_dependencies", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'solve_dependencies' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of get_request_handler", grep_pattern = "get_request_handler", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'get_request_handler' RETURN s.name, s.kind" },
+    { id = "error_types", label = "Find all Exception types", grep_pattern = "Exception", cypher = "MATCH (s) WHERE s.name CONTAINS 'Exception' RETURN s.name, s.kind LIMIT 20" },
+    { id = "call_graph", label = "What does get_openapi call?", grep_pattern = "openapi", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'get_openapi' RETURN s.name, t.name LIMIT 20" },
+    { id = "semantic", label = "Search dependency injection code", grep_pattern = "Depends", search = "dependency injection" },
+    { id = "process_flow", label = "Trace request handler flow", grep_pattern = "get_request_handler", processes_entry = "get_request_handler" },
+]
+
+[python.pydantic]
+url = "https://github.com/pydantic/pydantic.git"
+branch = "main"
+stars = "22k"
+category = "Validation"
+questions = [
+    { id = "callers", label = "Who calls validate_python?", grep_pattern = "validate_python", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'validate_python' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of model_validate", grep_pattern = "model_validate", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'model_validate' RETURN s.name, s.kind" },
+    { id = "error_types", label = "Find all Error types", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20" },
+    { id = "call_graph", label = "What does BaseModel call?", grep_pattern = "BaseModel", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'BaseModel' RETURN s.name, t.name LIMIT 20" },
+]
+
+[python.django]
+url = "https://github.com/django/django.git"
+branch = "main"
+stars = "82k"
+category = "Framework"
+questions = [
+    { id = "callers", label = "Who calls get_response?", grep_pattern = "get_response", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'get_response' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of resolve", grep_pattern = "resolve", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'resolve' RETURN s.name, s.kind" },
+    { id = "error_types", label = "Find all Exception types", grep_pattern = "Exception", cypher = "MATCH (s) WHERE s.name CONTAINS 'Exception' RETURN s.name, s.kind LIMIT 20" },
+    { id = "call_graph", label = "What does setup call?", grep_pattern = "setup", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'setup' RETURN s.name, t.name LIMIT 20" },
+]
+
+[python.langchain]
+url = "https://github.com/langchain-ai/langchain.git"
+branch = "master"
+stars = "100k"
+category = "AI Framework"
+questions = [
+    { id = "callers", label = "Who calls invoke?", grep_pattern = "invoke", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'invoke' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of _call", grep_pattern = "_call", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = '_call' RETURN s.name, s.kind" },
+    { id = "error_types", label = "Find all Error types", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20" },
+    { id = "semantic", label = "Search for chain composition", grep_pattern = "chain", search = "chain composition" },
+]
+
+# ---- JavaScript ----
+
+[javascript.express]
+url = "https://github.com/expressjs/express.git"
+branch = "master"
+stars = "66k"
+category = "Framework"
+questions = [
+    { id = "callers", label = "Who calls app.handle?", grep_pattern = "app.handle", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'handle' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all classes", grep_pattern = "class ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of Router", grep_pattern = "Router", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'Router' RETURN s.name, s.kind" },
+    { id = "call_graph", label = "What does createApplication call?", grep_pattern = "createApplication", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'createApplication' RETURN s.name, t.name LIMIT 20" },
+    { id = "error_types", label = "Find all Error types", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20" },
+    { id = "process_flow", label = "Trace request handling flow", grep_pattern = "handle", processes_entry = "handle" },
+]
+
+# ---- Go ----
+
+[go.gin]
+url = "https://github.com/gin-gonic/gin.git"
+branch = "master"
+stars = "80k"
+category = "Framework"
+questions = [
+    { id = "callers", label = "Who calls ServeHTTP?", grep_pattern = "ServeHTTP", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'ServeHTTP' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all structs", grep_pattern = "type ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of handleHTTPRequest", grep_pattern = "handleHTTPRequest", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'handleHTTPRequest' RETURN s.name, s.kind" },
+    { id = "call_graph", label = "What does Run call?", grep_pattern = "func.*Run", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'Run' RETURN s.name, t.name LIMIT 20" },
+    { id = "error_types", label = "Find all Error types", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20" },
+]
+
+# ---- Rust ----
+
+[rust.tokio]
+url = "https://github.com/tokio-rs/tokio.git"
+branch = "master"
+stars = "28k"
+category = "Runtime"
+questions = [
+    { id = "callers", label = "Who calls spawn?", grep_pattern = "fn spawn", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'spawn' RETURN s.name, s.kind" },
+    { id = "classes", label = "List all structs", grep_pattern = "struct ", cypher = "MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30" },
+    { id = "blast_radius", label = "Blast radius of block_on", grep_pattern = "block_on", cypher = "MATCH (s)-[:CALLS]->(t) WHERE t.name = 'block_on' RETURN s.name, s.kind" },
+    { id = "call_graph", label = "What does Runtime::new call?", grep_pattern = "fn new", cypher = "MATCH (s)-[:CALLS]->(t) WHERE s.name = 'new' AND s.file CONTAINS 'runtime' RETURN s.name, t.name LIMIT 20" },
+    { id = "error_types", label = "Find all Error types", grep_pattern = "Error", cypher = "MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20" },
+]

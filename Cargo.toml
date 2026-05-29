@@ -1,0 +1,114 @@
+[workspace]
+members = [
+    "crates/myceliums-core",
+    "crates/myceliums-storage",
+    "crates/myceliums-mcp",
+    "crates/myceliums-cypher",
+    "crates/myceliums-http",
+    "crates/myceliums-benchmarks",
+    "myc",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2021"
+license = "AGPL-3.0"
+authors = ["Marc Mantei"]
+repository = "https://github.com/marcmantei/myceliums"
+homepage = "https://github.com/marcmantei/myceliums"
+
+[workspace.dependencies]
+# Internal crates
+myceliums-core = { version = "0.2.0", path = "crates/myceliums-core" }
+myceliums-storage = { version = "0.2.0", path = "crates/myceliums-storage" }
+myceliums-mcp = { version = "0.2.0", path = "crates/myceliums-mcp" }
+myceliums-cypher = { version = "0.2.0", path = "crates/myceliums-cypher" }
+myceliums-http = { version = "0.2.0", path = "crates/myceliums-http" }
+
+# Core
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+anyhow = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Storage
+lancedb = "0.26"
+arrow-array = "57"
+arrow-data = "57"
+arrow-schema = "57"
+
+# Parsing
+tree-sitter = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-javascript = "0.25"
+tree-sitter-python = "0.25"
+tree-sitter-go = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-java = "0.23"
+tree-sitter-c-sharp = "0.23"
+tree-sitter-c = "0.24"
+tree-sitter-cpp = "0.23"
+tree-sitter-ruby = "0.23"
+tree-sitter-kotlin = { package = "tree-sitter-kotlin-ng", version = "1.1" }
+tree-sitter-swift = "0.7"
+tree-sitter-php = "0.24"
+tree-sitter-lua = "0.2"
+tree-sitter-zig = "1"
+tree-sitter-powershell = "0.26"
+tree-sitter-elixir = "0.3"
+tree-sitter-scala = "0.25"
+tree-sitter-objc = "3"
+tree-sitter-dart = "0.1"
+
+# Graph
+graphrs = "0.11"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+indicatif = "0.17"
+dialoguer = { version = "0.11", features = ["fuzzy-select"] }
+console = "0.15"
+
+# MCP (Phase 3)
+rmcp = { version = "1.2", features = ["server", "transport-io", "transport-streamable-http-server"] }
+schemars = "0.8"
+tokio-util = "0.7"
+
+# Cypher (Phase 4)
+logos = "0.15"
+
+# Search (Phase 5)
+fastembed = "4"
+
+# Concurrency
+dashmap = "6"
+rustc-hash = "2"
+
+# Parallelism
+rayon = "1.10"
+
+# Utils
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+walkdir = "2"
+dirs = "6"
+toml = "0.8"
+regex = "1"
+globset = "0.4"
+
+# File watching
+notify = "7"
+notify-debouncer-mini = "0.5"
+
+# HTTP / LLM
+reqwest = { version = "0.12", features = ["json"] }
+async-trait = "0.1"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
+tempfile = "3"

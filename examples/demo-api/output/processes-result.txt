@@ -1,0 +1,38 @@
+Processes in demo-api:
+
+  1. create_app flow (3 steps, entry: create_app)
+     Flow: 1. create_app → 2. setup_logging → 3. setup_error_handlers
+
+  2. list_users flow (5 steps, entry: list_users)
+     Flow: 1. list_users → 2. log_request → 3. get_pagination_params → 4. paginate → 5. to_dict
+
+  3. get_user_posts flow (5 steps, entry: get_user_posts)
+     Flow: 1. get_user_posts → 2. log_request → 3. get_user → 4. to_dict → 5. get_posts_by_user
+
+  4. make_admin flow (5 steps, entry: make_admin)
+     Flow: 1. make_admin → 2. log_request → 3. get_user → 4. to_dict → 5. update_user
+
+  5. deactivate_user flow (5 steps, entry: deactivate_user)
+     Flow: 1. deactivate_user → 2. log_request → 3. get_user → 4. to_dict → 5. update_user
+
+  6. register flow (8 steps, entry: register)
+     Flow: 1. register → 2. log_request → 3. get_user_by_username → 4. get_user_by_email → 5. hash_password → 6. create_user → 7. User → 8. to_dict
+
+  7. login flow (7 steps, entry: login)
+     Flow: 1. login → 2. log_request → 3. get_user_by_username → 4. verify_password → 5. hash_password → 6. generate_jwt_token → 7. to_dict
+
+  8. get_current_user flow (4 steps, entry: get_current_user)
+     Flow: 1. get_current_user → 2. log_request → 3. get_user → 4. to_dict
+
+  9. refresh_token flow (5 steps, entry: refresh_token)
+     Flow: 1. refresh_token → 2. log_request → 3. get_user → 4. to_dict → 5. generate_jwt_token
+
+  10. list_posts flow (6 steps, entry: list_posts)
+     Flow: 1. list_posts → 2. log_request → 3. get_pagination_params → 4. get_all_posts → 5. paginate → 6. to_dict
+
+  11. get_post_comments flow (6 steps, entry: get_post_comments)
+     Flow: 1. get_post_comments → 2. log_request → 3. get_post → 4. increment_view_count → 5. get_comments_for_post → 6. to_dict
+
+  12. decorated_function flow (6 steps, entry: decorated_function)
+     Flow: 1. decorated_function → 2. get_user_from_token → 3. verify_jwt_token → 4. get_user → 5. log_request → 6. to_dict
+

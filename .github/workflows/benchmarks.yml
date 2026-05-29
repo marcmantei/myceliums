@@ -1,0 +1,79 @@
+name: Benchmarks
+
+on:
+  # Disabled for v0.1.x — run manually only during optimization phase
+  # Re-enable on push triggers once benchmark suite is stabilized
+  # push:
+  #   tags:
+  #     - 'v*'
+  #   branches:
+  #     - main
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Benchmark Suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run benchmarks
+        run: cargo bench -p myceliums-benchmarks --no-run
+        continue-on-error: true
+
+      - name: Compile benchmarks
+        run: cargo bench -p myceliums-benchmarks -- --verbose
+        continue-on-error: true
+
+      - name: Generate JSON report
+        if: always()
+        run: |
+          mkdir -p benchmarks/results
+          if [ -d target/criterion ]; then
+            find target/criterion -name "*.json" -type f | head -1 | xargs -I {} cp {} benchmarks/results/benchmark-latest.json 2>/dev/null || true
+          fi
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            target/criterion/
+            benchmarks/results/
+          retention-days: 90
+
+      - name: Comment on PR with results
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'benchmarks/results/benchmark-latest.json';
+            if (fs.existsSync(path)) {
+              const results = JSON.parse(fs.readFileSync(path, 'utf8'));
+              const comment = `## 📊 Benchmark Results\n\n**Version:** ${results.version}\n\n**Timestamp:** ${results.timestamp}\n\n[View detailed results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }

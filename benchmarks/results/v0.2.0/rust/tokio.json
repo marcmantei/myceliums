@@ -1,0 +1,30 @@
+{
+  "repo": "tokio",
+  "language": "rust",
+  "url": "https://github.com/tokio-rs/tokio.git",
+  "category": "Runtime",
+  "stars": "28k",
+  "timestamp": "2026-04-09T12:00:00Z",
+  "version": "0.2.0",
+  "stats": {
+    "files": 1024,
+    "symbols": 8493,
+    "relationships": 11247
+  },
+  "questions": [
+    {"id":"callers","label":"Who calls spawn?","tokens_without":42318,"tokens_with":67,"token_reduction_pct":99.8,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},
+    {"id":"classes","label":"List all structs","tokens_without":28714,"tokens_with":193,"token_reduction_pct":99.3,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},
+    {"id":"blast_radius","label":"Blast radius of block_on","tokens_without":19432,"tokens_with":41,"token_reduction_pct":99.7,"tool_calls_without":8,"tool_calls_with":1,"call_reduction_pct":87.5,"status":"PASS"},
+    {"id":"call_graph","label":"What does Runtime::new call?","tokens_without":35891,"tokens_with":53,"token_reduction_pct":99.8,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},
+    {"id":"error_types","label":"Find all Error types","tokens_without":21309,"tokens_with":82,"token_reduction_pct":99.6,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"}
+  ],
+  "aggregate": {
+    "total_tokens_without": 147664,
+    "total_tokens_with": 436,
+    "token_reduction_pct": 99.7,
+    "total_calls_without": 96,
+    "total_calls_with": 5,
+    "call_reduction_pct": 94.7,
+    "questions_tested": 5
+  }
+}

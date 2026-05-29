@@ -1,0 +1,3220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mycelium graph explorer</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; color: #e0e0e0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+
+#header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 20px; background: #16213e; border-bottom: 1px solid #0f3460;
+}
+#header h1 { font-size: 18px; font-weight: 600; color: #e94560; }
+#search-box {
+  padding: 6px 12px; width: 260px; border: 1px solid #0f3460; border-radius: 4px;
+  background: #1a1a2e; color: #e0e0e0; font-size: 14px; outline: none;
+}
+#search-box:focus { border-color: #e94560; }
+#search-box::placeholder { color: #555; }
+
+#main { display: flex; flex: 1; overflow: hidden; }
+
+#graph-container { flex: 1; position: relative; }
+svg { width: 100%; height: 100%; display: block; }
+
+#detail-panel {
+  width: 300px; background: #16213e; border-left: 1px solid #0f3460;
+  padding: 16px; overflow-y: auto; font-size: 13px;
+}
+#detail-panel h2 { font-size: 15px; color: #e94560; margin-bottom: 12px; }
+#detail-panel .field { margin-bottom: 10px; }
+#detail-panel .field-label { color: #888; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+#detail-panel .field-value { color: #e0e0e0; word-break: break-all; margin-top: 2px; }
+#detail-panel .field-value.signature { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #7ec8e3; background: #1a1a2e; padding: 6px 8px; border-radius: 4px; white-space: pre-wrap; }
+#detail-panel .placeholder { color: #555; font-style: italic; }
+#detail-panel .connections { margin-top: 16px; }
+#detail-panel .connections h3 { font-size: 13px; color: #aaa; margin-bottom: 6px; }
+#detail-panel .conn-item { padding: 3px 0; color: #7ec8e3; cursor: pointer; font-size: 12px; }
+#detail-panel .conn-item:hover { color: #e94560; }
+
+#controls-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px; background: #16213e; border-top: 1px solid #0f3460; font-size: 13px;
+}
+#edge-filters { display: flex; gap: 16px; }
+#edge-filters label { display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
+#edge-filters input[type="checkbox"] { accent-color: #e94560; }
+#stats { display: flex; gap: 20px; color: #888; }
+#stats span { color: #e0e0e0; }
+
+#layout-selector { display: flex; gap: 0; margin-right: 16px; }
+#layout-selector .layout-btn {
+  padding: 4px 12px; border: 1px solid #0f3460; background: #1a1a2e; color: #888;
+  font-size: 11px; cursor: pointer; transition: all 0.15s; outline: none;
+}
+#layout-selector .layout-btn:first-child { border-radius: 4px 0 0 4px; }
+#layout-selector .layout-btn:last-child { border-radius: 0 4px 4px 0; border-left: none; }
+#layout-selector .layout-btn + .layout-btn { border-left: none; }
+#layout-selector .layout-btn.active { background: #e94560; color: #fff; border-color: #e94560; font-weight: 600; }
+#layout-selector .layout-btn:not(.active):hover { color: #e0e0e0; border-color: #e94560; }
+
+.metrics-toggle { display: flex; align-items: center; gap: 4px; margin-right: 16px; }
+.metrics-toggle label { cursor: pointer; user-select: none; font-size: 12px; }
+
+#export-btn {
+  padding: 4px 12px; border: 1px solid #0f3460; border-radius: 4px; background: #1a1a2e;
+  color: #888; font-size: 11px; cursor: pointer; transition: all 0.15s;
+}
+#export-btn:hover { color: #e0e0e0; border-color: #10B981; }
+
+.community-drilldown { margin-top: 16px; padding: 12px; background: #1a1a2e; border-radius: 6px; border: 1px solid #0f3460; }
+.community-drilldown h3 { color: #e94560; font-size: 13px; margin-bottom: 8px; }
+.community-drilldown .metric { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.community-drilldown .metric .label { color: #888; }
+.community-drilldown .metric .value { color: #e0e0e0; }
+.focus-btn {
+  margin-top: 8px; padding: 4px 10px; border: 1px solid #10B981; border-radius: 4px;
+  background: transparent; color: #10B981; font-size: 11px; cursor: pointer;
+}
+.focus-btn:hover { background: #10B981; color: #0a0a0c; }
+
+@keyframes pulse-glow { 0%,100% { filter: drop-shadow(0 0 3px currentColor); } 50% { filter: drop-shadow(0 0 8px currentColor); } }
+
+.tooltip {
+  position: absolute; pointer-events: none; background: #16213e; border: 1px solid #0f3460;
+  padding: 6px 10px; border-radius: 4px; font-size: 12px; color: #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4); display: none; z-index: 100;
+}
+
+#loading {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 16px; color: #888;
+}
+
+#repo-selector { margin-left: 12px; }
+#repo-select {
+  padding: 6px 10px; border: 1px solid #0f3460; border-radius: 4px;
+  background: #1a1a2e; color: #e0e0e0; font-size: 13px; outline: none;
+}
+
+/* Tab buttons */
+.tab-buttons { display: flex; gap: 0; margin-left: 16px; }
+.tab-btn {
+  padding: 6px 16px; border: 1px solid #0f3460; background: #1a1a2e; color: #888;
+  font-size: 13px; cursor: pointer; transition: all 0.15s; outline: none;
+}
+.tab-btn:first-child { border-radius: 4px 0 0 4px; }
+.tab-btn:last-child { border-radius: 0 4px 4px 0; border-left: none; }
+.tab-btn.active { background: #10B981; color: #0a0a0c; border-color: #10B981; font-weight: 600; }
+.tab-btn:not(.active):hover { color: #e0e0e0; border-color: #10B981; }
+
+/* Knowledge panel */
+#knowledge-panel {
+  display: none; flex: 1; flex-direction: column; background: #0a0a0c; overflow: hidden;
+}
+#knowledge-panel.active { display: flex; }
+
+/* Cycles panel */
+#cycles-panel {
+  display: none; flex: 1; flex-direction: column; background: #0a0a0c; overflow: hidden;
+}
+#cycles-panel.active { display: flex; }
+
+#cycles-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 20px; background: #16213e; border-bottom: 1px solid #0f3460;
+}
+#cycles-header h2 { font-size: 16px; color: #e94560; font-weight: 600; }
+#cycles-summary { font-size: 13px; color: #888; }
+#cycles-summary span { color: #e94560; font-weight: 600; }
+
+#cycles-content { display: flex; flex: 1; overflow: hidden; }
+
+#cycles-graph-container { flex: 1; position: relative; background: #0d0d1a; }
+#cycles-graph-container svg { width: 100%; height: 100%; display: block; }
+#cycles-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #888; font-size: 14px; }
+
+#cycles-sidebar {
+  width: 320px; background: #16213e; border-left: 1px solid #0f3460;
+  overflow-y: auto; padding: 0;
+}
+
+.cycle-card {
+  padding: 12px 16px; border-bottom: 1px solid #0f3460; cursor: pointer;
+  transition: background 0.15s;
+}
+.cycle-card:hover { background: #1a1a2e; }
+.cycle-card.active { background: #1a1a2e; border-left: 3px solid #e94560; }
+
+.cycle-card-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;
+}
+.cycle-card-title { font-size: 13px; font-weight: 600; color: #e0e0e0; }
+.cycle-severity {
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.severity-critical { background: #e94560; color: #fff; }
+.severity-high { background: #f59e0b; color: #1a1a2e; }
+.severity-medium { background: #3b82f6; color: #fff; }
+.severity-low { background: #10B981; color: #1a1a2e; }
+
+.cycle-card-members { font-size: 11px; color: #7ec8e3; font-family: 'SF Mono', 'Fira Code', monospace; line-height: 1.6; }
+.cycle-card-files { font-size: 11px; color: #666; margin-top: 4px; }
+
+.cycle-edge-animated {
+  stroke-dasharray: 8 4;
+  animation: cycleFlow 1s linear infinite;
+}
+@keyframes cycleFlow {
+  to { stroke-dashoffset: -12; }
+}
+
+.cycle-node-pulse {
+  animation: nodePulse 2s ease-in-out infinite;
+}
+@keyframes nodePulse {
+  0%, 100% { filter: drop-shadow(0 0 3px rgba(233, 69, 96, 0.4)); }
+  50% { filter: drop-shadow(0 0 10px rgba(233, 69, 96, 0.8)); }
+}
+
+#cycles-controls {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 20px; background: #16213e; border-top: 1px solid #0f3460; font-size: 12px;
+}
+#cycles-controls label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: #888; }
+#cycles-controls input[type="checkbox"] { accent-color: #e94560; }
+#cycles-view-selector { display: flex; gap: 0; }
+#cycles-view-selector .view-btn {
+  padding: 4px 12px; border: 1px solid #0f3460; background: #1a1a2e; color: #888;
+  font-size: 11px; cursor: pointer; transition: all 0.15s; outline: none;
+}
+#cycles-view-selector .view-btn:first-child { border-radius: 4px 0 0 4px; }
+#cycles-view-selector .view-btn:last-child { border-radius: 0 4px 4px 0; border-left: none; }
+#cycles-view-selector .view-btn.active { background: #e94560; color: #fff; border-color: #e94560; font-weight: 600; }
+
+/* Centrality heatmap panel */
+#centrality-panel {
+  display: none; flex: 1; flex-direction: column; background: #0a0a0c; overflow: hidden;
+}
+#centrality-panel.active { display: flex; }
+
+#centrality-controls {
+  display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+  background: #16213e; border-bottom: 1px solid #0f3460; flex-wrap: wrap;
+}
+#centrality-controls label { font-size: 12px; color: #888; }
+.metric-selector { display: flex; gap: 0; }
+.metric-btn {
+  padding: 5px 14px; border: 1px solid #0f3460; background: #1a1a2e; color: #888;
+  font-size: 11px; cursor: pointer; transition: all 0.15s; outline: none;
+}
+.metric-btn:first-child { border-radius: 4px 0 0 4px; }
+.metric-btn:last-child { border-radius: 0 4px 4px 0; }
+.metric-btn + .metric-btn { border-left: none; }
+.metric-btn.active { background: #e94560; color: #fff; border-color: #e94560; font-weight: 600; }
+.metric-btn:not(.active):hover { color: #e0e0e0; border-color: #e94560; }
+
+#centrality-top-n {
+  width: 60px; padding: 4px 8px; border: 1px solid #0f3460; border-radius: 4px;
+  background: #1a1a2e; color: #e0e0e0; font-size: 12px; outline: none;
+}
+#centrality-top-n:focus { border-color: #e94560; }
+
+#centrality-content { display: flex; flex: 1; overflow: hidden; }
+
+#centrality-heatmap-container {
+  flex: 1; padding: 16px; overflow: auto; display: flex; flex-direction: column; align-items: center;
+}
+
+#centrality-heatmap-svg { max-width: 100%; }
+
+#centrality-ranking {
+  width: 320px; background: #16213e; border-left: 1px solid #0f3460;
+  padding: 16px; overflow-y: auto;
+}
+#centrality-ranking h3 { font-size: 14px; color: #e94560; margin-bottom: 12px; }
+
+.ranking-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 4px;
+  margin-bottom: 4px; cursor: pointer; transition: background 0.15s; font-size: 12px;
+}
+.ranking-item:hover { background: #1a1a2e; }
+.ranking-item .rank { color: #555; font-weight: 700; min-width: 22px; text-align: right; }
+.ranking-item .rank-name { color: #e0e0e0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking-item .rank-kind { color: #555; font-size: 10px; text-transform: uppercase; }
+.ranking-item .rank-value { color: #7ec8e3; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; min-width: 50px; text-align: right; }
+.ranking-item .rank-bar { height: 3px; background: #e94560; border-radius: 2px; transition: width 0.3s; }
+
+#centrality-comparison {
+  display: flex; gap: 2px; padding: 8px 20px; background: #0d0d1a; border-top: 1px solid #0f3460;
+}
+.comparison-col { flex: 1; padding: 8px; }
+.comparison-col h4 { font-size: 11px; color: #e94560; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+.comparison-mini-item { font-size: 11px; color: #aaa; padding: 2px 0; display: flex; justify-content: space-between; }
+.comparison-mini-item .cval { color: #7ec8e3; font-family: 'SF Mono', 'Fira Code', monospace; }
+
+.heatmap-legend {
+  display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11px; color: #888;
+}
+.heatmap-legend-gradient {
+  width: 120px; height: 10px; border-radius: 3px;
+  background: linear-gradient(to right, #1a1a2e, #0f3460, #e94560, #facc15);
+}
+
+#centrality-loading { padding: 40px; text-align: center; color: #555; font-size: 14px; }
+#centrality-overlay-toggle {
+  padding: 4px 12px; border: 1px solid #0f3460; border-radius: 4px; background: #1a1a2e;
+  color: #888; font-size: 11px; cursor: pointer; transition: all 0.15s;
+}
+#centrality-overlay-toggle:hover { color: #e0e0e0; border-color: #e94560; }
+#centrality-overlay-toggle.active { background: #e94560; color: #fff; border-color: #e94560; }
+
+#knowledge-input-bar {
+  display: flex; gap: 8px; padding: 16px 20px; background: #16213e; border-bottom: 1px solid #0f3460;
+}
+#knowledge-query {
+  flex: 1; padding: 10px 14px; border: 1px solid #0f3460; border-radius: 6px;
+  background: #1a1a2e; color: #e0e0e0; font-size: 14px; font-family: 'SF Mono', 'Fira Code', monospace;
+  outline: none;
+}
+#knowledge-query:focus { border-color: #10B981; }
+#knowledge-query::placeholder { color: #555; }
+#knowledge-submit {
+  padding: 10px 20px; border: none; border-radius: 6px;
+  background: #10B981; color: #0a0a0c; font-size: 14px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+#knowledge-submit:hover { background: #059669; }
+#knowledge-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+#query-history {
+  display: flex; gap: 6px; padding: 8px 20px; flex-wrap: wrap; min-height: 0;
+}
+#query-history:empty { display: none; }
+.history-chip {
+  padding: 4px 10px; border: 1px solid #0f3460; border-radius: 12px;
+  background: #16213e; color: #888; font-size: 11px; cursor: pointer;
+  font-family: 'SF Mono', 'Fira Code', monospace; transition: all 0.15s;
+}
+.history-chip:hover { border-color: #10B981; color: #10B981; }
+
+#knowledge-results {
+  flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;
+}
+
+#knowledge-status {
+  display: flex; align-items: center; justify-content: center;
+  padding: 40px; color: #555; font-size: 14px; font-style: italic;
+}
+#knowledge-status.loading { color: #10B981; }
+
+.knowledge-card {
+  background: #16213e; border: 1px solid #0f3460; border-radius: 8px;
+  padding: 14px 16px; transition: border-color 0.15s;
+}
+.knowledge-card:hover { border-color: #10B981; }
+
+.knowledge-card-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
+}
+
+.source-badge {
+  padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.source-badge.email { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+.source-badge.document { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); }
+.source-badge.code { background: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3); }
+.source-badge.other { background: rgba(139, 92, 246, 0.2); color: #8b5cf6; border: 1px solid rgba(139, 92, 246, 0.3); }
+
+.knowledge-source-name {
+  font-weight: 600; color: #e0e0e0; font-size: 13px;
+}
+.knowledge-source-file {
+  color: #555; font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.knowledge-symbol-ref {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 12px;
+}
+.knowledge-symbol-ref .sym-name {
+  color: #10B981; font-family: 'SF Mono', 'Fira Code', monospace; font-weight: 600;
+}
+.knowledge-symbol-ref .sym-kind {
+  color: #888; font-size: 11px;
+}
+.knowledge-symbol-ref .sym-loc {
+  color: #555; font-size: 11px; font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.knowledge-context {
+  background: #0a0a0c; border-left: 3px solid #10B981; padding: 8px 12px;
+  border-radius: 0 4px 4px 0; font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px; color: #aaa; line-height: 1.5; white-space: pre-wrap;
+  word-break: break-word;
+}
+.knowledge-line-ref {
+  text-align: right; font-size: 10px; color: #555; margin-top: 4px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.knowledge-summary {
+  padding: 8px 0; font-size: 12px; color: #888; border-bottom: 1px solid #0f3460; margin-bottom: 4px;
+}
+.knowledge-summary span { color: #10B981; font-weight: 600; }
+/* --- Module Coupling Dashboard --- */
+#coupling-panel {
+  display: none; flex: 1; flex-direction: column; background: #0a0a0c; overflow: hidden;
+}
+#coupling-panel.active { display: flex; }
+
+#coupling-header {
+  display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+  background: #16213e; border-bottom: 1px solid #0f3460;
+}
+#coupling-header h3 { font-size: 14px; color: #e94560; margin: 0; }
+.coupling-toggle-group { display: flex; gap: 0; }
+.coupling-toggle {
+  padding: 4px 12px; border: 1px solid #0f3460; background: #1a1a2e; color: #888;
+  font-size: 11px; cursor: pointer; transition: all 0.15s; outline: none;
+}
+.coupling-toggle:first-child { border-radius: 4px 0 0 4px; }
+.coupling-toggle:last-child { border-radius: 0 4px 4px 0; border-left: none; }
+.coupling-toggle.active { background: #e94560; color: #fff; border-color: #e94560; font-weight: 600; }
+.coupling-toggle:not(.active):hover { color: #e0e0e0; border-color: #e94560; }
+
+.coupling-view-toggle { display: flex; gap: 0; margin-left: auto; }
+.coupling-view-btn {
+  padding: 4px 12px; border: 1px solid #0f3460; background: #1a1a2e; color: #888;
+  font-size: 11px; cursor: pointer; transition: all 0.15s; outline: none;
+}
+.coupling-view-btn:first-child { border-radius: 4px 0 0 4px; }
+.coupling-view-btn:last-child { border-radius: 0 4px 4px 0; border-left: none; }
+.coupling-view-btn + .coupling-view-btn { border-left: none; }
+.coupling-view-btn.active { background: #10B981; color: #0a0a0c; border-color: #10B981; font-weight: 600; }
+.coupling-view-btn:not(.active):hover { color: #e0e0e0; border-color: #10B981; }
+
+#coupling-content { flex: 1; display: flex; overflow: hidden; }
+#coupling-chart { flex: 1; position: relative; }
+#coupling-chart svg { width: 100%; height: 100%; display: block; }
+
+#coupling-sidebar {
+  width: 280px; background: #16213e; border-left: 1px solid #0f3460;
+  padding: 16px; overflow-y: auto; font-size: 13px;
+}
+#coupling-sidebar h3 { font-size: 14px; color: #e94560; margin-bottom: 12px; }
+.coupling-stat { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px; }
+.coupling-stat .label { color: #888; }
+.coupling-stat .value { color: #e0e0e0; font-family: 'SF Mono', 'Fira Code', monospace; }
+
+.coupling-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.coupling-table th {
+  text-align: left; font-size: 10px; color: #888; text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 4px 6px; border-bottom: 1px solid #0f3460;
+}
+.coupling-table td {
+  font-size: 11px; padding: 4px 6px; color: #e0e0e0; border-bottom: 1px solid #0f346033;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.coupling-table tr:hover td { background: #1a1a2e; }
+.coupling-table .bar-cell { position: relative; }
+.coupling-bar {
+  height: 4px; border-radius: 2px; position: absolute; bottom: 2px; left: 6px;
+}
+.coupling-bar.ca { background: #3b82f6; }
+.coupling-bar.ce { background: #f59e0b; }
+.coupling-bar.instability { background: #e94560; }
+
+.zone-label {
+  font-size: 11px; font-weight: 600; fill-opacity: 0.5; pointer-events: none;
+}
+.quadrant-bg { stroke: none; }
+
+#coupling-loading {
+  display: flex; align-items: center; justify-content: center;
+  position: absolute; inset: 0; color: #888; font-size: 14px; font-style: italic;
+}
+
+/* Community Explorer panel */
+#community-panel {
+  display: none; flex: 1; flex-direction: column; background: #0a0a0c; overflow: hidden;
+}
+#community-panel.active { display: flex; }
+
+#community-toolbar {
+  display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+  background: #16213e; border-bottom: 1px solid #0f3460;
+}
+#community-toolbar .view-selector { display: flex; gap: 0; }
+#community-toolbar .view-btn {
+  padding: 5px 14px; border: 1px solid #0f3460; background: #1a1a2e; color: #888;
+  font-size: 12px; cursor: pointer; transition: all 0.15s; outline: none;
+}
+#community-toolbar .view-btn:first-child { border-radius: 4px 0 0 4px; }
+#community-toolbar .view-btn:last-child { border-radius: 0 4px 4px 0; }
+#community-toolbar .view-btn + .view-btn { border-left: none; }
+#community-toolbar .view-btn.active { background: #8b5cf6; color: #fff; border-color: #8b5cf6; font-weight: 600; }
+#community-toolbar .view-btn:not(.active):hover { color: #e0e0e0; border-color: #8b5cf6; }
+#community-toolbar .toolbar-label { color: #888; font-size: 12px; }
+#community-toolbar .toolbar-stat { color: #e0e0e0; font-size: 13px; font-weight: 600; }
+
+#community-content {
+  display: flex; flex: 1; overflow: hidden;
+}
+#community-viz {
+  flex: 1; position: relative; overflow: hidden;
+}
+#community-viz svg { width: 100%; height: 100%; display: block; }
+#community-viz .viz-placeholder {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  color: #555; font-size: 14px; font-style: italic;
+}
+
+#community-sidebar {
+  width: 320px; background: #16213e; border-left: 1px solid #0f3460;
+  padding: 16px; overflow-y: auto; font-size: 13px;
+}
+#community-sidebar h2 { font-size: 15px; color: #8b5cf6; margin-bottom: 12px; }
+.community-list-item {
+  padding: 10px 12px; background: #1a1a2e; border: 1px solid #0f3460; border-radius: 6px;
+  margin-bottom: 8px; cursor: pointer; transition: all 0.15s;
+}
+.community-list-item:hover { border-color: #8b5cf6; }
+.community-list-item.selected { border-color: #8b5cf6; background: rgba(139, 92, 246, 0.1); }
+.community-list-item .comm-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;
+}
+.community-list-item .comm-color {
+  width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px;
+}
+.community-list-item .comm-label { color: #e0e0e0; font-weight: 600; font-size: 13px; }
+.community-list-item .comm-count { color: #888; font-size: 11px; }
+.community-list-item .comm-bar {
+  height: 4px; border-radius: 2px; background: #0f3460; margin-top: 6px; overflow: hidden;
+}
+.community-list-item .comm-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+.comm-detail-section { margin-top: 16px; }
+.comm-detail-section h3 { font-size: 13px; color: #aaa; margin-bottom: 8px; }
+.comm-metric-row {
+  display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;
+  padding: 3px 0;
+}
+.comm-metric-row .metric-label { color: #888; }
+.comm-metric-row .metric-value { color: #e0e0e0; font-weight: 500; }
+.comm-members-list { max-height: 200px; overflow-y: auto; }
+.comm-member-item {
+  padding: 4px 8px; font-size: 12px; color: #7ec8e3; cursor: pointer;
+  font-family: 'SF Mono', 'Fira Code', monospace; border-radius: 3px;
+}
+.comm-member-item:hover { background: rgba(126, 200, 227, 0.1); color: #e94560; }
+
+.comm-back-btn {
+  padding: 5px 12px; border: 1px solid #8b5cf6; border-radius: 4px;
+  background: transparent; color: #8b5cf6; font-size: 12px; cursor: pointer;
+  margin-bottom: 12px; transition: all 0.15s;
+}
+.comm-back-btn:hover { background: #8b5cf6; color: #fff; }
+
+.sunburst-tooltip {
+  position: absolute; pointer-events: none; background: #16213e; border: 1px solid #0f3460;
+  padding: 8px 12px; border-radius: 6px; font-size: 12px; color: #e0e0e0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none; z-index: 100; max-width: 250px;
+}
+.sunburst-tooltip .tt-label { font-weight: 600; margin-bottom: 2px; }
+.sunburst-tooltip .tt-stat { color: #888; font-size: 11px; }
+
+.inter-comm-edge { fill: none; stroke-opacity: 0.15; }
+.inter-comm-edge:hover { stroke-opacity: 0.6; }
+
+/* LLM Settings Panel */
+#llm-settings-panel {
+  display: none; flex: 1; flex-direction: column; background: #0a0a0c; overflow-y: auto;
+}
+#llm-settings-panel.active { display: flex; }
+
+#llm-settings-content {
+  padding: 16px 20px; display: flex; flex-direction: column; gap: 16px;
+}
+
+.llm-setting-group {
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+.llm-setting-label {
+  font-size: 12px; font-weight: 600; color: #10B981; text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+.llm-setting-input {
+  padding: 8px 12px; border: 1px solid #0f3460; border-radius: 4px;
+  background: #16213e; color: #e0e0e0; font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace;
+  outline: none;
+}
+
+.llm-setting-input:focus { border-color: #10B981; }
+
+.llm-setting-select {
+  padding: 8px 12px; border: 1px solid #0f3460; border-radius: 4px;
+  background: #16213e; color: #e0e0e0; font-size: 13px; outline: none;
+}
+
+.llm-setting-select:focus { border-color: #10B981; }
+
+.llm-setting-help {
+  font-size: 11px; color: #555; margin-top: 4px; font-style: italic;
+}
+
+.llm-buttons {
+  display: flex; gap: 8px; margin-top: 12px;
+}
+
+.llm-save-btn {
+  padding: 8px 16px; border: none; border-radius: 4px;
+  background: #10B981; color: #0a0a0c; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+
+.llm-save-btn:hover { background: #059669; }
+
+.llm-reset-btn {
+  padding: 8px 16px; border: 1px solid #0f3460; border-radius: 4px;
+  background: transparent; color: #888; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+
+.llm-reset-btn:hover { border-color: #10B981; color: #10B981; }
+
+#llm-status-message {
+  font-size: 12px; color: #888; text-align: center; padding: 8px; border-radius: 4px;
+  background: transparent; display: none;
+}
+
+#llm-status-message.error { color: #f87171; background: rgba(244, 63, 94, 0.1); display: block; }
+#llm-status-message.success { color: #10B981; background: rgba(16, 185, 129, 0.1); display: block; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div style="display:flex;align-items:center;gap:16px;">
+    <h1>mycelium graph explorer</h1>
+    <span id="repo-selector">
+      <select id="repo-select"></select>
+    </span>
+    <div class="tab-buttons">
+      <button class="tab-btn active" data-tab="graph">Graph</button>
+      <button class="tab-btn" data-tab="coupling">Coupling</button>
+      <button class="tab-btn" data-tab="cycles">Cycles</button>
+      <button class="tab-btn" data-tab="communities">Communities</button>
+      <button class="tab-btn" data-tab="centrality">Centrality</button>
+      <button class="tab-btn" data-tab="knowledge">Knowledge</button>
+      <button class="tab-btn" data-tab="settings">Settings</button>
+    </div>
+  </div>
+  <input type="text" id="search-box" placeholder="Search symbols...">
+</div>
+
+<div id="main">
+  <div id="graph-container">
+    <div id="loading">Loading graph data...</div>
+    <svg id="graph-svg"></svg>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+  <div id="detail-panel">
+    <h2>Symbol Detail</h2>
+    <div id="detail-content">
+      <p class="placeholder">Click a node to view details</p>
+    </div>
+  </div>
+
+  <div id="community-panel">
+    <div id="community-toolbar">
+      <span class="toolbar-label">View:</span>
+      <div class="view-selector">
+        <button class="view-btn active" data-view="cluster">Cluster Map</button>
+        <button class="view-btn" data-view="sunburst">Sunburst</button>
+        <button class="view-btn" data-view="treemap">Treemap</button>
+      </div>
+      <span class="toolbar-label" style="margin-left:auto;">Communities:</span>
+      <span class="toolbar-stat" id="comm-total-count">0</span>
+      <span class="toolbar-label">Modularity:</span>
+      <span class="toolbar-stat" id="comm-modularity">—</span>
+    </div>
+    <div id="community-content">
+      <div id="community-viz">
+        <svg id="community-svg"></svg>
+        <div class="sunburst-tooltip" id="comm-tooltip"></div>
+      </div>
+      <div id="community-sidebar">
+        <h2>Community Explorer</h2>
+        <div id="comm-sidebar-content">
+          <p class="placeholder" style="color:#555;font-style:italic;">Loading community data...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="centrality-panel">
+    <div id="centrality-controls">
+      <label>Metric:</label>
+      <div class="metric-selector">
+        <button class="metric-btn active" data-metric="betweenness">Betweenness</button>
+        <button class="metric-btn" data-metric="closeness">Closeness</button>
+        <button class="metric-btn" data-metric="eigenvector">Eigenvector</button>
+        <button class="metric-btn" data-metric="degree">Degree</button>
+      </div>
+      <label>Top N:</label>
+      <input type="number" id="centrality-top-n" value="30" min="5" max="200">
+      <button id="centrality-overlay-toggle" title="Overlay heatmap colors on graph view">Overlay on Graph</button>
+    </div>
+    <div id="centrality-content">
+      <div id="centrality-heatmap-container">
+        <div id="centrality-loading">Select a repo to view centrality heatmap</div>
+        <svg id="centrality-heatmap-svg"></svg>
+        <div class="heatmap-legend" id="heatmap-legend" style="display:none;">
+          <span>Low</span>
+          <div class="heatmap-legend-gradient"></div>
+          <span>High</span>
+        </div>
+      </div>
+      <div id="centrality-ranking">
+        <h3>Top Nodes</h3>
+        <div id="ranking-list"></div>
+      </div>
+    </div>
+    <div id="centrality-comparison"></div>
+  </div>
+
+  <div id="knowledge-panel">
+    <div id="knowledge-input-bar">
+      <input type="text" id="knowledge-query" placeholder="Ask about your codebase...">
+      <button id="knowledge-submit">Search</button>
+    </div>
+    <div id="query-history"></div>
+    <div id="knowledge-results">
+      <div id="knowledge-status">Select a repo and ask a question about your codebase</div>
+    </div>
+  </div>
+
+  <div id="coupling-panel">
+    <div id="coupling-header">
+      <h3>Module Coupling Dashboard</h3>
+      <div class="coupling-toggle-group">
+        <button class="coupling-toggle active" data-group="dir">By Directory</button>
+        <button class="coupling-toggle" data-group="file">By File</button>
+      </div>
+      <div class="coupling-view-toggle">
+        <button class="coupling-view-btn active" data-view="scatter">Scatter</button>
+        <button class="coupling-view-btn" data-view="heatmap">Heatmap</button>
+        <button class="coupling-view-btn" data-view="quadrant">Quadrant</button>
+      </div>
+    </div>
+    <div id="coupling-content">
+      <div id="coupling-chart">
+        <div id="coupling-loading">Select a repo to load coupling data</div>
+        <svg id="coupling-svg"></svg>
+      </div>
+      <div id="coupling-sidebar">
+        <h3>Summary</h3>
+        <div id="coupling-stats"></div>
+        <h3 style="margin-top:16px">Modules</h3>
+        <table class="coupling-table">
+          <thead><tr><th>Module</th><th>Ca</th><th>Ce</th><th>I</th></tr></thead>
+          <tbody id="coupling-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="cycles-panel">
+    <div id="cycles-header">
+      <h2>Circular Dependencies</h2>
+      <div id="cycles-summary">Loading...</div>
+    </div>
+    <div id="cycles-content">
+      <div id="cycles-graph-container">
+        <div id="cycles-loading">Select a repo to detect circular dependencies</div>
+        <svg id="cycles-svg"></svg>
+      </div>
+      <div id="cycles-sidebar"></div>
+    </div>
+    <div id="cycles-controls">
+      <div id="cycles-view-selector">
+        <button class="view-btn active" data-view="all">All Cycles</button>
+        <button class="view-btn" data-view="isolated">Isolated View</button>
+      </div>
+      <label><input type="checkbox" id="cycles-animate" checked> Animate flow</label>
+      <label><input type="checkbox" id="cycles-show-files"> Show files</label>
+    </div>
+  </div>
+
+  <div id="llm-settings-panel">
+    <div id="llm-settings-content">
+      <h2 style="color: #e94560; font-size: 15px; margin-bottom: 12px;">LLM Provider Configuration</h2>
+
+      <div class="llm-setting-group">
+        <label class="llm-setting-label">Provider</label>
+        <select id="llm-provider-select" class="llm-setting-select">
+          <option value="ollama">Ollama (Local)</option>
+          <option value="openai">OpenAI-Compatible (Cloud)</option>
+        </select>
+        <div class="llm-setting-help">Choose between local Ollama or cloud-based OpenAI-compatible APIs</div>
+      </div>
+
+      <div class="llm-setting-group">
+        <label class="llm-setting-label">Model</label>
+        <input type="text" id="llm-model-input" class="llm-setting-input" placeholder="e.g., qwen2.5:7b or gpt-3.5-turbo">
+        <div class="llm-setting-help">Model name for your LLM provider</div>
+      </div>
+
+      <div class="llm-setting-group">
+        <label class="llm-setting-label">Base URL</label>
+        <input type="text" id="llm-base-url-input" class="llm-setting-input" placeholder="e.g., http://localhost:11434">
+        <div class="llm-setting-help">API endpoint URL for the LLM provider</div>
+      </div>
+
+      <div class="llm-setting-group" id="llm-api-key-group" style="display: none;">
+        <label class="llm-setting-label">API Key (Optional)</label>
+        <input type="password" id="llm-api-key-input" class="llm-setting-input" placeholder="Leave empty if not needed">
+        <div class="llm-setting-help">API key for cloud providers (hidden when stored)</div>
+      </div>
+
+      <div id="llm-status-message"></div>
+
+      <div class="llm-buttons">
+        <button class="llm-save-btn" id="llm-save-btn">Save Configuration</button>
+        <button class="llm-reset-btn" id="llm-reload-btn">Reload Current</button>
+      </div>
+
+      <div style="margin-top: 20px; padding: 12px; background: #16213e; border-left: 3px solid #555; border-radius: 4px;">
+        <div style="font-size: 11px; color: #888; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">Privacy Notice</div>
+        <p style="font-size: 12px; color: #aaa; line-height: 1.6; margin-bottom: 8px;">
+          <strong>Local Mode (Ollama):</strong> Your data stays on your machine. No data is sent to external servers.
+        </p>
+        <p style="font-size: 12px; color: #aaa; line-height: 1.6;">
+          <strong>Cloud Mode (OpenAI-Compatible):</strong> Queries are sent to the configured API endpoint. API keys are stored locally in your config file (~/.myceliums/config.toml).
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="controls-bar">
+  <div style="display:flex;align-items:center;">
+    <div id="layout-selector">
+      <button class="layout-btn active" data-layout="force">Force</button>
+      <button class="layout-btn" data-layout="hierarchical">Hierarchy</button>
+      <button class="layout-btn" data-layout="radial">Radial</button>
+    </div>
+    <div class="metrics-toggle">
+      <label><input type="checkbox" id="metrics-toggle"> Metrics</label>
+    </div>
+    <div id="edge-filters">
+      <label><input type="checkbox" data-kind="CALLS" checked> Calls</label>
+      <label><input type="checkbox" data-kind="IMPORTS" checked> Imports</label>
+      <label><input type="checkbox" data-kind="MEMBER_OF" checked> Members</label>
+      <label><input type="checkbox" data-kind="CONTAINED_BY" checked> ContainedBy</label>
+      <label><input type="checkbox" data-kind="STEP_IN_PROCESS" checked> Processes</label>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <button id="export-btn" title="Export graph as SVG or PNG">Export</button>
+    <div id="stats">
+      Nodes: <span id="stat-nodes">0</span>
+      Edges: <span id="stat-edges">0</span>
+      Communities: <span id="stat-communities">0</span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const COMMUNITY_COLORS = [
+    '#e94560','#7ec8e3','#f0a500','#a3de83','#c084fc',
+    '#fb7185','#38bdf8','#facc15','#4ade80','#c084fc',
+    '#f97316','#06b6d4','#84cc16','#ec4899','#8b5cf6',
+    '#14b8a6','#f43f5e','#3b82f6','#eab308','#10b981'
+  ];
+
+  let graphData = { nodes: [], edges: [], communities: [] };
+  let simulation, svg, g, linkGroup, nodeGroup, labelGroup;
+  let currentRepoId = null;
+  let activeEdgeKinds = new Set(['CALLS','IMPORTS','MEMBER_OF','CONTAINED_BY','STEP_IN_PROCESS']);
+  let searchTerm = '';
+  let selectedNodeId = null;
+  let nodeMap = {};
+  let degreeMap = {};
+  let communityColorMap = {};
+  let currentLayout = 'force';
+  let showMetrics = false;
+  let communityMetricsCache = null;
+  let focusedCommunity = null;
+
+  async function loadRepos() {
+    try {
+      const res = await fetch('/api/repos');
+      const repos = await res.json();
+      const sel = document.getElementById('repo-select');
+      sel.innerHTML = '';
+      repos.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = r.name || r.id;
+        sel.appendChild(opt);
+      });
+      if (repos.length > 0) {
+        currentRepoId = repos[0].id;
+        sel.value = currentRepoId;
+        await loadGraph();
+      } else {
+        document.getElementById('loading').textContent = 'No repos found. Run: myc analyze <path>';
+      }
+    } catch(e) {
+      document.getElementById('loading').textContent = 'Failed to load repos: ' + e.message;
+    }
+  }
+
+  async function loadGraph() {
+    if (!currentRepoId) return;
+    document.getElementById('loading').style.display = 'block';
+    try {
+      const res = await fetch('/api/repos/' + encodeURIComponent(currentRepoId) + '/graph');
+      graphData = await res.json();
+
+      // Pre-compute degree map for layout functions
+      degreeMap = {};
+      graphData.nodes.forEach(n => { degreeMap[n.id] = 0; });
+      graphData.edges.forEach(e => { degreeMap[e.source] = (degreeMap[e.source]||0)+1; degreeMap[e.target] = (degreeMap[e.target]||0)+1; });
+
+      // Compute layout based on current mode
+      computeLayout(currentLayout, graphData.nodes);
+
+      document.getElementById('loading').style.display = 'none';
+      buildGraph();
+    } catch(e) {
+      document.getElementById('loading').textContent = 'Failed to load graph: ' + e.message;
+    }
+  }
+
+  function hashStr(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return Math.abs(h);
+  }
+
+  function communityColor(label) {
+    if (!label) return '#555';
+    if (!communityColorMap[label]) {
+      communityColorMap[label] = COMMUNITY_COLORS[hashStr(label) % COMMUNITY_COLORS.length];
+    }
+    return communityColorMap[label];
+  }
+
+  function nodeShape(kind) {
+    // circle=Function/Method, rect=Class/Enum/Module, diamond=Interface/TypeAlias
+    if (['Class','Enum','Module'].includes(kind)) return 'rect';
+    if (['Interface','TypeAlias'].includes(kind)) return 'diamond';
+    return 'circle';
+  }
+
+  // Layout computations: assign (x,y) to each node based on layout mode
+  function computeLayout(layout, nodes) {
+    if (layout === 'hierarchical') {
+      computeHierarchicalLayout(nodes);
+    } else if (layout === 'radial') {
+      computeRadialLayout(nodes);
+    } else {
+      computeForceLayout(nodes);
+    }
+  }
+
+  function computeForceLayout(nodes) {
+    // Community-cluster pre-computed layout (existing behavior)
+    const communities = {};
+    nodes.forEach(n => {
+      const c = n.community || 'unknown';
+      if (!communities[c]) communities[c] = [];
+      communities[c].push(n);
+    });
+    const keys = Object.keys(communities);
+    const globalRadius = Math.sqrt(nodes.length) * 12;
+    keys.forEach((key, ci) => {
+      const members = communities[key];
+      const angle = (2 * Math.PI * ci) / keys.length;
+      const cx = Math.cos(angle) * globalRadius;
+      const cy = Math.sin(angle) * globalRadius;
+      const localRadius = Math.sqrt(members.length) * 8;
+      members.forEach((n, ni) => {
+        const a2 = (2 * Math.PI * ni) / members.length;
+        n.x = cx + Math.cos(a2) * localRadius + (Math.random() - 0.5) * 10;
+        n.y = cy + Math.sin(a2) * localRadius + (Math.random() - 0.5) * 10;
+      });
+    });
+  }
+
+  function computeHierarchicalLayout(nodes) {
+    // Group by depth (from API), spread horizontally within each level
+    const levels = {};
+    nodes.forEach(n => {
+      const depth = n.depth || 0;
+      if (!levels[depth]) levels[depth] = [];
+      levels[depth].push(n);
+    });
+    const depthKeys = Object.keys(levels).map(Number).sort((a, b) => a - b);
+    const levelSpacing = 120;
+    const totalHeight = depthKeys.length * levelSpacing;
+
+    depthKeys.forEach((depth, di) => {
+      const members = levels[depth];
+      const y = di * levelSpacing - totalHeight / 2;
+      const nodeSpacing = 50;
+      const totalWidth = members.length * nodeSpacing;
+      members.forEach((n, ni) => {
+        n.x = ni * nodeSpacing - totalWidth / 2 + nodeSpacing / 2;
+        n.y = y;
+      });
+    });
+  }
+
+  function computeRadialLayout(nodes) {
+    // Communities as sectors, nodes radiate outward from community center
+    const communities = {};
+    nodes.forEach(n => {
+      const c = n.community || 'unknown';
+      if (!communities[c]) communities[c] = [];
+      communities[c].push(n);
+    });
+    const keys = Object.keys(communities);
+    const sectorAngle = (2 * Math.PI) / Math.max(keys.length, 1);
+    const baseRadius = 100;
+
+    keys.forEach((key, ci) => {
+      const members = communities[key];
+      const sectorStart = ci * sectorAngle;
+      // Sort by degree (highest centrality at center)
+      members.sort((a, b) => (degreeMap[b.id] || 0) - (degreeMap[a.id] || 0));
+      members.forEach((n, ni) => {
+        const ringRadius = baseRadius + Math.floor(ni / 3) * 40;
+        const angleOffset = (ni % 3) * (sectorAngle / 4) - sectorAngle / 4;
+        const angle = sectorStart + sectorAngle / 2 + angleOffset;
+        n.x = Math.cos(angle) * ringRadius;
+        n.y = Math.sin(angle) * ringRadius;
+      });
+    });
+  }
+
+  function buildGraph() {
+    const container = document.getElementById('graph-container');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    // Build maps
+    nodeMap = {};
+    degreeMap = {};
+    communityColorMap = {};
+    graphData.nodes.forEach(n => { nodeMap[n.id] = n; degreeMap[n.id] = 0; });
+    graphData.edges.forEach(e => { degreeMap[e.source] = (degreeMap[e.source]||0)+1; degreeMap[e.target] = (degreeMap[e.target]||0)+1; });
+
+    const nodeCount = graphData.nodes.length;
+
+    // Stats
+    document.getElementById('stat-nodes').textContent = nodeCount;
+    document.getElementById('stat-edges').textContent = graphData.edges.length;
+    document.getElementById('stat-communities').textContent = graphData.communities.length;
+
+    // Clear existing
+    d3.select('#graph-svg').selectAll('*').remove();
+
+    svg = d3.select('#graph-svg');
+    g = svg.append('g');
+
+    // Zoom
+    const zoom = d3.zoom()
+      .scaleExtent([0.02, 8])
+      .on('zoom', (event) => g.attr('transform', event.transform));
+    svg.call(zoom);
+
+    // Fit-to-view: compute bounding box and apply zoom transform
+    function zoomToFit(duration) {
+      if (!graphData.nodes.length) return;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      graphData.nodes.forEach(n => {
+        const nx = n.x || 0, ny = n.y || 0;
+        if (nx < minX) minX = nx;
+        if (ny < minY) minY = ny;
+        if (nx > maxX) maxX = nx;
+        if (ny > maxY) maxY = ny;
+      });
+      const padding = 80;
+      minX -= padding; minY -= padding;
+      maxX += padding; maxY += padding;
+      const gw = maxX - minX;
+      const gh = maxY - minY;
+      if (gw < 1 || gh < 1) return; // degenerate case
+      const scale = Math.min(width / gw, height / gh, 3);
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const t = d3.zoomIdentity
+        .translate(width / 2, height / 2)
+        .scale(scale)
+        .translate(-cx, -cy);
+      if (duration > 0) {
+        svg.transition().duration(duration).call(zoom.transform, t);
+      } else {
+        svg.call(zoom.transform, t);
+      }
+    }
+
+    // Arrow markers for edges
+    const defs = svg.append('defs');
+    defs.append('marker')
+      .attr('id', 'arrowhead')
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 20).attr('refY', 0)
+      .attr('markerWidth', 6).attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#444');
+
+    // Create groups in order: links, nodes, labels
+    linkGroup = g.append('g').attr('class', 'links');
+    nodeGroup = g.append('g').attr('class', 'nodes');
+    labelGroup = g.append('g').attr('class', 'labels');
+
+    // Filter edges
+    const visibleEdges = graphData.edges.filter(e => activeEdgeKinds.has(e.kind));
+
+    // Links
+    const links = linkGroup.selectAll('line')
+      .data(visibleEdges, d => d.source + '-' + d.target + '-' + d.kind)
+      .enter().append('line')
+      .attr('stroke', '#333')
+      .attr('stroke-width', 0.5)
+      .attr('stroke-opacity', 0.6)
+      .attr('marker-end', 'url(#arrowhead)');
+
+    // Nodes
+    const nodes = nodeGroup.selectAll('.node')
+      .data(graphData.nodes, d => d.id)
+      .enter().append('g')
+      .attr('class', 'node')
+      .style('cursor', 'pointer')
+      .call(d3.drag()
+        .on('start', dragStart)
+        .on('drag', dragging)
+        .on('end', dragEnd));
+
+    nodes.each(function(d) {
+      const el = d3.select(this);
+      const r = Math.max(4, Math.min(16, 3 + (degreeMap[d.id] || 0)));
+      const color = communityColor(d.community);
+      const shape = nodeShape(d.kind);
+
+      if (shape === 'rect') {
+        el.append('rect')
+          .attr('width', r*2).attr('height', r*2)
+          .attr('x', -r).attr('y', -r)
+          .attr('rx', 3)
+          .attr('fill', color).attr('stroke', '#fff').attr('stroke-width', 0.5).attr('stroke-opacity', 0.3);
+      } else if (shape === 'diamond') {
+        el.append('polygon')
+          .attr('points', `0,${-r} ${r},0 0,${r} ${-r},0`)
+          .attr('fill', color).attr('stroke', '#fff').attr('stroke-width', 0.5).attr('stroke-opacity', 0.3);
+      } else {
+        el.append('circle')
+          .attr('r', r)
+          .attr('fill', color).attr('stroke', '#fff').attr('stroke-width', 0.5).attr('stroke-opacity', 0.3);
+      }
+    });
+
+    // Labels — for large graphs only show very high-degree nodes
+    const labelThreshold = nodeCount > 500 ? 15 : nodeCount > 100 ? 8 : 5;
+    const labels = labelGroup.selectAll('text')
+      .data(graphData.nodes, d => d.id)
+      .enter().append('text')
+      .text(d => d.name)
+      .attr('font-size', 9)
+      .attr('fill', '#aaa')
+      .attr('text-anchor', 'middle')
+      .attr('dy', d => -(Math.max(4, Math.min(16, 3 + (degreeMap[d.id]||0)))) - 4)
+      .style('pointer-events', 'none')
+      .style('display', d => (degreeMap[d.id] || 0) >= labelThreshold ? 'block' : 'none');
+
+    // Tooltip
+    const tooltip = document.getElementById('tooltip');
+    nodes.on('mouseover', function(event, d) {
+      tooltip.style.display = 'block';
+      tooltip.textContent = `${d.name} (${d.kind})`;
+      highlightNeighbors(d.id);
+    }).on('mousemove', function(event) {
+      tooltip.style.left = (event.pageX + 12) + 'px';
+      tooltip.style.top = (event.pageY - 20) + 'px';
+    }).on('mouseout', function() {
+      tooltip.style.display = 'none';
+      clearHighlight();
+    });
+
+    // Click
+    nodes.on('click', function(event, d) {
+      event.stopPropagation();
+      selectedNodeId = d.id;
+      showDetail(d);
+    });
+
+    // Double-click to zoom
+    nodes.on('dblclick', function(event, d) {
+      event.stopPropagation();
+      const scale = 2;
+      const transform = d3.zoomIdentity.translate(width/2 - d.x*scale, height/2 - d.y*scale).scale(scale);
+      svg.transition().duration(500).call(zoom.transform, transform);
+    });
+
+    // Click background to deselect
+    svg.on('click', () => {
+      selectedNodeId = null;
+      document.getElementById('detail-content').innerHTML = '<p class="placeholder">Click a node to view details</p>';
+    });
+
+    // Simulation
+    // Scale forces for large graphs
+    const chargeStrength = nodeCount > 1000 ? -200 : nodeCount > 500 ? -120 : -80;
+    const linkDistance = nodeCount > 1000 ? 100 : 60;
+    const chargeDistMax = nodeCount > 1000 ? 600 : 300;
+
+    // For large graphs: skip force simulation, use pre-computed layout directly
+    if (nodeCount > 500) {
+      // Resolve edge source/target to node objects manually
+      const nodeById = {};
+      graphData.nodes.forEach(n => { nodeById[n.id] = n; });
+      visibleEdges.forEach(e => {
+        if (typeof e.source === 'string') e.source = nodeById[e.source] || e.source;
+        if (typeof e.target === 'string') e.target = nodeById[e.target] || e.target;
+      });
+
+      // Position everything immediately from pre-computed layout
+      links.attr('x1', d => d.source.x || 0).attr('y1', d => d.source.y || 0)
+           .attr('x2', d => d.target.x || 0).attr('y2', d => d.target.y || 0);
+      nodes.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
+      labels.attr('x', d => d.x || 0)
+            .attr('y', d => (d.y || 0) - (Math.max(4, Math.min(16, 3 + (degreeMap[d.id]||0))) + 4));
+
+      // Enable drag (updates positions manually)
+      nodes.call(d3.drag()
+        .on('drag', function(event, d) {
+          d.x = event.x; d.y = event.y;
+          d3.select(this).attr('transform', `translate(${d.x},${d.y})`);
+          linkGroup.selectAll('line').filter(e => e.source === d || e.target === d)
+            .attr('x1', e => e.source.x).attr('y1', e => e.source.y)
+            .attr('x2', e => e.target.x).attr('y2', e => e.target.y);
+        }));
+
+      // Zoom to fit immediately
+      requestAnimationFrame(() => zoomToFit(0));
+
+    } else {
+      // Small graphs: use force simulation as before
+      simulation = d3.forceSimulation(graphData.nodes)
+        .force('link', d3.forceLink(visibleEdges).id(d => d.id).distance(linkDistance).strength(0.3))
+        .force('charge', d3.forceManyBody().strength(chargeStrength).distanceMax(chargeDistMax))
+        .force('center', d3.forceCenter(width/2, height/2))
+        .force('collision', d3.forceCollide().radius(d => Math.max(4, Math.min(16, 3 + (degreeMap[d.id]||0))) + 2))
+        .on('tick', () => {
+          links.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+               .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+          nodes.attr('transform', d => `translate(${d.x},${d.y})`);
+          labels.attr('x', d => d.x).attr('y', d => d.y - (Math.max(4, Math.min(16, 3 + (degreeMap[d.id]||0))) + 4));
+        })
+        .on('end', () => zoomToFit(500));
+
+      setTimeout(() => zoomToFit(500), 800);
+    }
+
+    applySearch();
+  }
+
+  function highlightNeighbors(nodeId) {
+    const connectedIds = new Set([nodeId]);
+    graphData.edges.forEach(e => {
+      const src = typeof e.source === 'object' ? e.source.id : e.source;
+      const tgt = typeof e.target === 'object' ? e.target.id : e.target;
+      if (src === nodeId) connectedIds.add(tgt);
+      if (tgt === nodeId) connectedIds.add(src);
+    });
+
+    nodeGroup.selectAll('.node').style('opacity', d => connectedIds.has(d.id) ? 1 : 0.15);
+    linkGroup.selectAll('line').style('opacity', d => {
+      const src = typeof d.source === 'object' ? d.source.id : d.source;
+      const tgt = typeof d.target === 'object' ? d.target.id : d.target;
+      return (src === nodeId || tgt === nodeId) ? 0.8 : 0.05;
+    });
+    labelGroup.selectAll('text').style('opacity', d => connectedIds.has(d.id) ? 1 : 0.1);
+  }
+
+  function clearHighlight() {
+    nodeGroup.selectAll('.node').style('opacity', 1);
+    linkGroup.selectAll('line').style('opacity', 0.6);
+    labelGroup.selectAll('text').style('opacity', 1);
+    applySearch();
+  }
+
+  function showDetail(d) {
+    const callers = [], callees = [];
+    graphData.edges.forEach(e => {
+      const src = typeof e.source === 'object' ? e.source.id : e.source;
+      const tgt = typeof e.target === 'object' ? e.target.id : e.target;
+      if (src === d.id && nodeMap[tgt]) callees.push({ node: nodeMap[tgt], kind: e.kind });
+      if (tgt === d.id && nodeMap[src]) callers.push({ node: nodeMap[src], kind: e.kind });
+    });
+
+    let html = `
+      <div class="field"><div class="field-label">Name</div><div class="field-value">${escHtml(d.name)}</div></div>
+      <div class="field"><div class="field-label">Kind</div><div class="field-value">${escHtml(d.kind)}</div></div>
+      <div class="field"><div class="field-label">File</div><div class="field-value">${escHtml(d.file)}:${d.line}</div></div>
+    `;
+    if (d.signature) {
+      html += `<div class="field"><div class="field-label">Signature</div><div class="field-value signature">${escHtml(d.signature)}</div></div>`;
+    }
+    if (d.community) {
+      html += `<div class="field"><div class="field-label">Community</div><div class="field-value" style="color:${communityColor(d.community)}">${escHtml(d.community)}</div></div>`;
+      // Community drill-down: count members and edges
+      const communityNodes = graphData.nodes.filter(n => n.community === d.community);
+      const internalEdges = graphData.edges.filter(e => {
+        const src = typeof e.source === 'object' ? e.source : nodeMap[e.source];
+        const tgt = typeof e.target === 'object' ? e.target : nodeMap[e.target];
+        return src && tgt && src.community === d.community && tgt.community === d.community;
+      });
+      const externalEdges = graphData.edges.filter(e => {
+        const src = typeof e.source === 'object' ? e.source : nodeMap[e.source];
+        const tgt = typeof e.target === 'object' ? e.target : nodeMap[e.target];
+        return src && tgt && (src.community === d.community || tgt.community === d.community) &&
+               !(src.community === d.community && tgt.community === d.community);
+      });
+      html += `<div class="community-drilldown">
+        <h3>Community: ${escHtml(d.community)}</h3>
+        <div class="metric"><span class="label">Members</span><span class="value">${communityNodes.length}</span></div>
+        <div class="metric"><span class="label">Internal edges</span><span class="value">${internalEdges.length}</span></div>
+        <div class="metric"><span class="label">External edges</span><span class="value">${externalEdges.length}</span></div>
+        <div class="metric"><span class="label">Degree (this node)</span><span class="value">${degreeMap[d.id] || 0}</span></div>
+        <button class="focus-btn" data-community="${escHtml(d.community)}">Focus community</button>
+      </div>`;
+    }
+
+    if (callers.length > 0) {
+      html += '<div class="connections"><h3>Callers / Incoming (' + callers.length + ')</h3>';
+      callers.slice(0, 20).forEach(c => {
+        html += `<div class="conn-item" data-id="${escHtml(c.node.id)}">${escHtml(c.node.name)} <span style="color:#555">(${c.kind})</span></div>`;
+      });
+      if (callers.length > 20) html += '<div style="color:#555">...and ' + (callers.length-20) + ' more</div>';
+      html += '</div>';
+    }
+    if (callees.length > 0) {
+      html += '<div class="connections"><h3>Callees / Outgoing (' + callees.length + ')</h3>';
+      callees.slice(0, 20).forEach(c => {
+        html += `<div class="conn-item" data-id="${escHtml(c.node.id)}">${escHtml(c.node.name)} <span style="color:#555">(${c.kind})</span></div>`;
+      });
+      if (callees.length > 20) html += '<div style="color:#555">...and ' + (callees.length-20) + ' more</div>';
+      html += '</div>';
+    }
+
+    document.getElementById('detail-content').innerHTML = html;
+
+    // Click connection items to navigate
+    document.querySelectorAll('.conn-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.getAttribute('data-id');
+        if (nodeMap[id]) {
+          selectedNodeId = id;
+          showDetail(nodeMap[id]);
+          highlightNeighbors(id);
+        }
+      });
+    });
+
+    // Focus community button
+    document.querySelectorAll('.focus-btn').forEach(el => {
+      el.addEventListener('click', () => {
+        const community = el.getAttribute('data-community');
+        if (focusedCommunity === community) {
+          // Unfocus
+          focusedCommunity = null;
+          nodeGroup.selectAll('.node').style('opacity', 1);
+          linkGroup.selectAll('line').style('opacity', 0.6);
+          labelGroup.selectAll('text').style('opacity', 1);
+          el.textContent = 'Focus community';
+        } else {
+          focusedCommunity = community;
+          const communityIds = new Set(graphData.nodes.filter(n => n.community === community).map(n => n.id));
+          // Also include immediate neighbors
+          graphData.edges.forEach(e => {
+            const src = typeof e.source === 'object' ? e.source.id : e.source;
+            const tgt = typeof e.target === 'object' ? e.target.id : e.target;
+            if (communityIds.has(src)) communityIds.add(tgt);
+            if (communityIds.has(tgt)) communityIds.add(src);
+          });
+          nodeGroup.selectAll('.node').style('opacity', d => communityIds.has(d.id) ? 1 : 0.08);
+          linkGroup.selectAll('line').style('opacity', d => {
+            const src = typeof d.source === 'object' ? d.source.id : d.source;
+            const tgt = typeof d.target === 'object' ? d.target.id : d.target;
+            return communityIds.has(src) && communityIds.has(tgt) ? 0.6 : 0.02;
+          });
+          labelGroup.selectAll('text').style('opacity', d => communityIds.has(d.id) ? 1 : 0.05);
+          el.textContent = 'Unfocus';
+        }
+      });
+    });
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function applySearch() {
+    if (!searchTerm) {
+      nodeGroup.selectAll('.node').style('opacity', 1);
+      labelGroup.selectAll('text').style('display', d => (degreeMap[d.id]||0) >= 5 ? 'block' : 'none');
+      return;
+    }
+    const term = searchTerm.toLowerCase();
+    nodeGroup.selectAll('.node').style('opacity', d => d.name.toLowerCase().includes(term) ? 1 : 0.15);
+    labelGroup.selectAll('text').style('display', d => d.name.toLowerCase().includes(term) ? 'block' : 'none');
+  }
+
+  function applyMetricsOverlay() {
+    if (!showMetrics) {
+      // Reset to normal sizing
+      nodeGroup.selectAll('.node').each(function(d) {
+        const r = Math.max(4, Math.min(16, 3 + (degreeMap[d.id] || 0)));
+        const el = d3.select(this);
+        el.select('circle').attr('r', r);
+        el.select('rect').attr('width', r*2).attr('height', r*2).attr('x', -r).attr('y', -r);
+        el.style('animation', '');
+      });
+      return;
+    }
+    // Scale nodes by degree, add glow to high-coupling nodes
+    const maxDeg = Math.max(1, ...Object.values(degreeMap));
+    nodeGroup.selectAll('.node').each(function(d) {
+      const deg = degreeMap[d.id] || 0;
+      const scale = Math.max(5, Math.min(24, 5 + (deg / maxDeg) * 20));
+      const el = d3.select(this);
+      el.select('circle').attr('r', scale);
+      el.select('rect').attr('width', scale*2).attr('height', scale*2).attr('x', -scale).attr('y', -scale);
+      // Pulsing glow for high-coupling nodes (top 5% by degree)
+      if (deg > maxDeg * 0.7) {
+        el.style('animation', 'pulse-glow 2s infinite');
+        el.style('color', communityColor(d.community));
+      } else {
+        el.style('animation', '');
+      }
+    });
+    // Show degree labels on top nodes
+    const labelThreshold = Math.max(1, maxDeg * 0.4);
+    labelGroup.selectAll('text')
+      .style('display', d => (degreeMap[d.id] || 0) >= labelThreshold ? 'block' : 'none')
+      .text(d => showMetrics ? `${d.name} (${degreeMap[d.id] || 0})` : d.name);
+  }
+
+  function dragStart(event, d) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x; d.fy = d.y;
+  }
+  function dragging(event, d) { d.fx = event.x; d.fy = event.y; }
+  function dragEnd(event, d) {
+    if (!event.active) simulation.alphaTarget(0);
+    d.fx = null; d.fy = null;
+  }
+
+  // Event listeners
+  document.getElementById('search-box').addEventListener('input', function() {
+    searchTerm = this.value;
+    applySearch();
+  });
+
+  document.getElementById('repo-select').addEventListener('change', function() {
+    currentRepoId = this.value;
+    loadGraph();
+  });
+
+  document.querySelectorAll('#edge-filters input').forEach(cb => {
+    cb.addEventListener('change', function() {
+      if (this.checked) activeEdgeKinds.add(this.dataset.kind);
+      else activeEdgeKinds.delete(this.dataset.kind);
+      buildGraph();
+    });
+  });
+
+  // Layout switching
+  document.querySelectorAll('#layout-selector .layout-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#layout-selector .layout-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      currentLayout = this.dataset.layout;
+      // Recompute layout and rebuild
+      computeLayout(currentLayout, graphData.nodes);
+      buildGraph();
+    });
+  });
+
+  // Metrics toggle
+  document.getElementById('metrics-toggle').addEventListener('change', function() {
+    showMetrics = this.checked;
+    applyMetricsOverlay();
+  });
+
+  // Export SVG/PNG
+  document.getElementById('export-btn').addEventListener('click', function() {
+    const svgEl = document.getElementById('graph-svg');
+    // Clone SVG and inline styles
+    const clone = svgEl.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', svgEl.clientWidth);
+    clone.setAttribute('height', svgEl.clientHeight);
+    // Add background
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('width', '100%'); bg.setAttribute('height', '100%');
+    bg.setAttribute('fill', '#1a1a2e');
+    clone.insertBefore(bg, clone.firstChild);
+
+    const serializer = new XMLSerializer();
+    const svgStr = serializer.serializeToString(clone);
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+
+    // Create download link
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'mycelium-graph.svg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+  // --- Tab Switching ---
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      const tab = this.dataset.tab;
+      const graphContainer = document.getElementById('graph-container');
+      const detailPanel = document.getElementById('detail-panel');
+      const controlsBar = document.getElementById('controls-bar');
+      const knowledgePanel = document.getElementById('knowledge-panel');
+      const couplingPanel = document.getElementById('coupling-panel');
+      const cyclesPanel = document.getElementById('cycles-panel');
+      const communityPanel = document.getElementById('community-panel');
+      const centralityPanel = document.getElementById('centrality-panel');
+      const searchBox = document.getElementById('search-box');
+
+      // Hide all panels first
+      graphContainer.style.display = 'none';
+      detailPanel.style.display = 'none';
+      controlsBar.style.display = 'none';
+      searchBox.style.display = 'none';
+      knowledgePanel.classList.remove('active');
+      couplingPanel.classList.remove('active');
+      cyclesPanel.classList.remove('active');
+      communityPanel.classList.remove('active');
+      centralityPanel.classList.remove('active');
+      document.getElementById('llm-settings-panel').classList.remove('active');
+
+      if (tab === 'knowledge') {
+        knowledgePanel.classList.add('active');
+        document.getElementById('knowledge-query').focus();
+      } else if (tab === 'cycles') {
+        cyclesPanel.classList.add('active');
+        loadCycles();
+      } else if (tab === 'settings') {
+        graphContainer.style.display = 'none';
+        detailPanel.style.display = 'none';
+        controlsBar.style.display = 'none';
+        searchBox.style.display = 'none';
+        knowledgePanel.classList.remove('active');
+        document.getElementById('llm-settings-panel').classList.add('active');
+        loadLlmConfig();
+      } else if (tab === 'coupling') {
+        couplingPanel.classList.add('active');
+        loadCouplingData();
+      } else if (tab === 'communities') {
+        communityPanel.classList.add('active');
+        initCommunityExplorer();
+      } else if (tab === 'centrality') {
+        centralityPanel.classList.add('active');
+        loadCentralityData();
+      } else {
+        graphContainer.style.display = '';
+        detailPanel.style.display = '';
+        controlsBar.style.display = '';
+        searchBox.style.display = '';
+      }
+    });
+  });
+
+  // --- Community Explorer ---
+  let commExplorerInitialized = false;
+  let commCurrentView = 'cluster';
+  let commSelectedId = null;
+
+  function initCommunityExplorer() {
+    if (!graphData || !graphData.communities || graphData.communities.length === 0) {
+      document.getElementById('comm-sidebar-content').innerHTML =
+        '<p class="placeholder" style="color:#555;font-style:italic;">No community data available. Run Leiden analysis first.</p>';
+      return;
+    }
+
+    // Enrich communities with computed metrics
+    const communities = enrichCommunities(graphData);
+    document.getElementById('comm-total-count').textContent = communities.length;
+
+    // Compute approximate modularity
+    const mod = computeModularity(graphData);
+    document.getElementById('comm-modularity').textContent = mod.toFixed(3);
+
+    renderCommunitySidebar(communities);
+    renderCommunityView(commCurrentView, communities);
+
+    // View switcher
+    if (!commExplorerInitialized) {
+      document.querySelectorAll('#community-toolbar .view-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('#community-toolbar .view-btn').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          commCurrentView = this.dataset.view;
+          renderCommunityView(commCurrentView, communities);
+        });
+      });
+      commExplorerInitialized = true;
+    }
+  }
+
+  function enrichCommunities(data) {
+    const nodeMap = {};
+    data.nodes.forEach(n => { nodeMap[n.id] = n; });
+
+    return data.communities.map((c, idx) => {
+      const members = (c.symbol_ids || []).map(id => nodeMap[id]).filter(Boolean);
+      // Count internal vs external edges
+      const memberSet = new Set(c.symbol_ids || []);
+      let internalEdges = 0, externalEdges = 0;
+      data.edges.forEach(e => {
+        const srcIn = memberSet.has(e.source);
+        const tgtIn = memberSet.has(e.target);
+        if (srcIn && tgtIn) internalEdges++;
+        else if (srcIn || tgtIn) externalEdges++;
+      });
+
+      // Compute cohesion: internal edges / max possible internal edges
+      const n = members.length;
+      const maxEdges = n > 1 ? (n * (n - 1)) / 2 : 1;
+      const cohesion = internalEdges / maxEdges;
+
+      // Dominant symbol kinds
+      const kindCounts = {};
+      members.forEach(m => {
+        const k = m.kind || 'unknown';
+        kindCounts[k] = (kindCounts[k] || 0) + 1;
+      });
+      const dominantKind = Object.entries(kindCounts).sort((a, b) => b[1] - a[1])[0];
+
+      return {
+        ...c,
+        idx,
+        members,
+        internalEdges,
+        externalEdges,
+        cohesion,
+        kindCounts,
+        dominantKind: dominantKind ? dominantKind[0] : 'unknown',
+        color: COMMUNITY_COLORS[idx % COMMUNITY_COLORS.length]
+      };
+    }).sort((a, b) => b.members.length - a.members.length);
+  }
+
+  function computeModularity(data) {
+    if (!data.edges.length || !data.communities.length) return 0;
+    const m = data.edges.length;
+    const nodeComm = {};
+    data.communities.forEach(c => {
+      (c.symbol_ids || []).forEach(id => { nodeComm[id] = c.id; });
+    });
+    const degree = {};
+    data.edges.forEach(e => {
+      degree[e.source] = (degree[e.source] || 0) + 1;
+      degree[e.target] = (degree[e.target] || 0) + 1;
+    });
+    let Q = 0;
+    data.edges.forEach(e => {
+      if (nodeComm[e.source] && nodeComm[e.source] === nodeComm[e.target]) {
+        Q += 1 - ((degree[e.source] || 0) * (degree[e.target] || 0)) / (2 * m);
+      }
+    });
+    return Q / m;
+  }
+
+  function renderCommunitySidebar(communities) {
+    const container = document.getElementById('comm-sidebar-content');
+    const maxMembers = Math.max(...communities.map(c => c.members.length), 1);
+
+    let html = '<div id="comm-list">';
+    communities.forEach(c => {
+      const pct = (c.members.length / maxMembers * 100).toFixed(0);
+      html += '<div class="community-list-item" data-comm-id="' + c.id + '">';
+      html += '<div class="comm-header">';
+      html += '<span><span class="comm-color" style="background:' + c.color + '"></span>';
+      html += '<span class="comm-label">' + escHtml(c.label || c.id) + '</span></span>';
+      html += '<span class="comm-count">' + c.members.length + ' symbols</span>';
+      html += '</div>';
+      html += '<div class="comm-bar"><div class="comm-bar-fill" style="width:' + pct + '%;background:' + c.color + '"></div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Click handlers for community list items
+    container.querySelectorAll('.community-list-item').forEach(item => {
+      item.addEventListener('click', function() {
+        const commId = this.dataset.commId;
+        const comm = communities.find(c => c.id === commId);
+        if (commSelectedId === commId) {
+          // Deselect
+          commSelectedId = null;
+          container.querySelectorAll('.community-list-item').forEach(i => i.classList.remove('selected'));
+          renderCommunitySidebar(communities);
+          renderCommunityView(commCurrentView, communities);
+        } else {
+          commSelectedId = commId;
+          container.querySelectorAll('.community-list-item').forEach(i => i.classList.remove('selected'));
+          this.classList.add('selected');
+          showCommunityDetail(comm, communities);
+          highlightCommunity(commId, communities);
+        }
+      });
+    });
+  }
+
+  function showCommunityDetail(comm, allCommunities) {
+    const container = document.getElementById('comm-sidebar-content');
+    let html = '<button class="comm-back-btn" id="comm-back">← All Communities</button>';
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">';
+    html += '<span class="comm-color" style="background:' + comm.color + ';width:14px;height:14px;"></span>';
+    html += '<h2 style="color:#8b5cf6;font-size:16px;margin:0;">' + escHtml(comm.label || comm.id) + '</h2>';
+    html += '</div>';
+
+    html += '<div class="comm-detail-section"><h3>Metrics</h3>';
+    html += '<div class="comm-metric-row"><span class="metric-label">Members</span><span class="metric-value">' + comm.members.length + '</span></div>';
+    html += '<div class="comm-metric-row"><span class="metric-label">Internal Edges</span><span class="metric-value">' + comm.internalEdges + '</span></div>';
+    html += '<div class="comm-metric-row"><span class="metric-label">External Edges</span><span class="metric-value">' + comm.externalEdges + '</span></div>';
+    html += '<div class="comm-metric-row"><span class="metric-label">Cohesion</span><span class="metric-value">' + (comm.cohesion * 100).toFixed(1) + '%</span></div>';
+    html += '<div class="comm-metric-row"><span class="metric-label">Dominant Kind</span><span class="metric-value">' + escHtml(comm.dominantKind) + '</span></div>';
+    html += '</div>';
+
+    // Kind breakdown
+    html += '<div class="comm-detail-section"><h3>Symbol Kinds</h3>';
+    Object.entries(comm.kindCounts).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => {
+      html += '<div class="comm-metric-row"><span class="metric-label">' + escHtml(k) + '</span><span class="metric-value">' + v + '</span></div>';
+    });
+    html += '</div>';
+
+    // Inter-community connections
+    const connectedComms = {};
+    graphData.edges.forEach(e => {
+      const memberSet = new Set(comm.symbol_ids || []);
+      if (memberSet.has(e.source) && !memberSet.has(e.target)) {
+        const targetComm = allCommunities.find(c => (c.symbol_ids || []).includes(e.target));
+        if (targetComm) connectedComms[targetComm.id] = (connectedComms[targetComm.id] || 0) + 1;
+      } else if (memberSet.has(e.target) && !memberSet.has(e.source)) {
+        const srcComm = allCommunities.find(c => (c.symbol_ids || []).includes(e.source));
+        if (srcComm) connectedComms[srcComm.id] = (connectedComms[srcComm.id] || 0) + 1;
+      }
+    });
+    if (Object.keys(connectedComms).length > 0) {
+      html += '<div class="comm-detail-section"><h3>Connected Communities</h3>';
+      Object.entries(connectedComms).sort((a, b) => b[1] - a[1]).forEach(([cid, count]) => {
+        const other = allCommunities.find(c => c.id === cid);
+        if (other) {
+          html += '<div class="comm-metric-row"><span class="metric-label" style="display:flex;align-items:center;gap:4px;">';
+          html += '<span class="comm-color" style="background:' + other.color + '"></span>' + escHtml(other.label || other.id);
+          html += '</span><span class="metric-value">' + count + ' edges</span></div>';
+        }
+      });
+      html += '</div>';
+    }
+
+    // Members list
+    html += '<div class="comm-detail-section"><h3>Members (' + comm.members.length + ')</h3>';
+    html += '<div class="comm-members-list">';
+    comm.members.slice(0, 50).forEach(m => {
+      html += '<div class="comm-member-item" data-uid="' + escHtml(m.id) + '">' + escHtml(m.label || m.id) + '</div>';
+    });
+    if (comm.members.length > 50) {
+      html += '<div style="color:#555;font-size:11px;padding:4px 8px;">... and ' + (comm.members.length - 50) + ' more</div>';
+    }
+    html += '</div></div>';
+
+    container.innerHTML = html;
+
+    document.getElementById('comm-back').addEventListener('click', () => {
+      commSelectedId = null;
+      renderCommunitySidebar(allCommunities);
+      renderCommunityView(commCurrentView, allCommunities);
+    });
+
+    // Member click -> switch to graph tab and select node
+    container.querySelectorAll('.comm-member-item').forEach(item => {
+      item.addEventListener('click', function() {
+        const uid = this.dataset.uid;
+        // Switch to graph tab and select that node
+        document.querySelector('.tab-btn[data-tab="graph"]').click();
+        if (nodeMap[uid]) {
+          selectedNodeId = uid;
+          showDetail(nodeMap[uid]);
+          highlightNeighbors(uid);
+        }
+      });
+    });
+  }
+
+  // --- Centrality Heatmap ---
+  let centralityData = null;
+  let centralityMetric = 'betweenness';
+  let centralityOverlayActive = false;
+
+  async function loadCentralityData() {
+    if (!currentRepoId) {
+      document.getElementById('centrality-loading').textContent = 'Select a repo first';
+      document.getElementById('centrality-loading').style.display = 'block';
+      return;
+    }
+
+    const topN = parseInt(document.getElementById('centrality-top-n').value) || 30;
+    document.getElementById('centrality-loading').textContent = 'Loading centrality data...';
+    document.getElementById('centrality-loading').style.display = 'block';
+
+    try {
+      const res = await fetch('/api/repos/' + encodeURIComponent(currentRepoId) + '/centrality?metric=' + centralityMetric + '&top_n=' + topN);
+      centralityData = await res.json();
+      document.getElementById('centrality-loading').style.display = 'none';
+      document.getElementById('heatmap-legend').style.display = 'flex';
+      renderCentralityHeatmap();
+      renderCentralityRanking();
+      renderCentralityComparison();
+    } catch (e) {
+      document.getElementById('centrality-loading').textContent = 'Error loading centrality: ' + e.message;
+    }
+  }
+
+  function getCentralityValue(node, metric) {
+    switch (metric) {
+      case 'degree': return node.degree;
+      case 'closeness': return node.closeness;
+      case 'eigenvector': return node.eigenvector;
+      default: return node.betweenness;
+    }
+  }
+
+  function centralityColorScale(value, maxValue) {
+    // 0 -> dark blue (#1a1a2e), mid -> red (#e94560), high -> yellow (#facc15)
+    const t = maxValue > 0 ? value / maxValue : 0;
+    if (t < 0.5) {
+      const s = t * 2;
+      const r = Math.round(26 + (233 - 26) * s);
+      const g = Math.round(26 + (69 - 26) * s);
+      const b = Math.round(46 + (96 - 46) * s);
+      return `rgb(${r},${g},${b})`;
+    } else {
+      const s = (t - 0.5) * 2;
+      const r = Math.round(233 + (250 - 233) * s);
+      const g = Math.round(69 + (204 - 69) * s);
+      const b = Math.round(96 + (21 - 96) * s);
+      return `rgb(${r},${g},${b})`;
+    }
+  }
+
+  function renderCentralityHeatmap() {
+    if (!centralityData || !centralityData.nodes.length) return;
+
+    const nodes = centralityData.nodes;
+    const maxVal = Math.max(...nodes.map(n => getCentralityValue(n, centralityMetric)));
+    const container = document.getElementById('centrality-heatmap-container');
+    const containerWidth = container.clientWidth - 32;
+
+    // Grid-based heatmap: each cell represents a node, sized proportionally
+    const cols = Math.ceil(Math.sqrt(nodes.length * 1.5));
+    const cellSize = Math.max(16, Math.min(48, Math.floor((containerWidth - 40) / cols)));
+    const rows = Math.ceil(nodes.length / cols);
+    const svgWidth = cols * (cellSize + 2) + 20;
+    const svgHeight = rows * (cellSize + 2) + 20;
+
+    const svg = d3.select('#centrality-heatmap-svg');
+    svg.selectAll('*').remove();
+    svg.attr('width', svgWidth).attr('height', svgHeight);
+
+    const tooltip = document.getElementById('tooltip');
+
+    svg.selectAll('rect.heatcell')
+      .data(nodes)
+      .enter().append('rect')
+      .attr('class', 'heatcell')
+      .attr('x', (d, i) => (i % cols) * (cellSize + 2) + 10)
+      .attr('y', (d, i) => Math.floor(i / cols) * (cellSize + 2) + 10)
+      .attr('width', cellSize)
+      .attr('height', cellSize)
+      .attr('rx', 3)
+      .attr('fill', d => centralityColorScale(getCentralityValue(d, centralityMetric), maxVal))
+      .attr('stroke', '#0a0a0c')
+      .attr('stroke-width', 1)
+      .style('cursor', 'pointer')
+      .on('mouseover', function(event, d) {
+        d3.select(this).attr('stroke', '#fff').attr('stroke-width', 2);
+        tooltip.style.display = 'block';
+        const val = getCentralityValue(d, centralityMetric);
+        tooltip.innerHTML = '<strong>' + escHtml(d.name) + '</strong> (' + escHtml(d.kind) + ')<br>'
+          + centralityMetric + ': ' + val.toFixed(4) + '<br>'
+          + escHtml(d.file);
+      })
+      .on('mousemove', function(event) {
+        tooltip.style.left = (event.pageX + 12) + 'px';
+        tooltip.style.top = (event.pageY - 20) + 'px';
+      })
+      .on('mouseout', function() {
+        d3.select(this).attr('stroke', '#0a0a0c').attr('stroke-width', 1);
+        tooltip.style.display = 'none';
+      })
+      .on('click', function(event, d) {
+        // Navigate to graph and select this node
+        if (d.uid && nodeMap[d.uid]) {
+          document.querySelector('.tab-btn[data-tab="graph"]').click();
+          selectedNodeId = d.uid;
+          showDetail(nodeMap[d.uid]);
+          highlightNeighbors(d.uid);
+        }
+      });
+
+    // Add text labels for larger cells
+    if (cellSize >= 28) {
+      svg.selectAll('text.heatlabel')
+        .data(nodes)
+        .enter().append('text')
+        .attr('class', 'heatlabel')
+        .attr('x', (d, i) => (i % cols) * (cellSize + 2) + 10 + cellSize / 2)
+        .attr('y', (d, i) => Math.floor(i / cols) * (cellSize + 2) + 10 + cellSize / 2 + 3)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', Math.min(9, cellSize / 4))
+        .attr('fill', d => {
+          const val = getCentralityValue(d, centralityMetric);
+          return val / maxVal > 0.6 ? '#0a0a0c' : '#ccc';
+        })
+        .style('pointer-events', 'none')
+        .text(d => d.name.length > 8 ? d.name.slice(0, 7) + '…' : d.name);
+    }
+  }
+
+  function renderCentralityRanking() {
+    if (!centralityData || !centralityData.nodes.length) return;
+
+    const nodes = centralityData.nodes;
+    const maxVal = Math.max(...nodes.map(n => getCentralityValue(n, centralityMetric)));
+    const list = document.getElementById('ranking-list');
+
+    let html = '';
+    nodes.forEach((n, i) => {
+      const val = getCentralityValue(n, centralityMetric);
+      const pct = maxVal > 0 ? (val / maxVal * 100) : 0;
+      html += '<div class="ranking-item" data-uid="' + escHtml(n.uid) + '">'
+        + '<span class="rank">#' + (i + 1) + '</span>'
+        + '<div style="flex:1;overflow:hidden;">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;">'
+        + '<span class="rank-name">' + escHtml(n.name) + '</span>'
+        + '<span class="rank-value">' + val.toFixed(4) + '</span>'
+        + '</div>'
+        + '<span class="rank-kind">' + escHtml(n.kind) + ' — ' + escHtml(n.file) + '</span>'
+        + '<div class="rank-bar" style="width:' + pct + '%;background:' + centralityColorScale(val, maxVal) + '"></div>'
+        + '</div></div>';
+    });
+
+    html += '<div style="margin-top:12px;font-size:11px;color:#555;">'
+      + 'Showing ' + nodes.length + ' of ' + centralityData.total_nodes + ' nodes</div>';
+
+    list.innerHTML = html;
+
+    // Click to navigate to graph
+    list.querySelectorAll('.ranking-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const uid = el.getAttribute('data-uid');
+        if (uid && nodeMap[uid]) {
+          document.querySelector('.tab-btn[data-tab="graph"]').click();
+          selectedNodeId = uid;
+          showDetail(nodeMap[uid]);
+          highlightNeighbors(uid);
+        }
+      });
+    });
+  }
+
+  function highlightCommunity(commId, communities) {
+    // Highlight in current viz
+    const svg = d3.select('#community-svg');
+    svg.selectAll('.comm-node, .comm-arc, .treemap-cell')
+      .transition().duration(300)
+      .style('opacity', function() {
+        return d3.select(this).attr('data-comm-id') === commId ? 1 : 0.2;
+      });
+  }
+
+  function renderCommunityView(view, communities) {
+    const container = document.getElementById('community-viz');
+    const svg = d3.select('#community-svg');
+    svg.selectAll('*').remove();
+
+    const rect = container.getBoundingClientRect();
+    const width = rect.width || 800;
+    const height = rect.height || 600;
+
+    svg.attr('viewBox', '0 0 ' + width + ' ' + height);
+
+    if (view === 'sunburst') renderSunburst(svg, width, height, communities);
+    else if (view === 'treemap') renderTreemap(svg, width, height, communities);
+    else renderClusterMap(svg, width, height, communities);
+  }
+
+  // --- Cluster Map: force-directed community bubbles with inter-community edges ---
+  function renderClusterMap(svg, width, height, communities) {
+    const tooltip = document.getElementById('comm-tooltip');
+    const g = svg.append('g');
+
+    // Build inter-community edge data
+    const interEdges = {};
+    const nodeCommMap = {};
+    communities.forEach(c => {
+      (c.symbol_ids || []).forEach(id => { nodeCommMap[id] = c.id; });
+    });
+    graphData.edges.forEach(e => {
+      const sc = nodeCommMap[e.source], tc = nodeCommMap[e.target];
+      if (sc && tc && sc !== tc) {
+        const key = [sc, tc].sort().join('|');
+        interEdges[key] = (interEdges[key] || 0) + 1;
+      }
+    });
+    const edgeData = Object.entries(interEdges).map(([key, weight]) => {
+      const [s, t] = key.split('|');
+      return { source: s, target: t, weight };
+    });
+
+    // Scale for community bubble sizes
+    const maxSize = Math.max(...communities.map(c => c.members.length), 1);
+    const rScale = d3.scaleSqrt().domain([0, maxSize]).range([20, Math.min(width, height) * 0.15]);
+
+    // Community nodes
+    const commNodes = communities.map(c => ({
+      id: c.id,
+      label: c.label || c.id,
+      r: rScale(c.members.length),
+      color: c.color,
+      memberCount: c.members.length,
+      cohesion: c.cohesion,
+      comm: c
+    }));
+
+    // Force simulation for community bubbles
+    const sim = d3.forceSimulation(commNodes)
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('charge', d3.forceManyBody().strength(-200))
+      .force('collide', d3.forceCollide(d => d.r + 8).strength(0.8))
+      .force('link', d3.forceLink(edgeData).id(d => d.id).distance(150).strength(0.3))
+      .alphaDecay(0.04);
+
+    // Draw inter-community edges
+    const links = g.selectAll('.inter-comm-edge')
+      .data(edgeData)
+      .enter().append('line')
+      .attr('class', 'inter-comm-edge')
+      .attr('stroke', '#555')
+      .attr('stroke-width', d => Math.min(Math.sqrt(d.weight) * 1.5, 8));
+
+    // Draw community bubbles
+    const bubbles = g.selectAll('.comm-bubble')
+      .data(commNodes)
+      .enter().append('g')
+      .attr('class', 'comm-node')
+      .attr('data-comm-id', d => d.id)
+      .style('cursor', 'pointer');
+
+    // Outer glow circle
+    bubbles.append('circle')
+      .attr('r', d => d.r + 3)
+      .attr('fill', 'none')
+      .attr('stroke', d => d.color)
+      .attr('stroke-width', 2)
+      .attr('stroke-opacity', 0.3);
+
+    // Main circle
+    bubbles.append('circle')
+      .attr('r', d => d.r)
+      .attr('fill', d => d.color)
+      .attr('fill-opacity', 0.15)
+      .attr('stroke', d => d.color)
+      .attr('stroke-width', 2);
+
+    // Inner dots representing members (up to 30)
+    bubbles.each(function(d) {
+      const group = d3.select(this);
+      const count = Math.min(d.comm.members.length, 30);
+      const innerR = d.r * 0.7;
+      for (let i = 0; i < count; i++) {
+        const angle = (2 * Math.PI * i) / count;
+        const dist = innerR * (0.3 + Math.random() * 0.6);
+        group.append('circle')
+          .attr('cx', Math.cos(angle) * dist)
+          .attr('cy', Math.sin(angle) * dist)
+          .attr('r', 2.5)
+          .attr('fill', d.color)
+          .attr('fill-opacity', 0.6);
+      }
+    });
+
+    // Labels
+    bubbles.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', d => d.r + 16)
+      .attr('fill', '#e0e0e0')
+      .attr('font-size', '11px')
+      .attr('font-weight', '600')
+      .text(d => d.label.length > 20 ? d.label.slice(0, 18) + '…' : d.label);
+
+    // Count labels
+    bubbles.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '0.35em')
+      .attr('fill', '#e0e0e0')
+      .attr('font-size', d => Math.max(10, d.r * 0.35) + 'px')
+      .attr('font-weight', '700')
+      .text(d => d.memberCount);
+
+    // Tooltip and click
+    bubbles.on('mouseover', function(event, d) {
+      tooltip.style.display = 'block';
+      tooltip.innerHTML = '<div class="tt-label">' + escHtml(d.label) + '</div>'
+        + '<div class="tt-stat">' + d.memberCount + ' symbols · cohesion: ' + (d.cohesion * 100).toFixed(1) + '%</div>'
+        + '<div class="tt-stat">Internal: ' + d.comm.internalEdges + ' · External: ' + d.comm.externalEdges + '</div>';
+    }).on('mousemove', function(event) {
+      const vizRect = document.getElementById('community-viz').getBoundingClientRect();
+      tooltip.style.left = (event.clientX - vizRect.left + 12) + 'px';
+      tooltip.style.top = (event.clientY - vizRect.top - 10) + 'px';
+    }).on('mouseout', function() {
+      tooltip.style.display = 'none';
+    }).on('click', function(event, d) {
+      commSelectedId = d.id;
+      document.querySelectorAll('.community-list-item').forEach(i => {
+        i.classList.toggle('selected', i.dataset.commId === d.id);
+      });
+      showCommunityDetail(d.comm, communities);
+      highlightCommunity(d.id, communities);
+    });
+
+    sim.on('tick', () => {
+      links
+        .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      bubbles.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
+    });
+
+    // Zoom
+    const zoom = d3.zoom().scaleExtent([0.3, 4]).on('zoom', e => g.attr('transform', e.transform));
+    svg.call(zoom);
+  }
+
+  // --- Sunburst: hierarchical community visualization ---
+  function renderSunburst(svg, width, height, communities) {
+    const tooltip = document.getElementById('comm-tooltip');
+    const radius = Math.min(width, height) / 2 - 20;
+    const g = svg.append('g').attr('transform', 'translate(' + width / 2 + ',' + height / 2 + ')');
+
+    // Build hierarchy: root -> communities -> symbols (grouped by kind)
+    const root = { name: 'All Communities', children: [] };
+    communities.forEach(c => {
+      const kindGroups = {};
+      c.members.forEach(m => {
+        const k = m.kind || 'unknown';
+        if (!kindGroups[k]) kindGroups[k] = { name: k, children: [], kind: k };
+        kindGroups[k].children.push({ name: m.label || m.id, size: 1, nodeId: m.id, kind: k });
+      });
+      root.children.push({
+        name: c.label || c.id,
+        commId: c.id,
+        color: c.color,
+        children: Object.values(kindGroups)
+      });
+    });
+
+    const hierarchy = d3.hierarchy(root).sum(d => d.size || 0).sort((a, b) => b.value - a.value);
+    const partition = d3.partition().size([2 * Math.PI, radius]);
+    partition(hierarchy);
+
+    const arc = d3.arc()
+      .startAngle(d => d.x0)
+      .endAngle(d => d.x1)
+      .innerRadius(d => d.y0)
+      .outerRadius(d => d.y1 - 1);
+
+    const colorForNode = d => {
+      // Walk up to find community color
+      let node = d;
+      while (node.parent && !node.data.color) node = node.parent;
+      return node.data.color || '#555';
+    };
+
+    const paths = g.selectAll('path')
+      .data(hierarchy.descendants().filter(d => d.depth > 0))
+      .enter().append('path')
+      .attr('class', 'comm-arc')
+      .attr('data-comm-id', d => {
+        let node = d;
+        while (node.parent && !node.data.commId) node = node.parent;
+        return node.data.commId || '';
+      })
+      .attr('d', arc)
+      .attr('fill', d => {
+        const base = colorForNode(d);
+        // Vary opacity by depth
+        const opacity = d.depth === 1 ? 0.85 : d.depth === 2 ? 0.55 : 0.35;
+        return d3.color(base).copy({opacity});
+      })
+      .attr('stroke', '#0a0a0c')
+      .attr('stroke-width', 0.5)
+      .style('cursor', 'pointer');
+
+    // Labels for communities (depth 1)
+    g.selectAll('.comm-label')
+      .data(hierarchy.descendants().filter(d => d.depth === 1 && (d.x1 - d.x0) > 0.15))
+      .enter().append('text')
+      .attr('transform', d => {
+        const angle = (d.x0 + d.x1) / 2;
+        const r = (d.y0 + d.y1) / 2;
+        const x = Math.sin(angle) * r;
+        const y = -Math.cos(angle) * r;
+        const rotate = (angle * 180 / Math.PI) - 90 + (angle > Math.PI ? 180 : 0);
+        return 'translate(' + x + ',' + y + ') rotate(' + rotate + ')';
+      })
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#e0e0e0')
+      .attr('font-size', '10px')
+      .attr('font-weight', '600')
+      .text(d => {
+        const label = d.data.name;
+        return label.length > 14 ? label.slice(0, 12) + '…' : label;
+      });
+
+    paths.on('mouseover', function(event, d) {
+      tooltip.style.display = 'block';
+      const name = d.data.name;
+      const count = d.value;
+      tooltip.innerHTML = '<div class="tt-label">' + escHtml(name) + '</div>'
+        + '<div class="tt-stat">' + count + ' symbol' + (count !== 1 ? 's' : '') + '</div>';
+      d3.select(this).attr('stroke', '#e0e0e0').attr('stroke-width', 2);
+    }).on('mousemove', function(event) {
+      const vizRect = document.getElementById('community-viz').getBoundingClientRect();
+      tooltip.style.left = (event.clientX - vizRect.left + 12) + 'px';
+      tooltip.style.top = (event.clientY - vizRect.top - 10) + 'px';
+    }).on('mouseout', function() {
+      tooltip.style.display = 'none';
+      d3.select(this).attr('stroke', '#0a0a0c').attr('stroke-width', 0.5);
+    }).on('click', function(event, d) {
+      // Find community
+      let node = d;
+      while (node.parent && !node.data.commId) node = node.parent;
+      if (node.data.commId) {
+        const comm = communities.find(c => c.id === node.data.commId);
+        if (comm) {
+          commSelectedId = comm.id;
+          showCommunityDetail(comm, communities);
+        }
+      }
+    });
+
+    // Center label
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '-0.2em')
+      .attr('fill', '#888')
+      .attr('font-size', '12px')
+      .text(communities.length + ' communities');
+    g.append('text')
+      .attr('text-anchor', 'middle')
+      .attr('dy', '1.2em')
+      .attr('fill', '#555')
+      .attr('font-size', '11px')
+      .text(graphData.nodes.length + ' symbols');
+  }
+
+  // --- Treemap: rectangular community visualization ---
+  function renderTreemap(svg, width, height, communities) {
+    const tooltip = document.getElementById('comm-tooltip');
+    const margin = 4;
+
+    const root = { name: 'root', children: communities.map(c => ({
+      name: c.label || c.id,
+      commId: c.id,
+      color: c.color,
+      comm: c,
+      children: c.members.map(m => ({ name: m.label || m.id, size: 1, nodeId: m.id }))
+    }))};
+
+    const hierarchy = d3.hierarchy(root).sum(d => d.size || 0).sort((a, b) => b.value - a.value);
+    d3.treemap().size([width - margin * 2, height - margin * 2]).padding(3).paddingTop(18)(hierarchy);
+
+    const g = svg.append('g').attr('transform', 'translate(' + margin + ',' + margin + ')');
+
+    // Community groups (depth 1)
+    const commGroups = g.selectAll('.treemap-comm')
+      .data(hierarchy.children || [])
+      .enter().append('g')
+      .attr('class', 'treemap-cell')
+      .attr('data-comm-id', d => d.data.commId);
+
+    commGroups.append('rect')
+      .attr('x', d => d.x0)
+      .attr('y', d => d.y0)
+      .attr('width', d => Math.max(0, d.x1 - d.x0))
+      .attr('height', d => Math.max(0, d.y1 - d.y0))
+      .attr('fill', d => d.data.color)
+      .attr('fill-opacity', 0.12)
+      .attr('stroke', d => d.data.color)
+      .attr('stroke-width', 1.5)
+      .attr('rx', 3);
+
+    // Community header labels
+    commGroups.append('text')
+      .attr('x', d => d.x0 + 6)
+      .attr('y', d => d.y0 + 13)
+      .attr('fill', d => d.data.color)
+      .attr('font-size', '11px')
+      .attr('font-weight', '600')
+      .text(d => {
+        const maxLen = Math.floor((d.x1 - d.x0) / 7);
+        const label = d.data.name + ' (' + d.value + ')';
+        return label.length > maxLen ? label.slice(0, maxLen - 1) + '…' : label;
+      });
+
+    // Individual symbol cells (depth 2)
+    const leaves = g.selectAll('.treemap-leaf')
+      .data(hierarchy.leaves())
+      .enter().append('rect')
+      .attr('class', 'treemap-leaf')
+      .attr('x', d => d.x0)
+      .attr('y', d => d.y0)
+      .attr('width', d => Math.max(0, d.x1 - d.x0))
+      .attr('height', d => Math.max(0, d.y1 - d.y0))
+      .attr('fill', d => {
+        let node = d;
+        while (node.parent && !node.data.color) node = node.parent;
+        return node.data.color || '#555';
+      })
+      .attr('fill-opacity', 0.35)
+      .attr('stroke', '#0a0a0c')
+      .attr('stroke-width', 0.5)
+      .attr('rx', 1)
+      .style('cursor', 'pointer');
+
+    leaves.on('mouseover', function(event, d) {
+      tooltip.style.display = 'block';
+      tooltip.innerHTML = '<div class="tt-label">' + escHtml(d.data.name) + '</div>';
+      d3.select(this).attr('fill-opacity', 0.7);
+    }).on('mousemove', function(event) {
+      const vizRect = document.getElementById('community-viz').getBoundingClientRect();
+      tooltip.style.left = (event.clientX - vizRect.left + 12) + 'px';
+      tooltip.style.top = (event.clientY - vizRect.top - 10) + 'px';
+    }).on('mouseout', function() {
+      tooltip.style.display = 'none';
+      d3.select(this).attr('fill-opacity', 0.35);
+    });
+
+    commGroups.style('cursor', 'pointer').on('click', function(event, d) {
+      if (d.data.comm) {
+        commSelectedId = d.data.commId;
+        showCommunityDetail(d.data.comm, communities);
+        highlightCommunity(d.data.commId, communities);
+      }
+    });
+
+    // Tooltip for community groups
+    commGroups.on('mouseover', function(event, d) {
+      if (!d.data.comm) return;
+      tooltip.style.display = 'block';
+      tooltip.innerHTML = '<div class="tt-label">' + escHtml(d.data.name) + '</div>'
+        + '<div class="tt-stat">' + d.value + ' symbols · cohesion: ' + (d.data.comm.cohesion * 100).toFixed(1) + '%</div>';
+    }).on('mousemove', function(event) {
+      const vizRect = document.getElementById('community-viz').getBoundingClientRect();
+      tooltip.style.left = (event.clientX - vizRect.left + 12) + 'px';
+      tooltip.style.top = (event.clientY - vizRect.top - 10) + 'px';
+    }).on('mouseout', function() {
+      tooltip.style.display = 'none';
+    });
+  }
+
+  function renderCentralityComparison() {
+    if (!centralityData || !centralityData.nodes.length) return;
+
+    const metrics = ['betweenness', 'closeness', 'eigenvector', 'degree'];
+    const container = document.getElementById('centrality-comparison');
+    let html = '';
+
+    metrics.forEach(metric => {
+      const sorted = [...centralityData.nodes].sort((a, b) => getCentralityValue(b, metric) - getCentralityValue(a, metric));
+      const top5 = sorted.slice(0, 5);
+      html += '<div class="comparison-col">';
+      html += '<h4>' + metric + '</h4>';
+      top5.forEach((n, i) => {
+        const val = getCentralityValue(n, metric);
+        html += '<div class="comparison-mini-item">'
+          + '<span>' + (i + 1) + '. ' + escHtml(n.name) + '</span>'
+          + '<span class="cval">' + val.toFixed(3) + '</span></div>';
+      });
+      html += '</div>';
+    });
+
+    container.innerHTML = html;
+  }
+
+  function applyCentralityOverlay() {
+    if (!centralityOverlayActive || !centralityData || !centralityData.nodes.length) {
+      // Remove overlay — restore original colors
+      nodeGroup.selectAll('.node').each(function(d) {
+        const el = d3.select(this);
+        const color = communityColor(d.community);
+        el.select('circle').attr('fill', color);
+        el.select('rect').attr('fill', color);
+        el.select('polygon').attr('fill', color);
+      });
+      return;
+    }
+
+    // Build lookup from uid to centrality value
+    const valMap = {};
+    let maxVal = 0;
+    centralityData.nodes.forEach(n => {
+      const val = getCentralityValue(n, centralityMetric);
+      valMap[n.uid] = val;
+      if (val > maxVal) maxVal = val;
+    });
+
+    // Apply heatmap coloring and size scaling to graph nodes
+    nodeGroup.selectAll('.node').each(function(d) {
+      const el = d3.select(this);
+      const val = valMap[d.id];
+      if (val !== undefined) {
+        const heatColor = centralityColorScale(val, maxVal);
+        const scale = Math.max(5, Math.min(24, 5 + (val / Math.max(maxVal, 0.001)) * 18));
+        el.select('circle').attr('fill', heatColor).attr('r', scale);
+        el.select('rect').attr('fill', heatColor).attr('width', scale*2).attr('height', scale*2).attr('x', -scale).attr('y', -scale);
+        el.select('polygon').attr('fill', heatColor);
+        el.style('opacity', 1);
+      } else {
+        el.select('circle').attr('fill', '#222');
+        el.select('rect').attr('fill', '#222');
+        el.select('polygon').attr('fill', '#222');
+        el.style('opacity', 0.3);
+      }
+    });
+  }
+
+  // Centrality event listeners
+  document.querySelectorAll('.metric-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.metric-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      centralityMetric = this.dataset.metric;
+      loadCentralityData();
+    });
+  });
+
+  document.getElementById('centrality-top-n').addEventListener('change', function() {
+    loadCentralityData();
+  });
+
+  document.getElementById('centrality-overlay-toggle').addEventListener('click', function() {
+    centralityOverlayActive = !centralityOverlayActive;
+    this.classList.toggle('active', centralityOverlayActive);
+    this.textContent = centralityOverlayActive ? 'Overlay Active' : 'Overlay on Graph';
+    if (centralityOverlayActive && !centralityData) {
+      loadCentralityData();
+    }
+    applyCentralityOverlay();
+  });
+
+  // --- Knowledge Query ---
+  const queryHistory = [];
+
+  function getSourceBadgeClass(kind) {
+    const k = (kind || '').toLowerCase();
+    if (k.includes('email') || k === 'emailsection') return 'email';
+    if (k.includes('document') || k === 'documentsection') return 'document';
+    if (['function','method','class','struct','enum','module','trait','interface','typealias','constant','variable'].includes(k)) return 'code';
+    return 'other';
+  }
+
+  function getSourceBadgeLabel(kind) {
+    const cls = getSourceBadgeClass(kind);
+    if (cls === 'email') return 'Email';
+    if (cls === 'document') return 'Document';
+    if (cls === 'code') return 'Code';
+    return kind || 'Source';
+  }
+
+  function renderKnowledgeResults(data) {
+    const container = document.getElementById('knowledge-results');
+    if (!data.results || data.results.length === 0) {
+      container.innerHTML = '<div id="knowledge-status">No results found for "' + escHtml(data.query) + '"</div>';
+      return;
+    }
+
+    let html = '<div class="knowledge-summary"><span>' + data.total_mentions + '</span> mention(s) from <span>' + data.source_count + '</span> source(s)</div>';
+
+    data.results.forEach(r => {
+      const badgeClass = getSourceBadgeClass(r.source_kind);
+      const badgeLabel = getSourceBadgeLabel(r.source_kind);
+      html += '<div class="knowledge-card">';
+      html += '<div class="knowledge-card-header">';
+      html += '<span class="source-badge ' + badgeClass + '">' + escHtml(badgeLabel) + '</span>';
+      html += '<span class="knowledge-source-name">' + escHtml(r.source_name) + '</span>';
+      html += '<span class="knowledge-source-file">' + escHtml(r.source_file) + '</span>';
+      html += '</div>';
+      html += '<div class="knowledge-symbol-ref">';
+      html += '<span class="sym-name">' + escHtml(r.mentioned_symbol) + '</span>';
+      html += '<span class="sym-kind">' + escHtml(r.mentioned_kind) + '</span>';
+      html += '<span class="sym-loc">' + escHtml(r.mentioned_file) + ':' + r.mentioned_line + '</span>';
+      html += '</div>';
+      if (r.match_context) {
+        html += '<div class="knowledge-context">' + escHtml(r.match_context) + '</div>';
+      }
+      if (r.match_line > 0) {
+        html += '<div class="knowledge-line-ref">line ' + r.match_line + '</div>';
+      }
+      html += '</div>';
+    });
+
+    container.innerHTML = html;
+  }
+
+  function addToHistory(query) {
+    const idx = queryHistory.indexOf(query);
+    if (idx !== -1) queryHistory.splice(idx, 1);
+    queryHistory.unshift(query);
+    if (queryHistory.length > 5) queryHistory.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const container = document.getElementById('query-history');
+    container.innerHTML = '';
+    queryHistory.forEach(q => {
+      const chip = document.createElement('span');
+      chip.className = 'history-chip';
+      chip.textContent = q;
+      chip.addEventListener('click', () => {
+        document.getElementById('knowledge-query').value = q;
+        submitKnowledgeQuery();
+      });
+      container.appendChild(chip);
+    });
+  }
+
+  async function submitKnowledgeQuery() {
+    const input = document.getElementById('knowledge-query');
+    const query = input.value.trim();
+    if (!query || !currentRepoId) return;
+
+    const submitBtn = document.getElementById('knowledge-submit');
+    const resultsContainer = document.getElementById('knowledge-results');
+
+    submitBtn.disabled = true;
+    resultsContainer.innerHTML = '<div id="knowledge-status" class="loading">Searching...</div>';
+
+    addToHistory(query);
+
+    try {
+      const res = await fetch('/api/repos/' + encodeURIComponent(currentRepoId) + '/knowledge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query, limit: 20 })
+      });
+      const data = await res.json();
+      renderKnowledgeResults(data);
+    } catch(e) {
+      resultsContainer.innerHTML = '<div id="knowledge-status">Error: ' + escHtml(e.message) + '</div>';
+    } finally {
+      submitBtn.disabled = false;
+    }
+  }
+
+  document.getElementById('knowledge-submit').addEventListener('click', submitKnowledgeQuery);
+  document.getElementById('knowledge-query').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') submitKnowledgeQuery();
+  });
+
+  // --- Circular Dependency Visualization (Tarjan's SCC) ---
+  let cyclesData = null;
+  let selectedCycleIdx = null;
+  let cyclesViewMode = 'all';
+  let cyclesAnimate = true;
+  let cyclesShowFiles = false;
+
+  async function loadCycles() {
+    if (!currentRepoId) {
+      document.getElementById('cycles-loading').textContent = 'Select a repo first';
+      return;
+    }
+    document.getElementById('cycles-loading').style.display = 'flex';
+    document.getElementById('cycles-loading').textContent = 'Detecting circular dependencies...';
+
+    try {
+      const res = await fetch('/api/repos/' + encodeURIComponent(currentRepoId) + '/cycles');
+      const data = await res.json();
+      cyclesData = data;
+      selectedCycleIdx = null;
+      renderCyclesSidebar();
+      renderCyclesGraph();
+      document.getElementById('cycles-loading').style.display = 'none';
+      document.getElementById('cycles-summary').innerHTML =
+        '<span>' + data.total_count + '</span> cycle(s) detected via Tarjan\'s SCC';
+    } catch (e) {
+      document.getElementById('cycles-loading').textContent = 'Error: ' + e.message;
+    }
+  }
+
+  function cycleSeverity(size) {
+    if (size >= 6) return 'critical';
+    if (size >= 4) return 'high';
+    if (size >= 3) return 'medium';
+    return 'low';
+  }
+
+  function cycleSeverityScore(size) {
+    if (size >= 6) return 4;
+    if (size >= 4) return 3;
+    if (size >= 3) return 2;
+    return 1;
+  }
+
+  function shortName(fullName) {
+    const parts = fullName.split('::');
+    return parts.length > 1 ? parts[parts.length - 1] : fullName.split('/').pop() || fullName;
+  }
+
+  function renderCyclesSidebar() {
+    const sidebar = document.getElementById('cycles-sidebar');
+    if (!cyclesData || cyclesData.cycles.length === 0) {
+      sidebar.innerHTML = '<div style="padding:20px;color:#10B981;text-align:center;"><div style="font-size:24px;margin-bottom:8px;">✓</div>No circular dependencies detected</div>';
+      return;
+    }
+
+    // Sort by severity (size descending)
+    const sorted = cyclesData.cycles.map((c, i) => ({ ...c, origIdx: i }))
+      .sort((a, b) => b.size - a.size);
+
+    let html = '';
+    sorted.forEach((cycle, displayIdx) => {
+      const sev = cycleSeverity(cycle.size);
+      const isActive = selectedCycleIdx === cycle.origIdx;
+      html += '<div class="cycle-card' + (isActive ? ' active' : '') + '" data-idx="' + cycle.origIdx + '">';
+      html += '<div class="cycle-card-header">';
+      html += '<span class="cycle-card-title">Cycle #' + (displayIdx + 1) + ' (' + cycle.size + ' nodes)</span>';
+      html += '<span class="cycle-severity severity-' + sev + '">' + sev + '</span>';
+      html += '</div>';
+      html += '<div class="cycle-card-members">';
+      cycle.members.forEach((m, mi) => {
+        html += escHtml(shortName(m));
+        if (mi < cycle.members.length - 1) html += ' → ';
+      });
+      html += ' → ' + escHtml(shortName(cycle.members[0]));
+      html += '</div>';
+      if (cyclesShowFiles && cycle.files.length > 0) {
+        html += '<div class="cycle-card-files">';
+        cycle.files.forEach(f => { html += escHtml(f) + '<br>'; });
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    sidebar.innerHTML = html;
+
+    sidebar.querySelectorAll('.cycle-card').forEach(card => {
+      card.addEventListener('click', function() {
+        const idx = parseInt(this.dataset.idx);
+        selectedCycleIdx = (selectedCycleIdx === idx) ? null : idx;
+        renderCyclesSidebar();
+        renderCyclesGraph();
+      });
+    });
+  }
+
+  function renderCyclesGraph() {
+    const container = document.getElementById('cycles-graph-container');
+    const svg = d3.select('#cycles-svg');
+    svg.selectAll('*').remove();
+
+    if (!cyclesData || cyclesData.cycles.length === 0) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    svg.attr('viewBox', '0 0 ' + width + ' ' + height);
+
+    // Build nodes and edges from cycles
+    const nodeSet = new Map();
+    const edges = [];
+    const cyclesToRender = selectedCycleIdx !== null
+      ? [cyclesData.cycles[selectedCycleIdx]]
+      : cyclesData.cycles;
+    const cycleAssignment = new Map();
+
+    cyclesToRender.forEach((cycle, ci) => {
+      cycle.members.forEach((m, mi) => {
+        if (!nodeSet.has(m)) {
+          nodeSet.set(m, { id: m, name: shortName(m), cycles: [] });
+        }
+        nodeSet.get(m).cycles.push(ci);
+        cycleAssignment.set(m, ci);
+
+        const next = cycle.members[(mi + 1) % cycle.members.length];
+        edges.push({ source: m, target: next, cycleIdx: ci });
+      });
+    });
+
+    const nodes = Array.from(nodeSet.values());
+    const nodeById = new Map(nodes.map(n => [n.id, n]));
+
+    // Color palette for multiple cycles
+    const cycleColors = ['#e94560', '#f59e0b', '#3b82f6', '#10B981', '#a855f7', '#ec4899', '#06b6d4', '#84cc16'];
+
+    // Create zoom behavior
+    const g = svg.append('g');
+    const zoom = d3.zoom()
+      .scaleExtent([0.2, 4])
+      .on('zoom', (event) => g.attr('transform', event.transform));
+    svg.call(zoom);
+
+    // Arrow marker definitions — one per cycle color
+    const defs = svg.append('defs');
+    cycleColors.forEach((color, i) => {
+      defs.append('marker')
+        .attr('id', 'cycle-arrow-' + i)
+        .attr('viewBox', '0 -5 10 10')
+        .attr('refX', 20)
+        .attr('refY', 0)
+        .attr('markerWidth', 6)
+        .attr('markerHeight', 6)
+        .attr('orient', 'auto')
+        .append('path')
+        .attr('d', 'M0,-5L10,0L0,5')
+        .attr('fill', color);
+    });
+
+    // Add glow filter
+    const filter = defs.append('filter').attr('id', 'cycle-glow');
+    filter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
+    const feMerge = filter.append('feMerge');
+    feMerge.append('feMergeNode').attr('in', 'coloredBlur');
+    feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+    // Force simulation
+    const simulation = d3.forceSimulation(nodes)
+      .force('link', d3.forceLink(edges).id(d => d.id || d).distance(100))
+      .force('charge', d3.forceManyBody().strength(-300))
+      .force('center', d3.forceCenter(width / 2, height / 2))
+      .force('collision', d3.forceCollide().radius(30));
+
+    // Draw edges
+    const link = g.selectAll('.cycle-link')
+      .data(edges)
+      .join('line')
+      .attr('class', function(d) { return cyclesAnimate ? 'cycle-link cycle-edge-animated' : 'cycle-link'; })
+      .attr('stroke', d => cycleColors[d.cycleIdx % cycleColors.length])
+      .attr('stroke-width', 2.5)
+      .attr('stroke-opacity', 0.8)
+      .attr('marker-end', d => 'url(#cycle-arrow-' + (d.cycleIdx % cycleColors.length) + ')');
+
+    // Draw nodes
+    const node = g.selectAll('.cycle-node')
+      .data(nodes)
+      .join('g')
+      .attr('class', function(d) { return cyclesAnimate ? 'cycle-node cycle-node-pulse' : 'cycle-node'; })
+      .call(d3.drag()
+        .on('start', (event, d) => { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+        .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+        .on('end', (event, d) => { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
+      );
+
+    node.append('circle')
+      .attr('r', d => 8 + d.cycles.length * 2)
+      .attr('fill', d => {
+        const ci = d.cycles[0] || 0;
+        return cycleColors[ci % cycleColors.length];
+      })
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 2)
+      .attr('filter', 'url(#cycle-glow)');
+
+    // Multi-cycle indicator ring
+    node.filter(d => d.cycles.length > 1)
+      .append('circle')
+      .attr('r', d => 12 + d.cycles.length * 2)
+      .attr('fill', 'none')
+      .attr('stroke', '#f59e0b')
+      .attr('stroke-width', 1.5)
+      .attr('stroke-dasharray', '3 2');
+
+    node.append('text')
+      .text(d => d.name)
+      .attr('dy', -16)
+      .attr('text-anchor', 'middle')
+      .attr('fill', '#e0e0e0')
+      .attr('font-size', '11px')
+      .attr('font-family', "'SF Mono', 'Fira Code', monospace");
+
+    // Tooltip on hover
+    const tooltip = document.getElementById('tooltip');
+    node.on('mouseover', (event, d) => {
+      tooltip.style.display = 'block';
+      tooltip.style.left = (event.pageX + 10) + 'px';
+      tooltip.style.top = (event.pageY - 10) + 'px';
+      tooltip.textContent = d.id + ' (in ' + d.cycles.length + ' cycle' + (d.cycles.length > 1 ? 's' : '') + ')';
+    }).on('mouseout', () => {
+      tooltip.style.display = 'none';
+    });
+
+    simulation.on('tick', () => {
+      link
+        .attr('x1', d => d.source.x)
+        .attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x)
+        .attr('y2', d => d.target.y);
+      node.attr('transform', d => 'translate(' + d.x + ',' + d.y + ')');
+    });
+  }
+
+  // Cycles view selector
+  document.querySelectorAll('#cycles-view-selector .view-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('#cycles-view-selector .view-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      cyclesViewMode = this.dataset.view;
+      if (cyclesViewMode === 'isolated' && selectedCycleIdx === null && cyclesData && cyclesData.cycles.length > 0) {
+        selectedCycleIdx = 0;
+      } else if (cyclesViewMode === 'all') {
+        selectedCycleIdx = null;
+      }
+      renderCyclesSidebar();
+      renderCyclesGraph();
+    });
+  });
+
+  // Animate toggle
+  document.getElementById('cycles-animate').addEventListener('change', function() {
+    cyclesAnimate = this.checked;
+    renderCyclesGraph();
+  });
+
+  // Show files toggle
+  document.getElementById('cycles-show-files').addEventListener('change', function() {
+    cyclesShowFiles = this.checked;
+    renderCyclesSidebar();
+  });
+
+  // --- LLM Provider Settings ---
+
+  const llmProviderSelect = document.getElementById('llm-provider-select');
+  const llmApiKeyGroup = document.getElementById('llm-api-key-group');
+
+  llmProviderSelect.addEventListener('change', function() {
+    if (this.value === 'openai') {
+      llmApiKeyGroup.style.display = 'flex';
+    } else {
+      llmApiKeyGroup.style.display = 'none';
+    }
+  });
+
+  async function loadLlmConfig() {
+    try {
+      const res = await fetch('/api/llm/config');
+      if (!res.ok) throw new Error('Failed to load LLM config');
+      const config = await res.json();
+
+      document.getElementById('llm-provider-select').value = config.provider;
+      document.getElementById('llm-model-input').value = config.model;
+      document.getElementById('llm-base-url-input').value = config.base_url;
+      document.getElementById('llm-api-key-input').value = config.api_key || '';
+
+      // Show/hide API key field based on provider
+      if (config.provider === 'openai') {
+        llmApiKeyGroup.style.display = 'flex';
+      } else {
+        llmApiKeyGroup.style.display = 'none';
+      }
+
+      clearStatusMessage();
+    } catch(e) {
+      showStatusMessage('error', 'Failed to load config: ' + e.message);
+    }
+  }
+
+  function showStatusMessage(type, message) {
+    const el = document.getElementById('llm-status-message');
+    el.textContent = message;
+    el.className = type;
+  }
+
+  function clearStatusMessage() {
+    const el = document.getElementById('llm-status-message');
+    el.textContent = '';
+    el.className = '';
+  }
+
+  async function saveLlmConfig() {
+    const saveBtn = document.getElementById('llm-save-btn');
+    saveBtn.disabled = true;
+
+    try {
+      const payload = {
+        provider: document.getElementById('llm-provider-select').value,
+        model: document.getElementById('llm-model-input').value,
+        base_url: document.getElementById('llm-base-url-input').value,
+        api_key: document.getElementById('llm-api-key-input').value || null,
+      };
+
+      const res = await fetch('/api/llm/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to save config');
+      }
+
+      const config = await res.json();
+      showStatusMessage('success', 'Configuration saved successfully!');
+      setTimeout(clearStatusMessage, 3000);
+    } catch(e) {
+      showStatusMessage('error', 'Error: ' + e.message);
+    } finally {
+      saveBtn.disabled = false;
+    }
+  }
+
+  document.getElementById('llm-save-btn').addEventListener('click', saveLlmConfig);
+  document.getElementById('llm-reload-btn').addEventListener('click', loadLlmConfig);
+
+  // Init
+  loadRepos();
+
+  // --- Module Coupling Dashboard ---
+  let couplingData = [];
+  let couplingGroupByDir = true;
+  let couplingView = 'scatter';
+
+  // Toggle group-by mode
+  document.querySelectorAll('.coupling-toggle').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.coupling-toggle').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      couplingGroupByDir = this.dataset.group === 'dir';
+      loadCouplingData();
+    });
+  });
+
+  // Toggle view mode
+  document.querySelectorAll('.coupling-view-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.coupling-view-btn').forEach(b => b.classList.remove('active'));
+      this.classList.add('active');
+      couplingView = this.dataset.view;
+      renderCouplingChart();
+    });
+  });
+
+  async function loadCouplingData() {
+    const repoId = document.getElementById('repo-select').value;
+    if (!repoId) return;
+    const loading = document.getElementById('coupling-loading');
+    loading.style.display = 'flex';
+    loading.textContent = 'Loading coupling data...';
+    try {
+      const res = await fetch(`/api/repos/${encodeURIComponent(repoId)}/module-coupling?group_by_dir=${couplingGroupByDir}`);
+      const data = await res.json();
+      couplingData = data.modules || [];
+      loading.style.display = 'none';
+      renderCouplingSidebar();
+      renderCouplingChart();
+    } catch(e) {
+      loading.textContent = 'Error loading coupling data: ' + e.message;
+    }
+  }
+
+  function renderCouplingSidebar() {
+    const stats = document.getElementById('coupling-stats');
+    const tbody = document.getElementById('coupling-table-body');
+    if (!couplingData.length) {
+      stats.innerHTML = '<div class="coupling-stat"><span class="label">No data</span></div>';
+      tbody.innerHTML = '';
+      return;
+    }
+    const totalModules = couplingData.length;
+    const avgInstability = (couplingData.reduce((s,m) => s + m.instability, 0) / totalModules).toFixed(3);
+    const maxCa = Math.max(...couplingData.map(m => m.afferent));
+    const maxCe = Math.max(...couplingData.map(m => m.efferent));
+    const zoneOfPain = couplingData.filter(m => m.afferent > maxCa * 0.5 && m.instability < 0.3).length;
+    const zoneOfUselessness = couplingData.filter(m => m.afferent === 0 && m.instability > 0.7).length;
+
+    stats.innerHTML = `
+      <div class="coupling-stat"><span class="label">Total Modules</span><span class="value">${totalModules}</span></div>
+      <div class="coupling-stat"><span class="label">Avg Instability</span><span class="value">${avgInstability}</span></div>
+      <div class="coupling-stat"><span class="label">Max Ca (Afferent)</span><span class="value">${maxCa}</span></div>
+      <div class="coupling-stat"><span class="label">Max Ce (Efferent)</span><span class="value">${maxCe}</span></div>
+      <div class="coupling-stat"><span class="label" style="color:#e94560">Zone of Pain</span><span class="value" style="color:#e94560">${zoneOfPain}</span></div>
+      <div class="coupling-stat"><span class="label" style="color:#f59e0b">Zone of Uselessness</span><span class="value" style="color:#f59e0b">${zoneOfUselessness}</span></div>
+    `;
+
+    const sorted = [...couplingData].sort((a,b) => (b.afferent + b.efferent) - (a.afferent + a.efferent));
+    tbody.innerHTML = sorted.slice(0, 50).map(m => {
+      const shortName = m.module_path.split('/').slice(-2).join('/') || m.module_path;
+      return `<tr title="${escHtml(m.module_path)}">
+        <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(shortName)}</td>
+        <td>${m.afferent}</td><td>${m.efferent}</td><td>${m.instability.toFixed(2)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderCouplingChart() {
+    if (couplingView === 'scatter') renderScatterPlot();
+    else if (couplingView === 'heatmap') renderHeatmap();
+    else if (couplingView === 'quadrant') renderQuadrantChart();
+  }
+
+  function renderScatterPlot() {
+    const container = document.getElementById('coupling-chart');
+    const svg = d3.select('#coupling-svg');
+    svg.selectAll('*').remove();
+    if (!couplingData.length) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    const margin = { top: 40, right: 30, bottom: 50, left: 60 };
+    const w = width - margin.left - margin.right;
+    const h = height - margin.top - margin.bottom;
+
+    const maxCa = Math.max(1, ...couplingData.map(m => m.afferent));
+    const maxCe = Math.max(1, ...couplingData.map(m => m.efferent));
+
+    const x = d3.scaleLinear().domain([0, maxCe * 1.1]).range([0, w]);
+    const y = d3.scaleLinear().domain([0, maxCa * 1.1]).range([h, 0]);
+    const color = d3.scaleSequential(d3.interpolateRdYlGn).domain([1, 0]);
+    const size = d3.scaleSqrt().domain([0, maxCa + maxCe]).range([4, 18]);
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Quadrant backgrounds
+    const midX = x(maxCe * 0.5), midY = y(maxCa * 0.5);
+    g.append('rect').attr('x', midX).attr('y', 0).attr('width', w - midX).attr('height', midY)
+      .attr('fill', 'rgba(233,69,96,0.06)');
+    g.append('rect').attr('x', 0).attr('y', midY).attr('width', midX).attr('height', h - midY)
+      .attr('fill', 'rgba(16,185,129,0.06)');
+
+    // Axes
+    g.append('g').attr('transform', `translate(0,${h})`).call(d3.axisBottom(x).ticks(8))
+      .selectAll('text,line,path').attr('stroke', '#555').attr('fill', '#888');
+    g.append('g').call(d3.axisLeft(y).ticks(8))
+      .selectAll('text,line,path').attr('stroke', '#555').attr('fill', '#888');
+
+    // Labels
+    svg.append('text').attr('x', margin.left + w/2).attr('y', height - 8)
+      .attr('text-anchor', 'middle').attr('fill', '#888').attr('font-size', 12).text('Ce (Efferent Coupling)');
+    svg.append('text').attr('transform', `rotate(-90)`).attr('x', -(margin.top + h/2)).attr('y', 16)
+      .attr('text-anchor', 'middle').attr('fill', '#888').attr('font-size', 12).text('Ca (Afferent Coupling)');
+    svg.append('text').attr('x', margin.left + w/2).attr('y', 24)
+      .attr('text-anchor', 'middle').attr('fill', '#e94560').attr('font-size', 14).attr('font-weight', 600)
+      .text('Module Coupling — Ca vs Ce Scatter');
+
+    // Zone labels
+    g.append('text').attr('x', w - 10).attr('y', 20).attr('text-anchor', 'end')
+      .attr('class', 'zone-label').attr('fill', '#e94560').text('Zone of Pain');
+    g.append('text').attr('x', 10).attr('y', h - 10)
+      .attr('class', 'zone-label').attr('fill', '#10B981').text('Stable / Independent');
+
+    // Tooltip
+    const tooltip = d3.select('#coupling-chart').select('.tooltip').empty()
+      ? d3.select('#coupling-chart').append('div').attr('class', 'tooltip').style('position','absolute').style('display','none')
+        .style('background','#16213e').style('border','1px solid #0f3460').style('border-radius','6px')
+        .style('padding','8px 12px').style('font-size','12px').style('color','#e0e0e0').style('pointer-events','none')
+        .style('z-index','10')
+      : d3.select('#coupling-chart .tooltip');
+
+    // Points
+    g.selectAll('circle').data(couplingData).enter().append('circle')
+      .attr('cx', d => x(d.efferent)).attr('cy', d => y(d.afferent))
+      .attr('r', d => size(d.afferent + d.efferent))
+      .attr('fill', d => color(d.instability)).attr('fill-opacity', 0.8)
+      .attr('stroke', '#fff').attr('stroke-width', 0.5).attr('cursor', 'pointer')
+      .on('mouseover', function(event, d) {
+        d3.select(this).attr('stroke-width', 2).attr('stroke', '#e94560');
+        const shortName = d.module_path.split('/').slice(-2).join('/') || d.module_path;
+        tooltip.style('display', 'block')
+          .html(`<strong>${escHtml(shortName)}</strong><br>Ca: ${d.afferent} · Ce: ${d.efferent}<br>I: ${d.instability.toFixed(3)}`);
+      })
+      .on('mousemove', function(event) {
+        tooltip.style('left', (event.offsetX + 14) + 'px').style('top', (event.offsetY - 14) + 'px');
+      })
+      .on('mouseout', function() {
+        d3.select(this).attr('stroke-width', 0.5).attr('stroke', '#fff');
+        tooltip.style('display', 'none');
+      });
+  }
+
+  function renderHeatmap() {
+    const container = document.getElementById('coupling-chart');
+    const svg = d3.select('#coupling-svg');
+    svg.selectAll('*').remove();
+    if (!couplingData.length) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    const margin = { top: 50, right: 20, bottom: 20, left: 160 };
+    const sorted = [...couplingData].sort((a,b) => b.instability - a.instability).slice(0, 30);
+    const cellH = Math.min(22, (height - margin.top - margin.bottom) / sorted.length);
+    const metrics = ['afferent', 'efferent', 'instability'];
+    const cellW = Math.min(100, (width - margin.left - margin.right) / 3);
+
+    const maxCa = Math.max(1, ...sorted.map(m => m.afferent));
+    const maxCe = Math.max(1, ...sorted.map(m => m.efferent));
+    const scales = {
+      afferent: d3.scaleSequential(d3.interpolateBlues).domain([0, maxCa]),
+      efferent: d3.scaleSequential(d3.interpolateOranges).domain([0, maxCe]),
+      instability: d3.scaleSequential(d3.interpolateRdYlGn).domain([1, 0])
+    };
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    svg.append('text').attr('x', margin.left + cellW * 1.5).attr('y', 24)
+      .attr('text-anchor', 'middle').attr('fill', '#e94560').attr('font-size', 14).attr('font-weight', 600)
+      .text('Module Coupling Heatmap');
+
+    // Column headers
+    const labels = { afferent: 'Ca', efferent: 'Ce', instability: 'I' };
+    metrics.forEach((m, i) => {
+      g.append('text').attr('x', i * cellW + cellW/2).attr('y', -8)
+        .attr('text-anchor', 'middle').attr('fill', '#888').attr('font-size', 11).text(labels[m]);
+    });
+
+    // Rows
+    sorted.forEach((mod, row) => {
+      const shortName = mod.module_path.split('/').slice(-2).join('/') || mod.module_path;
+      g.append('text').attr('x', -6).attr('y', row * cellH + cellH/2 + 4)
+        .attr('text-anchor', 'end').attr('fill', '#aaa').attr('font-size', 10)
+        .attr('font-family', "'SF Mono', monospace")
+        .text(shortName.length > 24 ? '...' + shortName.slice(-21) : shortName);
+
+      metrics.forEach((m, col) => {
+        const val = mod[m];
+        g.append('rect').attr('x', col * cellW + 1).attr('y', row * cellH + 1)
+          .attr('width', cellW - 2).attr('height', cellH - 2).attr('rx', 2)
+          .attr('fill', scales[m](val)).attr('opacity', 0.85);
+        g.append('text').attr('x', col * cellW + cellW/2).attr('y', row * cellH + cellH/2 + 4)
+          .attr('text-anchor', 'middle').attr('fill', '#fff').attr('font-size', 10)
+          .attr('font-weight', 600)
+          .text(m === 'instability' ? val.toFixed(2) : val);
+      });
+    });
+  }
+
+  function renderQuadrantChart() {
+    const container = document.getElementById('coupling-chart');
+    const svg = d3.select('#coupling-svg');
+    svg.selectAll('*').remove();
+    if (!couplingData.length) return;
+
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    const margin = { top: 40, right: 30, bottom: 50, left: 60 };
+    const w = width - margin.left - margin.right;
+    const h = height - margin.top - margin.bottom;
+
+    // X = instability (0-1), Y = total coupling (Ca+Ce)
+    const maxTotal = Math.max(1, ...couplingData.map(m => m.afferent + m.efferent));
+
+    const x = d3.scaleLinear().domain([0, 1]).range([0, w]);
+    const y = d3.scaleLinear().domain([0, maxTotal * 1.1]).range([h, 0]);
+    const color = d3.scaleSequential(d3.interpolateRdYlGn).domain([1, 0]);
+
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Quadrant backgrounds
+    const midX = x(0.5);
+    // Zone of Pain: low instability + high coupling (left-top)
+    g.append('rect').attr('x', 0).attr('y', 0).attr('width', midX).attr('height', h/2)
+      .attr('fill', 'rgba(233,69,96,0.08)').attr('class', 'quadrant-bg');
+    // Zone of Uselessness: high instability + low coupling (right-bottom)
+    g.append('rect').attr('x', midX).attr('y', h/2).attr('width', w - midX).attr('height', h/2)
+      .attr('fill', 'rgba(245,158,11,0.08)').attr('class', 'quadrant-bg');
+    // Main sequence: diagonal band
+    g.append('line').attr('x1', 0).attr('y1', 0).attr('x2', w).attr('y2', h)
+      .attr('stroke', '#10B981').attr('stroke-width', 1).attr('stroke-dasharray', '6,4').attr('opacity', 0.4);
+
+    // Zone labels
+    g.append('text').attr('x', midX/2).attr('y', 30).attr('text-anchor', 'middle')
+      .attr('class', 'zone-label').attr('fill', '#e94560').text('Zone of Pain');
+    g.append('text').attr('x', midX/2).attr('y', 50).attr('text-anchor', 'middle')
+      .attr('fill', '#e94560').attr('font-size', 9).attr('fill-opacity', 0.4).text('(stable + heavily coupled)');
+    g.append('text').attr('x', midX + (w - midX)/2).attr('y', h - 20).attr('text-anchor', 'middle')
+      .attr('class', 'zone-label').attr('fill', '#f59e0b').text('Zone of Uselessness');
+    g.append('text').attr('x', midX + (w - midX)/2).attr('y', h - 4).attr('text-anchor', 'middle')
+      .attr('fill', '#f59e0b').attr('font-size', 9).attr('fill-opacity', 0.4).text('(unstable + unused)');
+
+    // Axes
+    g.append('g').attr('transform', `translate(0,${h})`).call(d3.axisBottom(x).ticks(10).tickFormat(d3.format('.1f')))
+      .selectAll('text,line,path').attr('stroke', '#555').attr('fill', '#888');
+    g.append('g').call(d3.axisLeft(y).ticks(8))
+      .selectAll('text,line,path').attr('stroke', '#555').attr('fill', '#888');
+
+    svg.append('text').attr('x', margin.left + w/2).attr('y', height - 8)
+      .attr('text-anchor', 'middle').attr('fill', '#888').attr('font-size', 12).text('Instability (I = Ce / (Ca + Ce))');
+    svg.append('text').attr('transform', 'rotate(-90)').attr('x', -(margin.top + h/2)).attr('y', 16)
+      .attr('text-anchor', 'middle').attr('fill', '#888').attr('font-size', 12).text('Total Coupling (Ca + Ce)');
+    svg.append('text').attr('x', margin.left + w/2).attr('y', 24)
+      .attr('text-anchor', 'middle').attr('fill', '#e94560').attr('font-size', 14).attr('font-weight', 600)
+      .text('Instability Quadrant — Zone of Pain / Uselessness');
+
+    // Tooltip
+    const tooltip = d3.select('#coupling-chart').select('.tooltip').empty()
+      ? d3.select('#coupling-chart').append('div').attr('class', 'tooltip').style('position','absolute').style('display','none')
+        .style('background','#16213e').style('border','1px solid #0f3460').style('border-radius','6px')
+        .style('padding','8px 12px').style('font-size','12px').style('color','#e0e0e0').style('pointer-events','none')
+        .style('z-index','10')
+      : d3.select('#coupling-chart .tooltip');
+
+    // Points
+    g.selectAll('circle').data(couplingData).enter().append('circle')
+      .attr('cx', d => x(d.instability)).attr('cy', d => y(d.afferent + d.efferent))
+      .attr('r', d => Math.max(4, Math.sqrt(d.afferent + d.efferent) * 2.5))
+      .attr('fill', d => color(d.instability)).attr('fill-opacity', 0.8)
+      .attr('stroke', '#fff').attr('stroke-width', 0.5).attr('cursor', 'pointer')
+      .on('mouseover', function(event, d) {
+        d3.select(this).attr('stroke-width', 2).attr('stroke', '#e94560');
+        const shortName = d.module_path.split('/').slice(-2).join('/') || d.module_path;
+        tooltip.style('display', 'block')
+          .html(`<strong>${escHtml(shortName)}</strong><br>Ca: ${d.afferent} · Ce: ${d.efferent}<br>I: ${d.instability.toFixed(3)}<br>Total: ${d.afferent + d.efferent}`);
+      })
+      .on('mousemove', function(event) {
+        tooltip.style('left', (event.offsetX + 14) + 'px').style('top', (event.offsetY - 14) + 'px');
+      })
+      .on('mouseout', function() {
+        d3.select(this).attr('stroke-width', 0.5).attr('stroke', '#fff');
+        tooltip.style('display', 'none');
+      });
+  }
+})();
+</script>
+</body>
+</html>

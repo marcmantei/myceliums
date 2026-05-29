@@ -1,0 +1,31 @@
+From alice@example.com Mon Apr 20 10:00:00 2026
+From: Alice Smith <alice@example.com>
+To: bob@example.com
+Subject: Project Update
+Date: Mon, 20 Apr 2026 10:00:00 +0000
+Message-ID: <msg-001@example.com>
+Content-Type: text/plain; charset=utf-8
+
+Hi Bob,
+
+Here is the latest project update. Everything is on track.
+
+Best,
+Alice
+
+From bob@example.com Mon Apr 20 11:30:00 2026
+From: Bob Jones <bob@example.com>
+To: alice@example.com
+Cc: carol@example.com
+Subject: Re: Project Update
+Date: Mon, 20 Apr 2026 11:30:00 +0000
+Message-ID: <msg-002@example.com>
+In-Reply-To: <msg-001@example.com>
+Content-Type: text/plain; charset=utf-8
+
+Thanks Alice,
+
+Good to hear. I will share this with Carol.
+
+Cheers,
+Bob

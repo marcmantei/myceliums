@@ -1,0 +1,6 @@
+This is a plain text file with no headings or links.
+
+It contains multiple paragraphs of prose content that should
+be indexed as a single Document symbol.
+
+The content parser emits one Document for the whole file.

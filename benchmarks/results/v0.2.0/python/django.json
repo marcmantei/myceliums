@@ -1,0 +1,30 @@
+{
+  "repo": "django",
+  "language": "python",
+  "url": "https://github.com/django/django.git",
+  "category": "Framework",
+  "stars": "82k",
+  "timestamp": "2026-04-09T12:00:00Z",
+  "version": "0.2.0",
+  "stats": {
+    "files": 6492,
+    "symbols": 38210,
+    "relationships": 52417
+  },
+  "questions": [
+    {"id":"callers","label":"Who calls get_response?","tokens_without":84231,"tokens_with":142,"token_reduction_pct":99.8,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},
+    {"id":"classes","label":"List all classes","tokens_without":192044,"tokens_with":384,"token_reduction_pct":99.8,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},
+    {"id":"blast_radius","label":"Blast radius of resolve","tokens_without":71209,"tokens_with":97,"token_reduction_pct":99.8,"tool_calls_without":10,"tool_calls_with":1,"call_reduction_pct":90.0,"status":"PASS"},
+    {"id":"error_types","label":"Find all Exception types","tokens_without":63841,"tokens_with":218,"token_reduction_pct":99.6,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},
+    {"id":"call_graph","label":"What does setup call?","tokens_without":145092,"tokens_with":89,"token_reduction_pct":99.9,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"}
+  ],
+  "aggregate": {
+    "total_tokens_without": 556417,
+    "total_tokens_with": 930,
+    "token_reduction_pct": 99.8,
+    "total_calls_without": 98,
+    "total_calls_with": 5,
+    "call_reduction_pct": 94.8,
+    "questions_tested": 5
+  }
+}

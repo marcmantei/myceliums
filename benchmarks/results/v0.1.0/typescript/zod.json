@@ -1,0 +1,24 @@
+{
+  "repo": "zod",
+  "language": "typescript",
+  "url": "https://github.com/colinhacks/zod.git",
+  "category": "Validation",
+  "stars": "35k",
+  "timestamp": "2026-03-14T14:35:51Z",
+  "version": "0.1.0",
+  "stats": {
+    "files": 361,
+    "symbols": 7327,
+    "relationships": 8403
+  },
+  "questions": [{"id":"callers","label":"Who calls safeParse?","tokens_without":59376,"tokens_with":34,"token_reduction_pct":99.9,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"classes","label":"List all classes","tokens_without":30933,"tokens_with":82,"token_reduction_pct":99.7,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"blast_radius","label":"Blast radius of addIssueToContext","tokens_without":12663,"tokens_with":39,"token_reduction_pct":99.6,"tool_calls_without":4,"tool_calls_with":1,"call_reduction_pct":75.0,"status":"PASS"},{"id":"call_graph","label":"What does parse call?","tokens_without":158139,"tokens_with":24,"token_reduction_pct":99.9,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"error_types","label":"Find all Error interfaces","tokens_without":67883,"tokens_with":40,"token_reduction_pct":99.9,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"}],
+  "aggregate": {
+    "total_tokens_without": 328994,
+    "total_tokens_with": 219,
+    "token_reduction_pct": 99.9,
+    "total_calls_without": 92,
+    "total_calls_with": 5,
+    "call_reduction_pct": 94.5,
+    "questions_tested": 5
+  }
+}

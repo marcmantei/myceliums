@@ -1,0 +1,29 @@
+From: senior-dev@example.com
+To: new-hire@example.com
+Subject: Onboarding: How the API works
+Date: Wed, 16 Apr 2026 10:00:00 +0200
+Message-ID: <onboard-003@example.com>
+
+Welcome to the team! Here is a quick overview of how the API works:
+
+1. The app starts in create_app which sets up Flask, registers all
+   route blueprints, and calls setup_logging and setup_error_handlers.
+
+2. Authentication flow:
+   - Users call register to create an account (uses hash_password)
+   - Users call login to get a JWT token (uses verify_password
+     and generate_jwt_token)
+   - All protected routes use the require_auth decorator
+
+3. Data access:
+   - database.py has all CRUD functions: create_user, get_user,
+     update_user, get_all_posts, create_post, etc.
+   - models.py defines User, Post, and Comment dataclasses with
+     to_dict methods for serialization
+
+4. Route structure:
+   - auth_routes.py: register, login, get_current_user, refresh_token
+   - user_routes.py: list_users, get_user, update_user, delete_user
+   - post_routes.py: list_posts, create_post, get_post, update_post
+
+Start by reading create_app in app.py, then follow the login flow.

@@ -1,0 +1,23 @@
+[package]
+name = "myceliums-cypher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Cypher-like query language for the Myceliums knowledge graph — lexer, recursive-descent parser, and executor"
+readme = "../../README.md"
+keywords = ["code-analysis", "knowledge-graph", "cypher", "query-language", "developer-tools"]
+categories = ["development-tools", "parser-implementations"]
+
+[dependencies]
+myceliums-storage = { workspace = true }
+myceliums-core = { workspace = true }
+logos = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

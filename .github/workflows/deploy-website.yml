@@ -1,0 +1,57 @@
+name: Deploy Website
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Website
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: website/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Export static site
+        run: npx next export || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website-build
+          path: website/out/
+          if-no-files-found: warn
+
+  deploy:
+    name: Deploy via FTP
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: website-build
+          path: website-build/
+
+      - name: Deploy to FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: website-build/
+          server-dir: ${{ secrets.FTP_SERVER_DIR || '/' }}
+          dangerous-clean-slate: false

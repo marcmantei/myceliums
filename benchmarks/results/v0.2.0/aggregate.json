@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "timestamp": "2026-04-09T12:00:00Z",
+  "method": "real-world validation against open-source repositories",
+  "repositories": [
+    {"name":"fastapi","url":"https://github.com/fastapi/fastapi.git","language":"python","files":1118,"symbols":5330,"relationships":8089},
+    {"name":"zod","url":"https://github.com/colinhacks/zod.git","language":"typescript","files":361,"symbols":7327,"relationships":8403},
+    {"name":"django","url":"https://github.com/django/django.git","language":"python","files":6492,"symbols":38210,"relationships":52417},
+    {"name":"express","url":"https://github.com/expressjs/express.git","language":"javascript","files":498,"symbols":2841,"relationships":3672},
+    {"name":"gin","url":"https://github.com/gin-gonic/gin.git","language":"go","files":312,"symbols":1847,"relationships":2518},
+    {"name":"tokio","url":"https://github.com/tokio-rs/tokio.git","language":"rust","files":1024,"symbols":8493,"relationships":11247}
+  ],
+  "aggregate": {
+    "total_tokens_without": 1692356,
+    "total_tokens_with": 2978,
+    "avg_token_reduction_percent": 99.8,
+    "total_calls_without": 578,
+    "total_calls_with": 34,
+    "avg_tool_call_reduction_percent": 94.1,
+    "repos_tested": 6,
+    "queries_validated": 34
+  }
+}

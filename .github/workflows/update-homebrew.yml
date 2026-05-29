@@ -1,0 +1,91 @@
+name: Update Homebrew Formula
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  update-formula:
+    name: Update Homebrew tap
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download checksums
+        run: |
+          curl -sL "https://github.com/marcmantei/myceliums/releases/download/${{ github.ref_name }}/checksums-sha256.txt" -o checksums.txt
+          cat checksums.txt
+
+      - name: Parse checksums
+        id: checksums
+        run: |
+          get_sha() {
+            grep "$1" checksums.txt | awk '{print $1}'
+          }
+          echo "aarch64_apple=$(get_sha 'myc-aarch64-apple-darwin.tar.gz')" >> "$GITHUB_OUTPUT"
+          echo "x86_64_apple=$(get_sha 'myc-x86_64-apple-darwin.tar.gz')" >> "$GITHUB_OUTPUT"
+          echo "aarch64_linux=$(get_sha 'myc-aarch64-unknown-linux-gnu.tar.gz')" >> "$GITHUB_OUTPUT"
+          echo "x86_64_linux=$(get_sha 'myc-x86_64-unknown-linux-gnu.tar.gz')" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew-tap
+        uses: actions/checkout@v4
+        with:
+          repository: marcmantei/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        run: |
+          cat > homebrew-tap/Formula/myc.rb << 'FORMULA'
+          class Myc < Formula
+            desc "Code knowledge graph engine for AI agents"
+            homepage "https://myceliums.ai"
+            version "${{ steps.version.outputs.version }}"
+            license "AGPL-3.0"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/marcmantei/myceliums/releases/download/v#{version}/myc-aarch64-apple-darwin.tar.gz"
+                sha256 "${{ steps.checksums.outputs.aarch64_apple }}"
+              else
+                url "https://github.com/marcmantei/myceliums/releases/download/v#{version}/myc-x86_64-apple-darwin.tar.gz"
+                sha256 "${{ steps.checksums.outputs.x86_64_apple }}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/marcmantei/myceliums/releases/download/v#{version}/myc-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "${{ steps.checksums.outputs.aarch64_linux }}"
+              else
+                url "https://github.com/marcmantei/myceliums/releases/download/v#{version}/myc-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${{ steps.checksums.outputs.x86_64_linux }}"
+              end
+            end
+
+            def install
+              bin.install "myc"
+            end
+
+            test do
+              assert_match "myc", shell_output("#{bin}/myc --version")
+            end
+          end
+          FORMULA
+
+      - name: Fix indentation
+        run: sed -i 's/^          //' homebrew-tap/Formula/myc.rb
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/myc.rb
+          git commit -m "Update myc to ${{ steps.version.outputs.version }}"
+          git push

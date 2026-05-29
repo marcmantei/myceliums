@@ -1,0 +1,16 @@
+{
+  "version": "0.1.0",
+  "timestamp": "2026-03-14T14:45:12Z",
+  "method": "real-world validation against open-source repositories",
+  "repositories": [{"name":"fastapi","url":"https://github.com/fastapi/fastapi.git","language":"python","files":1118,"symbols":5242,"relationships":7961},{"name":"zod","url":"https://github.com/colinhacks/zod.git","language":"typescript","files":361,"symbols":7327,"relationships":8403}],
+  "aggregate": {
+    "total_tokens_without": 618099,
+    "total_tokens_with": 1149,
+    "avg_token_reduction_percent": 99.8,
+    "total_calls_without": 187,
+    "total_calls_with": 11,
+    "avg_tool_call_reduction_percent": 94.1,
+    "repos_tested": 2,
+    "queries_validated": 11
+  }
+}

@@ -1,0 +1,28 @@
+From: security@example.com
+To: dev-team@example.com
+Subject: Security audit findings - password hashing
+Date: Mon, 14 Apr 2026 09:15:00 +0200
+Message-ID: <audit-001@example.com>
+
+Hi team,
+
+After reviewing the authentication module, I have the following findings:
+
+1. The hash_password function in auth.py uses SHA256 with a static salt.
+   This should be migrated to bcrypt or argon2 for production use.
+   The current implementation at line 14 concatenates salt + password,
+   which is vulnerable to length extension attacks.
+
+2. The verify_password function relies on hash_password internally,
+   so fixing the hashing will automatically fix verification.
+
+3. generate_jwt_token uses a hardcoded secret key ('demo-jwt-secret').
+   This must be replaced with an environment variable before deployment.
+
+4. The require_auth middleware decorator correctly validates tokens via
+   verify_jwt_token, but does not check token expiration robustly.
+
+Please prioritize these fixes before the next release.
+
+Best regards,
+Security Team
