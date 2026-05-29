@@ -99,9 +99,10 @@ jobs:
       - name: Run verified metrics benchmark
         run: cargo bench -p myceliums-benchmarks --bench verified_metrics
       - name: Commit benchmark results
+        continue-on-error: true
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/metrics/ benchmarks/latest.json || true
           git diff --quiet && git diff --staged --quiet || (git commit -m "perf: update verified metrics for ${{ github.ref_name }}")
-          git push origin main
+          git push origin main || echo "Push failed (expected for private repos without write token)"
