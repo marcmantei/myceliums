@@ -456,7 +456,7 @@ pub fn compute_community_metrics(
             edge_count: count,
         })
         .collect();
-    coupling.sort_by(|a, b| b.edge_count.cmp(&a.edge_count));
+    coupling.sort_by_key(|c| std::cmp::Reverse(c.edge_count));
 
     Ok(CommunityMetrics {
         modularity,

@@ -623,7 +623,7 @@ async fn main() -> Result<()> {
                 let _ = setup::wizard::run_wizard(&data_dir()).await;
             } else {
                 // Create data dir so we don't ask again
-                let _ = std::fs::create_dir_all(&data_dir());
+                let _ = std::fs::create_dir_all(data_dir());
             }
         }
     }
@@ -1218,10 +1218,7 @@ async fn cmd_status() -> Result<()> {
     if repos.is_empty() {
         println!("  No repositories analyzed yet.");
     } else {
-        println!(
-            "  {:<24} {:>6} {:>8} {:>10}  {}",
-            "Name", "Files", "Symbols", "Size", "Last Analyzed"
-        );
+        println!("  {:<24} {:>6} {:>8} {:>10}  Last Analyzed", "Name", "Files", "Symbols", "Size");
         println!("  {}", "\u{2500}".repeat(74));
 
         let mut total_size = 0u64;

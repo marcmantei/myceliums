@@ -95,7 +95,7 @@ pub fn detect_cycles(
         .collect();
 
     // Sort by size descending — largest cycles first
-    cycles.sort_by(|a, b| b.size.cmp(&a.size));
+    cycles.sort_by_key(|c| std::cmp::Reverse(c.size));
 
     Ok(cycles)
 }
