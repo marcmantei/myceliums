@@ -67,6 +67,7 @@ notify-debouncer-mini = { workspace = true }
 mail-parser = "0.9"
 reqwest = { workspace = true }
 async-trait = { workspace = true }
+openssl = { workspace = true }
 async-imap = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
 async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
 futures = "0.3"

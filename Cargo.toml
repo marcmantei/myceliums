@@ -109,6 +109,9 @@ notify-debouncer-mini = "0.5"
 reqwest = { version = "0.12", features = ["json"] }
 async-trait = "0.1"
 
+# TLS (vendored OpenSSL for cross-compilation and musl builds)
+openssl = { version = "0.10", features = ["vendored"] }
+
 # Benchmarking
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3"
