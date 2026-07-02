@@ -648,12 +648,17 @@ impl Store {
             .collect();
         let contents: Vec<&str> = matched_symbols.iter().map(|s| s.content.as_str()).collect();
         let repo_ids: Vec<&str> = matched_symbols.iter().map(|s| s.repo_id.as_str()).collect();
+        let metadata: Vec<Option<&str>> = matched_symbols
+            .iter()
+            .map(|s| s.metadata.as_deref())
+            .collect();
 
         // Flatten all vectors into a single Float32Array
         let flat_values: Vec<f32> = matched_vectors.iter().flatten().copied().collect();
         let values_array = Float32Array::from(flat_values);
         let vector_array = create_fixed_size_list(values_array, schema::EMBEDDING_DIM)?;
 
+        // Column order must match schema::symbols_schema() exactly.
         let batch = RecordBatch::try_new(
             schema.clone(),
             vec![
@@ -667,6 +672,7 @@ impl Store {
                 Arc::new(StringArray::from(signatures)),
                 Arc::new(StringArray::from(contents)),
                 Arc::new(StringArray::from(repo_ids)),
+                Arc::new(StringArray::from(metadata)),
                 Arc::new(vector_array),
             ],
         )?;
@@ -851,6 +857,67 @@ mod tests {
         // Above threshold but no symbols table exists — should return Ok
         let result = store.create_ann_index(20_000, 10_000).await;
         assert!(result.is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn make_symbol(uid: &str, metadata: Option<&str>) -> CodeSymbol {
+        CodeSymbol {
+            uid: uid.to_string(),
+            name: uid.to_string(),
+            qualified_name: uid.to_string(),
+            kind: SymbolKind::Function,
+            file_path: "src/lib.rs".to_string(),
+            start_line: 1,
+            end_line: 2,
+            signature: format!("fn {}()", uid),
+            content: "body".to_string(),
+            repo_id: "test-repo".to_string(),
+            metadata: metadata.map(|s| s.to_string()),
+        }
+    }
+
+    /// Regression test: `store_embeddings` must build a RecordBatch whose column
+    /// count and order match `symbols_schema()` (12 fields incl. `metadata`).
+    /// Previously the batch omitted `metadata`, so `RecordBatch::try_new` errored
+    /// and embeddings were never persisted — semantic search silently degraded.
+    #[tokio::test]
+    async fn test_store_embeddings_roundtrip() {
+        let dir = test_db_path("embeddings_roundtrip");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+
+        let symbols = vec![
+            make_symbol("alpha", Some("{\"k\":\"v\"}")),
+            make_symbol("beta", None),
+        ];
+        store.store_symbols(&symbols).await.unwrap();
+
+        let dim = schema::EMBEDDING_DIM as usize;
+        let embeddings = vec![
+            ("alpha".to_string(), vec![0.5f32; dim]),
+            ("beta".to_string(), vec![0.25f32; dim]),
+        ];
+        let stored = store.store_embeddings(embeddings).await.unwrap();
+        assert_eq!(stored, 2, "store_embeddings should report 2 stored");
+
+        let rows = store.get_symbols_with_vectors().await.unwrap();
+        assert_eq!(rows.len(), 2);
+        for (sym, vec) in &rows {
+            let vec = vec
+                .as_ref()
+                .unwrap_or_else(|| panic!("{} has no persisted vector", sym.uid));
+            assert_eq!(vec.len(), dim);
+            assert!(
+                vec.iter().any(|&x| x != 0.0),
+                "{} vector is all-zero — embeddings were not persisted",
+                sym.uid
+            );
+        }
+        // metadata must round-trip through the embeddings batch, not be dropped.
+        let alpha = rows.iter().find(|(s, _)| s.uid == "alpha").unwrap();
+        assert_eq!(alpha.0.metadata.as_deref(), Some("{\"k\":\"v\"}"));
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

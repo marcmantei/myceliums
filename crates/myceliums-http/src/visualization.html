@@ -2845,7 +2845,12 @@ svg { width: 100%; height: 100%; display: block; }
       document.getElementById('llm-provider-select').value = config.provider;
       document.getElementById('llm-model-input').value = config.model;
       document.getElementById('llm-base-url-input').value = config.base_url;
-      document.getElementById('llm-api-key-input').value = config.api_key || '';
+      // The server never returns the stored key (it would be readable cross-origin).
+      // Show a masked placeholder when one is set; leaving the field blank on save
+      // preserves the existing key.
+      const apiKeyInput = document.getElementById('llm-api-key-input');
+      apiKeyInput.value = '';
+      apiKeyInput.placeholder = config.has_api_key ? '•••••••••• (saved — leave blank to keep)' : 'sk-...';
 
       // Show/hide API key field based on provider
       if (config.provider === 'openai') {

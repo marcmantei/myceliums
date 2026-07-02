@@ -16,7 +16,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Instant;
-use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info};
 
 const VISUALIZATION_HTML: &str = include_str!("visualization.html");
@@ -1260,14 +1259,20 @@ async fn get_llm_config() -> impl IntoResponse {
 
     let config = GlobalConfig::load(&data_dir()).unwrap_or_else(|_| GlobalConfig::default());
 
-    let response = serde_json::json!({
+    // Never return the raw API key: the response is reachable cross-origin and
+    // would let any page in the user's browser read the secret. The UI only needs
+    // to know whether a key is set.
+    (StatusCode::OK, Json(llm_config_response(&config)))
+}
+
+/// Build the public LLM-config response, exposing only whether a key is set.
+fn llm_config_response(config: &myceliums_core::global_config::GlobalConfig) -> serde_json::Value {
+    serde_json::json!({
         "provider": config.llm.provider,
         "model": config.llm.model,
         "base_url": config.llm.base_url,
-        "api_key": config.llm.api_key,
-    });
-
-    (StatusCode::OK, Json(response))
+        "has_api_key": config.llm.api_key.as_deref().is_some_and(|k| !k.is_empty()),
+    })
 }
 
 /// Update the LLM provider configuration.
@@ -1319,14 +1324,7 @@ async fn set_llm_config(Json(body): Json<LlmProviderUpdate>) -> impl IntoRespons
         );
     }
 
-    let response = serde_json::json!({
-        "provider": config.llm.provider,
-        "model": config.llm.model,
-        "base_url": config.llm.base_url,
-        "api_key": config.llm.api_key,
-    });
-
-    (StatusCode::OK, Json(response))
+    (StatusCode::OK, Json(llm_config_response(&config)))
 }
 
 // --- Graph API v1: Embedding-based Visualization ---
@@ -1974,11 +1972,6 @@ async fn latency_logger(request: Request<axum::body::Body>, next: Next) -> Respo
 ///
 /// If `repo_id` is provided, it will be pre-selected in the UI.
 pub async fn start_server(port: u16, repo_id: Option<String>) -> Result<()> {
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
     let state = Arc::new(AppState {
         data_dir: data_dir(),
         registry_path: registry_path(),
@@ -2016,9 +2009,11 @@ pub async fn start_server(port: u16, repo_id: Option<String>) -> Result<()> {
         )
         .route("/api/v1/graph/search/{repo_id}", get(graph_v1_search))
         .layer(axum::middleware::from_fn(latency_logger))
-        .layer(cors)
         .with_state(state);
 
+    // Served on loopback only; the SPA is same-origin so no CORS layer is added.
+    // A wildcard CORS layer here previously let any website read the API graph and
+    // the (now redacted) LLM config.
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
     axum::serve(listener, app).await?;
 
@@ -2029,6 +2024,39 @@ pub async fn start_server(port: u16, repo_id: Option<String>) -> Result<()> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn test_llm_config_response_redacts_api_key() {
+        use myceliums_core::global_config::GlobalConfig;
+
+        let mut config = GlobalConfig::default();
+        config.llm.api_key = Some("sk-secret-value-123".to_string());
+
+        let body = llm_config_response(&config);
+        // The secret must never appear in the response, under any field.
+        assert!(
+            body.get("api_key").is_none(),
+            "response must not carry an api_key field"
+        );
+        assert_eq!(body["has_api_key"], serde_json::json!(true));
+        assert!(
+            !body.to_string().contains("sk-secret-value-123"),
+            "raw key must not be serialized anywhere in the response"
+        );
+
+        config.llm.api_key = None;
+        assert_eq!(
+            llm_config_response(&config)["has_api_key"],
+            serde_json::json!(false)
+        );
+
+        config.llm.api_key = Some(String::new());
+        assert_eq!(
+            llm_config_response(&config)["has_api_key"],
+            serde_json::json!(false),
+            "empty string should count as no key"
+        );
+    }
 
     #[test]
     fn test_symbol_kind_display() {

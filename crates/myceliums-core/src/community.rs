@@ -120,12 +120,28 @@ impl CommunityDetector {
             .map(|uid| Node::from_name(uid.clone()))
             .collect();
 
-        let edges: Vec<Arc<Edge<String, ()>>> = structural_rels
-            .iter()
-            .filter(|(rel, _)| rel.source_uid != rel.target_uid) // Filter self-loops
-            .map(|(rel, weight)| {
-                Edge::with_weight(rel.source_uid.clone(), rel.target_uid.clone(), *weight)
-            })
+        // Aggregate parallel edges by unordered endpoint pair. In an undirected
+        // graph, (a,b) and (b,a) are the same edge, and a codebase routinely has
+        // multiple relationships between the same pair of symbols (e.g. several
+        // CALLS). Passing duplicates to graphrs fails with `DuplicateEdge` and
+        // previously aborted detection silently. Summing weights is also the
+        // right semantics: more relationships between two symbols = stronger tie.
+        let mut edge_weights: HashMap<(String, String), f64> = HashMap::new();
+        for (rel, weight) in &structural_rels {
+            if rel.source_uid == rel.target_uid {
+                continue; // skip self-loops
+            }
+            let key = if rel.source_uid <= rel.target_uid {
+                (rel.source_uid.clone(), rel.target_uid.clone())
+            } else {
+                (rel.target_uid.clone(), rel.source_uid.clone())
+            };
+            *edge_weights.entry(key).or_insert(0.0) += *weight;
+        }
+
+        let edges: Vec<Arc<Edge<String, ()>>> = edge_weights
+            .into_iter()
+            .map(|((src, dst), weight)| Edge::with_weight(src, dst, weight))
             .collect();
 
         // Create undirected graph for Leiden (it requires undirected)
@@ -135,7 +151,8 @@ impl CommunityDetector {
         let graph = match graph {
             Ok(g) => g,
             Err(e) => {
-                info!("Failed to create graph: {:?}", e);
+                // Do not silently return zero communities — surface it.
+                tracing::warn!("Community detection: failed to build graph: {:?}", e);
                 return Ok(vec![]);
             }
         };
@@ -787,5 +804,31 @@ mod tests {
                 density
             );
         }
+    }
+
+    /// Regression test: duplicate/parallel edges (both directions of a call, or
+    /// several relationships between the same pair) must not abort detection.
+    /// Previously graphrs returned `DuplicateEdge` and `detect` silently yielded
+    /// zero communities — reproducible on Myceliums' own repository.
+    #[test]
+    fn test_detect_with_duplicate_edges() {
+        let symbols = vec![
+            make_symbol("a", "alpha", "src/a.rs"),
+            make_symbol("b", "beta", "src/a.rs"),
+            make_symbol("c", "gamma", "src/a.rs"),
+        ];
+        let rels = vec![
+            // Same unordered pair in both directions + a repeat → 3 parallel edges.
+            make_rel("a", "b", RelationshipKind::Calls),
+            make_rel("b", "a", RelationshipKind::Calls),
+            make_rel("a", "b", RelationshipKind::Imports),
+            make_rel("b", "c", RelationshipKind::Calls),
+        ];
+
+        let communities = CommunityDetector::detect(&symbols, &rels, "test").unwrap();
+        assert!(
+            !communities.is_empty(),
+            "duplicate edges must not collapse detection to zero communities"
+        );
     }
 }
