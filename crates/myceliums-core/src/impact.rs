@@ -65,6 +65,23 @@ pub struct AffectedSymbol {
 }
 
 /// Full impact report for a set of code changes.
+///
+/// ## Note on Confidence
+///
+/// Impact analysis relies on call graph resolution, which uses a **name-based heuristic**.
+/// This means:
+///
+/// - For changes to functions with **unique names** (e.g., `initializeAuthSystem`):
+///   The affected symbol list is typically accurate.
+///
+/// - For changes to functions with **common names** (e.g., `parse`, `handle`, `validate`):
+///   The affected list may include false positives. Cross-language relationships are
+///   particularly prone to false positives and should be verified manually.
+///
+/// **Very large blast radius (400+ symbols):** Often indicates cascading false positives.
+/// Spot-check results when analyzing common-name function edits.
+///
+/// See `docs/guides/call-resolution-limitations.md` for mitigation strategies.
 #[derive(Debug, Clone, Serialize)]
 pub struct ImpactReport {
     /// Symbols whose source lines overlap with the diff hunks.

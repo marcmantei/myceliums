@@ -33,10 +33,10 @@ Repository ID: my-project-a1b2c3
 | Without Myceliums | With Myceliums |
 |---|---|
 | AI grep-searches across hundreds of files | One graph query returns exact results |
-| "What calls this function?" → hallucinated guesses | Precise caller/callee chains from the graph |
+| "What calls this function?" → hallucinated guesses | Heuristic caller/callee chains from name-based resolution |
 | Full source files sent to AI (thousands of tokens) | Structural summaries (~200 tokens) |
 | No understanding of code architecture | Community detection reveals code clusters |
-| Manual impact analysis | `myc impact` traces blast radius automatically |
+| Manual impact analysis | `myc impact` traces blast radius (with confidence flags) |
 
 ### Key capabilities
 
@@ -549,6 +549,7 @@ The workspace has six crates:
 |-------|------|
 | Getting started | [docs/getting-started.md](docs/getting-started.md) |
 | Editor setup (all 14 editors) | [docs/editors/overview.md](docs/editors/overview.md) |
+| Call resolution limitations | [docs/guides/call-resolution-limitations.md](docs/guides/call-resolution-limitations.md) |
 | Token savings | [docs/guides/token-savings.md](docs/guides/token-savings.md) |
 | Cypher query guide | [docs/guides/cypher-queries.md](docs/guides/cypher-queries.md) |
 | Search modes | [docs/guides/search-modes.md](docs/guides/search-modes.md) |
