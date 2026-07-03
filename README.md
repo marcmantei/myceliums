@@ -338,11 +338,12 @@ Any other MCP-compatible editor can use myceliums by pointing to `myc mcp`.
 
 ## Performance
 
-| Repository size | `--skip-embeddings` | Full (with embeddings) | Cached |
+| Codebase size | `--skip-embeddings` | Full (with embeddings) | Cached |
 |---|---|---|---|
-| Small (< 100 files) | < 1 second | 5-30 seconds | ~50ms |
-| Medium (100-500 files) | 1-5 seconds | 1-5 minutes | ~50ms |
-| Large (1000+ files) | 5-15 seconds | 10-20 minutes | ~50ms |
+| Small (< 100 files) | 1-3 seconds | 5-30 seconds | ~50ms |
+| Medium (100-1,000 files) | 3-15 seconds | 1-5 minutes | ~50ms |
+| Large (1,000-10,000 files) | 15-120 seconds | 10-20 minutes | ~50ms |
+| Very large (10,000+ files) | 2-10 minutes | 30+ minutes | ~50ms |
 
 `myc session` uses `--skip-embeddings` by default for fast startup. BM25 text search, Cypher queries, impact detection, and process tracing all work without embeddings. Only semantic/hybrid search requires embeddings.
 
@@ -505,16 +506,6 @@ If an analysis is interrupted (e.g., timeout, crash, `Ctrl+C`), the data directo
 | **Lock file** | Prevents two analyses of the same repo from running simultaneously |
 | **Timeout** | `--timeout 300` (5 minutes) in auto mode — aborts gracefully on timeout |
 
-### Typical resource usage
-
-| Codebase size | Analysis time | RAM usage | Disk usage |
-|--------------|---------------|-----------|------------|
-| Small (< 100 files) | 1-3 seconds | < 200 MB | < 5 MB |
-| Medium (100-1,000 files) | 3-15 seconds | 200-500 MB | 5-50 MB |
-| Large (1,000-10,000 files) | 15-120 seconds | 500 MB-2 GB | 50-200 MB |
-| Very large (10,000+ files) | 2-10 minutes | 2-8 GB | 200 MB+ |
-
-Use `--skip-embeddings` for faster analysis (BM25 and Cypher still work without embeddings).
 
 ### Claude Code integration
 
