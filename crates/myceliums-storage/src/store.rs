@@ -15,6 +15,12 @@ use tracing::info;
 use crate::models::*;
 use crate::schema;
 
+/// Escape single quotes in LanceDB filter predicates by doubling them.
+/// This prevents SQL injection attacks when values are interpolated into predicates.
+fn escape_lance_str(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
 pub struct Store {
     db: Connection,
     repo_id: String,
@@ -186,9 +192,10 @@ impl Store {
             return Ok(vec![]);
         }
         let table = self.db.open_table(table_name).execute().await?;
+        let escaped_repo_id = escape_lance_str(&self.repo_id);
         let stream = table
             .query()
-            .only_if(format!("repo_id = '{}'", self.repo_id))
+            .only_if(format!("repo_id = '{}'", escaped_repo_id))
             .execute()
             .await?;
         let batches: Vec<RecordBatch> = stream.try_collect().await?;
@@ -391,10 +398,12 @@ impl Store {
         // Delete symbols for this file
         if tables.contains(&"symbols".to_string()) {
             let table = self.db.open_table("symbols").execute().await?;
+            let escaped_repo_id = escape_lance_str(&self.repo_id);
+            let escaped_file_path = escape_lance_str(file_path);
             table
                 .delete(&format!(
                     "repo_id = '{}' AND file_path = '{}'",
-                    self.repo_id, file_path
+                    escaped_repo_id, escaped_file_path
                 ))
                 .await?;
         }
@@ -402,10 +411,12 @@ impl Store {
         // Delete file node
         if tables.contains(&"files".to_string()) {
             let table = self.db.open_table("files").execute().await?;
+            let escaped_repo_id = escape_lance_str(&self.repo_id);
+            let escaped_file_path = escape_lance_str(file_path);
             table
                 .delete(&format!(
                     "repo_id = '{}' AND path = '{}'",
-                    self.repo_id, file_path
+                    escaped_repo_id, escaped_file_path
                 ))
                 .await?;
         }
@@ -418,11 +429,13 @@ impl Store {
                 .chain(file_uids.iter())
                 .map(|s| s.as_str())
                 .collect();
+            let escaped_repo_id = escape_lance_str(&self.repo_id);
             for uid in &all_uids {
+                let escaped_uid = escape_lance_str(uid);
                 table
                     .delete(&format!(
                         "repo_id = '{}' AND (source_uid = '{}' OR target_uid = '{}')",
-                        self.repo_id, uid, uid
+                        escaped_repo_id, escaped_uid, escaped_uid
                     ))
                     .await?;
             }
@@ -438,6 +451,7 @@ impl Store {
 
     pub async fn delete_repo_data(&self) -> Result<()> {
         let tables = self.db.table_names().execute().await?;
+        let escaped_repo_id = escape_lance_str(&self.repo_id);
         for table_name in [
             "symbols",
             "files",
@@ -448,7 +462,7 @@ impl Store {
             if tables.contains(&table_name.to_string()) {
                 let table = self.db.open_table(table_name).execute().await?;
                 table
-                    .delete(&format!("repo_id = '{}'", self.repo_id))
+                    .delete(&format!("repo_id = '{}'", escaped_repo_id))
                     .await?;
             }
         }
@@ -742,10 +756,11 @@ impl Store {
         }
 
         let table = self.db.open_table("symbols").execute().await?;
+        let escaped_repo_id = escape_lance_str(&self.repo_id);
         let stream = table
             .vector_search(query_vector)?
             .column("vector")
-            .only_if(format!("repo_id = '{}'", self.repo_id))
+            .only_if(format!("repo_id = '{}'", escaped_repo_id))
             .limit(limit)
             .execute()
             .await?;
@@ -834,6 +849,16 @@ mod tests {
 
     fn test_db_path(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("myceliums_store_test_{}", name))
+    }
+
+    #[test]
+    fn test_escape_lance_str() {
+        assert_eq!(escape_lance_str("normal"), "normal");
+        assert_eq!(escape_lance_str("O'Brien"), "O''Brien");
+        assert_eq!(escape_lance_str("don't"), "don''t");
+        assert_eq!(escape_lance_str("it's"), "it''s");
+        assert_eq!(escape_lance_str("it's O'Brien"), "it''s O''Brien");
+        assert_eq!(escape_lance_str("''"), "''''");
     }
 
     #[tokio::test]
