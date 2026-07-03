@@ -10,6 +10,12 @@ use crate::parser::{
     Query, WhereClause,
 };
 
+/// Maximum number of rows that can be returned from a query
+const MAX_RESULT_ROWS: usize = 100_000;
+
+/// Maximum allowed cartesian product size (when cross-joining patterns)
+const MAX_INTERMEDIATE_ROWS: usize = 10_000;
+
 pub struct CypherExecutor {
     symbols: Vec<CodeSymbol>,
     files: Vec<FileNode>,
@@ -72,6 +78,33 @@ impl CypherExecutor {
         let query =
             parser::parse_cypher(query_str).map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;
 
+        // Validate that unsupported clauses are not present
+        if query.with_clause.is_some() {
+            return Err(anyhow::anyhow!(
+                "WITH clause is not supported. Please use MATCH ... RETURN or MATCH ... WHERE ... RETURN instead."
+            ));
+        }
+
+        if query.return_clause.distinct {
+            return Err(anyhow::anyhow!(
+                "DISTINCT is not supported. Please remove DISTINCT from your RETURN clause."
+            ));
+        }
+
+        // Check for unknown labels in patterns
+        if let Some(ref match_clause) = query.match_clause {
+            for pattern in &match_clause.patterns {
+                self.validate_pattern_labels(pattern)?;
+            }
+        }
+
+        // Check for inline property maps in patterns (properties in node patterns)
+        if let Some(ref match_clause) = query.match_clause {
+            for pattern in &match_clause.patterns {
+                self.validate_pattern_properties(pattern)?;
+            }
+        }
+
         let mut rows = self.execute_match(&query)?;
 
         if let Some(ref where_clause) = query.where_clause {
@@ -103,7 +136,88 @@ impl CypherExecutor {
             result.truncate(limit as usize);
         }
 
+        // Check final result size against max rows limit
+        if result.len() > MAX_RESULT_ROWS {
+            return Err(anyhow::anyhow!(
+                "Query returned {} rows, exceeding maximum limit of {}. \
+                 Use LIMIT or WHERE clauses to reduce the result set.",
+                result.len(),
+                MAX_RESULT_ROWS
+            ));
+        }
+
         Ok(result)
+    }
+
+    fn validate_pattern_labels(&self, pattern: &Pattern) -> Result<()> {
+        match pattern {
+            Pattern::Node(node_pat) => {
+                if let Some(label) = &node_pat.label {
+                    if !self.is_supported_label(label) {
+                        return Err(anyhow::anyhow!(
+                            "Unknown label: `{}`. Supported labels are: CodeSymbol, File",
+                            label
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            Pattern::Relationship(start, _rel, end) => {
+                if let Some(label) = &start.label {
+                    if !self.is_supported_label(label) {
+                        return Err(anyhow::anyhow!(
+                            "Unknown label: `{}`. Supported labels are: CodeSymbol, File",
+                            label
+                        ));
+                    }
+                }
+                if let Some(label) = &end.label {
+                    if !self.is_supported_label(label) {
+                        return Err(anyhow::anyhow!(
+                            "Unknown label: `{}`. Supported labels are: CodeSymbol, File",
+                            label
+                        ));
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn is_supported_label(&self, label: &str) -> bool {
+        matches!(label, "CodeSymbol" | "File")
+    }
+
+    fn validate_pattern_properties(&self, pattern: &Pattern) -> Result<()> {
+        match pattern {
+            Pattern::Node(node_pat) => {
+                if !node_pat.properties.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "Inline property maps in MATCH patterns are not supported. \
+                         Use WHERE clauses to filter by properties instead. \
+                         Example: MATCH (n) WHERE n.name = 'value' RETURN n"
+                    ));
+                }
+                Ok(())
+            }
+            Pattern::Relationship(start, _rel, end) => {
+                if !start.properties.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "Inline property maps in MATCH patterns are not supported. \
+                         Use WHERE clauses to filter by properties instead. \
+                         Example: MATCH (n) WHERE n.name = 'value' RETURN n"
+                    ));
+                }
+                if !end.properties.is_empty() {
+                    return Err(anyhow::anyhow!(
+                        "Inline property maps in MATCH patterns are not supported. \
+                         Use WHERE clauses to filter by properties instead. \
+                         Example: MATCH (n) WHERE n.name = 'value' RETURN n"
+                    ));
+                }
+                Ok(())
+            }
+        }
     }
 
     fn execute_match(&self, query: &Query) -> Result<Vec<Row>> {
@@ -119,10 +233,20 @@ impl CypherExecutor {
             if rows.is_empty() {
                 rows = pattern_rows;
             } else {
-                // Cross join
+                // Cross join with cartesian product size check
                 let mut new_rows = Vec::new();
                 for existing in &rows {
                     for new in &pattern_rows {
+                        // Check if cartesian product would exceed threshold
+                        if new_rows.len() >= MAX_INTERMEDIATE_ROWS {
+                            return Err(anyhow::anyhow!(
+                                "Query cartesian product too large. Patterns joined would create {} rows (max: {}). \
+                                 Consider using WHERE clauses to reduce the result set before joining patterns.",
+                                new_rows.len(),
+                                MAX_INTERMEDIATE_ROWS
+                            ));
+                        }
+
                         let mut merged = existing.clone();
                         merged.extend(new.iter().map(|(k, v)| (k.clone(), v.clone())));
                         new_rows.push(merged);
@@ -166,8 +290,11 @@ impl CypherExecutor {
                         })
                         .collect()),
                     Some(other) => {
-                        info!("Unknown label: {}, searching symbols", other);
-                        Ok(vec![])
+                        // This should not happen if validate_pattern_labels was called
+                        Err(anyhow::anyhow!(
+                            "Unknown label: `{}`. Supported labels are: CodeSymbol, File",
+                            other
+                        ))
                     }
                 }
             }
@@ -273,10 +400,27 @@ impl CypherExecutor {
                     BinOp::Or => EvalResult::Value(json!(l.as_bool() || r.as_bool())),
                     BinOp::Eq => EvalResult::Value(json!(l.to_value() == r.to_value())),
                     BinOp::Neq => EvalResult::Value(json!(l.to_value() != r.to_value())),
-                    BinOp::Lt => EvalResult::Value(json!(l.as_f64() < r.as_f64())),
-                    BinOp::Gt => EvalResult::Value(json!(l.as_f64() > r.as_f64())),
-                    BinOp::Lte => EvalResult::Value(json!(l.as_f64() <= r.as_f64())),
-                    BinOp::Gte => EvalResult::Value(json!(l.as_f64() >= r.as_f64())),
+                    BinOp::Lt => {
+                        // Compare as strings if both are strings, otherwise as numbers
+                        let cmp = compare_operands_for_ordering(&l, &r);
+                        EvalResult::Value(json!(cmp == std::cmp::Ordering::Less))
+                    }
+                    BinOp::Gt => {
+                        let cmp = compare_operands_for_ordering(&l, &r);
+                        EvalResult::Value(json!(cmp == std::cmp::Ordering::Greater))
+                    }
+                    BinOp::Lte => {
+                        let cmp = compare_operands_for_ordering(&l, &r);
+                        EvalResult::Value(json!(
+                            cmp == std::cmp::Ordering::Less || cmp == std::cmp::Ordering::Equal
+                        ))
+                    }
+                    BinOp::Gte => {
+                        let cmp = compare_operands_for_ordering(&l, &r);
+                        EvalResult::Value(json!(
+                            cmp == std::cmp::Ordering::Greater || cmp == std::cmp::Ordering::Equal
+                        ))
+                    }
                 }
             }
             Expr::Not(inner) => {
@@ -1141,6 +1285,24 @@ fn compare_values(a: &Value, b: &Value) -> std::cmp::Ordering {
             .unwrap_or(std::cmp::Ordering::Equal),
         _ => std::cmp::Ordering::Equal,
     }
+}
+
+fn compare_operands_for_ordering(left: &EvalResult, right: &EvalResult) -> std::cmp::Ordering {
+    // If both are strings, compare as strings
+    let left_str = left.as_string();
+    let right_str = right.as_string();
+    
+    // Check if both values are numeric (either JSON numbers or strings that parse as numbers)
+    let left_num = left.to_value().as_f64();
+    let right_num = right.to_value().as_f64();
+    
+    // If both are numeric, compare as numbers
+    if let (Some(l), Some(r)) = (left_num, right_num) {
+        return l.partial_cmp(&r).unwrap_or(std::cmp::Ordering::Equal);
+    }
+    
+    // Otherwise, compare as strings
+    left_str.cmp(&right_str)
 }
 
 fn contains_aggregation(expr: &Expr) -> bool {

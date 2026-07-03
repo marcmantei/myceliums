@@ -93,18 +93,27 @@ myc hybrid-search "rate limiting middleware"
 Use the `query` subcommand with a Cypher string:
 
 ```bash
-myc query 'MATCH (s:Function) WHERE s.name = "login" RETURN s'
+myc query 'MATCH (s:CodeSymbol) WHERE s.name = "login" RETURN s'
 ```
 
 More examples:
 
 ```bash
-# Find all structs that have a field named "id"
-myc query 'MATCH (s:Struct)-[:HAS_FIELD]->(f) WHERE f.name = "id" RETURN s.name, s.file'
+# Find all functions with a specific name
+myc query 'MATCH (s:CodeSymbol) WHERE s.name = "validateInput" RETURN s.name, s.file_path'
 
-# Find callers of a function
-myc query 'MATCH (caller)-[:CALLS]->(target:Function {name: "processOrder"}) RETURN caller.name'
+# Find callers of a function via relationships
+myc query 'MATCH (caller:CodeSymbol)-[:CALLS]->(target:CodeSymbol) WHERE target.name = "processOrder" RETURN caller.name'
+
+# Find all code symbols in a specific file
+myc query 'MATCH (f:File) WHERE f.path = "src/auth.rs" RETURN f'
 ```
+
+**Supported Labels:**
+- `CodeSymbol` — Functions, structs, types, and other code entities
+- `File` — Source files
+
+**Note:** Inline property maps in MATCH patterns are not supported (e.g., `MATCH (s {name: "x"})` will fail). Use WHERE clauses to filter by properties instead: `MATCH (s:CodeSymbol) WHERE s.name = "x" RETURN s`
 
 See [docs/reference/cypher-queries.md](reference/cypher-queries.md) for the full schema and more query patterns.
 
