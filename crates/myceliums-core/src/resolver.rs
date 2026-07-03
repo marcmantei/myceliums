@@ -7,8 +7,41 @@ use crate::module_graph::ModuleGraph;
 use crate::parser::{CallReference, ExpressionStep, ImportInfo};
 use crate::string_pool::{StrId, StringPool};
 
-/// Resolves call references to actual symbol UIDs.
+/// Resolves call references to actual symbol UIDs using name-based heuristics.
 /// Two-pass: first collects all definitions, then resolves calls.
+///
+/// ## Heuristic Nature and Limitations
+///
+/// Call resolution uses a global `name -> uid` map (last-writer-wins), which means
+/// same-named symbols from different scopes/files will collide. This is a **heuristic
+/// approach** that is fast and covers most cases, but produces false positives on
+/// common names:
+///
+/// **Example false positive:**
+/// ```rust
+/// // File: auth.rs
+/// fn parse(input: &str) -> Token { }
+///
+/// // File: config.rs  
+/// fn parse(json: &str) -> Config { }
+///
+/// // File: main.rs
+/// let token = parse(user_input);  // Which parse()?
+/// ```
+///
+/// The resolver cannot distinguish between `auth::parse` and `config::parse` — it picks
+/// one arbitrarily. This produces incorrect edges in the call graph, especially for common
+/// names like `parse`, `handle`, `validate`, `map`, etc.
+///
+/// ## Mitigation Strategies
+///
+/// 1. Expression chains provide context: `obj.method()` is more reliable than `method()`
+/// 2. Import aliases and SSA-derived aliases improve accuracy within a file
+/// 3. Unique function names avoid collisions (e.g., prefer `validateUserEmail` over `validate`)
+/// 4. Cross-language calls are de-ranked (less likely to be real)
+///
+/// For 100% precise resolution, see future precision track: per-file scoping, type
+/// inference, confidence scores, and optional LSP enrichment.
 ///
 /// Internally uses a [`StringPool`] to intern all names and UIDs,
 /// replacing per-entry `String` allocations with compact [`StrId`] handles.
@@ -89,6 +122,15 @@ impl CallResolver {
     /// attempts to build a qualified name from the chain's receiver type
     /// (e.g. `Foo.bar`) and looks that up before falling back to the bare
     /// callee name. SSA aliases are also consulted as a final fallback.
+    ///
+    /// ## Confidence Notes
+    ///
+    /// This is a **heuristic approach** with varying confidence levels:
+    ///
+    /// - **High confidence**: Expression chains (`obj.method()`), unique names, same-file calls
+    /// - **Low confidence**: Bare-name calls to functions with common names (`parse`, `handle`, `validate`, `map`)
+    ///
+    /// See the struct-level documentation for details on false positives and mitigation.
     pub fn resolve_calls(&self, calls: &[CallReference], repo_id: &str) -> Vec<Relationship> {
         let mut relationships = Vec::new();
 
