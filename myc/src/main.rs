@@ -775,9 +775,29 @@ fn resolve_repo_or_latest(repo: Option<&str>) -> Result<(String, RepoInfo)> {
     if let Some(r) = repo {
         return resolve_repo(r);
     }
+    
     let registry = RepoRegistry::load(&registry_path())?;
+    
+    // Try to find a repo that contains the current working directory
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Ok(cwd_canonical) = cwd.canonicalize() {
+            for repo_info in registry.list() {
+                let repo_path = PathBuf::from(&repo_info.path);
+                if let Ok(repo_canonical) = repo_path.canonicalize() {
+                    // Check if cwd is within repo_path or is repo_path itself
+                    if cwd_canonical.starts_with(&repo_canonical) {
+                        eprintln!("Resolved repository: {} ({})", repo_info.name, repo_info.id);
+                        return Ok((repo_info.id.clone(), repo_info.clone()));
+                    }
+                }
+            }
+        }
+    }
+    
+    // Fall back to the latest repo if cwd is not in any indexed repo
     let repos = registry.list();
     if let Some(latest) = repos.last() {
+        eprintln!("Using latest repository as fallback: {} ({})", latest.name, latest.id);
         return Ok((latest.id.clone(), (*latest).clone()));
     }
     anyhow::bail!("No repositories analyzed yet. Run: myc analyze <path>");
