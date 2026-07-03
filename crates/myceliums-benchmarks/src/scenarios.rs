@@ -1,4 +1,4 @@
-use crate::baseline::{simulate_baseline, SimulationResult};
+use crate::baseline::{estimate_baseline, MeasurementResult};
 use crate::metrics::{Measurements, ScenarioMetrics};
 use anyhow::Result;
 
@@ -7,16 +7,19 @@ pub trait Scenario {
     fn name(&self) -> &str;
     fn description(&self) -> &str;
 
-    /// Simulate the baseline (without Myceliums) measurements
-    fn baseline_simulation(&self) -> Result<SimulationResult>;
+    /// Estimate the baseline (without Myceliums) measurements
+    /// **IMPORTANT**: These are illustrative estimates, not verified measurements
+    fn baseline_estimate(&self) -> Result<MeasurementResult>;
 
-    /// Simulate with Myceliums (would integrate with myceliums-core in real implementation)
-    fn with_myceliums_simulation(&self) -> Result<SimulationResult>;
+    /// Estimate with Myceliums (theoretical improvements from structured queries)
+    /// **IMPORTANT**: These are illustrative estimates, not verified measurements
+    fn with_myceliums_estimate(&self) -> Result<MeasurementResult>;
 
-    /// Run both simulations and return metrics
+    /// Run both estimates and return metrics
+    /// Note: These metrics are marked as unverified estimates
     fn run(&self) -> Result<ScenarioMetrics> {
-        let baseline_result = self.baseline_simulation()?;
-        let myceliums_result = self.with_myceliums_simulation()?;
+        let baseline_result = self.baseline_estimate()?;
+        let myceliums_result = self.with_myceliums_estimate()?;
 
         let baseline = Measurements {
             time_ms: baseline_result.time_ms,
@@ -35,6 +38,7 @@ pub trait Scenario {
             self.description().to_string(),
             baseline,
             with_myceliums,
+            false, // Mark as unverified estimate
         ))
     }
 }
@@ -48,28 +52,28 @@ impl Scenario for FindAllCallersScenario {
     }
 
     fn description(&self) -> &str {
-        "Find all callers of function X in a medium-sized codebase"
+        "Find all callers of function X in a medium-sized codebase (ILLUSTRATIVE ESTIMATE)"
     }
 
-    fn baseline_simulation(&self) -> Result<SimulationResult> {
-        // Baseline: grep + manual parsing
-        // Simulates: 2-3 grep calls, parsing 50-100 lines, generating prompt with results
-        let result = simulate_baseline(
+    fn baseline_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate baseline: grep + manual parsing
+        // Theoretical: 2-3 grep calls, parsing 50-100 lines, generating prompt with results
+        let result = estimate_baseline(
             "find_all_callers",
-            2400.0, // time_ms: 2-3 seconds for grep + parsing
-            15000,  // tokens: large unstructured output with grep results
-            8,      // tool_calls: multiple grep calls, file reads, etc.
+            2400.0, // time_ms: estimated 2-3 seconds for grep + parsing
+            15000,  // tokens: estimated large unstructured output with grep results
+            8,      // tool_calls: estimated multiple grep calls, file reads, etc.
         )?;
         Ok(result)
     }
 
-    fn with_myceliums_simulation(&self) -> Result<SimulationResult> {
-        // With Myceliums: single graph query
-        let result = simulate_baseline(
+    fn with_myceliums_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate with Myceliums: single graph query
+        let result = estimate_baseline(
             "find_all_callers",
-            320.0, // time_ms: ~300ms for graph query + serialization
-            2100,  // tokens: structured JSON output is more compact
-            2,     // tool_calls: 1 graph query + 1 format call
+            320.0, // time_ms: estimated ~300ms for graph query + serialization
+            2100,  // tokens: estimated structured JSON output is more compact
+            2,     // tool_calls: estimated 1 graph query + 1 format call
         )?;
         Ok(result)
     }
@@ -84,27 +88,27 @@ impl Scenario for DetectImpactScenario {
     }
 
     fn description(&self) -> &str {
-        "Analyze the impact of changing symbol Y across the codebase"
+        "Analyze the impact of changing symbol Y across the codebase (ILLUSTRATIVE ESTIMATE)"
     }
 
-    fn baseline_simulation(&self) -> Result<SimulationResult> {
-        // Baseline: manual call graph tracing
-        let result = simulate_baseline(
+    fn baseline_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate baseline: manual call graph tracing
+        let result = estimate_baseline(
             "detect_impact",
-            3100.0, // time_ms: 3+ seconds for manual tracing
-            18000,  // tokens: large unstructured trace output
-            12,     // tool_calls: file reads, grep, manual inspection
+            3100.0, // time_ms: estimated 3+ seconds for manual tracing
+            18000,  // tokens: estimated large unstructured trace output
+            12,     // tool_calls: estimated file reads, grep, manual inspection
         )?;
         Ok(result)
     }
 
-    fn with_myceliums_simulation(&self) -> Result<SimulationResult> {
-        // With Myceliums: structured impact detection
-        let result = simulate_baseline(
+    fn with_myceliums_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate with Myceliums: structured impact detection
+        let result = estimate_baseline(
             "detect_impact",
-            280.0, // time_ms: ~280ms for impact analysis
-            2400,  // tokens: structured impact report
-            2,     // tool_calls: 1 impact query + 1 format call
+            280.0, // time_ms: estimated ~280ms for impact analysis
+            2400,  // tokens: estimated structured impact report
+            2,     // tool_calls: estimated 1 impact query + 1 format call
         )?;
         Ok(result)
     }
@@ -119,27 +123,27 @@ impl Scenario for ListCommunitySymbolsScenario {
     }
 
     fn description(&self) -> &str {
-        "Find and list all symbols belonging to a specific community"
+        "Find and list all symbols belonging to a specific community (ILLUSTRATIVE ESTIMATE)"
     }
 
-    fn baseline_simulation(&self) -> Result<SimulationResult> {
-        // Baseline: git grep + manual filtering
-        let result = simulate_baseline(
+    fn baseline_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate baseline: git grep + manual filtering
+        let result = estimate_baseline(
             "list_community_symbols",
-            2000.0, // time_ms: 2 seconds for git grep + filtering
-            12000,  // tokens: unstructured grep output
-            6,      // tool_calls: git grep, file reads, filtering
+            2000.0, // time_ms: estimated 2 seconds for git grep + filtering
+            12000,  // tokens: estimated unstructured grep output
+            6,      // tool_calls: estimated git grep, file reads, filtering
         )?;
         Ok(result)
     }
 
-    fn with_myceliums_simulation(&self) -> Result<SimulationResult> {
-        // With Myceliums: direct community query
-        let result = simulate_baseline(
+    fn with_myceliums_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate with Myceliums: direct community query
+        let result = estimate_baseline(
             "list_community_symbols",
-            150.0, // time_ms: ~150ms for direct query
-            1500,  // tokens: structured list
-            1,     // tool_calls: 1 community query
+            150.0, // time_ms: estimated ~150ms for direct query
+            1500,  // tokens: estimated structured list
+            1,     // tool_calls: estimated 1 community query
         )?;
         Ok(result)
     }
@@ -154,27 +158,27 @@ impl Scenario for FindFunctionHandlersScenario {
     }
 
     fn description(&self) -> &str {
-        "Locate all functions that handle a specific type of request"
+        "Locate all functions that handle a specific type of request (ILLUSTRATIVE ESTIMATE)"
     }
 
-    fn baseline_simulation(&self) -> Result<SimulationResult> {
-        // Baseline: ripgrep + semantic analysis
-        let result = simulate_baseline(
+    fn baseline_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate baseline: ripgrep + semantic analysis
+        let result = estimate_baseline(
             "find_function_handlers",
-            2800.0, // time_ms: 2.8 seconds for ripgrep + analysis
-            16000,  // tokens: large unstructured results
-            10,     // tool_calls: multiple grep, file reads, analysis
+            2800.0, // time_ms: estimated 2.8 seconds for ripgrep + analysis
+            16000,  // tokens: estimated large unstructured results
+            10,     // tool_calls: estimated multiple grep, file reads, analysis
         )?;
         Ok(result)
     }
 
-    fn with_myceliums_simulation(&self) -> Result<SimulationResult> {
-        // With Myceliums: semantic search via MCP
-        let result = simulate_baseline(
+    fn with_myceliums_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate with Myceliums: semantic search via MCP
+        let result = estimate_baseline(
             "find_function_handlers",
-            340.0, // time_ms: ~340ms for semantic search
-            2200,  // tokens: structured results
-            2,     // tool_calls: semantic search + format
+            340.0, // time_ms: estimated ~340ms for semantic search
+            2200,  // tokens: estimated structured results
+            2,     // tool_calls: estimated semantic search + format
         )?;
         Ok(result)
     }
@@ -189,27 +193,27 @@ impl Scenario for RenameSafelyScenario {
     }
 
     fn description(&self) -> &str {
-        "Safely rename a symbol with comprehensive impact detection"
+        "Safely rename a symbol with comprehensive impact detection (ILLUSTRATIVE ESTIMATE)"
     }
 
-    fn baseline_simulation(&self) -> Result<SimulationResult> {
-        // Baseline: manual find-replace + code review
-        let result = simulate_baseline(
+    fn baseline_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate baseline: manual find-replace + code review
+        let result = estimate_baseline(
             "rename_safely",
-            3500.0, // time_ms: 3.5 seconds for full analysis
-            20000,  // tokens: large output for manual review
-            15,     // tool_calls: multiple searches, reads, analysis
+            3500.0, // time_ms: estimated 3.5 seconds for full analysis
+            20000,  // tokens: estimated large output for manual review
+            15,     // tool_calls: estimated multiple searches, reads, analysis
         )?;
         Ok(result)
     }
 
-    fn with_myceliums_simulation(&self) -> Result<SimulationResult> {
-        // With Myceliums: structured rename with impact analysis
-        let result = simulate_baseline(
+    fn with_myceliums_estimate(&self) -> Result<MeasurementResult> {
+        // Estimate with Myceliums: structured rename with impact analysis
+        let result = estimate_baseline(
             "rename_safely",
-            420.0, // time_ms: ~420ms for rename operation
-            2600,  // tokens: structured rename report
-            3,     // tool_calls: impact detection, rename, format
+            420.0, // time_ms: estimated ~420ms for rename operation
+            2600,  // tokens: estimated structured rename report
+            3,     // tool_calls: estimated impact detection, rename, format
         )?;
         Ok(result)
     }
@@ -247,6 +251,7 @@ mod tests {
         assert!(metrics.improvements.time_reduction_percent > 0.0);
         assert!(metrics.improvements.token_reduction_percent > 0.0);
         assert!(metrics.improvements.tool_call_reduction_percent > 0.0);
+        assert!(!metrics.is_verified); // These are estimates, not verified
     }
 
     #[test]
@@ -258,6 +263,7 @@ mod tests {
             assert!(!scenario.name.is_empty());
             assert!(!scenario.description.is_empty());
             assert!(scenario.improvements.time_reduction_percent > 0.0);
+            assert!(!scenario.is_verified); // All are estimates
         }
     }
 }
