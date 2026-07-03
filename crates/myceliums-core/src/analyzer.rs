@@ -734,10 +734,7 @@ impl Analyzer {
             }
 
             for sym in &all_symbols {
-                if let Some(pos) = sym.qualified_name.rfind("::") {
-                    let parent_name = &sym.qualified_name[..pos];
-                    let parent_short = parent_name.rsplit("::").next().unwrap_or(parent_name);
-
+                if let Some(parent_short) = member_parent_short(&sym.qualified_name) {
                     if let Some(&parent_uid) =
                         by_file_name.get(&(sym.file_path.as_str(), parent_short))
                     {
@@ -1380,9 +1377,7 @@ impl Analyzer {
                 );
             }
             for sym in &all_symbols {
-                if let Some(pos) = sym.qualified_name.rfind("::") {
-                    let parent_name = &sym.qualified_name[..pos];
-                    let parent_short = parent_name.rsplit("::").next().unwrap_or(parent_name);
+                if let Some(parent_short) = member_parent_short(&sym.qualified_name) {
                     if let Some(&parent_uid) =
                         by_file_name.get(&(sym.file_path.as_str(), parent_short))
                     {
@@ -2033,11 +2028,49 @@ fn build_globset(patterns: &[String]) -> Result<Option<GlobSet>> {
     ))
 }
 
+/// Extract the immediate parent's short name from a member `qualified_name`.
+///
+/// `to_code_symbols` builds member qualified names with a dot (`Parent.method`),
+/// while import/module paths use `::` (`std::io::Read`). Both must be handled:
+/// splitting only on `::` (as the code previously did) meant every dot-separated
+/// member name — i.e. all of them — was skipped and MEMBER_OF was never emitted.
+///
+/// Returns the last path segment before the final separator, e.g.
+/// `Outer.Inner.method` → `Inner`, `MyClass::method` → `MyClass`.
+fn member_parent_short(qualified_name: &str) -> Option<&str> {
+    let cut = |sep: &str| qualified_name.rfind(sep).map(|pos| (pos, sep.len()));
+    let (pos, sep_len) = match (cut("::"), cut(".")) {
+        (Some(a), Some(b)) => {
+            if a.0 >= b.0 {
+                a
+            } else {
+                b
+            }
+        }
+        (Some(a), None) => a,
+        (None, Some(b)) => b,
+        (None, None) => return None,
+    };
+    let parent = &qualified_name[..pos];
+    let short = parent
+        .rsplit("::")
+        .next()
+        .and_then(|s| s.rsplit('.').next())
+        .unwrap_or(parent);
+    // Ignore the trailing separator we matched on (keeps `sep_len` meaningful and
+    // guards against a name that ends in a separator).
+    if short.is_empty() || pos + sep_len > qualified_name.len() {
+        None
+    } else {
+        Some(short)
+    }
+}
+
 /// Compute MEMBER_OF relationships from qualified_name patterns.
 ///
-/// For each symbol whose `qualified_name` contains `::`  (e.g. `MyClass::method`),
-/// attempts to find a parent symbol with a matching short name in the same file.
-/// Returns the list of MEMBER_OF relationships found.
+/// For each member symbol whose `qualified_name` names a parent (e.g.
+/// `MyClass.method` or `MyClass::method`), attempts to find a parent symbol with a
+/// matching short name in the same file. Returns the MEMBER_OF relationships found.
 pub fn compute_member_of_relationships(symbols: &[CodeSymbol], repo_id: &str) -> Vec<Relationship> {
     let mut by_file_name: std::collections::HashMap<(&str, &str), &str> =
         std::collections::HashMap::new();
@@ -2050,9 +2083,7 @@ pub fn compute_member_of_relationships(symbols: &[CodeSymbol], repo_id: &str) ->
 
     let mut rels = Vec::new();
     for sym in symbols {
-        if let Some(pos) = sym.qualified_name.rfind("::") {
-            let parent_name = &sym.qualified_name[..pos];
-            let parent_short = parent_name.rsplit("::").next().unwrap_or(parent_name);
+        if let Some(parent_short) = member_parent_short(&sym.qualified_name) {
             if let Some(&parent_uid) = by_file_name.get(&(sym.file_path.as_str(), parent_short)) {
                 if parent_uid != sym.uid {
                     rels.push(Relationship {
@@ -2366,9 +2397,56 @@ mod tests {
 
     #[test]
     fn test_member_of_self_reference() {
-        // "Foo" with qualified_name "Foo" has no "::", so no MemberOf
+        // "Foo" with qualified_name "Foo" has no parent separator, so no MemberOf
         let symbols = vec![make_code_symbol("f1", "Foo", "Foo", "src/lib.rs")];
         let rels = compute_member_of_relationships(&symbols, "test");
         assert!(rels.is_empty(), "No self-referencing MemberOf edge");
+    }
+
+    #[test]
+    fn test_member_of_from_dotted_qualified_name() {
+        // This is the separator `to_code_symbols` actually emits (`Parent.method`).
+        // Previously derivation only matched `::`, so this produced no edge.
+        let symbols = vec![
+            make_code_symbol("c1", "MyClass", "MyClass", "src/lib.rs"),
+            make_code_symbol("m1", "method", "MyClass.method", "src/lib.rs"),
+        ];
+        let rels = compute_member_of_relationships(&symbols, "test");
+        assert_eq!(rels.len(), 1);
+        assert_eq!(rels[0].source_uid, "m1");
+        assert_eq!(rels[0].target_uid, "c1");
+    }
+
+    #[test]
+    fn test_member_parent_short_variants() {
+        assert_eq!(member_parent_short("MyClass.method"), Some("MyClass"));
+        assert_eq!(member_parent_short("MyClass::method"), Some("MyClass"));
+        assert_eq!(member_parent_short("Outer.Inner.method"), Some("Inner"));
+        assert_eq!(member_parent_short("a::b::c"), Some("b"));
+        assert_eq!(member_parent_short("bare"), None);
+    }
+
+    /// End-to-end regression: parse a real class through the parser and
+    /// `to_code_symbols`, then confirm MEMBER_OF edges are produced. This guards
+    /// against the derivation separator drifting from what the parser emits.
+    #[test]
+    fn test_member_of_end_to_end_parser() {
+        let source = "class Greeter {\n  greet() { return 1; }\n}\n";
+        let mut parser = SourceParser::new(SourceLanguage::TypeScript).unwrap();
+        let parsed = parser.parse(source).unwrap();
+        let symbols = crate::parser::to_code_symbols(&parsed.symbols, "src/greeter.ts", "test");
+        assert!(
+            symbols.iter().any(|s| s.name == "greet"),
+            "parser should extract the method"
+        );
+        let rels = compute_member_of_relationships(&symbols, "test");
+        assert!(
+            rels.iter().any(|r| r.kind == RelationshipKind::MemberOf),
+            "a parsed class method must yield a MEMBER_OF edge, got: {:?}",
+            symbols
+                .iter()
+                .map(|s| (&s.name, &s.qualified_name))
+                .collect::<Vec<_>>()
+        );
     }
 }
