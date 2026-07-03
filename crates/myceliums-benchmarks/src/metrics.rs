@@ -55,6 +55,8 @@ pub struct ScenarioMetrics {
     pub baseline: Measurements,
     pub with_myceliums: Measurements,
     pub improvements: Improvements,
+    /// True if measurements are from real runs, false if illustrative estimates
+    pub is_verified: bool,
 }
 
 impl ScenarioMetrics {
@@ -63,6 +65,7 @@ impl ScenarioMetrics {
         description: String,
         baseline: Measurements,
         with_myceliums: Measurements,
+        is_verified: bool,
     ) -> Self {
         let improvements = Improvements::calculate(&baseline, &with_myceliums);
         Self {
@@ -71,7 +74,19 @@ impl ScenarioMetrics {
             baseline,
             with_myceliums,
             improvements,
+            is_verified,
         }
+    }
+
+    /// Deprecated: use new() with is_verified parameter instead
+    #[deprecated(since = "0.2.0", note = "Use new() with is_verified parameter")]
+    pub fn from_measurements(
+        name: String,
+        description: String,
+        baseline: Measurements,
+        with_myceliums: Measurements,
+    ) -> Self {
+        Self::new(name, description, baseline, with_myceliums, false)
     }
 }
 
@@ -126,6 +141,14 @@ impl AggregateMetrics {
 }
 
 /// Verified metrics report - the final output
+/// 
+/// **IMPORTANT**: This structure may contain either verified measurements or illustrative 
+/// estimates depending on the `is_verified` flag in each ScenarioMetrics.
+/// 
+/// - When `is_verified = true`: Metrics are from real measurements (actual grep runs, 
+///   real timing, actual token counts)
+/// - When `is_verified = false`: Metrics are illustrative estimates for comparison purposes
+///   only and should not be treated as definitive performance benchmarks.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct VerifiedMetrics {
     pub version: String,
@@ -287,6 +310,7 @@ mod tests {
                     tokens: 1000,
                     tool_calls: 1,
                 },
+                false, // is_verified = false (estimates)
             ),
             ScenarioMetrics::new(
                 "scenario2".to_string(),
@@ -301,6 +325,7 @@ mod tests {
                     tokens: 1000,
                     tool_calls: 1,
                 },
+                false, // is_verified = false (estimates)
             ),
         ];
 
@@ -340,6 +365,7 @@ mod tests {
                 tokens: 1000,
                 tool_calls: 1,
             },
+            false, // is_verified = false (estimates)
         )];
 
         let metrics = VerifiedMetrics::new("0.1.0".to_string(), env, scenarios);
