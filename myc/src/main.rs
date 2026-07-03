@@ -840,21 +840,83 @@ fn is_interactive_command(cmd: &Commands) -> bool {
 /// Guards against:
 /// - Analyzing the home directory (would index hundreds of thousands of files)
 /// - Analyzing non-git directories (unless `--no-git-check` is passed)
-fn check_session_safeguards(path: &Path, no_git_check: bool) -> Result<()> {
-    let abs_path = match std::fs::canonicalize(path) {
-        Ok(p) => p,
-        Err(_) => return Ok(()), // Let the caller handle missing paths
-    };
 
-    // Home directory guard
+/// Check if a path is a dangerous ancestor (/, /Users, /home, drive roots).
+fn is_dangerous_ancestor(path: &Path) -> bool {
+    // Root directories that should never be indexed
+    let dangerous = ["/", "/Users", "/home"];
+    for ancestor in &dangerous {
+        if path.as_os_str() == *ancestor {
+            return true;
+        }
+    }
+
+    // On Windows, check for drive roots (C:\, D:\, etc.)
+    #[cfg(windows)]
+    {
+        if let Some(s) = path.to_str() {
+            // Drive root pattern: "C:\", "D:\", etc.
+            if s.len() == 3 && s.chars().nth(1) == Some(':') && s.ends_with('\\') {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Check if a target path is a problematic parent of home directory.
+/// This catches attempts to analyze /Users, /home, or root on systems
+/// where home is a subdirectory.
+fn is_home_ancestor(target: &Path, home: &Path) -> bool {
+    // Check if target is an ancestor of home (e.g., /Users when home is /Users/marc)
+    match home.strip_prefix(target) {
+        Ok(_) => target != home, // target is an ancestor of home (but not home itself)
+        Err(_) => false,
+    }
+}
+
+fn check_session_safeguards(path: &Path, no_git_check: bool) -> Result<()> {
+    // Fail closed: if canonicalize fails, refuse the operation rather than proceeding
+    let abs_path = std::fs::canonicalize(path).with_context(|| {
+        format!(
+            "Could not canonicalize path: {}. This may indicate a symlink loop or permission issue. Use --no-git-check if you are certain this is safe.",
+            path.display()
+        )
+    })?;
+
+    // Home directory guard — enhanced
     if let Some(home) = dirs::home_dir() {
         if let Ok(canonical_home) = std::fs::canonicalize(&home) {
+            // Refuse exact home directory
             if abs_path == canonical_home {
                 anyhow::bail!(
                     "Refusing to analyze home directory (~). \
                      This would index hundreds of thousands of files and consume \
                      excessive CPU and memory. Specify a project directory instead:\n\n  \
                      myc analyze ./my-project"
+                );
+            }
+
+            // Refuse ancestors of home (/, /Users, /home, drive roots)
+            if is_home_ancestor(&abs_path, &canonical_home) {
+                anyhow::bail!(
+                    "Refusing to analyze parent directory of home (~). \
+                     Path: {} would index your entire home directory and more. \
+                     Specify a project directory instead:\n\n  \
+                     myc analyze ./my-project",
+                    abs_path.display()
+                );
+            }
+
+            // Refuse known dangerous ancestors
+            if is_dangerous_ancestor(&abs_path) {
+                anyhow::bail!(
+                    "Refusing to analyze system root or shared user directory: {}. \
+                     This would consume excessive resources. \
+                     Specify a project directory instead:\n\n  \
+                     myc analyze ./my-project",
+                    abs_path.display()
                 );
             }
         }
@@ -4627,10 +4689,48 @@ mod tests {
     }
 
     #[test]
-    fn test_safeguard_nonexistent_path_passes() {
+    fn test_is_dangerous_ancestor() {
+        // Test known dangerous ancestors
+        assert!(is_dangerous_ancestor(Path::new("/")));
+        assert!(is_dangerous_ancestor(Path::new("/Users")));
+        assert!(is_dangerous_ancestor(Path::new("/home")));
+        
+        // Test that regular paths are not dangerous
+        assert!(!is_dangerous_ancestor(Path::new("/Users/marc")));
+        assert!(!is_dangerous_ancestor(Path::new("/home/user")));
+        assert!(!is_dangerous_ancestor(Path::new("/var/tmp")));
+    }
+
+    #[test]
+    fn test_is_home_ancestor() {
+        // Create temporary paths for testing
+        let tmp = TempDir::new().unwrap();
+        let home = tmp.path();
+        
+        // Parent should be detected as ancestor
+        if let Some(parent) = home.parent() {
+            assert!(is_home_ancestor(parent, home));
+        }
+        
+        // Home itself should not be ancestor of itself
+        assert!(!is_home_ancestor(home, home));
+        
+        // Non-parent should not be ancestor
+        let other = TempDir::new().unwrap();
+        assert!(!is_home_ancestor(other.path(), home));
+    }
+
+    #[test]
+    fn test_safeguard_nonexistent_path_fails() {
         let result = check_session_safeguards(Path::new("/nonexistent/path/abcdef"), false);
-        // Should pass (let the caller handle the missing path error)
-        assert!(result.is_ok());
+        // Should fail (fail closed on canonicalize error)
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("canonicalize"),
+            "Expected canonicalize error, got: {}",
+            err_msg
+        );
     }
 
     #[test]
