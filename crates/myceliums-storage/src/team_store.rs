@@ -10,6 +10,12 @@ use tracing::info;
 use crate::models::*;
 use crate::schema;
 
+/// Escape single quotes in LanceDB filter predicates by doubling them.
+/// This prevents SQL injection attacks when values are interpolated into predicates.
+fn escape_lance_str(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
 /// Store for team data. Uses a shared database (not per-repo).
 pub struct TeamStore {
     db: Connection,
@@ -151,9 +157,10 @@ impl TeamStore {
             return Ok(vec![]);
         }
         let table = self.db.open_table("team_members").execute().await?;
+        let escaped_team_id = escape_lance_str(team_id);
         let stream = table
             .query()
-            .only_if(format!("team_id = '{}'", team_id))
+            .only_if(format!("team_id = '{}'", escaped_team_id))
             .execute()
             .await?;
         let batches: Vec<RecordBatch> = stream.try_collect().await?;
@@ -187,9 +194,10 @@ impl TeamStore {
             return Ok(vec![]);
         }
         let table = self.db.open_table("team_members").execute().await?;
+        let escaped_user_id = escape_lance_str(user_id);
         let stream = table
             .query()
-            .only_if(format!("user_id = '{}'", user_id))
+            .only_if(format!("user_id = '{}'", escaped_user_id))
             .execute()
             .await?;
         let batches: Vec<RecordBatch> = stream.try_collect().await?;
@@ -234,4 +242,17 @@ fn col_u32<'a>(batch: &'a RecordBatch, name: &str) -> &'a UInt32Array {
         .as_any()
         .downcast_ref::<UInt32Array>()
         .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_escape_lance_str() {
+        assert_eq!(escape_lance_str("normal"), "normal");
+        assert_eq!(escape_lance_str("O'Brien"), "O''Brien");
+        assert_eq!(escape_lance_str("don't"), "don''t");
+        assert_eq!(escape_lance_str("it's"), "it''s");
+    }
 }
