@@ -1893,7 +1893,7 @@ async fn graph_v1_search(
     let top_k = params.top_k.unwrap_or(20).clamp(1, 100);
 
     // Embed the query using the same model as indexing
-    let embedder = match myceliums_core::get_embedder().await {
+    let embedder = match myceliums_core::embedder_for_index(&store).await {
         Ok(e) => e,
         Err(_) => {
             return (
@@ -1905,7 +1905,7 @@ async fn graph_v1_search(
             );
         }
     };
-    let query_vector = match embedder.embed_query(&params.q) {
+    let query_vector = match embedder.embed_query(&params.q).await {
         Ok(v) => v,
         Err(_) => {
             return (

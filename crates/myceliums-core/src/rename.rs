@@ -37,6 +37,9 @@ struct ByteRange {
 }
 
 impl ByteRange {
+    /// Note: kept for the upcoming comment/string-aware rename integration,
+    /// like the helpers below.
+    #[allow(dead_code)]
     fn contains(&self, pos: usize) -> bool {
         pos >= self.start && pos < self.end
     }
@@ -115,7 +118,7 @@ impl RenamePlan {
     /// Map byte offsets (from tree-sitter) back to (line, col) for a given line.
     ///
     /// Returns byte ranges within the line that are comments or strings.
-    /// 
+    ///
     /// Note: This function is marked as allowed unused because it will be used when
     /// the comment/string detection is fully integrated into the rename logic.
     #[allow(dead_code)]
@@ -149,7 +152,7 @@ impl RenamePlan {
     }
 
     /// Check if a match at a given position (within line text) overlaps with a comment/string.
-    /// 
+    ///
     /// Note: This function is marked as allowed unused because it will be used when
     /// the comment/string detection is fully integrated into the rename logic.
     #[allow(dead_code)]
@@ -159,12 +162,10 @@ impl RenamePlan {
         match_end: usize,
         excluded_ranges: &[(usize, usize)],
     ) -> bool {
-        excluded_ranges
-            .iter()
-            .any(|&(ex_start, ex_end)| {
-                // Check if match overlaps with excluded range
-                match_start < ex_end && match_end > ex_start
-            })
+        excluded_ranges.iter().any(|&(ex_start, ex_end)| {
+            // Check if match overlaps with excluded range
+            match_start < ex_end && match_end > ex_start
+        })
     }
 
     /// Find all references to a symbol and generate rename edits.
@@ -372,7 +373,10 @@ mod tests {
             !greet_edits.is_empty(),
             "Should have edits for the definition"
         );
-        assert!(!main_edits.is_empty(), "Should have edits for the call site");
+        assert!(
+            !main_edits.is_empty(),
+            "Should have edits for the call site"
+        );
         assert!(greet_edits[0].new_text.contains("sayHello"));
         assert!(main_edits[0].new_text.contains("sayHello"));
     }
@@ -470,7 +474,10 @@ mod tests {
             .filter(|e| e.file_path == "src/other.ts")
             .collect();
 
-        assert!(!utils_edits.is_empty(), "Should have edits for s1 definition");
+        assert!(
+            !utils_edits.is_empty(),
+            "Should have edits for s1 definition"
+        );
         assert!(!main_edits.is_empty(), "Should have edits for s2 call site");
         assert!(
             other_edits.is_empty(),

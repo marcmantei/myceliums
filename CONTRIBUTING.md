@@ -57,6 +57,16 @@ New language support lives in `crates/myceliums-core/src/parser.rs`. The steps a
 
 Look at the existing Go or Rust implementations as templates — they cover the full pattern including structs, functions, methods, and relationships.
 
+## Adding a new embedding or reranker model
+
+Local models live in a curated registry in `crates/myceliums-core/src/embeddings.rs` (`EMBEDDING_MODELS` / `RERANKER_MODELS`). A new local model is a single registry entry — no other code changes — but it must meet these criteria:
+
+1. It is supported by the pinned `fastembed` version (dimension and download repo are derived from fastembed's model list, so unsupported models cannot be added).
+2. The entry declares the correct query/passage prefixes (E5-style models need `query: `/`passage: ` — check the model card).
+3. The PR includes brief benchmark evidence (e.g. MTEB scores or a before/after retrieval comparison) explaining what the model adds over the existing entries.
+
+We deliberately keep this list small. If your model isn't in fastembed or is served remotely, you don't need a code change at all: the `openai-compatible` provider in `.myceliums.toml` works with any server speaking the OpenAI embeddings API (Ollama, LM Studio, TEI, vLLM, cloud providers).
+
 ## Code style
 
 - Run `cargo fmt` before committing.

@@ -21,6 +21,84 @@ pub struct ProjectConfig {
     pub process: ProcessSection,
     #[serde(default)]
     pub community: CommunitySection,
+    #[serde(default)]
+    pub embedding: EmbeddingSection,
+}
+
+/// Embedding provider configuration.
+///
+/// The chosen model determines the vectors stored in the index, so this
+/// section is part of the project config (committed, shared by the team)
+/// rather than per-user state. Changing it takes effect on the next
+/// analysis run, which re-embeds all symbols.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EmbeddingSection {
+    /// Embedding provider: `"local"` (bundled ONNX models via fastembed) or
+    /// `"openai-compatible"` (any server speaking the OpenAI embeddings API,
+    /// e.g. Ollama, LM Studio, TEI, vLLM, or a cloud provider).
+    #[serde(default = "EmbeddingSection::default_provider")]
+    pub provider: String,
+    /// Model identifier. For `local`, one of the curated registry ids
+    /// (see `myc doctor` for the list). For `openai-compatible`, the model
+    /// name passed to the API.
+    #[serde(default = "EmbeddingSection::default_model")]
+    pub model: String,
+    /// Cross-encoder reranker id used when `rerank` is requested at search
+    /// time. One of the curated reranker registry ids.
+    #[serde(default = "EmbeddingSection::default_reranker")]
+    pub reranker: String,
+    /// Base URL of the embeddings API. Required for `openai-compatible`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    /// Vector dimension. Required for `openai-compatible` (cannot be derived);
+    /// ignored for `local` (derived from the registry).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dim: Option<usize>,
+    /// Name of the environment variable holding the API key for
+    /// `openai-compatible`. The key itself never goes into this file.
+    #[serde(default = "EmbeddingSection::default_api_key_env")]
+    pub api_key_env: String,
+    /// Prefix prepended to search queries (e.g. `"query: "` for E5-style
+    /// models). For `local` models this is ignored — the registry value wins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_prefix: Option<String>,
+    /// Prefix prepended to indexed documents (e.g. `"passage: "`).
+    /// For `local` models this is ignored — the registry value wins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passage_prefix: Option<String>,
+}
+
+impl Default for EmbeddingSection {
+    fn default() -> Self {
+        Self {
+            provider: Self::default_provider(),
+            model: Self::default_model(),
+            reranker: Self::default_reranker(),
+            base_url: None,
+            dim: None,
+            api_key_env: Self::default_api_key_env(),
+            query_prefix: None,
+            passage_prefix: None,
+        }
+    }
+}
+
+impl EmbeddingSection {
+    fn default_provider() -> String {
+        "local".to_string()
+    }
+
+    fn default_model() -> String {
+        "multilingual-e5-small".to_string()
+    }
+
+    fn default_reranker() -> String {
+        "bge-reranker-v2-m3".to_string()
+    }
+
+    fn default_api_key_env() -> String {
+        "MYCELIUMS_EMBEDDING_API_KEY".to_string()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
@@ -246,6 +324,38 @@ max_file_size_kb = 1024
     fn test_empty_toml_uses_defaults() {
         let cfg: ProjectConfig = toml::from_str("").unwrap();
         assert_eq!(cfg, ProjectConfig::default());
+    }
+
+    #[test]
+    fn test_embedding_defaults() {
+        let cfg: ProjectConfig = toml::from_str("").unwrap();
+        assert_eq!(cfg.embedding.provider, "local");
+        assert_eq!(cfg.embedding.model, "multilingual-e5-small");
+        assert_eq!(cfg.embedding.reranker, "bge-reranker-v2-m3");
+        assert_eq!(cfg.embedding.api_key_env, "MYCELIUMS_EMBEDDING_API_KEY");
+        assert!(cfg.embedding.base_url.is_none());
+        assert!(cfg.embedding.dim.is_none());
+    }
+
+    #[test]
+    fn test_embedding_openai_compatible() {
+        let input = r#"
+[embedding]
+provider = "openai-compatible"
+model = "nomic-embed-text"
+base_url = "http://localhost:11434/v1"
+dim = 768
+"#;
+        let cfg: ProjectConfig = toml::from_str(input).unwrap();
+        assert_eq!(cfg.embedding.provider, "openai-compatible");
+        assert_eq!(cfg.embedding.model, "nomic-embed-text");
+        assert_eq!(
+            cfg.embedding.base_url.as_deref(),
+            Some("http://localhost:11434/v1")
+        );
+        assert_eq!(cfg.embedding.dim, Some(768));
+        // defaults still apply for omitted fields
+        assert_eq!(cfg.embedding.reranker, "bge-reranker-v2-m3");
     }
 
     #[test]

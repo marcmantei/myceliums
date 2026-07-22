@@ -141,11 +141,11 @@ impl AggregateMetrics {
 }
 
 /// Verified metrics report - the final output
-/// 
-/// **IMPORTANT**: This structure may contain either verified measurements or illustrative 
+///
+/// **IMPORTANT**: This structure may contain either verified measurements or illustrative
 /// estimates depending on the `is_verified` flag in each ScenarioMetrics.
-/// 
-/// - When `is_verified = true`: Metrics are from real measurements (actual grep runs, 
+///
+/// - When `is_verified = true`: Metrics are from real measurements (actual grep runs,
 ///   real timing, actual token counts)
 /// - When `is_verified = false`: Metrics are illustrative estimates for comparison purposes
 ///   only and should not be treated as definitive performance benchmarks.

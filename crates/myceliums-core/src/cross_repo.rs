@@ -336,7 +336,9 @@ pub fn isolate_intent(
 
 /// Isolate intent using hybrid search (BM25 + vector). Requires `embeddings` feature.
 #[cfg(feature = "embeddings")]
+#[allow(clippy::too_many_arguments)]
 pub async fn isolate_intent_hybrid(
+    embedder: &crate::embeddings::Embedder,
     intent: &str,
     repo_id: &str,
     repo_name: &str,
@@ -348,7 +350,7 @@ pub async fn isolate_intent_hybrid(
     use crate::hybrid_search::hybrid_search;
 
     let seed_limit = config.max_symbols.min(10);
-    let search_results = hybrid_search(symbols, intent, seed_limit).await?;
+    let search_results = hybrid_search(embedder, symbols, intent, seed_limit).await?;
 
     let seed_uids: HashSet<String> = search_results
         .iter()

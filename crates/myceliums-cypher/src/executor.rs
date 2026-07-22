@@ -3,7 +3,6 @@ use myceliums_core::Ontology;
 use myceliums_storage::{CodeSymbol, FileNode, Relationship, Store};
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
-use tracing::info;
 
 use crate::parser::{
     self, AggregationFunc, BinOp, Direction, Expr, PathFunction, PathVariableBinding, Pattern,
@@ -1291,16 +1290,16 @@ fn compare_operands_for_ordering(left: &EvalResult, right: &EvalResult) -> std::
     // If both are strings, compare as strings
     let left_str = left.as_string();
     let right_str = right.as_string();
-    
+
     // Check if both values are numeric (either JSON numbers or strings that parse as numbers)
     let left_num = left.to_value().as_f64();
     let right_num = right.to_value().as_f64();
-    
+
     // If both are numeric, compare as numbers
     if let (Some(l), Some(r)) = (left_num, right_num) {
         return l.partial_cmp(&r).unwrap_or(std::cmp::Ordering::Equal);
     }
-    
+
     // Otherwise, compare as strings
     left_str.cmp(&right_str)
 }

@@ -5,10 +5,11 @@ use myceliums_core::cache::{self, CacheCheckConfig, CacheDecision};
 use myceliums_core::config::{self, ProjectConfig};
 use myceliums_core::{
     attach_graph_edges, check_model_cache, compute_god_nodes, compute_surprising_connections,
-    compute_uid_to_community_label, detect_impact, export_graphml, export_neo4j_cypher,
-    export_wiki, hybrid_search, hybrid_search_explain, rerank_results, run_git_diff,
-    search_symbols, search_symbols_explain, CommunityDetector, Embedder, GlobalConfig,
-    ProcessFilter, ProcessTracer, RenamePlan, WikiExportConfig,
+    compute_uid_to_community_label, detect_impact, embedder_for_index, embedding_cache_info,
+    export_graphml, export_neo4j_cypher, export_wiki, hybrid_search, hybrid_search_explain,
+    local_model_code, rerank_results, run_git_diff, search_symbols, search_symbols_explain,
+    CommunityDetector, Embedder, GlobalConfig, IndexEmbeddingMeta, ProcessFilter, ProcessTracer,
+    RenamePlan, WikiExportConfig,
 };
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
 use std::collections::HashMap;
@@ -775,9 +776,9 @@ fn resolve_repo_or_latest(repo: Option<&str>) -> Result<(String, RepoInfo)> {
     if let Some(r) = repo {
         return resolve_repo(r);
     }
-    
+
     let registry = RepoRegistry::load(&registry_path())?;
-    
+
     // Try to find a repo that contains the current working directory
     if let Ok(cwd) = std::env::current_dir() {
         if let Ok(cwd_canonical) = cwd.canonicalize() {
@@ -793,11 +794,14 @@ fn resolve_repo_or_latest(repo: Option<&str>) -> Result<(String, RepoInfo)> {
             }
         }
     }
-    
+
     // Fall back to the latest repo if cwd is not in any indexed repo
     let repos = registry.list();
     if let Some(latest) = repos.last() {
-        eprintln!("Using latest repository as fallback: {} ({})", latest.name, latest.id);
+        eprintln!(
+            "Using latest repository as fallback: {} ({})",
+            latest.name, latest.id
+        );
         return Ok((latest.id.clone(), (*latest).clone()));
     }
     anyhow::bail!("No repositories analyzed yet. Run: myc analyze <path>");
@@ -835,11 +839,9 @@ fn is_interactive_command(cmd: &Commands) -> bool {
     )
 }
 
-/// Validate that a target path is safe to analyze.
-///
-/// Guards against:
-/// - Analyzing the home directory (would index hundreds of thousands of files)
-/// - Analyzing non-git directories (unless `--no-git-check` is passed)
+// Path-safety guards: refuse to analyze the home directory (would index
+// hundreds of thousands of files) and non-git directories (unless
+// `--no-git-check` is passed).
 
 /// Check if a path is a dangerous ancestor (/, /Users, /home, drive roots).
 fn is_dangerous_ancestor(path: &Path) -> bool {
@@ -1362,8 +1364,8 @@ async fn cmd_status() -> Result<()> {
     // FastEmbed model cache
     {
         println!();
-        let cache_info = check_model_cache();
-        println!("  FastEmbed model:");
+        let cache_info = embedding_cache_info();
+        println!("  FastEmbed model cache:");
         println!("    Location: {}", cache_info.cache_dir.display());
         println!("    Size:     {}", format_bytes(cache_info.size_bytes));
         if cache_info.is_cached {
@@ -1439,7 +1441,7 @@ async fn cmd_clean(
     }
 
     if cache {
-        let cache_info = check_model_cache();
+        let cache_info = embedding_cache_info();
         if cache_info.is_cached {
             println!(
                 "FastEmbed model cache: {} ({})",
@@ -2092,15 +2094,17 @@ async fn cmd_search(
     let symbols = store.get_symbols().await?;
 
     if use_hybrid {
+        let embedder = embedder_for_index(&store).await?;
         let mut results = if use_explain {
-            hybrid_search_explain(&symbols, query, limit).await?
+            hybrid_search_explain(&embedder, &symbols, query, limit).await?
         } else {
-            hybrid_search(&symbols, query, limit).await?
+            hybrid_search(&embedder, &symbols, query, limit).await?
         };
 
-        // Apply reranking if requested
+        // Apply reranking if requested, using the reranker recorded at indexing time
         if use_rerank {
-            results = rerank_results(query, results).await?;
+            let reranker_id = embedder.meta().reranker.clone();
+            results = rerank_results(query, results, reranker_id.as_deref()).await?;
         }
 
         // Attach graph edges for explain mode
@@ -2871,35 +2875,76 @@ async fn cmd_doctor(download: bool) -> Result<()> {
         }
     }
 
-    // ── Fastembed model ────────────────────────────────────────────────
-    let cache_info = check_model_cache();
-    if cache_info.is_cached {
-        println!(
-            "\u{2713} fastembed model: cached ({:.0} MB at {})",
-            cache_info.size_bytes as f64 / 1_000_000.0,
-            cache_info.cache_dir.display(),
-        );
-    } else if download {
-        println!("Downloading fastembed model (~100 MB)...");
-        match Embedder::new() {
-            Ok(_) => {
-                let updated = check_model_cache();
-                println!(
-                    "\u{2713} fastembed model: downloaded ({:.0} MB to {})",
-                    updated.size_bytes as f64 / 1_000_000.0,
-                    updated.cache_dir.display(),
-                );
+    // ── Embedding configuration + model cache ─────────────────────────
+    // Resolve the embedding config the same way analysis would: from
+    // .myceliums.toml in the current directory, falling back to defaults.
+    let embedding_cfg = {
+        let config_path = std::path::Path::new(config::CONFIG_FILENAME);
+        if config_path.exists() {
+            match ProjectConfig::load(config_path) {
+                Ok(cfg) => cfg.embedding,
+                Err(e) => {
+                    println!("\u{2717} .myceliums.toml is invalid: {}", e);
+                    issues += 1;
+                    Default::default()
+                }
             }
-            Err(e) => {
-                println!("\u{2717} fastembed model: download failed — {}", e);
-                issues += 1;
-            }
+        } else {
+            Default::default()
         }
-    } else {
-        println!(
-            "\u{2717} fastembed model: not downloaded (run `myc doctor --download` or it will download on first use)"
-        );
-        issues += 1;
+    };
+    match IndexEmbeddingMeta::from_config(&embedding_cfg) {
+        Ok(meta) => {
+            println!(
+                "\u{2713} Embedding config: {} (reranker: {})",
+                meta.fingerprint(),
+                embedding_cfg.reranker,
+            );
+            if meta.provider == "local" {
+                let model_code = local_model_code(&meta.model)?;
+                let cache_info = check_model_cache(&model_code);
+                if cache_info.is_cached {
+                    println!(
+                        "\u{2713} Embedding model: cached ({:.0} MB at {})",
+                        cache_info.size_bytes as f64 / 1_000_000.0,
+                        cache_info.cache_dir.display(),
+                    );
+                } else if download {
+                    println!("Downloading embedding model {}...", model_code);
+                    match Embedder::new(meta.clone()) {
+                        Ok(_) => {
+                            let updated = check_model_cache(&model_code);
+                            println!(
+                                "\u{2713} Embedding model: downloaded ({:.0} MB to {})",
+                                updated.size_bytes as f64 / 1_000_000.0,
+                                updated.cache_dir.display(),
+                            );
+                        }
+                        Err(e) => {
+                            println!("\u{2717} Embedding model: download failed — {}", e);
+                            issues += 1;
+                        }
+                    }
+                } else {
+                    println!(
+                        "\u{2717} Embedding model: not downloaded (run `myc doctor --download` or it will download on first use)"
+                    );
+                    issues += 1;
+                }
+            }
+            println!(
+                "  Available local models: {}",
+                myceliums_core::EMBEDDING_MODELS
+                    .iter()
+                    .map(|s| s.id)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+        }
+        Err(e) => {
+            println!("\u{2717} Embedding config: {}", e);
+            issues += 1;
+        }
     }
 
     // ── Content type support ────────────────────────────────────────────
@@ -3007,9 +3052,12 @@ async fn cmd_semantic_search(query: &str, repo: Option<&str>, limit: usize) -> R
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &ri.id);
     let store = Store::open(&db_path, &ri.id).await?;
 
-    let embedder = Embedder::new().context("Failed to load embedding model")?;
+    let embedder = embedder_for_index(&store)
+        .await
+        .context("Failed to load embedding model")?;
     let query_vector = embedder
         .embed_query(query)
+        .await
         .context("Failed to embed query")?;
 
     let results = store.vector_search(&query_vector, limit).await?;
@@ -4694,7 +4742,7 @@ mod tests {
         assert!(is_dangerous_ancestor(Path::new("/")));
         assert!(is_dangerous_ancestor(Path::new("/Users")));
         assert!(is_dangerous_ancestor(Path::new("/home")));
-        
+
         // Test that regular paths are not dangerous
         assert!(!is_dangerous_ancestor(Path::new("/Users/marc")));
         assert!(!is_dangerous_ancestor(Path::new("/home/user")));
@@ -4706,15 +4754,15 @@ mod tests {
         // Create temporary paths for testing
         let tmp = TempDir::new().unwrap();
         let home = tmp.path();
-        
+
         // Parent should be detected as ancestor
         if let Some(parent) = home.parent() {
             assert!(is_home_ancestor(parent, home));
         }
-        
+
         // Home itself should not be ancestor of itself
         assert!(!is_home_ancestor(home, home));
-        
+
         // Non-parent should not be ancestor
         let other = TempDir::new().unwrap();
         assert!(!is_home_ancestor(other.path(), home));

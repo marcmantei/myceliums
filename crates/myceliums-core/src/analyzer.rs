@@ -16,8 +16,6 @@ use walkdir::WalkDir;
 use crate::config::ProjectConfig;
 use crate::content::parse_content;
 use crate::email::{self, ParsedEmail};
-#[cfg(feature = "embeddings")]
-use crate::embeddings::Embedder;
 use crate::file_guard::{should_skip_file, FileSkipReason};
 use crate::git_metadata::GitMetadataExtractor;
 use crate::mbox;
@@ -116,8 +114,98 @@ impl Analyzer {
     /// are flushed to the store in fixed-size batches during analysis instead
     /// of being held until the very end. This caps peak memory usage for large
     /// repositories while keeping the `CallResolver` fully populated.
+    /// Resolve the embedding configuration for this run and prepare the
+    /// store for it (vector column dimension, table rebuild on model
+    /// change). Returns `None` when embeddings are skipped.
+    ///
+    /// On incremental runs the model recorded in the index wins over the
+    /// configured one: mixing vectors from two models in one index would
+    /// silently corrupt search results. A config change therefore takes
+    /// effect on the next full analysis.
+    #[cfg(feature = "embeddings")]
+    async fn prepare_embeddings(
+        &self,
+        incremental: bool,
+    ) -> Result<Option<crate::embeddings::IndexEmbeddingMeta>> {
+        use crate::embeddings::IndexEmbeddingMeta;
+
+        if self.skip_embeddings {
+            return Ok(None);
+        }
+
+        let cfg = self
+            .config
+            .as_ref()
+            .map(|c| c.embedding.clone())
+            .unwrap_or_default();
+        let configured = IndexEmbeddingMeta::from_config(&cfg)?;
+
+        let existing: Option<IndexEmbeddingMeta> = self
+            .store
+            .get_index_meta(IndexEmbeddingMeta::META_KEY)
+            .await?
+            .and_then(|json| serde_json::from_str(&json).ok());
+
+        let meta = if incremental {
+            match existing {
+                Some(existing) if existing.fingerprint() != configured.fingerprint() => {
+                    warn!(
+                        "Index was built with {} but config says {}; keeping the index's \
+                         model for this incremental run. Run a full analysis to switch.",
+                        existing.fingerprint(),
+                        configured.fingerprint()
+                    );
+                    existing
+                }
+                Some(existing) => existing,
+                None => {
+                    warn!(
+                        "Index has no embedding metadata; embedding with the legacy model. \
+                         Run a full analysis to upgrade to {}.",
+                        configured.fingerprint()
+                    );
+                    IndexEmbeddingMeta::legacy()
+                }
+            }
+        } else {
+            configured
+        };
+
+        self.store.set_embedding_dim(meta.dim as i32);
+        if self.store.ensure_symbols_dim().await? {
+            info!(
+                "Symbols table rebuilt for embedding model {}",
+                meta.fingerprint()
+            );
+        }
+        Ok(Some(meta))
+    }
+
+    /// Record which embedding model built this index, so query paths can
+    /// resolve the matching embedder.
+    #[cfg(feature = "embeddings")]
+    async fn record_embedding_meta(&self, meta: &crate::embeddings::IndexEmbeddingMeta) {
+        let json = match serde_json::to_string(meta) {
+            Ok(json) => json,
+            Err(e) => {
+                warn!("Failed to serialize embedding metadata: {}", e);
+                return;
+            }
+        };
+        if let Err(e) = self
+            .store
+            .set_index_meta(crate::embeddings::IndexEmbeddingMeta::META_KEY, &json)
+            .await
+        {
+            warn!("Failed to record embedding metadata in index: {}", e);
+        }
+    }
+
     pub async fn analyze(&self) -> Result<AnalysisResult> {
         let overall_timer = Timer::start();
+
+        #[cfg(feature = "embeddings")]
+        let embed_meta = self.prepare_embeddings(false).await?;
         let file_discovery_timer = Timer::start();
 
         let mut all_symbols: Vec<CodeSymbol> = Vec::new();
@@ -874,45 +962,51 @@ impl Analyzer {
         let embedding_generation_ms: f64 = 0.0;
 
         #[cfg(feature = "embeddings")]
-        let (embedding_count, embedding_generation_ms): (usize, f64) = if self.skip_embeddings {
-            (0, 0.0)
-        } else {
-            let embedding_timer = Timer::start();
-            let count = match Embedder::new() {
-                Ok(embedder) => {
-                    let batch_sz = self
-                        .config
-                        .as_ref()
-                        .map(|c| c.analysis.embedding_batch_size)
-                        .unwrap_or(256);
-                    match embedder.embed_symbols(&all_symbols, batch_sz) {
-                        Ok(vectors) => {
-                            let pairs: Vec<(String, Vec<f32>)> = all_symbols
-                                .iter()
-                                .zip(vectors)
-                                .map(|(s, v)| (s.uid.clone(), v))
-                                .collect();
-                            match self.store.store_embeddings(pairs).await {
-                                Ok(n) => n,
-                                Err(e) => {
-                                    warn!("Failed to store embeddings: {}", e);
-                                    0
+        let (embedding_count, embedding_generation_ms): (usize, f64) = match &embed_meta {
+            None => (0, 0.0),
+            Some(meta) => {
+                let embedding_timer = Timer::start();
+                let count = match crate::embeddings::get_embedder_for(meta.clone()).await {
+                    Ok(embedder) => {
+                        let batch_sz = self
+                            .config
+                            .as_ref()
+                            .map(|c| c.analysis.embedding_batch_size)
+                            .unwrap_or(256);
+                        match embedder.embed_symbols(&all_symbols, batch_sz).await {
+                            Ok(vectors) => {
+                                let pairs: Vec<(String, Vec<f32>)> = all_symbols
+                                    .iter()
+                                    .zip(vectors)
+                                    .map(|(s, v)| (s.uid.clone(), v))
+                                    .collect();
+                                match self.store.store_embeddings(pairs).await {
+                                    Ok(n) => {
+                                        if n > 0 {
+                                            self.record_embedding_meta(meta).await;
+                                        }
+                                        n
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to store embeddings: {}", e);
+                                        0
+                                    }
                                 }
                             }
-                        }
-                        Err(e) => {
-                            warn!("Failed to generate embeddings: {}", e);
-                            0
+                            Err(e) => {
+                                warn!("Failed to generate embeddings: {}", e);
+                                0
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    warn!("Failed to load embedding model: {}", e);
-                    0
-                }
-            };
-            let elapsed = embedding_timer.elapsed_ms();
-            (count, elapsed)
+                    Err(e) => {
+                        warn!("Failed to load embedding model: {}", e);
+                        0
+                    }
+                };
+                let elapsed = embedding_timer.elapsed_ms();
+                (count, elapsed)
+            }
         };
 
         #[cfg(feature = "embeddings")]
@@ -1019,6 +1113,9 @@ impl Analyzer {
     /// For each file: delete its old data from the store, then re-parse and
     /// store the updated symbols, file node, and relationships.
     pub async fn analyze_files(&self, changed_paths: &[PathBuf]) -> Result<AnalysisResult> {
+        #[cfg(feature = "embeddings")]
+        let embed_meta = self.prepare_embeddings(true).await?;
+
         let mut all_symbols: Vec<CodeSymbol> = Vec::new();
         let mut all_files: Vec<FileNode> = Vec::new();
         let mut all_calls = Vec::new();
@@ -1420,30 +1517,46 @@ impl Analyzer {
         let embedding_count: usize = 0;
 
         #[cfg(feature = "embeddings")]
-        let embedding_count: usize = if self.skip_embeddings {
-            0
-        } else {
-            match Embedder::new() {
+        let embedding_count: usize = match &embed_meta {
+            None => 0,
+            Some(meta) => match crate::embeddings::get_embedder_for(meta.clone()).await {
                 Ok(embedder) => {
                     let batch_sz = self
                         .config
                         .as_ref()
                         .map(|c| c.analysis.embedding_batch_size)
                         .unwrap_or(256);
-                    match embedder.embed_symbols(&all_symbols, batch_sz) {
+                    match embedder.embed_symbols(&all_symbols, batch_sz).await {
                         Ok(vectors) => {
                             let pairs: Vec<(String, Vec<f32>)> = all_symbols
                                 .iter()
                                 .zip(vectors)
                                 .map(|(s, v)| (s.uid.clone(), v))
                                 .collect();
-                            self.store.store_embeddings(pairs).await.unwrap_or(0)
+                            match self.store.store_embeddings(pairs).await {
+                                Ok(n) => {
+                                    if n > 0 {
+                                        self.record_embedding_meta(meta).await;
+                                    }
+                                    n
+                                }
+                                Err(e) => {
+                                    warn!("Failed to store embeddings: {}", e);
+                                    0
+                                }
+                            }
                         }
-                        Err(_) => 0,
+                        Err(e) => {
+                            warn!("Failed to generate embeddings: {}", e);
+                            0
+                        }
                     }
                 }
-                Err(_) => 0,
-            }
+                Err(e) => {
+                    warn!("Failed to load embedding model: {}", e);
+                    0
+                }
+            },
         };
 
         let result = AnalysisResult {

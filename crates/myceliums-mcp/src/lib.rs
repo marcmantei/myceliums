@@ -10,8 +10,8 @@ use myceliums_core::{
     link_decision_to_symbol, lint_architecture, list_snapshots, load_decisions,
     load_service_mappings, load_snapshot, load_snapshot_by_id, parse_codeowners, rerank_results,
     run_git_diff, save_decision, save_service_mapping, save_snapshot, search_symbols,
-    search_symbols_explain, AdrStatus, ArchDecisionRecord, CommunityDetector, Embedder,
-    MermaidDiagramType, Ontology, ProcessFilter, ProcessTracer, RenamePlan,
+    search_symbols_explain, AdrStatus, ArchDecisionRecord, CommunityDetector, MermaidDiagramType,
+    Ontology, ProcessFilter, ProcessTracer, RenamePlan,
 };
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
 use rmcp::handler::server::tool::ToolRouter;
@@ -1111,7 +1111,21 @@ impl MyceliumsMcp {
             .map_err(|e| rmcp::ErrorData::internal_error(format!("Delete error: {}", e), None))?;
 
         let skip_embeddings = params.skip_embeddings.unwrap_or(false);
-        let analyzer = Analyzer::new(store, abs_path.clone()).set_skip_embeddings(skip_embeddings);
+        // Honor the project's .myceliums.toml (analysis filters, embedding
+        // model) the same way the CLI does.
+        let config_path = abs_path.join(myceliums_core::config::CONFIG_FILENAME);
+        let analyzer = if config_path.exists() {
+            let cfg = myceliums_core::config::ProjectConfig::load(&config_path).map_err(|e| {
+                rmcp::ErrorData::internal_error(
+                    format!("Invalid {}: {}", config_path.display(), e),
+                    None,
+                )
+            })?;
+            Analyzer::with_config(store, abs_path.clone(), cfg)
+        } else {
+            Analyzer::new(store, abs_path.clone())
+        };
+        let analyzer = analyzer.set_skip_embeddings(skip_embeddings);
         let result = analyzer
             .analyze()
             .await
@@ -1357,21 +1371,31 @@ impl MyceliumsMcp {
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
+        let embedder = myceliums_core::embedder_for_index(&store)
+            .await
+            .map_err(|e| {
+                rmcp::ErrorData::internal_error(
+                    format!("Failed to load embedding model: {}", e),
+                    None,
+                )
+            })?;
+
         let explain = params.explain.unwrap_or(false);
         let limit = params.limit.unwrap_or(20);
         let mut results = if explain {
-            core_hybrid_search_explain(&symbols, &params.query, limit)
+            core_hybrid_search_explain(&embedder, &symbols, &params.query, limit)
                 .await
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
         } else {
-            core_hybrid_search(&symbols, &params.query, limit)
+            core_hybrid_search(&embedder, &symbols, &params.query, limit)
                 .await
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
         };
 
-        // Apply reranking if requested
+        // Apply reranking if requested, using the reranker recorded at indexing time
         if params.rerank.unwrap_or(false) {
-            results = rerank_results(&params.query, results)
+            let reranker_id = embedder.meta().reranker.clone();
+            results = rerank_results(&params.query, results, reranker_id.as_deref())
                 .await
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
         }
@@ -1536,10 +1560,15 @@ impl MyceliumsMcp {
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let embedder = Embedder::new().map_err(|e| {
-            rmcp::ErrorData::internal_error(format!("Failed to load embedding model: {}", e), None)
-        })?;
-        let query_vector = embedder.embed_query(&params.query).map_err(|e| {
+        let embedder = myceliums_core::embedder_for_index(&store)
+            .await
+            .map_err(|e| {
+                rmcp::ErrorData::internal_error(
+                    format!("Failed to load embedding model: {}", e),
+                    None,
+                )
+            })?;
+        let query_vector = embedder.embed_query(&params.query).await.map_err(|e| {
             rmcp::ErrorData::internal_error(format!("Failed to embed query: {}", e), None)
         })?;
         let limit = params.limit.unwrap_or(10);
@@ -3808,7 +3837,11 @@ impl MyceliumsMcp {
             expansion_depth: params.depth.unwrap_or(2),
         };
 
+        let embedder = myceliums_core::embedder_for_index(&store)
+            .await
+            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
         let slice = cross_repo::isolate_intent_hybrid(
+            &embedder,
             &params.intent,
             &params.repo_id,
             &repo_name,
@@ -3866,7 +3899,13 @@ impl MyceliumsMcp {
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
+        let src_embedder = myceliums_core::embedder_for_index(&src_store)
+            .await
+            .map_err(|e| {
+                rmcp::ErrorData::internal_error(format!("Source isolation: {}", e), None)
+            })?;
         let source_slice = cross_repo::isolate_intent_hybrid(
+            &src_embedder,
             &params.intent,
             &params.source_repo_id,
             &src_name,
@@ -3900,7 +3939,13 @@ impl MyceliumsMcp {
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
+        let tgt_embedder = myceliums_core::embedder_for_index(&tgt_store)
+            .await
+            .map_err(|e| {
+                rmcp::ErrorData::internal_error(format!("Target isolation: {}", e), None)
+            })?;
         let target_slice = cross_repo::isolate_intent_hybrid(
+            &tgt_embedder,
             &params.intent,
             &params.target_repo_id,
             &tgt_name,
@@ -3980,7 +4025,11 @@ impl MyceliumsMcp {
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
+        let src_embedder = myceliums_core::embedder_for_index(&src_store)
+            .await
+            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
         let source_slice = cross_repo::isolate_intent_hybrid(
+            &src_embedder,
             &params.intent,
             &params.source_repo_id,
             &src_name,
@@ -4013,7 +4062,11 @@ impl MyceliumsMcp {
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
+        let tgt_embedder = myceliums_core::embedder_for_index(&tgt_store)
+            .await
+            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
         let target_slice = cross_repo::isolate_intent_hybrid(
+            &tgt_embedder,
             &params.intent,
             &params.target_repo_id,
             &tgt_name,
