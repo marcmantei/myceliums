@@ -1111,12 +1111,17 @@ pub struct KnowledgeResultItem {
 /// Load the partial-index warning for a store, if the index is partially
 /// embedded. Reads the accounting recorded at index time — no per-query vector
 /// scan. Returns `None` when the index is complete or has no accounting.
+///
+/// A genuine load error is logged (so it is observable rather than silently
+/// indistinguishable from "no warning") but does not fail the query.
 async fn partial_index_warning(store: &Store) -> Option<String> {
-    myceliums_core::EmbeddingStats::load(store)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|stats| stats.partial_index_warning())
+    match myceliums_core::EmbeddingStats::load(store).await {
+        Ok(stats) => stats.and_then(|stats| stats.partial_index_warning()),
+        Err(e) => {
+            tracing::warn!("Failed to load embedding accounting for partial-index warning: {e}");
+            None
+        }
+    }
 }
 
 #[tool_router]
@@ -1174,9 +1179,17 @@ impl MyceliumsMcp {
                         .get_processes()
                         .await
                         .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+                    // A genuine load error propagates (same as the non-cached
+                    // path, which propagates the analyzer error). A *missing*
+                    // record means a legacy index built before accounting
+                    // existed: treat it as fully embedded rather than "0 of N",
+                    // which would falsely imply a total embedding failure.
                     let embedding_stats = myceliums_core::EmbeddingStats::load(&store)
                         .await
-                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
+                        .unwrap_or_else(|| {
+                            myceliums_core::EmbeddingStats::complete(symbols.len(), symbols.len())
+                        });
                     let output = AnalyzeOutput {
                         repo_id,
                         symbols: symbols.len(),
@@ -1184,13 +1197,9 @@ impl MyceliumsMcp {
                         relationships: relationships.len(),
                         communities: communities.len(),
                         processes: processes.len(),
-                        symbols_embedded: embedding_stats.map(|s| s.symbols_embedded).unwrap_or(0),
-                        symbols_total: embedding_stats
-                            .map(|s| s.symbols_total)
-                            .unwrap_or(symbols.len()),
-                        embedding_failures: embedding_stats
-                            .map(|s| s.embedding_failures)
-                            .unwrap_or(0),
+                        symbols_embedded: embedding_stats.symbols_embedded,
+                        symbols_total: embedding_stats.symbols_total,
+                        embedding_failures: embedding_stats.embedding_failures,
                         cached: true,
                     };
                     return Ok(Json(TextOutput {
