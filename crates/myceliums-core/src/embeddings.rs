@@ -1,29 +1,297 @@
-//! Embedding and reranking support via fastembed.
+//! Embedding and reranking support.
 //!
-//! Provides [`Embedder`] for generating vector embeddings of code symbols
-//! (using all-MiniLM-L6-v2) and [`Reranker`] for cross-encoder reranking
-//! (using BAAI/bge-reranker-base). Models are downloaded on first use and
-//! cached locally.
+//! Two providers are supported:
+//! - `local`: curated ONNX models run via fastembed (downloaded on first
+//!   use, cached locally). See [`EMBEDDING_MODELS`] for the registry.
+//! - `openai-compatible`: any server speaking the OpenAI embeddings API
+//!   (Ollama, LM Studio, TEI, vLLM, cloud providers).
+//!
+//! The model that built an index is recorded in the index itself (see
+//! [`IndexEmbeddingMeta`]); query paths resolve their embedder from that
+//! record via [`embedder_for_index`], so queries always use the same model
+//! the vectors were created with.
 
-use anyhow::{Context, Result};
+use crate::config::EmbeddingSection;
+use anyhow::{anyhow, bail, Context, Result};
 use fastembed::{
     EmbeddingModel, InitOptions, RerankInitOptions, RerankerModel, TextEmbedding, TextRerank,
 };
-use myceliums_storage::{CodeSymbol, SymbolMetadata};
+use myceliums_storage::{CodeSymbol, Store, SymbolMetadata};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::OnceCell;
-use tracing::info;
-
-/// The HuggingFace model repo used by fastembed for AllMiniLML6V2.
-const MODEL_REPO: &str = "Qdrant/all-MiniLM-L6-v2-onnx";
+use tokio::sync::{Mutex, OnceCell};
+use tracing::{info, warn};
 
 /// The default fastembed cache directory name (relative to CWD unless overridden).
 const DEFAULT_CACHE_DIR: &str = ".fastembed_cache";
 
+// ── Model registry ────────────────────────────────────────────────────
+
+/// A curated local embedding model. Dimension and HuggingFace repo are
+/// derived from fastembed's own model list, so they cannot drift.
+pub struct EmbeddingModelSpec {
+    /// Stable identifier used in `.myceliums.toml` and index metadata.
+    pub id: &'static str,
+    /// The fastembed model backing this entry.
+    pub model: EmbeddingModel,
+    /// Prefix prepended to search queries (E5-style models need this).
+    pub query_prefix: Option<&'static str>,
+    /// Prefix prepended to indexed documents.
+    pub passage_prefix: Option<&'static str>,
+    /// Whether the model handles non-English queries well.
+    pub multilingual: bool,
+}
+
+/// Curated local embedding models.
+///
+/// Adding a model: it must be supported by the pinned fastembed version;
+/// add one entry here with the correct prefixes and include benchmark
+/// evidence in the PR (see CONTRIBUTING).
+pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
+    EmbeddingModelSpec {
+        id: "multilingual-e5-small",
+        model: EmbeddingModel::MultilingualE5Small,
+        query_prefix: Some("query: "),
+        passage_prefix: Some("passage: "),
+        multilingual: true,
+    },
+    EmbeddingModelSpec {
+        id: "multilingual-e5-base",
+        model: EmbeddingModel::MultilingualE5Base,
+        query_prefix: Some("query: "),
+        passage_prefix: Some("passage: "),
+        multilingual: true,
+    },
+    EmbeddingModelSpec {
+        id: "multilingual-e5-large",
+        model: EmbeddingModel::MultilingualE5Large,
+        query_prefix: Some("query: "),
+        passage_prefix: Some("passage: "),
+        multilingual: true,
+    },
+    EmbeddingModelSpec {
+        id: "jina-embeddings-v2-base-code",
+        model: EmbeddingModel::JinaEmbeddingsV2BaseCode,
+        query_prefix: None,
+        passage_prefix: None,
+        multilingual: false,
+    },
+    EmbeddingModelSpec {
+        id: "all-minilm-l6-v2",
+        model: EmbeddingModel::AllMiniLML6V2,
+        query_prefix: None,
+        passage_prefix: None,
+        multilingual: false,
+    },
+];
+
+/// Default local embedding model for new indexes: multilingual, and at
+/// 384 dimensions cheap enough for a good first-run experience. Configure
+/// `multilingual-e5-large` in `.myceliums.toml` for maximum quality.
+pub const DEFAULT_LOCAL_EMBEDDING_MODEL: &str = "multilingual-e5-small";
+
+/// The model all indexes were built with before embedding configuration
+/// existed. Used as fallback when an index carries no embedding metadata.
+pub const LEGACY_LOCAL_EMBEDDING_MODEL: &str = "all-minilm-l6-v2";
+
+/// Look up a curated embedding model by id.
+pub fn embedding_model_spec(id: &str) -> Option<&'static EmbeddingModelSpec> {
+    EMBEDDING_MODELS.iter().find(|s| s.id == id)
+}
+
+fn known_embedding_model_ids() -> String {
+    EMBEDDING_MODELS
+        .iter()
+        .map(|s| s.id)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// A curated cross-encoder reranker model.
+pub struct RerankerSpec {
+    /// Stable identifier used in `.myceliums.toml` and index metadata.
+    pub id: &'static str,
+    /// The fastembed reranker backing this entry.
+    pub model: RerankerModel,
+    /// Whether the model handles non-English queries well.
+    pub multilingual: bool,
+}
+
+/// Curated reranker models.
+pub const RERANKER_MODELS: &[RerankerSpec] = &[
+    RerankerSpec {
+        id: "bge-reranker-v2-m3",
+        model: RerankerModel::BGERerankerV2M3,
+        multilingual: true,
+    },
+    RerankerSpec {
+        id: "jina-reranker-v2-base-multilingual",
+        model: RerankerModel::JINARerankerV2BaseMultiligual,
+        multilingual: true,
+    },
+    RerankerSpec {
+        id: "bge-reranker-base",
+        model: RerankerModel::BGERerankerBase,
+        multilingual: false,
+    },
+];
+
+/// Default reranker: multilingual bge-reranker-v2-m3.
+pub const DEFAULT_RERANKER_MODEL: &str = "bge-reranker-v2-m3";
+
+/// Look up a curated reranker model by id.
+pub fn reranker_spec(id: &str) -> Option<&'static RerankerSpec> {
+    RERANKER_MODELS.iter().find(|s| s.id == id)
+}
+
+fn known_reranker_ids() -> String {
+    RERANKER_MODELS
+        .iter()
+        .map(|s| s.id)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// fastembed's metadata (dimension, HF repo) for a curated local model.
+fn local_model_info(spec: &EmbeddingModelSpec) -> Result<fastembed::ModelInfo<EmbeddingModel>> {
+    TextEmbedding::list_supported_models()
+        .into_iter()
+        .find(|m| m.model == spec.model)
+        .ok_or_else(|| {
+            anyhow!(
+                "fastembed does not list model '{}' — registry and fastembed version out of sync",
+                spec.id
+            )
+        })
+}
+
+/// The HuggingFace repo fastembed downloads a curated local model from.
+pub fn local_model_code(id: &str) -> Result<String> {
+    let spec =
+        embedding_model_spec(id).ok_or_else(|| anyhow!("Unknown embedding model '{}'", id))?;
+    Ok(local_model_info(spec)?.model_code)
+}
+
+// ── Index metadata ────────────────────────────────────────────────────
+
+/// The embedding configuration an index was built with, persisted inside
+/// the index (LanceDB `index_meta` table). This is the source of truth at
+/// query time: vectors are only comparable when produced by the same model,
+/// so query paths must construct their embedder from this record.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IndexEmbeddingMeta {
+    /// `"local"` or `"openai-compatible"`.
+    pub provider: String,
+    /// Model id (registry id for local, API model name for remote).
+    pub model: String,
+    /// Vector dimension.
+    pub dim: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_prefix: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passage_prefix: Option<String>,
+    /// Base URL of the embeddings API (remote only; not a secret).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_url: Option<String>,
+    /// Env var name holding the API key (remote only; the name, never the key).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key_env: Option<String>,
+    /// Reranker registry id chosen at indexing time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reranker: Option<String>,
+}
+
+impl IndexEmbeddingMeta {
+    /// Key under which this record is stored in the `index_meta` table.
+    pub const META_KEY: &'static str = "embedding";
+
+    /// Resolve and validate an embedding configuration.
+    pub fn from_config(cfg: &EmbeddingSection) -> Result<Self> {
+        if reranker_spec(&cfg.reranker).is_none() {
+            bail!(
+                "Unknown reranker '{}' in [embedding] config. Supported: {}",
+                cfg.reranker,
+                known_reranker_ids()
+            );
+        }
+        match cfg.provider.as_str() {
+            "local" => {
+                let spec = embedding_model_spec(&cfg.model).ok_or_else(|| {
+                    anyhow!(
+                        "Unknown local embedding model '{}' in [embedding] config. Supported: {}",
+                        cfg.model,
+                        known_embedding_model_ids()
+                    )
+                })?;
+                let info = local_model_info(spec)?;
+                Ok(Self {
+                    provider: "local".to_string(),
+                    model: spec.id.to_string(),
+                    dim: info.dim,
+                    query_prefix: spec.query_prefix.map(str::to_string),
+                    passage_prefix: spec.passage_prefix.map(str::to_string),
+                    base_url: None,
+                    api_key_env: None,
+                    reranker: Some(cfg.reranker.clone()),
+                })
+            }
+            "openai-compatible" => {
+                let base_url = cfg.base_url.clone().ok_or_else(|| {
+                    anyhow!("[embedding] provider 'openai-compatible' requires base_url")
+                })?;
+                let dim = cfg.dim.ok_or_else(|| {
+                    anyhow!(
+                        "[embedding] provider 'openai-compatible' requires dim \
+                         (the model's vector dimension)"
+                    )
+                })?;
+                Ok(Self {
+                    provider: "openai-compatible".to_string(),
+                    model: cfg.model.clone(),
+                    dim,
+                    query_prefix: cfg.query_prefix.clone(),
+                    passage_prefix: cfg.passage_prefix.clone(),
+                    base_url: Some(base_url),
+                    api_key_env: Some(cfg.api_key_env.clone()),
+                    reranker: Some(cfg.reranker.clone()),
+                })
+            }
+            other => bail!(
+                "Unknown [embedding] provider '{}'. Supported: local, openai-compatible",
+                other
+            ),
+        }
+    }
+
+    /// Metadata for indexes created before embedding config existed.
+    pub fn legacy() -> Self {
+        let spec = embedding_model_spec(LEGACY_LOCAL_EMBEDDING_MODEL)
+            .expect("legacy model must be in registry");
+        Self {
+            provider: "local".to_string(),
+            model: spec.id.to_string(),
+            dim: 384,
+            query_prefix: None,
+            passage_prefix: None,
+            base_url: None,
+            api_key_env: None,
+            reranker: None,
+        }
+    }
+
+    /// Human-readable identity, e.g. `local:multilingual-e5-small:384`.
+    pub fn fingerprint(&self) -> String {
+        format!("{}:{}:{}", self.provider, self.model, self.dim)
+    }
+}
+
+// ── Cache inspection ──────────────────────────────────────────────────
+
 /// Information about the fastembed model cache.
 pub struct ModelCacheInfo {
-    /// The directory where the model is cached.
+    /// The directory where models are cached.
     pub cache_dir: PathBuf,
     /// Whether the model files are present.
     pub is_cached: bool,
@@ -42,12 +310,6 @@ pub(crate) fn get_cache_dir() -> PathBuf {
     PathBuf::from(DEFAULT_CACHE_DIR)
 }
 
-/// Get the model-specific subdirectory within the cache.
-fn model_cache_subdir(cache_dir: &Path) -> PathBuf {
-    let dir_name = format!("models--{}", MODEL_REPO.replace('/', "--"));
-    cache_dir.join(dir_name)
-}
-
 /// Compute total size of a directory recursively.
 fn dir_size(path: &Path) -> u64 {
     if !path.exists() {
@@ -62,10 +324,11 @@ fn dir_size(path: &Path) -> u64 {
         .sum()
 }
 
-/// Check the status of the fastembed model cache.
-pub fn check_model_cache() -> ModelCacheInfo {
+/// Check the cache status of a specific model by its HuggingFace repo
+/// (e.g. from [`local_model_code`]).
+pub fn check_model_cache(model_code: &str) -> ModelCacheInfo {
     let cache_dir = get_cache_dir();
-    let model_dir = model_cache_subdir(&cache_dir);
+    let model_dir = cache_dir.join(format!("models--{}", model_code.replace('/', "--")));
     let snapshots_dir = model_dir.join("snapshots");
 
     // The model is considered cached if the snapshots directory exists and contains files.
@@ -83,21 +346,18 @@ pub fn check_model_cache() -> ModelCacheInfo {
     }
 }
 
-/// Generates vector embeddings for code symbols using all-MiniLM-L6-v2.
-///
-/// The underlying ONNX model (~100 MB) is downloaded on first use and
-/// cached in the fastembed cache directory (set via `FASTEMBED_CACHE_DIR` env var).
-pub struct Embedder {
-    model: TextEmbedding,
+/// Aggregate status of the whole model cache directory (all models).
+pub fn embedding_cache_info() -> ModelCacheInfo {
+    let cache_dir = get_cache_dir();
+    let size_bytes = dir_size(&cache_dir);
+    ModelCacheInfo {
+        is_cached: size_bytes > 0,
+        cache_dir,
+        size_bytes,
+    }
 }
 
-/// Cross-encoder reranker using BAAI/bge-reranker-base.
-///
-/// Scores `(query, document)` pairs jointly, which is more accurate than
-/// embedding-based similarity but slower (O(n) forward passes).
-pub struct Reranker {
-    model: TextRerank,
-}
+// ── Embedding text construction ───────────────────────────────────────
 
 /// Truncate a byte-oriented slice to at most `max` bytes, ensuring the cut
 /// lands on a valid UTF-8 character boundary.
@@ -151,36 +411,246 @@ pub fn build_embedding_text(s: &CodeSymbol) -> String {
     )
 }
 
+/// Truncate a string to at most `max_chars` characters, splitting on a char
+/// boundary so the result is always valid UTF-8.
+pub fn truncate_content(s: &str, max_chars: usize) -> &str {
+    if s.len() <= max_chars {
+        // Fast path: byte length already within limit, so char length is too.
+        return s;
+    }
+    match s.char_indices().nth(max_chars) {
+        Some((byte_idx, _)) => &s[..byte_idx],
+        None => s,
+    }
+}
+
+// ── Embedder ──────────────────────────────────────────────────────────
+
+/// Whether a text is a search query or an indexed document. Determines
+/// which model-specific prefix is applied (E5-style models score poorly
+/// without them).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EmbedInput {
+    Query,
+    Passage,
+}
+
+enum EmbedderKind {
+    Local(Box<TextEmbedding>),
+    Remote(RemoteEmbedder),
+}
+
+struct RemoteEmbedder {
+    client: reqwest::Client,
+    base_url: String,
+    api_key: Option<String>,
+    model: String,
+}
+
+#[derive(Serialize)]
+struct RemoteEmbeddingRequest<'a> {
+    model: &'a str,
+    input: &'a [String],
+}
+
+#[derive(Deserialize)]
+struct RemoteEmbeddingResponse {
+    data: Vec<RemoteEmbeddingItem>,
+}
+
+#[derive(Deserialize)]
+struct RemoteEmbeddingItem {
+    index: usize,
+    embedding: Vec<f32>,
+}
+
+impl RemoteEmbedder {
+    async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        let url = format!("{}/embeddings", self.base_url.trim_end_matches('/'));
+        let mut request = self.client.post(&url).json(&RemoteEmbeddingRequest {
+            model: &self.model,
+            input: texts,
+        });
+        if let Some(key) = &self.api_key {
+            request = request.bearer_auth(key);
+        }
+        let response = request
+            .send()
+            .await
+            .with_context(|| format!("Embedding request to {} failed", url))?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            bail!(
+                "Embedding API returned {}: {}",
+                status,
+                truncate_content(&body, 500)
+            );
+        }
+        let parsed: RemoteEmbeddingResponse = response
+            .json()
+            .await
+            .context("Failed to parse embedding API response")?;
+        if parsed.data.len() != texts.len() {
+            bail!(
+                "Embedding API returned {} vectors for {} inputs",
+                parsed.data.len(),
+                texts.len()
+            );
+        }
+        let mut items = parsed.data;
+        items.sort_by_key(|i| i.index);
+        Ok(items.into_iter().map(|i| i.embedding).collect())
+    }
+}
+
+/// Generates vector embeddings for code symbols and queries.
+///
+/// Construct via [`Embedder::new`] with resolved [`IndexEmbeddingMeta`], or
+/// use [`embedder_for_index`] / [`get_embedder_for`] which cache instances
+/// per model.
+pub struct Embedder {
+    kind: EmbedderKind,
+    meta: IndexEmbeddingMeta,
+}
+
 impl Embedder {
-    /// Create a new Embedder with all-MiniLM-L6-v2.
-    /// This downloads the model (~100MB) on first use and prints progress to stderr.
-    pub fn new() -> Result<Self> {
-        let cache_info = check_model_cache();
+    /// Create an embedder for the given resolved metadata. For local models
+    /// this loads the ONNX model, downloading it on first use (with a notice
+    /// on stderr).
+    pub fn new(meta: IndexEmbeddingMeta) -> Result<Self> {
+        let kind = match meta.provider.as_str() {
+            "local" => {
+                let spec = embedding_model_spec(&meta.model).ok_or_else(|| {
+                    anyhow!(
+                        "Index was built with embedding model '{}', which this version \
+                         does not support (supported: {}). Re-run analysis to rebuild \
+                         the index with a supported model.",
+                        meta.model,
+                        known_embedding_model_ids()
+                    )
+                })?;
+                let info = local_model_info(spec)?;
+                if info.dim != meta.dim {
+                    bail!(
+                        "Embedding model '{}' has dimension {} but the index expects {}. \
+                         Re-run analysis to rebuild the index.",
+                        meta.model,
+                        info.dim,
+                        meta.dim
+                    );
+                }
+                let cache_info = check_model_cache(&info.model_code);
+                if !cache_info.is_cached {
+                    eprintln!(
+                        "Downloading embedding model {} (one-time)... this may take a while.",
+                        info.model_code,
+                    );
+                }
 
-        if !cache_info.is_cached {
-            eprintln!(
-                "Downloading fastembed model ({}, ~100 MB, one-time)... this may take a minute.",
-                MODEL_REPO,
-            );
+                info!("Loading embedding model ({})...", spec.id);
+                let model = TextEmbedding::try_new(
+                    InitOptions::new(spec.model.clone())
+                        .with_cache_dir(get_cache_dir())
+                        .with_show_download_progress(true),
+                )
+                .with_context(|| format!("Failed to initialize embedding model '{}'", spec.id))?;
+
+                if !cache_info.is_cached {
+                    let updated = check_model_cache(&info.model_code);
+                    eprintln!(
+                        "Model downloaded to {} ({:.0} MB)",
+                        updated.cache_dir.display(),
+                        updated.size_bytes as f64 / 1_000_000.0,
+                    );
+                }
+
+                info!("Embedding model loaded.");
+                EmbedderKind::Local(Box::new(model))
+            }
+            "openai-compatible" => {
+                let base_url = meta
+                    .base_url
+                    .clone()
+                    .ok_or_else(|| anyhow!("Index metadata is missing the embedding base_url"))?;
+                let api_key_env = meta
+                    .api_key_env
+                    .clone()
+                    .unwrap_or_else(|| "MYCELIUMS_EMBEDDING_API_KEY".to_string());
+                let api_key = std::env::var(&api_key_env).ok().filter(|k| !k.is_empty());
+                if api_key.is_none() {
+                    info!(
+                        "No API key found in ${} — calling embedding API unauthenticated",
+                        api_key_env
+                    );
+                }
+                EmbedderKind::Remote(RemoteEmbedder {
+                    client: reqwest::Client::new(),
+                    base_url,
+                    api_key,
+                    model: meta.model.clone(),
+                })
+            }
+            other => bail!("Unknown embedding provider '{}'", other),
+        };
+        Ok(Self { kind, meta })
+    }
+
+    /// The resolved metadata this embedder was built from.
+    pub fn meta(&self) -> &IndexEmbeddingMeta {
+        &self.meta
+    }
+
+    /// Vector dimension produced by this embedder.
+    pub fn dim(&self) -> usize {
+        self.meta.dim
+    }
+
+    fn apply_prefix(&self, text: &str, input: EmbedInput) -> String {
+        let prefix = match input {
+            EmbedInput::Query => self.meta.query_prefix.as_deref(),
+            EmbedInput::Passage => self.meta.passage_prefix.as_deref(),
+        };
+        match prefix {
+            Some(p) => format!("{p}{text}"),
+            None => text.to_string(),
         }
+    }
 
-        info!("Loading embedding model (all-MiniLM-L6-v2)...");
-        let model = TextEmbedding::try_new(
-            InitOptions::new(EmbeddingModel::AllMiniLML6V2).with_show_download_progress(true),
-        )
-        .context("Failed to initialize fastembed model")?;
-
-        if !cache_info.is_cached {
-            let updated = check_model_cache();
-            eprintln!(
-                "Model downloaded to {} ({:.0} MB)",
-                updated.cache_dir.display(),
-                updated.size_bytes as f64 / 1_000_000.0,
-            );
+    /// Embed a batch of texts, applying the model's query/passage prefix.
+    pub async fn embed_texts(&self, texts: &[String], input: EmbedInput) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(vec![]);
         }
+        let prefixed: Vec<String> = texts.iter().map(|t| self.apply_prefix(t, input)).collect();
+        let vectors = match &self.kind {
+            EmbedderKind::Local(model) => model
+                .embed(prefixed, None)
+                .context("Failed to generate embeddings")?,
+            EmbedderKind::Remote(remote) => remote.embed(&prefixed).await?,
+        };
+        for v in &vectors {
+            if v.len() != self.meta.dim {
+                bail!(
+                    "Embedding model returned dimension {} but {} was expected — \
+                     check the configured dim",
+                    v.len(),
+                    self.meta.dim
+                );
+            }
+        }
+        Ok(vectors)
+    }
 
-        info!("Embedding model loaded.");
-        Ok(Self { model })
+    /// Generate an embedding for a single query string.
+    pub async fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
+        let embeddings = self
+            .embed_texts(&[query.to_string()], EmbedInput::Query)
+            .await?;
+        embeddings
+            .into_iter()
+            .next()
+            .context("No embedding returned for query")
     }
 
     /// Generate embeddings for a batch of symbols, processing in chunks to
@@ -188,7 +658,7 @@ impl Embedder {
     ///
     /// Each symbol's text is enriched with metadata (kind, decorators,
     /// return type, superclasses) and content truncated to 512 chars.
-    pub fn embed_symbols(
+    pub async fn embed_symbols(
         &self,
         symbols: &[CodeSymbol],
         batch_size: usize,
@@ -202,10 +672,11 @@ impl Embedder {
         let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(symbols.len());
 
         info!(
-            "Generating embeddings for {} symbols in {} batches of {}...",
+            "Generating embeddings for {} symbols in {} batches of {} ({})...",
             symbols.len(),
             total_batches,
             batch_size,
+            self.meta.fingerprint(),
         );
 
         for (i, chunk) in symbols.chunks(batch_size).enumerate() {
@@ -217,42 +688,12 @@ impl Embedder {
             );
 
             let documents: Vec<String> = chunk.iter().map(build_embedding_text).collect();
-
-            let embeddings = self
-                .model
-                .embed(documents, None)
-                .context("Failed to generate embeddings")?;
-
+            let embeddings = self.embed_texts(&documents, EmbedInput::Passage).await?;
             all_embeddings.extend(embeddings);
         }
 
         info!("Generated {} embeddings.", all_embeddings.len());
         Ok(all_embeddings)
-    }
-
-    /// Generate an embedding for a single query string.
-    pub fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
-        let embeddings = self
-            .model
-            .embed(vec![query.to_string()], None)
-            .context("Failed to embed query")?;
-
-        embeddings
-            .into_iter()
-            .next()
-            .context("No embedding returned for query")
-    }
-
-    /// Embed multiple texts at once. Returns one vector per input.
-    pub fn embed_batch(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
-        if texts.is_empty() {
-            return Ok(vec![]);
-        }
-        let embeddings = self
-            .model
-            .embed(texts.to_vec(), None)
-            .context("Failed to embed batch")?;
-        Ok(embeddings)
     }
 
     /// Build a searchable text from a [`CodeSymbol`].
@@ -277,14 +718,14 @@ impl Embedder {
 
     /// Perform a brute-force vector search over symbols.
     /// Returns (symbol, similarity) pairs sorted by similarity descending.
-    pub fn vector_search(
+    pub async fn vector_search(
         &self,
         symbols: &[CodeSymbol],
         query_embedding: &[f32],
         limit: usize,
     ) -> Result<Vec<(CodeSymbol, f64)>> {
         let texts: Vec<String> = symbols.iter().map(Self::symbol_text).collect();
-        let embeddings = self.embed_batch(&texts)?;
+        let embeddings = self.embed_texts(&texts, EmbedInput::Passage).await?;
 
         let mut scored: Vec<(CodeSymbol, f64)> = symbols
             .iter()
@@ -301,45 +742,78 @@ impl Embedder {
     }
 }
 
-/// Truncate a string to at most `max_chars` characters, splitting on a char
-/// boundary so the result is always valid UTF-8.
-pub fn truncate_content(s: &str, max_chars: usize) -> &str {
-    if s.len() <= max_chars {
-        // Fast path: byte length already within limit, so char length is too.
-        return s;
+// ── Cached instances ──────────────────────────────────────────────────
+
+/// Embedder instances cached per fingerprint, so a model is loaded at most
+/// once per process even when serving multiple indexes.
+static EMBEDDER_CACHE: OnceCell<Mutex<HashMap<String, Arc<Embedder>>>> = OnceCell::const_new();
+
+/// Get or initialize a cached embedder for the given metadata.
+///
+/// The initialization happens while holding the cache lock, which also
+/// serializes concurrent first-use downloads of the same model.
+pub async fn get_embedder_for(meta: IndexEmbeddingMeta) -> Result<Arc<Embedder>> {
+    let cache = EMBEDDER_CACHE
+        .get_or_init(|| async { Mutex::new(HashMap::new()) })
+        .await;
+    let mut map = cache.lock().await;
+    if let Some(embedder) = map.get(&meta.fingerprint()) {
+        return Ok(embedder.clone());
     }
-    match s.char_indices().nth(max_chars) {
-        Some((byte_idx, _)) => &s[..byte_idx],
-        None => s,
+    let embedder = Arc::new(Embedder::new(meta.clone())?);
+    map.insert(meta.fingerprint(), embedder.clone());
+    Ok(embedder)
+}
+
+/// Read the embedding metadata recorded in an index, falling back to the
+/// legacy model for indexes created before embedding configuration existed.
+pub async fn index_embedding_meta(store: &Store) -> Result<IndexEmbeddingMeta> {
+    match store.get_index_meta(IndexEmbeddingMeta::META_KEY).await? {
+        Some(json) => serde_json::from_str(&json)
+            .context("Failed to parse embedding metadata stored in the index"),
+        None => {
+            warn!(
+                "Index has no embedding metadata; assuming legacy model ({}). \
+                 Re-run analysis to upgrade the index.",
+                LEGACY_LOCAL_EMBEDDING_MODEL
+            );
+            Ok(IndexEmbeddingMeta::legacy())
+        }
     }
 }
 
-/// Global singleton for the embedder to avoid reloading the model.
-static GLOBAL_EMBEDDER: OnceCell<Arc<Embedder>> = OnceCell::const_new();
+/// Resolve the embedder matching what an index was built with. This is the
+/// only correct way to obtain an embedder on a query path: it guarantees
+/// query vectors live in the same space as the indexed vectors.
+pub async fn embedder_for_index(store: &Store) -> Result<Arc<Embedder>> {
+    let meta = index_embedding_meta(store).await?;
+    get_embedder_for(meta).await
+}
 
-/// Get or initialize the global embedder instance.
-pub async fn get_embedder() -> Result<Arc<Embedder>> {
-    GLOBAL_EMBEDDER
-        .get_or_try_init(|| async {
-            let embedder = Embedder::new()?;
-            Ok::<_, anyhow::Error>(Arc::new(embedder))
-        })
-        .await
-        .cloned()
+// ── Reranker ──────────────────────────────────────────────────────────
+
+/// Cross-encoder reranker.
+///
+/// Scores `(query, document)` pairs jointly, which is more accurate than
+/// embedding-based similarity but slower (O(n) forward passes).
+pub struct Reranker {
+    model: TextRerank,
 }
 
 impl Reranker {
-    /// Create a new Reranker with BAAI/bge-reranker-base.
-    /// This downloads the model (~140MB) on first use.
-    pub fn new() -> Result<Self> {
+    /// Create a reranker for a curated registry entry, downloading the
+    /// model on first use.
+    pub fn new(spec: &RerankerSpec) -> Result<Self> {
         info!(
-            "Loading reranker model (BAAI/bge-reranker-base)... This may download ~140MB on first use."
+            "Loading reranker model ({})... This may download it on first use.",
+            spec.id
         );
         let model = TextRerank::try_new(
-            RerankInitOptions::new(RerankerModel::BGERerankerBase)
+            RerankInitOptions::new(spec.model.clone())
+                .with_cache_dir(get_cache_dir())
                 .with_show_download_progress(true),
         )
-        .context("Failed to initialize fastembed reranker model")?;
+        .with_context(|| format!("Failed to initialize reranker model '{}'", spec.id))?;
         info!("Reranker model loaded.");
         Ok(Self { model })
     }
@@ -374,24 +848,120 @@ impl Reranker {
     }
 }
 
-/// Global singleton for the reranker to avoid reloading the model.
-static GLOBAL_RERANKER: OnceCell<Arc<Reranker>> = OnceCell::const_new();
+/// Reranker instances cached per registry id.
+static RERANKER_CACHE: OnceCell<Mutex<HashMap<String, Arc<Reranker>>>> = OnceCell::const_new();
 
-/// Get or initialize the global reranker instance.
-pub(crate) async fn get_reranker() -> Result<Arc<Reranker>> {
-    GLOBAL_RERANKER
-        .get_or_try_init(|| async {
-            let reranker = Reranker::new()?;
-            Ok::<_, anyhow::Error>(Arc::new(reranker))
-        })
-        .await
-        .cloned()
+/// Get or initialize a cached reranker by registry id (`None` = default).
+pub async fn get_reranker(id: Option<&str>) -> Result<Arc<Reranker>> {
+    let id = id.unwrap_or(DEFAULT_RERANKER_MODEL);
+    let spec = reranker_spec(id).ok_or_else(|| {
+        anyhow!(
+            "Unknown reranker '{}'. Supported: {}",
+            id,
+            known_reranker_ids()
+        )
+    })?;
+    let cache = RERANKER_CACHE
+        .get_or_init(|| async { Mutex::new(HashMap::new()) })
+        .await;
+    let mut map = cache.lock().await;
+    if let Some(reranker) = map.get(spec.id) {
+        return Ok(reranker.clone());
+    }
+    let reranker = Arc::new(Reranker::new(spec)?);
+    map.insert(spec.id.to_string(), reranker.clone());
+    Ok(reranker)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use myceliums_storage::SymbolKind;
+
+    // --- registry tests ---
+
+    #[test]
+    fn registry_defaults_resolve() {
+        assert!(embedding_model_spec(DEFAULT_LOCAL_EMBEDDING_MODEL).is_some());
+        assert!(embedding_model_spec(LEGACY_LOCAL_EMBEDDING_MODEL).is_some());
+        assert!(reranker_spec(DEFAULT_RERANKER_MODEL).is_some());
+    }
+
+    #[test]
+    fn registry_entries_exist_in_fastembed() {
+        for spec in EMBEDDING_MODELS {
+            let info = local_model_info(spec).expect(spec.id);
+            assert!(info.dim > 0, "{} has no dimension", spec.id);
+        }
+    }
+
+    #[test]
+    fn legacy_meta_matches_original_setup() {
+        let meta = IndexEmbeddingMeta::legacy();
+        assert_eq!(meta.dim, 384);
+        assert_eq!(meta.fingerprint(), "local:all-minilm-l6-v2:384");
+        assert!(meta.query_prefix.is_none());
+    }
+
+    #[test]
+    fn meta_from_default_config_is_multilingual() {
+        let meta = IndexEmbeddingMeta::from_config(&EmbeddingSection::default()).unwrap();
+        assert_eq!(meta.provider, "local");
+        assert_eq!(meta.model, "multilingual-e5-small");
+        assert_eq!(meta.dim, 384);
+        assert_eq!(meta.query_prefix.as_deref(), Some("query: "));
+        assert_eq!(meta.passage_prefix.as_deref(), Some("passage: "));
+        assert_eq!(meta.reranker.as_deref(), Some("bge-reranker-v2-m3"));
+    }
+
+    #[test]
+    fn meta_from_config_rejects_unknown_model() {
+        let cfg = EmbeddingSection {
+            model: "does-not-exist".to_string(),
+            ..Default::default()
+        };
+        let err = IndexEmbeddingMeta::from_config(&cfg)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("does-not-exist"));
+        assert!(err.contains("multilingual-e5-small"));
+    }
+
+    #[test]
+    fn meta_from_config_rejects_unknown_reranker() {
+        let cfg = EmbeddingSection {
+            reranker: "does-not-exist".to_string(),
+            ..Default::default()
+        };
+        assert!(IndexEmbeddingMeta::from_config(&cfg).is_err());
+    }
+
+    #[test]
+    fn meta_from_config_openai_compatible_requires_base_url_and_dim() {
+        let mut cfg = EmbeddingSection {
+            provider: "openai-compatible".to_string(),
+            model: "nomic-embed-text".to_string(),
+            ..Default::default()
+        };
+        assert!(IndexEmbeddingMeta::from_config(&cfg).is_err());
+        cfg.base_url = Some("http://localhost:11434/v1".to_string());
+        assert!(IndexEmbeddingMeta::from_config(&cfg).is_err());
+        cfg.dim = Some(768);
+        let meta = IndexEmbeddingMeta::from_config(&cfg).unwrap();
+        assert_eq!(meta.fingerprint(), "openai-compatible:nomic-embed-text:768");
+        assert_eq!(
+            meta.api_key_env.as_deref(),
+            Some("MYCELIUMS_EMBEDDING_API_KEY")
+        );
+    }
+
+    #[test]
+    fn meta_json_roundtrip() {
+        let meta = IndexEmbeddingMeta::from_config(&EmbeddingSection::default()).unwrap();
+        let json = serde_json::to_string(&meta).unwrap();
+        let parsed: IndexEmbeddingMeta = serde_json::from_str(&json).unwrap();
+        assert_eq!(meta, parsed);
+    }
 
     // --- truncate_to_char_boundary tests ---
 

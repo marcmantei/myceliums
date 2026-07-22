@@ -9,9 +9,9 @@ use serde::Serialize;
 use std::collections::HashMap;
 
 #[cfg(feature = "embeddings")]
-use crate::embeddings::get_embedder;
-#[cfg(feature = "embeddings")]
 use crate::embeddings::get_reranker;
+#[cfg(feature = "embeddings")]
+use crate::embeddings::Embedder;
 use crate::search::{search_symbols, search_symbols_explain, SearchExplain};
 
 /// A graph edge traversed during search -- shows how a result connects to others.
@@ -176,18 +176,20 @@ pub fn attach_graph_edges(
 /// Perform hybrid search combining BM25 text search and vector semantic search.
 ///
 /// 1. Runs BM25 search over `symbols` with `query`
-/// 2. Generates a query embedding using fastembed
+/// 2. Generates a query embedding with the given embedder — obtain it via
+///    [`crate::embeddings::embedder_for_index`] so it matches the index
 /// 3. Runs vector search (cosine similarity) over `symbols`
 /// 4. Combines results using Reciprocal Rank Fusion (k=60)
 ///
 /// Requires the `embeddings` feature.
 #[cfg(feature = "embeddings")]
 pub async fn hybrid_search(
+    embedder: &Embedder,
     symbols: &[CodeSymbol],
     query: &str,
     limit: usize,
 ) -> Result<Vec<HybridSearchResult>> {
-    hybrid_search_impl(symbols, query, limit, false).await
+    hybrid_search_impl(embedder, symbols, query, limit, false).await
 }
 
 /// Hybrid search with explain traces showing scoring breakdown and graph paths.
@@ -195,15 +197,17 @@ pub async fn hybrid_search(
 /// Requires the `embeddings` feature.
 #[cfg(feature = "embeddings")]
 pub async fn hybrid_search_explain(
+    embedder: &Embedder,
     symbols: &[CodeSymbol],
     query: &str,
     limit: usize,
 ) -> Result<Vec<HybridSearchResult>> {
-    hybrid_search_impl(symbols, query, limit, true).await
+    hybrid_search_impl(embedder, symbols, query, limit, true).await
 }
 
 #[cfg(feature = "embeddings")]
 async fn hybrid_search_impl(
+    embedder: &Embedder,
     symbols: &[CodeSymbol],
     query: &str,
     limit: usize,
@@ -223,10 +227,11 @@ async fn hybrid_search_impl(
     };
 
     // Vector search
-    let embedder = get_embedder().await?;
-    let query_embedding = embedder.embed_query(query)?;
+    let query_embedding = embedder.embed_query(query).await?;
     let vector_limit = limit.max(100); // fetch more candidates for fusion
-    let vector_results = embedder.vector_search(symbols, &query_embedding, vector_limit)?;
+    let vector_results = embedder
+        .vector_search(symbols, &query_embedding, vector_limit)
+        .await?;
 
     // Combine with RRF (k=60)
     Ok(reciprocal_rank_fusion(
@@ -250,12 +255,13 @@ async fn hybrid_search_impl(
 pub async fn rerank_results(
     query: &str,
     results: Vec<HybridSearchResult>,
+    reranker_id: Option<&str>,
 ) -> Result<Vec<HybridSearchResult>> {
     if results.is_empty() {
         return Ok(results);
     }
 
-    let reranker = get_reranker().await?;
+    let reranker = get_reranker(reranker_id).await?;
 
     // Build document texts for reranking: name + signature + content
     let documents: Vec<String> = results

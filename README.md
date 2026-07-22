@@ -221,7 +221,7 @@ docker run -v $(pwd):/code -v ~/.myceliums:/root/.myceliums ghcr.io/marcmantei/m
 
 ### First run
 
-On the very first `myc analyze` or semantic/hybrid search, the fastembed model (~100 MB) is downloaded automatically. This is a one-time cost — subsequent runs use the cached model. The Docker image skips this step since the model is pre-bundled.
+On the very first `myc analyze` or semantic/hybrid search, the configured embedding model is downloaded automatically (a one-time cost — subsequent runs use the cached model). Pre-download it with `myc doctor --download`. The Docker image skips this step since the model is pre-bundled.
 
 ---
 
@@ -367,15 +367,27 @@ Myceliums offers three search modes that combine classical text matching with AI
 
 ### Semantic search — meaning-based (AI model)
 
-`myc semantic-search` converts your query and all code symbols into 384-dimensional vectors (embeddings) using [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2), a transformer model that runs **locally on your CPU** via [fastembed](https://github.com/Anush008/fastembed-rs) (~100 MB, downloaded once). Symbols with similar meaning land close together in vector space — so "authenticate user" finds `login()`, `verifyCredentials()`, and `checkSession()` even without shared keywords.
+`myc semantic-search` converts your query and all code symbols into vectors (embeddings) using an embedding model that runs **locally on your CPU** via [fastembed](https://github.com/Anush008/fastembed-rs) (downloaded once on first use). Symbols with similar meaning land close together in vector space — so "authenticate user" finds `login()`, `verifyCredentials()`, and `checkSession()` even without shared keywords.
 
-**Why the same model matters:** Each embedding model defines its own vector space. Queries and documents must be embedded with the same model — mixing models produces meaningless similarity scores.
+The default model is [multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small) (384 dimensions, multilingual — queries in German, French, etc. work against English code). The model is configurable per project via the `[embedding]` section in `.myceliums.toml`:
+
+| Model id | Dim | Multilingual | Notes |
+|---|---|---|---|
+| `multilingual-e5-small` | 384 | ✓ | Default — best size/quality balance |
+| `multilingual-e5-base` | 768 | ✓ | Higher quality, larger download |
+| `multilingual-e5-large` | 1024 | ✓ | Maximum quality, ~2 GB download |
+| `jina-embeddings-v2-base-code` | 768 | — | Code-specialized, English queries |
+| `all-minilm-l6-v2` | 384 | — | Legacy default, English only |
+
+Alternatively, set `provider = "openai-compatible"` to use any server speaking the OpenAI embeddings API (Ollama, LM Studio, TEI, vLLM, or a cloud provider) — see [Project config](#project-config).
+
+**Why the same model matters:** Each embedding model defines its own vector space. Queries and documents must be embedded with the same model — mixing models produces meaningless similarity scores. Myceliums records the model inside each index and always queries with that model; switching models in the config takes effect on the next full `myc analyze`, which rebuilds the vectors.
 
 Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector database (no server required). For repositories with more than 10,000 symbols, an approximate nearest neighbor (IVF-PQ) index is built automatically.
 
 ### Hybrid search — best of both worlds
 
-`myc search --hybrid` runs BM25 and semantic search in parallel, then merges results using [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) (RRF, k=60). This catches both exact keyword matches and semantically related symbols. A cross-encoder reranker ([BAAI/bge-reranker-base](https://huggingface.co/BAAI/bge-reranker-base)) optionally re-scores the top candidates for higher accuracy.
+`myc search --hybrid` runs BM25 and semantic search in parallel, then merges results using [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) (RRF, k=60). This catches both exact keyword matches and semantically related symbols. A cross-encoder reranker (default: the multilingual [bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3), configurable via `[embedding] reranker`) optionally re-scores the top candidates for higher accuracy.
 
 ### When to use which
 
@@ -403,7 +415,7 @@ graph TD
     
     D --> E["Community Detection<br/>(Leiden algorithm)"]
     D --> F["Process Tracing<br/>(entry-point → call chain)"]
-    D --> K["Embedding Generation<br/>(fastembed · all-MiniLM-L6-v2)"]
+    D --> K["Embedding Generation<br/>(fastembed · configurable, default multilingual-e5-small)"]
     
     E --> G["LanceDB Storage<br/>~/.myceliums/"]
     F --> G
@@ -444,7 +456,26 @@ entry_points = ["main", "handleRequest"]
 [community]
 min_community_size = 3
 resolution = 1.0
+
+[embedding]
+# Local ONNX model from the curated registry (see `myc doctor` for the list)
+provider = "local"
+model = "multilingual-e5-small"
+reranker = "bge-reranker-v2-m3"
 ```
+
+To use your own embedding server instead of the bundled local models, point the `openai-compatible` provider at any server speaking the OpenAI embeddings API:
+
+```toml
+[embedding]
+provider = "openai-compatible"
+model = "nomic-embed-text"
+base_url = "http://localhost:11434/v1"   # e.g. Ollama
+dim = 768                                 # the model's vector dimension
+api_key_env = "MYCELIUMS_EMBEDDING_API_KEY"  # env var holding the key (if any)
+```
+
+The embedding model determines the vectors stored in the index, so it lives in the project config (committed, shared by the team). Changing it takes effect on the next full `myc analyze`.
 
 ---
 
@@ -474,7 +505,7 @@ Shows all indexed repos, file/symbol counts, disk usage per repo, orphaned direc
 ```bash
 myc clean --orphans      # Remove orphaned data dirs
 myc clean my-project     # Remove a specific repo (with confirmation)
-myc clean --cache        # Remove the fastembed model cache (~100 MB)
+myc clean --cache        # Remove the fastembed model cache
 myc clean --all          # Remove everything (with confirmation)
 myc clean --orphans --yes  # Skip confirmation prompts
 ```

@@ -24,6 +24,10 @@ fn escape_lance_str(value: &str) -> String {
 pub struct Store {
     db: Connection,
     repo_id: String,
+    /// Dimension of the `vector` column when (re)creating the symbols table.
+    /// Defaults to the legacy 384; set from the resolved embedding model
+    /// before indexing. Atomic so it can be set through a shared reference.
+    embedding_dim: std::sync::atomic::AtomicI32,
 }
 
 impl Store {
@@ -35,11 +39,102 @@ impl Store {
         Ok(Self {
             db,
             repo_id: repo_id.to_string(),
+            embedding_dim: std::sync::atomic::AtomicI32::new(schema::DEFAULT_EMBEDDING_DIM),
         })
     }
 
     pub fn repo_id(&self) -> &str {
         &self.repo_id
+    }
+
+    /// The embedding dimension used for the symbols table vector column.
+    pub fn embedding_dim(&self) -> i32 {
+        self.embedding_dim
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Set the embedding dimension before indexing. Call
+    /// [`Store::ensure_symbols_dim`] afterwards to reconcile an existing table.
+    pub fn set_embedding_dim(&self, dim: i32) {
+        self.embedding_dim
+            .store(dim, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Reconcile an existing symbols table with the configured embedding
+    /// dimension. If the table was created with a different vector dimension
+    /// (i.e. a different embedding model), it is dropped and recreated —
+    /// vectors from one model are meaningless in another model's space.
+    /// Returns `true` if the table was rebuilt.
+    pub async fn ensure_symbols_dim(&self) -> Result<bool> {
+        let tables = self.db.table_names().execute().await?;
+        if !tables.contains(&"symbols".to_string()) {
+            return Ok(false);
+        }
+        let table = self.db.open_table("symbols").execute().await?;
+        let table_schema = table.schema().await?;
+        let existing_dim = table_schema.field_with_name("vector").ok().and_then(|f| {
+            if let DataType::FixedSizeList(_, size) = f.data_type() {
+                Some(*size)
+            } else {
+                None
+            }
+        });
+        let want = self.embedding_dim();
+        if let Some(have) = existing_dim {
+            if have != want {
+                info!(
+                    "Embedding dimension changed ({} -> {}); rebuilding symbols table",
+                    have, want
+                );
+                self.db.drop_table("symbols", &[]).await?;
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Read a value from the per-index key-value metadata table.
+    pub async fn get_index_meta(&self, key: &str) -> Result<Option<String>> {
+        let tables = self.db.table_names().execute().await?;
+        if !tables.contains(&"index_meta".to_string()) {
+            return Ok(None);
+        }
+        let table = self.db.open_table("index_meta").execute().await?;
+        let stream = table
+            .query()
+            .only_if(format!("key = '{}'", escape_lance_str(key)))
+            .execute()
+            .await?;
+        let batches: Vec<RecordBatch> = stream.try_collect().await?;
+        for batch in &batches {
+            let values = col_str(batch, "value");
+            if batch.num_rows() > 0 {
+                return Ok(Some(values.value(0).to_string()));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Upsert a value into the per-index key-value metadata table.
+    pub async fn set_index_meta(&self, key: &str, value: &str) -> Result<()> {
+        let table = self
+            .ensure_table("index_meta", schema::index_meta_schema())
+            .await?;
+        let schema = Arc::new(schema::index_meta_schema());
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(StringArray::from(vec![key])),
+                Arc::new(StringArray::from(vec![value])),
+            ],
+        )?;
+        let batches = RecordBatchIterator::new(vec![Ok(batch)], schema);
+        let mut merge = table.merge_insert(&["key"]);
+        merge
+            .when_matched_update_all(None)
+            .when_not_matched_insert_all();
+        merge.execute(Box::new(batches)).await?;
+        Ok(())
     }
 
     async fn ensure_table(&self, name: &str, schema: Schema) -> Result<lancedb::Table> {
@@ -58,11 +153,11 @@ impl Store {
             return Ok(0);
         }
         let table = self
-            .ensure_table("symbols", schema::symbols_schema())
+            .ensure_table("symbols", schema::symbols_schema(self.embedding_dim()))
             .await?;
 
         let count = symbols.len();
-        let batch = Self::symbols_to_batch(symbols)?;
+        let batch = self.symbols_to_batch(symbols)?;
         let schema = batch.schema();
         let batches = RecordBatchIterator::new(vec![Ok(batch)], schema);
         table.add(batches).execute().await?;
@@ -70,8 +165,9 @@ impl Store {
         Ok(count)
     }
 
-    fn symbols_to_batch(symbols: &[CodeSymbol]) -> Result<RecordBatch> {
-        let schema = Arc::new(schema::symbols_schema());
+    fn symbols_to_batch(&self, symbols: &[CodeSymbol]) -> Result<RecordBatch> {
+        let embedding_dim = self.embedding_dim();
+        let schema = Arc::new(schema::symbols_schema(embedding_dim));
         let uids: Vec<&str> = symbols.iter().map(|s| s.uid.as_str()).collect();
         let names: Vec<&str> = symbols.iter().map(|s| s.name.as_str()).collect();
         let qualified_names: Vec<&str> =
@@ -86,11 +182,10 @@ impl Store {
         let repo_ids: Vec<&str> = symbols.iter().map(|s| s.repo_id.as_str()).collect();
         let metadata: Vec<Option<&str>> = symbols.iter().map(|s| s.metadata.as_deref()).collect();
 
-        // Create zero vectors (384 dims) as placeholders
-        let dim = schema::EMBEDDING_DIM as usize;
-        let total_values = symbols.len() * dim;
+        // Create zero vectors as placeholders (filled in by store_embeddings)
+        let total_values = symbols.len() * embedding_dim as usize;
         let zero_values = Float32Array::from(vec![0.0f32; total_values]);
-        let vector_array = create_fixed_size_list(zero_values, schema::EMBEDDING_DIM)?;
+        let vector_array = create_fixed_size_list(zero_values, embedding_dim)?;
 
         Ok(RecordBatch::try_new(
             schema,
@@ -616,7 +711,7 @@ impl Store {
         }
 
         let table = self
-            .ensure_table("symbols", schema::symbols_schema())
+            .ensure_table("symbols", schema::symbols_schema(self.embedding_dim()))
             .await?;
 
         let count = embeddings.len();
@@ -641,7 +736,7 @@ impl Store {
             return Ok(0);
         }
 
-        let schema = Arc::new(schema::symbols_schema());
+        let schema = Arc::new(schema::symbols_schema(self.embedding_dim()));
         let uids: Vec<&str> = matched_symbols.iter().map(|s| s.uid.as_str()).collect();
         let names: Vec<&str> = matched_symbols.iter().map(|s| s.name.as_str()).collect();
         let qualified_names: Vec<&str> = matched_symbols
@@ -670,7 +765,7 @@ impl Store {
         // Flatten all vectors into a single Float32Array
         let flat_values: Vec<f32> = matched_vectors.iter().flatten().copied().collect();
         let values_array = Float32Array::from(flat_values);
-        let vector_array = create_fixed_size_list(values_array, schema::EMBEDDING_DIM)?;
+        let vector_array = create_fixed_size_list(values_array, self.embedding_dim())?;
 
         // Column order must match schema::symbols_schema() exactly.
         let batch = RecordBatch::try_new(
@@ -901,6 +996,64 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_index_meta_roundtrip() {
+        let dir = test_db_path("index_meta");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+
+        // Missing key on a fresh store
+        assert_eq!(store.get_index_meta("embedding").await.unwrap(), None);
+
+        // Write and read back
+        store.set_index_meta("embedding", "v1").await.unwrap();
+        assert_eq!(
+            store.get_index_meta("embedding").await.unwrap().as_deref(),
+            Some("v1")
+        );
+
+        // Upsert overwrites
+        store.set_index_meta("embedding", "v2").await.unwrap();
+        assert_eq!(
+            store.get_index_meta("embedding").await.unwrap().as_deref(),
+            Some("v2")
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn test_ensure_symbols_dim_rebuilds_on_change() {
+        let dir = test_db_path("dim_change");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+
+        // Create the symbols table at the default dimension (384)
+        store
+            .store_symbols(&[make_symbol("a", None)])
+            .await
+            .unwrap();
+        // Same dimension: no rebuild
+        assert!(!store.ensure_symbols_dim().await.unwrap());
+
+        // Change the dimension: table must be rebuilt (dropped)
+        store.set_embedding_dim(768);
+        assert!(store.ensure_symbols_dim().await.unwrap());
+        assert!(store.get_symbols().await.unwrap().is_empty());
+
+        // Re-storing now works at the new dimension
+        store
+            .store_symbols(&[make_symbol("b", None)])
+            .await
+            .unwrap();
+        assert_eq!(store.get_symbols().await.unwrap().len(), 1);
+        assert!(!store.ensure_symbols_dim().await.unwrap());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Regression test: `store_embeddings` must build a RecordBatch whose column
     /// count and order match `symbols_schema()` (12 fields incl. `metadata`).
     /// Previously the batch omitted `metadata`, so `RecordBatch::try_new` errored
@@ -918,7 +1071,7 @@ mod tests {
         ];
         store.store_symbols(&symbols).await.unwrap();
 
-        let dim = schema::EMBEDDING_DIM as usize;
+        let dim = schema::DEFAULT_EMBEDDING_DIM as usize;
         let embeddings = vec![
             ("alpha".to_string(), vec![0.5f32; dim]),
             ("beta".to_string(), vec![0.25f32; dim]),

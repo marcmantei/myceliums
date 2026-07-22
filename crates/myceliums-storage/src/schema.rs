@@ -1,9 +1,11 @@
 use arrow_schema::{DataType, Field, Schema};
 use std::sync::Arc;
 
-pub const EMBEDDING_DIM: i32 = 384;
+/// Dimension of the legacy default embedding model (all-MiniLM-L6-v2).
+/// Used when no embedding configuration or index metadata is available.
+pub const DEFAULT_EMBEDDING_DIM: i32 = 384;
 
-pub fn symbols_schema() -> Schema {
+pub fn symbols_schema(embedding_dim: i32) -> Schema {
     Schema::new(vec![
         Field::new("uid", DataType::Utf8, false),
         Field::new("name", DataType::Utf8, false),
@@ -20,10 +22,20 @@ pub fn symbols_schema() -> Schema {
             "vector",
             DataType::FixedSizeList(
                 Arc::new(Field::new("item", DataType::Float32, true)),
-                EMBEDDING_DIM,
+                embedding_dim,
             ),
             true,
         ),
+    ])
+}
+
+/// Key-value metadata about the index itself (e.g. which embedding model
+/// built the vectors). Kept separate from symbol data so it survives
+/// incremental updates and can be read without scanning symbols.
+pub fn index_meta_schema() -> Schema {
+    Schema::new(vec![
+        Field::new("key", DataType::Utf8, false),
+        Field::new("value", DataType::Utf8, false),
     ])
 }
 
