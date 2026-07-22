@@ -1,4 +1,4 @@
-use super::{remove_mcp_servers, EditorSetup};
+use super::{remove_mcp_servers, write_user_file, EditorSetup};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
@@ -93,10 +93,8 @@ impl EditorSetup for ZedEditor {
             if let Ok(content) = std::fs::read_to_string(&self.config_path) {
                 if let Ok(mut config) = serde_json::from_str::<serde_json::Value>(&content) {
                     remove_mcp_servers(&mut config, "context_servers")?;
-                    std::fs::write(
-                        &self.config_path,
-                        serde_json::to_string_pretty(&config).unwrap_or_default(),
-                    )?;
+                    let serialized = serde_json::to_string_pretty(&config)?;
+                    write_user_file(&self.config_path, &serialized)?;
                 }
             }
             println!("  ✓ MCP server removed from {}", self.config_path.display());

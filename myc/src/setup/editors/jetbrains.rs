@@ -1,4 +1,4 @@
-use super::{remove_mcp_servers, EditorSetup};
+use super::{remove_mcp_servers, write_user_file, EditorSetup};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
@@ -116,10 +116,8 @@ impl EditorSetup for JetBrainsEditor {
                 if let Ok(content) = std::fs::read_to_string(&mcp_config_path) {
                     if let Ok(mut config) = serde_json::from_str::<serde_json::Value>(&content) {
                         remove_mcp_servers(&mut config, "mcpServers")?;
-                        std::fs::write(
-                            &mcp_config_path,
-                            serde_json::to_string_pretty(&config).unwrap_or_default(),
-                        )?;
+                        let serialized = serde_json::to_string_pretty(&config)?;
+                        write_user_file(&mcp_config_path, &serialized)?;
                     }
                 }
                 println!("  ✓ MCP server removed from {}", mcp_config_path.display());

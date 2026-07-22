@@ -1,4 +1,4 @@
-use super::{remove_mcp_servers, EditorSetup};
+use super::{remove_mcp_servers, write_user_file, EditorSetup};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
@@ -81,11 +81,9 @@ impl EditorSetup for ClaudeEditor {
                     if let Ok(content) = std::fs::read_to_string(&config_path) {
                         if let Ok(mut config) = serde_json::from_str::<serde_json::Value>(&content)
                         {
-                            let _ = remove_mcp_servers(&mut config, "mcpServers");
-                            let _ = std::fs::write(
-                                &config_path,
-                                serde_json::to_string_pretty(&config).unwrap_or_default(),
-                            );
+                            remove_mcp_servers(&mut config, "mcpServers")?;
+                            let serialized = serde_json::to_string_pretty(&config)?;
+                            write_user_file(&config_path, &serialized)?;
                         }
                     }
                 }
@@ -104,10 +102,8 @@ impl EditorSetup for ClaudeEditor {
                         .and_then(|h| h.as_object_mut())
                     {
                         remove_hooks(hooks);
-                        let _ = std::fs::write(
-                            &settings_path,
-                            serde_json::to_string_pretty(&settings).unwrap_or_default(),
-                        );
+                        let serialized = serde_json::to_string_pretty(&settings)?;
+                        write_user_file(&settings_path, &serialized)?;
                     }
                 }
             }
@@ -145,6 +141,8 @@ fn setup_mcp_server(myc_path: &str) -> Result<()> {
             let stderr = String::from_utf8_lossy(&result.stderr);
             // If server already exists, try removing and re-adding
             if stderr.contains("already exists") {
+                // best-effort: remove the stale server before re-adding; the retry
+                // below is the authoritative operation whose result we check.
                 let _ = std::process::Command::new("claude")
                     .args(["mcp", "remove", "-s", "user", "myceliums"])
                     .output();
