@@ -1196,7 +1196,10 @@ async fn query_knowledge(
 
         source_ids.insert(rel.source_uid.clone());
 
-        // Parse metadata for match locations
+        // Parse metadata for match locations. Best-effort by design: malformed
+        // metadata is a data-quality issue on a single relationship, not a backend
+        // failure. The row is still surfaced below (in the `else` branch) without
+        // match details, so nothing is silently dropped.
         let metadata: Option<MentionMetadata> = serde_json::from_str(&rel.metadata).ok();
 
         if let Some(meta) = metadata {
@@ -1815,7 +1818,9 @@ async fn graph_v1_node(
         }
     }
 
-    // Semantic neighbors via vector search
+    // Semantic neighbors via vector search.
+    // A storage failure here is a real backend error, not "no neighbors": surface
+    // it as 5xx so callers can distinguish it from a genuine empty neighbor set.
     let semantic_neighbors = match store.get_symbols_with_vectors().await {
         Ok(svecs) => {
             // Find this symbol's vector
@@ -1837,13 +1842,26 @@ async fn graph_v1_node(
                             similarity: score,
                         })
                         .collect(),
-                    Err(_) => vec![],
+                    Err(e) => {
+                        error!("Vector search failed for node {}: {}", node_id, e);
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(Option::<NodeDetailResponse>::None),
+                        );
+                    }
                 }
             } else {
+                // Symbol has no embedding vector: legitimately no semantic neighbors.
                 vec![]
             }
         }
-        Err(_) => vec![],
+        Err(e) => {
+            error!("Failed to load symbol vectors for {}: {}", node_id, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(Option::<NodeDetailResponse>::None),
+            );
+        }
     };
 
     let comm = community_map.get(&node_id).cloned().unwrap_or_default();
@@ -1930,7 +1948,18 @@ async fn graph_v1_search(
                 score,
             })
             .collect(),
-        Err(_) => vec![],
+        // A storage failure is not "no matches": surface it as 5xx so callers
+        // can distinguish a real backend error from a genuine empty result set.
+        Err(e) => {
+            error!("Vector search failed for {}: {}", repo_id, e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(GraphSearchResponse {
+                    query: params.q,
+                    results: vec![],
+                }),
+            );
+        }
     };
 
     (
@@ -2264,5 +2293,164 @@ mod tests {
         assert_eq!(resp.cycles[0].size, 2);
         assert_eq!(resp.cycles[0].members.len(), 2);
         assert_eq!(resp.cycles[0].files.len(), 1);
+    }
+
+    // --- Regression tests for #30: search/neighbor endpoints must not collapse
+    // backend errors into an empty result set. A storage failure returns 5xx;
+    // HTTP 200 + `[]` is reserved for a genuine no-match. ---
+
+    use axum::response::IntoResponse;
+    use myceliums_storage::{CodeSymbol, SymbolKind};
+
+    /// A unique temp directory for an isolated test store.
+    fn test_data_dir(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("myceliums_http_test_{}", name))
+    }
+
+    fn app_state(data_dir: PathBuf) -> Arc<AppState> {
+        let registry_path = data_dir.join("registry.json");
+        Arc::new(AppState {
+            data_dir,
+            registry_path,
+            default_repo_id: None,
+        })
+    }
+
+    fn sample_symbol(uid: &str, repo_id: &str) -> CodeSymbol {
+        CodeSymbol {
+            uid: uid.to_string(),
+            name: uid.to_string(),
+            qualified_name: uid.to_string(),
+            kind: SymbolKind::Function,
+            file_path: "src/lib.rs".to_string(),
+            start_line: 1,
+            end_line: 2,
+            signature: format!("fn {}()", uid),
+            content: "body".to_string(),
+            repo_id: repo_id.to_string(),
+            metadata: None,
+        }
+    }
+
+    /// Seed a real store with one embedded symbol so `graph_v1_node` reaches the
+    /// semantic-neighbor vector search on a healthy backend.
+    async fn seed_healthy_store(data_dir: &std::path::Path, repo_id: &str, node_id: &str) {
+        let db_path = RepoRegistry::repo_db_path(data_dir, repo_id);
+        std::fs::create_dir_all(&db_path).unwrap();
+        let store = Store::open(&db_path, repo_id).await.unwrap();
+        store
+            .store_symbols(&[sample_symbol(node_id, repo_id)])
+            .await
+            .unwrap();
+        let dim = myceliums_storage::schema::DEFAULT_EMBEDDING_DIM as usize;
+        store
+            .store_embeddings(vec![(node_id.to_string(), vec![0.5f32; dim])])
+            .await
+            .unwrap();
+    }
+
+    /// Seed a valid store, then overwrite its on-disk table files with garbage.
+    /// `Store::open` (a lazy `connect`) still succeeds, but the first table read
+    /// — `get_symbols`, `get_symbols_with_vectors`, or `vector_search` — then
+    /// returns `Err`, giving us a deterministic backend failure to assert the
+    /// 5xx mapping against (verified reachable: `connect` ok, reads error).
+    async fn corrupt_seeded_store(data_dir: &std::path::Path, repo_id: &str, node_id: &str) {
+        seed_healthy_store(data_dir, repo_id, node_id).await;
+        let db_path = RepoRegistry::repo_db_path(data_dir, repo_id);
+        fn corrupt(p: &std::path::Path) {
+            if let Ok(entries) = std::fs::read_dir(p) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        corrupt(&path);
+                    } else {
+                        let _ = std::fs::write(&path, b"CORRUPT");
+                    }
+                }
+            }
+        }
+        corrupt(&db_path);
+    }
+
+    #[tokio::test]
+    async fn node_detail_returns_ok_for_genuine_no_semantic_match() {
+        let dir = test_data_dir("node_no_match");
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo_id = "repo_ok";
+        let node_id = "only_node";
+        seed_healthy_store(&dir, repo_id, node_id).await;
+
+        let resp = graph_v1_node(
+            State(app_state(dir.clone())),
+            Path((repo_id.to_string(), node_id.to_string())),
+        )
+        .await
+        .into_response();
+
+        // The single symbol is filtered out of its own neighbor list, so this is a
+        // genuine empty semantic-neighbor set — it must be 200, not an error.
+        assert_eq!(resp.status(), StatusCode::OK);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn node_detail_does_not_return_silent_ok_when_store_errors() {
+        let dir = test_data_dir("node_store_err");
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo_id = "repo_broken";
+        let node_id = "broken_node";
+        corrupt_seeded_store(&dir, repo_id, node_id).await;
+
+        let resp = graph_v1_node(
+            State(app_state(dir.clone())),
+            Path((repo_id.to_string(), node_id.to_string())),
+        )
+        .await
+        .into_response();
+
+        // A backend failure must never be served as a healthy 200 + empty
+        // neighbors — the endpoint must surface an error status instead. (The
+        // shared `symbols` table means `get_symbols` fails first, so this
+        // corrupt-store case exercises the endpoint's failure handling as a
+        // whole rather than the semantic-neighbor branch in isolation.)
+        assert_ne!(
+            resp.status(),
+            StatusCode::OK,
+            "corrupt store must not yield a silent 200"
+        );
+        assert!(
+            resp.status().is_client_error() || resp.status().is_server_error(),
+            "expected an error status on store failure, got {}",
+            resp.status()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn graph_search_returns_5xx_when_backend_errors() {
+        let dir = test_data_dir("search_store_err");
+        let _ = std::fs::remove_dir_all(&dir);
+        let repo_id = "repo_search_broken";
+        let node_id = "search_node";
+        corrupt_seeded_store(&dir, repo_id, node_id).await;
+
+        let resp = graph_v1_search(
+            State(app_state(dir.clone())),
+            Path(repo_id.to_string()),
+            Query(GraphSearchParams {
+                q: "anything".to_string(),
+                top_k: Some(20),
+            }),
+        )
+        .await
+        .into_response();
+
+        // The search endpoint must not answer a backend failure with 200 + `[]`.
+        assert!(
+            resp.status().is_server_error(),
+            "expected 5xx on store error, got {}",
+            resp.status()
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
