@@ -619,9 +619,12 @@ async fn main() -> Result<()> {
             );
             eprintln!();
             if prompt_yes_no("  Run the setup wizard to configure your editors?").unwrap_or(false) {
-                let _ = setup::wizard::run_wizard(&data_dir()).await;
+                if let Err(e) = setup::wizard::run_wizard(&data_dir()).await {
+                    eprintln!("  error: setup wizard failed: {:#}", e);
+                }
             } else {
-                // Create data dir so we don't ask again
+                // best-effort: create data dir so we don't prompt again; a failure
+                // here only means we re-ask on the next run, not lost user data.
                 let _ = std::fs::create_dir_all(data_dir());
             }
         }
@@ -2652,6 +2655,8 @@ async fn cmd_doctor(download: bool) -> Result<()> {
         let test_file = data.join(".write_test");
         match std::fs::write(&test_file, b"test") {
             Ok(_) => {
+                // best-effort: the write test already succeeded; removing the
+                // probe file is cleanup and does not affect the reported result.
                 let _ = std::fs::remove_file(&test_file);
                 println!(
                     "\u{2713} Data directory ({}) exists and is writable",
@@ -3590,6 +3595,8 @@ fn setup_mcp_server(myc_path: &str) -> Result<()> {
             let stderr = String::from_utf8_lossy(&result.stderr);
             // If server already exists, try removing and re-adding
             if stderr.contains("already exists") {
+                // best-effort: remove the stale server before re-adding; the retry
+                // below is the authoritative operation whose result we check.
                 let _ = std::process::Command::new("claude")
                     .args(["mcp", "remove", "-s", "user", "myceliums"])
                     .output();
@@ -3805,10 +3812,9 @@ fn cmd_uninstall_mcp_platform(platform: &str, config_path: &std::path::Path) -> 
                 if let Some(servers) = config.get_mut("mcpServers").and_then(|s| s.as_object_mut())
                 {
                     servers.remove("myceliums");
-                    let _ = std::fs::write(
-                        config_path,
-                        serde_json::to_string_pretty(&config).unwrap_or_default(),
-                    );
+                    let serialized = serde_json::to_string_pretty(&config)?;
+                    std::fs::write(config_path, serialized)
+                        .with_context(|| format!("Failed to write {}", config_path.display()))?;
                 }
             }
         }
@@ -4025,10 +4031,10 @@ fn cmd_setup_claude_uninstall(home: &std::path::Path, myc_path: &str) -> Result<
                             config.get_mut("mcpServers").and_then(|s| s.as_object_mut())
                         {
                             servers.remove("myceliums");
-                            let _ = std::fs::write(
-                                &config_path,
-                                serde_json::to_string_pretty(&config).unwrap_or_default(),
-                            );
+                            let serialized = serde_json::to_string_pretty(&config)?;
+                            std::fs::write(&config_path, serialized).with_context(|| {
+                                format!("Failed to write {}", config_path.display())
+                            })?;
                         }
                     }
                 }
@@ -4071,10 +4077,9 @@ fn cmd_setup_claude_uninstall(home: &std::path::Path, myc_path: &str) -> Result<
                         hooks.remove(&event);
                     }
                 }
-                let _ = std::fs::write(
-                    &settings_path,
-                    serde_json::to_string_pretty(&settings).unwrap_or_default(),
-                );
+                let serialized = serde_json::to_string_pretty(&settings)?;
+                std::fs::write(&settings_path, serialized)
+                    .with_context(|| format!("Failed to write {}", settings_path.display()))?;
             }
         }
     }
@@ -4652,6 +4657,7 @@ async fn cmd_email_sync(account: Option<&str>) -> Result<()> {
                 registry.save()?;
 
                 // Clean up temp files
+                // best-effort: temp dir removal failing does not affect user data.
                 let _ = std::fs::remove_dir_all(&temp_dir);
             }
         }

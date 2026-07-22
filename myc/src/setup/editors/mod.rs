@@ -12,8 +12,19 @@ pub mod vscode;
 pub mod windsurf;
 pub mod zed;
 
-use anyhow::Result;
-use std::path::PathBuf;
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+
+/// Write content the user asked us to persist (an editor config, a settings file),
+/// surfacing any failure with the offending path.
+///
+/// This is the single choke point for user-facing writes in the setup/uninstall
+/// flows. Callers must serialize their content into a `String` *before* calling
+/// this — never pass `unwrap_or_default()` output, or a serialization failure
+/// would silently truncate the user's config to an empty file.
+pub fn write_user_file(path: &Path, content: &str) -> Result<()> {
+    std::fs::write(path, content).with_context(|| format!("Failed to write {}", path.display()))
+}
 
 /// Trait for editor setup implementations
 pub trait EditorSetup {
@@ -80,4 +91,43 @@ pub fn remove_mcp_servers(config: &mut serde_json::Value, server_key: &str) -> R
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn write_user_file_writes_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.json");
+
+        write_user_file(&path, "{\"ok\":true}").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"ok\":true}");
+    }
+
+    #[test]
+    fn write_user_file_reports_failure_and_leaves_config_untouched() {
+        // A write can only fail structurally (not via permissions) when running
+        // as root, so target a path whose parent component is a regular file:
+        // the OS rejects it with ENOTDIR for every user.
+        let dir = tempfile::tempdir().unwrap();
+
+        let config_path = dir.path().join("config.json");
+        let original = "{\"mcpServers\":{\"myceliums\":{}}}";
+        std::fs::write(&config_path, original).unwrap();
+
+        // `config.json` is a file, so `config.json/nested.json` cannot be created.
+        let unwritable = config_path.join("nested.json");
+        let result = write_user_file(&unwritable, "");
+
+        // The write is reported as a failure, and the original config survives.
+        assert!(result.is_err(), "write under a non-directory should error");
+        assert_eq!(
+            std::fs::read_to_string(&config_path).unwrap(),
+            original,
+            "user config must be left untouched on write failure"
+        );
+    }
 }
