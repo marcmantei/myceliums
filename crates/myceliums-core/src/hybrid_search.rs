@@ -14,6 +14,34 @@ use crate::embeddings::get_reranker;
 use crate::embeddings::Embedder;
 use crate::search::{search_symbols, search_symbols_explain, SearchExplain};
 
+/// Source of persisted vector-search candidates for the hybrid vector leg.
+///
+/// The hybrid vector leg queries pre-computed embeddings rather than
+/// re-embedding the whole corpus on every request. `Store` implements this over
+/// its persisted LanceDB vectors; tests can substitute a lightweight fake to
+/// assert the query path never re-embeds stored symbols.
+#[cfg(feature = "embeddings")]
+#[async_trait::async_trait]
+pub trait VectorSearcher {
+    /// Return up to `limit` `(symbol, similarity)` candidates whose persisted
+    /// vector is nearest to `query_vector`, ordered by similarity descending.
+    async fn nearest(&self, query_vector: &[f32], limit: usize) -> Result<Vec<(CodeSymbol, f64)>>;
+}
+
+#[cfg(feature = "embeddings")]
+#[async_trait::async_trait]
+impl VectorSearcher for myceliums_storage::Store {
+    async fn nearest(&self, query_vector: &[f32], limit: usize) -> Result<Vec<(CodeSymbol, f64)>> {
+        // `Store::vector_search` already skips zero-vector placeholder rows and
+        // scopes to this repo; it returns f32 similarity scores we widen to f64.
+        let hits = self.vector_search(query_vector, limit).await?;
+        Ok(hits
+            .into_iter()
+            .map(|(sym, score)| (sym, score as f64))
+            .collect())
+    }
+}
+
 /// A graph edge traversed during search -- shows how a result connects to others.
 #[derive(Debug, Clone, Serialize)]
 pub struct GraphEdge {
@@ -175,21 +203,26 @@ pub fn attach_graph_edges(
 
 /// Perform hybrid search combining BM25 text search and vector semantic search.
 ///
-/// 1. Runs BM25 search over `symbols` with `query`
-/// 2. Generates a query embedding with the given embedder — obtain it via
-///    [`crate::embeddings::embedder_for_index`] so it matches the index
-/// 3. Runs vector search (cosine similarity) over `symbols`
+/// 1. Runs BM25 search over the in-memory `symbols` with `query`
+/// 2. Generates a single query embedding with the given embedder — obtain it
+///    via [`crate::embeddings::embedder_for_index`] so it matches the index
+/// 3. Runs vector search against `vectors`' **persisted** embeddings — the
+///    corpus is never re-embedded per query
 /// 4. Combines results using Reciprocal Rank Fusion (k=60)
+///
+/// `vectors` is typically a [`myceliums_storage::Store`]; the BM25 leg keeps
+/// using the in-memory `symbols` slice.
 ///
 /// Requires the `embeddings` feature.
 #[cfg(feature = "embeddings")]
 pub async fn hybrid_search(
     embedder: &Embedder,
     symbols: &[CodeSymbol],
+    vectors: &impl VectorSearcher,
     query: &str,
     limit: usize,
 ) -> Result<Vec<HybridSearchResult>> {
-    hybrid_search_impl(embedder, symbols, query, limit, false).await
+    hybrid_search_impl(embedder, symbols, vectors, query, limit, false).await
 }
 
 /// Hybrid search with explain traces showing scoring breakdown and graph paths.
@@ -199,16 +232,18 @@ pub async fn hybrid_search(
 pub async fn hybrid_search_explain(
     embedder: &Embedder,
     symbols: &[CodeSymbol],
+    vectors: &impl VectorSearcher,
     query: &str,
     limit: usize,
 ) -> Result<Vec<HybridSearchResult>> {
-    hybrid_search_impl(embedder, symbols, query, limit, true).await
+    hybrid_search_impl(embedder, symbols, vectors, query, limit, true).await
 }
 
 #[cfg(feature = "embeddings")]
 async fn hybrid_search_impl(
     embedder: &Embedder,
     symbols: &[CodeSymbol],
+    vectors: &impl VectorSearcher,
     query: &str,
     limit: usize,
     explain: bool,
@@ -226,12 +261,11 @@ async fn hybrid_search_impl(
             .collect()
     };
 
-    // Vector search
+    // Vector leg: embed the query once with the index's embedder, then query
+    // persisted vectors. We do NOT re-embed the corpus — that is the whole
+    // point of issue #28.
     let query_embedding = embedder.embed_query(query).await?;
-    let vector_limit = limit.max(100); // fetch more candidates for fusion
-    let vector_results = embedder
-        .vector_search(symbols, &query_embedding, vector_limit)
-        .await?;
+    let vector_results = vector_leg(vectors, &query_embedding, limit).await?;
 
     // Combine with RRF (k=60)
     Ok(reciprocal_rank_fusion(
@@ -240,6 +274,20 @@ async fn hybrid_search_impl(
         60.0,
         limit,
     ))
+}
+
+/// Vector leg of hybrid search: fetch nearest persisted-vector candidates for a
+/// pre-computed query embedding. Fetches `limit.max(100)` candidates so RRF has
+/// enough overlap with the BM25 leg. Kept separate from `hybrid_search_impl` so
+/// it can be exercised without loading the real embedding model.
+#[cfg(feature = "embeddings")]
+async fn vector_leg(
+    vectors: &impl VectorSearcher,
+    query_embedding: &[f32],
+    limit: usize,
+) -> Result<Vec<(CodeSymbol, f64)>> {
+    let vector_limit = limit.max(100); // fetch more candidates for fusion
+    vectors.nearest(query_embedding, vector_limit).await
 }
 
 /// Rerank hybrid search results using a cross-encoder model.
@@ -438,5 +486,119 @@ mod rerank_tests {
         assert_eq!(result.symbol.uid, "uid1");
         assert_eq!(result.symbol.name, "test_func");
         assert_eq!(result.bm25_score, Some(10.0));
+    }
+}
+
+/// Regression tests for issue #28: the hybrid vector leg must query persisted
+/// vectors instead of re-embedding the whole corpus. A counting fake stands in
+/// for the persisted-vector store and records how it is queried.
+#[cfg(all(test, feature = "embeddings"))]
+mod persisted_vector_tests {
+    use super::*;
+    use myceliums_storage::{CodeSymbol, SymbolKind};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    fn make_symbol(uid: &str, name: &str) -> CodeSymbol {
+        CodeSymbol {
+            uid: uid.to_string(),
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: SymbolKind::Function,
+            file_path: "test.rs".to_string(),
+            start_line: 1,
+            end_line: 10,
+            signature: format!("fn {}()", name),
+            content: String::new(),
+            repo_id: "test".to_string(),
+            metadata: None,
+        }
+    }
+
+    /// A `VectorSearcher` that returns canned candidates and counts how many
+    /// times it is queried, plus the `limit` it last received.
+    struct CountingSearcher {
+        candidates: Vec<(CodeSymbol, f64)>,
+        calls: AtomicUsize,
+        last_limit: AtomicUsize,
+    }
+
+    impl CountingSearcher {
+        fn new(candidates: Vec<(CodeSymbol, f64)>) -> Self {
+            Self {
+                candidates,
+                calls: AtomicUsize::new(0),
+                last_limit: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl VectorSearcher for CountingSearcher {
+        async fn nearest(
+            &self,
+            _query_vector: &[f32],
+            limit: usize,
+        ) -> Result<Vec<(CodeSymbol, f64)>> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            self.last_limit.store(limit, Ordering::SeqCst);
+            Ok(self.candidates.iter().take(limit).cloned().collect())
+        }
+    }
+
+    /// The vector leg queries the persisted store exactly once and never touches
+    /// the corpus — it fetches `limit.max(100)` candidates for RRF overlap.
+    #[tokio::test]
+    async fn vector_leg_queries_store_once_with_widened_limit() {
+        let searcher = CountingSearcher::new(vec![
+            (make_symbol("a", "alpha"), 0.9),
+            (make_symbol("b", "beta"), 0.8),
+        ]);
+        let query_embedding = vec![0.0f32; 8];
+
+        let results = vector_leg(&searcher, &query_embedding, 5)
+            .await
+            .expect("vector leg succeeds");
+
+        // Exactly one query against the persisted store — no per-symbol embedding.
+        assert_eq!(searcher.calls.load(Ordering::SeqCst), 1);
+        // limit.max(100) candidates requested for fusion overlap.
+        assert_eq!(searcher.last_limit.load(Ordering::SeqCst), 100);
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0.uid, "a");
+    }
+
+    /// Rank provenance (bm25_rank / vector_rank) is preserved when the vector
+    /// leg is fed from persisted candidates rather than a re-embedded corpus.
+    #[tokio::test]
+    async fn persisted_vectors_preserve_rank_provenance() {
+        let searcher = CountingSearcher::new(vec![
+            (make_symbol("b", "beta"), 0.95),
+            (make_symbol("a", "alpha"), 0.90),
+            (make_symbol("d", "delta"), 0.85),
+        ]);
+        let query_embedding = vec![0.0f32; 8];
+
+        let vector_results = vector_leg(&searcher, &query_embedding, 10)
+            .await
+            .expect("vector leg succeeds");
+
+        let bm25_results = vec![
+            (make_symbol("a", "alpha"), 10.0, None),
+            (make_symbol("b", "beta"), 8.0, None),
+            (make_symbol("c", "gamma"), 5.0, None),
+        ];
+
+        let fused = reciprocal_rank_fusion(bm25_results, vector_results, 60.0, 10);
+
+        let a = fused.iter().find(|r| r.symbol.uid == "a").unwrap();
+        assert_eq!(a.bm25_rank, Some(1));
+        assert_eq!(a.vector_rank, Some(2));
+
+        let d = fused.iter().find(|r| r.symbol.uid == "d").unwrap();
+        assert_eq!(d.bm25_rank, None);
+        assert_eq!(d.vector_rank, Some(3));
+
+        // Store queried exactly once for the whole fusion.
+        assert_eq!(searcher.calls.load(Ordering::SeqCst), 1);
     }
 }

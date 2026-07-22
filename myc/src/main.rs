@@ -2096,9 +2096,9 @@ async fn cmd_search(
     if use_hybrid {
         let embedder = embedder_for_index(&store).await?;
         let mut results = if use_explain {
-            hybrid_search_explain(&embedder, &symbols, query, limit).await?
+            hybrid_search_explain(&embedder, &symbols, &store, query, limit).await?
         } else {
-            hybrid_search(&embedder, &symbols, query, limit).await?
+            hybrid_search(&embedder, &symbols, &store, query, limit).await?
         };
 
         // Apply reranking if requested, using the reranker recorded at indexing time

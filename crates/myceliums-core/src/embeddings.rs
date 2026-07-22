@@ -715,31 +715,6 @@ impl Embedder {
         }
         dot / (norm_a * norm_b)
     }
-
-    /// Perform a brute-force vector search over symbols.
-    /// Returns (symbol, similarity) pairs sorted by similarity descending.
-    pub async fn vector_search(
-        &self,
-        symbols: &[CodeSymbol],
-        query_embedding: &[f32],
-        limit: usize,
-    ) -> Result<Vec<(CodeSymbol, f64)>> {
-        let texts: Vec<String> = symbols.iter().map(Self::symbol_text).collect();
-        let embeddings = self.embed_texts(&texts, EmbedInput::Passage).await?;
-
-        let mut scored: Vec<(CodeSymbol, f64)> = symbols
-            .iter()
-            .zip(embeddings.iter())
-            .map(|(sym, emb)| {
-                let sim = Self::cosine_similarity(query_embedding, emb);
-                (sym.clone(), sim)
-            })
-            .collect();
-
-        scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        scored.truncate(limit);
-        Ok(scored)
-    }
 }
 
 // ── Cached instances ──────────────────────────────────────────────────

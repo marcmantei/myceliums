@@ -336,6 +336,9 @@ pub fn isolate_intent(
 
 /// Isolate intent using hybrid search (BM25 + vector). Requires `embeddings` feature.
 #[cfg(feature = "embeddings")]
+// Cross-repo intent isolation genuinely needs the repo identity, its symbols and
+// persisted vectors, plus relationships/communities and config; grouping them into
+// a struct would obscure rather than clarify the call sites.
 #[allow(clippy::too_many_arguments)]
 pub async fn isolate_intent_hybrid(
     embedder: &crate::embeddings::Embedder,
@@ -343,6 +346,7 @@ pub async fn isolate_intent_hybrid(
     repo_id: &str,
     repo_name: &str,
     symbols: &[CodeSymbol],
+    vectors: &impl crate::hybrid_search::VectorSearcher,
     relationships: &[Relationship],
     communities: &[Community],
     config: &IsolateConfig,
@@ -350,7 +354,7 @@ pub async fn isolate_intent_hybrid(
     use crate::hybrid_search::hybrid_search;
 
     let seed_limit = config.max_symbols.min(10);
-    let search_results = hybrid_search(embedder, symbols, intent, seed_limit).await?;
+    let search_results = hybrid_search(embedder, symbols, vectors, intent, seed_limit).await?;
 
     let seed_uids: HashSet<String> = search_results
         .iter()
