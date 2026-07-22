@@ -14,6 +14,7 @@ Analyze a codebase and build its knowledge graph. Parses source files, extracts 
 | `--force` | bool | `false` | Force full re-analysis even if cache is fresh |
 | `--max-age` | integer (minutes) | `60` | Maximum cache age in minutes before triggering re-analysis |
 | `--skip-embeddings` | bool | `false` | Skip embedding generation (much faster, BM25 and Cypher still work) |
+| `--strict-embeddings` | bool | `false` | Exit non-zero if any symbol fails to embed (for CI — see [Embedding accounting](#embedding-accounting)) |
 | `--watch` | bool | `false` | Watch for file changes and re-index incrementally |
 | `--no-git-check` | bool | `false` | Allow analyzing directories without a `.git` repository |
 
@@ -26,7 +27,39 @@ myc analyze /path/to/project --force --skip-embeddings
 
 # Watch mode for continuous re-indexing
 myc analyze /path/to/project --watch
+
+# CI: fail the build if the index is only partially embedded
+myc analyze /path/to/project --strict-embeddings
 ```
+
+#### Embedding accounting
+
+Analysis reports how completely the index was embedded:
+
+```
+  Symbols:       1240
+  Embeddings:    1240 (1240/1240 symbols)
+```
+
+The `Embeddings` line shows `embedded/total` symbols. Embedding a symbol can
+fail (model load errors, provider timeouts, storage errors); when it does, the
+symbol has **no vector** and is **invisible to `semantic-search` and hybrid
+`search`** — those modes can only return symbols that were embedded. A partial
+index is reported explicitly:
+
+```
+  Embeddings:    900 (900/1240 symbols)
+  ⚠ Embedding failures: 340 — 900 of 1240 symbols have no vector and are invisible to semantic/hybrid search
+```
+
+- **`--strict-embeddings`** turns any embedding failure into a non-zero exit
+  code, so CI can fail the build instead of silently shipping a half-empty
+  index. Without the flag, failures are reported but the command still succeeds.
+- The accounting is persisted in the index. At query time, `semantic-search`
+  and hybrid `search` prepend a **partial-index warning** whenever the index is
+  incomplete, so a stale or half-built index never answers with unwarranted
+  confidence. (The warning is read from index metadata — no per-query vector
+  scan.)
 
 ### `myc session`
 

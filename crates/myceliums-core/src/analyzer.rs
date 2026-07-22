@@ -268,6 +268,36 @@ impl Analyzer {
         }
     }
 
+    /// Fold an incremental embedding batch into the index-wide accounting.
+    ///
+    /// A full analyze writes authoritative [`EmbeddingStats`]; an incremental
+    /// re-index only touches the changed files, so its batch counts are added
+    /// to (not substituted for) the existing totals. When no prior record
+    /// exists (a legacy index), the batch becomes the initial record.
+    #[cfg(feature = "embeddings")]
+    async fn merge_embedding_stats(
+        &self,
+        batch_total: usize,
+        batch_embedded: usize,
+        batch_failures: usize,
+    ) -> Result<()> {
+        use crate::embedding_stats::EmbeddingStats;
+
+        let merged = match EmbeddingStats::load(&self.store).await? {
+            Some(prev) => EmbeddingStats {
+                symbols_total: prev.symbols_total + batch_total,
+                symbols_embedded: prev.symbols_embedded + batch_embedded,
+                embedding_failures: prev.embedding_failures + batch_failures,
+            },
+            None => EmbeddingStats {
+                symbols_total: batch_total,
+                symbols_embedded: batch_embedded,
+                embedding_failures: batch_failures,
+            },
+        };
+        merged.record(&self.store).await
+    }
+
     pub async fn analyze(&self) -> Result<AnalysisResult> {
         let overall_timer = Timer::start();
 
@@ -1026,55 +1056,106 @@ impl Analyzer {
         #[cfg(not(feature = "embeddings"))]
         let embedding_count: usize = 0;
         #[cfg(not(feature = "embeddings"))]
+        let embedding_failures: usize = 0;
+        #[cfg(not(feature = "embeddings"))]
         let embedding_generation_ms: f64 = 0.0;
 
+        // Every indexed symbol is a candidate for embedding; `embed_meta` being
+        // `None` means embeddings were skipped, in which case there are no
+        // failures — just no vectors.
+        let symbols_total = all_symbols.len();
+
         #[cfg(feature = "embeddings")]
-        let (embedding_count, embedding_generation_ms): (usize, f64) = match &embed_meta {
-            None => (0, 0.0),
+        let (embedding_count, embedding_failures, embedding_generation_ms): (
+            usize,
+            usize,
+            f64,
+        ) = match &embed_meta {
+            None => (0, 0, 0.0),
             Some(meta) => {
                 let embedding_timer = Timer::start();
-                let count = match crate::embeddings::get_embedder_for(meta.clone()).await {
-                    Ok(embedder) => {
-                        let batch_sz = self
-                            .config
-                            .as_ref()
-                            .map(|c| c.analysis.embedding_batch_size)
-                            .unwrap_or(256);
-                        match embedder.embed_symbols(&all_symbols, batch_sz).await {
-                            Ok(vectors) => {
-                                let pairs: Vec<(String, Vec<f32>)> = all_symbols
-                                    .iter()
-                                    .zip(vectors)
-                                    .map(|(s, v)| (s.uid.clone(), v))
-                                    .collect();
-                                match self.store.store_embeddings(pairs).await {
-                                    Ok(n) => {
-                                        if n > 0 {
-                                            self.record_embedding_meta(meta).await;
+                // A failure at any stage (model load, generation, storage)
+                // leaves every candidate symbol un-embedded for this run.
+                let (count, failures) =
+                    match crate::embeddings::get_embedder_for(meta.clone()).await {
+                        Ok(embedder) => {
+                            let batch_sz = self
+                                .config
+                                .as_ref()
+                                .map(|c| c.analysis.embedding_batch_size)
+                                .unwrap_or(256);
+                            match embedder.embed_symbols(&all_symbols, batch_sz).await {
+                                Ok(vectors) => {
+                                    let pairs: Vec<(String, Vec<f32>)> = all_symbols
+                                        .iter()
+                                        .zip(vectors)
+                                        .map(|(s, v)| (s.uid.clone(), v))
+                                        .collect();
+                                    match self.store.store_embeddings(pairs).await {
+                                        Ok(n) => {
+                                            if n > 0 {
+                                                self.record_embedding_meta(meta).await;
+                                            }
+                                            // Any candidate symbol that did not
+                                            // get a vector counts as a failure.
+                                            (n, symbols_total.saturating_sub(n))
                                         }
-                                        n
-                                    }
-                                    Err(e) => {
-                                        warn!("Failed to store embeddings: {}", e);
-                                        0
+                                        Err(e) => {
+                                            warn!(
+                                                "Failed to store embeddings: {} \
+                                                 ({} symbols left un-embedded)",
+                                                e, symbols_total
+                                            );
+                                            (0, symbols_total)
+                                        }
                                     }
                                 }
-                            }
-                            Err(e) => {
-                                warn!("Failed to generate embeddings: {}", e);
-                                0
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to generate embeddings: {} \
+                                         ({} symbols left un-embedded)",
+                                        e, symbols_total
+                                    );
+                                    (0, symbols_total)
+                                }
                             }
                         }
-                    }
-                    Err(e) => {
-                        warn!("Failed to load embedding model: {}", e);
-                        0
-                    }
-                };
+                        Err(e) => {
+                            warn!(
+                                "Failed to load embedding model: {} \
+                                 ({} symbols left un-embedded)",
+                                e, symbols_total
+                            );
+                            (0, symbols_total)
+                        }
+                    };
                 let elapsed = embedding_timer.elapsed_ms();
-                (count, elapsed)
+                (count, failures, elapsed)
             }
         };
+
+        // Persist the embedding accounting inside the index so query paths can
+        // warn about partial indexes without scanning vectors.
+        #[cfg(feature = "embeddings")]
+        if embed_meta.is_some() {
+            let stats = crate::embedding_stats::EmbeddingStats {
+                symbols_total,
+                symbols_embedded: embedding_count,
+                embedding_failures,
+            };
+            if let Err(e) = stats.record(&self.store).await {
+                warn!("Failed to record embedding accounting in index: {}", e);
+            }
+        }
+
+        #[cfg(feature = "embeddings")]
+        if embedding_failures > 0 {
+            warn!(
+                "Embedding incomplete: {} of {} symbols embedded, {} failures — \
+                 semantic and hybrid search will omit un-embedded symbols",
+                embedding_count, symbols_total, embedding_failures
+            );
+        }
 
         #[cfg(feature = "embeddings")]
         info!(
@@ -1103,16 +1184,22 @@ impl Analyzer {
             file_count: all_files.len(),
             relationship_count: all_rels.len(),
             embedding_count,
+            symbols_total,
+            symbols_embedded: embedding_count,
+            embedding_failures,
             mentions_count,
             timing: Some(timing),
         };
 
         info!(
-            "Analysis complete: {} symbols, {} files, {} relationships, {} embeddings, {} mentions ({:.2}ms total)",
+            "Analysis complete: {} symbols, {} files, {} relationships, {} embeddings ({}/{} symbols, {} failures), {} mentions ({:.2}ms total)",
             result.symbol_count,
             result.file_count,
             result.relationship_count,
             result.embedding_count,
+            result.symbols_embedded,
+            result.symbols_total,
+            result.embedding_failures,
             result.mentions_count,
             total_ms
         );
@@ -1211,20 +1298,34 @@ impl Analyzer {
                 file_count: 0,
                 relationship_count: 0,
                 embedding_count: 0,
+                symbols_total: 0,
+                symbols_embedded: 0,
+                embedding_failures: 0,
                 mentions_count: 0,
                 timing: None,
             });
         }
 
-        // Delete old data for each changed file
+        // Delete old data for each changed file. A file that was never indexed
+        // (a brand-new file) is not an error: `delete_file_data` deletes by
+        // predicate, so a no-match is a successful no-op. Any `Err` here is a
+        // genuine store failure — do not swallow it, or we risk leaving stale
+        // graph rows behind an apparently-successful re-index.
         for (path, _) in &source_files {
             let rel_path = path
                 .strip_prefix(&self.repo_path)
                 .unwrap_or(path)
                 .to_string_lossy()
                 .to_string();
-            // Ignore errors — file might not exist in store yet (new file)
-            let _ = self.store.delete_file_data(&rel_path).await;
+            self.store
+                .delete_file_data(&rel_path)
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to delete stale index data for {} during incremental re-index",
+                        rel_path
+                    )
+                })?;
         }
 
         // Parse changed files (same logic as full analyze)
@@ -1579,13 +1680,18 @@ impl Analyzer {
         all_rels.extend(mention_rels);
         self.store.store_relationships(&all_rels).await?;
 
-        // Generate embeddings if not skipped and feature enabled
+        // Generate embeddings if not skipped and feature enabled.
         #[cfg(not(feature = "embeddings"))]
         let embedding_count: usize = 0;
+        #[cfg(not(feature = "embeddings"))]
+        let embedding_failures: usize = 0;
+
+        // Symbols in this incremental batch are the embedding candidates.
+        let symbols_total = all_symbols.len();
 
         #[cfg(feature = "embeddings")]
-        let embedding_count: usize = match &embed_meta {
-            None => 0,
+        let (embedding_count, embedding_failures): (usize, usize) = match &embed_meta {
+            None => (0, 0),
             Some(meta) => match crate::embeddings::get_embedder_for(meta.clone()).await {
                 Ok(embedder) => {
                     let batch_sz = self
@@ -1605,32 +1711,68 @@ impl Analyzer {
                                     if n > 0 {
                                         self.record_embedding_meta(meta).await;
                                     }
-                                    n
+                                    (n, symbols_total.saturating_sub(n))
                                 }
                                 Err(e) => {
-                                    warn!("Failed to store embeddings: {}", e);
-                                    0
+                                    warn!(
+                                        "Failed to store embeddings: {} \
+                                         ({} symbols left un-embedded)",
+                                        e, symbols_total
+                                    );
+                                    (0, symbols_total)
                                 }
                             }
                         }
                         Err(e) => {
-                            warn!("Failed to generate embeddings: {}", e);
-                            0
+                            warn!(
+                                "Failed to generate embeddings: {} \
+                                 ({} symbols left un-embedded)",
+                                e, symbols_total
+                            );
+                            (0, symbols_total)
                         }
                     }
                 }
                 Err(e) => {
-                    warn!("Failed to load embedding model: {}", e);
-                    0
+                    warn!(
+                        "Failed to load embedding model: {} \
+                         ({} symbols left un-embedded)",
+                        e, symbols_total
+                    );
+                    (0, symbols_total)
                 }
             },
         };
+
+        // Fold this batch into the index-wide embedding accounting so query-time
+        // partial-index warnings stay accurate after an incremental re-index.
+        #[cfg(feature = "embeddings")]
+        if embed_meta.is_some() {
+            if let Err(e) = self
+                .merge_embedding_stats(symbols_total, embedding_count, embedding_failures)
+                .await
+            {
+                warn!("Failed to update embedding accounting in index: {}", e);
+            }
+        }
+
+        #[cfg(feature = "embeddings")]
+        if embedding_failures > 0 {
+            warn!(
+                "Incremental embedding incomplete: {} of {} changed symbols embedded, \
+                 {} failures",
+                embedding_count, symbols_total, embedding_failures
+            );
+        }
 
         let result = AnalysisResult {
             symbol_count: all_symbols.len(),
             file_count: all_files.len(),
             relationship_count: all_rels.len(),
             embedding_count,
+            symbols_total,
+            symbols_embedded: embedding_count,
+            embedding_failures,
             mentions_count,
             timing: None,
         };
@@ -2154,10 +2296,35 @@ pub struct AnalysisResult {
     pub relationship_count: usize,
     /// Number of embeddings generated (0 when embeddings are skipped).
     pub embedding_count: usize,
+    /// Symbols that were candidates for embedding (0 when embeddings are skipped).
+    pub symbols_total: usize,
+    /// Symbols for which a vector was successfully generated and stored.
+    pub symbols_embedded: usize,
+    /// Symbols whose embedding generation or storage failed. Non-zero means the
+    /// index is partial and semantic/hybrid search will omit those symbols.
+    pub embedding_failures: usize,
     /// Number of cross-domain mention relationships discovered.
     pub mentions_count: usize,
     /// Timing information for each phase of the analysis.
     pub timing: Option<crate::timing::TimingReport>,
+}
+
+impl AnalysisResult {
+    /// The embedding accounting for this run, suitable for persisting in the
+    /// index or surfacing to the user.
+    pub fn embedding_stats(&self) -> crate::embedding_stats::EmbeddingStats {
+        crate::embedding_stats::EmbeddingStats {
+            symbols_total: self.symbols_total,
+            symbols_embedded: self.symbols_embedded,
+            embedding_failures: self.embedding_failures,
+        }
+    }
+
+    /// True when embedding generation failed for at least one symbol. CI can
+    /// treat this as a failure via the strict-embeddings knob.
+    pub fn has_embedding_failures(&self) -> bool {
+        self.embedding_failures > 0
+    }
 }
 
 /// Derive a deterministic repository ID from a filesystem path.
@@ -2296,6 +2463,86 @@ mod tests {
         let root = dir.path().join("project");
         fs::create_dir_all(&root).unwrap();
         root
+    }
+
+    /// A run where some symbols failed to embed must report those failures in
+    /// its accounting — they can no longer hide behind a `warn!`. Simulates a
+    /// failing embedder by constructing the result the analyzer would produce
+    /// when generation succeeds for only part of the candidate set.
+    #[test]
+    fn analysis_result_surfaces_embedding_failures() {
+        let result = AnalysisResult {
+            symbol_count: 10,
+            file_count: 3,
+            relationship_count: 5,
+            embedding_count: 6,
+            symbols_total: 10,
+            symbols_embedded: 6,
+            embedding_failures: 4,
+            mentions_count: 0,
+            timing: None,
+        };
+
+        assert!(result.has_embedding_failures());
+        let stats = result.embedding_stats();
+        assert_eq!(stats.symbols_total, 10);
+        assert_eq!(stats.symbols_embedded, 6);
+        assert_eq!(stats.embedding_failures, 4);
+        assert!(stats.is_partial());
+        assert!(stats
+            .partial_index_warning()
+            .expect("partial => warning")
+            .contains("6 of 10 symbols"));
+    }
+
+    /// A fully-embedded run reports no failures and no partial-index warning.
+    #[test]
+    fn analysis_result_clean_when_fully_embedded() {
+        let result = AnalysisResult {
+            symbol_count: 4,
+            file_count: 1,
+            relationship_count: 0,
+            embedding_count: 4,
+            symbols_total: 4,
+            symbols_embedded: 4,
+            embedding_failures: 0,
+            mentions_count: 0,
+            timing: None,
+        };
+
+        assert!(!result.has_embedding_failures());
+        assert!(!result.embedding_stats().is_partial());
+    }
+
+    /// An incremental re-index folds its batch into the index-wide accounting
+    /// so query-time warnings stay accurate. Simulates a failing embedder on a
+    /// second changed-file batch after a clean initial index.
+    #[cfg(feature = "embeddings")]
+    #[tokio::test]
+    async fn merge_embedding_stats_accumulates_failures() {
+        use crate::embedding_stats::EmbeddingStats;
+
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        let db_path = dir.path().join("db");
+        let store = Store::open(&db_path, "test-repo").await.unwrap();
+        let analyzer = Analyzer::new(store, root);
+
+        // Initial full-ish batch: everything embedded cleanly.
+        analyzer.merge_embedding_stats(8, 8, 0).await.unwrap();
+        // Incremental batch where the embedder failed for every changed symbol.
+        analyzer.merge_embedding_stats(3, 0, 3).await.unwrap();
+
+        // Read back through a fresh store handle on the same on-disk index.
+        let reader = Store::open(&db_path, "test-repo").await.unwrap();
+        let merged = EmbeddingStats::load(&reader)
+            .await
+            .unwrap()
+            .expect("stats recorded");
+        assert_eq!(merged.symbols_total, 11);
+        assert_eq!(merged.symbols_embedded, 8);
+        assert_eq!(merged.embedding_failures, 3);
+        assert!(merged.is_partial());
     }
 
     /// Helper: run discover_files on a temp directory (no store needed).
