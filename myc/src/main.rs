@@ -1118,6 +1118,33 @@ async fn cmd_analyze(
     Ok(())
 }
 
+/// Analyze a repository for interactive session startup (the `myc` session
+/// bootstrap and auto-analyze hooks).
+///
+/// Session startup deliberately trades embedding coverage for speed: it forces
+/// a fresh index but skips embedding generation (`myc analyze . --force` adds
+/// semantic vectors later). Because no embeddings are generated, there are no
+/// embedding failures to enforce, so strict-embedding gating does not apply —
+/// hence it is intentionally off. Centralizing the policy here keeps the four
+/// session call sites from each repeating (and drifting on) these flags.
+async fn cmd_analyze_for_session(path: &Path) -> Result<()> {
+    const SESSION_FORCE_REANALYZE: bool = true;
+    const SESSION_CACHE_MAX_AGE_MINUTES: u64 = 60;
+    const SESSION_SKIP_EMBEDDINGS: bool = true;
+    // No embeddings are generated in session mode, so there is nothing for
+    // strict-embedding enforcement to act on.
+    const SESSION_STRICT_EMBEDDINGS: bool = false;
+
+    cmd_analyze(
+        path,
+        SESSION_FORCE_REANALYZE,
+        SESSION_CACHE_MAX_AGE_MINUTES,
+        SESSION_SKIP_EMBEDDINGS,
+        SESSION_STRICT_EMBEDDINGS,
+    )
+    .await
+}
+
 async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> {
     use myceliums_core::watch::{start_watching, WatchEvent};
 
@@ -2113,12 +2140,19 @@ fn export_svg(
 
 /// The partial-index warning for a store, if the index is only partially
 /// embedded. Reads accounting recorded at index time — no per-query scan.
+///
+/// A genuine load error is logged (so it is not silently indistinguishable
+/// from "no warning") but does not fail the surrounding query: an unreadable
+/// accounting record should not block search results, it should only cost the
+/// advisory warning.
 async fn partial_index_warning(store: &Store) -> Option<String> {
-    myceliums_core::EmbeddingStats::load(store)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|stats| stats.partial_index_warning())
+    match myceliums_core::EmbeddingStats::load(store).await {
+        Ok(stats) => stats.and_then(|stats| stats.partial_index_warning()),
+        Err(e) => {
+            tracing::warn!("Failed to load embedding accounting for partial-index warning: {e}");
+            None
+        }
+    }
 }
 
 async fn cmd_search(
@@ -2169,6 +2203,8 @@ async fn cmd_search(
         } else {
             "Hybrid search results"
         };
+        // Advisory warning goes to stderr so it never corrupts the result
+        // data on stdout (which may be piped or consumed by hooks).
         if let Some(w) = partial_index_warning(&store).await {
             eprintln!("⚠ {w}");
             println!();
@@ -3117,6 +3153,8 @@ async fn cmd_semantic_search(query: &str, repo: Option<&str>, limit: usize) -> R
     }
 
     println!("Semantic search results for '{}' in {}:\n", query, ri.name);
+    // Advisory warning goes to stderr so it never corrupts the result data on
+    // stdout (which may be piped or consumed by hooks).
     if let Some(w) = partial_index_warning(&store).await {
         eprintln!("⚠ {w}\n");
     }
@@ -3265,7 +3303,7 @@ async fn cmd_session(
                     return Ok(());
                 }
                 CacheDecision::ReanalyzeNeeded { .. } => {
-                    let analyze_fut = cmd_analyze(&abs_path, true, 60, true, false);
+                    let analyze_fut = cmd_analyze_for_session(&abs_path);
                     if timeout_secs > 0 {
                         match tokio::time::timeout(
                             std::time::Duration::from_secs(timeout_secs),
@@ -3313,7 +3351,7 @@ async fn cmd_session(
             ));
             return Ok(());
         }
-        let analyze_fut = cmd_analyze(&abs_path, true, 60, true, false);
+        let analyze_fut = cmd_analyze_for_session(&abs_path);
         if timeout_secs > 0 {
             match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), analyze_fut)
                 .await
@@ -3378,7 +3416,7 @@ async fn cmd_session(
                 }
 
                 // Skip embeddings for fast session startup
-                cmd_analyze(&abs_path, true, 60, true, false).await?;
+                cmd_analyze_for_session(&abs_path).await?;
                 println!();
                 println!("  Ready. MCP tools available via 'myc mcp'.");
                 println!();
@@ -3410,7 +3448,7 @@ async fn cmd_session(
 
     println!();
     // Skip embeddings for fast session startup
-    cmd_analyze(&abs_path, true, 60, true, false).await?;
+    cmd_analyze_for_session(&abs_path).await?;
 
     println!();
     println!("  Ready. MCP tools available via 'myc mcp'.");

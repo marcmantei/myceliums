@@ -60,7 +60,6 @@ pub mod dependencies;
 pub mod drift;
 pub mod dsl;
 pub mod email;
-#[cfg(feature = "embeddings")]
 pub mod embedding_stats;
 pub mod embeddings;
 pub mod error;

@@ -1029,9 +1029,11 @@ impl Analyzer {
                                             if n > 0 {
                                                 self.record_embedding_meta(meta).await;
                                             }
-                                            // Any candidate symbol that did not
-                                            // get a vector counts as a failure.
-                                            (n, symbols_total.saturating_sub(n))
+                                            // Every stored vector corresponds to
+                                            // a candidate symbol, so `n` is bounded
+                                            // by `symbols_total`; the rest failed.
+                                            debug_assert!(n <= symbols_total);
+                                            (n, symbols_total - n)
                                         }
                                         Err(e) => {
                                             warn!(
@@ -1644,7 +1646,10 @@ impl Analyzer {
                                     if n > 0 {
                                         self.record_embedding_meta(meta).await;
                                     }
-                                    (n, symbols_total.saturating_sub(n))
+                                    // `n` counts stored vectors, one per candidate
+                                    // symbol, so it never exceeds `symbols_total`.
+                                    debug_assert!(n <= symbols_total);
+                                    (n, symbols_total - n)
                                 }
                                 Err(e) => {
                                     warn!(
