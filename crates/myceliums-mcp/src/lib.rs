@@ -1383,11 +1383,11 @@ impl MyceliumsMcp {
         let explain = params.explain.unwrap_or(false);
         let limit = params.limit.unwrap_or(20);
         let mut results = if explain {
-            core_hybrid_search_explain(&embedder, &symbols, &params.query, limit)
+            core_hybrid_search_explain(&embedder, &symbols, &store, &params.query, limit)
                 .await
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
         } else {
-            core_hybrid_search(&embedder, &symbols, &params.query, limit)
+            core_hybrid_search(&embedder, &symbols, &store, &params.query, limit)
                 .await
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
         };
@@ -3846,6 +3846,7 @@ impl MyceliumsMcp {
             &params.repo_id,
             &repo_name,
             &symbols,
+            &store,
             &relationships,
             &communities,
             &config,
@@ -3910,6 +3911,7 @@ impl MyceliumsMcp {
             &params.source_repo_id,
             &src_name,
             &src_symbols,
+            &src_store,
             &src_rels,
             &src_communities,
             &config,
@@ -3950,6 +3952,7 @@ impl MyceliumsMcp {
             &params.target_repo_id,
             &tgt_name,
             &tgt_symbols,
+            &tgt_store,
             &tgt_rels,
             &tgt_communities,
             &config,
@@ -4034,6 +4037,7 @@ impl MyceliumsMcp {
             &params.source_repo_id,
             &src_name,
             &src_symbols,
+            &src_store,
             &src_rels,
             &src_communities,
             &config,
@@ -4071,6 +4075,7 @@ impl MyceliumsMcp {
             &params.target_repo_id,
             &tgt_name,
             &tgt_symbols,
+            &tgt_store,
             &tgt_rels,
             &tgt_communities,
             &config,

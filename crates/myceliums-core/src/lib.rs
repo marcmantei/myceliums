@@ -149,7 +149,7 @@ pub use hybrid_search::{
     attach_graph_edges, reciprocal_rank_fusion, GraphEdge, HybridExplain, HybridSearchResult,
 };
 #[cfg(feature = "embeddings")]
-pub use hybrid_search::{hybrid_search, hybrid_search_explain, rerank_results};
+pub use hybrid_search::{hybrid_search, hybrid_search_explain, rerank_results, VectorSearcher};
 pub use impact::{detect_impact, run_git_diff, ImpactReport};
 pub use lock::{AnalysisLock, LockOutcome};
 pub use mbox::parse_mbox;
