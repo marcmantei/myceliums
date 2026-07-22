@@ -48,18 +48,15 @@ impl Default for ProcessTraceConfig {
 struct CallTreeNode {
     /// Name of the function/symbol
     name: String,
-    /// Depth in the tree (root is 0)
-    depth: usize,
     /// Children (callees) of this node
     children: Vec<CallTreeNode>,
 }
 
 impl CallTreeNode {
     /// Create a new call tree node
-    fn new(name: String, depth: usize) -> Self {
+    fn new(name: String) -> Self {
         Self {
             name,
-            depth,
             children: Vec::new(),
         }
     }
@@ -71,7 +68,7 @@ impl CallTreeNode {
 
         result.push_str(&format!("{}├─ {}\n", prefix, self.name));
 
-        for (_i, child) in self.children.iter().enumerate() {
+        for child in &self.children {
             let child_str = child.render_with_branches(indent + 1);
             result.push_str(&child_str);
         }
@@ -160,7 +157,7 @@ impl ProcessFilter {
 ///
 /// Discovers entry-point symbols and performs DFS to produce process
 /// descriptions that show how data/control flows through the codebase.
-/// 
+///
 /// The tracer preserves the branching structure by building a tree of calls
 /// and rendering it with clear indentation and branch markers. Shared callees
 /// may appear under multiple branches (since each branch has its own path).
@@ -177,7 +174,12 @@ impl ProcessTracer {
         relationships: &[Relationship],
         repo_id: &str,
     ) -> Result<Vec<Process>> {
-        Self::trace_with_config(symbols, relationships, repo_id, ProcessTraceConfig::default())
+        Self::trace_with_config(
+            symbols,
+            relationships,
+            repo_id,
+            ProcessTraceConfig::default(),
+        )
     }
 
     /// Trace all processes with custom configuration.
@@ -285,7 +287,7 @@ impl ProcessTracer {
             .map(|s| s.name.clone())
             .unwrap_or_else(|| "unknown".to_string());
 
-        let mut node = CallTreeNode::new(sym_name, depth);
+        let mut node = CallTreeNode::new(sym_name);
 
         // Check depth limit
         if depth >= config.max_depth {
@@ -302,6 +304,11 @@ impl ProcessTracer {
         // Add callees as children, allowing shared callees under multiple branches
         if let Some(callees) = adj.get(uid) {
             for callee in callees {
+                // A callee already on the current path would re-enter the
+                // cycle; skip it instead of emitting a duplicate node.
+                if visited_in_path.contains(*callee) {
+                    continue;
+                }
                 // Stop if we've hit max nodes
                 if node.count_nodes() >= config.max_nodes_per_process {
                     break;
@@ -364,10 +371,7 @@ mod tests {
             make_symbol("3", "bar"),
         ];
 
-        let relationships = vec![
-            make_call_rel("1", "2"),
-            make_call_rel("2", "3"),
-        ];
+        let relationships = vec![make_call_rel("1", "2"), make_call_rel("2", "3")];
 
         let processes = ProcessTracer::trace(&symbols, &relationships, "test-repo").unwrap();
 
@@ -390,10 +394,7 @@ mod tests {
             make_symbol("3", "bar"),
         ];
 
-        let relationships = vec![
-            make_call_rel("1", "2"),
-            make_call_rel("1", "3"),
-        ];
+        let relationships = vec![make_call_rel("1", "2"), make_call_rel("1", "3")];
 
         let processes = ProcessTracer::trace(&symbols, &relationships, "test-repo").unwrap();
 
@@ -433,7 +434,11 @@ mod tests {
 
         assert_eq!(processes.len(), 1);
         // Should stop at depth 5, so: main -> a -> b -> c -> d (5 nodes total, depth goes 0-4)
-        assert!(processes[0].step_count <= 6, "Expected <= 6 nodes with max_depth=5, got {}", processes[0].step_count);
+        assert!(
+            processes[0].step_count <= 6,
+            "Expected <= 6 nodes with max_depth=5, got {}",
+            processes[0].step_count
+        );
     }
 
     #[test]
@@ -496,7 +501,11 @@ mod tests {
         // When shared is reached through foo, it's included; when through bar, it's also there
         // But using the tree structure, we get main -> [foo, bar] where foo -> [shared], bar -> [shared]
         // Count: 1 (main) + 1 (foo) + 1 (bar) + 2 (shared in each branch) = 5
-        assert!(processes[0].step_count >= 4, "Expected at least 4 nodes (main, foo, bar, shared), got {}", processes[0].step_count);
+        assert!(
+            processes[0].step_count >= 4,
+            "Expected at least 4 nodes (main, foo, bar, shared), got {}",
+            processes[0].step_count
+        );
     }
 
     #[test]
@@ -519,7 +528,11 @@ mod tests {
 
         assert_eq!(processes.len(), 1);
         // Should have: main, foo, bar (and foo should not be revisited in the same path)
-        assert_eq!(processes[0].step_count, 3, "Expected 3 nodes with cycle, got {}", processes[0].step_count);
+        assert_eq!(
+            processes[0].step_count, 3,
+            "Expected 3 nodes with cycle, got {}",
+            processes[0].step_count
+        );
     }
 
     #[test]
@@ -562,9 +575,9 @@ mod tests {
 
     #[test]
     fn test_call_tree_node_render() {
-        let mut root = CallTreeNode::new("main".to_string(), 0);
-        let mut foo = CallTreeNode::new("foo".to_string(), 1);
-        let bar = CallTreeNode::new("bar".to_string(), 2);
+        let mut root = CallTreeNode::new("main".to_string());
+        let mut foo = CallTreeNode::new("foo".to_string());
+        let bar = CallTreeNode::new("bar".to_string());
         foo.children.push(bar);
         root.children.push(foo);
 
@@ -577,9 +590,9 @@ mod tests {
 
     #[test]
     fn test_call_tree_node_count() {
-        let mut root = CallTreeNode::new("main".to_string(), 0);
-        let mut foo = CallTreeNode::new("foo".to_string(), 1);
-        let bar = CallTreeNode::new("bar".to_string(), 2);
+        let mut root = CallTreeNode::new("main".to_string());
+        let mut foo = CallTreeNode::new("foo".to_string());
+        let bar = CallTreeNode::new("bar".to_string());
         foo.children.push(bar);
         root.children.push(foo);
 

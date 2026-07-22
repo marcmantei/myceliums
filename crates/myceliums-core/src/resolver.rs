@@ -18,7 +18,7 @@ use crate::string_pool::{StrId, StringPool};
 /// common names:
 ///
 /// **Example false positive:**
-/// ```rust
+/// ```text
 /// // File: auth.rs
 /// fn parse(input: &str) -> Token { }
 ///

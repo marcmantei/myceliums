@@ -776,9 +776,9 @@ fn resolve_repo_or_latest(repo: Option<&str>) -> Result<(String, RepoInfo)> {
     if let Some(r) = repo {
         return resolve_repo(r);
     }
-    
+
     let registry = RepoRegistry::load(&registry_path())?;
-    
+
     // Try to find a repo that contains the current working directory
     if let Ok(cwd) = std::env::current_dir() {
         if let Ok(cwd_canonical) = cwd.canonicalize() {
@@ -794,11 +794,14 @@ fn resolve_repo_or_latest(repo: Option<&str>) -> Result<(String, RepoInfo)> {
             }
         }
     }
-    
+
     // Fall back to the latest repo if cwd is not in any indexed repo
     let repos = registry.list();
     if let Some(latest) = repos.last() {
-        eprintln!("Using latest repository as fallback: {} ({})", latest.name, latest.id);
+        eprintln!(
+            "Using latest repository as fallback: {} ({})",
+            latest.name, latest.id
+        );
         return Ok((latest.id.clone(), (*latest).clone()));
     }
     anyhow::bail!("No repositories analyzed yet. Run: myc analyze <path>");
@@ -836,11 +839,9 @@ fn is_interactive_command(cmd: &Commands) -> bool {
     )
 }
 
-/// Validate that a target path is safe to analyze.
-///
-/// Guards against:
-/// - Analyzing the home directory (would index hundreds of thousands of files)
-/// - Analyzing non-git directories (unless `--no-git-check` is passed)
+// Path-safety guards: refuse to analyze the home directory (would index
+// hundreds of thousands of files) and non-git directories (unless
+// `--no-git-check` is passed).
 
 /// Check if a path is a dangerous ancestor (/, /Users, /home, drive roots).
 fn is_dangerous_ancestor(path: &Path) -> bool {
@@ -4741,7 +4742,7 @@ mod tests {
         assert!(is_dangerous_ancestor(Path::new("/")));
         assert!(is_dangerous_ancestor(Path::new("/Users")));
         assert!(is_dangerous_ancestor(Path::new("/home")));
-        
+
         // Test that regular paths are not dangerous
         assert!(!is_dangerous_ancestor(Path::new("/Users/marc")));
         assert!(!is_dangerous_ancestor(Path::new("/home/user")));
@@ -4753,15 +4754,15 @@ mod tests {
         // Create temporary paths for testing
         let tmp = TempDir::new().unwrap();
         let home = tmp.path();
-        
+
         // Parent should be detected as ancestor
         if let Some(parent) = home.parent() {
             assert!(is_home_ancestor(parent, home));
         }
-        
+
         // Home itself should not be ancestor of itself
         assert!(!is_home_ancestor(home, home));
-        
+
         // Non-parent should not be ancestor
         let other = TempDir::new().unwrap();
         assert!(!is_home_ancestor(other.path(), home));
