@@ -61,6 +61,7 @@ pub mod drift;
 pub mod dsl;
 pub mod email;
 #[cfg(feature = "embeddings")]
+pub mod embedding_stats;
 pub mod embeddings;
 pub mod error;
 pub mod file_guard;
@@ -130,6 +131,7 @@ pub use dependencies::{
 };
 pub use drift::{detect_drift, DriftReport};
 pub use email::{parse_eml, parse_eml_file, EmailAttachment, ParsedEmail};
+pub use embedding_stats::EmbeddingStats;
 #[cfg(feature = "embeddings")]
 pub use embeddings::{
     check_model_cache, embedder_for_index, embedding_cache_info, embedding_model_spec,

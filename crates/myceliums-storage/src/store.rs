@@ -1054,6 +1054,46 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// A genuine store failure in `delete_file_data` must surface as `Err`, not
+    /// be mistaken for a benign "file not indexed yet" no-op. The incremental
+    /// re-index loop propagates this error; regression guard for issue #32,
+    /// where the error was silently discarded and left stale graph rows.
+    #[tokio::test]
+    async fn test_delete_file_data_surfaces_genuine_errors() {
+        let dir = test_db_path("delete_file_data_errors");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+
+        // Populate a symbols table so the table exists on disk.
+        store
+            .store_symbols(&[make_symbol("alpha", None)])
+            .await
+            .unwrap();
+
+        // Deleting data for a file that was never indexed is a benign no-op —
+        // it must succeed (this is the "not-found is fine" branch).
+        store
+            .delete_file_data("does/not/exist.rs")
+            .await
+            .expect("deleting an un-indexed file is a no-op, not an error");
+
+        // Corrupt the on-disk symbols table so the next open/delete genuinely
+        // fails, then assert the failure is propagated rather than swallowed.
+        let symbols_table = dir.join("symbols.lance");
+        assert!(symbols_table.exists(), "symbols table should exist on disk");
+        std::fs::remove_dir_all(&symbols_table).unwrap();
+        std::fs::write(&symbols_table, b"not a lance table").unwrap();
+
+        let result = store.delete_file_data("src/lib.rs").await;
+        assert!(
+            result.is_err(),
+            "a corrupt store must surface a genuine delete error"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     /// Regression test: `store_embeddings` must build a RecordBatch whose column
     /// count and order match `symbols_schema()` (12 fields incl. `metadata`).
     /// Previously the batch omitted `metadata`, so `RecordBatch::try_new` errored
