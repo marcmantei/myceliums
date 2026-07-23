@@ -182,6 +182,12 @@ pub fn local_model_code(id: &str) -> Result<String> {
 /// so query paths must construct their embedder from this record.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct IndexEmbeddingMeta {
+    /// Schema version of this meta record. Bumped whenever the set of fields
+    /// that shape stored vectors (or the fingerprint algorithm) changes, so a
+    /// stale index is detected and a full re-analysis can be requested instead
+    /// of silently mixing incomparable vectors. See [`IndexEmbeddingMeta::META_VERSION`].
+    #[serde(default = "IndexEmbeddingMeta::default_meta_version")]
+    pub meta_version: u32,
     /// `"local"` or `"openai-compatible"`.
     pub provider: String,
     /// Model id (registry id for local, API model name for remote).
@@ -207,6 +213,26 @@ impl IndexEmbeddingMeta {
     /// Key under which this record is stored in the `index_meta` table.
     pub const META_KEY: &'static str = "embedding";
 
+    /// Current schema version of the embedding meta record.
+    ///
+    /// Bump this whenever a change alters which fields shape stored vectors or
+    /// how the fingerprint is computed. A recorded index with an older
+    /// `meta_version` is refused on incremental runs (see the analyzer), so the
+    /// operator re-runs a full analysis rather than growing a mixed index.
+    ///
+    /// History:
+    /// - `1`: original `provider:model:dim` fingerprint (records written before
+    ///   `meta_version` existed read back as version `1`).
+    /// - `2`: fingerprint extended with host-normalized `base_url` and the
+    ///   query/passage prefixes (issue #35).
+    pub const META_VERSION: u32 = 2;
+
+    /// serde default for records written before `meta_version` existed: they
+    /// predate the extended fingerprint, so they read back as version `1`.
+    fn default_meta_version() -> u32 {
+        1
+    }
+
     /// Resolve and validate an embedding configuration.
     pub fn from_config(cfg: &EmbeddingSection) -> Result<Self> {
         if reranker_spec(&cfg.reranker).is_none() {
@@ -227,6 +253,7 @@ impl IndexEmbeddingMeta {
                 })?;
                 let info = local_model_info(spec)?;
                 Ok(Self {
+                    meta_version: Self::META_VERSION,
                     provider: "local".to_string(),
                     model: spec.id.to_string(),
                     dim: info.dim,
@@ -248,6 +275,7 @@ impl IndexEmbeddingMeta {
                     )
                 })?;
                 Ok(Self {
+                    meta_version: Self::META_VERSION,
                     provider: "openai-compatible".to_string(),
                     model: cfg.model.clone(),
                     dim,
@@ -270,6 +298,9 @@ impl IndexEmbeddingMeta {
         let spec = embedding_model_spec(LEGACY_LOCAL_EMBEDDING_MODEL)
             .expect("legacy model must be in registry");
         Self {
+            // Legacy indexes predate the extended fingerprint; they only ever
+            // guaranteed provider:model:dim, so they read back as version 1.
+            meta_version: Self::default_meta_version(),
             provider: "local".to_string(),
             model: spec.id.to_string(),
             dim: 384,
@@ -281,9 +312,74 @@ impl IndexEmbeddingMeta {
         }
     }
 
-    /// Human-readable identity, e.g. `local:multilingual-e5-small:384`.
-    pub fn fingerprint(&self) -> String {
+    /// Short human-readable identity for logs and status output, e.g.
+    /// `local:multilingual-e5-small:384`. This is *not* the compatibility key —
+    /// two indexes can share an identity yet be incompatible (e.g. same model
+    /// name and dim behind different remote `base_url`s). Use [`fingerprint`]
+    /// for compatibility and cache decisions.
+    ///
+    /// [`fingerprint`]: IndexEmbeddingMeta::fingerprint
+    pub fn identity(&self) -> String {
         format!("{}:{}:{}", self.provider, self.model, self.dim)
+    }
+
+    /// Complete compatibility fingerprint: every field that shapes the stored
+    /// vectors. Two indexes are vector-comparable iff their fingerprints match,
+    /// so this doubles as the embedder-instance cache key.
+    ///
+    /// Included: provider, model, dim, host-normalized `base_url`, and the
+    /// query/passage prefixes — a change to any of these produces different
+    /// vectors, so it must invalidate the index.
+    ///
+    /// Excluded on purpose:
+    /// - `api_key_env` — only the env-var *name* is stored, never the key.
+    ///   Rotating the key (or renaming the env var that holds it) does not
+    ///   change the model or its output, so it must not invalidate an index.
+    /// - `reranker` — affects query-time scoring only, never the stored vectors.
+    /// - `meta_version` — the migration guard handles version skew separately
+    ///   (see the analyzer); folding it in here would conflate "incompatible
+    ///   config" with "stale schema" in the same signal.
+    pub fn fingerprint(&self) -> String {
+        format!(
+            "{}:{}:{}|base_url={}|query_prefix={}|passage_prefix={}",
+            self.provider,
+            self.model,
+            self.dim,
+            self.base_url
+                .as_deref()
+                .map(normalize_base_url)
+                .unwrap_or_default(),
+            self.query_prefix.as_deref().unwrap_or_default(),
+            self.passage_prefix.as_deref().unwrap_or_default(),
+        )
+    }
+}
+
+/// Normalize a remote embeddings `base_url` for fingerprinting: lowercase the
+/// scheme+host, drop a trailing slash, and ignore an explicit default port so
+/// cosmetic URL differences don't spuriously invalidate an index, while a real
+/// endpoint change (different host, port, or path) still does.
+fn normalize_base_url(url: &str) -> String {
+    let trimmed = url.trim().trim_end_matches('/');
+    match trimmed.split_once("://") {
+        Some((scheme, rest)) => {
+            let scheme = scheme.to_ascii_lowercase();
+            let (authority, path) = match rest.split_once('/') {
+                Some((authority, path)) => (authority, Some(path)),
+                None => (rest, None),
+            };
+            let authority = authority.to_ascii_lowercase();
+            let authority = match (&scheme[..], authority.split_once(':')) {
+                ("http", Some((host, "80"))) => host.to_string(),
+                ("https", Some((host, "443"))) => host.to_string(),
+                _ => authority,
+            };
+            match path {
+                Some(path) => format!("{}://{}/{}", scheme, authority, path),
+                None => format!("{}://{}", scheme, authority),
+            }
+        }
+        None => trimmed.to_ascii_lowercase(),
     }
 }
 
@@ -676,7 +772,7 @@ impl Embedder {
             symbols.len(),
             total_batches,
             batch_size,
-            self.meta.fingerprint(),
+            self.meta.identity(),
         );
 
         for (i, chunk) in symbols.chunks(batch_size).enumerate() {
@@ -874,8 +970,10 @@ mod tests {
     fn legacy_meta_matches_original_setup() {
         let meta = IndexEmbeddingMeta::legacy();
         assert_eq!(meta.dim, 384);
-        assert_eq!(meta.fingerprint(), "local:all-minilm-l6-v2:384");
+        assert_eq!(meta.identity(), "local:all-minilm-l6-v2:384");
         assert!(meta.query_prefix.is_none());
+        // Legacy indexes predate the extended fingerprint and read back as v1.
+        assert_eq!(meta.meta_version, 1);
     }
 
     #[test]
@@ -923,7 +1021,7 @@ mod tests {
         assert!(IndexEmbeddingMeta::from_config(&cfg).is_err());
         cfg.dim = Some(768);
         let meta = IndexEmbeddingMeta::from_config(&cfg).unwrap();
-        assert_eq!(meta.fingerprint(), "openai-compatible:nomic-embed-text:768");
+        assert_eq!(meta.identity(), "openai-compatible:nomic-embed-text:768");
         assert_eq!(
             meta.api_key_env.as_deref(),
             Some("MYCELIUMS_EMBEDDING_API_KEY")
@@ -936,6 +1034,118 @@ mod tests {
         let json = serde_json::to_string(&meta).unwrap();
         let parsed: IndexEmbeddingMeta = serde_json::from_str(&json).unwrap();
         assert_eq!(meta, parsed);
+    }
+
+    // --- fingerprint tests (issue #35) ---
+
+    fn openai_meta() -> IndexEmbeddingMeta {
+        let cfg = EmbeddingSection {
+            provider: "openai-compatible".to_string(),
+            model: "nomic-embed-text".to_string(),
+            base_url: Some("https://api.host.example/v1".to_string()),
+            dim: Some(768),
+            ..Default::default()
+        };
+        IndexEmbeddingMeta::from_config(&cfg).unwrap()
+    }
+
+    #[test]
+    fn fingerprint_covers_base_url() {
+        let a = openai_meta();
+        let mut b = openai_meta();
+        b.base_url = Some("https://other.host.example/v1".to_string());
+        assert_ne!(
+            a.fingerprint(),
+            b.fingerprint(),
+            "a base_url change must invalidate the index"
+        );
+        // ...but the human-readable identity is unchanged.
+        assert_eq!(a.identity(), b.identity());
+    }
+
+    #[test]
+    fn fingerprint_covers_prefixes() {
+        let a = openai_meta();
+        let mut b = openai_meta();
+        b.query_prefix = Some("search_query: ".to_string());
+        assert_ne!(a.fingerprint(), b.fingerprint());
+
+        let mut c = openai_meta();
+        c.passage_prefix = Some("search_document: ".to_string());
+        assert_ne!(a.fingerprint(), c.fingerprint());
+    }
+
+    #[test]
+    fn fingerprint_ignores_api_key_env() {
+        // Rotating the env-var name that *holds* the key must not invalidate
+        // the index — the model and its output are unchanged.
+        let a = openai_meta();
+        let mut b = openai_meta();
+        b.api_key_env = Some("SOME_OTHER_ENV".to_string());
+        assert_eq!(a.fingerprint(), b.fingerprint());
+    }
+
+    #[test]
+    fn fingerprint_ignores_reranker() {
+        // The reranker only reorders query results; it never shapes the stored
+        // vectors, so it must not invalidate the index.
+        let a = openai_meta();
+        let mut b = openai_meta();
+        b.reranker = Some("some-other-reranker".to_string());
+        assert_eq!(a.fingerprint(), b.fingerprint());
+    }
+
+    #[test]
+    fn fingerprint_ignores_meta_version() {
+        // Version skew is handled by the migration guard, not the fingerprint.
+        let a = openai_meta();
+        let mut b = openai_meta();
+        b.meta_version = 1;
+        assert_eq!(a.fingerprint(), b.fingerprint());
+    }
+
+    #[test]
+    fn normalize_base_url_folds_cosmetic_differences() {
+        // Trailing slash, host case, and an explicit default port are cosmetic.
+        assert_eq!(
+            normalize_base_url("https://API.Host.Example/v1/"),
+            normalize_base_url("https://api.host.example/v1")
+        );
+        assert_eq!(
+            normalize_base_url("https://api.host.example:443/v1"),
+            normalize_base_url("https://api.host.example/v1")
+        );
+        assert_eq!(
+            normalize_base_url("http://localhost:80/v1"),
+            normalize_base_url("http://localhost/v1")
+        );
+    }
+
+    #[test]
+    fn normalize_base_url_preserves_real_endpoint_differences() {
+        // A different host, port, or path is a real endpoint change.
+        assert_ne!(
+            normalize_base_url("https://api.host.example/v1"),
+            normalize_base_url("https://api.host.example/v2")
+        );
+        assert_ne!(
+            normalize_base_url("https://api.host.example:8443/v1"),
+            normalize_base_url("https://api.host.example/v1")
+        );
+        assert_ne!(
+            normalize_base_url("https://a.example/v1"),
+            normalize_base_url("https://b.example/v1")
+        );
+    }
+
+    #[test]
+    fn meta_without_version_field_reads_as_v1() {
+        // A record persisted before `meta_version` existed must migrate to v1
+        // via serde default, so the analyzer can detect it as stale.
+        let json = r#"{"provider":"local","model":"all-minilm-l6-v2","dim":384}"#;
+        let meta: IndexEmbeddingMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(meta.meta_version, 1);
+        assert!(meta.meta_version < IndexEmbeddingMeta::META_VERSION);
     }
 
     // --- truncate_to_char_boundary tests ---
