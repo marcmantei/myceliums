@@ -12,7 +12,17 @@ BM25 is a keyword-based ranking algorithm. It scores documents by how well they 
 - Fast, runs entirely on the local index
 - No model download required
 - Works without embeddings
-- Matches exact tokens (identifiers, function names, variable names)
+- Matches whole tokens, with identifiers split on `snake_case`/`camelCase`
+
+BM25 tokenizes both the query and the indexed text on word boundaries **and**
+identifier boundaries, then lowercases. This means:
+
+- A query token matches only a *whole* token in the document — searching `cat`
+  does **not** match `concatenate`.
+- Identifiers are split, so `get_user_name` indexes as `get`, `user`, `name`;
+  the natural-language query `user name` matches it.
+- Term frequency and document length are counted in tokens, not characters, so
+  a symbol is not penalised merely for having long identifiers.
 
 **Best for:**
 - Finding a specific function or class by name
@@ -125,3 +135,63 @@ When using myceliums through MCP (e.g., in Claude Code or Cursor), the same sear
 - `hybrid_search` performs hybrid search with optional reranking
 
 The AI agent selects the appropriate tool based on the query. If embeddings are not available, it falls back to BM25 automatically.
+
+## How Symbols Are Embedded (and Truncated)
+
+Semantic and hybrid search embed **one vector per symbol**. The document text
+for a symbol is built as:
+
+```
+{kind} {name} {decorators} {signature} {return_type} {superclasses} {content_head}
+```
+
+The leading header (kind, name, signature, decorators, return type,
+superclasses) is short and high-signal, so it is **always kept whole**. Only the
+trailing `content_head` is truncated, and the truncation is **bounded by the
+embedding model's token budget**, not an arbitrary byte count.
+
+### Why truncation is bounded
+
+Every embedding model has a maximum input length in tokens. Text longer than
+that is silently discarded by the model's tokenizer. To keep index-time text
+within that limit, myceliums derives a **content byte budget** from the model's
+declared `max_input_tokens`:
+
+```
+content_bytes = max(256, (max_input_tokens − header_reserve) × bytes_per_token)
+```
+
+with `header_reserve = 64` tokens and a conservative `bytes_per_token = 4`
+(subword tokenizers average ~3–4 characters per token on code; picking the high
+end keeps us at or under the true limit rather than over it). For the default
+`multilingual-e5-small` model (512 tokens) this is **1792 bytes** of content —
+substantially more than the previous fixed 512-byte cut, and it scales with the
+model:
+
+| Model | `max_input_tokens` | Content budget (bytes) |
+|-------|-------------------:|-----------------------:|
+| all-minilm-l6-v2 | 256 | 768 |
+| multilingual-e5-small / base / large | 512 | 1792 |
+| jina-embeddings-v2-base-code | 8192 | 32512 |
+
+### Known limitation: long symbols are still truncated
+
+This is the **single-vector-per-symbol** design (issue #36, option 2). A symbol
+whose content exceeds the model's budget still loses its tail from the semantic
+index. The header and the first ~1.8 KB (default model) of the body are indexed;
+a very long function's final branches are not directly embedded. BM25 still
+indexes the **full** symbol text, so lexical search covers what semantic search
+truncates, and hybrid search fuses the two.
+
+The reranker uses the **same** builder as the retriever, so the cross-encoder
+scores exactly the text that was indexed — there is no longer an asymmetry where
+rerank saw content the retriever never embedded.
+
+### Roadmap: multi-chunk embeddings
+
+Full coverage of long symbols requires splitting them into overlapping chunks,
+embedding each chunk as its own row, and de-duplicating to the best chunk per
+symbol at query time (issue #36, option 1). That improves recall at the cost of
+index growth and query-side dedup, and is tracked as a follow-up rather than
+shipped here. For launch, the bounded single-vector approach above is the
+documented, measured behaviour.
