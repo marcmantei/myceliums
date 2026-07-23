@@ -65,6 +65,64 @@ skip_patterns = ["min.js", "min.css", "bundle.js", "map"]
 | `min_community_size` | integer | `3` | Minimum number of symbols for a community to be reported |
 | `resolution` | float | `1.0` | Louvain resolution parameter. Higher values produce more (smaller) communities, lower values produce fewer (larger) communities |
 
+### `[embedding]`
+
+Selects the model that turns code into the vectors used for semantic search.
+The chosen model shapes every stored vector, so this section is committed with
+the project (shared by the team) rather than kept as per-user state.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `provider` | string | `"local"` | `"local"` (bundled ONNX models via fastembed) or `"openai-compatible"` (any server speaking the OpenAI embeddings API — Ollama, LM Studio, TEI, vLLM, or a cloud provider) |
+| `model` | string | `"multilingual-e5-small"` | Registry id for `local`; the API model name for `openai-compatible` |
+| `reranker` | string | `"bge-reranker-v2-m3"` | Cross-encoder used when `rerank` is requested at search time |
+| `base_url` | string | — | Embeddings API base URL. **Required** for `openai-compatible` |
+| `dim` | integer | — | Vector dimension. **Required** for `openai-compatible` (cannot be derived); ignored for `local` |
+| `api_key_env` | string | `"MYCELIUMS_EMBEDDING_API_KEY"` | Name of the environment variable holding the API key. The key itself never goes into this file |
+| `query_prefix` | string | — | Prefix prepended to search queries (e.g. `"query: "` for E5-style models). Ignored for `local` — the registry value wins |
+| `passage_prefix` | string | — | Prefix prepended to indexed documents (e.g. `"passage: "`). Ignored for `local` — the registry value wins |
+
+#### Which fields invalidate an existing index
+
+Vectors are only comparable when they were produced by the same embedder, so an
+index records the embedder it was built with (its **fingerprint**) and query
+paths resolve the matching embedder from that record. Changing a field that
+shapes the stored vectors makes the old vectors incomparable — the index must be
+rebuilt with a full analysis (`myc analyze`) before the change takes effect.
+
+**Fields in the fingerprint — a change invalidates the index:**
+
+| Field | Why it invalidates |
+|-------|--------------------|
+| `provider` | A different backend produces a different vector space |
+| `model` | Different weights → different vectors, even at the same dimension |
+| `dim` | Different vector length; the stored table is physically rebuilt |
+| `base_url` (host-normalized) | The same model name behind a different endpoint can be a different model. Cosmetic differences — trailing slash, host case, an explicit default port (`:80`/`:443`) — are folded and do **not** invalidate |
+| `query_prefix` / `passage_prefix` | E5-style prefixes change the text sent to the model, so they change the vectors |
+
+**Fields *not* in the fingerprint — a change does not invalidate the index:**
+
+| Field | Why it is safe |
+|-------|----------------|
+| `api_key_env` | Only the environment-variable *name* is stored, never the key. Rotating the key — or renaming the variable that holds it — does not change the model or its output |
+| `reranker` | Reranking only reorders query results at search time; it never shapes the stored vectors |
+
+**Incremental vs. full runs.** Incremental runs (`myc watch`, re-indexing
+changed files) never switch embedders: they keep the index's recorded embedder
+and warn if the config now resolves to a different fingerprint — mixing two
+embedders in one index would silently corrupt search. A full analysis
+(`myc analyze`) adopts the configured embedder and, when it differs from the
+recorded one, wipes the stale vectors first so no mixed index can survive. This
+wipe is enforced by the analyzer itself, not by call-site ordering, so it cannot
+be forgotten.
+
+**Metadata versioning.** Each index records a `meta_version`. When a release
+changes which fields shape stored vectors (or how the fingerprint is computed),
+this version is bumped; an index written by an older release is detected on the
+next incremental run and reported as stale, with the same instruction to run a
+full re-analysis. Records written before `meta_version` existed read back as
+version `1`.
+
 ### Example: Minimal
 
 ```toml

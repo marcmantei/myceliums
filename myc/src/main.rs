@@ -2902,7 +2902,7 @@ async fn cmd_doctor(download: bool) -> Result<()> {
         Ok(meta) => {
             println!(
                 "\u{2713} Embedding config: {} (reranker: {})",
-                meta.fingerprint(),
+                meta.identity(),
                 embedding_cfg.reranker,
             );
             if meta.provider == "local" {

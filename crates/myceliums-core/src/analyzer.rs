@@ -147,27 +147,18 @@ impl Analyzer {
             .and_then(|json| serde_json::from_str(&json).ok());
 
         let meta = if incremental {
-            match existing {
-                Some(existing) if existing.fingerprint() != configured.fingerprint() => {
-                    warn!(
-                        "Index was built with {} but config says {}; keeping the index's \
-                         model for this incremental run. Run a full analysis to switch.",
-                        existing.fingerprint(),
-                        configured.fingerprint()
-                    );
-                    existing
-                }
-                Some(existing) => existing,
-                None => {
-                    warn!(
-                        "Index has no embedding metadata; embedding with the legacy model. \
-                         Run a full analysis to upgrade to {}.",
-                        configured.fingerprint()
-                    );
-                    IndexEmbeddingMeta::legacy()
-                }
-            }
+            self.reconcile_incremental_embedding(existing, configured)
         } else {
+            // Full analysis switches to the configured model. If it differs
+            // from what the index was built with — including a *same-dimension*
+            // model swap, a `base_url` change, or a prefix change that the
+            // physical dimension check cannot see — the existing vectors are
+            // incomparable and must be wiped before we write new ones.
+            //
+            // This invariant lives here, in the layer that owns the index, so
+            // no call site can forget the pre-analyze wipe (issue #35).
+            self.wipe_incomparable_vectors(existing.as_ref(), &configured)
+                .await?;
             configured
         };
 
@@ -175,10 +166,86 @@ impl Analyzer {
         if self.store.ensure_symbols_dim().await? {
             info!(
                 "Symbols table rebuilt for embedding model {}",
-                meta.fingerprint()
+                meta.identity()
             );
         }
         Ok(Some(meta))
+    }
+
+    /// Decide which embedding model an *incremental* run must use.
+    ///
+    /// Incremental runs never switch models: mixing vectors from two models in
+    /// one index silently corrupts search. So the model recorded in the index
+    /// always wins, and a config change (different model, `base_url`, prefixes,
+    /// or a stale `meta_version` from a prior schema) is refused with an
+    /// actionable message pointing at a full re-analysis.
+    #[cfg(feature = "embeddings")]
+    fn reconcile_incremental_embedding(
+        &self,
+        existing: Option<crate::embeddings::IndexEmbeddingMeta>,
+        configured: crate::embeddings::IndexEmbeddingMeta,
+    ) -> crate::embeddings::IndexEmbeddingMeta {
+        use crate::embeddings::IndexEmbeddingMeta;
+
+        match existing {
+            Some(existing) if existing.meta_version < IndexEmbeddingMeta::META_VERSION => {
+                warn!(
+                    "Index metadata is from an older schema (meta_version {} < {}); its \
+                     fingerprint predates fields that now invalidate an index. Keeping the \
+                     index's model for this incremental run — run a full analysis \
+                     (`myc analyze`) to migrate and re-embed.",
+                    existing.meta_version,
+                    IndexEmbeddingMeta::META_VERSION,
+                );
+                existing
+            }
+            Some(existing) if existing.fingerprint() != configured.fingerprint() => {
+                warn!(
+                    "Index was built with {} but config resolves to {}; keeping the index's \
+                     embedder for this incremental run. Run a full analysis (`myc analyze`) \
+                     to switch — incremental runs cannot mix embedders.",
+                    existing.fingerprint(),
+                    configured.fingerprint()
+                );
+                existing
+            }
+            Some(existing) => existing,
+            None => {
+                warn!(
+                    "Index has no embedding metadata; embedding with the legacy model. \
+                     Run a full analysis (`myc analyze`) to upgrade to {}.",
+                    configured.identity()
+                );
+                IndexEmbeddingMeta::legacy()
+            }
+        }
+    }
+
+    /// Wipe previously-indexed repo data when a full analysis switches to an
+    /// embedder whose fingerprint differs from the one the index was built
+    /// with. A physical dimension change is handled downstream by
+    /// `ensure_symbols_dim`, but a same-dim swap (or a `base_url`/prefix
+    /// change) leaves the table shape intact, so we must delete the stale rows
+    /// explicitly to guarantee no mixed index survives.
+    #[cfg(feature = "embeddings")]
+    async fn wipe_incomparable_vectors(
+        &self,
+        existing: Option<&crate::embeddings::IndexEmbeddingMeta>,
+        configured: &crate::embeddings::IndexEmbeddingMeta,
+    ) -> Result<()> {
+        let Some(existing) = existing else {
+            return Ok(());
+        };
+        if existing.fingerprint() == configured.fingerprint() {
+            return Ok(());
+        }
+        info!(
+            "Embedder changed ({} -> {}); wiping stale index data before full re-analysis",
+            existing.fingerprint(),
+            configured.fingerprint()
+        );
+        self.store.delete_repo_data().await?;
+        Ok(())
     }
 
     /// Record which embedding model built this index, so query paths can
@@ -2561,5 +2628,167 @@ mod tests {
                 .map(|s| (&s.name, &s.qualified_name))
                 .collect::<Vec<_>>()
         );
+    }
+
+    // ── Embedding fingerprint compatibility (issue #35) ───────────────
+
+    #[cfg(feature = "embeddings")]
+    mod embedding_fingerprint {
+        use super::*;
+        use crate::config::EmbeddingSection;
+        use crate::embeddings::IndexEmbeddingMeta;
+        use myceliums_storage::Store;
+
+        /// Build an analyzer over a fresh temp store with the given embedding
+        /// config. Returns the analyzer and the temp dir (kept alive by caller).
+        async fn analyzer_with_embedding(embedding: EmbeddingSection) -> (Analyzer, TempDir) {
+            let dir = TempDir::new().unwrap();
+            let db = dir.path().join("db");
+            std::fs::create_dir_all(&db).unwrap();
+            let store = Store::open(&db, "test-repo").await.unwrap();
+            let mut config = ProjectConfig::default();
+            config.embedding = embedding;
+            let root = make_test_root(&dir);
+            let analyzer = Analyzer::with_config(store, root, config);
+            (analyzer, dir)
+        }
+
+        fn openai_section(base_url: &str) -> EmbeddingSection {
+            EmbeddingSection {
+                provider: "openai-compatible".to_string(),
+                model: "nomic-embed-text".to_string(),
+                base_url: Some(base_url.to_string()),
+                dim: Some(768),
+                ..Default::default()
+            }
+        }
+
+        /// Persist an embedding meta record into the store, as a completed
+        /// analysis would.
+        async fn record(analyzer: &Analyzer, meta: &IndexEmbeddingMeta) {
+            let json = serde_json::to_string(meta).unwrap();
+            analyzer
+                .store
+                .set_index_meta(IndexEmbeddingMeta::META_KEY, &json)
+                .await
+                .unwrap();
+        }
+
+        /// Incremental run against an index whose recorded `base_url` differs
+        /// must refuse to switch: it keeps the index's embedder rather than
+        /// producing a mixed index.
+        #[tokio::test]
+        async fn incremental_refuses_base_url_change() {
+            let (analyzer, _dir) =
+                analyzer_with_embedding(openai_section("https://new.host.example/v1")).await;
+            let recorded =
+                IndexEmbeddingMeta::from_config(&openai_section("https://old.host.example/v1"))
+                    .unwrap();
+            record(&analyzer, &recorded).await;
+
+            let chosen = analyzer.prepare_embeddings(true).await.unwrap().unwrap();
+            assert_eq!(
+                chosen.fingerprint(),
+                recorded.fingerprint(),
+                "incremental run must keep the index's recorded embedder, not the new base_url"
+            );
+        }
+
+        /// Incremental run against an index whose recorded prefixes differ must
+        /// likewise refuse to switch.
+        #[tokio::test]
+        async fn incremental_refuses_prefix_change() {
+            let mut new_cfg = openai_section("https://host.example/v1");
+            new_cfg.query_prefix = Some("search_query: ".to_string());
+            let (analyzer, _dir) = analyzer_with_embedding(new_cfg).await;
+
+            let recorded =
+                IndexEmbeddingMeta::from_config(&openai_section("https://host.example/v1"))
+                    .unwrap();
+            record(&analyzer, &recorded).await;
+
+            let chosen = analyzer.prepare_embeddings(true).await.unwrap().unwrap();
+            assert_eq!(
+                chosen.query_prefix, None,
+                "incremental run must keep the index's recorded (prefix-less) embedder"
+            );
+            assert_eq!(chosen.fingerprint(), recorded.fingerprint());
+        }
+
+        /// A full analysis that swaps to a *same-dimension* model whose
+        /// fingerprint differs must wipe the stale rows itself — even when the
+        /// caller forgot the pre-analyze wipe — so no mixed index survives.
+        #[tokio::test]
+        async fn full_run_wipes_on_same_dim_swap() {
+            // Configure model B; the index was built with model A (same 768 dim).
+            let mut cfg_b = openai_section("https://host.example/v1");
+            cfg_b.model = "model-b".to_string();
+            let (analyzer, _dir) = analyzer_with_embedding(cfg_b).await;
+
+            // Seed the store as if model A had already indexed a symbol at 768d.
+            let mut recorded = openai_section("https://host.example/v1");
+            recorded.model = "model-a".to_string();
+            let recorded = IndexEmbeddingMeta::from_config(&recorded).unwrap();
+            analyzer.store.set_embedding_dim(recorded.dim as i32);
+            analyzer
+                .store
+                .store_symbols(&[make_embedding_symbol("stale")])
+                .await
+                .unwrap();
+            record(&analyzer, &recorded).await;
+            assert_eq!(analyzer.store.symbol_count().await.unwrap(), 1);
+
+            // A direct full analysis (no call-site wipe) must clear the stale row.
+            let chosen = analyzer.prepare_embeddings(false).await.unwrap().unwrap();
+            assert_eq!(chosen.model, "model-b");
+            assert_eq!(
+                analyzer.store.symbol_count().await.unwrap(),
+                0,
+                "same-dim model swap on a full run must not leave a mixed index"
+            );
+        }
+
+        /// A pre-change meta record (no `meta_version`, i.e. version 1) must be
+        /// detected on an incremental run and handled with the migration guard:
+        /// the run keeps the index's embedder and instructs a full re-analysis.
+        #[tokio::test]
+        async fn incremental_detects_pre_change_meta_record() {
+            let (analyzer, _dir) =
+                analyzer_with_embedding(openai_section("https://host.example/v1")).await;
+
+            // Persist a legacy-shaped record with no meta_version field.
+            let legacy_json = r#"{"provider":"openai-compatible","model":"nomic-embed-text",
+                "dim":768,"base_url":"https://host.example/v1"}"#;
+            analyzer
+                .store
+                .set_index_meta(IndexEmbeddingMeta::META_KEY, legacy_json)
+                .await
+                .unwrap();
+
+            let chosen = analyzer.prepare_embeddings(true).await.unwrap().unwrap();
+            assert_eq!(
+                chosen.meta_version, 1,
+                "a record written before meta_version existed must read back as v1"
+            );
+            assert!(chosen.meta_version < IndexEmbeddingMeta::META_VERSION);
+        }
+
+        /// Helper: build a symbol so the store creates the symbols table at the
+        /// configured embedding dimension.
+        fn make_embedding_symbol(uid: &str) -> CodeSymbol {
+            CodeSymbol {
+                uid: uid.to_string(),
+                name: uid.to_string(),
+                qualified_name: uid.to_string(),
+                kind: myceliums_storage::SymbolKind::Function,
+                file_path: "src/lib.rs".to_string(),
+                start_line: 1,
+                end_line: 2,
+                signature: format!("fn {}()", uid),
+                content: "body".to_string(),
+                repo_id: "test-repo".to_string(),
+                metadata: None,
+            }
+        }
     }
 }
