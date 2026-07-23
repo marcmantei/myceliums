@@ -15,8 +15,10 @@ Closes #<issue-number>
 
 ## Changes
 
-<!-- Bullet the notable changes. -->
--
+<!-- Bullet the notable changes, e.g.:
+     - Added rate limiting to the webhook bridge
+     - Fixed off-by-one in the pagination cursor -->
+- 
 
 ## Checklist
 
