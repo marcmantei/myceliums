@@ -5885,71 +5885,38 @@ mod tests {
         assert!(output.questions.len() <= 2, "Should not exceed limit of 2");
     }
 
-    /// A tempdir index with un-embedded (zero-vector) symbols must produce a
-    /// partial-index warning that search responses can surface. Regression
-    /// guard for issue #32: partial indexes were invisible at query time.
-    #[tokio::test]
-    async fn partial_index_warning_surfaces_from_zero_vector_rows() {
-        use myceliums_core::EmbeddingStats;
-        use myceliums_storage::{CodeSymbol, SymbolKind};
-
-        let dir = tempfile::tempdir().unwrap();
-        let store = Store::open(dir.path(), "test-repo").await.unwrap();
-
-        // Three symbols indexed; each starts life as a zero-vector placeholder.
-        let symbols: Vec<CodeSymbol> = (0..3)
-            .map(|i| CodeSymbol {
-                uid: format!("sym{i}"),
-                name: format!("fn{i}"),
-                qualified_name: format!("m.fn{i}"),
-                kind: SymbolKind::Function,
-                file_path: "src/lib.rs".to_string(),
-                start_line: 1,
-                end_line: 2,
-                signature: format!("fn fn{i}()"),
-                content: "body".to_string(),
-                repo_id: "test-repo".to_string(),
-                metadata: None,
-            })
-            .collect();
-        store.store_symbols(&symbols).await.unwrap();
-
-        // Only one of three symbols got a real vector — the other two remain
-        // zero-vector placeholders (a deliberately partial index).
-        let dim = myceliums_storage::schema::DEFAULT_EMBEDDING_DIM as usize;
-        store
-            .store_embeddings(vec![("sym0".to_string(), vec![0.5f32; dim])])
-            .await
-            .unwrap();
-        EmbeddingStats {
+    /// A partial-index warning is prefixed onto the rendered search body as a
+    /// banner the user cannot miss. Regression guard for issue #32: partial
+    /// indexes were invisible at query time.
+    ///
+    /// The store round-trip that produces the warning
+    /// (`EmbeddingStats::record` → `load` → `partial_index_warning`) is owned
+    /// and tested by `myceliums-core`; here we assert only the MCP-specific
+    /// surfacing — how a warning is banded onto a response body.
+    #[test]
+    fn partial_index_warning_is_banded_onto_search_body() {
+        let warning = myceliums_core::EmbeddingStats {
             symbols_total: 3,
             symbols_embedded: 1,
             embedding_failures: 2,
         }
-        .record(&store)
-        .await
-        .unwrap();
-
-        let warning = partial_index_warning(&store)
-            .await
-            .expect("partial index must warn");
+        .partial_index_warning()
+        .expect("partial index must warn");
         assert!(warning.contains("1 of 3 symbols"));
 
-        // The warning is prefixed onto the rendered search body.
         let body = format::with_index_warning(Some(warning), "results table".to_string());
         assert!(body.starts_with("⚠ "));
         assert!(body.contains("results table"));
     }
 
-    /// A fully-embedded tempdir index produces no warning.
-    #[tokio::test]
-    async fn complete_index_has_no_partial_warning() {
-        use myceliums_core::EmbeddingStats;
+    /// A complete index yields no warning, so the search body is passed through
+    /// untouched — no banner.
+    #[test]
+    fn complete_index_leaves_search_body_untouched() {
+        let warning = myceliums_core::EmbeddingStats::complete(2, 2).partial_index_warning();
+        assert_eq!(warning, None);
 
-        let dir = tempfile::tempdir().unwrap();
-        let store = Store::open(dir.path(), "test-repo").await.unwrap();
-        EmbeddingStats::complete(2, 2).record(&store).await.unwrap();
-
-        assert_eq!(partial_index_warning(&store).await, None);
+        let body = format::with_index_warning(warning, "results table".to_string());
+        assert_eq!(body, "results table");
     }
 }

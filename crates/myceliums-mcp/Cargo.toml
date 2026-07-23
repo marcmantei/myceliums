@@ -45,4 +45,3 @@ chrono = { workspace = true }
 # `cargo test --workspace` compiles the test-facing handler delegates without
 # the feature ever reaching a production (non-dev) build.
 myceliums-mcp = { path = ".", features = ["test-support"] }
-tempfile = { workspace = true }
