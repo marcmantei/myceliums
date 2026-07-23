@@ -1,17 +1,23 @@
 //! BM25-inspired text search over code symbols.
 //!
 //! Provides a simple, dependency-free keyword search that scores symbols by
-//! name, signature, and content using TF-IDF with BM25 normalization.
+//! name, signature, content, and metadata using TF-IDF with BM25
+//! normalization. Text is tokenized on word boundaries **and** identifier
+//! boundaries (`snake_case`/`camelCase`) via [`crate::tokenize`], so term
+//! frequency and document length are token-exact: `"cat"` no longer matches
+//! `concatenate`, and `"user name"` matches `get_user_name`.
 
+use crate::tokenize::tokenize;
 use myceliums_storage::CodeSymbol;
 use serde::Serialize;
+use std::collections::HashMap;
 
 /// Per-term scoring breakdown for explain mode.
 #[derive(Debug, Clone, Serialize)]
 pub struct TermScore {
     /// The query term.
     pub term: String,
-    /// Raw term frequency in the document.
+    /// Raw term frequency (token-exact count) in the document.
     pub tf: f64,
     /// Inverse document frequency across all symbols.
     pub idf: f64,
@@ -28,9 +34,9 @@ pub struct TermScore {
 pub struct SearchExplain {
     /// Per-term breakdown of how the score was computed.
     pub term_scores: Vec<TermScore>,
-    /// Document length (combined length of name + signature + content).
+    /// Document length in tokens (name + signature + content + metadata).
     pub doc_len: f64,
-    /// Average document length across all symbols.
+    /// Average document length in tokens across all symbols.
     pub avg_doc_len: f64,
 }
 
@@ -56,31 +62,38 @@ pub fn search_symbols_explain(symbols: &[CodeSymbol], query: &str) -> Vec<Search
 }
 
 fn search_symbols_impl(symbols: &[CodeSymbol], query: &str, explain: bool) -> Vec<SearchResult> {
-    let query_terms: Vec<&str> = query.split_whitespace().collect();
+    let query_terms: Vec<String> = tokenize(query);
     if query_terms.is_empty() {
         return vec![];
     }
 
-    let avg_len: f64 = symbols.iter().map(doc_len).sum::<f64>() / symbols.len().max(1) as f64;
+    // Tokenize each document once into a bag of token counts. Token-exact
+    // matching means "cat" no longer matches "concatenate", and identifier
+    // splitting means "user name" matches `get_user_name`.
+    let docs: Vec<DocTokens> = symbols.iter().map(DocTokens::from_symbol).collect();
+
+    let avg_len: f64 =
+        docs.iter().map(|d| d.length).sum::<f64>() / docs.len().max(1) as f64;
     let k1 = 1.2;
     let b = 0.75;
     let n = symbols.len() as f64;
 
-    // IDF per term
+    // Document frequency per query term (token-exact).
     let term_doc_freq: Vec<f64> = query_terms
         .iter()
-        .map(|term| symbols.iter().filter(|s| contains_term(s, term)).count() as f64)
+        .map(|term| docs.iter().filter(|d| d.counts.contains_key(term)).count() as f64)
         .collect();
 
     let mut results: Vec<SearchResult> = symbols
         .iter()
-        .filter_map(|sym| {
-            let dl = doc_len(sym);
+        .zip(docs.iter())
+        .filter_map(|(sym, doc)| {
+            let dl = doc.length;
             let mut score = 0.0;
             let mut term_scores = Vec::new();
 
             for (i, term) in query_terms.iter().enumerate() {
-                let tf = term_freq(sym, term);
+                let tf = doc.counts.get(term).copied().unwrap_or(0) as f64;
                 if tf == 0.0 {
                     continue;
                 }
@@ -91,27 +104,13 @@ fn search_symbols_impl(symbols: &[CodeSymbol], query: &str, explain: bool) -> Ve
                 score += contribution;
 
                 if explain {
-                    let lower = term.to_lowercase();
-                    let mut matched_in = Vec::new();
-                    if sym.name.to_lowercase().contains(&lower) {
-                        matched_in.push("name".to_string());
-                    }
-                    if sym.signature.to_lowercase().contains(&lower) {
-                        matched_in.push("signature".to_string());
-                    }
-                    if sym.content.to_lowercase().contains(&lower) {
-                        matched_in.push("content".to_string());
-                    }
-                    if metadata_text(sym).to_lowercase().contains(&lower) {
-                        matched_in.push("metadata".to_string());
-                    }
                     term_scores.push(TermScore {
-                        term: term.to_string(),
+                        term: term.clone(),
                         tf,
                         idf,
                         tf_norm,
                         contribution,
-                        matched_in,
+                        matched_in: doc.fields_for(term),
                     });
                 }
             }
@@ -145,31 +144,66 @@ fn search_symbols_impl(symbols: &[CodeSymbol], query: &str, explain: bool) -> Ve
     results
 }
 
-fn doc_len(sym: &CodeSymbol) -> f64 {
-    let base = sym.name.len() + sym.signature.len() + sym.content.len();
-    let meta_len = metadata_text(sym).len();
-    (base + meta_len) as f64
+/// A code symbol's tokenized text: a bag of token counts, the token-based
+/// document length, and per-field token sets for explain traces.
+///
+/// Building this once per symbol avoids re-tokenizing the same text for every
+/// query term.
+struct DocTokens {
+    /// Token → occurrence count across all searchable fields.
+    counts: HashMap<String, u32>,
+    /// Document length in tokens (BM25 length normalization input).
+    length: f64,
+    /// Distinct tokens per field, for explain-mode `matched_in`.
+    name_tokens: HashMap<String, ()>,
+    signature_tokens: HashMap<String, ()>,
+    content_tokens: HashMap<String, ()>,
+    metadata_tokens: HashMap<String, ()>,
 }
 
-fn contains_term(sym: &CodeSymbol, term: &str) -> bool {
-    let lower = term.to_lowercase();
-    sym.name.to_lowercase().contains(&lower)
-        || sym.signature.to_lowercase().contains(&lower)
-        || sym.content.to_lowercase().contains(&lower)
-        || metadata_text(sym).to_lowercase().contains(&lower)
-}
+impl DocTokens {
+    fn from_symbol(sym: &CodeSymbol) -> Self {
+        let name = tokenize(&sym.name);
+        let signature = tokenize(&sym.signature);
+        let content = tokenize(&sym.content);
+        let metadata = tokenize(&metadata_text(sym));
 
-fn term_freq(sym: &CodeSymbol, term: &str) -> f64 {
-    let lower = term.to_lowercase();
-    let meta = metadata_text(sym);
-    let text = format!(
-        "{} {} {} {}",
-        sym.name.to_lowercase(),
-        sym.signature.to_lowercase(),
-        sym.content.to_lowercase(),
-        meta.to_lowercase()
-    );
-    text.matches(&lower).count() as f64
+        let mut counts: HashMap<String, u32> = HashMap::new();
+        let mut length = 0u32;
+        for field in [&name, &signature, &content, &metadata] {
+            for tok in field {
+                *counts.entry(tok.clone()).or_insert(0) += 1;
+                length += 1;
+            }
+        }
+
+        DocTokens {
+            counts,
+            length: length as f64,
+            name_tokens: name.into_iter().map(|t| (t, ())).collect(),
+            signature_tokens: signature.into_iter().map(|t| (t, ())).collect(),
+            content_tokens: content.into_iter().map(|t| (t, ())).collect(),
+            metadata_tokens: metadata.into_iter().map(|t| (t, ())).collect(),
+        }
+    }
+
+    /// Which fields contain `term` (already tokenized/lowercased).
+    fn fields_for(&self, term: &str) -> Vec<String> {
+        let mut matched = Vec::new();
+        if self.name_tokens.contains_key(term) {
+            matched.push("name".to_string());
+        }
+        if self.signature_tokens.contains_key(term) {
+            matched.push("signature".to_string());
+        }
+        if self.content_tokens.contains_key(term) {
+            matched.push("content".to_string());
+        }
+        if self.metadata_tokens.contains_key(term) {
+            matched.push("metadata".to_string());
+        }
+        matched
+    }
 }
 
 /// Extract searchable text from symbol metadata (decorators, return type, etc.).
@@ -203,4 +237,112 @@ fn metadata_text(sym: &CodeSymbol) -> String {
         parts.push(vis.to_string());
     }
     parts.join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use myceliums_storage::SymbolKind;
+
+    fn symbol(name: &str, signature: &str, content: &str) -> CodeSymbol {
+        CodeSymbol {
+            uid: format!("uid-{name}"),
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: SymbolKind::Function,
+            file_path: "src/lib.rs".to_string(),
+            start_line: 1,
+            end_line: 2,
+            signature: signature.to_string(),
+            content: content.to_string(),
+            repo_id: "repo-1".to_string(),
+            metadata: None,
+        }
+    }
+
+    fn names(results: &[SearchResult]) -> Vec<&str> {
+        results.iter().map(|r| r.symbol.name.as_str()).collect()
+    }
+
+    #[test]
+    fn cat_does_not_match_concatenate() {
+        // Substring matching would score `concatenate`; token-exact must not.
+        let symbols = vec![
+            symbol("concatenate", "fn concatenate(a, b)", "join two strings"),
+            symbol("feed_cat", "fn feed_cat()", "give the cat food"),
+        ];
+        let results = search_symbols(&symbols, "cat");
+        assert_eq!(
+            names(&results),
+            vec!["feed_cat"],
+            "`cat` must match only the symbol with a whole `cat` token"
+        );
+    }
+
+    #[test]
+    fn user_name_matches_get_user_name() {
+        // Identifier splitting lets a natural-language query hit an identifier.
+        let symbols = vec![
+            symbol("get_user_name", "fn get_user_name() -> String", "self.name.clone()"),
+            symbol("compute_hash", "fn compute_hash() -> u64", "hash the bytes"),
+        ];
+        let results = search_symbols(&symbols, "user name");
+        assert!(
+            !results.is_empty(),
+            "`user name` should match `get_user_name`"
+        );
+        assert_eq!(results[0].symbol.name, "get_user_name");
+    }
+
+    #[test]
+    fn camel_case_query_matches_snake_case_symbol() {
+        let symbols = vec![
+            symbol("get_user_name", "fn get_user_name()", ""),
+            symbol("noise", "fn noise()", "unrelated"),
+        ];
+        // Query tokens split the same way regardless of the caller's casing.
+        let results = search_symbols(&symbols, "getUserName");
+        assert_eq!(results[0].symbol.name, "get_user_name");
+    }
+
+    #[test]
+    fn empty_query_returns_nothing() {
+        let symbols = vec![symbol("foo", "fn foo()", "bar")];
+        assert!(search_symbols(&symbols, "").is_empty());
+        assert!(search_symbols(&symbols, "   ").is_empty());
+    }
+
+    #[test]
+    fn explain_reports_token_tf_and_fields() {
+        let symbols = vec![symbol(
+            "parse_user",
+            "fn parse_user(user: User)",
+            "parse the user record",
+        )];
+        let results = search_symbols_explain(&symbols, "user");
+        let explain = results[0].explain.as_ref().expect("explain trace");
+        let term = &explain.term_scores[0];
+        assert_eq!(term.term, "user");
+        // Token-exact TF counts every occurrence across all fields:
+        //   name       `parse_user`               -> user x1
+        //   signature  `fn parse_user(user: User)` -> user x3 (parse_user, user, User)
+        //   content    `parse the user record`     -> user x1
+        // Total tf == 5. Substring matching would have conflated these; the
+        // point of this test is that identifier splitting counts each token.
+        assert_eq!(term.tf, 5.0);
+        assert!(term.matched_in.contains(&"name".to_string()));
+        assert!(term.matched_in.contains(&"signature".to_string()));
+        assert!(term.matched_in.contains(&"content".to_string()));
+    }
+
+    #[test]
+    fn doc_length_is_token_based() {
+        // A symbol with many tokens but few characters must not be penalised
+        // by character-based length. Two single-token docs have equal length.
+        let symbols = vec![symbol("a", "", ""), symbol("b", "", "")];
+        let results = search_symbols_explain(&symbols, "a");
+        let explain = results[0].explain.as_ref().unwrap();
+        assert_eq!(explain.doc_len, 1.0);
+        assert_eq!(explain.avg_doc_len, 1.0);
+    }
 }

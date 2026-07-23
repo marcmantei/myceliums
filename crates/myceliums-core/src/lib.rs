@@ -91,6 +91,7 @@ pub mod service_map;
 pub mod snapshot;
 pub mod surprising_connections;
 pub mod timing;
+pub mod tokenize;
 pub mod watch;
 pub mod wiki_export;
 

@@ -42,6 +42,11 @@ pub struct EmbeddingModelSpec {
     pub passage_prefix: Option<&'static str>,
     /// Whether the model handles non-English queries well.
     pub multilingual: bool,
+    /// Maximum input sequence length in tokens the model accepts. Text longer
+    /// than this is silently truncated by the tokenizer, so index-time text is
+    /// bounded to fit (see [`content_byte_budget`]). This is a fixed property
+    /// of the model architecture, taken from its published config.
+    pub max_input_tokens: usize,
 }
 
 /// Curated local embedding models.
@@ -56,6 +61,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         query_prefix: Some("query: "),
         passage_prefix: Some("passage: "),
         multilingual: true,
+        max_input_tokens: 512,
     },
     EmbeddingModelSpec {
         id: "multilingual-e5-base",
@@ -63,6 +69,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         query_prefix: Some("query: "),
         passage_prefix: Some("passage: "),
         multilingual: true,
+        max_input_tokens: 512,
     },
     EmbeddingModelSpec {
         id: "multilingual-e5-large",
@@ -70,6 +77,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         query_prefix: Some("query: "),
         passage_prefix: Some("passage: "),
         multilingual: true,
+        max_input_tokens: 512,
     },
     EmbeddingModelSpec {
         id: "jina-embeddings-v2-base-code",
@@ -77,6 +85,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         query_prefix: None,
         passage_prefix: None,
         multilingual: false,
+        max_input_tokens: 8192,
     },
     EmbeddingModelSpec {
         id: "all-minilm-l6-v2",
@@ -84,6 +93,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         query_prefix: None,
         passage_prefix: None,
         multilingual: false,
+        max_input_tokens: 256,
     },
 ];
 
@@ -468,16 +478,70 @@ fn truncate_to_char_boundary(s: &str, max: usize) -> &str {
     &s[..end]
 }
 
-/// Build the embedding document text for a single [`CodeSymbol`].
+/// Conservative estimate of how many bytes of code text one model token covers.
+///
+/// Subword tokenizers (WordPiece/BPE) on source code average roughly 3–4
+/// characters per token. We deliberately pick the *high* end (4) so the byte
+/// budget we compute stays at or below the model's true token capacity —
+/// under-filling is safe; over-filling would be silently truncated by the
+/// tokenizer, reintroducing the very defect this addresses.
+const BYTES_PER_TOKEN: usize = 4;
+
+/// Tokens reserved for the high-signal header (kind, name, signature,
+/// decorators, return type, superclasses) plus the model's passage prefix.
+/// The header is always kept whole; only content is truncated to fit.
+const HEADER_TOKEN_RESERVE: usize = 64;
+
+/// Byte budget for the *content* portion of an embedding document, derived
+/// from a model's `max_input_tokens`.
+///
+/// The header (name, signature, metadata) is short and high-signal, so it is
+/// always preserved; the remaining token budget is spent on content, converted
+/// to bytes with a conservative [`BYTES_PER_TOKEN`] ratio. A small floor keeps
+/// the function meaningful even for tiny-context models.
+pub fn content_byte_budget(max_input_tokens: usize) -> usize {
+    let content_tokens = max_input_tokens.saturating_sub(HEADER_TOKEN_RESERVE);
+    (content_tokens * BYTES_PER_TOKEN).max(256)
+}
+
+/// Byte budget for the default local embedding model, used by
+/// [`build_embedding_text`] when no model context is supplied.
+fn default_content_byte_budget() -> usize {
+    embedding_model_spec(DEFAULT_LOCAL_EMBEDDING_MODEL)
+        .map(|s| content_byte_budget(s.max_input_tokens))
+        .unwrap_or(256)
+}
+
+/// Build the embedding document text for a single [`CodeSymbol`], truncating
+/// content to the default model's [`content_byte_budget`].
+///
+/// Prefer [`build_embedding_text_for`] when the target model is known so the
+/// budget matches the model that will actually tokenize the text.
 ///
 /// The format is:
 /// `{kind} {name} {decorators} {signature} {return_type} {superclasses} {content_head}`
 ///
 /// Metadata fields are extracted from the JSON-serialised [`SymbolMetadata`]
 /// stored in `CodeSymbol::metadata`. Missing or unparseable metadata is
-/// gracefully skipped (empty strings).  Content is truncated to 512 bytes on
-/// a character boundary to keep documents concise for the embedding model.
+/// gracefully skipped (empty strings).
 pub fn build_embedding_text(s: &CodeSymbol) -> String {
+    build_embedding_text_with_budget(s, default_content_byte_budget())
+}
+
+/// Build the embedding document text for `s`, sizing the content budget to
+/// `max_input_tokens` of the model that will embed it.
+///
+/// The header (kind, name, signature, decorators, return type, superclasses)
+/// is always kept whole because it is the highest-signal, shortest part of the
+/// document; only trailing content is truncated to fit the model's context.
+/// This makes truncation *principled* — bounded by the model's real token
+/// budget rather than an arbitrary 512-byte cut — and keeps a single vector per
+/// symbol (see `docs/guides/search-modes.md` for the decision and its limits).
+pub fn build_embedding_text_for(s: &CodeSymbol, max_input_tokens: usize) -> String {
+    build_embedding_text_with_budget(s, content_byte_budget(max_input_tokens))
+}
+
+fn build_embedding_text_with_budget(s: &CodeSymbol, content_budget: usize) -> String {
     let kind = s.kind.to_string();
 
     let meta: Option<SymbolMetadata> = s
@@ -498,7 +562,7 @@ pub fn build_embedding_text(s: &CodeSymbol) -> String {
         .map(|m| m.superclasses.join(" "))
         .unwrap_or_default();
 
-    let content_head = truncate_to_char_boundary(&s.content, 512);
+    let content_head = truncate_to_char_boundary(&s.content, content_budget);
 
     format!(
         "{kind} {name} {decorators} {signature} {return_type} {superclasses} {content_head}",
@@ -753,7 +817,8 @@ impl Embedder {
     /// avoid OOM on large repositories.
     ///
     /// Each symbol's text is enriched with metadata (kind, decorators,
-    /// return type, superclasses) and content truncated to 512 chars.
+    /// return type, superclasses) and content truncated to the model's
+    /// principled content budget (see [`content_byte_budget`]).
     pub async fn embed_symbols(
         &self,
         symbols: &[CodeSymbol],
@@ -783,13 +848,27 @@ impl Embedder {
                 chunk.len(),
             );
 
-            let documents: Vec<String> = chunk.iter().map(build_embedding_text).collect();
+            let budget_tokens = self.max_input_tokens();
+            let documents: Vec<String> = chunk
+                .iter()
+                .map(|s| build_embedding_text_for(s, budget_tokens))
+                .collect();
             let embeddings = self.embed_texts(&documents, EmbedInput::Passage).await?;
             all_embeddings.extend(embeddings);
         }
 
         info!("Generated {} embeddings.", all_embeddings.len());
         Ok(all_embeddings)
+    }
+
+    /// The model's maximum input length in tokens. Local models report their
+    /// architecture limit from the registry; remote (openai-compatible) models
+    /// have no local token config, so we assume the common 8192-token window,
+    /// which the principled content budget stays comfortably under.
+    fn max_input_tokens(&self) -> usize {
+        embedding_model_spec(&self.meta.model)
+            .map(|s| s.max_input_tokens)
+            .unwrap_or(8192)
     }
 
     /// Build a searchable text from a [`CodeSymbol`].
@@ -963,6 +1042,20 @@ mod tests {
         for spec in EMBEDDING_MODELS {
             let info = local_model_info(spec).expect(spec.id);
             assert!(info.dim > 0, "{} has no dimension", spec.id);
+        }
+    }
+
+    #[test]
+    fn every_model_declares_a_token_budget() {
+        for spec in EMBEDDING_MODELS {
+            assert!(
+                spec.max_input_tokens >= 256,
+                "{} has an implausibly small token budget",
+                spec.id
+            );
+            // A principled content budget must leave room for content beyond
+            // the reserved header.
+            assert!(content_byte_budget(spec.max_input_tokens) >= 256);
         }
     }
 
@@ -1288,32 +1381,58 @@ mod tests {
     }
 
     #[test]
-    fn build_text_content_truncated_at_512_bytes() {
-        let long_content = "x".repeat(1000);
+    fn build_text_content_truncated_at_default_budget() {
+        // Default model (multilingual-e5-small, 512 tokens) yields a content
+        // byte budget of (512 - 64) * 4 = 1792 bytes.
+        let budget = content_byte_budget(512);
+        assert_eq!(budget, 1792);
+        let long_content = "x".repeat(4000);
         let sym = make_symbol("big", SymbolKind::Function, "fn big()", &long_content, None);
         let text = build_embedding_text(&sym);
-        // The content portion should be at most 512 bytes
-        // Total text = "Function big  fn big()   " + content_head
         let prefix = "Function big  fn big()   ";
         let content_in_text = &text[prefix.len()..];
-        assert_eq!(content_in_text.len(), 512);
+        assert_eq!(content_in_text.len(), budget);
+    }
+
+    #[test]
+    fn build_text_budget_scales_with_model() {
+        // A larger-context model keeps more content; a smaller one keeps less.
+        let long_content = "x".repeat(50_000);
+        let sym = make_symbol("big", SymbolKind::Function, "fn big()", &long_content, None);
+        let prefix = "Function big  fn big()   ".len();
+
+        let jina = build_embedding_text_for(&sym, 8192); // (8192-64)*4 = 32512
+        assert_eq!(jina[prefix..].len(), content_byte_budget(8192));
+        assert_eq!(content_byte_budget(8192), 32512);
+
+        let minilm = build_embedding_text_for(&sym, 256); // (256-64)*4 = 768
+        assert_eq!(minilm[prefix..].len(), content_byte_budget(256));
+        assert_eq!(content_byte_budget(256), 768);
+
+        assert!(jina.len() > minilm.len());
+    }
+
+    #[test]
+    fn content_budget_has_floor() {
+        // Even a tiny-context model keeps a usable content window.
+        assert_eq!(content_byte_budget(0), 256);
+        assert_eq!(content_byte_budget(64), 256);
     }
 
     #[test]
     fn build_text_content_truncated_multibyte() {
-        // Build content that has multi-byte chars around the 512-byte boundary.
-        // U+00E9 is 2 bytes. Fill with 'a' up to 511, then add e-acute.
-        let mut content = "a".repeat(511);
-        content.push('\u{00E9}'); // 2 bytes: total 513 bytes
+        // A multi-byte char straddling the budget boundary must not be split.
+        let budget = content_byte_budget(512); // 1792
+        let mut content = "a".repeat(budget - 1);
+        content.push('\u{00E9}'); // 2 bytes: crosses the boundary
         content.push_str("zzz");
         let sym = make_symbol("mb", SymbolKind::Function, "fn mb()", &content, None);
         let text = build_embedding_text(&sym);
-        // Content should be truncated to 511 bytes (backing up from 512 to
-        // avoid splitting the 2-byte char).
         let prefix = "Function mb  fn mb()   ";
         let content_in_text = &text[prefix.len()..];
-        assert_eq!(content_in_text.len(), 511);
-        assert_eq!(content_in_text, "a".repeat(511));
+        // Backs up from `budget` to avoid splitting the 2-byte char.
+        assert_eq!(content_in_text.len(), budget - 1);
+        assert_eq!(content_in_text, "a".repeat(budget - 1));
     }
 
     #[test]

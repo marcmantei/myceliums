@@ -311,15 +311,15 @@ pub async fn rerank_results(
 
     let reranker = get_reranker(reranker_id).await?;
 
-    // Build document texts for reranking: name + signature + content
+    // Build document texts for reranking using the *same* principled builder
+    // the retriever used to embed each symbol. Previously this rebuilt an
+    // untruncated `name signature content` string, so the cross-encoder scored
+    // text the retriever never indexed (issue #36). Sharing `Embedder::symbol_text`
+    // removes that asymmetry: reranker and retriever see the same document,
+    // bounded by the model's token budget.
     let documents: Vec<String> = results
         .iter()
-        .map(|r| {
-            format!(
-                "{} {} {}",
-                r.symbol.name, r.symbol.signature, r.symbol.content
-            )
-        })
+        .map(|r| Embedder::symbol_text(&r.symbol))
         .collect();
 
     // Rerank with cross-encoder - returns (index, score) pairs sorted by score
