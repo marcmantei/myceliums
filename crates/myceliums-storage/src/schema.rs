@@ -5,6 +5,8 @@ use std::sync::Arc;
 /// Used when no embedding configuration or index metadata is available.
 pub const DEFAULT_EMBEDDING_DIM: i32 = 384;
 
+/// Arrow schema for the `symbols` table, with a fixed-size vector column
+/// sized to `embedding_dim`.
 pub fn symbols_schema(embedding_dim: i32) -> Schema {
     Schema::new(vec![
         Field::new("uid", DataType::Utf8, false),
@@ -39,6 +41,7 @@ pub fn index_meta_schema() -> Schema {
     ])
 }
 
+/// Arrow schema for the `files` table.
 pub fn files_schema() -> Schema {
     Schema::new(vec![
         Field::new("uid", DataType::Utf8, false),
@@ -49,6 +52,7 @@ pub fn files_schema() -> Schema {
     ])
 }
 
+/// Arrow schema for the `relationships` (edges) table.
 pub fn relationships_schema() -> Schema {
     Schema::new(vec![
         Field::new("uid", DataType::Utf8, false),
@@ -60,6 +64,7 @@ pub fn relationships_schema() -> Schema {
     ])
 }
 
+/// Arrow schema for the `communities` table.
 pub fn communities_schema() -> Schema {
     Schema::new(vec![
         Field::new("uid", DataType::Utf8, false),
@@ -71,6 +76,7 @@ pub fn communities_schema() -> Schema {
     ])
 }
 
+/// Arrow schema for the `processes` table.
 pub fn processes_schema() -> Schema {
     Schema::new(vec![
         Field::new("uid", DataType::Utf8, false),
@@ -82,6 +88,7 @@ pub fn processes_schema() -> Schema {
     ])
 }
 
+/// Arrow schema for the `teams` table.
 pub fn teams_schema() -> Schema {
     Schema::new(vec![
         Field::new("uid", DataType::Utf8, false),
@@ -93,6 +100,7 @@ pub fn teams_schema() -> Schema {
     ])
 }
 
+/// Arrow schema for the `team_members` table.
 pub fn team_members_schema() -> Schema {
     Schema::new(vec![
         Field::new("uid", DataType::Utf8, false),
@@ -104,6 +112,7 @@ pub fn team_members_schema() -> Schema {
     ])
 }
 
+/// Wraps a [`Schema`] in an [`Arc`] for sharing across LanceDB calls.
 pub fn _schema_arc(schema: Schema) -> Arc<Schema> {
     Arc::new(schema)
 }

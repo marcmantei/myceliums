@@ -15,6 +15,11 @@ const MAX_RESULT_ROWS: usize = 100_000;
 /// Maximum allowed cartesian product size (when cross-joining patterns)
 const MAX_INTERMEDIATE_ROWS: usize = 10_000;
 
+/// In-memory executor for the read-only Cypher subset.
+///
+/// Loads symbols, files, and relationships from a [`Store`] and evaluates
+/// parsed [`Query`] values against them. An optional
+/// [`Ontology`] enables entity/edge-type validation.
 pub struct CypherExecutor {
     symbols: Vec<CodeSymbol>,
     files: Vec<FileNode>,
@@ -44,6 +49,7 @@ struct Path {
 }
 
 impl CypherExecutor {
+    /// Builds an executor by loading all graph data from the given store.
     pub async fn from_store(store: &Store) -> Result<Self> {
         let symbols = store.get_symbols().await?;
         let files = store.get_files().await?;
@@ -56,6 +62,8 @@ impl CypherExecutor {
         })
     }
 
+    /// Builds an executor from the store and attaches an ontology for
+    /// entity/edge-type validation.
     pub async fn from_store_with_ontology(store: &Store, ontology: Ontology) -> Result<Self> {
         let symbols = store.get_symbols().await?;
         let files = store.get_files().await?;
@@ -68,11 +76,13 @@ impl CypherExecutor {
         })
     }
 
+    /// Attaches (or replaces) the ontology used for type validation.
     pub fn with_ontology(mut self, ontology: Ontology) -> Self {
         self.ontology = Some(ontology);
         self
     }
 
+    /// Parses and executes a Cypher query string, returning the result rows.
     pub fn execute(&self, query_str: &str) -> Result<Vec<Row>> {
         let query =
             parser::parse_cypher(query_str).map_err(|e| anyhow::anyhow!("Parse error: {}", e))?;

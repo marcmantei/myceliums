@@ -22,6 +22,7 @@ pub struct TeamStore {
 }
 
 impl TeamStore {
+    /// Opens (creating if needed) the shared team database at `db_path`.
     pub async fn open(db_path: &Path) -> Result<Self> {
         let db = connect(db_path.to_str().unwrap())
             .execute()
@@ -45,6 +46,7 @@ impl TeamStore {
         }
     }
 
+    /// Creates a new team record.
     pub async fn create_team(&self, team: &Team) -> Result<()> {
         let table = self.ensure_table("teams", schema::teams_schema()).await?;
 
@@ -67,6 +69,7 @@ impl TeamStore {
         Ok(())
     }
 
+    /// Returns all teams.
     pub async fn get_teams(&self) -> Result<Vec<Team>> {
         let tables = self.db.table_names().execute().await?;
         if !tables.contains(&"teams".to_string()) {
@@ -99,11 +102,13 @@ impl TeamStore {
         Ok(teams)
     }
 
+    /// Returns the team with the given id, if it exists.
     pub async fn get_team(&self, team_id: &str) -> Result<Option<Team>> {
         let teams = self.get_teams().await?;
         Ok(teams.into_iter().find(|t| t.uid == team_id))
     }
 
+    /// Returns all teams the user owns or is a member of.
     pub async fn get_teams_for_user(&self, user_id: &str) -> Result<Vec<Team>> {
         // Get teams where user is owner
         let mut teams: Vec<Team> = self
@@ -127,6 +132,7 @@ impl TeamStore {
         Ok(teams)
     }
 
+    /// Adds a member to a team.
     pub async fn add_member(&self, member: &TeamMember) -> Result<()> {
         let table = self
             .ensure_table("team_members", schema::team_members_schema())
@@ -151,6 +157,7 @@ impl TeamStore {
         Ok(())
     }
 
+    /// Returns all members of the given team.
     pub async fn get_members(&self, team_id: &str) -> Result<Vec<TeamMember>> {
         let tables = self.db.table_names().execute().await?;
         if !tables.contains(&"team_members".to_string()) {

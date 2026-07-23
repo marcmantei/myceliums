@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/marcmantei/myceliums/tree/main/docs
+    about: Guides, CLI reference, and configuration docs.
+  - name: FAQ
+    url: https://github.com/marcmantei/myceliums/blob/main/docs/faq.md
+    about: Answers to common questions — please check here before opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/marcmantei/myceliums/blob/main/SECURITY.md
+    about: Do not open public issues for security problems — follow the disclosure process instead.

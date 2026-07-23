@@ -21,7 +21,7 @@ cargo clippy --workspace -- -D warnings
 
 ## Project structure
 
-The workspace has six crates:
+The workspace has seven crates:
 
 | Crate | Purpose |
 |---|---|
@@ -30,7 +30,14 @@ The workspace has six crates:
 | `myceliums-mcp` | MCP server implementation |
 | `myceliums-cypher` | Cypher query parser and executor |
 | `myceliums-http` | Axum HTTP server for graph visualization |
+| `myceliums-benchmarks` | Benchmark harness and retrieval-quality measurement |
 | `myc` | CLI binary |
+
+## Code of Conduct
+
+This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md).
+By participating, you are expected to uphold it. Please report unacceptable
+behavior as described there.
 
 ## How to contribute
 
@@ -44,6 +51,10 @@ The workspace has six crates:
    cargo clippy --workspace -- -D warnings
    cargo fmt --all -- --check
    ```
+6. **Follow the [pull request template](.github/pull_request_template.md)** — it
+   restates the CI gates above and asks for [Conventional
+   Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`,
+   `chore:`, ...). See also the [roadmap](ROADMAP.md) for planned work.
 
 ## Adding a new language
 
