@@ -1124,6 +1124,26 @@ async fn partial_index_warning(store: &Store) -> Option<String> {
     }
 }
 
+/// Load the embedding accounting for a store, for reporting in the `analyze`
+/// response's cached path.
+///
+/// A genuine load error propagates. A *missing* record means a legacy index
+/// built before accounting existed: treat it as fully embedded (using
+/// `symbol_count` as the total) rather than "0 of N", which would falsely
+/// imply a total embedding failure. Centralized so the cached and non-cached
+/// query paths derive the reported counts the same way — the non-cached path
+/// gets the equivalent record straight from `AnalysisResult::embedding_stats`.
+async fn load_embedding_stats(
+    store: &Store,
+    symbol_count: usize,
+) -> Result<myceliums_core::EmbeddingStats, rmcp::ErrorData> {
+    let loaded = myceliums_core::EmbeddingStats::load(store)
+        .await
+        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+    Ok(loaded
+        .unwrap_or_else(|| myceliums_core::EmbeddingStats::complete(symbol_count, symbol_count)))
+}
+
 #[tool_router]
 impl MyceliumsMcp {
     #[tool(
@@ -1179,17 +1199,7 @@ impl MyceliumsMcp {
                         .get_processes()
                         .await
                         .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                    // A genuine load error propagates (same as the non-cached
-                    // path, which propagates the analyzer error). A *missing*
-                    // record means a legacy index built before accounting
-                    // existed: treat it as fully embedded rather than "0 of N",
-                    // which would falsely imply a total embedding failure.
-                    let embedding_stats = myceliums_core::EmbeddingStats::load(&store)
-                        .await
-                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
-                        .unwrap_or_else(|| {
-                            myceliums_core::EmbeddingStats::complete(symbols.len(), symbols.len())
-                        });
+                    let embedding_stats = load_embedding_stats(&store, symbols.len()).await?;
                     let output = AnalyzeOutput {
                         repo_id,
                         symbols: symbols.len(),
@@ -1292,6 +1302,7 @@ impl MyceliumsMcp {
         let snapshot = build_snapshot(&repo_id, &symbols, &relationships);
         let _ = save_snapshot(&data_dir(), &snapshot); // best-effort
 
+        let embedding_stats = result.embedding_stats();
         let output = AnalyzeOutput {
             repo_id,
             symbols: result.symbol_count,
@@ -1299,9 +1310,9 @@ impl MyceliumsMcp {
             relationships: result.relationship_count,
             communities: community_count,
             processes: process_count,
-            symbols_embedded: result.symbols_embedded,
-            symbols_total: result.symbols_total,
-            embedding_failures: result.embedding_failures,
+            symbols_embedded: embedding_stats.symbols_embedded,
+            symbols_total: embedding_stats.symbols_total,
+            embedding_failures: embedding_stats.embedding_failures,
             cached: false,
         };
         Ok(Json(TextOutput {
