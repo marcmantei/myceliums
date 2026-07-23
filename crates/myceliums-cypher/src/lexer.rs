@@ -50,7 +50,7 @@ pub enum Token {
     /// `IS` keyword (used in `IS NULL` / `IS NOT NULL`).
     #[token("IS", ignore(ascii_case))]
     Is,
-    /// `NULL` literal keyword.
+    /// `NULL` literal.
     #[token("NULL", ignore(ascii_case))]
     Null,
     /// `TRUE` boolean literal.

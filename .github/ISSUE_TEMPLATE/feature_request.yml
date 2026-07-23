@@ -7,8 +7,9 @@ body:
     attributes:
       value: |
         Thanks for suggesting an improvement. Please check the
-        [ROADMAP](../../ROADMAP.md) and existing issues first — the idea may
-        already be planned or under discussion.
+        [ROADMAP](https://github.com/marcmantei/myceliums/blob/main/ROADMAP.md)
+        and existing issues first — the idea may already be planned or under
+        discussion.
 
   - type: textarea
     id: problem

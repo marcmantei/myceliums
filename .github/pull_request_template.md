@@ -9,8 +9,9 @@ See CLAUDE.md and CONTRIBUTING.md for the full contributor workflow.
 
 ## Related issue
 
-<!-- Link the issue this closes, e.g. "Closes #123". -->
-Closes #
+<!-- Link the issue this closes, e.g. "Closes #123". Replace the placeholder
+     below with the issue number, or remove this section if none applies. -->
+Closes #<issue-number>
 
 ## Changes
 

@@ -9,7 +9,8 @@ body:
         Thanks for taking the time to file a bug report. Please fill in the
         fields below so the maintainers can reproduce and diagnose the issue
         quickly. Before opening, please search existing issues and the
-        [FAQ](../../docs/faq.md) to avoid duplicates.
+        [FAQ](https://github.com/marcmantei/myceliums/blob/main/docs/faq.md) to
+        avoid duplicates.
 
   - type: textarea
     id: summary

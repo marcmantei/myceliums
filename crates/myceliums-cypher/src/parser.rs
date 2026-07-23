@@ -74,11 +74,11 @@ pub enum PathFunction {
 /// Arguments to a [`PathFunction`].
 #[derive(Debug, Clone)]
 pub struct PathFunctionArgs {
-    /// Start node variable, if given.
+    /// Optional start node variable.
     pub start: Option<String>,
-    /// End node variable, if given.
+    /// Optional end node variable.
     pub end: Option<String>,
-    /// Maximum traversal depth, if bounded.
+    /// Optional maximum traversal depth.
     pub max_depth: Option<i64>,
     /// Relationship types the path may traverse.
     pub rel_types: Vec<String>,
@@ -161,7 +161,8 @@ pub struct ReturnItem {
 /// An `ORDER BY` clause.
 #[derive(Debug, Clone)]
 pub struct OrderByClause {
-    /// Sort keys as `(expression, ascending)` pairs.
+    /// Sort keys as `(expression, ascending)` pairs, where `true` sorts
+    /// ascending (`ASC`, the default) and `false` sorts descending (`DESC`).
     pub items: Vec<(Expr, bool)>,
 }
 
@@ -180,7 +181,7 @@ pub enum Expr {
     FloatLit(f64),
     /// A boolean literal.
     BoolLit(bool),
-    /// The `null` literal.
+    /// The `NULL` literal.
     Null,
     /// A binary operation `lhs op rhs`.
     BinOp(Box<Expr>, BinOp, Box<Expr>),
