@@ -12,6 +12,10 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Full debug info makes the test binaries (20+ tree-sitter grammars, lance,
+  # datafusion, onnxruntime) large enough to crash the linker on the 7 GB
+  # runners. Line tables keep file/line in backtraces at a fraction of the size.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
   build:
@@ -19,6 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # The hosted runners ship with ~14 GB free; the workspace target dir plus
+      # cargo cache exceeds that, which surfaced as ld dying with SIGBUS.
+      - name: Free runner disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: dtolnay/rust-toolchain@stable
@@ -37,6 +45,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Free runner disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: dtolnay/rust-toolchain@stable
@@ -88,6 +98,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      - name: Free runner disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: dtolnay/rust-toolchain@stable
