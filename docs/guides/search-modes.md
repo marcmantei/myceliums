@@ -41,7 +41,7 @@ This will find symbols and files containing the exact token `validateEmail`, ran
 
 **Command:** `myc semantic-search "query"`
 
-Semantic search uses vector embeddings to find code by meaning rather than exact keywords. Myceliums uses the all-MiniLM-L6-v2 model (384-dimensional vectors) to encode both the query and the indexed code.
+Semantic search uses vector embeddings to find code by meaning rather than exact keywords. By default Myceliums uses the multilingual-e5-small model (384-dimensional vectors) to encode both the query and the indexed code. Other models can be selected in configuration (see the [configuration reference](../reference/config.md)).
 
 **Characteristics:**
 - Understands natural language queries

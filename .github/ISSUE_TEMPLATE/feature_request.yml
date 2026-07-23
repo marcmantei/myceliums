@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a new capability or an enhancement to an existing one.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. Please check the
+        [ROADMAP](../../ROADMAP.md) and existing issues first — the idea may
+        already be planned or under discussion.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What are you trying to do that Myceliums does not support today? Describe the underlying need, not just a proposed solution.
+      placeholder: "When indexing a monorepo I cannot scope search to a single package."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work? Command shape, config keys, or API sketches are welcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you evaluated and why they fall short.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, references, or examples from other tools that illustrate the idea.
+    validations:
+      required: false

@@ -21,6 +21,11 @@ fn escape_lance_str(value: &str) -> String {
     value.replace('\'', "''")
 }
 
+/// LanceDB-backed persistence layer for a single repository's code graph.
+///
+/// A `Store` owns a connection to the repository's on-disk database and
+/// provides typed read/write access to symbols, files, relationships,
+/// communities, processes, and their embeddings.
 pub struct Store {
     db: Connection,
     repo_id: String,
@@ -31,6 +36,7 @@ pub struct Store {
 }
 
 impl Store {
+    /// Opens (creating if needed) the LanceDB-backed store for a repository.
     pub async fn open(db_path: &Path, repo_id: &str) -> Result<Self> {
         let db = connect(db_path.to_str().unwrap())
             .execute()
@@ -43,6 +49,7 @@ impl Store {
         })
     }
 
+    /// Returns the identifier of the repository this store is bound to.
     pub fn repo_id(&self) -> &str {
         &self.repo_id
     }
@@ -148,6 +155,7 @@ impl Store {
         }
     }
 
+    /// Persists the given symbols, replacing any existing rows with the same UID.
     pub async fn store_symbols(&self, symbols: &[CodeSymbol]) -> Result<usize> {
         if symbols.is_empty() {
             return Ok(0);
@@ -206,6 +214,7 @@ impl Store {
         )?)
     }
 
+    /// Persists the given file nodes.
     pub async fn store_files(&self, files: &[FileNode]) -> Result<usize> {
         if files.is_empty() {
             return Ok(0);
@@ -241,6 +250,7 @@ impl Store {
         )?)
     }
 
+    /// Persists the given relationships (graph edges).
     pub async fn store_relationships(&self, rels: &[Relationship]) -> Result<usize> {
         if rels.is_empty() {
             return Ok(0);
@@ -297,6 +307,7 @@ impl Store {
         Ok(batches)
     }
 
+    /// Returns all symbols stored for this repository.
     pub async fn get_symbols(&self) -> Result<Vec<CodeSymbol>> {
         let batches = self.query_table("symbols").await?;
         let mut symbols = Vec::new();
@@ -419,6 +430,7 @@ impl Store {
         Ok(results)
     }
 
+    /// Returns all file nodes stored for this repository.
     pub async fn get_files(&self) -> Result<Vec<FileNode>> {
         let batches = self.query_table("files").await?;
         let mut files = Vec::new();
@@ -442,6 +454,7 @@ impl Store {
         Ok(files)
     }
 
+    /// Returns all relationships stored for this repository.
     pub async fn get_relationships(&self) -> Result<Vec<Relationship>> {
         let batches = self.query_table("relationships").await?;
         let mut rels = Vec::new();
@@ -544,6 +557,7 @@ impl Store {
         Ok(())
     }
 
+    /// Deletes all data (symbols, files, relationships, ...) for this repository.
     pub async fn delete_repo_data(&self) -> Result<()> {
         let tables = self.db.table_names().execute().await?;
         let escaped_repo_id = escape_lance_str(&self.repo_id);
@@ -565,18 +579,22 @@ impl Store {
         Ok(())
     }
 
+    /// Returns the number of symbols stored for this repository.
     pub async fn symbol_count(&self) -> Result<usize> {
         Ok(self.get_symbols().await?.len())
     }
 
+    /// Returns the number of files stored for this repository.
     pub async fn file_count(&self) -> Result<usize> {
         Ok(self.get_files().await?.len())
     }
 
+    /// Returns the number of relationships stored for this repository.
     pub async fn relationship_count(&self) -> Result<usize> {
         Ok(self.get_relationships().await?.len())
     }
 
+    /// Persists the given detected communities.
     pub async fn store_communities(&self, communities: &[Community]) -> Result<usize> {
         if communities.is_empty() {
             return Ok(0);
@@ -613,6 +631,7 @@ impl Store {
         Ok(count)
     }
 
+    /// Persists the given traced processes.
     pub async fn store_processes(&self, processes: &[Process]) -> Result<usize> {
         if processes.is_empty() {
             return Ok(0);
@@ -649,6 +668,7 @@ impl Store {
         Ok(count)
     }
 
+    /// Returns all communities stored for this repository.
     pub async fn get_communities(&self) -> Result<Vec<Community>> {
         let batches = self.query_table("communities").await?;
         let mut communities = Vec::new();
@@ -679,6 +699,7 @@ impl Store {
         Ok(communities)
     }
 
+    /// Returns all processes stored for this repository.
     pub async fn get_processes(&self) -> Result<Vec<Process>> {
         let batches = self.query_table("processes").await?;
         let mut processes = Vec::new();

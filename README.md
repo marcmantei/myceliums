@@ -551,7 +551,9 @@ To remove the integration: `myc setup-claude --uninstall`
 
 ## Contributing
 
-Contributions are welcome. Please open an issue before starting significant work.
+Contributions are welcome. Please open an issue before starting significant
+work, and review the [Contributing guide](CONTRIBUTING.md), the
+[Code of Conduct](CODE_OF_CONDUCT.md), and the [Roadmap](ROADMAP.md) first.
 
 ```bash
 git clone https://github.com/marcmantei/myceliums
@@ -561,7 +563,7 @@ cargo test --workspace
 cargo clippy --workspace -- -D warnings
 ```
 
-The workspace has six crates:
+The workspace has seven crates:
 
 | Crate | Purpose |
 |---|---|
@@ -570,6 +572,7 @@ The workspace has six crates:
 | `myceliums-mcp` | MCP server implementation |
 | `myceliums-cypher` | Cypher query parser and executor |
 | `myceliums-http` | Axum HTTP server for visualization |
+| `myceliums-benchmarks` | Benchmark harness and retrieval-quality measurement |
 | `myc` | CLI binary |
 
 ---
@@ -591,6 +594,7 @@ The workspace has six crates:
 | Configuration | [docs/reference/config.md](docs/reference/config.md) |
 | Data management | [docs/reference/data-management.md](docs/reference/data-management.md) |
 | FAQ | [docs/faq.md](docs/faq.md) |
+| Roadmap | [ROADMAP.md](ROADMAP.md) |
 
 ---
 

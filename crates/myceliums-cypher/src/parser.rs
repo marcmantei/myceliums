@@ -1,160 +1,254 @@
 use crate::lexer::Token;
 use thiserror::Error;
 
+/// Error produced while parsing a Cypher query into an AST.
 #[derive(Error, Debug)]
 pub enum ParseError {
+    /// A token appeared where the grammar did not allow it.
     #[error("Unexpected token: {0}")]
     UnexpectedToken(String),
+    /// A specific token was expected but a different one was found.
     #[error("Expected {expected}, found {found}")]
-    Expected { expected: String, found: String },
+    Expected {
+        /// Description of the token or construct the parser expected.
+        expected: String,
+        /// Description of the token that was actually found.
+        found: String,
+    },
+    /// A write/mutating clause was encountered; this parser is read-only.
     #[error("Write operations are blocked: {0}")]
     BlockedOperation(String),
+    /// Input ended before a complete query could be parsed.
     #[error("Unexpected end of input")]
     UnexpectedEnd,
 }
 
+/// A parsed, read-only Cypher query.
 #[derive(Debug, Clone)]
 pub struct Query {
+    /// Optional `MATCH` clause describing the graph pattern to find.
     pub match_clause: Option<MatchClause>,
+    /// Optional `WHERE` clause filtering matched rows.
     pub where_clause: Option<WhereClause>,
+    /// Optional `WITH` clause projecting intermediate results.
     pub with_clause: Option<WithClause>,
+    /// The `RETURN` clause describing the query's output columns.
     pub return_clause: ReturnClause,
+    /// Optional `ORDER BY` clause.
     pub order_by: Option<OrderByClause>,
+    /// Optional `SKIP` count.
     pub skip: Option<i64>,
+    /// Optional `LIMIT` count.
     pub limit: Option<i64>,
 }
 
+/// A `MATCH` clause: one or more graph patterns plus path-variable bindings.
 #[derive(Debug, Clone)]
 pub struct MatchClause {
+    /// Node and relationship patterns to match against the graph.
     pub patterns: Vec<Pattern>,
+    /// Named path variables bound via path functions (e.g. `shortestPath`).
     pub path_vars: Vec<PathVariableBinding>,
 }
 
+/// Binds a variable name to the result of a path function.
 #[derive(Debug, Clone)]
 pub struct PathVariableBinding {
+    /// The variable name the path result is bound to.
     pub variable: String,
+    /// The path function that produces the bound value.
     pub path_fn: PathFunction,
 }
 
+/// A path-finding function invoked in a pattern.
 #[derive(Debug, Clone)]
 pub enum PathFunction {
+    /// `shortestPath(...)` — the shortest path between two nodes.
     ShortestPath(PathFunctionArgs),
+    /// `allPaths(...)` — every path between two nodes (bounded by depth).
     AllPaths(PathFunctionArgs),
+    /// `anyPath(...)` — any single path between two nodes.
     AnyPath(PathFunctionArgs),
 }
 
+/// Arguments to a [`PathFunction`].
 #[derive(Debug, Clone)]
 pub struct PathFunctionArgs {
+    /// Start node variable, if given.
     pub start: Option<String>,
+    /// End node variable, if given.
     pub end: Option<String>,
+    /// Maximum traversal depth, if bounded.
     pub max_depth: Option<i64>,
+    /// Relationship types the path may traverse.
     pub rel_types: Vec<String>,
 }
 
+/// A graph pattern element within a `MATCH` clause.
 #[derive(Debug, Clone)]
 pub enum Pattern {
+    /// A single node pattern.
     Node(NodePattern),
+    /// A relationship connecting two node patterns: `(a)-[r]->(b)`.
     Relationship(NodePattern, RelPattern, NodePattern),
 }
 
+/// A node pattern such as `(n:Function {name: "foo"})`.
 #[derive(Debug, Clone)]
 pub struct NodePattern {
+    /// Optional bound variable for the node.
     pub variable: Option<String>,
+    /// Optional node label (entity type).
     pub label: Option<String>,
+    /// Inline property equality constraints as `(key, value)` pairs.
     pub properties: Vec<(String, Expr)>,
 }
 
+/// A relationship pattern such as `-[r:CALLS]->`.
 #[derive(Debug, Clone)]
 pub struct RelPattern {
+    /// Optional bound variable for the relationship.
     pub variable: Option<String>,
+    /// Optional relationship type (edge type).
     pub rel_type: Option<String>,
+    /// Traversal direction of the relationship.
     pub direction: Direction,
 }
 
+/// Direction of a relationship pattern.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Direction {
-    Right, // -->
-    Left,  // <--
-    Both,  // --
+    /// Left-to-right: `-->`.
+    Right,
+    /// Right-to-left: `<--`.
+    Left,
+    /// Undirected: `--`.
+    Both,
 }
 
+/// A `WHERE` clause holding a boolean filter expression.
 #[derive(Debug, Clone)]
 pub struct WhereClause {
+    /// The predicate expression evaluated per row.
     pub expr: Expr,
 }
 
+/// A `WITH` clause projecting intermediate result columns.
 #[derive(Debug, Clone)]
 pub struct WithClause {
+    /// The projected items carried forward.
     pub items: Vec<ReturnItem>,
 }
 
+/// A `RETURN` clause describing the query's output.
 #[derive(Debug, Clone)]
 pub struct ReturnClause {
+    /// Whether `DISTINCT` was requested.
     pub distinct: bool,
+    /// The returned items (expressions with optional aliases).
     pub items: Vec<ReturnItem>,
 }
 
+/// A single returned item: an expression with an optional alias.
 #[derive(Debug, Clone)]
 pub struct ReturnItem {
+    /// The expression producing the column value.
     pub expr: Expr,
+    /// Optional column alias (`AS name`).
     pub alias: Option<String>,
 }
 
+/// An `ORDER BY` clause.
 #[derive(Debug, Clone)]
 pub struct OrderByClause {
-    pub items: Vec<(Expr, bool)>, // (expr, ascending)
+    /// Sort keys as `(expression, ascending)` pairs.
+    pub items: Vec<(Expr, bool)>,
 }
 
+/// An expression node in the query AST.
 #[derive(Debug, Clone)]
 pub enum Expr {
+    /// A bare identifier (variable reference).
     Ident(String),
-    Property(String, String), // variable.property
+    /// A property access `variable.property`.
+    Property(String, String),
+    /// A string literal.
     StringLit(String),
+    /// An integer literal.
     IntLit(i64),
+    /// A floating-point literal.
     FloatLit(f64),
+    /// A boolean literal.
     BoolLit(bool),
+    /// The `null` literal.
     Null,
+    /// A binary operation `lhs op rhs`.
     BinOp(Box<Expr>, BinOp, Box<Expr>),
+    /// Logical negation `NOT expr`.
     Not(Box<Expr>),
+    /// `lhs CONTAINS rhs` substring test.
     Contains(Box<Expr>, Box<Expr>),
+    /// `expr IS NULL` test.
     IsNull(Box<Expr>),
+    /// `expr IS NOT NULL` test.
     IsNotNull(Box<Expr>),
+    /// A scalar function call `name(args...)`.
     FunctionCall(String, Vec<Expr>),
+    /// An aggregation over an expression, e.g. `count(x)`.
     Aggregation(AggregationFunc, Box<Expr>),
 }
 
+/// A supported aggregation function.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AggregationFunc {
+    /// `count(...)`.
     Count,
+    /// `sum(...)`.
     Sum,
+    /// `avg(...)`.
     Avg,
+    /// `min(...)`.
     Min,
+    /// `max(...)`.
     Max,
+    /// `collect(...)` — gather values into a list.
     Collect,
 }
 
+/// A binary operator.
 #[derive(Debug, Clone)]
 pub enum BinOp {
+    /// Equality `=`.
     Eq,
+    /// Inequality `<>`.
     Neq,
+    /// Less-than `<`.
     Lt,
+    /// Greater-than `>`.
     Gt,
+    /// Less-than-or-equal `<=`.
     Lte,
+    /// Greater-than-or-equal `>=`.
     Gte,
+    /// Logical `AND`.
     And,
+    /// Logical `OR`.
     Or,
 }
 
+/// Recursive-descent parser turning a token stream into a [`Query`] AST.
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
 }
 
 impl Parser {
+    /// Creates a parser over the given token stream.
     pub fn new(tokens: Vec<Token>) -> Self {
         Self { tokens, pos: 0 }
     }
 
+    /// Parses the token stream into a [`Query`], rejecting write operations.
     pub fn parse(mut self) -> Result<Query, ParseError> {
         // Check for blocked operations
         for tok in &self.tokens {
@@ -721,6 +815,7 @@ impl Parser {
     }
 }
 
+/// Lexes and parses a Cypher query string into a [`Query`] AST in one step.
 pub fn parse_cypher(input: &str) -> Result<Query, ParseError> {
     let tokens: Vec<Token> = crate::lexer::lex(input)
         .into_iter()

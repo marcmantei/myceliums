@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a defect so it can be reproduced and fixed.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in the
+        fields below so the maintainers can reproduce and diagnose the issue
+        quickly. Before opening, please search existing issues and the
+        [FAQ](../../docs/faq.md) to avoid duplicates.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug and what you expected to happen instead.
+      placeholder: "`myc search` returns no results even though the symbol exists in the index."
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: The exact commands and inputs needed to trigger the bug.
+      placeholder: |
+        1. `myc analyze ./my-project`
+        2. `myc search "parse_config"`
+        3. See empty output
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Myceliums version
+      description: "Output of `myc --version`."
+      placeholder: "myc 0.5.1"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: OS name and version (e.g. `uname -a` on Unix, or Windows build).
+      placeholder: "macOS 14.5 (arm64) / Ubuntu 24.04 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or output
+      description: Paste any error output. Re-running with `RUST_LOG=debug` often helps.
+      render: shell
+    validations:
+      required: false
