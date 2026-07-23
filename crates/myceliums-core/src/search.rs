@@ -72,8 +72,7 @@ fn search_symbols_impl(symbols: &[CodeSymbol], query: &str, explain: bool) -> Ve
     // splitting means "user name" matches `get_user_name`.
     let docs: Vec<DocTokens> = symbols.iter().map(DocTokens::from_symbol).collect();
 
-    let avg_len: f64 =
-        docs.iter().map(|d| d.length).sum::<f64>() / docs.len().max(1) as f64;
+    let avg_len: f64 = docs.iter().map(|d| d.length).sum::<f64>() / docs.len().max(1) as f64;
     let k1 = 1.2;
     let b = 0.75;
     let n = symbols.len() as f64;
@@ -283,7 +282,11 @@ mod tests {
     fn user_name_matches_get_user_name() {
         // Identifier splitting lets a natural-language query hit an identifier.
         let symbols = vec![
-            symbol("get_user_name", "fn get_user_name() -> String", "self.name.clone()"),
+            symbol(
+                "get_user_name",
+                "fn get_user_name() -> String",
+                "self.name.clone()",
+            ),
             symbol("compute_hash", "fn compute_hash() -> u64", "hash the bytes"),
         ];
         let results = search_symbols(&symbols, "user name");
