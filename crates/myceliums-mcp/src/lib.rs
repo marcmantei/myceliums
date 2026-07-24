@@ -28,6 +28,11 @@ use tracing::info;
 mod format;
 
 fn data_dir() -> PathBuf {
+    // Allow overriding the data home so the server can be pointed at an
+    // isolated directory (used by integration tests and multi-tenant setups).
+    if let Some(dir) = std::env::var_os("MYCELIUMS_DATA_DIR") {
+        return PathBuf::from(dir);
+    }
     dirs::home_dir()
         .expect("Could not find home directory")
         .join(".myceliums")
@@ -53,6 +58,73 @@ impl MyceliumsMcp {
         Self {
             tool_router: Self::tool_router(),
         }
+    }
+}
+
+/// Public, test-facing wrappers around the private `#[tool]` handlers.
+///
+/// The tool handlers are private because their only production caller is the
+/// rmcp tool router. Integration tests, however, need to exercise the exact
+/// handler logic (store wiring, result shaping, error mapping) without standing
+/// up a full stdio transport. These thin delegates expose that surface behind
+/// the `test-support` feature so the shipped API stays narrow.
+///
+/// Each wrapper returns the rendered `text` payload on success, or the mapped
+/// error message on failure — the two things an integration test asserts on.
+#[cfg(feature = "test-support")]
+impl MyceliumsMcp {
+    /// Invoke the `context_search` handler.
+    pub async fn context_search_for_test(&self, params: SearchParams) -> Result<String, String> {
+        self.context_search(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `hybrid_search` handler.
+    pub async fn hybrid_search_for_test(
+        &self,
+        params: HybridSearchParams,
+    ) -> Result<String, String> {
+        self.hybrid_search(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `detect_impact` handler.
+    pub async fn detect_impact_for_test(
+        &self,
+        params: DetectImpactParams,
+    ) -> Result<String, String> {
+        self.detect_impact_tool(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `rename_symbol` handler.
+    pub async fn rename_symbol_for_test(&self, params: RenameParams) -> Result<String, String> {
+        self.rename_symbol(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `semantic_search` handler.
+    pub async fn semantic_search_for_test(&self, params: SearchParams) -> Result<String, String> {
+        self.semantic_search(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `cypher_query` handler.
+    pub async fn cypher_query_for_test(&self, params: CypherQueryParams) -> Result<String, String> {
+        self.cypher_query(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
     }
 }
 

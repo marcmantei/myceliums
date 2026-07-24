@@ -12,9 +12,14 @@ keywords = ["code-analysis", "knowledge-graph", "mcp", "ai-agent", "developer-to
 categories = ["development-tools", "command-line-utilities"]
 
 [features]
-default = []
+default = ["test-support"]
 ## Enable cross-repository comparison and adaptation planning (premium feature).
 cross_repo = ["myceliums-core/cross_repo"]
+## Expose thin public wrappers around the private tool handlers so integration
+## tests can exercise handler logic without a full stdio transport. Enabled by
+## default because the wrappers are zero-cost (thin delegates, no extra deps)
+## and this keeps `cargo test --workspace` running the integration suite.
+test-support = []
 
 [dependencies]
 myceliums-core = { workspace = true }
@@ -33,3 +38,6 @@ schemars = { workspace = true }
 dirs = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
