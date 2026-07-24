@@ -4728,6 +4728,7 @@ dependencies = [
  "dirs",
  "myceliums-core",
  "myceliums-cypher",
+ "myceliums-mcp",
  "myceliums-storage",
  "rmcp",
  "schemars 0.8.22",

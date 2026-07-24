@@ -14,7 +14,11 @@ use std::collections::HashMap;
 ///
 /// A dedicated store (separate from the shared handler harness) keeps this
 /// pipeline assertion self-contained and independent of test ordering.
-async fn analyze_fixture() -> (
+///
+/// Named `_for_test` to match the `_for_test` convention used by the MCP
+/// handler wrappers, marking this as a test-only helper rather than a
+/// production entry point.
+async fn analyze_fixture_for_test() -> (
     Vec<myceliums_storage::CodeSymbol>,
     Vec<myceliums_storage::Relationship>,
     myceliums_core::analyzer::AnalysisResult,
@@ -38,7 +42,7 @@ async fn analyze_fixture() -> (
 
 #[tokio::test]
 async fn analyze_produces_exact_entity_counts() {
-    let (_symbols, _rels, result) = analyze_fixture().await;
+    let (_symbols, _rels, result) = analyze_fixture_for_test().await;
     // Ground truth for tests/fixtures/sample-ts-project (4 .ts files).
     assert_eq!(result.file_count, 4, "expected 4 indexed files");
     assert_eq!(result.symbol_count, 28, "expected 28 indexed symbols");
@@ -50,42 +54,54 @@ async fn analyze_produces_exact_entity_counts() {
 
 #[tokio::test]
 async fn analyze_extracts_named_symbols_with_kinds() {
-    let (symbols, _rels, _result) = analyze_fixture().await;
+    let (symbols, _rels, _result) = analyze_fixture_for_test().await;
     let by_name: HashMap<&str, &myceliums_storage::CodeSymbol> =
         symbols.iter().map(|s| (s.name.as_str(), s)).collect();
 
     // Classes / interfaces / type aliases from the fixture.
     assert_eq!(
-        by_name.get("UserService").map(|s| s.kind.to_string()),
+        by_name
+            .get(harness::fixture::USER_SERVICE)
+            .map(|s| s.kind.to_string()),
         Some("Class".to_string())
     );
     assert_eq!(
-        by_name.get("Database").map(|s| s.kind.to_string()),
+        by_name
+            .get(harness::fixture::DATABASE)
+            .map(|s| s.kind.to_string()),
         Some("Class".to_string())
     );
     assert_eq!(
-        by_name.get("User").map(|s| s.kind.to_string()),
+        by_name
+            .get(harness::fixture::USER)
+            .map(|s| s.kind.to_string()),
         Some("Interface".to_string())
     );
     assert_eq!(
-        by_name.get("Config").map(|s| s.kind.to_string()),
+        by_name
+            .get(harness::fixture::CONFIG)
+            .map(|s| s.kind.to_string()),
         Some("TypeAlias".to_string())
     );
 
     // A free function and a method resolve to the expected files.
     assert_eq!(
-        by_name.get("formatName").map(|s| s.file_path.as_str()),
+        by_name
+            .get(harness::fixture::FORMAT_NAME)
+            .map(|s| s.file_path.as_str()),
         Some("src/utils.ts")
     );
     assert_eq!(
-        by_name.get("getUser").map(|s| s.file_path.as_str()),
-        Some("src/services/user.ts")
+        by_name
+            .get(harness::fixture::GET_USER)
+            .map(|s| s.file_path.as_str()),
+        Some(harness::fixture::USER_SERVICE_FILE)
     );
 }
 
 #[tokio::test]
 async fn analyze_resolves_call_edges() {
-    let (symbols, rels, _result) = analyze_fixture().await;
+    let (symbols, rels, _result) = analyze_fixture_for_test().await;
     let uid_to_name: HashMap<&str, &str> = symbols
         .iter()
         .map(|s| (s.uid.as_str(), s.name.as_str()))
@@ -107,10 +123,10 @@ async fn analyze_resolves_call_edges() {
 
     // Specific, meaningful call relationships must be present.
     for expected in [
-        ("main", "getUser"),
-        ("main", "formatName"),
-        ("getUser", "findById"),
-        ("createUser", "insert"),
+        ("main", harness::fixture::GET_USER),
+        ("main", harness::fixture::FORMAT_NAME),
+        (harness::fixture::GET_USER, harness::fixture::FIND_BY_ID),
+        (harness::fixture::CREATE_USER, "insert"),
         ("handler", "processRequest"),
         ("processRequest", "parseBody"),
         ("processRequest", "validateInput"),
@@ -124,7 +140,7 @@ async fn analyze_resolves_call_edges() {
 
 #[tokio::test]
 async fn analyze_resolves_membership_edges() {
-    let (symbols, rels, _result) = analyze_fixture().await;
+    let (symbols, rels, _result) = analyze_fixture_for_test().await;
     let uid_to_name: HashMap<&str, &str> = symbols
         .iter()
         .map(|s| (s.uid.as_str(), s.name.as_str()))
@@ -143,10 +159,13 @@ async fn analyze_resolves_membership_edges() {
 
     // Methods are members of their declaring class.
     for expected in [
-        ("getUser", "UserService"),
-        ("createUser", "UserService"),
-        ("findById", "Database"),
-        ("insert", "Database"),
+        (harness::fixture::GET_USER, harness::fixture::USER_SERVICE),
+        (
+            harness::fixture::CREATE_USER,
+            harness::fixture::USER_SERVICE,
+        ),
+        (harness::fixture::FIND_BY_ID, harness::fixture::DATABASE),
+        ("insert", harness::fixture::DATABASE),
     ] {
         assert!(
             member_edges.contains(&expected),

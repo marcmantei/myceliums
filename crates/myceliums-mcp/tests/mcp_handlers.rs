@@ -27,7 +27,7 @@ async fn context_search_finds_indexed_symbol() {
     harness::ensure_indexed().await;
     let out = server()
         .context_search_for_test(SearchParams {
-            query: "getUser".to_string(),
+            query: harness::fixture::GET_USER.to_string(),
             repo_id: Some(harness::REPO_ID.to_string()),
             limit: Some(10),
             explain: None,
@@ -35,7 +35,7 @@ async fn context_search_finds_indexed_symbol() {
         .await
         .expect("context_search should succeed");
     assert!(
-        out.contains("getUser"),
+        out.contains(harness::fixture::GET_USER),
         "expected getUser in results, got: {out}"
     );
 }
@@ -85,7 +85,7 @@ index 0000000..1111111 100644
         .expect("detect_impact should succeed");
     // The changed file must be surfaced in the impact report.
     assert!(
-        out.contains("src/services/user.ts"),
+        out.contains(harness::fixture::USER_SERVICE_FILE),
         "impact report should mention the changed file, got: {out}"
     );
 }
@@ -114,14 +114,14 @@ async fn rename_symbol_produces_plan_for_known_symbol() {
     harness::ensure_indexed().await;
     let out = server()
         .rename_symbol_for_test(RenameParams {
-            symbol_name: "getUser".to_string(),
-            new_name: "fetchUser".to_string(),
+            symbol_name: harness::fixture::GET_USER.to_string(),
+            new_name: harness::fixture::FETCH_USER.to_string(),
             repo_id: harness::REPO_ID.to_string(),
         })
         .await
         .expect("rename of a known symbol should succeed");
     assert!(
-        out.contains("fetchUser") || out.contains("getUser"),
+        out.contains(harness::fixture::FETCH_USER) || out.contains(harness::fixture::GET_USER),
         "rename plan should reference the symbols, got: {out}"
     );
 }
@@ -156,7 +156,7 @@ async fn cypher_query_handler_returns_rows() {
         .await
         .expect("cypher_query should succeed");
     assert!(
-        out.contains("UserService") && out.contains("Database"),
+        out.contains(harness::fixture::USER_SERVICE) && out.contains(harness::fixture::DATABASE),
         "class query should list both classes, got: {out}"
     );
 }

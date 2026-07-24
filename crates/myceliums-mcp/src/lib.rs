@@ -28,8 +28,12 @@ use tracing::info;
 mod format;
 
 fn data_dir() -> PathBuf {
-    // Allow overriding the data home so the server can be pointed at an
-    // isolated directory (used by integration tests and multi-tenant setups).
+    // `MYCELIUMS_DATA_DIR` overrides the data home so the server can be pointed
+    // at an isolated directory. This is a **test/dev-only seam** (the
+    // integration harness sets it to a throwaway tempdir) and also serves
+    // multi-tenant setups; it is intentionally not a security boundary — the
+    // path is taken verbatim and not validated, so production deployments must
+    // not expose it to untrusted input.
     if let Some(dir) = std::env::var_os("MYCELIUMS_DATA_DIR") {
         return PathBuf::from(dir);
     }
