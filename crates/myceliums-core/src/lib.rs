@@ -87,6 +87,7 @@ pub mod process;
 pub mod progress;
 pub mod rename;
 pub mod search;
+pub mod service;
 pub mod service_map;
 pub mod snapshot;
 pub mod surprising_connections;
@@ -163,6 +164,7 @@ pub use process::{ProcessFilter, ProcessTracer};
 pub use progress::{AnalysisPhase, ProgressReporter, SilentReporter};
 pub use rename::RenamePlan;
 pub use search::{search_symbols, search_symbols_explain, SearchExplain, TermScore};
+pub use service::{GraphService, SymbolContext};
 pub use service_map::{load_service_mappings, save_service_mapping, ServiceMapping};
 pub use snapshot::{
     build_snapshot, diff_snapshots, list_snapshots, load_snapshot, load_snapshot_by_id,
