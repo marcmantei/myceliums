@@ -129,12 +129,13 @@ impl GraphService {
         RepoRegistry::repo_db_path(&self.data_dir, repo_id)
     }
 
-    /// Opens (or returns the cached) store handle for `repo_id`.
+    /// Returns the process-wide [`Store`] handle for `repo_id`, opening it on
+    /// first use.
     ///
-    /// The first call for a given repository opens the LanceDB database and
-    /// caches the handle; subsequent calls return the same [`Arc<Store>`]
-    /// without touching disk. This guarantees a single open handle per
-    /// repository per process.
+    /// The first call for a repository opens its LanceDB database and caches
+    /// the handle; every later call returns that same [`Arc<Store>`] without
+    /// touching disk. There is therefore exactly one open handle per
+    /// repository per process, shared by all callers — reads and writes alike.
     pub async fn open_store(&self, repo_id: &str) -> Result<Arc<Store>> {
         if let Some(existing) = self.stores.get(repo_id) {
             return Ok(existing.clone());
@@ -142,23 +143,19 @@ impl GraphService {
         let store = Store::open(&self.db_path(repo_id), repo_id)
             .await
             .map_err(|e| MyceliumError::Storage(e.to_string()))?;
-        // A concurrent opener may have raced us; `entry` collapses to a single
-        // cached handle either way.
+        // Two callers can both miss the cache above and both open the database,
+        // because `Store::open` is awaited outside any lock (holding a DashMap
+        // guard across an await point would risk deadlock). `entry(..)` locks
+        // the shard and `or_insert_with` runs at most once, so exactly one of
+        // the racing handles is published and every caller receives that same
+        // `Arc<Store>`. The loser's handle is dropped here — wasted work on a
+        // cold-start race, never a second live handle for the repository.
         let handle = self
             .stores
             .entry(repo_id.to_string())
             .or_insert_with(|| Arc::new(store))
             .clone();
         Ok(handle)
-    }
-
-    /// Returns the cached store handle for `repo_id`, opening it if needed.
-    ///
-    /// This is the read-access counterpart to [`open_store`](Self::open_store);
-    /// they share the same cache, so the returned handle is the single
-    /// per-process store for the repository.
-    pub async fn get_store(&self, repo_id: &str) -> Result<Arc<Store>> {
-        self.open_store(repo_id).await
     }
 
     // ── Shared graph-assembly helpers ────────────────────────────────
@@ -186,7 +183,7 @@ impl GraphService {
         query: &str,
         explain: bool,
     ) -> Result<Vec<SearchResult>> {
-        let store = self.get_store(repo_id).await?;
+        let store = self.open_store(repo_id).await?;
         let symbols = store
             .get_symbols()
             .await
@@ -210,7 +207,7 @@ impl GraphService {
         repo_id: &str,
         symbol_name: &str,
     ) -> Result<SymbolContext> {
-        let store = self.get_store(repo_id).await?;
+        let store = self.open_store(repo_id).await?;
         let symbols = store
             .get_symbols()
             .await
@@ -282,6 +279,11 @@ mod tests {
         (GraphService::new(dir.path()), dir)
     }
 
+    /// Builds a fully-populated [`CodeSymbol`] fixture.
+    ///
+    /// Every field of `CodeSymbol` is set explicitly — no `..Default::default()`
+    /// — so adding a field to the struct breaks this helper at compile time and
+    /// forces the fixture to stay in step with the domain model.
     fn symbol(uid: &str, name: &str) -> CodeSymbol {
         CodeSymbol {
             uid: uid.to_string(),
@@ -307,6 +309,22 @@ mod tests {
             repo_id: "r".to_string(),
             metadata: String::new(),
         }
+    }
+
+    #[test]
+    fn symbol_fixture_populates_every_field() {
+        let s = symbol("u1", "alpha");
+        assert_eq!(s.uid, "u1");
+        assert_eq!(s.name, "alpha");
+        assert_eq!(s.qualified_name, "mod::alpha");
+        assert_eq!(s.kind, myceliums_storage::SymbolKind::Function);
+        assert_eq!(s.file_path, "src/lib.rs");
+        assert_eq!(s.start_line, 1);
+        assert_eq!(s.end_line, 2);
+        assert_eq!(s.signature, "fn alpha()");
+        assert_eq!(s.content, "");
+        assert_eq!(s.repo_id, "r");
+        assert_eq!(s.metadata, None);
     }
 
     #[test]

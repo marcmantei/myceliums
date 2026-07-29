@@ -34,6 +34,32 @@
 //! # }
 //! ```
 //!
+//! ## Service Layer
+//!
+//! [`GraphService`] is the entry point for transport adapters (MCP tools, HTTP
+//! handlers, CLI commands). It owns store lifecycle — one
+//! `myceliums_storage::Store` per repository per process, opened lazily and
+//! cached — resolves repository ids, and provides the read-and-stitch routines
+//! handlers used to duplicate.
+//!
+//! ```rust,no_run
+//! use myceliums_core::GraphService;
+//!
+//! # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+//! let service = GraphService::new("/tmp/myceliums-data");
+//! let repo_id = service.resolve_repo_id(None)?;
+//!
+//! // Symbol plus the graph edges that reach it, as a `SymbolContext`.
+//! let context = service.get_symbol_context(&repo_id, "authenticate").await?;
+//! println!("{} called by {:?}", context.symbol.name, context.callers);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! Prefer `GraphService` over opening a store directly: handlers that do their
+//! own `Store::open` bypass the cache and leak a second handle per call. See
+//! the [`service`] module for the full API.
+//!
 //! ## Feature Flags
 //!
 //! | Feature | Default | Description |
@@ -164,6 +190,8 @@ pub use process::{ProcessFilter, ProcessTracer};
 pub use progress::{AnalysisPhase, ProgressReporter, SilentReporter};
 pub use rename::RenamePlan;
 pub use search::{search_symbols, search_symbols_explain, SearchExplain, TermScore};
+/// Service layer: store lifecycle, repo resolution, and graph assembly for
+/// transport adapters. See the crate-level "Service Layer" section.
 pub use service::{GraphService, SymbolContext};
 pub use service_map::{load_service_mappings, save_service_mapping, ServiceMapping};
 pub use snapshot::{
