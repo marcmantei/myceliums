@@ -9,9 +9,9 @@ use myceliums_core::{
     hybrid_search as core_hybrid_search, hybrid_search_explain as core_hybrid_search_explain,
     link_decision_to_symbol, lint_architecture, list_snapshots, load_decisions,
     load_service_mappings, load_snapshot, load_snapshot_by_id, parse_codeowners, rerank_results,
-    run_git_diff, save_decision, save_service_mapping, save_snapshot, search_symbols,
-    search_symbols_explain, AdrStatus, ArchDecisionRecord, CommunityDetector, MermaidDiagramType,
-    Ontology, ProcessFilter, ProcessTracer, RenamePlan,
+    run_git_diff, save_decision, save_service_mapping, save_snapshot, search_symbols, AdrStatus,
+    ArchDecisionRecord, CommunityDetector, GraphService, MermaidDiagramType, Ontology,
+    ProcessFilter, ProcessTracer, RenamePlan,
 };
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
 use rmcp::handler::server::tool::ToolRouter;
@@ -49,6 +49,9 @@ fn registry_path() -> PathBuf {
 pub struct MyceliumsMcp {
     #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
+    /// Owns store lifecycle, repo resolution, and graph assembly so handlers
+    /// stay thin transport adapters.
+    service: GraphService,
 }
 
 impl Default for MyceliumsMcp {
@@ -61,6 +64,7 @@ impl MyceliumsMcp {
     pub fn new() -> Self {
         Self {
             tool_router: Self::tool_router(),
+            service: GraphService::new(data_dir()),
         }
     }
 }
@@ -1355,22 +1359,17 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<SearchParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
-        let store = Store::open(&db_path, &repo_id)
+        let repo_id = self
+            .service
+            .resolve_repo_id(params.repo_id.as_deref())
+            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let explain = params.explain.unwrap_or(false);
+        let results = self
+            .service
+            .search_context(&repo_id, &params.query, explain)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let explain = params.explain.unwrap_or(false);
-        let results = if explain {
-            search_symbols_explain(&symbols, &params.query)
-        } else {
-            search_symbols(&symbols, &params.query)
-        };
         let limit = params.limit.unwrap_or(20);
         let items: Vec<SearchResultItem> = results
             .into_iter()
@@ -1400,55 +1399,13 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<SymbolContextParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
-        let store = Store::open(&db_path, &params.repo_id)
+        let context = self
+            .service
+            .get_symbol_context(&params.repo_id, &params.symbol_name)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let symbol = symbols
-            .iter()
-            .find(|s| s.name == params.symbol_name || s.qualified_name == params.symbol_name)
-            .ok_or_else(|| {
-                rmcp::ErrorData::internal_error(
-                    format!("Symbol not found: {}", params.symbol_name),
-                    None,
-                )
-            })?;
-
-        use myceliums_storage::RelationshipKind;
-        let uid_to_name: std::collections::HashMap<&str, &str> = symbols
-            .iter()
-            .map(|s| (s.uid.as_str(), s.name.as_str()))
-            .collect();
-
-        let callers: Vec<String> = relationships
-            .iter()
-            .filter(|r| r.kind == RelationshipKind::Calls && r.target_uid == symbol.uid)
-            .filter_map(|r| {
-                uid_to_name
-                    .get(r.source_uid.as_str())
-                    .map(|s| s.to_string())
-            })
-            .collect();
-
-        let callees: Vec<String> = relationships
-            .iter()
-            .filter(|r| r.kind == RelationshipKind::Calls && r.source_uid == symbol.uid)
-            .filter_map(|r| {
-                uid_to_name
-                    .get(r.target_uid.as_str())
-                    .map(|s| s.to_string())
-            })
-            .collect();
+        let symbol = context.symbol;
         let output = SymbolContextOutput {
             name: symbol.name.clone(),
             qualified_name: symbol.qualified_name.clone(),
@@ -1458,8 +1415,8 @@ impl MyceliumsMcp {
             end_line: symbol.end_line,
             signature: symbol.signature.clone(),
             content: symbol.content.clone(),
-            callers,
-            callees,
+            callers: context.callers,
+            callees: context.callees,
             metadata: symbol.metadata.clone(),
         };
         Ok(Json(TextOutput {
