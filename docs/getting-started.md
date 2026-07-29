@@ -11,17 +11,21 @@ Get your codebase indexed and queryable in under 2 minutes.
 
 Pick one of the three methods below.
 
-### Option A: Install from crates.io
+### Option A: Install with Cargo
+
+`myc` is not published to crates.io yet, so install it from the git tag of a
+release. Pin the tag — installing from the default branch gives you whatever is
+on `main` at that moment, which is not reproducible.
 
 ```bash
-cargo install myc
+cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.0 --locked myc
 ```
 
 ### Option B: Build from source
 
 ```bash
-git clone https://github.com/myceliums/myc.git
-cd myc
+git clone https://github.com/marcmantei/myceliums.git
+cd myceliums
 cargo build --release
 # The binary is at ./target/release/myc
 ```

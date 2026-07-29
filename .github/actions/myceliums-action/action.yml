@@ -8,7 +8,7 @@ branding:
 
 inputs:
   myc-version:
-    description: 'Version of myc to install (e.g., "0.2.0" or "latest")'
+    description: 'Release of myc to install — a version like "0.3.0" or "latest". Every install is pinned to a release tag; the action never builds from a branch HEAD.'
     required: false
     default: 'latest'
   depth:
@@ -26,7 +26,7 @@ runs:
     - name: Install myc
       shell: bash
       run: |
-        set -e
+        set -eu
         VERSION="${{ inputs.myc-version }}"
         OS=$(uname -s | tr '[:upper:]' '[:lower:]')
         ARCH=$(uname -m)
@@ -45,21 +45,39 @@ runs:
           *) echo "::error::Unsupported OS: $OS"; exit 1 ;;
         esac
 
-        if [ "$VERSION" = "latest" ]; then
-          DOWNLOAD_URL=$(curl -s https://api.github.com/repos/marcmantei/myceliums/releases/latest | grep "browser_download_url.*${TARGET}" | head -1 | cut -d '"' -f 4)
+        # Resolve the requested version to a concrete tag before installing
+        # anything. Both install paths below — pre-built binary and source build
+        # — are pinned to that tag, so a run is reproducible and never picks up
+        # whatever happens to be on the default branch when it executes.
+        if [ "$VERSION" = "latest" ] || [ -z "$VERSION" ]; then
+          TAG=$(curl -fsSL https://api.github.com/repos/marcmantei/myceliums/releases/latest \
+            | grep -m1 '"tag_name"' | cut -d '"' -f 4 || true)
+
+          # No published release yet: fall back to the highest version tag in the
+          # repo. Still a fixed commit — just not one with binaries attached.
+          if [ -z "$TAG" ]; then
+            TAG=$(git ls-remote --tags --refs https://github.com/marcmantei/myceliums 'v*' \
+              | cut -d '/' -f 3 | sort -V | tail -1 || true)
+          fi
         else
-          DOWNLOAD_URL="https://github.com/marcmantei/myceliums/releases/download/v${VERSION}/myc-${TARGET}.tar.gz"
+          TAG="v${VERSION#v}"
         fi
 
-        if [ -z "$DOWNLOAD_URL" ]; then
-          echo "::warning::No pre-built binary found for ${TARGET}. Building from source..."
-          cargo install myc
-        else
-          echo "Downloading myc from: $DOWNLOAD_URL"
-          curl -sL "$DOWNLOAD_URL" -o /tmp/myc.tar.gz
+        if [ -z "$TAG" ]; then
+          echo "::error::Could not resolve a myc tag for myc-version '${VERSION}'. Pass an explicit version, e.g. myc-version: '0.3.0'."
+          exit 1
+        fi
+
+        echo "Installing myc ${TAG} for ${TARGET}"
+        DOWNLOAD_URL="https://github.com/marcmantei/myceliums/releases/download/${TAG}/myc-${TARGET}.tar.gz"
+
+        if curl -fsSL "$DOWNLOAD_URL" -o /tmp/myc.tar.gz; then
           tar xzf /tmp/myc.tar.gz -C /tmp/
           chmod +x /tmp/myc
           sudo mv /tmp/myc /usr/local/bin/myc
+        else
+          echo "::warning::No pre-built binary for ${TARGET} at ${TAG}. Building from source at that tag..."
+          cargo install --git https://github.com/marcmantei/myceliums --tag "$TAG" --locked myc
         fi
 
         myc --version
@@ -114,42 +132,32 @@ runs:
           RISK_EMOJI="🟢"
         fi
 
-        # Build markdown comment
-        COMMENT="## 🔍 Myceliums Impact Analysis
+        # Build the markdown comment with printf rather than a multi-line shell
+        # string. Every line here must stay indented: inside a YAML block scalar
+        # a line at column 0 terminates the block, which is what made this file
+        # unparseable before.
+        {
+          printf '## 🔍 Myceliums Impact Analysis\n\n'
+          printf '**Blast Radius:** %s symbols affected %s %s\n' \
+            "$TOTAL" "$RISK_EMOJI" "$RISK_SCORE"
 
-**Blast Radius:** ${TOTAL} symbols affected ${RISK_EMOJI} ${RISK_SCORE}
-"
+          if [ -n "$DIRECTLY_CHANGED" ] && [ "$DIRECT_COUNT" -gt 0 ]; then
+            printf '\n### Directly Changed (%s)\n' "$DIRECT_COUNT"
+            printf '```\n%s\n```\n' "$DIRECTLY_CHANGED"
+          fi
 
-        if [ -n "$DIRECTLY_CHANGED" ] && [ "$DIRECT_COUNT" -gt 0 ]; then
-          COMMENT="${COMMENT}
-### Directly Changed (${DIRECT_COUNT})
-\`\`\`
-${DIRECTLY_CHANGED}
-\`\`\`
-"
-        fi
+          if [ -n "$INDIRECTLY_AFFECTED" ] && [ "$INDIRECT_COUNT" -gt 0 ]; then
+            printf '\n### Indirectly Affected (%s)\n' "$INDIRECT_COUNT"
+            printf '```\n%s\n```\n' "$INDIRECTLY_AFFECTED"
+          fi
 
-        if [ -n "$INDIRECTLY_AFFECTED" ] && [ "$INDIRECT_COUNT" -gt 0 ]; then
-          COMMENT="${COMMENT}
-### Indirectly Affected (${INDIRECT_COUNT})
-\`\`\`
-${INDIRECTLY_AFFECTED}
-\`\`\`
-"
-        fi
+          if [ "$TOTAL" -eq 0 ]; then
+            printf '\nNo symbols affected by this change. The diff may only touch comments, formatting, or non-code files.\n'
+          fi
 
-        if [ "$TOTAL" -eq 0 ]; then
-          COMMENT="${COMMENT}
-No symbols affected by this change. The diff may only touch comments, formatting, or non-code files.
-"
-        fi
-
-        COMMENT="${COMMENT}
----
-<sub>Powered by <a href=\"https://github.com/marcmantei/myceliums\">Myceliums</a> — the code knowledge graph engine. 30 MCP tools · 20+ languages · local-first · no cloud required</sub>"
-
-        # Write to file for the comment step
-        echo "$COMMENT" > /tmp/impact_comment.md
+          printf '\n---\n'
+          printf '<sub>Powered by <a href="https://github.com/marcmantei/myceliums">Myceliums</a> — the code knowledge graph engine. 54 MCP tools · 23 languages · local-first · no cloud required</sub>\n'
+        } > /tmp/impact_comment.md
 
     - name: Post PR comment
       shell: bash

@@ -4,17 +4,15 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.2.x   | Yes       |
-| < 0.2   | No        |
+| 0.3.x   | Yes       |
+| < 0.3   | No        |
 
 ## Reporting a vulnerability
 
 If you discover a security vulnerability, please report it responsibly.
 
-**Do not open a public issue.** Instead, use one of:
-
-1. **GitHub Security Advisories** — [Report a vulnerability](https://github.com/marcmantei/myceliums/security/advisories/new) (preferred)
-2. **Email** — Send details to **security@myceliums.ai**
+**Do not open a public issue.** Instead, report it privately through
+**[GitHub Security Advisories](https://github.com/marcmantei/myceliums/security/advisories/new)**.
 
 Please include:
 
@@ -25,9 +23,11 @@ Please include:
 
 ## What to expect
 
-- **Acknowledgement** within 48 hours
-- **Status update** within 7 days
-- **Fix or mitigation** as soon as practical, depending on severity
+Myceliums is maintained by a single person on a best-effort basis, so this is a
+statement of intent rather than a service-level agreement: reports are usually
+acknowledged within a few days, and fixes land as soon as practical, prioritised
+by severity. If a report goes unanswered for two weeks, feel free to ping the
+advisory thread.
 
 ## Scope
 
