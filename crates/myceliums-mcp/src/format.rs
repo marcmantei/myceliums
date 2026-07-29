@@ -13,7 +13,7 @@ use myceliums_core::{
 
 pub fn format_analyze(o: &AnalyzeOutput) -> String {
     let status = if o.cached { "cached" } else { "fresh" };
-    format!(
+    let mut out = format!(
         "Analysis complete ({status}):\n\
          \n\
          Repository:  {repo}\n\
@@ -21,14 +21,35 @@ pub fn format_analyze(o: &AnalyzeOutput) -> String {
          Files:       {files}\n\
          Relations:   {rels}\n\
          Communities: {comm}\n\
-         Processes:   {proc}",
+         Processes:   {proc}\n\
+         Embeddings:  {embedded}/{total} symbols",
         repo = o.repo_id,
         sym = o.symbols,
         files = o.files,
         rels = o.relationships,
         comm = o.communities,
         proc = o.processes,
-    )
+        embedded = o.symbols_embedded,
+        total = o.symbols_total,
+    );
+    if o.embedding_failures > 0 {
+        out.push_str(&format!(
+            "\n⚠ Embedding failures: {} — {} of {} symbols have no vector and are \
+             invisible to semantic/hybrid search",
+            o.embedding_failures, o.symbols_embedded, o.symbols_total
+        ));
+    }
+    out
+}
+
+/// Prefix a search result body with a partial-index warning banner when one
+/// applies. Keeps the warning impossible to miss at the top of the response
+/// while leaving the result table untouched.
+pub fn with_index_warning(warning: Option<String>, body: String) -> String {
+    match warning {
+        Some(w) => format!("⚠ {w}\n\n{body}"),
+        None => body,
+    }
 }
 
 pub fn format_search_results(query: &str, results: &[SearchResultItem]) -> String {

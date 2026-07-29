@@ -28,6 +28,11 @@ Search for symbols using semantic similarity (vector embeddings). Returns symbol
 | `limit` | integer | no | `10` | Maximum results to return |
 | `explain` | bool | no | `false` | Show scoring breakdown |
 
+> **Partial-index warning.** `semantic_search` can only return symbols that were
+> embedded. If some symbols failed to embed during analysis, the response is
+> prefixed with a warning (`⚠ index partially embedded: N of M symbols …`) so
+> callers know results may be incomplete. See [Partial indexes](#partial-indexes).
+
 ### `hybrid_search`
 
 Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality. Combines text matching and semantic similarity.
@@ -39,6 +44,25 @@ Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion fo
 | `limit` | integer | no | `20` | Maximum results to return |
 | `rerank` | bool | no | `false` | Apply cross-encoder reranking to results |
 | `explain` | bool | no | `false` | Show scoring breakdown and graph paths |
+
+> **Partial-index warning.** Like `semantic_search`, the vector half of
+> `hybrid_search` only sees embedded symbols. A partial index prepends a warning
+> to the response. See [Partial indexes](#partial-indexes).
+
+#### Partial indexes
+
+Both `semantic_search` and `hybrid_search` read embedding accounting recorded at
+index time (no per-query vector scan). When `symbols_embedded < symbols_total` —
+because embedding generation or storage failed for some symbols — the search
+response is prefixed with:
+
+```
+⚠ index partially embedded: 900 of 1240 symbols have vectors (340 embedding failures); un-embedded symbols are invisible to semantic and hybrid search
+```
+
+The `analyze` tool response surfaces the same accounting (embedded/total symbols
+and an explicit failure line). To make partial indexes a hard failure in CI, run
+`myc analyze --strict-embeddings` (see [commands reference](commands.md#embedding-accounting)).
 
 ### `search_documents`
 
@@ -498,6 +522,13 @@ Analyze a codebase and build its knowledge graph. Parses source files, extracts 
 | `force` | bool | no | `false` | Force full re-analysis |
 | `max_age_minutes` | integer | no | `60` | Maximum cache age in minutes |
 | `skip_embeddings` | bool | no | `false` | Skip embedding generation for faster analysis |
+
+The response includes embedding accounting — `symbols_embedded` of `symbols_total`
+symbols, plus an explicit failure line when any symbol could not be embedded. A
+non-zero failure count means the index is partial and semantic/hybrid search will
+omit the un-embedded symbols (see [Partial indexes](#partial-indexes)). The MCP
+tool has no strictness knob; use the `myc analyze --strict-embeddings` CLI flag to
+fail CI on a partial index.
 
 ### `delete`
 

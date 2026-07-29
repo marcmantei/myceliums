@@ -753,6 +753,12 @@ pub struct AnalyzeOutput {
     pub relationships: usize,
     pub communities: usize,
     pub processes: usize,
+    /// Number of symbols that received an embedding vector.
+    pub symbols_embedded: usize,
+    /// Number of symbols that were candidates for embedding.
+    pub symbols_total: usize,
+    /// Number of symbols whose embedding failed (0 = fully embedded / skipped).
+    pub embedding_failures: usize,
     /// Whether this result came from cache (true) or a fresh analysis (false)
     pub cached: bool,
 }
@@ -1102,6 +1108,22 @@ pub struct KnowledgeResultItem {
     pub confidence: f64,
 }
 
+/// Load the partial-index warning for a store, if the index is partially
+/// embedded. Reads the accounting recorded at index time — no per-query vector
+/// scan. Returns `None` when the index is complete or has no accounting.
+///
+/// A genuine load error is logged (so it is observable rather than silently
+/// indistinguishable from "no warning") but does not fail the query.
+async fn partial_index_warning(store: &Store) -> Option<String> {
+    match myceliums_core::EmbeddingStats::load(store).await {
+        Ok(stats) => stats.and_then(|stats| stats.partial_index_warning()),
+        Err(e) => {
+            tracing::warn!("Failed to load embedding accounting for partial-index warning: {e}");
+            None
+        }
+    }
+}
+
 #[tool_router]
 impl MyceliumsMcp {
     #[tool(
@@ -1157,6 +1179,17 @@ impl MyceliumsMcp {
                         .get_processes()
                         .await
                         .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+                    // A genuine load error propagates (same as the non-cached
+                    // path, which propagates the analyzer error). A *missing*
+                    // record means a legacy index built before accounting
+                    // existed: treat it as fully embedded rather than "0 of N",
+                    // which would falsely imply a total embedding failure.
+                    let embedding_stats = myceliums_core::EmbeddingStats::load(&store)
+                        .await
+                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
+                        .unwrap_or_else(|| {
+                            myceliums_core::EmbeddingStats::complete(symbols.len(), symbols.len())
+                        });
                     let output = AnalyzeOutput {
                         repo_id,
                         symbols: symbols.len(),
@@ -1164,6 +1197,9 @@ impl MyceliumsMcp {
                         relationships: relationships.len(),
                         communities: communities.len(),
                         processes: processes.len(),
+                        symbols_embedded: embedding_stats.symbols_embedded,
+                        symbols_total: embedding_stats.symbols_total,
+                        embedding_failures: embedding_stats.embedding_failures,
                         cached: true,
                     };
                     return Ok(Json(TextOutput {
@@ -1263,6 +1299,9 @@ impl MyceliumsMcp {
             relationships: result.relationship_count,
             communities: community_count,
             processes: process_count,
+            symbols_embedded: result.symbols_embedded,
+            symbols_total: result.symbols_total,
+            embedding_failures: result.embedding_failures,
             cached: false,
         };
         Ok(Json(TextOutput {
@@ -1507,8 +1546,12 @@ impl MyceliumsMcp {
                 explain: r.explain.and_then(|e| serde_json::to_value(e).ok()),
             })
             .collect();
+        let warning = partial_index_warning(&store).await;
         Ok(Json(TextOutput {
-            text: format::format_hybrid_results(&params.query, &items),
+            text: format::with_index_warning(
+                warning,
+                format::format_hybrid_results(&params.query, &items),
+            ),
         }))
     }
 
@@ -1666,8 +1709,12 @@ impl MyceliumsMcp {
                 explain: None,
             })
             .collect();
+        let warning = partial_index_warning(&store).await;
         Ok(Json(TextOutput {
-            text: format::format_search_results(&params.query, &items),
+            text: format::with_index_warning(
+                warning,
+                format::format_search_results(&params.query, &items),
+            ),
         }))
     }
 
@@ -5868,5 +5915,73 @@ mod tests {
 
         // Should respect the limit
         assert!(output.questions.len() <= 2, "Should not exceed limit of 2");
+    }
+
+    /// A tempdir index with un-embedded (zero-vector) symbols must produce a
+    /// partial-index warning that search responses can surface. Regression
+    /// guard for issue #32: partial indexes were invisible at query time.
+    #[tokio::test]
+    async fn partial_index_warning_surfaces_from_zero_vector_rows() {
+        use myceliums_core::EmbeddingStats;
+        use myceliums_storage::{CodeSymbol, SymbolKind};
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path(), "test-repo").await.unwrap();
+
+        // Three symbols indexed; each starts life as a zero-vector placeholder.
+        let symbols: Vec<CodeSymbol> = (0..3)
+            .map(|i| CodeSymbol {
+                uid: format!("sym{i}"),
+                name: format!("fn{i}"),
+                qualified_name: format!("m.fn{i}"),
+                kind: SymbolKind::Function,
+                file_path: "src/lib.rs".to_string(),
+                start_line: 1,
+                end_line: 2,
+                signature: format!("fn fn{i}()"),
+                content: "body".to_string(),
+                repo_id: "test-repo".to_string(),
+                metadata: None,
+            })
+            .collect();
+        store.store_symbols(&symbols).await.unwrap();
+
+        // Only one of three symbols got a real vector — the other two remain
+        // zero-vector placeholders (a deliberately partial index).
+        let dim = myceliums_storage::schema::DEFAULT_EMBEDDING_DIM as usize;
+        store
+            .store_embeddings(vec![("sym0".to_string(), vec![0.5f32; dim])])
+            .await
+            .unwrap();
+        EmbeddingStats {
+            symbols_total: 3,
+            symbols_embedded: 1,
+            embedding_failures: 2,
+        }
+        .record(&store)
+        .await
+        .unwrap();
+
+        let warning = partial_index_warning(&store)
+            .await
+            .expect("partial index must warn");
+        assert!(warning.contains("1 of 3 symbols"));
+
+        // The warning is prefixed onto the rendered search body.
+        let body = format::with_index_warning(Some(warning), "results table".to_string());
+        assert!(body.starts_with("⚠ "));
+        assert!(body.contains("results table"));
+    }
+
+    /// A fully-embedded tempdir index produces no warning.
+    #[tokio::test]
+    async fn complete_index_has_no_partial_warning() {
+        use myceliums_core::EmbeddingStats;
+
+        let dir = tempfile::tempdir().unwrap();
+        let store = Store::open(dir.path(), "test-repo").await.unwrap();
+        EmbeddingStats::complete(2, 2).record(&store).await.unwrap();
+
+        assert_eq!(partial_index_warning(&store).await, None);
     }
 }
