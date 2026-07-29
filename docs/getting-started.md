@@ -24,8 +24,8 @@ cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.0 --locke
 ### Option B: Build from source
 
 ```bash
-git clone https://github.com/myceliums/myc.git
-cd myc
+git clone https://github.com/marcmantei/myceliums.git
+cd myceliums
 cargo build --release
 # The binary is at ./target/release/myc
 ```

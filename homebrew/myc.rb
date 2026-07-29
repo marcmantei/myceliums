@@ -1,7 +1,12 @@
+# Template only. The formula users actually install lives in
+# marcmantei/homebrew-tap and is regenerated on every release by
+# .github/workflows/update-homebrew.yml, which fills in the real version and
+# checksums. The version and PLACEHOLDER digests below are illustrative — do not
+# expect this file to install.
 class Myc < Formula
   desc "Code knowledge graph engine for AI agents"
   homepage "https://github.com/marcmantei/myceliums"
-  version "0.2.0"
+  version "0.3.0"
   license "Apache-2.0"
 
   on_macos do

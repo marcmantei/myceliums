@@ -26,7 +26,7 @@ jobs:
             os: ubuntu-latest
           # macos-13 was retired by GitHub (Dec 2025) — jobs targeting it queue
           # forever instead of failing. macos-15-intel is the successor x86_64
-          # image, available until Aug 2027.
+          # image, available until Aug 2027 — tracked in #59.
           #
           # This must be a NATIVE x86_64 runner: cross-compiling this target from
           # an arm64 runner fails to link, because lance's AVX-512 kernel

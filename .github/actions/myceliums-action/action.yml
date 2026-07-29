@@ -132,42 +132,32 @@ runs:
           RISK_EMOJI="🟢"
         fi
 
-        # Build markdown comment
-        COMMENT="## 🔍 Myceliums Impact Analysis
+        # Build the markdown comment with printf rather than a multi-line shell
+        # string. Every line here must stay indented: inside a YAML block scalar
+        # a line at column 0 terminates the block, which is what made this file
+        # unparseable before.
+        {
+          printf '## 🔍 Myceliums Impact Analysis\n\n'
+          printf '**Blast Radius:** %s symbols affected %s %s\n' \
+            "$TOTAL" "$RISK_EMOJI" "$RISK_SCORE"
 
-**Blast Radius:** ${TOTAL} symbols affected ${RISK_EMOJI} ${RISK_SCORE}
-"
+          if [ -n "$DIRECTLY_CHANGED" ] && [ "$DIRECT_COUNT" -gt 0 ]; then
+            printf '\n### Directly Changed (%s)\n' "$DIRECT_COUNT"
+            printf '```\n%s\n```\n' "$DIRECTLY_CHANGED"
+          fi
 
-        if [ -n "$DIRECTLY_CHANGED" ] && [ "$DIRECT_COUNT" -gt 0 ]; then
-          COMMENT="${COMMENT}
-### Directly Changed (${DIRECT_COUNT})
-\`\`\`
-${DIRECTLY_CHANGED}
-\`\`\`
-"
-        fi
+          if [ -n "$INDIRECTLY_AFFECTED" ] && [ "$INDIRECT_COUNT" -gt 0 ]; then
+            printf '\n### Indirectly Affected (%s)\n' "$INDIRECT_COUNT"
+            printf '```\n%s\n```\n' "$INDIRECTLY_AFFECTED"
+          fi
 
-        if [ -n "$INDIRECTLY_AFFECTED" ] && [ "$INDIRECT_COUNT" -gt 0 ]; then
-          COMMENT="${COMMENT}
-### Indirectly Affected (${INDIRECT_COUNT})
-\`\`\`
-${INDIRECTLY_AFFECTED}
-\`\`\`
-"
-        fi
+          if [ "$TOTAL" -eq 0 ]; then
+            printf '\nNo symbols affected by this change. The diff may only touch comments, formatting, or non-code files.\n'
+          fi
 
-        if [ "$TOTAL" -eq 0 ]; then
-          COMMENT="${COMMENT}
-No symbols affected by this change. The diff may only touch comments, formatting, or non-code files.
-"
-        fi
-
-        COMMENT="${COMMENT}
----
-<sub>Powered by <a href=\"https://github.com/marcmantei/myceliums\">Myceliums</a> — the code knowledge graph engine. 30 MCP tools · 20+ languages · local-first · no cloud required</sub>"
-
-        # Write to file for the comment step
-        echo "$COMMENT" > /tmp/impact_comment.md
+          printf '\n---\n'
+          printf '<sub>Powered by <a href="https://github.com/marcmantei/myceliums">Myceliums</a> — the code knowledge graph engine. 54 MCP tools · 23 languages · local-first · no cloud required</sub>\n'
+        } > /tmp/impact_comment.md
 
     - name: Post PR comment
       shell: bash
