@@ -6,7 +6,7 @@
 class Myc < Formula
   desc "Code knowledge graph engine for AI agents"
   homepage "https://github.com/marcmantei/myceliums"
-  version "0.3.1"
+  version "0.3.2"
   license "Apache-2.0"
 
   on_macos do

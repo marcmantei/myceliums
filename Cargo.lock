@@ -4560,7 +4560,7 @@ checksum = "2195bf6aa996a481483b29d62a7663eed3fe39600c460e323f8ff41e90bdd89b"
 
 [[package]]
 name = "myc"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4610,7 +4610,7 @@ dependencies = [
 
 [[package]]
 name = "myceliums-benchmarks"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -4632,7 +4632,7 @@ dependencies = [
 
 [[package]]
 name = "myceliums-core"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-imap",
@@ -4688,7 +4688,7 @@ dependencies = [
 
 [[package]]
 name = "myceliums-cypher"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "logos",
@@ -4704,7 +4704,7 @@ dependencies = [
 
 [[package]]
 name = "myceliums-http"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -4720,7 +4720,7 @@ dependencies = [
 
 [[package]]
 name = "myceliums-mcp"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "axum",
@@ -4744,7 +4744,7 @@ dependencies = [
 
 [[package]]
 name = "myceliums-storage"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "arrow-array",
