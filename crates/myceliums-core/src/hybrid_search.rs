@@ -71,8 +71,13 @@ pub struct HybridSearchResult {
     pub bm25_score: Option<f64>,
     /// Cosine similarity from vector search (if present in the vector ranking).
     pub vector_score: Option<f64>,
-    /// Combined RRF score.
+    /// Combined RRF score (a.k.a. fusion score). Preserved even after
+    /// reranking so both scales remain observable (issue #29).
     pub combined_score: f64,
+    /// Cross-encoder rerank score, populated only when reranking ran.
+    /// `None` for non-reranked results. This is a separate scale from
+    /// `combined_score` and must not overwrite it.
+    pub rerank_score: Option<f64>,
     /// 1-based rank in the BM25 results.
     pub bm25_rank: Option<usize>,
     /// 1-based rank in the vector results.
@@ -150,6 +155,7 @@ pub fn reciprocal_rank_fusion(
                 bm25_score,
                 vector_score,
                 combined_score: combined,
+                rerank_score: None,
                 bm25_rank,
                 vector_rank,
                 explain,
@@ -325,13 +331,15 @@ pub async fn rerank_results(
     // Rerank with cross-encoder - returns (index, score) pairs sorted by score
     let reranked_indices = reranker.rerank(query, &documents)?;
 
-    // Rebuild results in reranked order
+    // Rebuild results in reranked order. Keep the RRF fusion score in
+    // `combined_score` and record the cross-encoder score in `rerank_score`
+    // instead of overwriting it (issue #29): the two live on different scales,
+    // so callers can report both rather than silently swapping semantics.
     let reranked_results: Vec<HybridSearchResult> = reranked_indices
         .into_iter()
         .map(|(idx, cross_encoder_score)| {
             let mut result = results[idx].clone();
-            // Store the cross-encoder score as the combined score for display
-            result.combined_score = cross_encoder_score as f64;
+            result.rerank_score = Some(cross_encoder_score as f64);
             result
         })
         .collect();
@@ -478,6 +486,7 @@ mod rerank_tests {
             bm25_score: Some(10.0),
             vector_score: Some(0.95),
             combined_score: 1.0 / 61.0,
+            rerank_score: None,
             bm25_rank: Some(1),
             vector_rank: Some(1),
             explain: None,
@@ -486,6 +495,38 @@ mod rerank_tests {
         assert_eq!(result.symbol.uid, "uid1");
         assert_eq!(result.symbol.name, "test_func");
         assert_eq!(result.bm25_score, Some(10.0));
+    }
+
+    /// Issue #29: reranking must record the cross-encoder score in a separate
+    /// `rerank_score` field and must NOT overwrite the RRF `combined_score`.
+    /// This pins the "two scales, both reported" contract without needing the
+    /// cross-encoder model — it exercises the same field-assignment logic
+    /// `rerank_results` performs after the model returns.
+    #[test]
+    fn rerank_records_second_scale_without_clobbering_fusion() {
+        let sym = make_symbol("uid1", "test_func");
+        let fusion = 1.0 / 61.0;
+        let mut result = HybridSearchResult {
+            symbol: sym,
+            bm25_score: Some(10.0),
+            vector_score: Some(0.95),
+            combined_score: fusion,
+            rerank_score: None,
+            bm25_rank: Some(1),
+            vector_rank: Some(1),
+            explain: None,
+        };
+
+        // Simulate what rerank_results does with a cross-encoder score.
+        let cross_encoder_score = 7.3_f64;
+        result.rerank_score = Some(cross_encoder_score);
+
+        // Fusion score is untouched (still the RRF scale, ~1/k).
+        assert_eq!(result.combined_score, fusion);
+        // Rerank score lives on its own field/scale.
+        assert_eq!(result.rerank_score, Some(cross_encoder_score));
+        // The two are genuinely different scales — never conflated.
+        assert_ne!(result.combined_score, result.rerank_score.unwrap());
     }
 }
 

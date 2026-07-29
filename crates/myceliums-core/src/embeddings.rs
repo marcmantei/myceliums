@@ -395,6 +395,21 @@ fn normalize_base_url(url: &str) -> String {
 
 // ── Cache inspection ──────────────────────────────────────────────────
 
+/// L2-normalize a vector in place to unit length.
+///
+/// After normalization, cosine similarity equals the dot product and the
+/// squared L2 distance between two vectors `a` and `b` is `2 - 2·cos(a, b)`.
+/// This lets the brute-force cosine path and the LanceDB L2 path rank by the
+/// **same** geometry (see issue #29). Zero vectors are left unchanged.
+pub fn l2_normalize(vector: &mut [f32]) {
+    let norm: f32 = vector.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for x in vector.iter_mut() {
+            *x /= norm;
+        }
+    }
+}
+
 /// Information about the fastembed model cache.
 pub struct ModelCacheInfo {
     /// The directory where models are cached.
@@ -803,14 +818,19 @@ impl Embedder {
     }
 
     /// Generate an embedding for a single query string.
+    ///
+    /// The returned vector is L2-normalized so it shares the same (cosine)
+    /// geometry as the stored vectors — see [`l2_normalize`] and issue #29.
     pub async fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
         let embeddings = self
             .embed_texts(&[query.to_string()], EmbedInput::Query)
             .await?;
-        embeddings
+        let mut vector = embeddings
             .into_iter()
             .next()
-            .context("No embedding returned for query")
+            .context("No embedding returned for query")?;
+        l2_normalize(&mut vector);
+        Ok(vector)
     }
 
     /// Generate embeddings for a batch of symbols, processing in chunks to
@@ -855,6 +875,13 @@ impl Embedder {
                 .collect();
             let embeddings = self.embed_texts(&documents, EmbedInput::Passage).await?;
             all_embeddings.extend(embeddings);
+        }
+
+        // L2-normalize every stored vector so persisted geometry is cosine
+        // (issue #29): the LanceDB L2 path and the brute-force cosine path then
+        // rank identically.
+        for emb in all_embeddings.iter_mut() {
+            l2_normalize(emb);
         }
 
         info!("Generated {} embeddings.", all_embeddings.len());
@@ -1455,5 +1482,46 @@ mod tests {
         let sym = make_symbol("short", SymbolKind::Constant, "const X: u32", "= 1;", None);
         let text = build_embedding_text(&sym);
         assert!(text.ends_with("= 1;"));
+    }
+
+    /// Issue #29: `l2_normalize` produces a unit-length vector, which makes the
+    /// LanceDB squared-L2 metric agree with cosine geometry.
+    #[test]
+    fn l2_normalize_yields_unit_length() {
+        let mut v = vec![3.0f32, 4.0]; // ‖v‖ = 5
+        l2_normalize(&mut v);
+        let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+        assert!((norm - 1.0).abs() < 1e-6, "norm was {norm}");
+        assert!((v[0] - 0.6).abs() < 1e-6);
+        assert!((v[1] - 0.8).abs() < 1e-6);
+    }
+
+    /// A zero vector has no direction, so normalization must leave it untouched
+    /// rather than divide by zero.
+    #[test]
+    fn l2_normalize_leaves_zero_vector_unchanged() {
+        let mut v = vec![0.0f32; 4];
+        l2_normalize(&mut v);
+        assert!(v.iter().all(|&x| x == 0.0));
+    }
+
+    /// After L2-normalization, cosine similarity equals the dot product, and the
+    /// squared L2 distance relates to cosine by `dist² = 2 - 2·cos`. This is the
+    /// identity the storage layer relies on to expose cosine from an L2 index.
+    #[test]
+    fn normalized_l2_distance_matches_cosine_identity() {
+        let mut a = vec![1.0f32, 2.0, 3.0];
+        let mut b = vec![-1.0f32, 0.5, 2.0];
+        l2_normalize(&mut a);
+        l2_normalize(&mut b);
+
+        let cos = Embedder::cosine_similarity(&a, &b);
+        let sq_l2: f64 = a
+            .iter()
+            .zip(&b)
+            .map(|(x, y)| (*x as f64 - *y as f64).powi(2))
+            .sum();
+        // dist² = 2 - 2·cos  ⇒  cos = 1 - dist²/2
+        assert!(((1.0 - sq_l2 / 2.0) - cos).abs() < 1e-5);
     }
 }

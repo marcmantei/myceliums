@@ -5,6 +5,15 @@ use std::sync::Arc;
 /// Used when no embedding configuration or index metadata is available.
 pub const DEFAULT_EMBEDDING_DIM: i32 = 384;
 
+/// Version of the stored vector geometry.
+///
+/// Bumped to `2` when embeddings became L2-normalized (cosine geometry) and the
+/// ANN index was activated (issue #29). An index written under an older version
+/// stores raw (unnormalized) vectors whose L2 ordering differs from cosine, so
+/// [`RepoInfo::vector_geometry_version`] lets callers detect a stale index and
+/// trigger a rebuild rather than silently mixing geometries.
+pub const VECTOR_GEOMETRY_VERSION: u32 = 2;
+
 /// Arrow schema for the `symbols` table, with a fixed-size vector column
 /// sized to `embedding_dim`.
 pub fn symbols_schema(embedding_dim: i32) -> Schema {

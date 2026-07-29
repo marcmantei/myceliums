@@ -815,7 +815,12 @@ pub struct HybridSearchResultItem {
     pub start_line: u32,
     pub end_line: u32,
     pub signature: String,
+    /// RRF fusion score (rank-based, order of ~1/k). Present for every result.
     pub combined_score: f64,
+    /// Cross-encoder rerank score. Only present when reranking ran; a separate
+    /// scale from `combined_score` (issue #29).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rerank_score: Option<f64>,
     pub bm25_rank: Option<usize>,
     pub vector_rank: Option<usize>,
     pub bm25_score: Option<f64>,
@@ -1297,6 +1302,7 @@ impl MyceliumsMcp {
             symbol_count: result.symbol_count as u32,
             file_count: result.file_count as u32,
             analyzed_commit,
+            vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
         });
         registry
             .save()
@@ -1507,6 +1513,7 @@ impl MyceliumsMcp {
                 end_line: r.symbol.end_line,
                 signature: r.symbol.signature,
                 combined_score: r.combined_score,
+                rerank_score: r.rerank_score,
                 bm25_rank: r.bm25_rank,
                 vector_rank: r.vector_rank,
                 bm25_score: r.bm25_score,

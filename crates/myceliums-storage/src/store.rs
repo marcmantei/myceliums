@@ -15,6 +15,33 @@ use tracing::info;
 use crate::models::*;
 use crate::schema;
 
+/// Row-count threshold above which an IVF-PQ ANN index is built for the
+/// `symbols` vector column. Below this, a flat (brute-force) scan is faster and
+/// avoids IVF-PQ recall loss on tiny corpora. See issue #29.
+///
+/// LanceDB's IVF-PQ index trades exactness for speed, so it only pays off once
+/// the corpus is large enough that a flat scan hurts; 5_000 keeps small and
+/// medium repos on the exact flat scan. Partition count adapts to the row count
+/// via [`ivf_partitions`].
+pub const ANN_INDEX_THRESHOLD: usize = 5_000;
+
+/// Number of PQ sub-vectors. Must divide [`schema::DEFAULT_EMBEDDING_DIM`] (384 / 16 = 24
+/// dimensions per sub-vector).
+const IVF_PQ_SUB_VECTORS: u32 = 16;
+
+/// Choose the IVF partition count for a corpus of `num_symbols` rows.
+///
+/// IVF k-means needs enough rows per partition to train a meaningful centroid;
+/// asking for more partitions than the data supports produces empty clusters and
+/// poor recall. The usual heuristic is `√n`, capped so very large corpora don't
+/// build an unwieldy coarse quantizer and floored so the index stays useful.
+fn ivf_partitions(num_symbols: usize) -> u32 {
+    const MIN_PARTITIONS: u32 = 4;
+    const MAX_PARTITIONS: u32 = 256;
+    let sqrt_n = (num_symbols as f64).sqrt() as u32;
+    sqrt_n.clamp(MIN_PARTITIONS, MAX_PARTITIONS)
+}
+
 /// Escape single quotes in LanceDB filter predicates by doubling them.
 /// This prevents SQL injection attacks when values are interpolated into predicates.
 fn escape_lance_str(value: &str) -> String {
@@ -815,11 +842,27 @@ impl Store {
         merge.execute(Box::new(batches)).await?;
 
         info!("Stored {} embeddings", count);
+
+        // Activate the ANN index once the corpus is large enough to benefit
+        // (issue #29). Below the threshold `create_ann_index` is a no-op and
+        // searches keep using the exact flat scan.
+        if let Err(e) = self.create_ann_index(count, ANN_INDEX_THRESHOLD).await {
+            // A failed index build must not fail the write: searches still work
+            // via flat scan. Surface it so the degradation is observable.
+            info!("ANN index build skipped/failed after bulk insert: {}", e);
+        }
+
         Ok(count)
     }
 
-    /// Create an IVF-PQ ANN index on the vector column for faster similarity search.
-    /// Only useful for repos with many symbols (>threshold).
+    /// Create an IVF-PQ ANN index on the vector column for faster similarity
+    /// search. Only builds when `num_symbols >= threshold`; below that the flat
+    /// scan is both faster and exact (issue #29).
+    ///
+    /// The vector column stores L2-normalized embeddings, so LanceDB's default
+    /// L2 metric on the index reproduces cosine ordering. Re-analysis calls this
+    /// again with the fresh row count; `replace(true)` rebuilds the index in
+    /// place so a stale index never shadows new vectors.
     pub async fn create_ann_index(&self, num_symbols: usize, threshold: usize) -> Result<()> {
         if num_symbols < threshold {
             info!(
@@ -836,9 +879,10 @@ impl Store {
 
         let table = self.db.open_table("symbols").execute().await?;
 
+        let num_partitions = ivf_partitions(num_symbols);
         info!(
-            "Creating IVF-PQ ANN index on vector column ({} symbols)...",
-            num_symbols
+            "Creating IVF-PQ ANN index on vector column ({} symbols, {} partitions)...",
+            num_symbols, num_partitions
         );
 
         use lancedb::index::vector::IvfPqIndexBuilder;
@@ -849,10 +893,11 @@ impl Store {
                 &["vector"],
                 Index::IvfPq(
                     IvfPqIndexBuilder::default()
-                        .num_partitions(256)
-                        .num_sub_vectors(16),
+                        .num_partitions(num_partitions)
+                        .num_sub_vectors(IVF_PQ_SUB_VECTORS),
                 ),
             )
+            .replace(true)
             .execute()
             .await?;
 
@@ -903,8 +948,16 @@ impl Store {
 
             for i in 0..batch.num_rows() {
                 let distance = distances.map(|d| d.value(i)).unwrap_or(f32::MAX);
-                // Convert distance to similarity score (1 / (1 + distance))
-                let score = 1.0 / (1.0 + distance);
+                // Vectors are L2-normalized at write/query time (issue #29), so
+                // LanceDB's default squared-L2 `_distance` relates to cosine
+                // similarity by `dist² = 2 - 2·cos`, i.e. `cos = 1 - dist/2`.
+                // This yields the same cosine geometry as the brute-force path,
+                // clamped to [-1, 1] to absorb floating-point drift.
+                let score = if distance == f32::MAX {
+                    0.0
+                } else {
+                    (1.0 - distance / 2.0).clamp(-1.0, 1.0)
+                };
 
                 results.push((
                     CodeSymbol {
@@ -1156,6 +1209,201 @@ mod tests {
         // metadata must round-trip through the embeddings batch, not be dropped.
         let alpha = rows.iter().find(|(s, _)| s.uid == "alpha").unwrap();
         assert_eq!(alpha.0.metadata.as_deref(), Some("{\"k\":\"v\"}"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Issue #29: the IVF partition count must scale with the corpus. A fixed
+    /// large count creates empty clusters on small corpora (poor recall) and the
+    /// heuristic must stay within trainable bounds.
+    #[test]
+    fn ivf_partitions_scale_with_corpus_and_stay_bounded() {
+        // √n in the normal range.
+        assert_eq!(ivf_partitions(10_000), 100);
+        assert_eq!(ivf_partitions(40_000), 200);
+        // Floored so a barely-above-threshold corpus still gets a usable index.
+        assert_eq!(ivf_partitions(0), 4);
+        assert_eq!(ivf_partitions(9), 4);
+        // Capped so huge corpora don't build an unwieldy coarse quantizer.
+        assert_eq!(ivf_partitions(100_000_000), 256);
+        // Monotonic non-decreasing across the range.
+        let mut prev = 0;
+        for n in [0usize, 100, 5_000, 20_000, 65_536, 1_000_000] {
+            let p = ivf_partitions(n);
+            assert!(p >= prev, "partitions must not decrease as n grows");
+            prev = p;
+        }
+    }
+
+    /// PQ requires the embedding dimension to divide evenly into sub-vectors.
+    #[test]
+    fn pq_sub_vectors_divide_embedding_dim() {
+        assert_eq!(schema::DEFAULT_EMBEDDING_DIM as u32 % IVF_PQ_SUB_VECTORS, 0);
+    }
+
+    /// L2-normalize a vector so tests can construct unit-length embeddings the
+    /// same way the write path does (mirrors `embeddings::l2_normalize`).
+    fn unit(mut v: Vec<f32>) -> Vec<f32> {
+        let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+        if norm > 0.0 {
+            for x in v.iter_mut() {
+                *x /= norm;
+            }
+        }
+        v
+    }
+
+    /// Cosine similarity for the expected-ordering oracle in the tests below.
+    fn cosine(a: &[f32], b: &[f32]) -> f32 {
+        let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
+        let na: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
+        let nb: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
+        if na == 0.0 || nb == 0.0 {
+            0.0
+        } else {
+            dot / (na * nb)
+        }
+    }
+
+    /// Issue #29: `vector_search` over L2-normalized vectors must expose cosine
+    /// similarity in `[-1, 1]` and rank identically to the brute-force cosine
+    /// path. This pins the exposed score semantics for the storage/LanceDB leg
+    /// that both `semantic_search` and the vector leg of `hybrid_search` consume.
+    #[tokio::test]
+    async fn test_vector_search_scores_are_cosine_and_ordered() {
+        let dir = test_db_path("vector_search_cosine");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+
+        let dim = schema::DEFAULT_EMBEDDING_DIM as usize;
+        // Build three distinct unit vectors by placing weight on early dims.
+        let mk = |a: f32, b: f32, c: f32| -> Vec<f32> {
+            let mut v = vec![0.0f32; dim];
+            v[0] = a;
+            v[1] = b;
+            v[2] = c;
+            unit(v)
+        };
+        let near = mk(1.0, 0.1, 0.0);
+        let mid = mk(0.6, 0.6, 0.0);
+        let far = mk(0.0, 0.1, 1.0);
+
+        let symbols = vec![
+            make_symbol("near", None),
+            make_symbol("mid", None),
+            make_symbol("far", None),
+        ];
+        store.store_symbols(&symbols).await.unwrap();
+        store
+            .store_embeddings(vec![
+                ("near".to_string(), near.clone()),
+                ("mid".to_string(), mid.clone()),
+                ("far".to_string(), far.clone()),
+            ])
+            .await
+            .unwrap();
+
+        let query = mk(1.0, 0.0, 0.0);
+        let results = store.vector_search(&query, 3).await.unwrap();
+        assert_eq!(results.len(), 3);
+
+        // Every exposed score is a cosine similarity within [-1, 1].
+        for (sym, score) in &results {
+            assert!(
+                (-1.0..=1.0).contains(score),
+                "{} score {} outside cosine range [-1, 1]",
+                sym.uid,
+                score
+            );
+        }
+
+        // Ordering matches the brute-force cosine oracle exactly.
+        let by_uid: std::collections::HashMap<&str, &[f32]> = [
+            ("near", near.as_slice()),
+            ("mid", mid.as_slice()),
+            ("far", far.as_slice()),
+        ]
+        .into_iter()
+        .collect();
+        let mut oracle: Vec<(&str, f32)> = by_uid
+            .iter()
+            .map(|(uid, v)| (*uid, cosine(&query, v)))
+            .collect();
+        oracle.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+
+        let got_order: Vec<&str> = results.iter().map(|(s, _)| s.uid.as_str()).collect();
+        let want_order: Vec<&str> = oracle.iter().map(|(uid, _)| *uid).collect();
+        assert_eq!(
+            got_order, want_order,
+            "LanceDB cosine ordering must match brute-force cosine ordering"
+        );
+
+        // The exposed score must track cosine numerically, not just in rank.
+        for (sym, score) in &results {
+            let want = cosine(&query, by_uid[sym.uid.as_str()]);
+            assert!(
+                (score - want).abs() < 1e-3,
+                "{}: exposed {} vs cosine {}",
+                sym.uid,
+                score,
+                want
+            );
+        }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Issue #29: above the threshold `create_ann_index` must actually build the
+    /// IVF-PQ index, and search must remain correct (top-1 still the nearest
+    /// vector) once the ANN index is in play.
+    #[tokio::test]
+    async fn test_ann_index_created_above_threshold_and_search_correct() {
+        let dir = test_db_path("ann_above");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+
+        let dim = schema::DEFAULT_EMBEDDING_DIM as usize;
+        // Enough rows to train IVF-PQ (256 partitions). Spread a marker across
+        // dim 0 so one row is unambiguously nearest the query.
+        let n = 300usize;
+        let symbols: Vec<CodeSymbol> = (0..n)
+            .map(|i| make_symbol(&format!("s{i}"), None))
+            .collect();
+        store.store_symbols(&symbols).await.unwrap();
+
+        let embeddings: Vec<(String, Vec<f32>)> = (0..n)
+            .map(|i| {
+                let mut v = vec![0.01f32; dim];
+                // Give each row a distinct, unit-normalized direction.
+                v[i % dim] += 1.0;
+                v[(i * 7) % dim] += 0.3;
+                (format!("s{i}"), unit(v))
+            })
+            .collect();
+        store.store_embeddings(embeddings.clone()).await.unwrap();
+
+        // Build the ANN index with a threshold below the row count.
+        store.create_ann_index(n, 100).await.unwrap();
+
+        // Query exactly the direction of s5 — it must come back top-1 even with
+        // the ANN index active, and scores stay in cosine range.
+        let target = embeddings
+            .iter()
+            .find(|(u, _)| u == "s5")
+            .unwrap()
+            .1
+            .clone();
+        let results = store.vector_search(&target, 5).await.unwrap();
+        assert!(!results.is_empty(), "ANN search returned no rows");
+        assert_eq!(
+            results[0].0.uid, "s5",
+            "top-1 must be the exact-match vector after ANN index build"
+        );
+        for (_, score) in &results {
+            assert!((-1.0..=1.0).contains(score));
+        }
 
         let _ = std::fs::remove_dir_all(&dir);
     }

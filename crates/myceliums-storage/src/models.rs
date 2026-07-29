@@ -350,6 +350,11 @@ pub struct RepoInfo {
     /// Git commit hash at the time of analysis (for cache invalidation)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub analyzed_commit: Option<String>,
+    /// Stored vector geometry version (see [`crate::schema::VECTOR_GEOMETRY_VERSION`]).
+    /// `None`/`0` means a legacy index with unnormalized vectors that must be
+    /// rebuilt before its vectors can be trusted for cosine ranking (issue #29).
+    #[serde(default)]
+    pub vector_geometry_version: u32,
 }
 
 // --- Symbol Metadata ---

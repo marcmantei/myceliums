@@ -28,6 +28,14 @@ Search for symbols using semantic similarity (vector embeddings). Returns symbol
 | `limit` | integer | no | `10` | Maximum results to return |
 | `explain` | bool | no | `false` | Show scoring breakdown |
 
+**Score semantics.** Results are ranked by **cosine similarity** in the range
+`[-1, 1]` (higher = more similar). Embeddings are L2-normalized at both write and
+query time, so this is the identical geometry used by the vector leg of
+`hybrid_search` — the same query over the same index yields the same top-k
+ordering in both tools. On corpora above an internal row-count threshold an
+IVF-PQ ANN index accelerates the search; below it an exact flat scan is used.
+Either way the exposed score is cosine similarity.
+
 > **Partial-index warning.** `semantic_search` can only return symbols that were
 > embedded. If some symbols failed to embed during analysis, the response is
 > prefixed with a warning (`⚠ index partially embedded: N of M symbols …`) so
@@ -44,6 +52,21 @@ Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion fo
 | `limit` | integer | no | `20` | Maximum results to return |
 | `rerank` | bool | no | `false` | Apply cross-encoder reranking to results |
 | `explain` | bool | no | `false` | Show scoring breakdown and graph paths |
+
+**Score semantics.** Each result reports up to three scores on **distinct,
+non-interchangeable scales**:
+
+- `combined_score` (a.k.a. *fusion* score) — the Reciprocal Rank Fusion score,
+  a rank-based quantity on the order of `1/k`. Present for every result.
+- `vector_score` — **cosine similarity** in `[-1, 1]`, the same geometry
+  `semantic_search` exposes. The vector leg of hybrid search ranks by this.
+- `bm25_score` — the raw BM25 lexical relevance score (unbounded, higher = more
+  relevant).
+
+When `rerank=true`, the cross-encoder result is reported in a separate
+`rerank_score` field. It does **not** overwrite `combined_score`: fusion and
+rerank live on different scales, so both remain observable and no tool ever
+returns two different scales under the same name.
 
 > **Partial-index warning.** Like `semantic_search`, the vector half of
 > `hybrid_search` only sees embedded symbols. A partial index prepends a warning

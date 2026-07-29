@@ -5,7 +5,7 @@
 //! file modifications.
 
 use anyhow::Result;
-use myceliums_storage::RepoInfo;
+use myceliums_storage::{schema, RepoInfo};
 use std::path::Path;
 use std::process::Command;
 use tracing::info;
@@ -58,6 +58,20 @@ pub fn check_cache(
     repo_path: &Path,
     config: &CacheCheckConfig,
 ) -> CacheDecision {
+    // Stored vector geometry must match the current one. An index written
+    // before embeddings were L2-normalized holds vectors whose L2 ordering is
+    // not cosine ordering (issue #29); reusing it would silently mix
+    // geometries, so it is re-analyzed regardless of age or git state.
+    if repo_info.vector_geometry_version != schema::VECTOR_GEOMETRY_VERSION {
+        return CacheDecision::ReanalyzeNeeded {
+            reason: format!(
+                "Vector geometry version {} is stale (current: {}) — embeddings must be rebuilt",
+                repo_info.vector_geometry_version,
+                schema::VECTOR_GEOMETRY_VERSION
+            ),
+        };
+    }
+
     // Check age
     let analyzed_at = match chrono::DateTime::parse_from_rfc3339(&repo_info.analyzed_at) {
         Ok(dt) => dt,
@@ -389,6 +403,7 @@ mod tests {
             symbol_count: 10,
             file_count: 5,
             analyzed_commit: Some("abc123".to_string()),
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
         };
         let config = CacheCheckConfig::default();
         let decision = check_cache(&repo_info, Path::new("/tmp/test"), &config);
@@ -408,6 +423,7 @@ mod tests {
             symbol_count: 10,
             file_count: 5,
             analyzed_commit: None,
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
         };
         let config = CacheCheckConfig::default();
         // Empty dir + recent analysis → cache is fresh
@@ -443,6 +459,7 @@ mod tests {
             symbol_count: 0,
             file_count: 0,
             analyzed_commit: None,
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
         };
         let config = CacheCheckConfig {
             max_age_minutes: 120,
@@ -465,8 +482,61 @@ mod tests {
         );
     }
 
-    // ── QueryCache tests ────────────────────────────────────────────
+    /// Issue #29: an index written under an older vector geometry holds
+    /// unnormalized vectors whose L2 ordering is not cosine ordering. It must be
+    /// rebuilt even when every other freshness signal says the cache is good
+    /// (analyzed seconds ago, no file changes) — otherwise the geometry bump
+    /// would never take effect on existing data.
+    #[test]
+    fn stale_vector_geometry_forces_reanalysis() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo_info = RepoInfo {
+            id: "test-geometry".to_string(),
+            name: "test".to_string(),
+            path: tmp.path().to_string_lossy().to_string(),
+            analyzed_at: chrono::Utc::now().to_rfc3339(),
+            symbol_count: 10,
+            file_count: 5,
+            analyzed_commit: None,
+            // Legacy index: written before embeddings were L2-normalized.
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION - 1,
+        };
+        let config = CacheCheckConfig::default();
 
+        match check_cache(&repo_info, tmp.path(), &config) {
+            CacheDecision::ReanalyzeNeeded { reason } => {
+                assert!(
+                    reason.contains("geometry"),
+                    "reason should name the geometry mismatch, got: {reason}"
+                );
+            }
+            other => panic!("stale geometry must force re-analysis, got: {other:?}"),
+        }
+    }
+
+    /// The same repo at the current geometry version stays cached — the check
+    /// invalidates stale geometry only, it does not defeat caching outright.
+    #[test]
+    fn current_vector_geometry_keeps_cache() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo_info = RepoInfo {
+            id: "test-geometry".to_string(),
+            name: "test".to_string(),
+            path: tmp.path().to_string_lossy().to_string(),
+            analyzed_at: chrono::Utc::now().to_rfc3339(),
+            symbol_count: 10,
+            file_count: 5,
+            analyzed_commit: None,
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+        };
+        let config = CacheCheckConfig::default();
+        assert!(matches!(
+            check_cache(&repo_info, tmp.path(), &config),
+            CacheDecision::UseCached { .. }
+        ));
+    }
+
+    // ── QueryCache tests ────────────────────────────────────────────
     #[test]
     fn query_cache_insert_and_get() {
         let cache = QueryCache::new(64, 60);
