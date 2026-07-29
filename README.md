@@ -5,6 +5,7 @@
 # Myceliums
 
 [![CI](https://github.com/marcmantei/myceliums/actions/workflows/ci.yml/badge.svg)](https://github.com/marcmantei/myceliums/actions)
+[![crates.io](https://img.shields.io/crates/v/myc.svg)](https://crates.io/crates/myc)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 **The code knowledge graph that gives AI agents structural understanding — not just text search.**
@@ -54,8 +55,8 @@ Repository ID: my-project-a1b2c3
 ## Quick start
 
 ```bash
-# Install (pinned to the latest release tag — myc is not on crates.io yet)
-cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.2 --locked myc
+# Install
+cargo install myc
 
 # Set up Claude Code integration (one-time)
 myc setup-claude
@@ -189,13 +190,11 @@ myc serve --port 3000  # custom port
 
 **Cargo (recommended):**
 
-`myc` is not published to crates.io yet, so install it from the git tag of a
-release. Pin the tag — installing from the default branch gives you whatever is
-on `main` at that moment, which is not reproducible.
-
 ```bash
-cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.2 --locked myc
+cargo install myc
 ```
+
+To pin an exact version, add `--version 0.3.2 --locked`.
 
 **From source:**
 
