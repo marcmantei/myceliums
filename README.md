@@ -315,7 +315,8 @@ myc setup-continue    # Continue
 
 Any other MCP-compatible editor can use myceliums by pointing to `myc mcp`.
 
-**Available MCP tools:**
+**Most-used MCP tools** — the server exposes 54 in total; see the
+[MCP tools reference](docs/reference/mcp-tools.md) for the complete list:
 
 | Tool | Description |
 |---|---|
