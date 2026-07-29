@@ -45,4 +45,7 @@ chrono = { workspace = true }
 # `cargo test --workspace` compiles the test-facing handler delegates without
 # the feature ever reaching a production (non-dev) build.
 myceliums-mcp = { path = ".", features = ["test-support"] }
+# Used directly by tests/harness/mod.rs and tests/pipeline.rs (added in #33/#52,
+# after issue #49 was filed) — no longer redundant with core's copy (#49 was
+# right when filed, but the integration suite landed a genuine second user).
 tempfile = { workspace = true }
