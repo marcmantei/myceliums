@@ -11,10 +11,10 @@ Get your codebase indexed and queryable in under 2 minutes.
 
 Pick one of the three methods below.
 
-### Option A: Install from crates.io
+### Option A: Install with Cargo
 
 ```bash
-cargo install myc
+cargo install --git https://github.com/marcmantei/myceliums myc
 ```
 
 ### Option B: Build from source

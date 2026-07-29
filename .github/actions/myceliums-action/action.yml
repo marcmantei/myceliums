@@ -53,7 +53,7 @@ runs:
 
         if [ -z "$DOWNLOAD_URL" ]; then
           echo "::warning::No pre-built binary found for ${TARGET}. Building from source..."
-          cargo install myc
+          cargo install --git https://github.com/marcmantei/myceliums myc
         else
           echo "Downloading myc from: $DOWNLOAD_URL"
           curl -sL "$DOWNLOAD_URL" -o /tmp/myc.tar.gz
