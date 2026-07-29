@@ -482,13 +482,13 @@ mod tests {
         );
     }
 
-    /// Issue #29: an index written under an older vector geometry holds
-    /// unnormalized vectors whose L2 ordering is not cosine ordering. It must be
-    /// rebuilt even when every other freshness signal says the cache is good
-    /// (analyzed seconds ago, no file changes) — otherwise the geometry bump
-    /// would never take effect on existing data.
     #[test]
     fn stale_vector_geometry_forces_reanalysis() {
+        // Issue #29: an index written under an older vector geometry holds
+        // unnormalized vectors whose L2 ordering is not cosine ordering. It must
+        // be rebuilt even when every other freshness signal says the cache is
+        // good (analyzed seconds ago, no file changes) — otherwise the geometry
+        // bump would never take effect on existing data.
         let tmp = tempfile::TempDir::new().unwrap();
         let repo_info = RepoInfo {
             id: "test-geometry".to_string(),
@@ -514,10 +514,10 @@ mod tests {
         }
     }
 
-    /// The same repo at the current geometry version stays cached — the check
-    /// invalidates stale geometry only, it does not defeat caching outright.
     #[test]
     fn current_vector_geometry_keeps_cache() {
+        // The same repo at the current geometry version stays cached — the check
+        // invalidates stale geometry only, it does not defeat caching outright.
         let tmp = tempfile::TempDir::new().unwrap();
         let repo_info = RepoInfo {
             id: "test-geometry".to_string(),
@@ -537,6 +537,7 @@ mod tests {
     }
 
     // ── QueryCache tests ────────────────────────────────────────────
+
     #[test]
     fn query_cache_insert_and_get() {
         let cache = QueryCache::new(64, 60);

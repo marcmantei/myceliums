@@ -32,9 +32,16 @@ Search for symbols using semantic similarity (vector embeddings). Returns symbol
 `[-1, 1]` (higher = more similar). Embeddings are L2-normalized at both write and
 query time, so this is the identical geometry used by the vector leg of
 `hybrid_search` — the same query over the same index yields the same top-k
-ordering in both tools. On corpora above an internal row-count threshold an
-IVF-PQ ANN index accelerates the search; below it an exact flat scan is used.
-Either way the exposed score is cosine similarity.
+ordering in both tools.
+
+**Index selection.** Repositories with **5,000 or more embedded symbols** get an
+IVF-PQ approximate-nearest-neighbour (ANN) index, built automatically after
+analysis; smaller repositories use an exact brute-force scan. Below the
+threshold an exact scan is both faster and perfectly accurate, and IVF-PQ
+quantization would cost recall for nothing. The exposed score is cosine
+similarity either way, so the index type is not observable in the score — but
+above the threshold results are *approximate*: a low-ranked result may
+occasionally be missed in exchange for a substantially faster query.
 
 > **Partial-index warning.** `semantic_search` can only return symbols that were
 > embedded. If some symbols failed to embed during analysis, the response is
@@ -63,10 +70,13 @@ non-interchangeable scales**:
 - `bm25_score` — the raw BM25 lexical relevance score (unbounded, higher = more
   relevant).
 
-When `rerank=true`, the cross-encoder result is reported in a separate
-`rerank_score` field. It does **not** overwrite `combined_score`: fusion and
-rerank live on different scales, so both remain observable and no tool ever
-returns two different scales under the same name.
+When `rerank=true`, a cross-encoder model re-scores the fused candidates and its
+score is reported in a separate `rerank_score` field. It does **not** overwrite
+`combined_score`: fusion and rerank live on different scales, so both remain
+observable and no tool ever returns two different scales under the same name.
+Results are ordered by `rerank_score` when it is present. Unlike the other
+scores it has no fixed range — it is the raw cross-encoder relevance logit, so
+compare values only within a single result set, never across queries.
 
 > **Partial-index warning.** Like `semantic_search`, the vector half of
 > `hybrid_search` only sees embedded symbols. A partial index prepends a warning

@@ -397,18 +397,11 @@ fn normalize_base_url(url: &str) -> String {
 
 /// L2-normalize a vector in place to unit length.
 ///
-/// After normalization, cosine similarity equals the dot product and the
-/// squared L2 distance between two vectors `a` and `b` is `2 - 2·cos(a, b)`.
-/// This lets the brute-force cosine path and the LanceDB L2 path rank by the
-/// **same** geometry (see issue #29). Zero vectors are left unchanged.
-pub fn l2_normalize(vector: &mut [f32]) {
-    let norm: f32 = vector.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm > 0.0 {
-        for x in vector.iter_mut() {
-            *x /= norm;
-        }
-    }
-}
+/// Re-exported from [`myceliums_storage::schema`], which owns the stored vector
+/// geometry (see `VECTOR_GEOMETRY_VERSION`). The embedding layer applies it; the
+/// storage layer defines it. One definition, so the write path and the schema's
+/// declared geometry can never drift apart (issue #29).
+pub use myceliums_storage::schema::l2_normalize;
 
 /// Information about the fastembed model cache.
 pub struct ModelCacheInfo {
@@ -1510,6 +1503,15 @@ mod tests {
     /// identity the storage layer relies on to expose cosine from an L2 index.
     #[test]
     fn normalized_l2_distance_matches_cosine_identity() {
+        // The identity is exact in real arithmetic. The error here comes from
+        // storing unit vectors as `f32`: normalization rounds each component to
+        // ~2^-24 relative precision, and the dot product accumulates that over
+        // `n` terms. For these 3-element vectors that bounds the deviation well
+        // under 1e-6, so 1e-5 is a comfortable margin that would still catch a
+        // genuinely wrong identity (e.g. a missing factor of 2, which shifts the
+        // result by ~0.5).
+        const F32_ROUNDING_TOLERANCE: f64 = 1e-5;
+
         let mut a = vec![1.0f32, 2.0, 3.0];
         let mut b = vec![-1.0f32, 0.5, 2.0];
         l2_normalize(&mut a);
@@ -1522,6 +1524,11 @@ mod tests {
             .map(|(x, y)| (*x as f64 - *y as f64).powi(2))
             .sum();
         // dist² = 2 - 2·cos  ⇒  cos = 1 - dist²/2
-        assert!(((1.0 - sq_l2 / 2.0) - cos).abs() < 1e-5);
+        assert!(
+            ((1.0 - sq_l2 / 2.0) - cos).abs() < F32_ROUNDING_TOLERANCE,
+            "identity cos = 1 - dist²/2 violated: got {} from distance, {} from cosine",
+            1.0 - sq_l2 / 2.0,
+            cos
+        );
     }
 }
