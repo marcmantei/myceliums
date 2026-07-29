@@ -1476,7 +1476,9 @@ mod tests {
         let table = store.db.open_table("symbols").execute().await.unwrap();
         let indices = table.list_indices().await.unwrap();
         assert!(
-            indices.iter().any(|i| i.columns.iter().any(|c| c == "vector")),
+            indices
+                .iter()
+                .any(|i| i.columns.iter().any(|c| c == "vector")),
             "LanceDB reports no index on the vector column: {indices:?}"
         );
 
