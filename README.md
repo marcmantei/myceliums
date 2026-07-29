@@ -5,9 +5,7 @@
 # Myceliums
 
 [![CI](https://github.com/marcmantei/myceliums/actions/workflows/ci.yml/badge.svg)](https://github.com/marcmantei/myceliums/actions)
-[![crates.io](https://img.shields.io/crates/v/myc.svg)](https://crates.io/crates/myc)
-[![Downloads](https://img.shields.io/crates/d/myc.svg)](https://crates.io/crates/myc)
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
 **The code knowledge graph that gives AI agents structural understanding — not just text search.**
 
@@ -57,7 +55,7 @@ Repository ID: my-project-a1b2c3
 
 ```bash
 # Install
-cargo install myc
+cargo install --git https://github.com/marcmantei/myceliums myc
 
 # Set up Claude Code integration (one-time)
 myc setup-claude
@@ -192,7 +190,7 @@ myc serve --port 3000  # custom port
 **Cargo (recommended):**
 
 ```bash
-cargo install myc
+cargo install --git https://github.com/marcmantei/myceliums myc
 ```
 
 **From source:**
@@ -598,6 +596,18 @@ The workspace has seven crates:
 
 ---
 
+## Project status
+
+Myceliums is a personal project, maintained on a best-effort basis. It is used
+in real work and the test suite and CI gates are taken seriously, but there is
+no company behind it and no support commitment.
+
+Practically, that means: issues may not get a timely response, pull requests may
+take weeks to review, and the [ROADMAP](ROADMAP.md) is a direction of travel
+rather than a promise. Bug reports with a reproduction are genuinely welcome.
+Before starting significant work on a PR, please open an issue first so we can
+agree on the approach — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## License
 
-AGPL-3.0 -- see [LICENSE](LICENSE).
+Apache-2.0 -- see [LICENSE](LICENSE).

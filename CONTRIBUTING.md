@@ -2,6 +2,16 @@
 
 Contributions are welcome! Whether it's a bug fix, new language support, or a feature idea, we appreciate your help.
 
+**Please set your expectations first.** Myceliums is a personal project maintained
+on a best-effort basis — there is no company behind it and no support commitment.
+Issues may not get a timely response, and pull requests may take weeks to review.
+That is not a reflection on your contribution; it is the honest capacity of a
+single maintainer.
+
+To avoid wasted effort: for anything beyond a small fix, **open an issue before
+you write code** so we can agree on the approach. A well-scoped PR that nobody
+asked for is still a PR that may get declined.
+
 ## Getting started
 
 ### Prerequisites
@@ -95,4 +105,4 @@ Please use [GitHub Issues](https://github.com/marcmantei/myceliums/issues) and i
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [AGPL-3.0 License](LICENSE).
+By contributing, you agree that your contributions will be licensed under the [Apache-2.0 License](LICENSE).

@@ -1,8 +1,8 @@
 class Myc < Formula
   desc "Code knowledge graph engine for AI agents"
-  homepage "https://myceliums.ai"
+  homepage "https://github.com/marcmantei/myceliums"
   version "0.2.0"
-  license "AGPL-3.0"
+  license "Apache-2.0"
 
   on_macos do
     if Hardware::CPU.arm?
