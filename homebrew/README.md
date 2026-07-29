@@ -30,7 +30,7 @@ needs two updates: the **version** and the **SHA256 checksums**.
 
 1. Download the checksums file from the GitHub Release:
    ```bash
-   curl -sL https://github.com/marcmantei/myceliums/releases/download/v0.3.0/checksums-sha256.txt
+   curl -sL https://github.com/marcmantei/myceliums/releases/download/v0.3.1/checksums-sha256.txt
    ```
 2. Update `version` in the formula to the new version.
 3. Replace each `sha256 "PLACEHOLDER"` with the corresponding checksum from the file:
