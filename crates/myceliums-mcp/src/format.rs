@@ -130,12 +130,12 @@ pub fn format_hybrid_results(query: &str, results: &[HybridSearchResultItem]) ->
         .clamp(4, 12);
 
     out.push_str(&format!(
-        " {:<3} {:<name_w$}  {:<kind_w$}  {:<40}  {:>6}  {:>5}  {:>5}  {:>5}\n",
-        "#", "Name", "Kind", "File", "Lines", "Score", "BM25", "Vec",
+        " {:<3} {:<name_w$}  {:<kind_w$}  {:<40}  {:>6}  {:>6}  {:>6}  {:>5}  {:>5}\n",
+        "#", "Name", "Kind", "File", "Lines", "Fusion", "Rerank", "BM25", "Vec",
     ));
     out.push_str(&format!(
-        " {:-<3} {:-<name_w$}  {:-<kind_w$}  {:-<40}  {:->6}  {:->5}  {:->5}  {:->5}\n",
-        "", "", "", "", "", "", "", "",
+        " {:-<3} {:-<name_w$}  {:-<kind_w$}  {:-<40}  {:->6}  {:->6}  {:->6}  {:->5}  {:->5}\n",
+        "", "", "", "", "", "", "", "", "",
     ));
 
     for (i, r) in results.iter().enumerate() {
@@ -153,14 +153,19 @@ pub fn format_hybrid_results(query: &str, results: &[HybridSearchResultItem]) ->
             .vector_rank
             .map(|r| format!("#{}", r))
             .unwrap_or_else(|| "-".into());
+        let rerank = r
+            .rerank_score
+            .map(|s| format!("{:.2}", s))
+            .unwrap_or_else(|| "-".into());
         out.push_str(&format!(
-            " {:<3} {:<name_w$}  {:<kind_w$}  {:<40}  {:>6}  {:>5.2}  {:>5}  {:>5}\n",
+            " {:<3} {:<name_w$}  {:<kind_w$}  {:<40}  {:>6}  {:>6.2}  {:>6}  {:>5}  {:>5}\n",
             i + 1,
             truncate(&r.name, name_w),
             truncate(&r.kind, kind_w),
             short_file,
             lines,
             r.combined_score,
+            rerank,
             bm25,
             vec,
         ));

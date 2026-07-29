@@ -112,6 +112,7 @@ pub async fn ensure_indexed() -> PathBuf {
                 symbol_count: result.symbol_count as u32,
                 file_count: result.file_count as u32,
                 analyzed_commit: None,
+                vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
             });
             registry.save().expect("save registry");
 
