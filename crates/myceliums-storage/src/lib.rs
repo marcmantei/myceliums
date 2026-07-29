@@ -46,5 +46,5 @@ pub mod team_store;
 
 pub use models::*;
 pub use registry::RepoRegistry;
-pub use store::Store;
+pub use store::{AnnIndexBuild, Store};
 pub use team_store::TeamStore;

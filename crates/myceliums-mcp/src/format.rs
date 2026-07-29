@@ -1953,4 +1953,62 @@ mod tests {
         assert!(text.contains("Ce"));
         assert!(text.contains("Instability"));
     }
+
+    fn hybrid_item(name: &str, rerank_score: Option<f64>) -> HybridSearchResultItem {
+        HybridSearchResultItem {
+            name: name.to_string(),
+            qualified_name: format!("mod::{name}"),
+            kind: "Function".to_string(),
+            file_path: "src/lib.rs".to_string(),
+            start_line: 1,
+            end_line: 2,
+            signature: format!("fn {name}()"),
+            combined_score: 0.0164,
+            rerank_score,
+            bm25_rank: Some(1),
+            vector_rank: Some(2),
+            bm25_score: Some(3.2),
+            vector_score: Some(0.87),
+            explain: None,
+        }
+    }
+
+    /// Issue #29 added a `Rerank` column to the hybrid results table. Column
+    /// alignment in a hand-rolled fixed-width table breaks silently — the output
+    /// is still valid text, just unreadable — so pin it: every rendered line
+    /// (header, rule, and each row) must be exactly the same display width.
+    ///
+    /// Rows are checked both with and without a rerank score, because the
+    /// absent case substitutes a `-` string where the present case formats an
+    /// `f64`, and a width mismatch between those two format specs is exactly the
+    /// kind of drift that would misalign the table.
+    #[test]
+    fn hybrid_results_table_columns_stay_aligned() {
+        let results = vec![
+            hybrid_item("parse", Some(3.2)),
+            // No rerank score → the `-` placeholder path.
+            hybrid_item("a_much_longer_symbol_name", None),
+        ];
+        let text = format_hybrid_results("query", &results);
+
+        let table_lines: Vec<&str> = text
+            .lines()
+            .filter(|l| l.starts_with(' ') && !l.trim().is_empty())
+            .collect();
+        assert!(
+            table_lines.len() >= 4,
+            "expected header + rule + 2 rows, got: {table_lines:#?}"
+        );
+
+        let widths: Vec<usize> = table_lines.iter().map(|l| l.chars().count()).collect();
+        assert!(
+            widths.windows(2).all(|w| w[0] == w[1]),
+            "table columns misaligned — line widths {widths:?} in:\n{text}"
+        );
+
+        // The new column is actually rendered, in both states.
+        assert!(text.contains("Rerank"), "missing Rerank header:\n{text}");
+        assert!(text.contains("Fusion"), "missing Fusion header:\n{text}");
+        assert!(text.contains("3.20"), "missing rerank value:\n{text}");
+    }
 }

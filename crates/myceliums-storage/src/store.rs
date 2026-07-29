@@ -29,6 +29,37 @@ pub const ANN_INDEX_THRESHOLD: usize = 5_000;
 /// dimensions per sub-vector).
 const IVF_PQ_SUB_VECTORS: u32 = 16;
 
+/// What [`Store::create_ann_index`] actually did.
+///
+/// The call has three legitimate outcomes and only one of them builds an index.
+/// Returning them explicitly — rather than a bare `Ok(())` — lets callers and
+/// tests tell "index built" from "deliberately skipped", which is the difference
+/// between an accelerated search and a flat scan (issue #29).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnnIndexBuild {
+    /// The IVF-PQ index was built over the vector column.
+    Built {
+        /// Number of IVF partitions the index was built with.
+        partitions: u32,
+    },
+    /// The corpus is below the threshold; the exact flat scan is kept.
+    SkippedBelowThreshold {
+        /// Rows present in the corpus.
+        num_symbols: usize,
+        /// Row count at or above which an index would have been built.
+        threshold: usize,
+    },
+    /// There is no `symbols` table yet, so there is nothing to index.
+    SkippedNoTable,
+}
+
+impl AnnIndexBuild {
+    /// Whether an ANN index was actually built.
+    pub fn was_built(&self) -> bool {
+        matches!(self, Self::Built { .. })
+    }
+}
+
 /// Choose the IVF partition count for a corpus of `num_symbols` rows.
 ///
 /// IVF k-means needs enough rows per partition to train a meaningful centroid;
@@ -844,12 +875,13 @@ impl Store {
         info!("Stored {} embeddings", count);
 
         // Activate the ANN index once the corpus is large enough to benefit
-        // (issue #29). Below the threshold `create_ann_index` is a no-op and
-        // searches keep using the exact flat scan.
-        if let Err(e) = self.create_ann_index(count, ANN_INDEX_THRESHOLD).await {
+        // (issue #29). Below the threshold this is a no-op and searches keep
+        // using the exact flat scan.
+        match self.create_ann_index(count, ANN_INDEX_THRESHOLD).await {
+            Ok(outcome) => info!("ANN index after bulk insert: {:?}", outcome),
             // A failed index build must not fail the write: searches still work
             // via flat scan. Surface it so the degradation is observable.
-            info!("ANN index build skipped/failed after bulk insert: {}", e);
+            Err(e) => info!("ANN index build failed after bulk insert: {}", e),
         }
 
         Ok(count)
@@ -863,18 +895,27 @@ impl Store {
     /// L2 metric on the index reproduces cosine ordering. Re-analysis calls this
     /// again with the fresh row count; `replace(true)` rebuilds the index in
     /// place so a stale index never shadows new vectors.
-    pub async fn create_ann_index(&self, num_symbols: usize, threshold: usize) -> Result<()> {
+    ///
+    /// Returns which of the three outcomes occurred — see [`AnnIndexBuild`].
+    pub async fn create_ann_index(
+        &self,
+        num_symbols: usize,
+        threshold: usize,
+    ) -> Result<AnnIndexBuild> {
         if num_symbols < threshold {
             info!(
                 "Skipping ANN index: {} symbols < {} threshold",
                 num_symbols, threshold
             );
-            return Ok(());
+            return Ok(AnnIndexBuild::SkippedBelowThreshold {
+                num_symbols,
+                threshold,
+            });
         }
 
         let tables = self.db.table_names().execute().await?;
         if !tables.contains(&"symbols".to_string()) {
-            return Ok(());
+            return Ok(AnnIndexBuild::SkippedNoTable);
         }
 
         let table = self.db.open_table("symbols").execute().await?;
@@ -902,7 +943,9 @@ impl Store {
             .await?;
 
         info!("ANN index created successfully");
-        Ok(())
+        Ok(AnnIndexBuild::Built {
+            partitions: num_partitions,
+        })
     }
 
     /// Perform vector similarity search using LanceDB.
@@ -1036,9 +1079,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let store = Store::open(&dir, "test-repo").await.unwrap();
-        // With 100 symbols and threshold 10_000, should skip and return Ok
-        let result = store.create_ann_index(100, 10_000).await;
-        assert!(result.is_ok());
+        // With 100 symbols and threshold 10_000, the flat scan is kept.
+        let outcome = store.create_ann_index(100, 10_000).await.unwrap();
+        assert_eq!(
+            outcome,
+            AnnIndexBuild::SkippedBelowThreshold {
+                num_symbols: 100,
+                threshold: 10_000
+            }
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1048,9 +1097,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let store = Store::open(&dir, "test-repo").await.unwrap();
-        // Above threshold but no symbols table exists — should return Ok
-        let result = store.create_ann_index(20_000, 10_000).await;
-        assert!(result.is_ok());
+        // Above threshold but no symbols table exists — nothing to index.
+        let outcome = store.create_ann_index(20_000, 10_000).await.unwrap();
+        assert_eq!(outcome, AnnIndexBuild::SkippedNoTable);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1241,15 +1290,31 @@ mod tests {
         assert_eq!(schema::DEFAULT_EMBEDDING_DIM as u32 % IVF_PQ_SUB_VECTORS, 0);
     }
 
-    /// L2-normalize a vector so tests can construct unit-length embeddings the
-    /// same way the write path does (mirrors `embeddings::l2_normalize`).
+    /// `docs/reference/mcp-tools.md` states the ANN threshold as a concrete
+    /// number so users can predict whether their repo gets an approximate index.
+    /// A documented constant that silently drifts from the code is worse than no
+    /// documentation, so fail here if they disagree.
+    #[test]
+    fn documented_ann_threshold_matches_constant() {
+        const DOCS: &str = include_str!("../../../docs/reference/mcp-tools.md");
+        // The docs render the threshold for humans, with a thousands separator.
+        let documented = "5,000";
+        assert_eq!(
+            ANN_INDEX_THRESHOLD, 5_000,
+            "ANN_INDEX_THRESHOLD changed — update the figure in \
+             docs/reference/mcp-tools.md and here"
+        );
+        assert!(
+            DOCS.contains(documented),
+            "mcp-tools.md must document the ANN threshold as {documented}"
+        );
+    }
+
+    /// Build a unit-length embedding using the **same** normalization the write
+    /// path applies, so these tests exercise the production geometry rather than
+    /// a test-local re-implementation that could silently drift from it.
     fn unit(mut v: Vec<f32>) -> Vec<f32> {
-        let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 0.0 {
-            for x in v.iter_mut() {
-                *x /= norm;
-            }
-        }
+        schema::l2_normalize(&mut v);
         v
     }
 
@@ -1357,6 +1422,16 @@ mod tests {
     /// Issue #29: above the threshold `create_ann_index` must actually build the
     /// IVF-PQ index, and search must remain correct (top-1 still the nearest
     /// vector) once the ANN index is in play.
+    ///
+    /// The corpus is 300 rows with an explicit threshold of 100 rather than the
+    /// production `ANN_INDEX_THRESHOLD` of 5_000: building a real IVF-PQ index
+    /// over 5_000 × 384-dim vectors runs k-means training and would make this a
+    /// minutes-long test. The threshold is a *parameter* precisely so the
+    /// build path can be exercised cheaply — and the assertions below confirm
+    /// the index really was created, so the ANN path is genuinely covered rather
+    /// than silently falling back to a flat scan.
+    /// `ann_index_threshold_keeps_typical_repos_on_flat_scan` pins the
+    /// production constant separately.
     #[tokio::test]
     async fn test_ann_index_created_above_threshold_and_search_correct() {
         let dir = test_db_path("ann_above");
@@ -1365,8 +1440,6 @@ mod tests {
         let store = Store::open(&dir, "test-repo").await.unwrap();
 
         let dim = schema::DEFAULT_EMBEDDING_DIM as usize;
-        // Enough rows to train IVF-PQ (256 partitions). Spread a marker across
-        // dim 0 so one row is unambiguously nearest the query.
         let n = 300usize;
         let symbols: Vec<CodeSymbol> = (0..n)
             .map(|i| make_symbol(&format!("s{i}"), None))
@@ -1385,7 +1458,29 @@ mod tests {
         store.store_embeddings(embeddings.clone()).await.unwrap();
 
         // Build the ANN index with a threshold below the row count.
-        store.create_ann_index(n, 100).await.unwrap();
+        let outcome = store.create_ann_index(n, 100).await.unwrap();
+
+        // The build path was taken — not skipped — with a corpus-sized
+        // partition count. Without this the test would still pass on a flat
+        // scan, which is exactly the dead-index bug issue #29 fixed.
+        assert_eq!(
+            outcome,
+            AnnIndexBuild::Built {
+                partitions: ivf_partitions(n)
+            },
+            "expected a real IVF-PQ build, got {outcome:?}"
+        );
+
+        // Corroborate against LanceDB itself: the vector column now carries an
+        // index, so searches go through the ANN path.
+        let table = store.db.open_table("symbols").execute().await.unwrap();
+        let indices = table.list_indices().await.unwrap();
+        assert!(
+            indices
+                .iter()
+                .any(|i| i.columns.iter().any(|c| c == "vector")),
+            "LanceDB reports no index on the vector column: {indices:?}"
+        );
 
         // Query exactly the direction of s5 — it must come back top-1 even with
         // the ANN index active, and scores stay in cosine range.
@@ -1404,6 +1499,46 @@ mod tests {
         for (_, score) in &results {
             assert!((-1.0..=1.0).contains(score));
         }
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The production threshold decides which repos get an ANN index at all, so
+    /// pin the policy it encodes: typical repos stay on the exact flat scan and
+    /// only genuinely large corpora pay for IVF-PQ. Asserting the *decision*
+    /// keeps this cheap — building a real index at this scale would dominate the
+    /// suite's runtime, and
+    /// `test_ann_index_created_above_threshold_and_search_correct` already
+    /// covers the build itself.
+    #[tokio::test]
+    async fn ann_index_threshold_keeps_typical_repos_on_flat_scan() {
+        let dir = test_db_path("ann_threshold_policy");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+
+        // A repo just under the threshold keeps the exact flat scan.
+        let below = store
+            .create_ann_index(ANN_INDEX_THRESHOLD - 1, ANN_INDEX_THRESHOLD)
+            .await
+            .unwrap();
+        assert!(
+            !below.was_built(),
+            "a corpus below the threshold must not build an ANN index, got {below:?}"
+        );
+
+        // At the threshold the policy flips to building. (No `symbols` table
+        // here, so the build stops at `SkippedNoTable` — the point is that the
+        // row count no longer short-circuits it.)
+        let at = store
+            .create_ann_index(ANN_INDEX_THRESHOLD, ANN_INDEX_THRESHOLD)
+            .await
+            .unwrap();
+        assert_eq!(
+            at,
+            AnnIndexBuild::SkippedNoTable,
+            "at the threshold the row-count check must pass, got {at:?}"
+        );
 
         let _ = std::fs::remove_dir_all(&dir);
     }

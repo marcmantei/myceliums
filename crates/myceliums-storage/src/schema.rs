@@ -14,6 +14,29 @@ pub const DEFAULT_EMBEDDING_DIM: i32 = 384;
 /// trigger a rebuild rather than silently mixing geometries.
 pub const VECTOR_GEOMETRY_VERSION: u32 = 2;
 
+/// L2-normalize a vector in place to unit length.
+///
+/// This is the function that *establishes* the geometry
+/// [`VECTOR_GEOMETRY_VERSION`] versions, which is why it lives beside it: every
+/// vector written to or queried against the `vector` column must pass through
+/// here, or the stored geometry no longer matches the declared version.
+///
+/// After normalization, cosine similarity equals the dot product, and the
+/// squared L2 distance between two vectors `a` and `b` is `2 - 2·cos(a, b)`.
+/// That identity is what lets the LanceDB L2 metric and the brute-force cosine
+/// path rank by the **same** geometry (issue #29).
+///
+/// A zero vector has no direction, so it is left unchanged rather than
+/// producing `NaN`.
+pub fn l2_normalize(vector: &mut [f32]) {
+    let norm: f32 = vector.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 0.0 {
+        for x in vector.iter_mut() {
+            *x /= norm;
+        }
+    }
+}
+
 /// Arrow schema for the `symbols` table, with a fixed-size vector column
 /// sized to `embedding_dim`.
 pub fn symbols_schema(embedding_dim: i32) -> Schema {
