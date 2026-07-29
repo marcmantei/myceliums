@@ -13,8 +13,12 @@ Pick one of the three methods below.
 
 ### Option A: Install with Cargo
 
+`myc` is not published to crates.io yet, so install it from the git tag of a
+release. Pin the tag — installing from the default branch gives you whatever is
+on `main` at that moment, which is not reproducible.
+
 ```bash
-cargo install --git https://github.com/marcmantei/myceliums myc
+cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.0 --locked myc
 ```
 
 ### Option B: Build from source

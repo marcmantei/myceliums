@@ -54,8 +54,8 @@ Repository ID: my-project-a1b2c3
 ## Quick start
 
 ```bash
-# Install
-cargo install --git https://github.com/marcmantei/myceliums myc
+# Install (pinned to the latest release tag — myc is not on crates.io yet)
+cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.0 --locked myc
 
 # Set up Claude Code integration (one-time)
 myc setup-claude
@@ -189,8 +189,12 @@ myc serve --port 3000  # custom port
 
 **Cargo (recommended):**
 
+`myc` is not published to crates.io yet, so install it from the git tag of a
+release. Pin the tag — installing from the default branch gives you whatever is
+on `main` at that moment, which is not reproducible.
+
 ```bash
-cargo install --git https://github.com/marcmantei/myceliums myc
+cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.0 --locked myc
 ```
 
 **From source:**
