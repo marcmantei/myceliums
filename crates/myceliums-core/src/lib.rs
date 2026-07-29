@@ -66,6 +66,11 @@
 //! |---------|---------|-------------|
 //! | `embeddings` | **yes** | Enables fastembed-based semantic search and reranking |
 //! | `pdf` | no | Enables PDF-to-markdown conversion via `opendataloader-pdf` CLI |
+//!
+//! Disabling `embeddings` removes the `embeddings` module (vector generation
+//! needs `fastembed`) but keeps [`embedding_stats`]: a BM25-only build can still
+//! open an index built with embeddings, and must be able to read its accounting
+//! to warn that vectors are missing.
 
 // ── Public modules ───────────────────────────────────────────────────
 
@@ -86,7 +91,16 @@ pub mod dependencies;
 pub mod drift;
 pub mod dsl;
 pub mod email;
+// `embedding_stats` is deliberately *not* gated on `embeddings` while
+// `embeddings` is: the two answer different questions. `embeddings` generates
+// vectors and needs `fastembed`, so it only exists when the feature is on.
+// `embedding_stats` only *reports* how completely an index was embedded — it
+// depends on `Store` and `serde` alone. A BM25-only build still opens indexes
+// built elsewhere with embeddings, and must be able to read their accounting to
+// warn that vectors are missing. Gating it would make that warning unreadable
+// exactly where it matters most.
 pub mod embedding_stats;
+#[cfg(feature = "embeddings")]
 pub mod embeddings;
 pub mod error;
 pub mod file_guard;
