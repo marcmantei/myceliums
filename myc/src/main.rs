@@ -189,9 +189,10 @@ enum Commands {
         /// Skip embedding generation (much faster, BM25/Cypher still work)
         #[arg(long)]
         skip_embeddings: bool,
-        /// Exit non-zero if any symbol failed to embed (for CI: fail the build
-        /// on a partial index instead of silently shipping missing vectors)
-        #[arg(long)]
+        /// Exit non-zero if the index is not fully embedded (for CI: fail the
+        /// build on a partial index instead of silently shipping missing
+        /// vectors). Cannot be combined with --skip-embeddings.
+        #[arg(long, conflicts_with = "skip_embeddings")]
         strict_embeddings: bool,
         /// Watch for file changes and re-index incrementally
         #[arg(long)]
@@ -318,6 +319,11 @@ enum Commands {
         /// Maximum runtime in seconds for auto mode (default: 300, 0 = no limit)
         #[arg(long, default_value = "300")]
         timeout: u64,
+        /// Generate embeddings during session bootstrap and fail if the index
+        /// is not fully embedded. Session startup skips embeddings by default
+        /// for speed, so this opts into the slower, verified path.
+        #[arg(long)]
+        strict_embeddings: bool,
         /// Allow analyzing directories without a .git repository
         #[arg(long)]
         no_git_check: bool,
@@ -645,7 +651,8 @@ async fn main() -> Result<()> {
             no_git_check,
         } => {
             check_session_safeguards(&path, no_git_check)?;
-            cmd_analyze(&path, force, max_age, skip_embeddings, strict_embeddings).await?;
+            let embedding_policy = EmbeddingPolicy::from_flags(skip_embeddings, strict_embeddings);
+            cmd_analyze(&path, force, max_age, embedding_policy).await?;
             if watch {
                 cmd_watch(&path, skip_embeddings).await?;
             }
@@ -688,10 +695,11 @@ async fn main() -> Result<()> {
             path,
             yes,
             timeout,
+            strict_embeddings,
             no_git_check,
         } => {
             let p = path.unwrap_or_else(|| PathBuf::from("."));
-            cmd_session(&p, yes, timeout, no_git_check).await
+            cmd_session(&p, yes, timeout, strict_embeddings, no_git_check).await
         }
         Commands::Status => cmd_status().await,
         Commands::Clean {
@@ -945,14 +953,71 @@ fn check_session_safeguards(path: &Path, no_git_check: bool) -> Result<()> {
     Ok(())
 }
 
+/// How an analysis run treats embedding coverage.
+///
+/// Embedding behaviour is two decisions that must travel together: whether to
+/// generate vectors at all, and whether an incompletely embedded index is a
+/// failure. Passing them as two independent `bool` arguments is what let the
+/// session bootstrap silently drop `--strict-embeddings` (#51) — a single value
+/// makes the combination explicit at every call site and unrepresentable in
+/// contradictory states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EmbeddingPolicy {
+    /// Generate embeddings; a partial index is reported but tolerated.
+    Embed,
+    /// Generate embeddings and fail the run if the index is not complete.
+    EmbedStrict,
+    /// Do not generate embeddings at all (fast path; no vectors are written).
+    Skip,
+}
+
+impl EmbeddingPolicy {
+    /// Resolve the CLI flags into a policy.
+    ///
+    /// `--skip-embeddings` and `--strict-embeddings` are mutually exclusive
+    /// (clap rejects the combination), so skipping always wins here.
+    fn from_flags(skip_embeddings: bool, strict_embeddings: bool) -> Self {
+        match (skip_embeddings, strict_embeddings) {
+            (true, _) => Self::Skip,
+            (false, true) => Self::EmbedStrict,
+            (false, false) => Self::Embed,
+        }
+    }
+
+    /// The policy for a session bootstrap run.
+    ///
+    /// Session startup skips embeddings for speed by default, but
+    /// `--strict-embeddings` opts into the slower, verified path. This is the
+    /// single place that decision is made, so the session command cannot drift
+    /// back into ignoring the flag (#51).
+    fn for_session(strict_embeddings: bool) -> Self {
+        if strict_embeddings {
+            Self::EmbedStrict
+        } else {
+            Self::Skip
+        }
+    }
+
+    /// Whether embedding generation is bypassed entirely.
+    fn skips_embeddings(self) -> bool {
+        matches!(self, Self::Skip)
+    }
+
+    /// Whether an incompletely embedded index should fail the run.
+    fn is_strict(self) -> bool {
+        matches!(self, Self::EmbedStrict)
+    }
+}
+
 async fn cmd_analyze(
     path: &Path,
     force: bool,
     max_age_minutes: u64,
-    skip_embeddings: bool,
-    strict_embeddings: bool,
+    embedding_policy: EmbeddingPolicy,
 ) -> Result<()> {
     use myceliums_core::lock::{AnalysisLock, LockOutcome};
+
+    let skip_embeddings = embedding_policy.skips_embeddings();
 
     let abs_path = std::fs::canonicalize(path)
         .with_context(|| format!("Path does not exist: {}", path.display()))?;
@@ -980,6 +1045,12 @@ async fn cmd_analyze(
                     );
                     println!();
                     println!("Use --force to re-analyze.");
+                    // Reusing a cached index must not weaken the strict
+                    // contract: verify the *stored* accounting instead of
+                    // returning success without ever checking coverage.
+                    if embedding_policy.is_strict() {
+                        enforce_strict_embeddings(&db_path, &repo_id).await?;
+                    }
                     return Ok(());
                 }
                 CacheDecision::ReanalyzeNeeded { reason } => {
@@ -1110,7 +1181,7 @@ async fn cmd_analyze(
     println!("Repository ID: {}", repo_id);
 
     // Strict mode (CI): a partial index is a build failure, not a warning.
-    if strict_embeddings && result.has_embedding_failures() {
+    if embedding_policy.is_strict() && result.has_embedding_failures() {
         anyhow::bail!(
             "strict-embeddings: {} of {} symbols failed to embed; the index is \
              partial and would silently degrade search",
@@ -1121,29 +1192,52 @@ async fn cmd_analyze(
     Ok(())
 }
 
+/// Fail when a cached index is not fully embedded.
+///
+/// `--strict-embeddings` asserts a property of the index that is *used*, not
+/// merely of the run that happened to build it. A fresh cache short-circuits
+/// analysis, so the assertion is re-checked against the accounting persisted in
+/// the index. An index written before embedding accounting existed has no
+/// record; that is unverifiable rather than clean, so strict mode rejects it and
+/// points at the re-analysis that would produce a verdict.
+async fn enforce_strict_embeddings(db_path: &Path, repo_id: &str) -> Result<()> {
+    let store = Store::open(db_path, repo_id).await?;
+    match myceliums_core::EmbeddingStats::load(&store).await? {
+        Some(stats) if stats.is_partial() => anyhow::bail!(
+            "strict-embeddings: cached index is partial — {} of {} symbols have \
+             vectors ({} embedding failures); un-embedded symbols are invisible \
+             to semantic and hybrid search. Re-run with --force to rebuild.",
+            stats.symbols_embedded,
+            stats.symbols_total,
+            stats.embedding_failures
+        ),
+        Some(_) => Ok(()),
+        None => anyhow::bail!(
+            "strict-embeddings: cached index has no embedding accounting, so its \
+             coverage cannot be verified (it predates embedding accounting or was \
+             built with --skip-embeddings). Re-run with --force to rebuild."
+        ),
+    }
+}
+
 /// Analyze a repository for interactive session startup (the `myc` session
 /// bootstrap and auto-analyze hooks).
 ///
-/// Session startup deliberately trades embedding coverage for speed: it forces
-/// a fresh index but skips embedding generation (`myc analyze . --force` adds
-/// semantic vectors later). Because no embeddings are generated, there are no
-/// embedding failures to enforce, so strict-embedding gating does not apply —
-/// hence it is intentionally off. Centralizing the policy here keeps the four
-/// session call sites from each repeating (and drifting on) these flags.
-async fn cmd_analyze_for_session(path: &Path) -> Result<()> {
+/// Session startup trades embedding coverage for speed: it forces a fresh index
+/// and, by default, skips embedding generation entirely (`myc analyze . --force`
+/// adds semantic vectors later). That default is a *default*, not a law — when
+/// the caller asks for strict embeddings, the session path must generate
+/// vectors and enforce full coverage like any other analysis. Hardcoding the
+/// policy here is what made `--strict-embeddings` a silent no-op (#51).
+async fn cmd_analyze_for_session(path: &Path, embedding_policy: EmbeddingPolicy) -> Result<()> {
     const SESSION_FORCE_REANALYZE: bool = true;
     const SESSION_CACHE_MAX_AGE_MINUTES: u64 = 60;
-    const SESSION_SKIP_EMBEDDINGS: bool = true;
-    // No embeddings are generated in session mode, so there is nothing for
-    // strict-embedding enforcement to act on.
-    const SESSION_STRICT_EMBEDDINGS: bool = false;
 
     cmd_analyze(
         path,
         SESSION_FORCE_REANALYZE,
         SESSION_CACHE_MAX_AGE_MINUTES,
-        SESSION_SKIP_EMBEDDINGS,
-        SESSION_STRICT_EMBEDDINGS,
+        embedding_policy,
     )
     .await
 }
@@ -3273,8 +3367,13 @@ async fn cmd_session(
     path: &Path,
     auto_yes: bool,
     timeout_secs: u64,
+    strict_embeddings: bool,
     no_git_check: bool,
 ) -> Result<()> {
+    // Session startup skips embeddings for speed unless the caller demands a
+    // verified, fully-embedded index.
+    let embedding_policy = EmbeddingPolicy::for_session(strict_embeddings);
+
     let abs_path = std::fs::canonicalize(path)
         .with_context(|| format!("Path does not exist: {}", path.display()))?;
 
@@ -3301,6 +3400,18 @@ async fn cmd_session(
             let cache_config = CacheCheckConfig::default();
             match cache::check_cache(repo_info, &abs_path, &cache_config) {
                 CacheDecision::UseCached { .. } => {
+                    // A fresh cache must not launder a partial index into a
+                    // "ready" report when strict coverage was demanded.
+                    if embedding_policy.is_strict() {
+                        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+                        if let Err(e) = enforce_strict_embeddings(&db_path, &repo_id).await {
+                            hook_system_message(&format!(
+                                "[myceliums] {} error | {}",
+                                project_name, e
+                            ));
+                            return Ok(());
+                        }
+                    }
                     hook_system_message_with_instructions(&format!(
                         "[myceliums] {} ready | {} files \u{00b7} {} symbols",
                         project_name, repo_info.file_count, repo_info.symbol_count,
@@ -3308,7 +3419,7 @@ async fn cmd_session(
                     return Ok(());
                 }
                 CacheDecision::ReanalyzeNeeded { .. } => {
-                    let analyze_fut = cmd_analyze_for_session(&abs_path);
+                    let analyze_fut = cmd_analyze_for_session(&abs_path, embedding_policy);
                     if timeout_secs > 0 {
                         match tokio::time::timeout(
                             std::time::Duration::from_secs(timeout_secs),
@@ -3356,7 +3467,7 @@ async fn cmd_session(
             ));
             return Ok(());
         }
-        let analyze_fut = cmd_analyze_for_session(&abs_path);
+        let analyze_fut = cmd_analyze_for_session(&abs_path, embedding_policy);
         if timeout_secs > 0 {
             match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), analyze_fut)
                 .await
@@ -3403,6 +3514,10 @@ async fn cmd_session(
                 println!("  Symbols:   {}", repo_info.symbol_count);
                 println!("  Files:     {}", repo_info.file_count);
                 println!();
+                if embedding_policy.is_strict() {
+                    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+                    enforce_strict_embeddings(&db_path, &repo_id).await?;
+                }
                 println!("  Ready. MCP tools available via 'myc mcp'.");
                 println!();
                 return Ok(());
@@ -3420,8 +3535,8 @@ async fn cmd_session(
                     return Ok(());
                 }
 
-                // Skip embeddings for fast session startup
-                cmd_analyze_for_session(&abs_path).await?;
+                // Embeddings follow the session policy (skipped for speed by default)
+                cmd_analyze_for_session(&abs_path, embedding_policy).await?;
                 println!();
                 println!("  Ready. MCP tools available via 'myc mcp'.");
                 println!();
@@ -3452,8 +3567,8 @@ async fn cmd_session(
     }
 
     println!();
-    // Skip embeddings for fast session startup
-    cmd_analyze_for_session(&abs_path).await?;
+    // Embeddings follow the session policy (skipped for speed by default)
+    cmd_analyze_for_session(&abs_path, embedding_policy).await?;
 
     println!();
     println!("  Ready. MCP tools available via 'myc mcp'.");
@@ -4911,5 +5026,176 @@ mod tests {
         std::fs::write(tmp.path().join("a.txt"), "hello").unwrap();
         std::fs::write(tmp.path().join("b.txt"), "world!").unwrap();
         assert_eq!(dir_size_bytes(tmp.path()), 11); // 5 + 6
+    }
+
+    // --- Embedding policy (#51) ---------------------------------------------
+    //
+    // The regression: `--strict-embeddings` was accepted by the CLI but the
+    // session bootstrap hardcoded it off, so strict runs exited 0 on a partial
+    // index. These tests pin the policy resolution and the cached-index gate.
+
+    #[test]
+    fn strict_flag_resolves_to_strict_policy() {
+        let policy = EmbeddingPolicy::from_flags(false, true);
+        assert_eq!(policy, EmbeddingPolicy::EmbedStrict);
+        assert!(policy.is_strict());
+        assert!(!policy.skips_embeddings());
+    }
+
+    #[test]
+    fn plain_analyze_embeds_without_strictness() {
+        let policy = EmbeddingPolicy::from_flags(false, false);
+        assert_eq!(policy, EmbeddingPolicy::Embed);
+        assert!(!policy.is_strict());
+        assert!(!policy.skips_embeddings());
+    }
+
+    #[test]
+    fn skip_flag_disables_embedding_and_strictness() {
+        let policy = EmbeddingPolicy::from_flags(true, false);
+        assert_eq!(policy, EmbeddingPolicy::Skip);
+        assert!(policy.skips_embeddings());
+        assert!(!policy.is_strict());
+    }
+
+    /// `--skip-embeddings` and `--strict-embeddings` are mutually exclusive at
+    /// the CLI layer; if they ever reach the resolver together, skipping wins
+    /// rather than silently claiming a verified index.
+    #[test]
+    fn skip_wins_over_strict_when_both_are_set() {
+        assert_eq!(
+            EmbeddingPolicy::from_flags(true, true),
+            EmbeddingPolicy::Skip
+        );
+    }
+
+    /// clap must reject the contradictory flag pair outright, so the conflict
+    /// never becomes a silent precedence decision.
+    #[test]
+    fn cli_rejects_skip_combined_with_strict() {
+        let parsed = Cli::try_parse_from([
+            "myc",
+            "analyze",
+            ".",
+            "--skip-embeddings",
+            "--strict-embeddings",
+        ]);
+        assert!(
+            parsed.is_err(),
+            "--skip-embeddings with --strict-embeddings must be rejected"
+        );
+    }
+
+    /// The bug in one assertion: `myc session --strict-embeddings` must not
+    /// resolve to the skip-everything policy that made the flag a no-op.
+    #[test]
+    fn session_honors_strict_embeddings_flag() {
+        let parsed = Cli::try_parse_from(["myc", "session", "--strict-embeddings"])
+            .expect("session must accept --strict-embeddings");
+        let Commands::Session {
+            strict_embeddings, ..
+        } = parsed.command
+        else {
+            panic!("expected the session subcommand");
+        };
+        assert!(strict_embeddings, "flag must reach the session command");
+
+        let policy = EmbeddingPolicy::for_session(strict_embeddings);
+        assert_eq!(policy, EmbeddingPolicy::EmbedStrict);
+        assert!(
+            policy.is_strict(),
+            "strict session bootstrap must enforce full coverage"
+        );
+        assert!(
+            !policy.skips_embeddings(),
+            "strict session bootstrap must generate vectors, not skip them"
+        );
+    }
+
+    /// Session startup stays fast by default: no flag means no embeddings.
+    #[test]
+    fn session_skips_embeddings_by_default() {
+        let parsed =
+            Cli::try_parse_from(["myc", "session"]).expect("session must parse without flags");
+        let Commands::Session {
+            strict_embeddings, ..
+        } = parsed.command
+        else {
+            panic!("expected the session subcommand");
+        };
+        assert!(!strict_embeddings);
+
+        let policy = EmbeddingPolicy::for_session(strict_embeddings);
+        assert_eq!(policy, EmbeddingPolicy::Skip);
+        assert!(policy.skips_embeddings());
+    }
+
+    /// An index with no persisted accounting cannot be certified as complete,
+    /// so strict mode must fail rather than assume success.
+    #[tokio::test]
+    async fn strict_mode_rejects_cached_index_without_accounting() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join("db");
+        // Materialize an index that has never recorded embedding accounting.
+        Store::open(&db_path, "repo-under-test").await.unwrap();
+
+        let err = enforce_strict_embeddings(&db_path, "repo-under-test")
+            .await
+            .expect_err("unverifiable coverage must fail strict mode");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("strict-embeddings"),
+            "error must name the flag it enforces, got: {msg}"
+        );
+        assert!(
+            msg.contains("--force"),
+            "error must tell the user how to recover, got: {msg}"
+        );
+    }
+
+    /// A fully-embedded cached index satisfies strict mode without re-analysis.
+    #[tokio::test]
+    async fn strict_mode_accepts_fully_embedded_cached_index() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join("db");
+        let store = Store::open(&db_path, "repo-under-test").await.unwrap();
+        myceliums_core::EmbeddingStats::complete(12, 12)
+            .record(&store)
+            .await
+            .unwrap();
+
+        enforce_strict_embeddings(&db_path, "repo-under-test")
+            .await
+            .expect("a complete index must pass strict mode");
+    }
+
+    /// The silent-success path: reusing a partial index under `--strict-embeddings`
+    /// previously exited 0. It must now fail and say how bad the coverage is.
+    #[tokio::test]
+    async fn strict_mode_rejects_partial_cached_index() {
+        let tmp = TempDir::new().unwrap();
+        let db_path = tmp.path().join("db");
+        let store = Store::open(&db_path, "repo-under-test").await.unwrap();
+        myceliums_core::EmbeddingStats {
+            symbols_total: 10,
+            symbols_embedded: 4,
+            embedding_failures: 6,
+        }
+        .record(&store)
+        .await
+        .unwrap();
+
+        let err = enforce_strict_embeddings(&db_path, "repo-under-test")
+            .await
+            .expect_err("a partial cached index must fail strict mode");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("4 of 10"),
+            "error must quantify coverage: {msg}"
+        );
+        assert!(
+            msg.contains("6 embedding failures"),
+            "error must report the failure count: {msg}"
+        );
     }
 }

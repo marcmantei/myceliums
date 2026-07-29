@@ -14,7 +14,7 @@ Analyze a codebase and build its knowledge graph. Parses source files, extracts 
 | `--force` | bool | `false` | Force full re-analysis even if cache is fresh |
 | `--max-age` | integer (minutes) | `60` | Maximum cache age in minutes before triggering re-analysis |
 | `--skip-embeddings` | bool | `false` | Skip embedding generation (much faster, BM25 and Cypher still work) |
-| `--strict-embeddings` | bool | `false` | Exit non-zero if any symbol fails to embed (for CI — see [Embedding accounting](#embedding-accounting)) |
+| `--strict-embeddings` | bool | `false` | Exit non-zero unless the index is fully embedded (for CI — see [Embedding accounting](#embedding-accounting)). Conflicts with `--skip-embeddings` |
 | `--watch` | bool | `false` | Watch for file changes and re-index incrementally |
 | `--no-git-check` | bool | `false` | Allow analyzing directories without a `.git` repository |
 
@@ -52,9 +52,17 @@ index is reported explicitly:
   ⚠ Embedding failures: 340 — 900 of 1240 symbols have no vector and are invisible to semantic/hybrid search
 ```
 
-- **`--strict-embeddings`** turns any embedding failure into a non-zero exit
-  code, so CI can fail the build instead of silently shipping a half-empty
+- **`--strict-embeddings`** turns an incompletely embedded index into a non-zero
+  exit code, so CI can fail the build instead of silently shipping a half-empty
   index. Without the flag, failures are reported but the command still succeeds.
+  It cannot be combined with `--skip-embeddings` — asserting full coverage while
+  generating no vectors is contradictory, so the CLI rejects the pair.
+- **The assertion covers cached indexes too.** `--strict-embeddings` describes
+  the index you end up *using*, not just the run that built it. When a fresh
+  cache short-circuits re-analysis, the check is re-applied to the coverage
+  recorded in the index. An index with no recorded accounting (built before
+  embedding accounting existed, or with `--skip-embeddings`) cannot be verified,
+  so strict mode fails and asks for `--force` rather than assuming success.
 - The accounting is persisted in the index. At query time, `semantic-search`
   and hybrid `search` prepend a **partial-index warning** whenever the index is
   incomplete, so a stale or half-built index never answers with unwarranted
@@ -70,6 +78,7 @@ Interactive session setup: checks cache freshness, prompts for analysis if data 
 | `<path>` | positional, optional | current directory | Path to the project directory |
 | `--yes` | bool | `false` | Skip interactive prompt and auto-analyze if needed |
 | `--timeout` | integer (seconds) | `300` | Maximum runtime in seconds for auto mode (0 = no limit) |
+| `--strict-embeddings` | bool | `false` | Generate embeddings during bootstrap and fail unless the index is fully embedded |
 | `--no-git-check` | bool | `false` | Allow analyzing directories without a `.git` repository |
 
 ```bash
@@ -79,6 +88,11 @@ myc session
 # Non-interactive, auto-analyze with 5-minute timeout
 myc session /path/to/project --yes --timeout 300
 ```
+
+Session bootstrap skips embedding generation by default so startup stays fast;
+`myc analyze . --force` adds semantic vectors later. Pass `--strict-embeddings`
+to opt into the slower, verified path — the session then generates vectors and
+fails if the resulting index is not fully embedded.
 
 ---
 
