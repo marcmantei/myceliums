@@ -55,7 +55,7 @@ Repository ID: my-project-a1b2c3
 
 ```bash
 # Install (pinned to the latest release tag — myc is not on crates.io yet)
-cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.1 --locked myc
+cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.2 --locked myc
 
 # Set up Claude Code integration (one-time)
 myc setup-claude
@@ -194,7 +194,7 @@ release. Pin the tag — installing from the default branch gives you whatever i
 on `main` at that moment, which is not reproducible.
 
 ```bash
-cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.1 --locked myc
+cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.2 --locked myc
 ```
 
 **From source:**

@@ -8,7 +8,7 @@ branding:
 
 inputs:
   myc-version:
-    description: 'Release of myc to install — a version like "0.3.1" or "latest". Every install is pinned to a release tag; the action never builds from a branch HEAD.'
+    description: 'Release of myc to install — a version like "0.3.2" or "latest". Every install is pinned to a release tag; the action never builds from a branch HEAD.'
     required: false
     default: 'latest'
   depth:
@@ -64,7 +64,7 @@ runs:
         fi
 
         if [ -z "$TAG" ]; then
-          echo "::error::Could not resolve a myc tag for myc-version '${VERSION}'. Pass an explicit version, e.g. myc-version: '0.3.1'."
+          echo "::error::Could not resolve a myc tag for myc-version '${VERSION}'. Pass an explicit version, e.g. myc-version: '0.3.2'."
           exit 1
         fi
 

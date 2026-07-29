@@ -18,7 +18,7 @@ release. Pin the tag — installing from the default branch gives you whatever i
 on `main` at that moment, which is not reproducible.
 
 ```bash
-cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.1 --locked myc
+cargo install --git https://github.com/marcmantei/myceliums --tag v0.3.2 --locked myc
 ```
 
 ### Option B: Build from source
