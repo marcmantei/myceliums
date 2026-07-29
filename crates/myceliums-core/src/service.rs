@@ -22,9 +22,7 @@ use std::sync::Arc;
 
 use dashmap::DashMap;
 
-use myceliums_storage::{
-    CodeSymbol, RelationshipKind, RepoInfo, RepoRegistry, Store,
-};
+use myceliums_storage::{CodeSymbol, RelationshipKind, RepoInfo, RepoRegistry, Store};
 
 use crate::error::MyceliumError;
 use crate::search::{search_symbols, search_symbols_explain, SearchResult};
@@ -82,8 +80,7 @@ impl GraphService {
 
     /// Loads the repository registry from disk.
     fn load_registry(&self) -> Result<RepoRegistry> {
-        RepoRegistry::load(&self.registry_path())
-            .map_err(|e| MyceliumError::Storage(e.to_string()))
+        RepoRegistry::load(&self.registry_path()).map_err(|e| MyceliumError::Storage(e.to_string()))
     }
 
     /// Resolves an optional caller-supplied repository id to a concrete id.

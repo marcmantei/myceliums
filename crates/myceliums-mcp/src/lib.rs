@@ -7,12 +7,11 @@ use myceliums_core::{
     compute_ownership, compute_surprising_connections, detect_contracts, detect_cycles,
     detect_drift, detect_impact, diff_snapshots, export_mermaid, generate_architecture_diagram,
     hybrid_search as core_hybrid_search, hybrid_search_explain as core_hybrid_search_explain,
-    GraphService,
     link_decision_to_symbol, lint_architecture, list_snapshots, load_decisions,
     load_service_mappings, load_snapshot, load_snapshot_by_id, parse_codeowners, rerank_results,
     run_git_diff, save_decision, save_service_mapping, save_snapshot, search_symbols, AdrStatus,
-    ArchDecisionRecord, CommunityDetector, MermaidDiagramType,
-    Ontology, ProcessFilter, ProcessTracer, RenamePlan,
+    ArchDecisionRecord, CommunityDetector, GraphService, MermaidDiagramType, Ontology,
+    ProcessFilter, ProcessTracer, RenamePlan,
 };
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
 use rmcp::handler::server::tool::ToolRouter;
