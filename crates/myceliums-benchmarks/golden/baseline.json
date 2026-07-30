@@ -1,0 +1,35 @@
+{
+  "commit_sha": "778194244c64f0be3dc4feefc6f5a7e1a618faf6",
+  "corpus_symbols": 96,
+  "dataset_version": "2026-07-30",
+  "queries": 51,
+  "regenerate_with": "cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline",
+  "results": {
+    "hybrid": {
+      "metrics": null,
+      "reason": "requires the semantic leg's model weights — run where the fastembed weights are already cached",
+      "status": "UNAVAILABLE"
+    },
+    "hybrid+rerank": {
+      "metrics": null,
+      "reason": "requires the semantic leg plus cross-encoder reranker weights — run where the fastembed and reranker weights are already cached",
+      "status": "UNAVAILABLE"
+    },
+    "lexical": {
+      "metrics": {
+        "mrr": 0.6405,
+        "recall_at_1": 0.3765,
+        "recall_at_10": 0.6983,
+        "recall_at_5": 0.6468
+      },
+      "reason": null,
+      "status": "MEASURED"
+    },
+    "semantic": {
+      "metrics": null,
+      "reason": "requires fastembed model weights (network download) — run where the fastembed weights are already cached",
+      "status": "UNAVAILABLE"
+    }
+  },
+  "timestamp": "2026-07-30T21:23:37Z"
+}

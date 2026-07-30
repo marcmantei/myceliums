@@ -1,0 +1,971 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "2026-07-30",
+  "corpus_root": "tests/fixtures",
+  "queries": [
+    {
+      "id": "exact-name-format-name",
+      "query": "format_name",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-py-project/utils/helpers.py",
+          "symbol": "format_name"
+        },
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "formatName"
+        },
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "formatName"
+        }
+      ],
+      "rationale": "Search tokenization is case-insensitive and splits identifiers, so format_name and formatName are the same token sequence. All three definitions are genuinely correct answers; labelling only the Python one would penalize correct behaviour."
+    },
+    {
+      "id": "exact-name-userservice-get-user",
+      "query": "UserService get_user",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.get_user"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.getUser"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.getUser"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "UserService.GetUser"
+        }
+      ],
+      "rationale": "Class-qualified method lookup. Naming the class repeats the token 'user', which pulls bare 'user' variables above the actual getters — a known weakness this query is kept to measure."
+    },
+    {
+      "id": "exact-name-process-request",
+      "query": "process_request",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-py-project/main.py",
+          "symbol": "process_request"
+        },
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "processRequest"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "processRequest"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "processRequest"
+        }
+      ],
+      "rationale": "Duplicated across the Python, TS and JS entry points; all four copies are correct answers."
+    },
+    {
+      "id": "exact-name-formatname",
+      "query": "formatName",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-py-project/utils/helpers.py",
+          "symbol": "format_name"
+        },
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "formatName"
+        },
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "formatName"
+        }
+      ],
+      "rationale": "The camelCase spelling of q01. Labels are identical by design: the pair measures whether query casing changes the ranking (it should not)."
+    },
+    {
+      "id": "exact-name-database-findbyid",
+      "query": "Database findById",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.findById"
+        }
+      ],
+      "rationale": "findById occurs once in the corpus, so class plus method resolves unambiguously."
+    },
+    {
+      "id": "exact-name-generateid",
+      "query": "generateId",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "generateId"
+        }
+      ],
+      "rationale": "Unique non-exported helper; confirms module-private symbols are still retrievable."
+    },
+    {
+      "id": "exact-name-debounce",
+      "query": "debounce",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "debounce"
+        }
+      ],
+      "rationale": "Unique arrow-function constant; verifies const-bound functions are indexed like declarations."
+    },
+    {
+      "id": "exact-name-parseuser",
+      "query": "parseUser",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "parseUser"
+        }
+      ],
+      "rationale": "Unique JS helper; a single unambiguous answer."
+    },
+    {
+      "id": "exact-name-newserver",
+      "query": "NewServer",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "NewServer"
+        }
+      ],
+      "rationale": "Unique Go constructor following the New<Type> convention."
+    },
+    {
+      "id": "exact-name-maxretries",
+      "query": "MaxRetries",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "MaxRetries"
+        }
+      ],
+      "rationale": "Package-level constant; checks that constants are retrievable, not just callables."
+    },
+    {
+      "id": "exact-name-servehttp",
+      "query": "ServeHTTP",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-go-project/interfaces.go",
+          "symbol": "MyHandler.ServeHTTP"
+        },
+        {
+          "file": "sample-go-project/interfaces.go",
+          "symbol": "Handler"
+        }
+      ],
+      "rationale": "Both the concrete implementation and the Handler interface that declares the method answer a search for ServeHTTP."
+    },
+    {
+      "id": "exact-name-userid-type",
+      "query": "UserID type",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "UserID"
+        }
+      ],
+      "rationale": "Named string type; the only symbol called UserID."
+    },
+    {
+      "id": "exact-name-processid",
+      "query": "ProcessId",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "UserService.ProcessId"
+        }
+      ],
+      "rationale": "Unique private C# method; verifies private members are indexed."
+    },
+    {
+      "id": "exact-name-status-enum",
+      "query": "Status enum",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "Status"
+        }
+      ],
+      "rationale": "Unique enum declaration; exercises an enum symbol kind."
+    },
+    {
+      "id": "exact-name-person-record",
+      "query": "Person record",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "Person"
+        }
+      ],
+      "rationale": "C# record type; a modern declaration form that must still be indexed."
+    },
+    {
+      "id": "paraphrase-capitalize-a-word",
+      "query": "capitalize a word",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-py-project/utils/helpers.py",
+          "symbol": "capitalize"
+        },
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "capitalize"
+        },
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "capitalize"
+        }
+      ],
+      "rationale": "The name appears verbatim but the query adds filler words; all three language copies are correct answers."
+    },
+    {
+      "id": "paraphrase-tidy-up-a-person-s-name-for-display",
+      "query": "tidy up a person's name for display",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-py-project/utils/helpers.py",
+          "symbol": "format_name"
+        },
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "formatName"
+        },
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "formatName"
+        }
+      ],
+      "rationale": "Describes name formatting without using the word 'format'; a pure vocabulary-gap probe where lexical search is expected to struggle."
+    },
+    {
+      "id": "paraphrase-reject-empty-payloads",
+      "query": "reject empty payloads",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-py-project/main.py",
+          "symbol": "validate_input"
+        },
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "validateInput"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "validateInput"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "validateInput"
+        }
+      ],
+      "rationale": "Restates input validation in entirely different words; no query term appears in any labelled symbol, so lexical search cannot reach them at all."
+    },
+    {
+      "id": "paraphrase-remove-a-record-by-identifier",
+      "query": "remove a record by identifier",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.delete"
+        },
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.delete_user"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.deleteUser"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.deleteUser"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "UserService.DeleteUser"
+        }
+      ],
+      "rationale": "'remove' and 'record' are synonyms for the delete operations; every deletion entry point in the corpus is a correct answer."
+    },
+    {
+      "id": "paraphrase-spin-up-the-http-listener",
+      "query": "spin up the HTTP listener",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "Server.Start"
+        }
+      ],
+      "rationale": "Colloquial phrasing for starting a server; the body calls ListenAndServe, so content matching can still reach it."
+    },
+    {
+      "id": "paraphrase-build-a-fresh-server-instance",
+      "query": "build a fresh server instance",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "NewServer"
+        }
+      ],
+      "rationale": "Constructor described rather than named; 'fresh' stands in for 'new'."
+    },
+    {
+      "id": "behavioural-look-up-a-stored-user-by-id",
+      "query": "look up a stored user by id",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.get_user"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.getUser"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.getUser"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "UserService.GetUser"
+        }
+      ],
+      "rationale": "Describes the read path by behaviour; every language's service getter is a correct answer."
+    },
+    {
+      "id": "behavioural-delay-running-a-function-until-calls-stop",
+      "query": "delay running a function until calls stop",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "debounce"
+        }
+      ],
+      "rationale": "Textbook definition of debouncing with none of the identifier's characters present."
+    },
+    {
+      "id": "behavioural-generate-a-random-unique-identifier",
+      "query": "generate a random unique identifier",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "generateId"
+        }
+      ],
+      "rationale": "Describes the Math.random-based id helper by what it does."
+    },
+    {
+      "id": "behavioural-return-every-stored-item-as-a-list",
+      "query": "return every stored item as a list",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.list_users"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.listUsers"
+        },
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.findAll"
+        }
+      ],
+      "rationale": "Behavioural description of enumeration; the two service listers and the database findAll all implement it."
+    },
+    {
+      "id": "behavioural-format-host-and-port-into-an-address-string",
+      "query": "format host and port into an address string",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "Server.Address"
+        }
+      ],
+      "rationale": "Describes the Sprintf body; 'host' and 'port' appear in the content but not the method name."
+    },
+    {
+      "id": "conceptual-application-entry-point",
+      "query": "application entry point",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-py-project/main.py",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "main"
+        }
+      ],
+      "rationale": "A concept, not a name: every main function in the corpus is an entry point, and none of them contain the query's words."
+    },
+    {
+      "id": "conceptual-user-crud-operations",
+      "query": "user CRUD operations",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.create_user"
+        },
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.get_user"
+        },
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.delete_user"
+        },
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.list_users"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.createUser"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.getUser"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.deleteUser"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.listUsers"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.addUser"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.getUser"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.deleteUser"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "UserService.GetUser"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "UserService.DeleteUser"
+        }
+      ],
+      "rationale": "A concept spanning every user-service method in the corpus. With 13 relevant symbols, recall@10 is capped at 0.77 by construction — the ceiling is a property of the query, not a defect."
+    },
+    {
+      "id": "conceptual-persistence-layer",
+      "query": "persistence layer",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database"
+        },
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.insert"
+        },
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.findById"
+        },
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.findAll"
+        },
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.delete"
+        }
+      ],
+      "rationale": "Names an architectural layer rather than a symbol; the Database class and its operations are the only persistence code in the corpus."
+    },
+    {
+      "id": "conceptual-http-request-handling",
+      "query": "HTTP request handling",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "handler"
+        },
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "processRequest"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "handler"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "processRequest"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "handler"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "processRequest"
+        },
+        {
+          "file": "sample-go-project/interfaces.go",
+          "symbol": "Handler"
+        },
+        {
+          "file": "sample-go-project/interfaces.go",
+          "symbol": "MyHandler.ServeHTTP"
+        }
+      ],
+      "rationale": "A cross-fixture concept: the TS/JS request pipelines and the Go handler contract all implement request handling."
+    },
+    {
+      "id": "paraphrase-add-new-user",
+      "query": "register a new user record",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.create_user"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "UserService.createUser"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.addUser"
+        }
+      ],
+      "rationale": "Creation is spelled create_user, createUser and addUser across the fixtures. All three answer 'register a new user'."
+    },
+    {
+      "id": "paraphrase-look-up-record",
+      "query": "look up one record in a collection",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.findById"
+        }
+      ],
+      "rationale": "findById is the only single-record lookup on the store; findAll returns many and is excluded."
+    },
+    {
+      "id": "paraphrase-store-a-record",
+      "query": "save a record into storage",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.insert"
+        }
+      ],
+      "rationale": "'Save' for 'insert'. Tests that a common synonym reaches the write path."
+    },
+    {
+      "id": "behavioural-reject-nameless-user",
+      "query": "throw when a user has no name",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.validateUser"
+        }
+      ],
+      "rationale": "The only guard that specifically checks user.name and throws."
+    },
+    {
+      "id": "behavioural-trim-whitespace",
+      "query": "strip surrounding whitespace from values",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-py-project/main.py",
+          "symbol": "transform_data"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "UserService.ProcessId"
+        }
+      ],
+      "rationale": "Both call a trim/strip. Identified purely from the body: neither name mentions whitespace."
+    },
+    {
+      "id": "behavioural-read-request-body",
+      "query": "read the body out of an http request",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "parseBody"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "parseBody"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "parseBody"
+        }
+      ],
+      "rationale": "Each returns req.body. Trivial bodies, which makes them a good test of whether short symbols can be found at all."
+    },
+    {
+      "id": "behavioural-json-response",
+      "query": "return a json encoded http response",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "handler"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "handler"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "handler"
+        }
+      ],
+      "rationale": "The handlers are the only symbols that JSON.stringify into a Response."
+    },
+    {
+      "id": "behavioural-log-on-delete",
+      "query": "write a log line when something is deleted",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "UserService.DeleteUser"
+        }
+      ],
+      "rationale": "The C# delete is the only one with a logging side effect — behaviour that distinguishes it from its same-named siblings in other languages."
+    },
+    {
+      "id": "behavioural-print-to-console",
+      "query": "print a value to standard output",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-py-project/main.py",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "main"
+        },
+        {
+          "file": "sample-go-project/imports.go",
+          "symbol": "demo"
+        }
+      ],
+      "rationale": "A deliberately broad behavioural query: six entry points print. Wide relevant sets punish a mode that only ever returns one good answer."
+    },
+    {
+      "id": "behavioural-empty-string-guard",
+      "query": "return an empty string for empty input",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-py-project/utils/helpers.py",
+          "symbol": "capitalize"
+        }
+      ],
+      "rationale": "Only the Python capitalize has the empty-word fallback. A single-symbol behavioural needle."
+    },
+    {
+      "id": "behavioural-delete-returns-bool",
+      "query": "delete and report whether anything was removed",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-ts-project/src/db.ts",
+          "symbol": "Database.delete"
+        },
+        {
+          "file": "sample-py-project/services/user_service.py",
+          "symbol": "UserService.delete_user"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.deleteUser"
+        }
+      ],
+      "rationale": "All three return a boolean success flag. The C# DeleteUser returns void and is correctly excluded — the distinction is the whole point of the query."
+    },
+    {
+      "id": "behavioural-validate-then-transform",
+      "query": "validate the payload then transform it",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "sample-py-project/main.py",
+          "symbol": "process_request"
+        },
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "processRequest"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "processRequest"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "processRequest"
+        }
+      ],
+      "rationale": "Each orchestrates a validate-then-transform pipeline. Labels the coordinator, not the steps it calls."
+    },
+    {
+      "id": "conceptual-input-validation",
+      "query": "where is user input validated",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-py-project/main.py",
+          "symbol": "validate_input"
+        },
+        {
+          "file": "sample-ts-project/src/index.ts",
+          "symbol": "validateInput"
+        },
+        {
+          "file": "sample-js-project/src/index.js",
+          "symbol": "validateInput"
+        },
+        {
+          "file": "sample-js-project/src/db.js",
+          "symbol": "validateInput"
+        },
+        {
+          "file": "sample-js-project/src/services/user.js",
+          "symbol": "UserService.validateUser"
+        }
+      ],
+      "rationale": "Validation is scattered across entry points and the user service. A cross-file concept query, which is where lexical search is expected to struggle."
+    },
+    {
+      "id": "conceptual-http-server-setup",
+      "query": "http server setup and configuration",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "Server"
+        },
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "NewServer"
+        },
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "Server.Start"
+        }
+      ],
+      "rationale": "The type, its constructor and its start method together constitute 'server setup'."
+    },
+    {
+      "id": "conceptual-string-formatting-helpers",
+      "query": "string formatting utility helpers",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-py-project/utils/helpers.py",
+          "symbol": "format_name"
+        },
+        {
+          "file": "sample-py-project/utils/helpers.py",
+          "symbol": "capitalize"
+        },
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "formatName"
+        },
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "capitalize"
+        },
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "formatName"
+        },
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "capitalize"
+        }
+      ],
+      "rationale": "The utils modules as a category. Six symbols across three languages; tests recall breadth rather than precision."
+    },
+    {
+      "id": "conceptual-interface-contracts",
+      "query": "interface definitions and contracts",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-go-project/interfaces.go",
+          "symbol": "Handler"
+        },
+        {
+          "file": "sample-go-project/interfaces.go",
+          "symbol": "ReadWriter"
+        },
+        {
+          "file": "sample-ts-project/src/services/user.ts",
+          "symbol": "User"
+        }
+      ],
+      "rationale": "Every interface-kind symbol in the corpus. Probes whether symbol kind is reachable through natural language."
+    },
+    {
+      "id": "conceptual-type-declarations",
+      "query": "type aliases and enumerations",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "UserID"
+        },
+        {
+          "file": "sample-ts-project/src/utils.ts",
+          "symbol": "Config"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "Status"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "EventHandler"
+        }
+      ],
+      "rationale": "Type-level declarations across three languages. None of them share a token with the query, making this the hardest conceptual case in the set."
+    },
+    {
+      "id": "conceptual-value-objects",
+      "query": "simple value objects holding coordinates or people",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "Point"
+        },
+        {
+          "file": "sample-csharp-project/Basic.cs",
+          "symbol": "Person"
+        }
+      ],
+      "rationale": "The C# struct and record. Tests that data-carrying types are retrievable, not just behaviour-carrying ones."
+    },
+    {
+      "id": "paraphrase-shout-text",
+      "query": "convert text to all capitals",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "capitalize"
+        }
+      ],
+      "rationale": "The JS capitalize upper-cases the whole string, unlike its Python and TypeScript namesakes which only touch the first letter. Labelling just this one makes the query a precision test between same-named, different-behaving symbols."
+    },
+    {
+      "id": "paraphrase-extract-user-fields",
+      "query": "extract name email and age from raw data",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-js-project/src/utils.js",
+          "symbol": "parseUser"
+        }
+      ],
+      "rationale": "Describes the field projection parseUser performs without naming the function or the word 'parse'."
+    },
+    {
+      "id": "paraphrase-retry-limit",
+      "query": "how many times do we retry before giving up",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "sample-go-project/basic.go",
+          "symbol": "MaxRetries"
+        }
+      ],
+      "rationale": "Natural-language route to a constant. Constants are usually reachable only by exact name, so this probes whether prose finds them at all."
+    }
+  ]
+}

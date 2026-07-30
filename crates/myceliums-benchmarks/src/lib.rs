@@ -3,6 +3,7 @@ use walkdir::WalkDir;
 
 /// Benchmark infrastructure module
 pub mod baseline;
+pub mod eval;
 pub mod fixtures;
 pub mod large_repo;
 pub mod metrics;

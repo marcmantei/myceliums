@@ -45,6 +45,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # myceliums-benchmarks' baseline provenance tests (issue #34) walk
+          # git history to confirm the recorded commit_sha resolves and is an
+          # ancestor of HEAD — a shallow (depth-1) checkout has neither, so
+          # every PR would fail those tests regardless of content.
+          fetch-depth: 0
       - name: Free runner disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install protoc
