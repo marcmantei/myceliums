@@ -4,7 +4,7 @@
   "corpus_root": "tests/fixtures",
   "queries": [
     {
-      "id": "q01",
+      "id": "exact-name-format-name",
       "query": "format_name",
       "intent": "exact-name",
       "relevant": [
@@ -24,7 +24,7 @@
       "rationale": "Search tokenization is case-insensitive and splits identifiers, so format_name and formatName are the same token sequence. All three definitions are genuinely correct answers; labelling only the Python one would penalize correct behaviour."
     },
     {
-      "id": "q02",
+      "id": "exact-name-userservice-get-user",
       "query": "UserService get_user",
       "intent": "exact-name",
       "relevant": [
@@ -48,7 +48,7 @@
       "rationale": "Class-qualified method lookup. Naming the class repeats the token 'user', which pulls bare 'user' variables above the actual getters — a known weakness this query is kept to measure."
     },
     {
-      "id": "q05",
+      "id": "exact-name-process-request",
       "query": "process_request",
       "intent": "exact-name",
       "relevant": [
@@ -72,7 +72,7 @@
       "rationale": "Duplicated across the Python, TS and JS entry points; all four copies are correct answers."
     },
     {
-      "id": "q08",
+      "id": "exact-name-formatname",
       "query": "formatName",
       "intent": "exact-name",
       "relevant": [
@@ -92,7 +92,7 @@
       "rationale": "The camelCase spelling of q01. Labels are identical by design: the pair measures whether query casing changes the ranking (it should not)."
     },
     {
-      "id": "q09",
+      "id": "exact-name-database-findbyid",
       "query": "Database findById",
       "intent": "exact-name",
       "relevant": [
@@ -104,7 +104,7 @@
       "rationale": "findById occurs once in the corpus, so class plus method resolves unambiguously."
     },
     {
-      "id": "q10",
+      "id": "exact-name-generateid",
       "query": "generateId",
       "intent": "exact-name",
       "relevant": [
@@ -116,7 +116,7 @@
       "rationale": "Unique non-exported helper; confirms module-private symbols are still retrievable."
     },
     {
-      "id": "q11",
+      "id": "exact-name-debounce",
       "query": "debounce",
       "intent": "exact-name",
       "relevant": [
@@ -128,7 +128,7 @@
       "rationale": "Unique arrow-function constant; verifies const-bound functions are indexed like declarations."
     },
     {
-      "id": "q15",
+      "id": "exact-name-parseuser",
       "query": "parseUser",
       "intent": "exact-name",
       "relevant": [
@@ -140,7 +140,7 @@
       "rationale": "Unique JS helper; a single unambiguous answer."
     },
     {
-      "id": "q19",
+      "id": "exact-name-newserver",
       "query": "NewServer",
       "intent": "exact-name",
       "relevant": [
@@ -152,7 +152,7 @@
       "rationale": "Unique Go constructor following the New<Type> convention."
     },
     {
-      "id": "q20",
+      "id": "exact-name-maxretries",
       "query": "MaxRetries",
       "intent": "exact-name",
       "relevant": [
@@ -164,7 +164,7 @@
       "rationale": "Package-level constant; checks that constants are retrievable, not just callables."
     },
     {
-      "id": "q21",
+      "id": "exact-name-servehttp",
       "query": "ServeHTTP",
       "intent": "exact-name",
       "relevant": [
@@ -180,7 +180,7 @@
       "rationale": "Both the concrete implementation and the Handler interface that declares the method answer a search for ServeHTTP."
     },
     {
-      "id": "q24",
+      "id": "exact-name-userid-type",
       "query": "UserID type",
       "intent": "exact-name",
       "relevant": [
@@ -192,7 +192,7 @@
       "rationale": "Named string type; the only symbol called UserID."
     },
     {
-      "id": "q26",
+      "id": "exact-name-processid",
       "query": "ProcessId",
       "intent": "exact-name",
       "relevant": [
@@ -204,7 +204,7 @@
       "rationale": "Unique private C# method; verifies private members are indexed."
     },
     {
-      "id": "q28",
+      "id": "exact-name-status-enum",
       "query": "Status enum",
       "intent": "exact-name",
       "relevant": [
@@ -216,7 +216,7 @@
       "rationale": "Unique enum declaration; exercises an enum symbol kind."
     },
     {
-      "id": "q29",
+      "id": "exact-name-person-record",
       "query": "Person record",
       "intent": "exact-name",
       "relevant": [
@@ -228,7 +228,7 @@
       "rationale": "C# record type; a modern declaration form that must still be indexed."
     },
     {
-      "id": "q32",
+      "id": "paraphrase-capitalize-a-word",
       "query": "capitalize a word",
       "intent": "paraphrase",
       "relevant": [
@@ -248,7 +248,7 @@
       "rationale": "The name appears verbatim but the query adds filler words; all three language copies are correct answers."
     },
     {
-      "id": "q33",
+      "id": "paraphrase-tidy-up-a-person-s-name-for-display",
       "query": "tidy up a person's name for display",
       "intent": "paraphrase",
       "relevant": [
@@ -268,7 +268,7 @@
       "rationale": "Describes name formatting without using the word 'format'; a pure vocabulary-gap probe where lexical search is expected to struggle."
     },
     {
-      "id": "q34",
+      "id": "paraphrase-reject-empty-payloads",
       "query": "reject empty payloads",
       "intent": "paraphrase",
       "relevant": [
@@ -292,7 +292,7 @@
       "rationale": "Restates input validation in entirely different words; no query term appears in any labelled symbol, so lexical search cannot reach them at all."
     },
     {
-      "id": "q35",
+      "id": "paraphrase-remove-a-record-by-identifier",
       "query": "remove a record by identifier",
       "intent": "paraphrase",
       "relevant": [
@@ -320,7 +320,7 @@
       "rationale": "'remove' and 'record' are synonyms for the delete operations; every deletion entry point in the corpus is a correct answer."
     },
     {
-      "id": "q36",
+      "id": "paraphrase-spin-up-the-http-listener",
       "query": "spin up the HTTP listener",
       "intent": "paraphrase",
       "relevant": [
@@ -332,7 +332,7 @@
       "rationale": "Colloquial phrasing for starting a server; the body calls ListenAndServe, so content matching can still reach it."
     },
     {
-      "id": "q37",
+      "id": "paraphrase-build-a-fresh-server-instance",
       "query": "build a fresh server instance",
       "intent": "paraphrase",
       "relevant": [
@@ -344,7 +344,7 @@
       "rationale": "Constructor described rather than named; 'fresh' stands in for 'new'."
     },
     {
-      "id": "q38",
+      "id": "behavioural-look-up-a-stored-user-by-id",
       "query": "look up a stored user by id",
       "intent": "behavioural",
       "relevant": [
@@ -368,7 +368,7 @@
       "rationale": "Describes the read path by behaviour; every language's service getter is a correct answer."
     },
     {
-      "id": "q39",
+      "id": "behavioural-delay-running-a-function-until-calls-stop",
       "query": "delay running a function until calls stop",
       "intent": "behavioural",
       "relevant": [
@@ -380,7 +380,7 @@
       "rationale": "Textbook definition of debouncing with none of the identifier's characters present."
     },
     {
-      "id": "q40",
+      "id": "behavioural-generate-a-random-unique-identifier",
       "query": "generate a random unique identifier",
       "intent": "behavioural",
       "relevant": [
@@ -392,7 +392,7 @@
       "rationale": "Describes the Math.random-based id helper by what it does."
     },
     {
-      "id": "q41",
+      "id": "behavioural-return-every-stored-item-as-a-list",
       "query": "return every stored item as a list",
       "intent": "behavioural",
       "relevant": [
@@ -412,7 +412,7 @@
       "rationale": "Behavioural description of enumeration; the two service listers and the database findAll all implement it."
     },
     {
-      "id": "q42",
+      "id": "behavioural-format-host-and-port-into-an-address-string",
       "query": "format host and port into an address string",
       "intent": "behavioural",
       "relevant": [
@@ -424,7 +424,7 @@
       "rationale": "Describes the Sprintf body; 'host' and 'port' appear in the content but not the method name."
     },
     {
-      "id": "q43",
+      "id": "conceptual-application-entry-point",
       "query": "application entry point",
       "intent": "conceptual",
       "relevant": [
@@ -452,7 +452,7 @@
       "rationale": "A concept, not a name: every main function in the corpus is an entry point, and none of them contain the query's words."
     },
     {
-      "id": "q44",
+      "id": "conceptual-user-crud-operations",
       "query": "user CRUD operations",
       "intent": "conceptual",
       "relevant": [
@@ -512,7 +512,7 @@
       "rationale": "A concept spanning every user-service method in the corpus. With 13 relevant symbols, recall@10 is capped at 0.77 by construction — the ceiling is a property of the query, not a defect."
     },
     {
-      "id": "q45",
+      "id": "conceptual-persistence-layer",
       "query": "persistence layer",
       "intent": "conceptual",
       "relevant": [
@@ -540,7 +540,7 @@
       "rationale": "Names an architectural layer rather than a symbol; the Database class and its operations are the only persistence code in the corpus."
     },
     {
-      "id": "q46",
+      "id": "conceptual-http-request-handling",
       "query": "HTTP request handling",
       "intent": "conceptual",
       "relevant": [

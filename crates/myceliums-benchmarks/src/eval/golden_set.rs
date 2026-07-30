@@ -195,6 +195,32 @@ mod tests {
     }
 
     #[test]
+    fn query_ids_describe_the_query() {
+        // Ids are descriptive kebab-case slugs prefixed by their intent, not an
+        // opaque sequence. A slug survives insertion and retirement without
+        // renumbering, so there is no gap for a reader to interpret — and a
+        // query that scores badly names itself in the report, instead of
+        // sending the reader back to the dataset to find out what "q37" was.
+        let set = GoldenSet::embedded().unwrap();
+        for query in &set.queries {
+            assert!(
+                query
+                    .id
+                    .chars()
+                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'),
+                "{} is not kebab-case",
+                query.id
+            );
+            assert!(
+                query.id.starts_with(query.intent.label()),
+                "{} should be prefixed with its intent {}",
+                query.id,
+                query.intent.label()
+            );
+        }
+    }
+
+    #[test]
     fn every_query_is_labelled_and_explained() {
         let set = GoldenSet::embedded().unwrap();
         for query in &set.queries {

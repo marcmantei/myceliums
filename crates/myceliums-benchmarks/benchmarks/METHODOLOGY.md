@@ -63,6 +63,13 @@ matching the prose in this crate. The set is closed — the loader rejects
 anything outside it, so `behavioral` or `exact_name` fails at load rather than
 silently becoming a fifth category that no aggregate reports on.
 
+Query ids follow the same convention: a descriptive slug prefixed by intent,
+such as `behavioural-trim-whitespace`. Slugs rather than a numbered sequence,
+because a slug survives insertion and retirement without renumbering — there is
+no gap for a reader to interpret — and a query that scores badly names itself in
+the report instead of sending the reader back to the dataset to look up what
+`q37` was. `query_ids_describe_the_query` enforces both properties.
+
 The spread is deliberate. A dataset of only exact-name lookups would report a
 flattering number that says nothing about the queries agents actually struggle
 with; the paraphrase and conceptual queries are where a lexical engine is

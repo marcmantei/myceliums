@@ -215,6 +215,21 @@ mod tests {
     }
 
     #[test]
+    fn backslash_separators_are_normalised() {
+        // The golden set stores one canonical spelling of a path, so a
+        // Windows-shaped separator must not yield a second SymbolRef for the
+        // same file. On Unix a backslash is an ordinary filename character,
+        // which is exactly why this needs an explicit case: building the input
+        // with `Path::join` and forward slashes never reaches the replacement.
+        let root = Path::new("/tmp/fixtures");
+        let windows_style = Path::new(r"/tmp/fixtures/sample-py-project\utils\helpers.py");
+        assert_eq!(
+            fixture_relative_path(root, windows_style).unwrap(),
+            "sample-py-project/utils/helpers.py"
+        );
+    }
+
+    #[test]
     fn corpus_loading_is_deterministic() {
         let root = fixtures_root().unwrap();
         let first = Corpus::load(&root).unwrap();

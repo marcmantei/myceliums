@@ -408,9 +408,13 @@ Retrieval quality is measured, not asserted. A golden set of 51 hand-labelled qu
 | Mode | recall@1 | recall@5 | recall@10 | MRR |
 |---|---:|---:|---:|---:|
 | BM25 (lexical) | 0.3765 | 0.6468 | 0.6983 | 0.6405 |
-| Semantic | \_not yet measured\_ | | | |
-| Hybrid | \_not yet measured\_ | | | |
-| Hybrid + rerank | \_not yet measured\_ | | | |
+| Semantic | _not measured — needs model weights_ | | | |
+| Hybrid | _not measured — needs model weights_ | | | |
+| Hybrid + rerank | _not measured — needs model weights_ | | | |
+
+_These three modes are **implemented and working**. They are unmeasured here
+because scoring them means downloading model weights, which this offline
+benchmark deliberately does not do — not because the features are missing._
 
 BM25 is strong when a query names the symbol (exact-name MRR **0.93**) and much weaker when it does not (paraphrase MRR **0.40**) — which is precisely the gap the semantic and hybrid modes exist to close. The three model-backed modes are reported as unmeasured rather than estimated: scoring them requires downloading model weights, which the offline benchmark deliberately does not do. **The claim that hybrid and reranking improve accuracy is therefore untested in these numbers.**
 

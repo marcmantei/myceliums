@@ -157,9 +157,17 @@ impl ModeReport {
     }
 }
 
-/// Round to four decimals so the report is diffable and free of float noise.
+/// Decimal places kept in reported scores.
+///
+/// Four is enough to see a real ranking change and few enough that float noise
+/// in the last bits does not surface as a spurious diff between two runs of the
+/// same code.
+const REPORTED_DECIMALS: i32 = 4;
+
+/// Round to [`REPORTED_DECIMALS`] so the report is diffable and free of float noise.
 fn round(value: f64) -> f64 {
-    (value * 10_000.0).round() / 10_000.0
+    let scale = 10_f64.powi(REPORTED_DECIMALS);
+    (value * scale).round() / scale
 }
 
 fn main() -> Result<()> {
