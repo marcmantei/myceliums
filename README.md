@@ -389,7 +389,7 @@ Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector databa
 
 ### Hybrid search — best of both worlds
 
-`myc search --hybrid` runs BM25 and semantic search in parallel, then merges results using [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) (RRF, k=60). This catches both exact keyword matches and semantically related symbols. A cross-encoder reranker (default: the multilingual [bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3), configurable via `[embedding] reranker`) optionally re-scores the top candidates for higher accuracy.
+`myc search --hybrid` runs BM25 and semantic search in parallel, then merges results using [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) (RRF, k=60). This catches both exact keyword matches and semantically related symbols. A cross-encoder reranker (default: the multilingual [bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3), configurable via `[embedding] reranker`) optionally re-scores the top candidates. Reranking is intended to improve ordering; its effect is [not yet measured](#how-well-does-search-actually-work).
 
 ### When to use which
 
@@ -400,6 +400,21 @@ Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector databa
 | Hybrid | `myc search --hybrid` | Fast | General-purpose — recommended default |
 
 > **Embeddings are optional.** BM25 search, Cypher queries, impact detection, and process tracing all work without embeddings. Use `--skip-embeddings` during analysis for faster startup when semantic search isn't needed.
+
+### How well does search actually work?
+
+Retrieval quality is measured, not asserted. A golden set of 51 hand-labelled queries over the in-repo fixture corpus scores each mode with recall@k and MRR:
+
+| Mode | recall@1 | recall@5 | recall@10 | MRR |
+|---|---:|---:|---:|---:|
+| BM25 (lexical) | 0.3765 | 0.6468 | 0.6983 | 0.6405 |
+| Semantic | \_not yet measured\_ | | | |
+| Hybrid | \_not yet measured\_ | | | |
+| Hybrid + rerank | \_not yet measured\_ | | | |
+
+BM25 is strong when a query names the symbol (exact-name MRR **0.93**) and much weaker when it does not (paraphrase MRR **0.40**) — which is precisely the gap the semantic and hybrid modes exist to close. The three model-backed modes are reported as unmeasured rather than estimated: scoring them requires downloading model weights, which the offline benchmark deliberately does not do. **The claim that hybrid and reranking improve accuracy is therefore untested in these numbers.**
+
+Reproduce with `cargo run -p myceliums-benchmarks --bin retrieval-eval`. Methodology, labelling rules and limitations: [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
 
 ---
 

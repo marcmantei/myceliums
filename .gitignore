@@ -4,3 +4,7 @@
 .fastembed_cache/
 .claude/worktrees/
 tmp/
+
+# Per-run retrieval-eval output. The committed baseline is the reference;
+# a report is a local artefact of whichever run produced it.
+crates/myceliums-benchmarks/golden/report.json

@@ -1,0 +1,70 @@
+# Retrieval-quality CI job (paste-ready)
+#
+# This job belongs in `.github/workflows/ci.yml` but is parked here: the bot
+# account that opened the PR has no `workflows` permission, so a push touching
+# that file is rejected by GitHub. Paste the block below into the `jobs:` map of
+# `.github/workflows/ci.yml` to enable it — no other change is needed.
+#
+# It runs the retrieval evaluation on every push and pull request and writes a
+# current-vs-baseline table to the job summary. Report-only by design: a label
+# fix and a genuine regression move the same number, so the job surfaces the
+# delta and leaves the judgement to the reviewer.
+
+  retrieval-quality:
+    name: Retrieval Quality
+    runs-on: ubuntu-latest
+    # Report-only: surfaces current-vs-baseline relevance so a reviewer can see
+    # whether a change moved the numbers. It never fails the build — a relevance
+    # shift is a judgement call, not a red light.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Evaluate retrieval quality
+        # Offline and deterministic; embeddings are not needed for the lexical mode.
+        run: |
+          cargo run -p myceliums-benchmarks --bin retrieval-eval \
+            --no-default-features -- --out golden-report.json | tee retrieval.txt
+      - name: Compare against the recorded baseline
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          base = json.load(open('crates/myceliums-benchmarks/golden/baseline.json'))
+          curr = json.load(open('golden-report.json'))
+          print('## Retrieval quality — current vs baseline\n')
+          print(f"Dataset `{curr['dataset_version']}` · {curr['queries']} queries · {curr['corpus_symbols']} symbols\n")
+          print('| Mode | Metric | Baseline | Current | Δ |')
+          print('| --- | --- | ---: | ---: | ---: |')
+          for mode, now in curr['results'].items():
+              was = base['results'].get(mode, {})
+              if now.get('status') != 'MEASURED':
+                  print(f"| `{mode}` | — | — | UNAVAILABLE | — |")
+                  continue
+              for metric in ('recall_at_1', 'recall_at_5', 'recall_at_10', 'mrr'):
+                  b, c = was.get(metric), now[metric]
+                  if b is None:
+                      print(f"| `{mode}` | {metric} | — | {c:.4f} | new |")
+                  else:
+                      d = c - b
+                      print(f"| `{mode}` | {metric} | {b:.4f} | {c:.4f} | {d:+.4f} |")
+          print('\nReport-only: relevance changes never fail the build.')
+          print('Methodology: `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.')
+          PY
+      - name: Upload retrieval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-quality-report
+          path: |
+            golden-report.json
+            retrieval.txt
+          retention-days: 90

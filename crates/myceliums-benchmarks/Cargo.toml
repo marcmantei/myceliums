@@ -34,6 +34,14 @@ num_cpus = "1.16"
 name = "myceliums_benchmarks"
 path = "src/lib.rs"
 
+[[bin]]
+name = "retrieval-eval"
+path = "src/bin/retrieval_eval.rs"
+
+[[bin]]
+name = "corpus-inventory"
+path = "src/bin/corpus_inventory.rs"
+
 [[bench]]
 name = "indexing"
 harness = false

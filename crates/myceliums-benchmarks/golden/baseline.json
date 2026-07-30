@@ -1,0 +1,28 @@
+{
+  "commit_sha": "b071f3cc750a79515951bbc7b2e2c816b632f6bc",
+  "corpus_symbols": 96,
+  "dataset_version": "2026-07-30",
+  "queries": 51,
+  "results": {
+    "hybrid": {
+      "reason": "requires the semantic leg's model weights",
+      "status": "UNAVAILABLE"
+    },
+    "hybrid+rerank": {
+      "reason": "requires the semantic leg plus cross-encoder reranker weights",
+      "status": "UNAVAILABLE"
+    },
+    "lexical": {
+      "mrr": 0.6405,
+      "recall_at_1": 0.3765,
+      "recall_at_10": 0.6983,
+      "recall_at_5": 0.6468,
+      "status": "MEASURED"
+    },
+    "semantic": {
+      "reason": "requires fastembed model weights (network download)",
+      "status": "UNAVAILABLE"
+    }
+  },
+  "timestamp": "2026-07-30T20:30:27Z"
+}
