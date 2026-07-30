@@ -1,20 +1,3 @@
-# Retrieval-quality CI workflow (paste-ready)
-#
-# This file belongs at `.github/workflows/retrieval-quality.yml` but is parked
-# here: the GitHub App that opens these PRs has no `workflows` permission, so a
-# push touching `.github/workflows/` is rejected outright by GitHub —
-#
-#   ! [remote rejected] refusing to allow a GitHub App to create or update
-#     workflow `.github/workflows/ci.yml` without `workflows` permission
-#
-# To enable it, a maintainer copies this file into `.github/workflows/`:
-#
-#   git mv benchmarks/retrieval-quality-ci.yml \
-#          .github/workflows/retrieval-quality.yml
-#
-# Nothing else needs to change — everything below the header is a complete,
-# valid workflow.
-
 name: Retrieval Quality
 
 # Scores search relevance against the golden set on every push and pull request
