@@ -215,11 +215,18 @@ and the pair records the win.
 The evaluation is meant to run on every push and pull request, writing a
 current-vs-baseline table to the job summary.
 
-The job definition lives in `benchmarks/retrieval-quality-ci.yml` rather than in
-`.github/workflows/ci.yml`, because the bot account that opens these PRs has no
+The workflow lives in `benchmarks/retrieval-quality-ci.yml` rather than under
+`.github/workflows/`, because the GitHub App that opens these PRs has no
 `workflows` permission and GitHub rejects any push that touches a workflow file.
-Paste the block into the `jobs:` map of `.github/workflows/ci.yml` to enable it;
-nothing else needs to change.
+A maintainer enables it by moving the file into place:
+
+```bash
+git mv benchmarks/retrieval-quality-ci.yml \
+       .github/workflows/retrieval-quality.yml
+```
+
+Nothing else needs to change — everything below the explanatory header is a
+complete, valid workflow.
 
 The job is **report-only and never fails the build**. A relevance change is a
 judgement call — a label fix, a deliberate ranking trade-off, and a genuine
