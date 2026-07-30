@@ -1125,8 +1125,8 @@ async fn cmd_analyze(
             // Impossible to miss: a partial index degrades search silently, so
             // shout about it here.
             eprintln!(
-                "  ⚠ Embedding failures: {} — {} of {} symbols have NO vector \
-                 and are invisible to semantic/hybrid search",
+                "  ⚠ Embedding failures: {} — {} of {} symbols have no vector \
+                 and are invisible to semantic and hybrid search",
                 result.embedding_failures, result.symbols_embedded, result.symbols_total
             );
         }
@@ -1204,13 +1204,14 @@ async fn cmd_analyze(
 async fn enforce_strict_embeddings(db_path: &Path, repo_id: &str) -> Result<()> {
     let store = Store::open(db_path, repo_id).await?;
     match myceliums_core::EmbeddingStats::load(&store).await? {
+        // Reuse the canonical wording rather than restating it: this message
+        // and EmbeddingStats::partial_index_warning had already drifted apart
+        // once, which is what #48 reported.
         Some(stats) if stats.is_partial() => anyhow::bail!(
-            "strict-embeddings: cached index is partial — {} of {} symbols have \
-             vectors ({} embedding failures); un-embedded symbols are invisible \
-             to semantic and hybrid search. Re-run with --force to rebuild.",
-            stats.symbols_embedded,
-            stats.symbols_total,
-            stats.embedding_failures
+            "strict-embeddings: cached index is partial — {}. Re-run with --force to rebuild.",
+            stats
+                .partial_index_warning()
+                .expect("is_partial() => warning")
         ),
         Some(_) => Ok(()),
         None => anyhow::bail!(
