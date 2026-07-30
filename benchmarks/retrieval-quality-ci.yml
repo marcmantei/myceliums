@@ -63,9 +63,12 @@ jobs:
         # Offline and deterministic: the corpus is parsed from in-repo fixtures,
         # and the evaluator refuses to run the modes that need model weights
         # rather than downloading them.
+        #
+        # The report lands on the binary's own default path, which is the path
+        # .gitignore already covers. One location, so a generated report cannot
+        # be committed by accident.
         run: |
-          cargo run -p myceliums-benchmarks --bin retrieval-eval \
-            -- --out golden-report.json | tee retrieval.txt
+          cargo run -p myceliums-benchmarks --bin retrieval-eval | tee retrieval.txt
       - name: Compare against the recorded baseline
         # pipefail so a crash in the comparison fails the step instead of being
         # masked by tee's exit status.
@@ -73,28 +76,90 @@ jobs:
           set -euo pipefail
           python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import json
+          import sys
 
-          baseline = json.load(open('crates/myceliums-benchmarks/golden/baseline.json'))
-          current = json.load(open('golden-report.json'))
+          BASELINE = 'crates/myceliums-benchmarks/golden/baseline.json'
+          REPORT = 'crates/myceliums-benchmarks/golden/report.json'
+          REGENERATE = (
+              'cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline'
+          )
+
+          def load(path, what):
+              """Read a JSON document, or fail with a message that names the fix.
+
+              A missing or malformed file is a broken job, not a relevance
+              judgement, so it fails loudly with an annotation a reader can act
+              on rather than an opaque traceback.
+              """
+              try:
+                  with open(path, encoding='utf-8') as handle:
+                      return json.load(handle)
+              except FileNotFoundError:
+                  sys.exit(
+                      f"::error::{what} not found at {path}. The evaluation step did not "
+                      f"produce it — check the step above. Re-record with: {REGENERATE}"
+                  )
+              except json.JSONDecodeError as error:
+                  sys.exit(
+                      f"::error::{what} at {path} is not valid JSON (line {error.lineno}, "
+                      f"column {error.colno}): {error.msg}. It is generated output — do not "
+                      f"hand-edit it; re-record with: {REGENERATE}"
+                  )
+
+          def results(document, path, what):
+              """The per-mode results map, or a clear failure if the shape is wrong."""
+              modes = document.get('results')
+              if not isinstance(modes, dict):
+                  sys.exit(
+                      f"::error::{what} at {path} has no 'results' object — the file does "
+                      f"not match the schema this job reads. Re-record with: {REGENERATE}"
+                  )
+              return modes
+
+          baseline = load(BASELINE, 'Recorded baseline')
+          current = load(REPORT, 'Current retrieval report')
+          baseline_modes = results(baseline, BASELINE, 'Recorded baseline')
+          current_modes = results(current, REPORT, 'Current retrieval report')
 
           print('## Retrieval quality — current vs baseline\n')
-          print(f"Dataset `{current['dataset_version']}` · "
-                f"{current['queries']} queries · {current['corpus_symbols']} symbols\n")
+          if baseline.get('dataset_version') != current.get('dataset_version'):
+              print(
+                  f"> **Ground truth changed** — baseline "
+                  f"`{baseline.get('dataset_version')}` vs current "
+                  f"`{current.get('dataset_version')}`. Scores recorded against different "
+                  "labels are not comparable; read the deltas below as informational only.\n"
+              )
+          print(f"Dataset `{current.get('dataset_version', 'unknown')}` · "
+                f"{current.get('queries', '?')} queries · "
+                f"{current.get('corpus_symbols', '?')} symbols\n")
           print('| Mode | Metric | Baseline | Current | Δ |')
           print('| --- | --- | ---: | ---: | ---: |')
 
-          for mode, now in current['results'].items():
-              if now['status'] != 'MEASURED':
-                  print(f"| `{mode}` | — | — | UNAVAILABLE | {now['reason']} |")
+          for mode, now in sorted(current_modes.items()):
+              if now.get('status') != 'MEASURED':
+                  print(f"| `{mode}` | — | — | UNAVAILABLE [*] | — |")
                   continue
-              was = baseline['results'].get(mode, {})
+              was = (baseline_modes.get(mode) or {}).get('metrics') or {}
+              measured = now.get('metrics') or {}
               for metric in ('recall_at_1', 'recall_at_5', 'recall_at_10', 'mrr'):
-                  before, after = was.get(metric), now[metric]
-                  if before is None:
+                  before, after = was.get(metric), measured.get(metric)
+                  if after is None:
+                      print(f"| `{mode}` | {metric} | — | missing | — |")
+                  elif before is None:
                       print(f"| `{mode}` | {metric} | — | {after:.4f} | new |")
                   else:
                       print(f"| `{mode}` | {metric} | {before:.4f} | {after:.4f} "
                             f"| {after - before:+.4f} |")
+
+          unavailable = [
+              (mode, report.get('reason') or 'no reason recorded')
+              for mode, report in sorted(current_modes.items())
+              if report.get('status') != 'MEASURED'
+          ]
+          if unavailable:
+              print('\n[*] Not measured — **no numbers are reported** for these modes:\n')
+              for mode, reason in unavailable:
+                  print(f"- `{mode}` — {reason}")
 
           print('\nReport-only: relevance changes never fail the build.')
           print('Methodology: `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.')
@@ -105,6 +170,6 @@ jobs:
         with:
           name: retrieval-quality-report
           path: |
-            golden-report.json
+            crates/myceliums-benchmarks/golden/report.json
             retrieval.txt
           retention-days: 90

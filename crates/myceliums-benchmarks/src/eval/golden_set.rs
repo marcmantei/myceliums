@@ -54,8 +54,17 @@ impl std::fmt::Display for SymbolRef {
 
 /// What a query is testing, so failures can be read by category rather than
 /// one query at a time.
+///
+/// # Vocabulary
+///
+/// The wire values are **kebab-case** (`exact-name`, `paraphrase`,
+/// `behavioural`, `conceptual`) and use **British spelling**, matching the
+/// prose in this crate and the rest of the engine's own source. The set is
+/// closed: serde rejects any value outside it, so a typo in `queries.json`
+/// fails at load rather than silently creating a fifth category that no report
+/// aggregates. `intent_vocabulary_is_kebab_case` pins the convention.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 pub enum QueryIntent {
     /// The query names the symbol almost exactly (`formatName`).
     ExactName,
@@ -214,6 +223,38 @@ mod tests {
         ] {
             assert!(intents.contains(&intent), "no {:?} queries", intent);
         }
+    }
+
+    #[test]
+    fn intent_vocabulary_is_kebab_case() {
+        // One convention, pinned: kebab-case on the wire, British spelling.
+        // `label()` feeds reports and the serde representation feeds the
+        // dataset, so the two must not drift apart.
+        for (intent, expected) in [
+            (QueryIntent::ExactName, "exact-name"),
+            (QueryIntent::Paraphrase, "paraphrase"),
+            (QueryIntent::Behavioural, "behavioural"),
+            (QueryIntent::Conceptual, "conceptual"),
+        ] {
+            assert_eq!(intent.label(), expected);
+            assert_eq!(
+                serde_json::to_string(&intent).unwrap(),
+                format!("\"{expected}\""),
+                "the dataset value and the report label must agree"
+            );
+            assert!(
+                expected.chars().all(|c| c.is_ascii_lowercase() || c == '-'),
+                "{expected} is not kebab-case"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_intent_is_rejected() {
+        // A typo must fail at load rather than quietly becoming a fifth
+        // category that no aggregate reports on.
+        assert!(serde_json::from_str::<QueryIntent>("\"exact_name\"").is_err());
+        assert!(serde_json::from_str::<QueryIntent>("\"behavioral\"").is_err());
     }
 
     #[test]

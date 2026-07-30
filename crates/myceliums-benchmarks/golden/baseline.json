@@ -1,28 +1,35 @@
 {
-  "commit_sha": "28c33c3a7465336540708b47bc7c8b3c7c627760",
+  "commit_sha": "55cc5d17fd791cc6b137c4f4af45320d2aca187b-dirty",
   "corpus_symbols": 96,
   "dataset_version": "2026-07-30",
   "queries": 51,
+  "regenerate_with": "cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline",
   "results": {
     "hybrid": {
-      "reason": "requires the semantic leg's model weights",
+      "metrics": null,
+      "reason": "requires the semantic leg's model weights — run where the fastembed weights are already cached",
       "status": "UNAVAILABLE"
     },
     "hybrid+rerank": {
-      "reason": "requires the semantic leg plus cross-encoder reranker weights",
+      "metrics": null,
+      "reason": "requires the semantic leg plus cross-encoder reranker weights — run where the fastembed and reranker weights are already cached",
       "status": "UNAVAILABLE"
     },
     "lexical": {
-      "mrr": 0.6405,
-      "recall_at_1": 0.3765,
-      "recall_at_10": 0.6983,
-      "recall_at_5": 0.6468,
+      "metrics": {
+        "mrr": 0.6405,
+        "recall_at_1": 0.3765,
+        "recall_at_10": 0.6983,
+        "recall_at_5": 0.6468
+      },
+      "reason": null,
       "status": "MEASURED"
     },
     "semantic": {
-      "reason": "requires fastembed model weights (network download)",
+      "metrics": null,
+      "reason": "requires fastembed model weights (network download) — run where the fastembed weights are already cached",
       "status": "UNAVAILABLE"
     }
   },
-  "timestamp": "2026-07-30T20:42:44Z"
+  "timestamp": "2026-07-30T21:04:50Z"
 }
