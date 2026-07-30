@@ -55,7 +55,7 @@ impl EmbeddingStats {
     pub fn partial_index_warning(&self) -> Option<String> {
         if self.is_partial() {
             Some(format!(
-                "index partially embedded: {} of {} symbols have vectors\
+                "index partially embedded: {} of {} symbols have vectors \
                  ({} embedding failures); un-embedded symbols are invisible to \
                  semantic and hybrid search",
                 self.symbols_embedded, self.symbols_total, self.embedding_failures
@@ -104,6 +104,27 @@ mod tests {
         let warning = stats.partial_index_warning().expect("partial => warning");
         assert!(warning.contains("7 of 10"));
         assert!(warning.contains("3 embedding failures"));
+    }
+
+    /// Pins the exact wording, because this string is user-facing in three
+    /// places (CLI, MCP responses, and the docs that quote it verbatim) and a
+    /// `contains` check cannot see spacing. A line-continuation backslash had
+    /// silently eaten the space before the parenthesis, so the shipped text
+    /// read "have vectors(3 embedding failures)" while the docs showed it with
+    /// a space.
+    #[test]
+    fn partial_index_warning_wording_is_exact() {
+        let stats = EmbeddingStats {
+            symbols_total: 1240,
+            symbols_embedded: 900,
+            embedding_failures: 340,
+        };
+        assert_eq!(
+            stats.partial_index_warning().expect("partial => warning"),
+            "index partially embedded: 900 of 1240 symbols have vectors \
+             (340 embedding failures); un-embedded symbols are invisible to \
+             semantic and hybrid search"
+        );
     }
 
     #[test]
