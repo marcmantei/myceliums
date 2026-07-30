@@ -277,17 +277,32 @@ fn write_json(path: &Path, value: &serde_json::Value) -> Result<()> {
 /// Commit the baseline was recorded at, or `"unknown"` outside a git checkout.
 ///
 /// Provenance only — the scores themselves never depend on it.
+///
+/// A dirty tree gets a `-dirty` suffix. Without it the sha implies a
+/// reproducibility the file does not have: the numbers were produced from
+/// uncommitted code that nobody else can check out. Note that re-recording a
+/// baseline necessarily predates the commit that carries it, so this sha names
+/// the tree the measurement ran against, not the commit the file lands in.
 fn commit_sha() -> String {
+    let Some(sha) = git(&["rev-parse", "HEAD"]) else {
+        return "unknown".to_string();
+    };
+    match git(&["status", "--porcelain"]) {
+        Some(changes) if !changes.is_empty() => format!("{sha}-dirty"),
+        _ => sha,
+    }
+}
+
+/// Run a git command in the crate directory, or `None` if git is unavailable.
+fn git(args: &[&str]) -> Option<String> {
     std::process::Command::new("git")
-        .args(["rev-parse", "HEAD"])
+        .args(args)
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()
         .ok()
         .filter(|out| out.status.success())
         .and_then(|out| String::from_utf8(out.stdout).ok())
-        .map(|sha| sha.trim().to_string())
-        .filter(|sha| !sha.is_empty())
-        .unwrap_or_else(|| "unknown".to_string())
+        .map(|text| text.trim().to_string())
 }
 
 /// When the baseline was recorded, as an RFC 3339 UTC timestamp.
