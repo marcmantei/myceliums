@@ -58,6 +58,11 @@ than one query at a time:
 | `paraphrase` | 12 | The query uses different words for the same idea. |
 | `conceptual` | 10 | The query names a concept spread over several symbols. |
 
+These four values are the whole vocabulary: **kebab-case, British spelling**,
+matching the prose in this crate. The set is closed — the loader rejects
+anything outside it, so `behavioral` or `exact_name` fails at load rather than
+silently becoming a fifth category that no aggregate reports on.
+
 The spread is deliberate. A dataset of only exact-name lookups would report a
 flattering number that says nothing about the queries agents actually struggle
 with; the paraphrase and conceptual queries are where a lexical engine is
@@ -75,9 +80,16 @@ top `k` results:
 recall@k = |relevant ∩ top-k retrieved| / |relevant|
 ```
 
-Reported at k = 1, 5, 10. A query with an empty relevant set scores `0.0` rather
-than `1.0`; the dataset validator rejects such queries, so this is a defensive
-floor rather than an expected path.
+Reported at k = 1, 5, 10.
+
+**The empty relevant set.** Recall divides by `|relevant|`, so it is undefined
+when nothing is labelled — there is no fraction of zero answers to have found.
+The implementation returns `0.0` for that case, chosen so a data-quality problem
+shows up as a visibly bad score rather than a perfect one: returning `1.0` would
+read as "found everything" and let an unlabelled query flatter every aggregate
+it appears in. The dataset validator rejects unlabelled queries outright, so
+evaluation never reaches this path; it exists to make the metric total, and to
+fail conspicuously if the validator is ever bypassed.
 
 **MRR (mean reciprocal rank)** — the mean over queries of the reciprocal of the
 rank of the *first* relevant hit:
@@ -121,6 +133,22 @@ fabricating a number for an unrun mode would be worse than reporting nothing.
 To measure them, run in an environment with the model weights already cached and
 extend `SearchMode::rank`.
 
+Every blocker is *environmental* — the code works, the weights are absent — so
+each one records what would lift it alongside why it applies. `UNAVAILABLE`
+answers "can I trust this number"; `lifted_by` answers "what do I do about it".
+
+Both outcomes share one record shape, so a consumer parses one thing:
+
+```json
+"lexical":  { "status": "MEASURED",    "reason": null,          "metrics": { "mrr": 0.6405, ... } },
+"semantic": { "status": "UNAVAILABLE", "reason": "requires ...", "metrics": null }
+```
+
+`metrics` is `null` for an unmeasured mode — never zeroes, and never absent
+keys that a reader might default to zero. In the printed table those rows show
+a `[*]` marker keyed to the reasons listed underneath, rather than a bare word
+sitting in a numeric column.
+
 ## Determinism
 
 The benchmark is offline and reproducible by construction:
@@ -156,6 +184,12 @@ Single-file grammar fixtures (`rust/`, `java/`, `kotlin/`, `ruby/`, `php/`, `c/`
 the parser, and their trivially unique symbol names would inflate retrieval
 scores without telling us anything about relevance.
 
+Every configured project must contribute at least one symbol, or loading fails.
+A renamed or emptied fixture would otherwise shrink the corpus and move every
+reported metric with no visible cause — precisely the silent regression this
+benchmark exists to catch. Content files (Markdown, JSON) are skipped because
+they hold prose, not retrievable symbols.
+
 Queries average 2.7 labelled answers each.
 
 ## Baseline
@@ -166,8 +200,34 @@ alongside the numbers, so a score is never compared across different ground
 truth. Changing labels means bumping `dataset_version` — a score from one dataset
 version is not comparable to a score from another.
 
+**The file is generated output; never hand-edit it.** `commit_sha` and
+`timestamp` are stamped by the binary at the moment of the run, so the only
+supported way to change them is to re-run it:
+
+```bash
+cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline
+```
+
+The file records that command in its own `regenerate_with` field, so a reader
+who opens it does not have to go looking. Re-record when a scoring change or a
+label change is *intended* — that is the moment the numbers legitimately move —
+and commit the regenerated file alongside the change that moved it, so a
+reviewer sees cause and effect in one diff. A `-dirty` suffix on `commit_sha`
+means the run measured uncommitted code; re-record from a clean tree before
+committing. Three tests guard the provenance: the recorded commit must resolve,
+must be an ancestor of `HEAD` (an amend-orphaned sha resolves locally but nobody
+else can fetch it), and its `dataset_version` must match the golden set's.
+
 The baseline was recorded after the persisted-vector work in #28/#29 landed
 (2026-07-23), against the dataset dated 2026-07-30.
+
+> **On the dates.** `dataset_version` and the baseline `timestamp` are the real
+> dates these artefacts were produced, taken from the repository's own clock —
+> the surrounding commits on `main` carry the same ones. They look forward-dated
+> only if read against a different calendar. `dataset_version` is a *content*
+> version, not a release date: its job is to make two scores comparable only
+> when they were measured against the same labels, so what matters is that it
+> changes whenever a label does.
 
 ### Recorded results
 
@@ -235,8 +295,15 @@ them apart. A hard threshold would either be set so loose it catches nothing or
 so tight it blocks honest work, so the job surfaces the delta and leaves the
 decision to the reviewer.
 
-It runs with `--no-default-features`: the embeddings feature is not needed to
-score the lexical mode, and skipping it keeps the job offline and fast.
+The job writes its report to `crates/myceliums-benchmarks/golden/report.json` —
+the binary's default path, and the one `.gitignore` covers. Keeping the two in
+step means a generated report cannot be ignored in one place and committable in
+another.
+
+A missing or malformed JSON file fails the step with an annotation naming the
+file, where parsing gave up, and the command that re-records it. That is not a
+contradiction of "report-only": a *relevance* change is a judgement call and
+never fails the build, but a report that cannot be read is a broken job.
 
 ## Known limitations
 

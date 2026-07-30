@@ -16,10 +16,13 @@ pub type RelevantSet = BTreeSet<SymbolRef>;
 
 /// Fraction of the relevant symbols that appear in the top `k` results.
 ///
-/// Returns `0.0` when the relevant set is empty — a query with no labelled
-/// answer cannot be satisfied, and silently returning `1.0` would flatter the
-/// engine. The golden-set validator rejects such queries before evaluation, so
-/// this is a defensive floor rather than an expected path.
+/// Recall divides by `|relevant|`, so it is undefined when nothing is labelled.
+/// This returns `0.0` for that case: a data-quality problem should show up as a
+/// visibly bad score, whereas `1.0` would read as "found everything" and let an
+/// unlabelled query flatter every aggregate it appears in. The golden-set
+/// validator rejects unlabelled queries, so evaluation never reaches this path
+/// — it exists to make the function total and to fail conspicuously if the
+/// validator is ever bypassed.
 pub fn recall_at_k(ranking: &[SymbolRef], relevant: &RelevantSet, k: usize) -> f64 {
     if relevant.is_empty() {
         return 0.0;
