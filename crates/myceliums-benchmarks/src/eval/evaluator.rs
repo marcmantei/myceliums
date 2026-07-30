@@ -14,8 +14,39 @@ use super::metrics::{mean, recall_at_k, reciprocal_rank, RelevantSet};
 /// The cutoffs recall is reported at, the cutoffs issue #34 asks for.
 pub const RECALL_CUTOFFS: [usize; 3] = [1, 5, 10];
 
-/// How many results a mode is asked for. Ten is the largest reported cutoff.
-const RESULT_LIMIT: usize = 10;
+/// How many results a mode is asked for: the deepest cutoff the report names.
+///
+/// Derived rather than written down, so adding a cutoff to [`RECALL_CUTOFFS`]
+/// widens the request automatically. A result ranked past this point cannot
+/// change any reported number, so fetching more would be wasted work.
+const DEEPEST_REPORTED_CUTOFF: usize = deepest_cutoff();
+
+/// Largest value in [`RECALL_CUTOFFS`], evaluated at compile time.
+const fn deepest_cutoff() -> usize {
+    let mut deepest = 0;
+    let mut index = 0;
+    while index < RECALL_CUTOFFS.len() {
+        if RECALL_CUTOFFS[index] > deepest {
+            deepest = RECALL_CUTOFFS[index];
+        }
+        index += 1;
+    }
+    deepest
+}
+
+/// Why a mode cannot be scored by this harness, and what would change that.
+///
+/// Every blocker recorded here is *environmental*: the mode's code works, but
+/// the artefacts it needs are absent from an offline run. `lifted_by` names the
+/// concrete change that makes the mode measurable, so `UNAVAILABLE` is never
+/// read as "this mode is broken" or "this mode can never be scored".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OfflineBlocker {
+    /// What is missing, in one line.
+    pub reason: &'static str,
+    /// The change that would let this mode be measured.
+    pub lifted_by: &'static str,
+}
 
 /// A retrieval strategy under measurement.
 ///
@@ -58,15 +89,22 @@ impl SearchMode {
         }
     }
 
-    /// Why a mode cannot be scored offline, or `None` when it can.
-    pub fn offline_blocker(&self) -> Option<&'static str> {
+    /// Why a mode cannot be scored in this environment, or `None` when it can.
+    pub fn offline_blocker(&self) -> Option<OfflineBlocker> {
         match self {
             SearchMode::Lexical => None,
-            SearchMode::Semantic => Some("requires fastembed model weights (network download)"),
-            SearchMode::Hybrid => Some("requires the semantic leg's model weights"),
-            SearchMode::HybridRerank => {
-                Some("requires the semantic leg plus cross-encoder reranker weights")
-            }
+            SearchMode::Semantic => Some(OfflineBlocker {
+                reason: "requires fastembed model weights (network download)",
+                lifted_by: "run where the fastembed weights are already cached",
+            }),
+            SearchMode::Hybrid => Some(OfflineBlocker {
+                reason: "requires the semantic leg's model weights",
+                lifted_by: "run where the fastembed weights are already cached",
+            }),
+            SearchMode::HybridRerank => Some(OfflineBlocker {
+                reason: "requires the semantic leg plus cross-encoder reranker weights",
+                lifted_by: "run where the fastembed and reranker weights are already cached",
+            }),
         }
     }
 
@@ -76,15 +114,28 @@ impl SearchMode {
     }
 
     /// Rank corpus symbols for `query`, best first.
-    fn rank(&self, corpus: &Corpus, query: &str) -> Vec<SymbolRef> {
+    ///
+    /// Errors for a mode with an [`offline_blocker`](Self::offline_blocker)
+    /// rather than returning an empty ranking. An empty ranking scores zero on
+    /// every metric, which is indistinguishable from a search engine that found
+    /// nothing — so the one thing this must never do is stay quiet.
+    fn rank(&self, corpus: &Corpus, query: &str) -> Result<Vec<SymbolRef>> {
         match self {
-            SearchMode::Lexical => myceliums_core::search_symbols(corpus.symbols(), query)
+            SearchMode::Lexical => Ok(myceliums_core::search_symbols(corpus.symbols(), query)
                 .iter()
-                .take(RESULT_LIMIT)
+                .take(DEEPEST_REPORTED_CUTOFF)
                 .map(|hit| symbol_ref(&hit.symbol))
-                .collect(),
-            // Unmeasurable offline; never invoked by `evaluate`.
-            SearchMode::Semantic | SearchMode::Hybrid | SearchMode::HybridRerank => Vec::new(),
+                .collect()),
+            SearchMode::Semantic | SearchMode::Hybrid | SearchMode::HybridRerank => {
+                anyhow::bail!(
+                    "mode '{}' was asked to rank '{}' but cannot run offline: {}",
+                    self.id(),
+                    query,
+                    self.offline_blocker()
+                        .map(|blocker| blocker.reason)
+                        .unwrap_or("no blocker recorded"),
+                )
+            }
         }
     }
 }
@@ -140,9 +191,10 @@ impl ModeScore {
 pub fn evaluate(mode: SearchMode, corpus: &Corpus, set: &GoldenSet) -> Result<ModeScore> {
     if let Some(blocker) = mode.offline_blocker() {
         anyhow::bail!(
-            "mode '{}' cannot be measured offline: {}",
+            "mode '{}' cannot be measured offline: {} ({})",
             mode.id(),
-            blocker
+            blocker.reason,
+            blocker.lifted_by
         );
     }
 
@@ -150,7 +202,7 @@ pub fn evaluate(mode: SearchMode, corpus: &Corpus, set: &GoldenSet) -> Result<Mo
         .queries
         .iter()
         .map(|query| score_query(mode, corpus, query))
-        .collect();
+        .collect::<Result<_>>()?;
 
     let recall = RECALL_CUTOFFS
         .iter()
@@ -170,11 +222,11 @@ pub fn evaluate(mode: SearchMode, corpus: &Corpus, set: &GoldenSet) -> Result<Mo
     })
 }
 
-fn score_query(mode: SearchMode, corpus: &Corpus, query: &GoldenQuery) -> QueryScore {
-    let ranking = mode.rank(corpus, &query.query);
+fn score_query(mode: SearchMode, corpus: &Corpus, query: &GoldenQuery) -> Result<QueryScore> {
+    let ranking = mode.rank(corpus, &query.query)?;
     let relevant: RelevantSet = query.relevant.iter().cloned().collect();
 
-    QueryScore {
+    Ok(QueryScore {
         id: query.id.clone(),
         intent: query.intent,
         recall: RECALL_CUTOFFS
@@ -182,7 +234,7 @@ fn score_query(mode: SearchMode, corpus: &Corpus, query: &GoldenQuery) -> QueryS
             .map(|&k| (k, recall_at_k(&ranking, &relevant, k)))
             .collect(),
         reciprocal_rank: reciprocal_rank(&ranking, &relevant),
-    }
+    })
 }
 
 #[cfg(test)]
@@ -205,10 +257,51 @@ mod tests {
     }
 
     #[test]
+    fn every_blocker_names_what_would_lift_it() {
+        for mode in SearchMode::all()
+            .into_iter()
+            .filter(|m| !m.is_measurable_offline())
+        {
+            let blocker = mode
+                .offline_blocker()
+                .expect("unmeasurable mode has a blocker");
+            assert!(
+                !blocker.lifted_by.trim().is_empty(),
+                "{} reports UNAVAILABLE without saying what would fix it",
+                mode.id()
+            );
+        }
+    }
+
+    #[test]
+    fn results_are_requested_to_the_deepest_reported_cutoff() {
+        // A result ranked past the deepest cutoff cannot move any reported
+        // number, and one ranked before it must not be truncated away.
+        assert_eq!(DEEPEST_REPORTED_CUTOFF, 10);
+        assert_eq!(
+            DEEPEST_REPORTED_CUTOFF,
+            RECALL_CUTOFFS.into_iter().max().unwrap()
+        );
+    }
+
+    #[test]
     fn unmeasurable_modes_refuse_to_produce_numbers() {
         let corpus = Corpus::load(&fixtures_root().unwrap()).unwrap();
         let set = GoldenSet::embedded().unwrap();
         assert!(evaluate(SearchMode::Semantic, &corpus, &set).is_err());
+    }
+
+    #[test]
+    fn ranking_an_unmeasurable_mode_errors_rather_than_scoring_zero() {
+        // The guard in `evaluate` should make this unreachable — but if it is
+        // ever bypassed, an empty ranking would report a plausible-looking 0.0
+        // instead of failing, which is the one outcome this harness must not
+        // produce.
+        let corpus = Corpus::load(&fixtures_root().unwrap()).unwrap();
+        let error = SearchMode::Hybrid
+            .rank(&corpus, "anything")
+            .expect_err("an unmeasurable mode must not return a ranking");
+        assert!(error.to_string().contains("hybrid"));
     }
 
     #[test]
@@ -242,8 +335,13 @@ mod tests {
         let score = scored();
         // Exact-name lookup is the easiest case; if this regresses, tokenization
         // or corpus loading is broken rather than relevance being subtly worse.
+        // The floor is set well below the recorded 0.93 so ordinary ranking
+        // churn does not trip it: 0.5 means the average exact-name query still
+        // puts a correct answer in the top two, which no working tokenizer
+        // fails to do.
+        const EXACT_NAME_MRR_FLOOR: f64 = 0.5;
         assert!(
-            score.mrr_for_intent(QueryIntent::ExactName) > 0.5,
+            score.mrr_for_intent(QueryIntent::ExactName) > EXACT_NAME_MRR_FLOOR,
             "exact-name MRR unexpectedly low: {}",
             score.mrr_for_intent(QueryIntent::ExactName)
         );

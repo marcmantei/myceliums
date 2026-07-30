@@ -9,13 +9,31 @@
 //! JSON. With `--update-baseline` it also rewrites `golden/baseline.json`, which
 //! is the recorded starting point future changes are compared against.
 //!
+//! # Regenerating the baseline
+//!
+//! `golden/baseline.json` is *generated output*, never hand-edited. Its
+//! `commit_sha` and `timestamp` are stamped by this binary at the moment of the
+//! run, so the only supported way to change them is to re-run it:
+//!
+//! ```text
+//! cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline
+//! ```
+//!
+//! Re-record whenever a scoring change or a label change is *intended* — that
+//! is the moment the numbers legitimately move. Commit the regenerated file in
+//! the same change as the code or labels that moved it, so a reviewer sees the
+//! cause and the effect in one diff. A `-dirty` suffix on `commit_sha` means the
+//! run measured uncommitted code; re-record from a clean tree before committing.
+//!
 //! Offline and deterministic by construction: the corpus is parsed from in-repo
 //! fixtures, no model weights are downloaded, and the only non-reproducible
 //! fields (timestamp, commit) are confined to the baseline's provenance header.
 
 use anyhow::{Context, Result};
 use myceliums_benchmarks::eval::corpus::{fixtures_root, Corpus};
-use myceliums_benchmarks::eval::evaluator::{evaluate, ModeScore, SearchMode, RECALL_CUTOFFS};
+use myceliums_benchmarks::eval::evaluator::{
+    evaluate, ModeScore, OfflineBlocker, SearchMode, RECALL_CUTOFFS,
+};
 use myceliums_benchmarks::eval::golden_set::GoldenSet;
 use serde::Serialize;
 use serde_json::json;
@@ -27,6 +45,18 @@ const DEFAULT_REPORT: &str = "golden/report.json";
 /// The recorded reference scores, rewritten only on `--update-baseline`.
 const BASELINE: &str = "golden/baseline.json";
 
+/// Column widths of the aggregate table, in print order. The separator rule is
+/// derived from these so a column change cannot leave a ragged underline.
+const TABLE_COLUMNS: [usize; 5] = [14, 10, 10, 11, 8];
+
+/// One space between each pair of columns.
+const COLUMN_GAP: usize = 1;
+
+/// Width of the aggregate table's separator rule.
+fn table_width() -> usize {
+    TABLE_COLUMNS.iter().sum::<usize>() + COLUMN_GAP * (TABLE_COLUMNS.len() - 1)
+}
+
 /// How the binary was invoked.
 struct Options {
     /// Rewrite `golden/baseline.json` from this run.
@@ -36,8 +66,11 @@ struct Options {
 }
 
 impl Options {
-    /// Parse `--update-baseline` and `--out <path>`; anything else is an error
-    /// rather than a silent no-op.
+    /// Parse `--update-baseline` and `--out <path>`.
+    ///
+    /// `--help` prints usage and exits successfully; any other unrecognised
+    /// argument is an error rather than a silent no-op, so a typo cannot look
+    /// like a successful run that quietly ignored what you asked for.
     fn from_args(args: impl Iterator<Item = String>) -> Result<Self> {
         let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut options = Self {
@@ -67,31 +100,59 @@ impl Options {
     }
 }
 
+/// The `status` values a mode report carries. Named once here so the writer and
+/// the table reader below cannot drift apart on a string literal.
+mod status {
+    /// The mode ran and the numbers are real.
+    pub const MEASURED: &str = "MEASURED";
+    /// The mode did not run; there are no numbers, not zeroes.
+    pub const UNAVAILABLE: &str = "UNAVAILABLE";
+}
+
 /// One mode's scores, as they appear in the report and the baseline.
 ///
-/// A mode that cannot run offline reports `status: "UNAVAILABLE"` and carries no
-/// numbers at all — an absent measurement must never be mistaken for a zero.
+/// Both variants carry the same three keys — `status`, `reason`, `metrics` — so
+/// a consumer reads one shape regardless of outcome. A mode that cannot run
+/// offline reports `status: "UNAVAILABLE"` with `metrics: null`: an absent
+/// measurement must never be mistaken for a zero.
 #[derive(Debug, Serialize)]
-#[serde(tag = "status", rename_all = "UPPERCASE")]
-enum ModeReport {
-    /// The mode ran and produced scores.
-    Measured {
-        recall_at_1: f64,
-        recall_at_5: f64,
-        recall_at_10: f64,
-        mrr: f64,
-    },
-    /// The mode could not run in this environment, and why.
-    Unavailable { reason: &'static str },
+struct ModeReport {
+    /// [`status::MEASURED`] or [`status::UNAVAILABLE`].
+    status: &'static str,
+    /// Why the mode did not run, and what would let it — `null` when measured.
+    reason: Option<String>,
+    /// The scores, or `null` when the mode did not run.
+    metrics: Option<Metrics>,
+}
+
+/// The four numbers a measured mode reports.
+#[derive(Debug, Serialize)]
+struct Metrics {
+    recall_at_1: f64,
+    recall_at_5: f64,
+    recall_at_10: f64,
+    mrr: f64,
 }
 
 impl ModeReport {
     fn measured(score: &ModeScore) -> Self {
-        Self::Measured {
-            recall_at_1: round(score.recall_at(1)),
-            recall_at_5: round(score.recall_at(5)),
-            recall_at_10: round(score.recall_at(10)),
-            mrr: round(score.mrr),
+        Self {
+            status: status::MEASURED,
+            reason: None,
+            metrics: Some(Metrics {
+                recall_at_1: round(score.recall_at(1)),
+                recall_at_5: round(score.recall_at(5)),
+                recall_at_10: round(score.recall_at(10)),
+                mrr: round(score.mrr),
+            }),
+        }
+    }
+
+    fn unavailable(blocker: OfflineBlocker) -> Self {
+        Self {
+            status: status::UNAVAILABLE,
+            reason: Some(format!("{} — {}", blocker.reason, blocker.lifted_by)),
+            metrics: None,
         }
     }
 }
@@ -121,7 +182,7 @@ fn main() -> Result<()> {
 
     for mode in SearchMode::all() {
         let report = match mode.offline_blocker() {
-            Some(reason) => ModeReport::Unavailable { reason },
+            Some(blocker) => ModeReport::unavailable(blocker),
             None => {
                 let score = evaluate(mode, &corpus, &golden)?;
                 let report = ModeReport::measured(&score);
@@ -149,6 +210,7 @@ fn main() -> Result<()> {
     if options.update_baseline {
         let baseline_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(BASELINE);
         let baseline = json!({
+            "regenerate_with": "cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline",
             "timestamp": build_timestamp(),
             "commit_sha": commit_sha(),
             "dataset_version": golden.dataset_version,
@@ -164,18 +226,25 @@ fn main() -> Result<()> {
 }
 
 /// Print the aggregate table: one row per mode, unavailable modes included.
+///
+/// Unavailable modes print a marker instead of numbers and their reason is
+/// listed below the table, so the reader never has to guess whether a blank
+/// cell means "zero" or "not run".
 fn print_table(reports: &serde_json::Map<String, serde_json::Value>) {
+    let [mode_w, r1_w, r5_w, r10_w, mrr_w] = TABLE_COLUMNS;
     println!(
-        "{:<14} {:>10} {:>10} {:>11} {:>8}",
+        "{:<mode_w$} {:>r1_w$} {:>r5_w$} {:>r10_w$} {:>mrr_w$}",
         "mode", "recall@1", "recall@5", "recall@10", "MRR"
     );
-    println!("{}", "-".repeat(57));
+    println!("{}", "-".repeat(table_width()));
+
     for (mode, value) in reports {
-        match value.get("status").and_then(|s| s.as_str()) {
-            Some("MEASURED") => {
-                let get = |key: &str| value.get(key).and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let measured = value.get("status").and_then(|s| s.as_str()) == Some(status::MEASURED);
+        match value.get("metrics").filter(|_| measured) {
+            Some(metrics) => {
+                let get = |key: &str| metrics.get(key).and_then(|v| v.as_f64()).unwrap_or(0.0);
                 println!(
-                    "{:<14} {:>10.4} {:>10.4} {:>11.4} {:>8.4}",
+                    "{:<mode_w$} {:>r1_w$.4} {:>r5_w$.4} {:>r10_w$.4} {:>mrr_w$.4}",
                     mode,
                     get("recall_at_1"),
                     get("recall_at_5"),
@@ -183,12 +252,23 @@ fn print_table(reports: &serde_json::Map<String, serde_json::Value>) {
                     get("mrr")
                 );
             }
-            _ => println!("{mode:<14} {:>42}", "UNAVAILABLE"),
+            // The marker refers to the reasons listed under the table.
+            None => println!(
+                "{mode:<mode_w$} {:>width$}",
+                format!("{} [*]", status::UNAVAILABLE),
+                width = table_width() - mode_w - COLUMN_GAP
+            ),
         }
     }
+
+    let mut footnoted = false;
     for (mode, value) in reports {
         if let Some(reason) = value.get("reason").and_then(|r| r.as_str()) {
-            println!("  {mode}: UNAVAILABLE — {reason}");
+            if !footnoted {
+                println!("\n[*] not measured — no numbers are reported for these modes:");
+                footnoted = true;
+            }
+            println!("    {mode}: {reason}");
         }
     }
 }
