@@ -6,25 +6,24 @@
 class Myc < Formula
   desc "Code knowledge graph engine for AI agents"
   homepage "https://github.com/marcmantei/myceliums"
-  version "0.3.2"
   license "Apache-2.0"
 
   on_macos do
     if Hardware::CPU.arm?
-      url "https://github.com/marcmantei/myceliums/releases/download/v#{version}/myc-aarch64-apple-darwin.tar.gz"
+      url "https://github.com/marcmantei/myceliums/releases/download/v0.3.2/myc-aarch64-apple-darwin.tar.gz"
       sha256 "PLACEHOLDER"
     else
-      url "https://github.com/marcmantei/myceliums/releases/download/v#{version}/myc-x86_64-apple-darwin.tar.gz"
+      url "https://github.com/marcmantei/myceliums/releases/download/v0.3.2/myc-x86_64-apple-darwin.tar.gz"
       sha256 "PLACEHOLDER"
     end
   end
 
   on_linux do
     if Hardware::CPU.arm?
-      url "https://github.com/marcmantei/myceliums/releases/download/v#{version}/myc-aarch64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/marcmantei/myceliums/releases/download/v0.3.2/myc-aarch64-unknown-linux-gnu.tar.gz"
       sha256 "PLACEHOLDER"
     else
-      url "https://github.com/marcmantei/myceliums/releases/download/v#{version}/myc-x86_64-unknown-linux-gnu.tar.gz"
+      url "https://github.com/marcmantei/myceliums/releases/download/v0.3.2/myc-x86_64-unknown-linux-gnu.tar.gz"
       sha256 "PLACEHOLDER"
     end
   end

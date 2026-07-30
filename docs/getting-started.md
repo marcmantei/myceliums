@@ -20,20 +20,22 @@ cargo install myc
 To pin an exact version rather than tracking the latest release, add
 `--version 0.3.2 --locked`.
 
-### Option B: Build from source
+### Option B: Homebrew
+
+```bash
+brew install marcmantei/tap/myc
+```
+
+Installs a pre-built binary, so there is nothing to compile. Available for macOS
+(Apple Silicon and Intel) and Linux (aarch64 and x86_64).
+
+### Option C: Build from source
 
 ```bash
 git clone https://github.com/marcmantei/myceliums.git
 cd myceliums
 cargo build --release
 # The binary is at ./target/release/myc
-```
-
-### Option C: Docker
-
-```bash
-docker pull myceliums/myc:latest
-docker run --rm -v "$PWD:/repo" myceliums/myc:latest analyze /repo
 ```
 
 ## Step 1: Run the Setup Wizard

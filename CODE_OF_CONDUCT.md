@@ -59,8 +59,8 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the maintainer, who is responsible for enforcement, via the contact
-address on the [maintainer's GitHub profile](https://github.com/marcmantei).
+reported to the maintainer, who is responsible for enforcement, at
+**mail@marcmantei.com**.
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the

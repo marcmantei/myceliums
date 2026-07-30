@@ -196,6 +196,15 @@ cargo install myc
 
 To pin an exact version, add `--version 0.3.2 --locked`.
 
+**Homebrew:**
+
+```bash
+brew install marcmantei/tap/myc
+```
+
+Installs a pre-built binary for macOS (Apple Silicon or Intel) and Linux
+(aarch64 or x86_64) from the [tap](https://github.com/marcmantei/homebrew-tap).
+
 **From source:**
 
 ```bash
@@ -208,21 +217,12 @@ cargo install --path myc
 
 Download from [GitHub Releases](https://github.com/marcmantei/myceliums/releases).
 
-**Docker:**
-
-```bash
-docker run -v $(pwd):/code ghcr.io/marcmantei/myceliums analyze /code
-```
-
-The Docker image comes with the fastembed model pre-bundled — no model download on first run. To persist analysis data across runs, mount the data directory:
-
-```bash
-docker run -v $(pwd):/code -v ~/.myceliums:/root/.myceliums ghcr.io/marcmantei/myceliums analyze /code
-```
+**Docker:** no image is published yet. A `Dockerfile` is in the repository if
+you want to build one locally; the publishing workflow is disabled.
 
 ### First run
 
-On the very first `myc analyze` or semantic/hybrid search, the configured embedding model is downloaded automatically (a one-time cost — subsequent runs use the cached model). Pre-download it with `myc doctor --download`. The Docker image skips this step since the model is pre-bundled.
+On the very first `myc analyze` or semantic/hybrid search, the configured embedding model is downloaded automatically (a one-time cost — subsequent runs use the cached model). Pre-download it with `myc doctor --download`.
 
 ---
 
