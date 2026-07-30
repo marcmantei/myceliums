@@ -22,6 +22,10 @@ pub mod evaluator;
 pub mod golden_set;
 pub mod metrics;
 
+/// Guards on the committed `golden/baseline.json` — tests only, no public API.
+#[cfg(test)]
+mod baseline;
+
 pub use evaluator::{evaluate, ModeScore, QueryScore, SearchMode, RECALL_CUTOFFS};
 pub use golden_set::{GoldenQuery, GoldenSet, QueryIntent, SymbolRef};
 pub use metrics::{mean, mrr, recall_at_k, reciprocal_rank, RelevantSet};
