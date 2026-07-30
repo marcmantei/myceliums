@@ -38,18 +38,34 @@ fn git(args: &[&str]) -> Option<std::process::Output> {
         .ok()
 }
 
+/// Whether this checkout was cloned without full history.
+///
+/// CI checks out with `--depth=1`, so an older commit is absent from the object
+/// store even though it exists on the remote. A shallow clone therefore cannot
+/// distinguish "this sha was rewritten away" from "this sha is simply older
+/// than my truncated history" — and a test that cannot answer its question must
+/// skip rather than fail.
+fn is_shallow() -> bool {
+    git(&["rev-parse", "--is-shallow-repository"])
+        .filter(|out| out.status.success())
+        .and_then(|out| String::from_utf8(out.stdout).ok())
+        .map(|text| text.trim() == "true")
+        .unwrap_or(false)
+}
+
 /// The recorded commit must exist, or the provenance is a dead reference.
 ///
 /// This is exactly the failure a rebase introduces: the sha names a commit that
 /// was rewritten away, so the baseline looks authoritative while pointing at
-/// nothing. Skipped outside a git checkout (published crate, source tarball).
+/// nothing. Skipped outside a git checkout (published crate, source tarball)
+/// and in a shallow clone, where absence proves nothing.
 #[test]
 fn recorded_commit_is_resolvable() {
     let Ok(provenance) = provenance() else {
         return;
     };
     let sha = provenance.commit_sha.trim_end_matches("-dirty");
-    if sha == "unknown" {
+    if sha == "unknown" || is_shallow() {
         return;
     }
     let Some(output) = git(&["cat-file", "-t", sha]) else {
@@ -67,13 +83,15 @@ fn recorded_commit_is_resolvable() {
 /// Resolving is not enough: a commit orphaned by an amend still resolves
 /// locally until it is garbage-collected, but nobody else can fetch it. Only an
 /// ancestor of `HEAD` is genuinely obtainable by a reader.
+///
+/// Skipped in a shallow clone, where reachability cannot be established.
 #[test]
 fn recorded_commit_is_an_ancestor() {
     let Ok(provenance) = provenance() else {
         return;
     };
     let sha = provenance.commit_sha.trim_end_matches("-dirty");
-    if sha == "unknown" {
+    if sha == "unknown" || is_shallow() {
         return;
     }
     // Only meaningful inside a git checkout that knows the commit at all.

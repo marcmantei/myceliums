@@ -125,3 +125,135 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add benchmarks/metrics/ benchmarks/latest.json || true
           git diff --quiet && git diff --staged --quiet || (git commit -m "perf: update verified metrics for ${{ github.ref_name }}" && git push origin main)
+
+  retrieval-quality:
+    name: Retrieval Quality
+    runs-on: ubuntu-latest
+    # Report-only: surfaces current-vs-baseline relevance so a reviewer can see
+    # whether a change moved the numbers. It never fails the build on a metric
+    # shift — a label fix, a deliberate ranking trade-off and a genuine
+    # regression all move the same number, and only a human reading the diff can
+    # tell them apart. It *does* fail on a missing or malformed report, because
+    # that is a broken job rather than a judgement call.
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free runner disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Evaluate retrieval quality
+        # Offline and deterministic; embeddings are not needed for the lexical
+        # mode. The report lands on the binary's default path, which is the path
+        # .gitignore knows about — one location, so a stale report cannot be
+        # committed by accident.
+        run: |
+          cargo run -p myceliums-benchmarks --bin retrieval-eval \
+            --no-default-features | tee retrieval.txt
+      - name: Compare against the recorded baseline
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          import sys
+
+          BASELINE = 'crates/myceliums-benchmarks/golden/baseline.json'
+          REPORT = 'crates/myceliums-benchmarks/golden/report.json'
+          REGENERATE = (
+              'cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline'
+          )
+
+          def load(path, what):
+              """Read a JSON document, or fail with a message naming the fix."""
+              try:
+                  with open(path, encoding='utf-8') as handle:
+                      return json.load(handle)
+              except FileNotFoundError:
+                  sys.exit(
+                      f"::error::{what} not found at {path}. The evaluation step did not "
+                      f"produce it — check the step above. Re-record with: {REGENERATE}"
+                  )
+              except json.JSONDecodeError as error:
+                  sys.exit(
+                      f"::error::{what} at {path} is not valid JSON (line {error.lineno}, "
+                      f"column {error.colno}): {error.msg}. It is generated output — do not "
+                      f"hand-edit it; re-record with: {REGENERATE}"
+                  )
+
+          def results(document, path, what):
+              """The per-mode results map, or a clear failure if the shape is wrong."""
+              modes = document.get('results')
+              if not isinstance(modes, dict):
+                  sys.exit(
+                      f"::error::{what} at {path} has no 'results' object — the file does "
+                      f"not match the schema this job reads. Re-record with: {REGENERATE}"
+                  )
+              return modes
+
+          base = load(BASELINE, 'Recorded baseline')
+          curr = load(REPORT, 'Current retrieval report')
+          base_modes = results(base, BASELINE, 'Recorded baseline')
+          curr_modes = results(curr, REPORT, 'Current retrieval report')
+
+          print('## Retrieval quality — current vs baseline\n')
+          if base.get('dataset_version') != curr.get('dataset_version'):
+              print(
+                  f"> **Ground truth changed** — baseline `{base.get('dataset_version')}` vs "
+                  f"current `{curr.get('dataset_version')}`. Scores recorded against "
+                  "different labels are not comparable; read the deltas below as "
+                  "informational only.\n"
+              )
+          print(
+              f"Dataset `{curr.get('dataset_version', 'unknown')}` · "
+              f"{curr.get('queries', '?')} queries · "
+              f"{curr.get('corpus_symbols', '?')} symbols\n"
+          )
+          print('| Mode | Metric | Baseline | Current | Δ |')
+          print('| --- | --- | ---: | ---: | ---: |')
+          for mode, now in sorted(curr_modes.items()):
+              if now.get('status') != 'MEASURED':
+                  print(f"| `{mode}` | — | — | UNAVAILABLE [*] | — |")
+                  continue
+              was = (base_modes.get(mode) or {}).get('metrics') or {}
+              current = now.get('metrics') or {}
+              for metric in ('recall_at_1', 'recall_at_5', 'recall_at_10', 'mrr'):
+                  before, after = was.get(metric), current.get(metric)
+                  if after is None:
+                      print(f"| `{mode}` | {metric} | — | missing | — |")
+                  elif before is None:
+                      print(f"| `{mode}` | {metric} | — | {after:.4f} | new |")
+                  else:
+                      print(
+                          f"| `{mode}` | {metric} | {before:.4f} | {after:.4f} "
+                          f"| {after - before:+.4f} |"
+                      )
+
+          unavailable = [
+              (mode, report.get('reason') or 'no reason recorded')
+              for mode, report in sorted(curr_modes.items())
+              if report.get('status') != 'MEASURED'
+          ]
+          if unavailable:
+              print('\n[*] Not measured — **no numbers are reported** for these modes:\n')
+              for mode, reason in unavailable:
+                  print(f"- `{mode}` — {reason}")
+
+          print('\nReport-only: relevance changes never fail the build.')
+          print('Methodology: `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.')
+          PY
+      - name: Upload retrieval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: retrieval-quality-report
+          path: |
+            crates/myceliums-benchmarks/golden/report.json
+            retrieval.txt
+          retention-days: 90
