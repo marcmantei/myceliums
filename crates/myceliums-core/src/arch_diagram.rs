@@ -175,7 +175,6 @@ fn generate_mermaid(services: &[ServiceNode], connections: &[ServiceConnection])
 #[cfg(test)]
 mod tests {
     use super::*;
-    use myceliums_storage::SymbolKind;
 
     fn make_community(uid: &str, label: &str, count: u32) -> Community {
         Community {
@@ -185,22 +184,6 @@ mod tests {
             member_count: count,
             top_symbols: "foo, bar".to_string(),
             summary: String::new(),
-        }
-    }
-
-    fn make_symbol(uid: &str, name: &str) -> CodeSymbol {
-        CodeSymbol {
-            uid: uid.to_string(),
-            name: name.to_string(),
-            qualified_name: name.to_string(),
-            kind: SymbolKind::Function,
-            file_path: "src/lib.rs".to_string(),
-            start_line: 1,
-            end_line: 10,
-            signature: String::new(),
-            content: String::new(),
-            repo_id: "test".to_string(),
-            metadata: None,
         }
     }
 
