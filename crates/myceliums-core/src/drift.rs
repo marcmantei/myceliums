@@ -137,7 +137,7 @@ pub fn detect_drift(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use myceliums_storage::{RelationshipKind, SymbolKind};
+    use myceliums_storage::SymbolKind;
 
     fn make_symbol(uid: &str, name: &str) -> CodeSymbol {
         CodeSymbol {
