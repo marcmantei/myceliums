@@ -2898,8 +2898,10 @@ mod tests {
             let db = dir.path().join("db");
             std::fs::create_dir_all(&db).unwrap();
             let store = Store::open(&db, "test-repo").await.unwrap();
-            let mut config = ProjectConfig::default();
-            config.embedding = embedding;
+            let config = ProjectConfig {
+                embedding,
+                ..Default::default()
+            };
             let root = make_test_root(&dir);
             let analyzer = Analyzer::with_config(store, root, config);
             (analyzer, dir)
