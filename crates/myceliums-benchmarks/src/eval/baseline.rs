@@ -1,13 +1,16 @@
 //! The recorded baseline: reference scores plus the provenance to reproduce them.
 //!
-//! A baseline is only useful if a reader can get back to the tree that produced
-//! it. These tests guard that property — the numbers themselves are compared by
-//! the `retrieval-eval` binary, not here.
+//! A baseline is only useful if a reader can tell what it was measured against.
+//! These tests guard that property — the numbers themselves are compared by the
+//! `retrieval-eval` binary, not here.
+//!
+//! The guarantee is content-addressed, not history-addressed: see
+//! [`recorded_commit_sha_is_well_formed`] for why a git reference cannot carry
+//! it in a squash-merge repository.
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::Path;
-use std::process::Command;
 
 /// Provenance header of `golden/baseline.json`.
 ///
@@ -34,15 +37,6 @@ fn provenance() -> Result<BaselineProvenance> {
     let json =
         std::fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
     serde_json::from_str(&json).context("parsing the baseline provenance header")
-}
-
-/// Run a git command in the crate directory, or `None` if git is unavailable.
-fn git(args: &[&str]) -> Option<std::process::Output> {
-    Command::new("git")
-        .args(args)
-        .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .output()
-        .ok()
 }
 
 /// The recorded sha must look like a sha, or it is not provenance at all.
