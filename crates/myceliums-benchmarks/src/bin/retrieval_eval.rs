@@ -221,6 +221,7 @@ fn main() -> Result<()> {
             "regenerate_with": "cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline",
             "timestamp": build_timestamp(),
             "commit_sha": commit_sha(),
+            "dataset_digest": GoldenSet::embedded_digest(),
             "dataset_version": golden.dataset_version,
             "corpus_symbols": corpus.len(),
             "queries": golden.len(),
