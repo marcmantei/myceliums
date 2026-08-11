@@ -1,6 +1,7 @@
 {
-  "commit_sha": "778194244c64f0be3dc4feefc6f5a7e1a618faf6",
+  "commit_sha": "5892b16b593abd6c0d16b4dc3668829de34a6ae4",
   "corpus_symbols": 96,
+  "dataset_digest": "05ff3a8c7b12b939192f6a03de4285aa158c273ddff33ed31e3c1c125c8f9308",
   "dataset_version": "2026-07-30",
   "queries": 51,
   "regenerate_with": "cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline",
@@ -31,5 +32,5 @@
       "status": "UNAVAILABLE"
     }
   },
-  "timestamp": "2026-07-30T21:23:37Z"
+  "timestamp": "2026-08-11T12:35:24Z"
 }

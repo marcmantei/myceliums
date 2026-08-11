@@ -130,6 +130,20 @@ impl GoldenSet {
         Ok(set)
     }
 
+    /// Content digest of the golden set exactly as it ships.
+    ///
+    /// Hashes the embedded file's own bytes rather than a re-serialisation, so
+    /// the value cannot drift with serde field ordering or JSON formatting.
+    ///
+    /// This is what the baseline records to prove it was measured against the
+    /// ground truth it is compared to. `dataset_version` states the same claim
+    /// but is typed by hand, so it stays correct only as long as nobody forgets
+    /// to bump it; the digest cannot be forgotten.
+    pub fn embedded_digest() -> String {
+        use sha2::{Digest, Sha256};
+        format!("{:x}", Sha256::digest(EMBEDDED_GOLDEN_SET.as_bytes()))
+    }
+
     /// Load a golden set from a JSON file, for experimenting with alternative
     /// label sets without rebuilding.
     pub fn from_path(path: &Path) -> Result<Self> {
