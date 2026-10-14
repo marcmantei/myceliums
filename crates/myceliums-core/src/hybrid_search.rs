@@ -21,6 +21,8 @@ use crate::search::{search_symbols, search_symbols_explain, SearchExplain};
 /// its persisted LanceDB vectors; tests can substitute a lightweight fake to
 /// assert the query path never re-embeds stored symbols.
 #[cfg(feature = "embeddings")]
+// async_trait marks the boxed future #[must_use]; newer clippy flags that as double_must_use.
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait VectorSearcher {
     /// Return up to `limit` `(symbol, similarity)` candidates whose persisted

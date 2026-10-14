@@ -14,6 +14,8 @@ use crate::global_config::GlobalConfig;
 // ── Trait ────────────────────────────────────────────────────────────
 
 /// A backend that can produce text completions.
+// async_trait marks the boxed future #[must_use]; newer clippy flags that as double_must_use.
+#[allow(clippy::double_must_use)]
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
     /// Generate a plain-text completion for the given prompt.
