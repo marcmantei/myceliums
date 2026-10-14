@@ -24,7 +24,7 @@ Closes #<issue-number>
 
 - [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`, ...)
 - [ ] `cargo fmt --all` — code is formatted
-- [ ] `cargo clippy --workspace -- -D warnings` — no lint warnings
+- [ ] `cargo clippy --workspace --all-targets -- -D warnings` — no lint warnings
 - [ ] `cargo test --workspace` — tests pass
 - [ ] Documentation updated where behaviour changed (README / `docs/` / rustdoc)
 

@@ -26,7 +26,7 @@ git clone https://github.com/marcmantei/myceliums
 cd myceliums
 cargo build --workspace
 cargo test --workspace
-cargo clippy --workspace -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 ## Project structure
@@ -58,7 +58,7 @@ behavior as described there.
 5. **Ensure CI checks pass** before submitting:
    ```bash
    cargo test --workspace
-   cargo clippy --workspace -- -D warnings
+   cargo clippy --workspace --all-targets -- -D warnings
    cargo fmt --all -- --check
    ```
 6. **Follow the [pull request template](.github/pull_request_template.md)** — it

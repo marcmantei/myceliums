@@ -9,7 +9,7 @@ Always run `cargo fmt --all` before creating a commit. Rustfmt failures block CI
 All PRs must pass these checks before merge:
 - **Build**: `cargo build --workspace`
 - **Test**: `cargo test --workspace`
-- **Clippy**: `cargo clippy --workspace -- -D warnings`
+- **Clippy**: `cargo clippy --workspace --all-targets -- -D warnings`
 - **Rustfmt**: `cargo fmt --all -- --check`
 
 ## Commit style
