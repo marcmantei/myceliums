@@ -581,7 +581,7 @@ git clone https://github.com/marcmantei/myceliums
 cd myceliums
 cargo build --workspace
 cargo test --workspace
-cargo clippy --workspace -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 The workspace has seven crates:
