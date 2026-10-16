@@ -42,7 +42,7 @@ Repository ID: my-project-a1b2c3
 - **23 languages** — TypeScript, JavaScript, Python, Go, Rust, Java, C#, C, C++, Ruby, Kotlin, Swift, PHP, TSX, Lua, Zig, PowerShell, Elixir, Scala, Objective-C, Dart, Vue, Svelte
 - **Content files** — Markdown, MDX, and plain text indexed alongside code (headings as Section symbols, links as References edges)
 - **Cypher queries** — Query your codebase like a database: `MATCH (s)-[:CALLS]->(t) RETURN t.name`
-- **Token-optimized reviews** — `get_review_context` returns minimal structural summaries instead of full source, reducing AI token usage by 5-20x
+- **Token-optimized reviews** — `get_review_context` returns minimal structural summaries (signatures, callers, callees) instead of full source
 - **Interactive visualization** — `myc serve` launches a D3.js force-directed graph explorer in your browser
 - **Community detection** — Leiden algorithm automatically discovers code clusters and architectural boundaries
 - **Process tracing** — Maps execution flows from entry points through entire call chains
@@ -142,7 +142,7 @@ myc serve
 
 ## Token-optimized AI reviews
 
-The `get_review_context` MCP tool dramatically reduces token consumption by returning structural summaries instead of full source code:
+The `get_review_context` MCP tool returns structural summaries instead of full source code:
 
 ```
 Review context for 3 changed symbols across 2 files:
@@ -160,10 +160,10 @@ Callees (dependencies):
 
 Communities touched: [request-handling, input-validation]
 
-Token estimate: ~187 tokens (vs ~4,200 for full files — 22x reduction)
+Token estimate: ~187 tokens (vs ~4,200 for full source — 22x reduction)
 ```
 
-AI agents get everything they need for a code review in ~200 tokens instead of thousands.
+The `Token estimate` line is a size estimate, not a measured saving: it divides the character count of the summary by four and sets it against the character count of the indexed symbols in the affected files, also divided by four. It does not measure how many tokens an agent actually spends on a review, or whether the summary alone is enough for it. See [How token savings work](docs/guides/token-savings.md).
 
 ---
 
