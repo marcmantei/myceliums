@@ -64,4 +64,6 @@ Indexing and query timings on a generated 5,010-file project. See
 nothing: every baseline and "with Myceliums" value is a constant in
 [`crates/myceliums-benchmarks/src/scenarios.rs`](../crates/myceliums-benchmarks/src/scenarios.rs),
 commented there as an estimate and returned with `is_verified: false`. Its
-output is a set of scenario assumptions, not a result. `metrics/` is empty.
+output is a set of scenario assumptions, not a result. `metrics/` is empty;
+the bench does not write into this directory (see
+[METHODOLOGY.md](./METHODOLOGY.md#running-it)).

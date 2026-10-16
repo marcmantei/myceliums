@@ -147,7 +147,7 @@ Avg Tool Call Reduction = Sum(call_reductions) / scenario_count
 
 ## Environment and fixtures
 
-The bench records the OS, CPU count, memory and Rust version in its output. Because every figure is a constant, the environment does not change them, and the bench uses no test project.
+The bench writes the OS, CPU count, memory and Rust version into its output (memory is read from `/proc/meminfo` on Linux and is a fixed 16 GB on every other OS). Because every figure is a constant, the environment does not change them, and the bench uses no test project.
 
 ## Running it
 
@@ -155,7 +155,11 @@ The bench records the OS, CPU count, memory and Rust version in its output. Beca
 cargo bench -p myceliums-benchmarks --bench verified_metrics
 ```
 
-This prints the constants and the derived percentages as JSON.
+This prints the constants and the derived percentages as JSON. In an optimised build, which is what
+`cargo bench` produces, it also saves that JSON as `benchmarks/metrics/v<version>.json` and
+`benchmarks/latest.json` relative to its working directory. Cargo runs a bench from its package
+directory, so those files land under `crates/myceliums-benchmarks/benchmarks/`, not in this
+directory.
 
 ## Changelog
 

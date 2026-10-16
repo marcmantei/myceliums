@@ -33,7 +33,7 @@ Repository ID: my-project-a1b2c3
 |---|---|
 | AI grep-searches across hundreds of files | One graph query returns exact results |
 | "What calls this function?" → hallucinated guesses | Heuristic caller/callee chains from name-based resolution |
-| Full source files sent to AI (thousands of tokens) | Structural summaries (~200 tokens) |
+| Full source files sent to AI (thousands of tokens) | Structural summaries: signatures, callers, callees |
 | No understanding of code architecture | Community detection reveals code clusters |
 | Manual impact analysis | `myc impact` traces blast radius (with confidence flags) |
 
@@ -142,7 +142,7 @@ myc serve
 
 ## Token-optimized AI reviews
 
-The `get_review_context` MCP tool returns structural summaries instead of full source code:
+The `get_review_context` MCP tool returns structural summaries instead of full source code. An example response (the symbols and figures in it are illustrative):
 
 ```
 Review context for 3 changed symbols across 2 files:
