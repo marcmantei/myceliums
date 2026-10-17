@@ -1,0 +1,24 @@
+s.name | s.kind
+----------------------------------------
+TestError | Function
+customError | Class
+TestErrorSlice | Function
+Error | Method
+TestErrorUnwrap | Function
+ErrorLogger | Function
+ErrorLoggerT | Function
+TestRenderJSONError | Function
+errorWriter | Class
+TestRenderJsonpJSONError | Function
+TestRenderJsonpJSONError2 | Function
+TestRenderBSONError | Function
+TestRenderBSONWriteError | Function
+TestRenderXMLError | Function
+TestRenderDataError | Function
+TestRenderHTMLTemplateError | Function
+TestRenderHTMLTemplateExecuteError | Function
+TestRenderWriteError | Function
+TestRenderMsgPackError | Function
+TestRouteServeErrorWithWriteHeader | Function
+
+20 row(s)

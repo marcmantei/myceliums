@@ -1,0 +1,22 @@
+s.kind | s.name
+----------------------------------------
+Method | test_not_modified_headers
+Function | middleware
+Method | __call__
+Method | test_cookie_settings
+Method | test_max_cookie_length
+Method | test_flush_used_backends
+Method | test_no_fallback
+Method | test_session_fallback
+Method | test_session_fallback_only
+Method | test_add_lazy_translation
+Method | test_no_update
+Method | test_add_update
+Method | test_existing_add_read_update
+Method | test_existing_read_add_update
+Method | test_404_response
+Method | __acall__
+Function | inner
+Method | get_response
+
+18 row(s)

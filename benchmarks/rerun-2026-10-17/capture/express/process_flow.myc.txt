@@ -1,0 +1,16 @@
+Processes in express:
+(filtered)
+
+  1. handleHeaders flow (2 steps, entry: handleHeaders)
+     Flow: ├─ handleHeaders
+  ├─ assert
+
+
+  2. handler1 flow (2 steps, entry: handler1)
+     Flow: ├─ handler1
+  ├─ next
+
+
+  3. handler2 flow (2 steps, entry: handler2)
+     Flow: ├─ handler2
+  ├─ send

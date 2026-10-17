@@ -1,0 +1,8 @@
+s.name | s.kind
+----------------------------------------
+$ZodErrorMap | Interface
+$ZodError | Interface
+$ZodRealError | Interface
+ZodError | Interface
+
+4 row(s)

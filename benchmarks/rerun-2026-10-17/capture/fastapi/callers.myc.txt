@@ -1,0 +1,7 @@
+s.name | s.kind
+----------------------------------------
+solve_dependencies | Function
+app | Function
+_solve_dependencies | Method
+
+3 row(s)

@@ -1,0 +1,24 @@
+s.kind | s.name
+----------------------------------------
+Method | test_default_argument_suppresses_exceptions
+Method | test_sum_star_exception
+Method | test_run_suite_logs_seed_exception
+Class | ExceptionThatFailsUnpickling
+Method | test_setupclass_exception
+Class | RunTestsExceptionHandlingTests
+Method | test_save_send_email_exceptions_are_catched_and_logged
+Method | test_permissioned_denied_exception_raised
+Method | test_permissioned_denied_exception_raised_async_view
+Method | test_getuser_raises_exception
+Method | test_raise_exception
+Method | test_raise_exception_custom_message
+Method | test_raise_exception_custom_message_function
+Method | test_permissioned_denied_exception_raised
+Class | FilteredExceptionReporter
+Method | test_raises_exception
+Method | test_araises_exception
+Method | test_does_not_shadow_exception
+Function | permission_required_exception
+Function | login_and_permission_required_exception
+
+20 row(s)
