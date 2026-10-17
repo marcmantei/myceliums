@@ -1,0 +1,1479 @@
+{
+ "veroeffentlicht": {
+  "v0.1.0": {
+   "gesamt": {
+    "n": 11,
+    "tokens_ohne": 618099,
+    "tokens_mit": 1149,
+    "aufrufe_ohne": 187,
+    "aufrufe_mit": 11,
+    "token_gepoolt": 99.81410744880674,
+    "token_gepoolt_runsh": 99.8,
+    "aufruf_gepoolt": 94.11764705882352,
+    "aufruf_gepoolt_runsh": 94.1,
+    "token_mittel": 99.75325424651068,
+    "token_median": 99.90988886293096,
+    "token_min": 99.34819262244521,
+    "token_max": 99.9848234780794,
+    "aufruf_mittel": 89.11845730027548,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 66.66666666666666,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 537.9451697127937,
+    "faktor_median": 1109.7407407407406,
+    "faktor_min": 153.41955835962145,
+    "faktor_max": 6589.125
+   },
+   "dateien": {
+    "fastapi": {
+     "timestamp": "2026-03-14T14:45:12Z",
+     "questions_einzeilig_wie_runsh": true,
+     "files": 1118
+    },
+    "zod": {
+     "timestamp": "2026-03-14T14:35:51Z",
+     "questions_einzeilig_wie_runsh": true,
+     "files": 361
+    }
+   },
+   "aggregat_timestamp": "2026-03-14T14:45:12Z",
+   "aggregat_repositories_einzeilig_wie_runsh": true,
+   "aggregat_reihenfolge": [
+    "fastapi",
+    "zod"
+   ],
+   "runsh_glob_reihenfolge": [
+    "fastapi",
+    "zod"
+   ],
+   "je_repo": {
+    "fastapi": {
+     "n": 6,
+     "tokens_ohne": 289105,
+     "tokens_mit": 930,
+     "aufrufe_ohne": 95,
+     "aufrufe_mit": 6,
+     "token_gepoolt": 99.67831756628215,
+     "token_gepoolt_runsh": 99.6,
+     "aufruf_gepoolt": 93.6842105263158,
+     "aufruf_gepoolt_runsh": 93.6,
+     "token_mittel": 99.66503888257955,
+     "token_median": 99.71313791521338,
+     "token_min": 99.34819262244521,
+     "token_max": 99.92069355119068,
+     "aufruf_mittel": 87.24747474747474,
+     "aufruf_median": 95.45454545454545,
+     "aufruf_min": 66.66666666666666,
+     "aufruf_max": 95.45454545454545,
+     "faktor_gepoolt": 310.86559139784947,
+     "faktor_median": 658.2588165855097,
+     "faktor_min": 153.41955835962145,
+     "faktor_max": 1260.9315068493152
+    },
+    "zod": {
+     "n": 5,
+     "tokens_ohne": 328994,
+     "tokens_mit": 219,
+     "aufrufe_ohne": 92,
+     "aufrufe_mit": 5,
+     "token_gepoolt": 99.93343343647605,
+     "token_gepoolt_runsh": 99.9,
+     "aufruf_gepoolt": 94.56521739130434,
+     "aufruf_gepoolt_runsh": 94.5,
+     "token_mittel": 99.85911268322805,
+     "token_median": 99.94107508507285,
+     "token_min": 99.69201610992656,
+     "token_max": 99.9848234780794,
+     "aufruf_mittel": 91.36363636363636,
+     "aufruf_median": 95.45454545454545,
+     "aufruf_min": 75.0,
+     "aufruf_max": 95.45454545454545,
+     "faktor_gepoolt": 1502.255707762557,
+     "faktor_median": 1697.075,
+     "faktor_min": 324.6923076923077,
+     "faktor_max": 6589.125
+    }
+   }
+  },
+  "v0.2.0": {
+   "gesamt": {
+    "n": 34,
+    "tokens_ohne": 1692356,
+    "tokens_mit": 2978,
+    "aufrufe_ohne": 578,
+    "aufrufe_mit": 34,
+    "token_gepoolt": 99.82403229580538,
+    "token_gepoolt_runsh": 99.8,
+    "aufruf_gepoolt": 94.11764705882352,
+    "aufruf_gepoolt_runsh": 94.1,
+    "token_mittel": 99.7454717191275,
+    "token_median": 99.81606374727542,
+    "token_min": 99.15796963946869,
+    "token_max": 99.99494115935981,
+    "aufruf_mittel": 90.94474153297682,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 66.66666666666666,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 568.2860980523842,
+    "faktor_median": 543.6666666666667,
+    "faktor_min": 118.7605633802817,
+    "faktor_max": 19767.375
+   },
+   "dateien": {
+    "gin": {
+     "timestamp": "2026-04-09T12:00:00Z",
+     "questions_einzeilig_wie_runsh": false,
+     "files": 312
+    },
+    "express": {
+     "timestamp": "2026-04-09T12:00:00Z",
+     "questions_einzeilig_wie_runsh": false,
+     "files": 498
+    },
+    "django": {
+     "timestamp": "2026-04-09T12:00:00Z",
+     "questions_einzeilig_wie_runsh": false,
+     "files": 6492
+    },
+    "fastapi": {
+     "timestamp": "2026-03-14T18:10:46Z",
+     "questions_einzeilig_wie_runsh": true,
+     "files": 1118
+    },
+    "tokio": {
+     "timestamp": "2026-04-09T12:00:00Z",
+     "questions_einzeilig_wie_runsh": false,
+     "files": 1024
+    },
+    "zod": {
+     "timestamp": "2026-03-14T18:04:19Z",
+     "questions_einzeilig_wie_runsh": true,
+     "files": 361
+    }
+   },
+   "aggregat_timestamp": "2026-04-09T12:00:00Z",
+   "aggregat_repositories_einzeilig_wie_runsh": false,
+   "aggregat_reihenfolge": [
+    "fastapi",
+    "zod",
+    "django",
+    "express",
+    "gin",
+    "tokio"
+   ],
+   "runsh_glob_reihenfolge": [
+    "gin",
+    "express",
+    "django",
+    "fastapi",
+    "tokio",
+    "zod"
+   ],
+   "je_repo": {
+    "gin": {
+     "n": 5,
+     "tokens_ohne": 67298,
+     "tokens_mit": 213,
+     "aufrufe_ohne": 80,
+     "aufrufe_mit": 5,
+     "token_gepoolt": 99.68349728075128,
+     "token_gepoolt_runsh": 99.6,
+     "aufruf_gepoolt": 93.75,
+     "aufruf_gepoolt_runsh": 93.7,
+     "token_mittel": 99.61847938327854,
+     "token_median": 99.69352803317109,
+     "token_min": 99.15796963946869,
+     "token_max": 99.81612013484524,
+     "aufruf_mittel": 91.43939393939394,
+     "aufruf_median": 95.45454545454545,
+     "aufruf_min": 83.33333333333334,
+     "aufruf_max": 95.45454545454545,
+     "faktor_gepoolt": 315.9530516431925,
+     "faktor_median": 326.29411764705884,
+     "faktor_min": 118.7605633802817,
+     "faktor_max": 543.8333333333334
+    },
+    "express": {
+     "n": 6,
+     "tokens_ohne": 116516,
+     "tokens_mit": 234,
+     "aufrufe_ohne": 92,
+     "aufrufe_mit": 6,
+     "token_gepoolt": 99.79916921281198,
+     "token_gepoolt_runsh": 99.7,
+     "aufruf_gepoolt": 93.47826086956522,
+     "aufruf_gepoolt_runsh": 93.4,
+     "token_mittel": 99.74712774938864,
+     "token_median": 99.81726038995349,
+     "token_min": 99.32732993381794,
+     "token_max": 99.93493113545169,
+     "aufruf_mittel": 91.89393939393939,
+     "aufruf_median": 92.72727272727272,
+     "aufruf_min": 87.5,
+     "aufruf_max": 95.45454545454545,
+     "faktor_gepoolt": 497.9316239316239,
+     "faktor_median": 550.7641129032259,
+     "faktor_min": 148.66129032258064,
+     "faktor_max": 1536.8333333333333
+    },
+    "django": {
+     "n": 5,
+     "tokens_ohne": 556417,
+     "tokens_mit": 930,
+     "aufrufe_ohne": 98,
+     "aufrufe_mit": 5,
+     "token_gepoolt": 99.83285916857321,
+     "token_gepoolt_runsh": 99.8,
+     "aufruf_gepoolt": 94.89795918367348,
+     "aufruf_gepoolt_runsh": 94.8,
+     "token_mittel": 99.81848586693036,
+     "token_median": 99.83141598698816,
+     "token_min": 99.65852665215144,
+     "token_max": 99.93865960907561,
+     "aufruf_mittel": 94.36363636363636,
+     "aufruf_median": 95.45454545454545,
+     "aufruf_min": 90.0,
+     "aufruf_max": 95.45454545454545,
+     "faktor_gepoolt": 598.2978494623655,
+     "faktor_median": 593.1760563380282,
+     "faktor_min": 292.848623853211,
+     "faktor_max": 1630.247191011236
+    },
+    "fastapi": {
+     "n": 7,
+     "tokens_ohne": 317328,
+     "tokens_mit": 938,
+     "aufrufe_ohne": 98,
+     "aufrufe_mit": 7,
+     "token_gepoolt": 99.70440679675289,
+     "token_gepoolt_runsh": 99.7,
+     "aufruf_gepoolt": 92.85714285714286,
+     "aufruf_gepoolt_runsh": 92.8,
+     "token_mittel": 99.70884108856634,
+     "token_median": 99.90988886293096,
+     "token_min": 99.34819262244521,
+     "token_max": 99.97165432448712,
+     "aufruf_mittel": 84.3073593073593,
+     "aufruf_median": 95.45454545454545,
+     "aufruf_min": 66.66666666666666,
+     "aufruf_max": 95.45454545454545,
+     "faktor_gepoolt": 338.30277185501063,
+     "faktor_median": 1109.7407407407406,
+     "faktor_min": 153.41955835962145,
+     "faktor_max": 3527.875
+    },
+    "tokio": {
+     "n": 5,
+     "tokens_ohne": 147664,
+     "tokens_mit": 436,
+     "aufrufe_ohne": 96,
+     "aufrufe_mit": 5,
+     "token_gepoolt": 99.70473507422255,
+     "token_gepoolt_runsh": 99.7,
+     "aufruf_gepoolt": 94.79166666666666,
+     "aufruf_gepoolt_runsh": 94.7,
+     "token_mittel": 99.68521070149878,
+     "token_median": 99.78900782214903,
+     "token_min": 99.3278540084976,
+     "token_max": 99.85233066785545,
+     "aufruf_mittel": 93.86363636363636,
+     "aufruf_median": 95.45454545454545,
+     "aufruf_min": 87.5,
+     "aufruf_max": 95.45454545454545,
+     "faktor_gepoolt": 338.6788990825688,
+     "faktor_median": 473.9512195121951,
+     "faktor_min": 148.77720207253887,
+     "faktor_max": 677.188679245283
+    },
+    "zod": {
+     "n": 6,
+     "tokens_ohne": 487133,
+     "tokens_mit": 227,
+     "aufrufe_ohne": 114,
+     "aufrufe_mit": 6,
+     "token_gepoolt": 99.95340081661477,
+     "token_gepoolt_runsh": 99.9,
+     "aufruf_gepoolt": 94.73684210526315,
+     "aufruf_gepoolt_runsh": 94.7,
+     "token_mittel": 99.88175076258334,
+     "token_median": 99.941906445797,
+     "token_min": 99.69201610992656,
+     "token_max": 99.99494115935981,
+     "aufruf_mittel": 92.04545454545455,
+     "aufruf_median": 95.45454545454545,
+     "aufruf_min": 75.0,
+     "aufruf_max": 95.45454545454545,
+     "faktor_gepoolt": 2145.9603524229074,
+     "faktor_median": 1721.7139705882353,
+     "faktor_min": 324.6923076923077,
+     "faktor_max": 19767.375
+    }
+   }
+  },
+  "v010_v020_identische_fragen": {
+   "fastapi": [
+    "callers",
+    "classes",
+    "blast_radius",
+    "error_types",
+    "call_graph",
+    "semantic"
+   ],
+   "zod": [
+    "callers",
+    "classes",
+    "blast_radius",
+    "call_graph",
+    "error_types"
+   ]
+  }
+ },
+ "neulauf": {
+  "gesamt": {
+   "n": 34,
+   "tokens_ohne": 2266087,
+   "tokens_mit": 24677,
+   "aufrufe_ohne": 573,
+   "aufrufe_mit": 34,
+   "token_gepoolt": 98.91103033555198,
+   "token_gepoolt_runsh": 98.9,
+   "aufruf_gepoolt": 94.06631762652705,
+   "aufruf_gepoolt_runsh": 94.0,
+   "token_mittel": 98.88065749189418,
+   "token_median": 99.77214168893761,
+   "token_min": 83.87651281098283,
+   "token_max": 99.99236330312596,
+   "aufruf_mittel": 89.90617225911343,
+   "aufruf_median": 95.45454545454545,
+   "aufruf_min": 66.66666666666666,
+   "aufruf_max": 95.45454545454545,
+   "faktor_gepoolt": 91.82992259999189,
+   "faktor_median": 439.4324742268041,
+   "faktor_min": 6.20213225759977,
+   "faktor_max": 13094.666666666666
+  },
+  "je_repo": {
+   "gin": {
+    "n": 5,
+    "tokens_ohne": 89370,
+    "tokens_mit": 712,
+    "aufrufe_ohne": 69,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 99.2033120734027,
+    "token_gepoolt_runsh": 99.2,
+    "aufruf_gepoolt": 92.7536231884058,
+    "aufruf_gepoolt_runsh": 92.7,
+    "token_mittel": 99.16106463407918,
+    "token_median": 99.37006070324132,
+    "token_min": 98.18570942166448,
+    "token_max": 99.56440877055599,
+    "aufruf_mittel": 87.32467532467533,
+    "aufruf_median": 93.33333333333333,
+    "aufruf_min": 66.66666666666666,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 125.51966292134831,
+    "faktor_median": 158.74545454545455,
+    "faktor_min": 55.11796246648794,
+    "faktor_max": 229.57303370786516
+   },
+   "express": {
+    "n": 6,
+    "tokens_ohne": 92045,
+    "tokens_mit": 160,
+    "aufrufe_ohne": 67,
+    "aufrufe_mit": 6,
+    "token_gepoolt": 99.8261719810962,
+    "token_gepoolt_runsh": 99.8,
+    "aufruf_gepoolt": 91.04477611940298,
+    "aufruf_gepoolt_runsh": 91.0,
+    "token_mittel": 99.83469121200368,
+    "token_median": 99.87047821048756,
+    "token_min": 99.57478276945831,
+    "token_max": 99.98284047360293,
+    "aufruf_mittel": 81.92501942501943,
+    "aufruf_median": 83.65384615384616,
+    "aufruf_min": 66.66666666666666,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 575.28125,
+    "faktor_median": 1324.7113095238096,
+    "faktor_min": 235.17391304347825,
+    "faktor_max": 5827.666666666667
+   },
+   "django": {
+    "n": 5,
+    "tokens_ohne": 849381,
+    "tokens_mit": 1231,
+    "aufrufe_ohne": 110,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 99.85507092812294,
+    "token_gepoolt_runsh": 99.8,
+    "aufruf_gepoolt": 95.45454545454545,
+    "aufruf_gepoolt_runsh": 95.4,
+    "token_mittel": 99.79322148496759,
+    "token_median": 99.84447564531807,
+    "token_min": 99.41283924843424,
+    "token_max": 99.97074966878301,
+    "aufruf_mittel": 95.45454545454545,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 95.45454545454545,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 689.9926888708367,
+    "faktor_median": 642.9861111111111,
+    "faktor_min": 170.3111111111111,
+    "faktor_max": 3418.764705882353
+   },
+   "fastapi": {
+    "n": 7,
+    "tokens_ohne": 312984,
+    "tokens_mit": 1216,
+    "aufrufe_ohne": 103,
+    "aufrufe_mit": 7,
+    "token_gepoolt": 99.61148173708561,
+    "token_gepoolt_runsh": 99.6,
+    "aufruf_gepoolt": 93.20388349514563,
+    "aufruf_gepoolt_runsh": 93.2,
+    "token_mittel": 99.59540914464665,
+    "token_median": 99.6144820650352,
+    "token_min": 99.13771452490582,
+    "token_max": 99.89732596186393,
+    "aufruf_mittel": 88.83116883116882,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 80.0,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 257.3881578947368,
+    "faktor_median": 259.39130434782606,
+    "faktor_min": 115.97087378640776,
+    "faktor_max": 973.9560439560439
+   },
+   "tokio": {
+    "n": 5,
+    "tokens_ohne": 298027,
+    "tokens_mit": 10860,
+    "aufrufe_ohne": 110,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 96.35603485590232,
+    "token_gepoolt_runsh": 96.3,
+    "aufruf_gepoolt": 95.45454545454545,
+    "aufruf_gepoolt_runsh": 95.4,
+    "token_mittel": 95.36884385708113,
+    "token_median": 99.8267107976502,
+    "token_min": 83.87651281098283,
+    "token_max": 99.99236330312596,
+    "aufruf_mittel": 95.45454545454545,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 95.45454545454545,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 27.442633517495395,
+    "faktor_median": 577.07,
+    "faktor_min": 6.20213225759977,
+    "faktor_max": 13094.666666666666
+   },
+   "zod": {
+    "n": 6,
+    "tokens_ohne": 624280,
+    "tokens_mit": 10498,
+    "aufrufe_ohne": 114,
+    "aufrufe_mit": 6,
+    "token_gepoolt": 98.31838277695906,
+    "token_gepoolt_runsh": 98.3,
+    "aufruf_gepoolt": 94.73684210526315,
+    "aufruf_gepoolt_runsh": 94.7,
+    "token_mittel": 99.02511559320232,
+    "token_median": 99.77214168893761,
+    "token_min": 94.96072646079624,
+    "token_max": 99.98803851597854,
+    "aufruf_mittel": 92.04545454545455,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 75.0,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 59.46656506001143,
+    "faktor_median": 439.4324742268041,
+    "faktor_min": 19.84413015527643,
+    "faktor_max": 8360.166666666666
+   }
+  },
+  "mitschnitt": {
+   "gin/callers": {
+    "glob": 5003,
+    "grep": 4102,
+    "read": 73132,
+    "read_count": 13,
+    "files_txt": 13,
+    "myc_zeichen": 1492,
+    "myc_bytes": 1492,
+    "myc_zeilen": 47,
+    "no_results": false,
+    "nur_grep_tokens": 1025
+   },
+   "gin/classes": {
+    "glob": 5003,
+    "grep": 19129,
+    "read": 57598,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 359,
+    "myc_bytes": 359,
+    "myc_zeilen": 33,
+    "no_results": false,
+    "nur_grep_tokens": 4782
+   },
+   "gin/blast_radius": {
+    "glob": 5003,
+    "grep": 228,
+    "read": 7409,
+    "read_count": 1,
+    "files_txt": 1,
+    "myc_zeichen": 108,
+    "myc_bytes": 108,
+    "myc_zeilen": 5,
+    "no_results": false,
+    "nur_grep_tokens": 57
+   },
+   "gin/call_graph": {
+    "glob": 5003,
+    "grep": 2337,
+    "read": 27585,
+    "read_count": 5,
+    "files_txt": 5,
+    "myc_zeichen": 220,
+    "myc_bytes": 220,
+    "myc_zeilen": 11,
+    "no_results": false,
+    "nur_grep_tokens": 584
+   },
+   "gin/error_types": {
+    "glob": 5003,
+    "grep": 77569,
+    "read": 63381,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 672,
+    "myc_bytes": 672,
+    "myc_zeilen": 23,
+    "no_results": false,
+    "nur_grep_tokens": 19392
+   },
+   "express/callers": {
+    "glob": 19739,
+    "grep": 188,
+    "read": 6238,
+    "read_count": 2,
+    "files_txt": 2,
+    "myc_zeichen": 12,
+    "myc_bytes": 12,
+    "myc_zeilen": 1,
+    "no_results": true,
+    "nur_grep_tokens": 47
+   },
+   "express/classes": {
+    "glob": 19739,
+    "grep": 185,
+    "read": 10984,
+    "read_count": 1,
+    "files_txt": 1,
+    "myc_zeichen": 12,
+    "myc_bytes": 12,
+    "myc_zeilen": 1,
+    "no_results": true,
+    "nur_grep_tokens": 46
+   },
+   "express/blast_radius": {
+    "glob": 19739,
+    "grep": 9214,
+    "read": 40980,
+    "read_count": 11,
+    "files_txt": 12,
+    "myc_zeichen": 12,
+    "myc_bytes": 12,
+    "myc_zeilen": 1,
+    "no_results": true,
+    "nur_grep_tokens": 2303
+   },
+   "express/call_graph": {
+    "glob": 19739,
+    "grep": 262,
+    "read": 1636,
+    "read_count": 1,
+    "files_txt": 1,
+    "myc_zeichen": 92,
+    "myc_bytes": 92,
+    "myc_zeilen": 4,
+    "no_results": false,
+    "nur_grep_tokens": 65
+   },
+   "express/error_types": {
+    "glob": 19739,
+    "grep": 23090,
+    "read": 62247,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 224,
+    "myc_bytes": 224,
+    "myc_zeilen": 11,
+    "no_results": false,
+    "nur_grep_tokens": 5772
+   },
+   "express/process_flow": {
+    "glob": 19739,
+    "grep": 20242,
+    "read": 74486,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 291,
+    "myc_bytes": 315,
+    "myc_zeilen": 11,
+    "no_results": false,
+    "nur_grep_tokens": 5060
+   },
+   "django/callers": {
+    "glob": 220629,
+    "grep": 32695,
+    "read": 117039,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 578,
+    "myc_bytes": 578,
+    "myc_zeilen": 21,
+    "no_results": false,
+    "nur_grep_tokens": 8173
+   },
+   "django/classes": {
+    "glob": 220629,
+    "grep": 1314804,
+    "read": 91899,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 478,
+    "myc_bytes": 478,
+    "myc_zeilen": 33,
+    "no_results": false,
+    "nur_grep_tokens": 328701
+   },
+   "django/blast_radius": {
+    "glob": 220629,
+    "grep": 127454,
+    "read": 111760,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 2702,
+    "myc_bytes": 2702,
+    "myc_zeilen": 81,
+    "no_results": false,
+    "nur_grep_tokens": 31863
+   },
+   "django/error_types": {
+    "glob": 220629,
+    "grep": 108761,
+    "read": 105165,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 933,
+    "myc_bytes": 933,
+    "myc_zeilen": 23,
+    "no_results": false,
+    "nur_grep_tokens": 27190
+   },
+   "django/call_graph": {
+    "glob": 220629,
+    "grep": 179835,
+    "read": 104979,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 242,
+    "myc_bytes": 242,
+    "myc_zeilen": 13,
+    "no_results": false,
+    "nur_grep_tokens": 44958
+   },
+   "fastapi/callers": {
+    "glob": 98678,
+    "grep": 1303,
+    "read": 20226,
+    "read_count": 3,
+    "files_txt": 3,
+    "myc_zeichen": 140,
+    "myc_bytes": 140,
+    "myc_zeilen": 6,
+    "no_results": false,
+    "nur_grep_tokens": 325
+   },
+   "fastapi/classes": {
+    "glob": 98678,
+    "grep": 86867,
+    "read": 11921,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 1004,
+    "myc_bytes": 1004,
+    "myc_zeilen": 33,
+    "no_results": false,
+    "nur_grep_tokens": 21716
+   },
+   "fastapi/blast_radius": {
+    "glob": 98678,
+    "grep": 1361,
+    "read": 19284,
+    "read_count": 3,
+    "files_txt": 3,
+    "myc_zeichen": 146,
+    "myc_bytes": 146,
+    "myc_zeilen": 5,
+    "no_results": false,
+    "nur_grep_tokens": 340
+   },
+   "fastapi/error_types": {
+    "glob": 98678,
+    "grep": 35941,
+    "read": 15372,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 1106,
+    "myc_bytes": 1106,
+    "myc_zeilen": 23,
+    "no_results": false,
+    "nur_grep_tokens": 8985
+   },
+   "fastapi/call_graph": {
+    "glob": 98678,
+    "grep": 193091,
+    "read": 62752,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 367,
+    "myc_bytes": 367,
+    "myc_zeilen": 12,
+    "no_results": false,
+    "nur_grep_tokens": 48272
+   },
+   "fastapi/semantic": {
+    "glob": 98678,
+    "grep": 80685,
+    "read": 11757,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 1648,
+    "myc_bytes": 1690,
+    "myc_zeilen": 19,
+    "no_results": false,
+    "nur_grep_tokens": 20171
+   },
+   "fastapi/process_flow": {
+    "glob": 98678,
+    "grep": 1361,
+    "read": 19284,
+    "read_count": 3,
+    "files_txt": 3,
+    "myc_zeichen": 461,
+    "myc_bytes": 505,
+    "myc_zeilen": 14,
+    "no_results": false,
+    "nur_grep_tokens": 340
+   },
+   "tokio/callers": {
+    "glob": 53535,
+    "grep": 21461,
+    "read": 97202,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 27765,
+    "myc_bytes": 27765,
+    "myc_zeilen": 790,
+    "no_results": false,
+    "nur_grep_tokens": 5365
+   },
+   "tokio/classes": {
+    "glob": 53535,
+    "grep": 103939,
+    "read": 73354,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 402,
+    "myc_bytes": 402,
+    "myc_zeilen": 33,
+    "no_results": false,
+    "nur_grep_tokens": 25984
+   },
+   "tokio/blast_radius": {
+    "glob": 53535,
+    "grep": 96660,
+    "read": 68837,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 14716,
+    "myc_bytes": 14716,
+    "myc_zeilen": 396,
+    "no_results": false,
+    "nur_grep_tokens": 24165
+   },
+   "tokio/call_graph": {
+    "glob": 53535,
+    "grep": 43273,
+    "read": 60329,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 12,
+    "myc_bytes": 12,
+    "myc_zeilen": 1,
+    "no_results": true,
+    "nur_grep_tokens": 10818
+   },
+   "tokio/error_types": {
+    "glob": 53535,
+    "grep": 287145,
+    "read": 72237,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 548,
+    "myc_bytes": 548,
+    "myc_zeilen": 23,
+    "no_results": false,
+    "nur_grep_tokens": 71786
+   },
+   "zod/callers": {
+    "glob": 34688,
+    "grep": 259027,
+    "read": 59493,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 777,
+    "myc_bytes": 777,
+    "myc_zeilen": 31,
+    "no_results": false,
+    "nur_grep_tokens": 64756
+   },
+   "zod/classes": {
+    "glob": 34688,
+    "grep": 15210,
+    "read": 102635,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 363,
+    "myc_bytes": 363,
+    "myc_zeilen": 33,
+    "no_results": false,
+    "nur_grep_tokens": 3802
+   },
+   "zod/blast_radius": {
+    "glob": 34688,
+    "grep": 7207,
+    "read": 11106,
+    "read_count": 2,
+    "files_txt": 2,
+    "myc_zeichen": 159,
+    "myc_bytes": 159,
+    "myc_zeilen": 7,
+    "no_results": false,
+    "nur_grep_tokens": 1801
+   },
+   "zod/call_graph": {
+    "glob": 34688,
+    "grep": 703922,
+    "read": 63967,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 98,
+    "myc_bytes": 98,
+    "myc_zeilen": 5,
+    "no_results": false,
+    "nur_grep_tokens": 175980
+   },
+   "zod/error_types": {
+    "glob": 34688,
+    "grep": 210802,
+    "read": 87739,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 160,
+    "myc_bytes": 160,
+    "myc_zeilen": 7,
+    "no_results": false,
+    "nur_grep_tokens": 52700
+   },
+   "zod/process_flow": {
+    "glob": 34688,
+    "grep": 703922,
+    "read": 63967,
+    "read_count": 20,
+    "files_txt": 20,
+    "myc_zeichen": 40445,
+    "myc_bytes": 45745,
+    "myc_zeilen": 1339,
+    "no_results": false,
+    "nur_grep_tokens": 175980
+   }
+  },
+  "zusammensetzung_ohne_pct": {
+   "glob": 26.62221802999538,
+   "grep": 52.65957628722049,
+   "read": 20.718205682784124
+  },
+  "nur_grep": {
+   "myc_kleiner": 33,
+   "ausnahmen": [
+    "tokio/callers"
+   ],
+   "gepoolt": 97.93204413963248,
+   "median_red": 98.04815886072863,
+   "median_faktor": 51.344537471364674,
+   "min_red": -29.375582479030754
+  },
+  "no_results": [
+   "express/callers",
+   "express/classes",
+   "express/blast_radius",
+   "tokio/call_graph"
+  ],
+  "am_limit": [],
+  "wiederholung_identisch": {
+   "gin": true,
+   "express": true,
+   "tokio": true
+  },
+  "embeddings_gegenprobe_identisch": {
+   "zod": true
+  },
+  "express_js_variante": {
+   "express": {
+    "n": 6,
+    "tokens_ohne": 71036,
+    "tokens_mit": 160,
+    "aufrufe_ohne": 65,
+    "aufrufe_mit": 6,
+    "token_gepoolt": 99.77476209246015,
+    "token_gepoolt_runsh": 99.7,
+    "aufruf_gepoolt": 90.76923076923077,
+    "aufruf_gepoolt_runsh": 90.7,
+    "token_mittel": 99.72640596943964,
+    "token_median": 99.82180923102925,
+    "token_min": 99.1112828438949,
+    "token_max": 99.97431506849314,
+    "aufruf_mittel": 79.04040404040404,
+    "aufruf_median": 83.33333333333333,
+    "aufruf_min": 50.0,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 443.975,
+    "faktor_median": 585.3720238095239,
+    "faktor_min": 112.52173913043478,
+    "faktor_max": 3893.3333333333335
+   },
+   "gesamt": {
+    "n": 34,
+    "tokens_ohne": 2245078,
+    "tokens_mit": 24677,
+    "aufrufe_ohne": 571,
+    "aufrufe_mit": 34,
+    "token_gepoolt": 98.90083997081615,
+    "token_gepoolt_runsh": 98.9,
+    "aufruf_gepoolt": 94.04553415061297,
+    "aufruf_gepoolt_runsh": 94.0,
+    "token_mittel": 98.8615483314417,
+    "token_median": 99.77214168893761,
+    "token_min": 83.87651281098283,
+    "token_max": 99.99236330312596,
+    "aufruf_mittel": 89.39712248535778,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 50.0,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 90.9785630344045,
+    "faktor_median": 439.4324742268041,
+    "faktor_min": 6.20213225759977,
+    "faktor_max": 13094.666666666666
+   }
+  },
+  "zeitstempel": {
+   "gin": {
+    "datei": "2026-10-16T23:40:38Z",
+    "log_start": "2026-10-16T23:40:29Z",
+    "log_ende": "2026-10-16T23:40:38Z",
+    "rc": 0,
+    "sekunden": 9,
+    "version": "0.3.2"
+   },
+   "express": {
+    "datei": "2026-10-16T23:40:29Z",
+    "log_start": "2026-10-16T23:40:25Z",
+    "log_ende": "2026-10-16T23:40:29Z",
+    "rc": 0,
+    "sekunden": 4,
+    "version": "0.3.2"
+   },
+   "django": {
+    "datei": "2026-10-16T23:40:25Z",
+    "log_start": "2026-10-16T22:42:24Z",
+    "log_ende": "2026-10-16T23:40:25Z",
+    "rc": 0,
+    "sekunden": 3481,
+    "version": "0.3.2"
+   },
+   "fastapi": {
+    "datei": "2026-10-16T22:42:24Z",
+    "log_start": "2026-10-16T22:32:44Z",
+    "log_ende": "2026-10-16T22:42:24Z",
+    "rc": 0,
+    "sekunden": 580,
+    "version": "0.3.2"
+   },
+   "tokio": {
+    "datei": "2026-10-16T23:43:33Z",
+    "log_start": "2026-10-16T23:40:38Z",
+    "log_ende": "2026-10-16T23:43:33Z",
+    "rc": 0,
+    "sekunden": 175,
+    "version": "0.3.2"
+   },
+   "zod": {
+    "datei": "2026-10-16T22:32:43Z",
+    "log_start": "2026-10-16T22:27:54Z",
+    "log_ende": "2026-10-16T22:32:44Z",
+    "rc": 0,
+    "sekunden": 290,
+    "version": "0.3.2"
+   }
+  }
+ },
+ "befunde": [
+  {
+   "ok": false,
+   "text": "v0.1.0 fastapi: Fragen ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph', 'semantic'] == repos.toml ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph', 'semantic', 'process_flow']"
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 fastapi: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 fastapi: Aggregatsummen (289105, 930, 95, 6) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 fastapi: Aggregat-% Datei 99.6/93.6 vs run.sh-Formel 99.6/93.6 (exakt 99.678/93.684)"
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 fastapi: questions_tested 6 == 6"
+  },
+  {
+   "ok": false,
+   "text": "v0.1.0 zod: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow']"
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 zod: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 zod: Aggregatsummen (328994, 219, 92, 5) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 zod: Aggregat-% Datei 99.9/94.5 vs run.sh-Formel 99.9/94.5 (exakt 99.933/94.565)"
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 zod: questions_tested 5 == 5"
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 aggregate.json: Summen aus Einzeldateien == Datei (618099->1149, 187->11, n=11)"
+  },
+  {
+   "ok": true,
+   "text": "v0.1.0 aggregate.json: 99.8/94.1 == run.sh-Formel 99.8/94.1"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 gin: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types']"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 gin: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 gin: Aggregatsummen (67298, 213, 80, 5) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 gin: Aggregat-% Datei 99.6/93.7 vs run.sh-Formel 99.6/93.7 (exakt 99.683/93.750)"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 gin: questions_tested 5 == 5"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 express: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow']"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 express: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 express: Aggregatsummen (116516, 234, 92, 6) == Datei"
+  },
+  {
+   "ok": false,
+   "text": "v0.2.0 express: Aggregat-% Datei 99.8/93.4 vs run.sh-Formel 99.7/93.4 (exakt 99.799/93.478)"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 express: questions_tested 6 == 6"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 django: Fragen ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph'] == repos.toml ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph']"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 django: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 django: Aggregatsummen (556417, 930, 98, 5) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 django: Aggregat-% Datei 99.8/94.8 vs run.sh-Formel 99.8/94.8 (exakt 99.833/94.898)"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 django: questions_tested 5 == 5"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 fastapi: Fragen ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph', 'semantic', 'process_flow'] == repos.toml ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph', 'semantic', 'process_flow']"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 fastapi: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 fastapi: Aggregatsummen (317328, 938, 98, 7) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 fastapi: Aggregat-% Datei 99.7/92.8 vs run.sh-Formel 99.7/92.8 (exakt 99.704/92.857)"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 fastapi: questions_tested 7 == 7"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 tokio: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types']"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 tokio: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 tokio: Aggregatsummen (147664, 436, 96, 5) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 tokio: Aggregat-% Datei 99.7/94.7 vs run.sh-Formel 99.7/94.7 (exakt 99.705/94.792)"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 tokio: questions_tested 5 == 5"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 zod: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow']"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 zod: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 zod: Aggregatsummen (487133, 227, 114, 6) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 zod: Aggregat-% Datei 99.9/94.7 vs run.sh-Formel 99.9/94.7 (exakt 99.953/94.737)"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 zod: questions_tested 6 == 6"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 aggregate.json: Summen aus Einzeldateien == Datei (1692356->2978, 578->34, n=34)"
+  },
+  {
+   "ok": true,
+   "text": "v0.2.0 aggregate.json: 99.8/94.1 == run.sh-Formel 99.8/94.1"
+  },
+  {
+   "ok": true,
+   "text": "latest.json ist byte-gleich mit results/v0.2.0/aggregate.json"
+  },
+  {
+   "ok": true,
+   "text": "neu gin: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types']"
+  },
+  {
+   "ok": true,
+   "text": "neu gin: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "neu gin: Aggregatsummen (89370, 712, 69, 5) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "neu gin: Aggregat-% Datei 99.2/92.7 vs run.sh-Formel 99.2/92.7 (exakt 99.203/92.754)"
+  },
+  {
+   "ok": true,
+   "text": "neu gin: questions_tested 5 == 5"
+  },
+  {
+   "ok": true,
+   "text": "neu express: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow']"
+  },
+  {
+   "ok": true,
+   "text": "neu express: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "neu express: Aggregatsummen (92045, 160, 67, 6) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "neu express: Aggregat-% Datei 99.8/91.0 vs run.sh-Formel 99.8/91.0 (exakt 99.826/91.045)"
+  },
+  {
+   "ok": true,
+   "text": "neu express: questions_tested 6 == 6"
+  },
+  {
+   "ok": true,
+   "text": "neu django: Fragen ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph'] == repos.toml ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph']"
+  },
+  {
+   "ok": true,
+   "text": "neu django: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "neu django: Aggregatsummen (849381, 1231, 110, 5) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "neu django: Aggregat-% Datei 99.8/95.4 vs run.sh-Formel 99.8/95.4 (exakt 99.855/95.455)"
+  },
+  {
+   "ok": true,
+   "text": "neu django: questions_tested 5 == 5"
+  },
+  {
+   "ok": true,
+   "text": "neu fastapi: Fragen ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph', 'semantic', 'process_flow'] == repos.toml ['callers', 'classes', 'blast_radius', 'error_types', 'call_graph', 'semantic', 'process_flow']"
+  },
+  {
+   "ok": true,
+   "text": "neu fastapi: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "neu fastapi: Aggregatsummen (312984, 1216, 103, 7) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "neu fastapi: Aggregat-% Datei 99.6/93.2 vs run.sh-Formel 99.6/93.2 (exakt 99.611/93.204)"
+  },
+  {
+   "ok": true,
+   "text": "neu fastapi: questions_tested 7 == 7"
+  },
+  {
+   "ok": true,
+   "text": "neu tokio: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types']"
+  },
+  {
+   "ok": true,
+   "text": "neu tokio: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "neu tokio: Aggregatsummen (298027, 10860, 110, 5) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "neu tokio: Aggregat-% Datei 96.3/95.4 vs run.sh-Formel 96.3/95.4 (exakt 96.356/95.455)"
+  },
+  {
+   "ok": true,
+   "text": "neu tokio: questions_tested 5 == 5"
+  },
+  {
+   "ok": true,
+   "text": "neu zod: Fragen ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow'] == repos.toml ['callers', 'classes', 'blast_radius', 'call_graph', 'error_types', 'process_flow']"
+  },
+  {
+   "ok": true,
+   "text": "neu zod: Einzelwerte folgen der run.sh-Formel (abgeschnitten) "
+  },
+  {
+   "ok": true,
+   "text": "neu zod: Aggregatsummen (624280, 10498, 114, 6) == Datei"
+  },
+  {
+   "ok": true,
+   "text": "neu zod: Aggregat-% Datei 98.3/94.7 vs run.sh-Formel 98.3/94.7 (exakt 98.318/94.737)"
+  },
+  {
+   "ok": true,
+   "text": "neu zod: questions_tested 6 == 6"
+  },
+  {
+   "ok": true,
+   "text": "neu: aggregate.json (run.sh) == Summe der 6 Repo-Dateien"
+  },
+  {
+   "ok": true,
+   "text": "neu: run.sh selbst weist 98.9 % / 94.0 % aus (abgeschnitten)"
+  },
+  {
+   "ok": true,
+   "text": "neu: alle 34 Zahlen aus dem Mitschnitt (bytes.txt, myc.txt) nachgebildet "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json gesamt_neu == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json gesamt_veroeffentlicht == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[django].neu == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[django].veroeffentlicht == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[express].neu == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[express].veroeffentlicht == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[gin].neu == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[gin].veroeffentlicht == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[tokio].neu == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[tokio].veroeffentlicht == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[fastapi].neu == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[fastapi].veroeffentlicht == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[zod].neu == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json je_repo[zod].veroeffentlicht == eigene Rechnung "
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json enthaelt genau die 34 Fragen der run.sh-Dateien (34)"
+  },
+  {
+   "ok": true,
+   "text": "neulauf.json fragen[*] == run.sh-Dateien "
+  }
+ ],
+ "gleichwertigkeit_zusatz": {
+  "auswahl": "random.seed(20261017); random.sample(sorted(21 ungepruefte Fragen), 3)",
+  "fragen": {
+   "fastapi/call_graph": {
+    "myc": "beantwortet",
+    "ohne": "teilweise",
+    "referenz": "get_openapi (fastapi/openapi/utils.py:585-679) ruft get_fields_from_routes, get_flat_models_from_fields, get_model_name_map, get_definitions, routing.iter_route_contexts, _get_api_route_for_openapi, get_openapi_path, jsonable_encoder, OpenAPI",
+    "myc_ausgabe": "genau diese 9, kein Rauschen; mit eigenem Build reproduziert",
+    "ohne_begruendung": "grep openapi zeigt 2 der 9 Aufrufe als Zeilen; utils.py nur bis Zeile 200 gelesen; 12/20 gelesene Dateien docs_src"
+   },
+   "django/blast_radius": {
+    "myc": "teilweise",
+    "ohne": "teilweise",
+    "referenz": "direkte Aufrufer django.urls.resolve in django/: is_valid_path, translate_url (urls/base.py), add_preserved_filters (admin_urls.py), catch_all_view (admin/sites.py), get_caller (views/debug.py), Client.request/AsyncClient.request (test/client.py); URLResolver.resolve: resolve_request (core/handlers/base.py), resolve (urls/base.py)",
+    "myc_ausgabe": "alle enthalten, vermischt mit Variable.resolve- und pathlib.Path.resolve-Aufrufern, 49/78 Testmethoden, keine Fundorte (Mitschnitt, nicht neu erzeugt)",
+    "ohne_begruendung": "1021 grep-Zeilen (359 tests), 65 Nicht-Test-Aufrufzeilen mit Datei, Funktion unbekannt; sites.py nur bis Zeile 200, urls/base.py nicht gelesen"
+   },
+   "tokio/blast_radius": {
+    "myc": "teilweise",
+    "ohne": "teilweise",
+    "referenz": "44 Funktionen in */src (inkl. Inline-Tests) mit block_on-Aufruf, ermittelt per grep + umschliessendes fn",
+    "myc_ausgabe": "393 Namen ohne Fundort; 42/44 enthalten, fehlen spawn_thread (in cfg_rt_multi_thread!) und parse_knobs (#[tokio::main]-Expansion, tokio-macros/src/entry.rs:519); mit eigenem Build reproduziert",
+    "ohne_begruendung": "628 Code-Aufrufzeilen mit Datei inkl. Makrozeile, ohne umschliessende Funktion; gelesen 17 benches + 3 examples"
+   }
+  },
+  "ergebnis_3": {
+   "myc": {
+    "beantwortet": 1,
+    "teilweise": 2,
+    "nicht": 0
+   },
+   "ohne": {
+    "beantwortet": 0,
+    "teilweise": 3,
+    "nicht": 0
+   }
+  },
+  "ergebnis_16": {
+   "myc": {
+    "beantwortet": 4,
+    "teilweise": 6,
+    "nicht": 6
+   },
+   "ohne": {
+    "beantwortet": 4,
+    "teilweise": 10,
+    "nicht": 2
+   }
+  }
+ },
+ "wiederholung_pruefung": {
+  "ohne_seite_17_fragen_fastapi_tokio_django": "17/17 bytegleich (pruefung_ohne.sh, Originalzeilen run.sh)",
+  "mit_seite_12_fragen_tokio_fastapi": "12/12 gleich (eigener Build c5dff11, myc 0.3.2, --skip-embeddings, eigenes HOME); Symbole/Beziehungen tokio 11202/35247, fastapi 22668/82241; Analyse 184 s / 443 s",
+  "historische_dateizahlen_tree_api": {
+   "django@09f27cc3": "2894 .py",
+   "express@8e022edc": "213 Dateien, 141 .js",
+   "gin@d3ffc998": "99 .go",
+   "tokio@d7db722b": "774 .rs",
+   "fastapi@7e7c4d09": "1118 .py",
+   "zod@c7805073": "361 .ts"
+  },
+  "faktor_ohne_leere": {
+   "n": 30,
+   "median": 369.0,
+   "gepoolt_pct": 98.88
+  }
+ }
+}

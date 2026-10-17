@@ -1,0 +1,24 @@
+{
+  "repo": "fastapi",
+  "language": "python",
+  "url": "https://github.com/fastapi/fastapi.git",
+  "category": "Framework",
+  "stars": "82k",
+  "timestamp": "2026-10-16T22:42:24Z",
+  "version": "0.3.2",
+  "stats": {
+    "files": 1168,
+    "symbols": 22668,
+    "relationships": 82241
+  },
+  "questions": [{"id":"callers","label":"Who calls solve_dependencies?","tokens_without":30051,"tokens_with":35,"token_reduction_pct":99.8,"tool_calls_without":5,"tool_calls_with":1,"call_reduction_pct":80.0,"status":"PASS"},{"id":"classes","label":"List all classes","tokens_without":49366,"tokens_with":251,"token_reduction_pct":99.4,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"blast_radius","label":"Blast radius of get_request_handler","tokens_without":29830,"tokens_with":36,"token_reduction_pct":99.8,"tool_calls_without":5,"tool_calls_with":1,"call_reduction_pct":80.0,"status":"PASS"},{"id":"error_types","label":"Find all Exception types","tokens_without":37497,"tokens_with":276,"token_reduction_pct":99.2,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"call_graph","label":"What does get_openapi call?","tokens_without":88630,"tokens_with":91,"token_reduction_pct":99.8,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"semantic","label":"Search dependency injection code","tokens_without":47780,"tokens_with":412,"token_reduction_pct":99.1,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"process_flow","label":"Trace request handler flow","tokens_without":29830,"tokens_with":115,"token_reduction_pct":99.6,"tool_calls_without":5,"tool_calls_with":1,"call_reduction_pct":80.0,"status":"PASS"}],
+  "aggregate": {
+    "total_tokens_without": 312984,
+    "total_tokens_with": 1216,
+    "token_reduction_pct": 99.6,
+    "total_calls_without": 103,
+    "total_calls_with": 7,
+    "call_reduction_pct": 93.2,
+    "questions_tested": 7
+  }
+}

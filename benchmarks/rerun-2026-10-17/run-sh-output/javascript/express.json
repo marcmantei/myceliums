@@ -1,0 +1,24 @@
+{
+  "repo": "express",
+  "language": "javascript",
+  "url": "https://github.com/expressjs/express.git",
+  "category": "Framework",
+  "stars": "66k",
+  "timestamp": "2026-10-16T23:40:29Z",
+  "version": "0.3.2",
+  "stats": {
+    "files": 322,
+    "symbols": 2011,
+    "relationships": 2119
+  },
+  "questions": [{"id":"callers","label":"Who calls app.handle?","tokens_without":6541,"tokens_with":3,"token_reduction_pct":99.9,"tool_calls_without":4,"tool_calls_with":1,"call_reduction_pct":75.0,"status":"PASS"},{"id":"classes","label":"List all classes","tokens_without":7727,"tokens_with":3,"token_reduction_pct":99.9,"tool_calls_without":3,"tool_calls_with":1,"call_reduction_pct":66.6,"status":"PASS"},{"id":"blast_radius","label":"Blast radius of Router","tokens_without":17483,"tokens_with":3,"token_reduction_pct":99.9,"tool_calls_without":13,"tool_calls_with":1,"call_reduction_pct":92.3,"status":"PASS"},{"id":"call_graph","label":"What does createApplication call?","tokens_without":5409,"tokens_with":23,"token_reduction_pct":99.5,"tool_calls_without":3,"tool_calls_with":1,"call_reduction_pct":66.6,"status":"PASS"},{"id":"error_types","label":"Find all Error types","tokens_without":26269,"tokens_with":56,"token_reduction_pct":99.7,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"},{"id":"process_flow","label":"Trace request handling flow","tokens_without":28616,"tokens_with":72,"token_reduction_pct":99.7,"tool_calls_without":22,"tool_calls_with":1,"call_reduction_pct":95.4,"status":"PASS"}],
+  "aggregate": {
+    "total_tokens_without": 92045,
+    "total_tokens_with": 160,
+    "token_reduction_pct": 99.8,
+    "total_calls_without": 67,
+    "total_calls_with": 6,
+    "call_reduction_pct": 91.0,
+    "questions_tested": 6
+  }
+}

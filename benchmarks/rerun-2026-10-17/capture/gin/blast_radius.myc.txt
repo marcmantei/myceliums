@@ -1,0 +1,6 @@
+s.name | s.kind
+----------------------------------------
+ServeHTTP | Method
+HandleContext | Method
+
+2 row(s)

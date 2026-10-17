@@ -1,0 +1,6 @@
+s.kind | s.name
+----------------------------------------
+Function | get_request_handler_with_endpoint_wrapper
+Method | get_route_handler
+
+2 row(s)

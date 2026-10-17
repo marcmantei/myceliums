@@ -1,0 +1,20 @@
+Search results for 'dependency injection' in fastapi:
+
+  1. Dependency Injection { #dependency-injection } (Section) — docs/hi/docs/tutorial/background-tasks.md:48-63  [score: 17.18]
+     ## Dependency Injection { #dependency-injection }
+  2. Dependency Injection { #dependency-injection } (Section) — docs/hi/docs/features.md:137-147  [score: 17.18]
+     ### Dependency Injection { #dependency-injection }
+  3. Dependency Injection { #dependency-injection } (Section) — docs/de/docs/tutorial/background-tasks.md:48-63  [score: 17.18]
+     ## Dependency Injection { #dependency-injection }
+  4. Dependency Injection { #dependency-injection } (Section) — docs/de/docs/features.md:137-147  [score: 17.18]
+     ### Dependency Injection { #dependency-injection }
+  5. Dependency Injection { #dependency-injection } (Section) — docs/en/docs/tutorial/background-tasks.md:48-63  [score: 17.18]
+     ## Dependency Injection { #dependency-injection }
+  6. Dependency Injection { #dependency-injection } (Section) — docs/en/docs/features.md:138-148  [score: 17.18]
+     ### Dependency Injection { #dependency-injection }
+  7. Dependency Injection { #dependency-injection } (Section) — docs/tr/docs/tutorial/background-tasks.md:48-63  [score: 17.18]
+     ## Dependency Injection { #dependency-injection }
+  8. Dependency Injection { #dependency-injection } (Section) — docs/tr/docs/features.md:137-147  [score: 17.18]
+     ### Dependency Injection { #dependency-injection }
+  9. 依賴注入（Dependency Injection） { #dependency-injection } (Section) — docs/zh-hant/docs/features.md:137-147  [score: 17.10]
+     ### 依賴注入（Dependency Injection） { #dependency-injection }

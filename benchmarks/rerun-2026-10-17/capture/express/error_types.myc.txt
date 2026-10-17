@@ -1,0 +1,12 @@
+s.name | s.kind
+----------------------------------------
+parseError | Function
+error | Variable
+error | Function
+createError | Variable
+error | Function
+createError | Variable
+onerror | Function
+logerror | Function
+
+8 row(s)

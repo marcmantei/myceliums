@@ -1,0 +1,8 @@
+s.name | s.kind
+----------------------------------------
+_parse | Function
+_getInvalidInput | Method
+handleResults | Function
+handleParsed | Function
+
+4 row(s)

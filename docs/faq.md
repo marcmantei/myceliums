@@ -121,7 +121,7 @@ See [docs/reference/cypher-queries.md](reference/cypher-queries.md) for the full
 
 No. The AI assistant must actively call myceliums tools (like `context_search` or `symbol_context`) instead of reading files with grep and cat. Myceliums returns structured results with exact locations, types, and relationships in a single call, which is far more token-efficient than multiple rounds of file reading.
 
-The setup wizard can add instructions to your editor configuration that guide the AI to prefer myceliums tools. See [docs/guides/token-savings.md](guides/token-savings.md) for details on how this works and how to measure the savings.
+The setup wizard can add instructions to your editor configuration that guide the AI to prefer myceliums tools. See [docs/guides/token-savings.md](guides/token-savings.md) for details on how this works.
 
 ---
 

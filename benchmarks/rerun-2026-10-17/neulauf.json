@@ -1,0 +1,1992 @@
+{
+ "erzeugt": "2026-10-16T23:43:42Z",
+ "myc_version": "myc 0.3.2",
+ "myceliums_commit": "c5dff11cbfbd3e8ec5b68d31f09b7f8195f3430a",
+ "zuordnung_repo_variante": {
+  "zod": "skip",
+  "fastapi": "skip",
+  "django": "skip",
+  "express": "skip",
+  "gin": "skip",
+  "tokio": "skip"
+ },
+ "methode": "benchmarks/run.sh (minimal gepatcht, s. skripte/run-nachrechnung.diff); ohne = find + grep -r + bis zu 20 gelesene Dateien (Zeichen/4); mit = Ausgabe eines myc-Befehls (Zeichen/4); keine Antwortpruefung im Skript",
+ "gesamt_neu": {
+  "n": 34,
+  "tokens_ohne": 2266087,
+  "tokens_mit": 24677,
+  "aufrufe_ohne": 573,
+  "aufrufe_mit": 34,
+  "token_gepoolt": 98.91103033555198,
+  "aufruf_gepoolt": 94.06631762652705,
+  "token_mittel": 98.88065749189418,
+  "token_median": 99.77214168893761,
+  "token_min": 83.87651281098283,
+  "token_max": 99.99236330312596,
+  "aufruf_mittel": 89.90617225911343,
+  "aufruf_median": 95.45454545454545,
+  "aufruf_min": 66.66666666666666,
+  "aufruf_max": 95.45454545454545,
+  "faktor_gepoolt": 91.82992259999189,
+  "faktor_median": 439.4324742268041
+ },
+ "gesamt_neu_nur_fastapi_zod": {
+  "n": 13,
+  "tokens_ohne": 937264,
+  "tokens_mit": 11714,
+  "aufrufe_ohne": 217,
+  "aufrufe_mit": 13,
+  "token_gepoolt": 98.75019204834497,
+  "aufruf_gepoolt": 94.00921658986175,
+  "token_mittel": 99.33219673628773,
+  "token_median": 99.76398395090867,
+  "token_min": 94.96072646079624,
+  "token_max": 99.98803851597854,
+  "aufruf_mittel": 90.31468531468532,
+  "aufruf_median": 95.45454545454545,
+  "aufruf_min": 75.0,
+  "aufruf_max": 95.45454545454545,
+  "faktor_gepoolt": 80.01229298275568,
+  "faktor_median": 423.7
+ },
+ "gesamt_neu_nur_fragen_mit_treffer": {
+  "n": 30,
+  "tokens_ohne": 2195052,
+  "tokens_mit": 24665,
+  "aufrufe_ohne": 531,
+  "aufrufe_mit": 30,
+  "token_gepoolt": 98.8763364148093,
+  "aufruf_gepoolt": 94.35028248587571,
+  "token_mittel": 98.73506134646937,
+  "token_median": 99.72702644252325,
+  "token_min": 83.87651281098283,
+  "token_max": 99.98803851597854,
+  "aufruf_mittel": 90.9126984126984,
+  "aufruf_median": 95.45454545454545,
+  "aufruf_min": 66.66666666666666,
+  "aufruf_max": 95.45454545454545,
+  "faktor_gepoolt": 88.99460774376647,
+  "faktor_median": 368.5940170940171
+ },
+ "sensitivitaet_ohne_gleich_nur_grep": {
+  "n": 34,
+  "tokens_ohne": 1193304,
+  "tokens_mit": 24677,
+  "aufrufe_ohne": 34,
+  "aufrufe_mit": 34,
+  "token_gepoolt": 97.93204413963248,
+  "aufruf_gepoolt": 0.0,
+  "token_mittel": 89.14311491398344,
+  "token_median": 98.04815886072863,
+  "token_min": -29.375582479030754,
+  "token_max": 99.98636208660075,
+  "aufruf_mittel": 0.0,
+  "aufruf_median": 0.0,
+  "aufruf_min": 0.0,
+  "aufruf_max": 0.0,
+  "faktor_gepoolt": 48.35693155569964,
+  "faktor_median": 51.344537471364674
+ },
+ "gesamt_veroeffentlicht": {
+  "n": 34,
+  "tokens_ohne": 1692356,
+  "tokens_mit": 2978,
+  "aufrufe_ohne": 578,
+  "aufrufe_mit": 34,
+  "token_gepoolt": 99.82403229580538,
+  "aufruf_gepoolt": 94.11764705882352,
+  "token_mittel": 99.7454717191275,
+  "token_median": 99.81606374727542,
+  "token_min": 99.15796963946869,
+  "token_max": 99.99494115935981,
+  "aufruf_mittel": 90.94474153297682,
+  "aufruf_median": 95.45454545454545,
+  "aufruf_min": 66.66666666666666,
+  "aufruf_max": 95.45454545454545,
+  "faktor_gepoolt": 568.2860980523842,
+  "faktor_median": 543.6666666666667
+ },
+ "je_repo": {
+  "django": {
+   "neu": {
+    "n": 5,
+    "tokens_ohne": 849381,
+    "tokens_mit": 1231,
+    "aufrufe_ohne": 110,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 99.85507092812294,
+    "aufruf_gepoolt": 95.45454545454545,
+    "token_mittel": 99.79322148496759,
+    "token_median": 99.84447564531807,
+    "token_min": 99.41283924843424,
+    "token_max": 99.97074966878301,
+    "aufruf_mittel": 95.45454545454545,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 95.45454545454545,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 689.9926888708367,
+    "faktor_median": 642.9861111111111
+   },
+   "variante": "skip",
+   "sekunden": 3481,
+   "files": 2933,
+   "symbols": 46343,
+   "relationships": 395034,
+   "timestamp": "2026-10-16T23:40:25Z",
+   "commit": "d430084791a61b31cecec132bce3dca19194f7f2",
+   "commit_date": "2026-10-15T08:51:04+02:00",
+   "pub_files": 6492,
+   "pub_symbols": 38210,
+   "pub_relationships": 52417,
+   "pub_timestamp": "2026-04-09T12:00:00Z",
+   "status_mit": {
+    "ok": 5,
+    "kein_treffer": 0,
+    "leer": 0,
+    "fehler": 0
+   },
+   "veroeffentlicht": {
+    "n": 5,
+    "tokens_ohne": 556417,
+    "tokens_mit": 930,
+    "aufrufe_ohne": 98,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 99.83285916857321,
+    "aufruf_gepoolt": 94.89795918367348,
+    "token_mittel": 99.81848586693036,
+    "token_median": 99.83141598698816,
+    "token_min": 99.65852665215144,
+    "token_max": 99.93865960907561,
+    "aufruf_mittel": 94.36363636363636,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 90.0,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 598.2978494623655,
+    "faktor_median": 593.1760563380282
+   }
+  },
+  "express": {
+   "neu": {
+    "n": 6,
+    "tokens_ohne": 92045,
+    "tokens_mit": 160,
+    "aufrufe_ohne": 67,
+    "aufrufe_mit": 6,
+    "token_gepoolt": 99.8261719810962,
+    "aufruf_gepoolt": 91.04477611940298,
+    "token_mittel": 99.83469121200368,
+    "token_median": 99.87047821048756,
+    "token_min": 99.57478276945831,
+    "token_max": 99.98284047360293,
+    "aufruf_mittel": 81.92501942501943,
+    "aufruf_median": 83.65384615384616,
+    "aufruf_min": 66.66666666666666,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 575.28125,
+    "faktor_median": 1324.7113095238096
+   },
+   "variante": "skip",
+   "sekunden": 4,
+   "files": 322,
+   "symbols": 2011,
+   "relationships": 2119,
+   "timestamp": "2026-10-16T23:40:29Z",
+   "commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+   "commit_date": "2026-10-09T11:24:38-05:00",
+   "pub_files": 498,
+   "pub_symbols": 2841,
+   "pub_relationships": 3672,
+   "pub_timestamp": "2026-04-09T12:00:00Z",
+   "status_mit": {
+    "ok": 3,
+    "kein_treffer": 3,
+    "leer": 0,
+    "fehler": 0
+   },
+   "veroeffentlicht": {
+    "n": 6,
+    "tokens_ohne": 116516,
+    "tokens_mit": 234,
+    "aufrufe_ohne": 92,
+    "aufrufe_mit": 6,
+    "token_gepoolt": 99.79916921281198,
+    "aufruf_gepoolt": 93.47826086956522,
+    "token_mittel": 99.74712774938864,
+    "token_median": 99.81726038995349,
+    "token_min": 99.32732993381794,
+    "token_max": 99.93493113545169,
+    "aufruf_mittel": 91.89393939393939,
+    "aufruf_median": 92.72727272727272,
+    "aufruf_min": 87.5,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 497.9316239316239,
+    "faktor_median": 550.7641129032259
+   }
+  },
+  "gin": {
+   "neu": {
+    "n": 5,
+    "tokens_ohne": 89370,
+    "tokens_mit": 712,
+    "aufrufe_ohne": 69,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 99.2033120734027,
+    "aufruf_gepoolt": 92.7536231884058,
+    "token_mittel": 99.16106463407918,
+    "token_median": 99.37006070324132,
+    "token_min": 98.18570942166448,
+    "token_max": 99.56440877055599,
+    "aufruf_mittel": 87.32467532467533,
+    "aufruf_median": 93.33333333333333,
+    "aufruf_min": 66.66666666666666,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 125.51966292134831,
+    "faktor_median": 158.74545454545455
+   },
+   "variante": "skip",
+   "sekunden": 9,
+   "files": 99,
+   "symbols": 2174,
+   "relationships": 6499,
+   "timestamp": "2026-10-16T23:40:38Z",
+   "commit": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+   "commit_date": "2026-10-10T12:20:35+08:00",
+   "pub_files": 312,
+   "pub_symbols": 1847,
+   "pub_relationships": 2518,
+   "pub_timestamp": "2026-04-09T12:00:00Z",
+   "status_mit": {
+    "ok": 5,
+    "kein_treffer": 0,
+    "leer": 0,
+    "fehler": 0
+   },
+   "veroeffentlicht": {
+    "n": 5,
+    "tokens_ohne": 67298,
+    "tokens_mit": 213,
+    "aufrufe_ohne": 80,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 99.68349728075128,
+    "aufruf_gepoolt": 93.75,
+    "token_mittel": 99.61847938327854,
+    "token_median": 99.69352803317109,
+    "token_min": 99.15796963946869,
+    "token_max": 99.81612013484524,
+    "aufruf_mittel": 91.43939393939394,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 83.33333333333334,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 315.9530516431925,
+    "faktor_median": 326.29411764705884
+   }
+  },
+  "tokio": {
+   "neu": {
+    "n": 5,
+    "tokens_ohne": 298027,
+    "tokens_mit": 10860,
+    "aufrufe_ohne": 110,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 96.35603485590232,
+    "aufruf_gepoolt": 95.45454545454545,
+    "token_mittel": 95.36884385708113,
+    "token_median": 99.8267107976502,
+    "token_min": 83.87651281098283,
+    "token_max": 99.99236330312596,
+    "aufruf_mittel": 95.45454545454545,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 95.45454545454545,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 27.442633517495395,
+    "faktor_median": 577.07
+   },
+   "variante": "skip",
+   "sekunden": 175,
+   "files": 811,
+   "symbols": 11202,
+   "relationships": 35247,
+   "timestamp": "2026-10-16T23:43:33Z",
+   "commit": "cdd9dae3aa5056e23dc4d5bc4f852ab8fbf27aff",
+   "commit_date": "2026-10-16T13:15:35+02:00",
+   "pub_files": 1024,
+   "pub_symbols": 8493,
+   "pub_relationships": 11247,
+   "pub_timestamp": "2026-04-09T12:00:00Z",
+   "status_mit": {
+    "ok": 4,
+    "kein_treffer": 1,
+    "leer": 0,
+    "fehler": 0
+   },
+   "veroeffentlicht": {
+    "n": 5,
+    "tokens_ohne": 147664,
+    "tokens_mit": 436,
+    "aufrufe_ohne": 96,
+    "aufrufe_mit": 5,
+    "token_gepoolt": 99.70473507422255,
+    "aufruf_gepoolt": 94.79166666666666,
+    "token_mittel": 99.68521070149878,
+    "token_median": 99.78900782214903,
+    "token_min": 99.3278540084976,
+    "token_max": 99.85233066785545,
+    "aufruf_mittel": 93.86363636363636,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 87.5,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 338.6788990825688,
+    "faktor_median": 473.9512195121951
+   }
+  },
+  "fastapi": {
+   "neu": {
+    "n": 7,
+    "tokens_ohne": 312984,
+    "tokens_mit": 1216,
+    "aufrufe_ohne": 103,
+    "aufrufe_mit": 7,
+    "token_gepoolt": 99.61148173708561,
+    "aufruf_gepoolt": 93.20388349514563,
+    "token_mittel": 99.59540914464665,
+    "token_median": 99.6144820650352,
+    "token_min": 99.13771452490582,
+    "token_max": 99.89732596186393,
+    "aufruf_mittel": 88.83116883116882,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 80.0,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 257.3881578947368,
+    "faktor_median": 259.39130434782606
+   },
+   "variante": "skip",
+   "sekunden": 580,
+   "files": 1168,
+   "symbols": 22668,
+   "relationships": 82241,
+   "timestamp": "2026-10-16T22:42:24Z",
+   "commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "commit_date": "2026-10-16T16:12:16+02:00",
+   "pub_files": 1118,
+   "pub_symbols": 5330,
+   "pub_relationships": 8089,
+   "pub_timestamp": "2026-03-14T18:10:46Z",
+   "status_mit": {
+    "ok": 7,
+    "kein_treffer": 0,
+    "leer": 0,
+    "fehler": 0
+   },
+   "veroeffentlicht": {
+    "n": 7,
+    "tokens_ohne": 317328,
+    "tokens_mit": 938,
+    "aufrufe_ohne": 98,
+    "aufrufe_mit": 7,
+    "token_gepoolt": 99.70440679675289,
+    "aufruf_gepoolt": 92.85714285714286,
+    "token_mittel": 99.70884108856634,
+    "token_median": 99.90988886293096,
+    "token_min": 99.34819262244521,
+    "token_max": 99.97165432448712,
+    "aufruf_mittel": 84.3073593073593,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 66.66666666666666,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 338.30277185501063,
+    "faktor_median": 1109.7407407407406
+   }
+  },
+  "zod": {
+   "neu": {
+    "n": 6,
+    "tokens_ohne": 624280,
+    "tokens_mit": 10498,
+    "aufrufe_ohne": 114,
+    "aufrufe_mit": 6,
+    "token_gepoolt": 98.31838277695906,
+    "aufruf_gepoolt": 94.73684210526315,
+    "token_mittel": 99.02511559320232,
+    "token_median": 99.77214168893761,
+    "token_min": 94.96072646079624,
+    "token_max": 99.98803851597854,
+    "aufruf_mittel": 92.04545454545455,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 75.0,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 59.46656506001143,
+    "faktor_median": 439.4324742268041
+   },
+   "variante": "skip",
+   "sekunden": 290,
+   "files": 477,
+   "symbols": 12465,
+   "relationships": 19519,
+   "timestamp": "2026-10-16T22:32:43Z",
+   "commit": "680d19f7d1e042e55934209caeb79bc843b94f44",
+   "commit_date": "2026-10-13T11:16:28-07:00",
+   "pub_files": 361,
+   "pub_symbols": 7327,
+   "pub_relationships": 8403,
+   "pub_timestamp": "2026-03-14T18:04:19Z",
+   "status_mit": {
+    "ok": 6,
+    "kein_treffer": 0,
+    "leer": 0,
+    "fehler": 0
+   },
+   "veroeffentlicht": {
+    "n": 6,
+    "tokens_ohne": 487133,
+    "tokens_mit": 227,
+    "aufrufe_ohne": 114,
+    "aufrufe_mit": 6,
+    "token_gepoolt": 99.95340081661477,
+    "aufruf_gepoolt": 94.73684210526315,
+    "token_mittel": 99.88175076258334,
+    "token_median": 99.941906445797,
+    "token_min": 99.69201610992656,
+    "token_max": 99.99494115935981,
+    "aufruf_mittel": 92.04545454545455,
+    "aufruf_median": 95.45454545454545,
+    "aufruf_min": 75.0,
+    "aufruf_max": 95.45454545454545,
+    "faktor_gepoolt": 2145.9603524229074,
+    "faktor_median": 1721.7139705882353
+   }
+  }
+ },
+ "fragen": [
+  {
+   "repo": "django",
+   "language": "python",
+   "id": "callers",
+   "label": "Who calls get_response?",
+   "repo_commit": "d430084791a61b31cecec132bce3dca19194f7f2",
+   "variante": "skip",
+   "grep_pattern": "get_response",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'get_response' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 92590,
+    "aufrufe": 22,
+    "zeichen_glob": 220629,
+    "zeichen_grep": 32695,
+    "bytes_gelesen": 117039,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 59.57101546320772
+   },
+   "mit": {
+    "tokens": 144,
+    "aufrufe": 1,
+    "zeichen": 578,
+    "ausgabe_status": "ok",
+    "zeilen": 22,
+    "ausgabe_anfang": "s.kind | s.name\n----------------------------------------\nMethod | test_not_modified_headers\nFunction | middleware\nMethod | __call__\nMethod | test_cookie_settings\nMethod | test_max_cookie_length\nMethod | test_flush_used_backends\nMethod | test_no_fallback\nMethod | test_session_fallback\nMethod | test_session_fallback_only\nMethod | test_add_lazy_translation\nMethod | test_no_update\nMethod | test_add_up"
+   },
+   "token_reduktion_pct": 99.84447564531807,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 8173,
+    "token_reduktion_pct": 98.23810106448062
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 84231,
+    "tokens_mit": 142,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.83141598698816,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "MiddlewareMixin.__call__/__acall__ (middleware/__init__.py), convert_exception_to_response.inner (core/handlers/exception.py), WSGIHandler.__call__ (core/handlers/wsgi.py), ClientHandler.__call__ (test/client.py), Methoden in contrib/auth/middleware.py, ein get_response-Override in test/testcases.py",
+    "myc": "teilweise",
+    "myc_begruendung": "18 Namen, davon 13 Testmethoden; __call__ steht ununterscheidbar fuer mehrere Klassen, inner/__acall__/get_response/middleware ohne Fundort",
+    "ohne": "beantwortet",
+    "ohne_begruendung": "270 grep-Zeilen; unter den 20 gelesenen Dateien sind middleware/__init__.py, exception.py, wsgi.py (ganz) sowie client.py und auth/middleware.py bis Zeile 200, in denen die Aufrufe stehen (nur testcases.py:1692 liegt ausserhalb)"
+   }
+  },
+  {
+   "repo": "django",
+   "language": "python",
+   "id": "classes",
+   "label": "List all classes",
+   "repo_commit": "d430084791a61b31cecec132bce3dca19194f7f2",
+   "variante": "skip",
+   "grep_pattern": "class ",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30\"",
+   "ohne": {
+    "tokens": 406833,
+    "aufrufe": 22,
+    "zeichen_glob": 220629,
+    "zeichen_grep": 1314804,
+    "bytes_gelesen": 91899,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 13.557712869899936
+   },
+   "mit": {
+    "tokens": 119,
+    "aufrufe": 1,
+    "zeichen": 478,
+    "ausgabe_status": "ok",
+    "zeilen": 34,
+    "ausgabe_anfang": "s.name\n----------------------------------------\nListViewTests\nDetailViewTest\nFormContext\nFormContext\nArtist\nMeta\nAuthor\nMeta\nDoesNotExistQuerySet\nBook\nMeta\nPage\nBookSigning\nTestDataMixin\nArchiveIndexViewTests\nYearArchiveViewTests\nMonthArchiveViewTests\nWeekArchiveViewTests\nDayArchiveViewTests\nDateDetailViewTests\nFormMixinTests\nTestFormMixin\nTestFormMixin\nFormClassTestFormMixin\nFormContext\nBasicForm"
+   },
+   "token_reduktion_pct": 99.97074966878301,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 328701,
+    "token_reduktion_pct": 99.96379688531522
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 192044,
+    "tokens_mit": 384,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.80004582283227,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "django",
+   "language": "python",
+   "id": "blast_radius",
+   "label": "Blast radius of resolve",
+   "repo_commit": "d430084791a61b31cecec132bce3dca19194f7f2",
+   "variante": "skip",
+   "grep_pattern": "resolve",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'resolve' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 114960,
+    "aufrufe": 22,
+    "zeichen_glob": 220629,
+    "zeichen_grep": 127454,
+    "bytes_gelesen": 111760,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 47.979201597066826
+   },
+   "mit": {
+    "tokens": 675,
+    "aufrufe": 1,
+    "zeichen": 2702,
+    "ausgabe_status": "ok",
+    "zeilen": 82,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\ntest_resolve_view | Method\ntest_resolve_login_required_view | Method\nfe_test | Method\ntest_variable_parsing | Method\ntest_filter_numeric_argument_parsing | Method\ntest_log_on_variable_does_not_exist_silent | Method\ntest_log_on_variable_does_not_exist_not_silent | Method\ntest_no_log_when_variable_exists | Method\ntest_resolve_on_context_method"
+   },
+   "token_reduktion_pct": 99.41283924843424,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 31863,
+    "token_reduktion_pct": 97.88155540909518
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 71209,
+    "tokens_mit": 97,
+    "aufrufe_ohne": 10,
+    "token_reduktion_pct": 99.86378126360432,
+    "aufruf_reduktion_pct": 90.0
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "django",
+   "language": "python",
+   "id": "error_types",
+   "label": "Find all Exception types",
+   "repo_commit": "d430084791a61b31cecec132bce3dca19194f7f2",
+   "variante": "skip",
+   "grep_pattern": "Exception",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.name CONTAINS 'Exception' RETURN s.name, s.kind LIMIT 20\"",
+   "ohne": {
+    "tokens": 108638,
+    "aufrufe": 22,
+    "zeichen_glob": 220629,
+    "zeichen_grep": 108761,
+    "bytes_gelesen": 105165,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 50.771248748719955
+   },
+   "mit": {
+    "tokens": 233,
+    "aufrufe": 1,
+    "zeichen": 933,
+    "ausgabe_status": "ok",
+    "zeilen": 24,
+    "ausgabe_anfang": "s.kind | s.name\n----------------------------------------\nMethod | test_default_argument_suppresses_exceptions\nMethod | test_sum_star_exception\nMethod | test_run_suite_logs_seed_exception\nClass | ExceptionThatFailsUnpickling\nMethod | test_setupclass_exception\nClass | RunTestsExceptionHandlingTests\nMethod | test_save_send_email_exceptions_are_catched_and_logged\nMethod | test_permissioned_denied_exce"
+   },
+   "token_reduktion_pct": 99.78552624311935,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 27190,
+    "token_reduktion_pct": 99.14306730415593
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 63841,
+    "tokens_mit": 218,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.65852665215144,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "django",
+   "language": "python",
+   "id": "call_graph",
+   "label": "What does setup call?",
+   "repo_commit": "d430084791a61b31cecec132bce3dca19194f7f2",
+   "variante": "skip",
+   "grep_pattern": "setup",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE s.name = 'setup' RETURN s.name, t.name LIMIT 20\"",
+   "ohne": {
+    "tokens": 126360,
+    "aufrufe": 22,
+    "zeichen_glob": 220629,
+    "zeichen_grep": 179835,
+    "bytes_gelesen": 104979,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 43.650619357672376
+   },
+   "mit": {
+    "tokens": 60,
+    "aufrufe": 1,
+    "zeichen": 242,
+    "ausgabe_status": "ok",
+    "zeilen": 14,
+    "ausgabe_anfang": "t.name | s.name\n----------------------------------------\nsetup | setup\nsuper | setup\nupdate | setup\nreplace | setup\nvalue | setup\nconnect | setup\nadd_node | setup\nconfigure_logging | setup\nset_script_prefix | setup\npopulate | setup\n\n10 row(s)"
+   },
+   "token_reduktion_pct": 99.95251661918329,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 44958,
+    "token_reduktion_pct": 99.86654210596558
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 145092,
+    "tokens_mit": 89,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.93865960907561,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "django.setup(): configure_logging, set_script_prefix, apps.populate (django/__init__.py); daneben gibt es View.setup und weitere setup-Methoden",
+    "myc": "teilweise",
+    "myc_begruendung": "configure_logging, set_script_prefix, populate sind enthalten, aber vermischt mit Aufrufen anderer setup-Symbole (super, update, replace, value, connect, add_node, setup); keine Zuordnung, welches setup was ruft",
+    "ohne": "beantwortet",
+    "ohne_begruendung": "django/__init__.py (825 Bytes) ist unter den gelesenen Dateien und enthaelt den vollstaendigen Rumpf von setup()"
+   }
+  },
+  {
+   "repo": "express",
+   "language": "javascript",
+   "id": "callers",
+   "label": "Who calls app.handle?",
+   "repo_commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+   "variante": "skip",
+   "grep_pattern": "app.handle",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'handle' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 6541,
+    "aufrufe": 4,
+    "zeichen_glob": 19739,
+    "zeichen_grep": 188,
+    "bytes_gelesen": 6238,
+    "dateien_gelesen": 2,
+    "anteil_glob_pct": 75.44047391553602
+   },
+   "mit": {
+    "tokens": 3,
+    "aufrufe": 1,
+    "zeichen": 12,
+    "ausgabe_status": "kein_treffer",
+    "zeilen": 1,
+    "ausgabe_anfang": "(no results)"
+   },
+   "token_reduktion_pct": 99.9541354532946,
+   "aufruf_reduktion_pct": 75.0,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 47,
+    "token_reduktion_pct": 93.61702127659575
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 18442,
+    "tokens_mit": 31,
+    "aufrufe_ohne": 8,
+    "token_reduktion_pct": 99.83190543325018,
+    "aufruf_reduktion_pct": 87.5
+   },
+   "gleichwertigkeit": {
+    "referenz": "innere Funktion app in createApplication (lib/express.js: app.handle(req, res, next)); in app.use gemountete Apps rufen fn.handle (lib/application.js)",
+    "myc": "nicht",
+    "myc_begruendung": "'(no results)' - 12 Zeichen, von run.sh als 99,9 % Reduktion und PASS gezaehlt",
+    "ohne": "beantwortet",
+    "ohne_begruendung": "grep findet lib/express.js und lib/application.js; express.js (1.636 Bytes) wird ganz gelesen und zeigt createApplication mit app.handle"
+   }
+  },
+  {
+   "repo": "express",
+   "language": "javascript",
+   "id": "classes",
+   "label": "List all classes",
+   "repo_commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+   "variante": "skip",
+   "grep_pattern": "class ",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30\"",
+   "ohne": {
+    "tokens": 7727,
+    "aufrufe": 3,
+    "zeichen_glob": 19739,
+    "zeichen_grep": 185,
+    "bytes_gelesen": 10984,
+    "dateien_gelesen": 1,
+    "anteil_glob_pct": 63.86372460204478
+   },
+   "mit": {
+    "tokens": 3,
+    "aufrufe": 1,
+    "zeichen": 12,
+    "ausgabe_status": "kein_treffer",
+    "zeilen": 1,
+    "ausgabe_anfang": "(no results)"
+   },
+   "token_reduktion_pct": 99.96117510029767,
+   "aufruf_reduktion_pct": 66.66666666666666,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 46,
+    "token_reduktion_pct": 93.47826086956522
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 9217,
+    "tokens_mit": 62,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.32732993381794,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "express",
+   "language": "javascript",
+   "id": "blast_radius",
+   "label": "Blast radius of Router",
+   "repo_commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+   "variante": "skip",
+   "grep_pattern": "Router",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'Router' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 17483,
+    "aufrufe": 13,
+    "zeichen_glob": 19739,
+    "zeichen_grep": 9214,
+    "bytes_gelesen": 40980,
+    "dateien_gelesen": 11,
+    "anteil_glob_pct": 28.225587347890123
+   },
+   "mit": {
+    "tokens": 3,
+    "aufrufe": 1,
+    "zeichen": 12,
+    "ausgabe_status": "kein_treffer",
+    "zeilen": 1,
+    "ausgabe_anfang": "(no results)"
+   },
+   "token_reduktion_pct": 99.98284047360293,
+   "aufruf_reduktion_pct": 92.3076923076923,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 2303,
+    "token_reduktion_pct": 99.8697351280938
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 24318,
+    "tokens_mit": 48,
+    "aufrufe_ohne": 10,
+    "token_reduktion_pct": 99.8026153466568,
+    "aufruf_reduktion_pct": 90.0
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "express",
+   "language": "javascript",
+   "id": "call_graph",
+   "label": "What does createApplication call?",
+   "repo_commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+   "variante": "skip",
+   "grep_pattern": "createApplication",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE s.name = 'createApplication' RETURN s.name, t.name LIMIT 20\"",
+   "ohne": {
+    "tokens": 5409,
+    "aufrufe": 3,
+    "zeichen_glob": 19739,
+    "zeichen_grep": 262,
+    "bytes_gelesen": 1636,
+    "dateien_gelesen": 1,
+    "anteil_glob_pct": 91.22798909275778
+   },
+   "mit": {
+    "tokens": 23,
+    "aufrufe": 1,
+    "zeichen": 92,
+    "ausgabe_status": "ok",
+    "zeilen": 5,
+    "ausgabe_anfang": "t.name | s.name\n----------------------------------------\nmixin | createApplication\n\n1 row(s)"
+   },
+   "token_reduktion_pct": 99.57478276945831,
+   "aufruf_reduktion_pct": 66.66666666666666,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 65,
+    "token_reduktion_pct": 64.61538461538461
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 31204,
+    "tokens_mit": 37,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.88142545827458,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "express",
+   "language": "javascript",
+   "id": "error_types",
+   "label": "Find all Error types",
+   "repo_commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+   "variante": "skip",
+   "grep_pattern": "Error",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20\"",
+   "ohne": {
+    "tokens": 26269,
+    "aufrufe": 22,
+    "zeichen_glob": 19739,
+    "zeichen_grep": 23090,
+    "bytes_gelesen": 62247,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 18.785450531044194
+   },
+   "mit": {
+    "tokens": 56,
+    "aufrufe": 1,
+    "zeichen": 224,
+    "ausgabe_status": "ok",
+    "zeilen": 12,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\nparseError | Function\nerror | Variable\nerror | Function\ncreateError | Variable\nerror | Function\ncreateError | Variable\nonerror | Function\nlogerror | Function\n\n8 row(s)"
+   },
+   "token_reduktion_pct": 99.78682096768054,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 5772,
+    "token_reduktion_pct": 99.02979902979902
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 14893,
+    "tokens_mit": 44,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.70455918888068,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "express",
+   "language": "javascript",
+   "id": "process_flow",
+   "label": "Trace request handling flow",
+   "repo_commit": "a419aa7350389a275ab45fde2e849ed1f02449ef",
+   "variante": "skip",
+   "grep_pattern": "handle",
+   "myc_befehl": "myc processes --entry 'handle'",
+   "ohne": {
+    "tokens": 28616,
+    "aufrufe": 22,
+    "zeichen_glob": 19739,
+    "zeichen_grep": 20242,
+    "bytes_gelesen": 74486,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 17.244271274690522
+   },
+   "mit": {
+    "tokens": 72,
+    "aufrufe": 1,
+    "zeichen": 291,
+    "ausgabe_status": "ok",
+    "zeilen": 16,
+    "ausgabe_anfang": "Processes in express:\n(filtered)\n\n  1. handleHeaders flow (2 steps, entry: handleHeaders)\n     Flow: ├─ handleHeaders\n  ├─ assert\n\n\n  2. handler1 flow (2 steps, entry: handler1)\n     Flow: ├─ handler1\n  ├─ next\n\n\n  3. handler2 flow (2 steps, entry: handler2)\n     Flow: ├─ handler2\n  ├─ send"
+   },
+   "token_reduktion_pct": 99.74839250768801,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 5060,
+    "token_reduktion_pct": 98.57707509881422
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 18442,
+    "tokens_mit": 12,
+    "aufrufe_ohne": 8,
+    "token_reduktion_pct": 99.93493113545169,
+    "aufruf_reduktion_pct": 87.5
+   },
+   "gleichwertigkeit": {
+    "referenz": "app(req,res) -> app.handle -> this.router.handle (Router aus dem Paket 'router')",
+    "myc": "nicht",
+    "myc_begruendung": "drei 2-Schritt-Flows handleHeaders/handler1/handler2 aus Tests/Beispielen, nicht der Anfragepfad",
+    "ohne": "beantwortet",
+    "ohne_begruendung": "unter den 20 gelesenen Dateien sind lib/express.js (ganz) und lib/application.js (erste 200 Zeilen, enthalten app.handle bis router.handle)"
+   }
+  },
+  {
+   "repo": "gin",
+   "language": "go",
+   "id": "callers",
+   "label": "Who calls ServeHTTP?",
+   "repo_commit": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+   "variante": "skip",
+   "grep_pattern": "ServeHTTP",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'ServeHTTP' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 20559,
+    "aufrufe": 15,
+    "zeichen_glob": 5003,
+    "zeichen_grep": 4102,
+    "bytes_gelesen": 73132,
+    "dateien_gelesen": 13,
+    "anteil_glob_pct": 6.083636319418266
+   },
+   "mit": {
+    "tokens": 373,
+    "aufrufe": 1,
+    "zeichen": 1492,
+    "ausgabe_status": "ok",
+    "zeilen": 48,
+    "ausgabe_anfang": "s.kind | s.name\n----------------------------------------\nFunction | TestEngineHandleContextUseEscapedPathPercentEncoded\nFunction | TestEngineHandleContextUseRawPathPercentEncoded\nFunction | TestCustomUnmarshalStruct\nFunction | TestMethodNotAllowedNoRoute\nFunction | TestLiteralColonWithRun\nFunction | TestLiteralColonWithDirectServeHTTP\nFunction | TestLiteralColonWithHandler\nFunction | TestLiteralCo"
+   },
+   "token_reduktion_pct": 98.18570942166448,
+   "aufruf_reduktion_pct": 93.33333333333333,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 1025,
+    "token_reduktion_pct": 63.609756097560975
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 15218,
+    "tokens_mit": 28,
+    "aufrufe_ohne": 8,
+    "token_reduktion_pct": 99.81600735970562,
+    "aufruf_reduktion_pct": 87.5
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "gin",
+   "language": "go",
+   "id": "classes",
+   "label": "List all structs",
+   "repo_commit": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+   "variante": "skip",
+   "grep_pattern": "type ",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30\"",
+   "ohne": {
+    "tokens": 20432,
+    "aufrufe": 22,
+    "zeichen_glob": 5003,
+    "zeichen_grep": 19129,
+    "bytes_gelesen": 57598,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 6.121375260002447
+   },
+   "mit": {
+    "tokens": 89,
+    "aufrufe": 1,
+    "zeichen": 359,
+    "ausgabe_status": "ok",
+    "zeilen": 34,
+    "ausgabe_anfang": "s.name\n----------------------------------------\nTest\nTest_OptionalGroup\nx\ntestStruct\nbindTestStruct\ncustomError\nParam\nmethodTree\nnode\nnodeValue\nskippedNode\nauthPair\ncleanPathTest\nmockFileSystem\nLoggerConfig\nLogFormatterParams\nsonicApi\njsoniterApi\ngojsonApi\njsonApi\nmockFileSystem\nFileSystem\nBSON\nMsgPack\nPDF\nXML\nDelims\nHTMLProduction\nHTMLDebug\nHTML\n\n30 row(s)"
+   },
+   "token_reduktion_pct": 99.56440877055599,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 4782,
+    "token_reduktion_pct": 98.13885403596821
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 8432,
+    "tokens_mit": 71,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.15796963946869,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "gin",
+   "language": "go",
+   "id": "blast_radius",
+   "label": "Blast radius of handleHTTPRequest",
+   "repo_commit": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+   "variante": "skip",
+   "grep_pattern": "handleHTTPRequest",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'handleHTTPRequest' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 3160,
+    "aufrufe": 3,
+    "zeichen_glob": 5003,
+    "zeichen_grep": 228,
+    "bytes_gelesen": 7409,
+    "dateien_gelesen": 1,
+    "anteil_glob_pct": 39.58069620253165
+   },
+   "mit": {
+    "tokens": 27,
+    "aufrufe": 1,
+    "zeichen": 108,
+    "ausgabe_status": "ok",
+    "zeilen": 6,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\nServeHTTP | Method\nHandleContext | Method\n\n2 row(s)"
+   },
+   "token_reduktion_pct": 99.14556962025316,
+   "aufruf_reduktion_pct": 66.66666666666666,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 57,
+    "token_reduktion_pct": 52.63157894736842
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 11094,
+    "tokens_mit": 34,
+    "aufrufe_ohne": 6,
+    "token_reduktion_pct": 99.69352803317109,
+    "aufruf_reduktion_pct": 83.33333333333334
+   },
+   "gleichwertigkeit": {
+    "referenz": "Engine.ServeHTTP, Engine.HandleContext (gin.go)",
+    "myc": "beantwortet",
+    "myc_begruendung": "genau ServeHTTP und HandleContext (ohne Fundort)",
+    "ohne": "teilweise",
+    "ohne_begruendung": "grep zeigt die zwei Aufrufzeilen in gin.go; gin.go wird nur bis Zeile 200 gelesen, die Funktionen stehen bei Zeile 691/709"
+   }
+  },
+  {
+   "repo": "gin",
+   "language": "go",
+   "id": "call_graph",
+   "label": "What does Run call?",
+   "repo_commit": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+   "variante": "skip",
+   "grep_pattern": "func.*Run",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE s.name = 'Run' RETURN s.name, t.name LIMIT 20\"",
+   "ohne": {
+    "tokens": 8731,
+    "aufrufe": 7,
+    "zeichen_glob": 5003,
+    "zeichen_grep": 2337,
+    "bytes_gelesen": 27585,
+    "dateien_gelesen": 5,
+    "anteil_glob_pct": 14.324982104509665
+   },
+   "mit": {
+    "tokens": 55,
+    "aufrufe": 1,
+    "zeichen": 220,
+    "ausgabe_status": "ok",
+    "zeilen": 12,
+    "ausgabe_anfang": "s.name | t.name\n----------------------------------------\nRun | Run\nRun | engine\nRun | isUnsafeTrustedProxies\nRun | debugPrint\nRun | updateRouteTrees\nRun | resolveAddress\nRun | Handler\nRun | getReadHeaderTimeout\n\n8 row(s)"
+   },
+   "token_reduktion_pct": 99.37006070324132,
+   "aufruf_reduktion_pct": 85.71428571428571,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 584,
+    "token_reduktion_pct": 90.58219178082192
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 22841,
+    "tokens_mit": 42,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.81612013484524,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "Engine.Run: isUnsafeTrustedProxies, debugPrint, updateRouteTrees, resolveAddress, Handler, getReadHeaderTimeout, http.Server.ListenAndServe, debugPrintError (defer-Closure)",
+    "myc": "teilweise",
+    "myc_begruendung": "6 von 8 Aufrufen (isUnsafeTrustedProxies, debugPrint, updateRouteTrees, resolveAddress, Handler, getReadHeaderTimeout); es fehlen http.Server.ListenAndServe - der Aufruf, der den Server startet - und debugPrintError (defer-Closure); dazu Rauschen 'Run', 'engine'",
+    "ohne": "nicht",
+    "ohne_begruendung": "grep 'func.*Run' liefert nur 23 Signaturzeilen; der Rumpf von Run (gin.go Zeile 566) liegt hinter den gelesenen 200 Zeilen"
+   }
+  },
+  {
+   "repo": "gin",
+   "language": "go",
+   "id": "error_types",
+   "label": "Find all Error types",
+   "repo_commit": "0f09c3a9b4626d9fe9979cf4d0521d6ae32ab646",
+   "variante": "skip",
+   "grep_pattern": "Error",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20\"",
+   "ohne": {
+    "tokens": 36488,
+    "aufrufe": 22,
+    "zeichen_glob": 5003,
+    "zeichen_grep": 77569,
+    "bytes_gelesen": 63381,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 3.427815803717635
+   },
+   "mit": {
+    "tokens": 168,
+    "aufrufe": 1,
+    "zeichen": 672,
+    "ausgabe_status": "ok",
+    "zeilen": 24,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\nTestError | Function\ncustomError | Class\nTestErrorSlice | Function\nError | Method\nTestErrorUnwrap | Function\nErrorLogger | Function\nErrorLoggerT | Function\nTestRenderJSONError | Function\nerrorWriter | Class\nTestRenderJsonpJSONError | Function\nTestRenderJsonpJSONError2 | Function\nTestRenderBSONError | Function\nTestRenderBSONWriteError | Funct"
+   },
+   "token_reduktion_pct": 99.53957465468099,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 19392,
+    "token_reduktion_pct": 99.13366336633663
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 9713,
+    "tokens_mit": 38,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.60877174920209,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "tokio",
+   "language": "rust",
+   "id": "callers",
+   "label": "Who calls spawn?",
+   "repo_commit": "cdd9dae3aa5056e23dc4d5bc4f852ab8fbf27aff",
+   "variante": "skip",
+   "grep_pattern": "fn spawn",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'spawn' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 43049,
+    "aufrufe": 22,
+    "zeichen_glob": 53535,
+    "zeichen_grep": 21461,
+    "bytes_gelesen": 97202,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 31.089211256809023
+   },
+   "mit": {
+    "tokens": 6941,
+    "aufrufe": 1,
+    "zeichen": 27765,
+    "ausgabe_status": "ok",
+    "zeilen": 791,
+    "ausgabe_anfang": "s.kind | s.name\n----------------------------------------\nFunction | join_set_stream_terminated_after_tasks_are_joined\nFunction | poll_peek_does_not_advance_stream\nFunction | poll_peek_mutates_buffered_item\nFunction | poll_peek_propagates_pending\nFunction | pending_first\nFunction | stream_chunks_remainder\nFunction | merge_async_streams\nFunction | basic_usage\nFunction | return_elapsed_errors_only_on"
+   },
+   "token_reduktion_pct": 83.87651281098283,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 5365,
+    "token_reduktion_pct": -29.375582479030754
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 42318,
+    "tokens_mit": 67,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.84167493737888,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "tokio",
+   "language": "rust",
+   "id": "classes",
+   "label": "List all structs",
+   "repo_commit": "cdd9dae3aa5056e23dc4d5bc4f852ab8fbf27aff",
+   "variante": "skip",
+   "grep_pattern": "struct ",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30\"",
+   "ohne": {
+    "tokens": 57707,
+    "aufrufe": 22,
+    "zeichen_glob": 53535,
+    "zeichen_grep": 103939,
+    "bytes_gelesen": 73354,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 23.192593619491568
+   },
+   "mit": {
+    "tokens": 100,
+    "aufrufe": 1,
+    "zeichen": 402,
+    "ausgabe_status": "ok",
+    "zeilen": 34,
+    "ausgabe_anfang": "s.name\n----------------------------------------\nEndOnce\nMaxHint\nUnbounded\nPendingOnce\nMonster\nMonster\nAlternate\nMonster\nInvalid\nReceiverStream\nCtrlCStream\nCtrlBreakStream\nUnboundedReceiverStream\nIntervalStream\nTcpListenerStream\nJoinSetStream\nUnixListenerStream\nWatchStream\nSignalStream\nBroadcastStream\nReadDirStream\nPending\nEmpty\nIter\nElapsed\nInternal\nOnce\nStreamMap\nFastRand\nZeroSizedFuture\n\n30 row("
+   },
+   "token_reduktion_pct": 99.8267107976502,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 25984,
+    "token_reduktion_pct": 99.61514778325123
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 28714,
+    "tokens_mit": 193,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.3278540084976,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "tokio",
+   "language": "rust",
+   "id": "blast_radius",
+   "label": "Blast radius of block_on",
+   "repo_commit": "cdd9dae3aa5056e23dc4d5bc4f852ab8fbf27aff",
+   "variante": "skip",
+   "grep_pattern": "block_on",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'block_on' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 54758,
+    "aufrufe": 22,
+    "zeichen_glob": 53535,
+    "zeichen_grep": 96660,
+    "bytes_gelesen": 68837,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 24.441634099127068
+   },
+   "mit": {
+    "tokens": 3679,
+    "aufrufe": 1,
+    "zeichen": 14716,
+    "ausgabe_status": "ok",
+    "zeilen": 397,
+    "ausgabe_anfang": "s.kind | s.name\n----------------------------------------\nFunction | zero_duration_does_not_require_time_driver\nFunction | local_pool_handle_spawn_pinned_by_idx_panic_caller\nFunction | delay_queue_insert_at_panic_caller\nFunction | delay_queue_insert_panic_caller\nFunction | delay_queue_remove_panic_caller\nFunction | delay_queue_reset_at_panic_caller\nFunction | delay_queue_reset_panic_caller\nFunction"
+   },
+   "token_reduktion_pct": 93.28134701778735,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 24165,
+    "token_reduktion_pct": 84.77550175874198
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 19432,
+    "tokens_mit": 41,
+    "aufrufe_ohne": 8,
+    "token_reduktion_pct": 99.78900782214903,
+    "aufruf_reduktion_pct": 87.5
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "tokio",
+   "language": "rust",
+   "id": "call_graph",
+   "label": "What does Runtime::new call?",
+   "repo_commit": "cdd9dae3aa5056e23dc4d5bc4f852ab8fbf27aff",
+   "variante": "skip",
+   "grep_pattern": "fn new",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE s.name = 'new' AND s.file CONTAINS 'runtime' RETURN s.name, t.name LIMIT 20\"",
+   "ohne": {
+    "tokens": 39284,
+    "aufrufe": 22,
+    "zeichen_glob": 53535,
+    "zeichen_grep": 43273,
+    "bytes_gelesen": 60329,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 34.06899711716528
+   },
+   "mit": {
+    "tokens": 3,
+    "aufrufe": 1,
+    "zeichen": 12,
+    "ausgabe_status": "kein_treffer",
+    "zeilen": 1,
+    "ausgabe_anfang": "(no results)"
+   },
+   "token_reduktion_pct": 99.99236330312596,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 10818,
+    "token_reduktion_pct": 99.9722684414864
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 35891,
+    "tokens_mit": 53,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.85233066785545,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "Builder::new_multi_thread().enable_all().build() (tokio/src/runtime/runtime.rs:179)",
+    "myc": "nicht",
+    "myc_begruendung": "'(no results)' (die Abfrage filtert auf s.file CONTAINS 'runtime') - als 99,9 % Reduktion und PASS gezaehlt",
+    "ohne": "nicht",
+    "ohne_begruendung": "grep 'fn new' trifft 258 Dateien, die Signaturzeile von Runtime::new ist dabei, der Rumpf nicht; die 20 gelesenen Dateien sind benches/examples/tokio-stream"
+   }
+  },
+  {
+   "repo": "tokio",
+   "language": "rust",
+   "id": "error_types",
+   "label": "Find all Error types",
+   "repo_commit": "cdd9dae3aa5056e23dc4d5bc4f852ab8fbf27aff",
+   "variante": "skip",
+   "grep_pattern": "Error",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.name CONTAINS 'Error' RETURN s.name, s.kind LIMIT 20\"",
+   "ohne": {
+    "tokens": 103229,
+    "aufrufe": 22,
+    "zeichen_glob": 53535,
+    "zeichen_grep": 287145,
+    "bytes_gelesen": 72237,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 12.965075305690974
+   },
+   "mit": {
+    "tokens": 137,
+    "aufrufe": 1,
+    "zeichen": 548,
+    "ausgabe_status": "ok",
+    "zeilen": 24,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\njoin_set_as_stream_panics_with_error | Function\nreturn_elapsed_errors_only_once | Function\nBroadcastStreamRecvError | Enum\nerrors | Module\nreturn_none_after_error | Function\nError | TypeAlias\nError | TypeAlias\nError | TypeAlias\nError | TypeAlias\nError | TypeAlias\ndata_remaining_is_error | Function\nError | TypeAlias\ncorrect_behavior_on_errors"
+   },
+   "token_reduktion_pct": 99.86728535585931,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 71786,
+    "token_reduktion_pct": 99.80915498843785
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 21309,
+    "tokens_mit": 82,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.61518607161294,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "u. a. JoinError, SendError/RecvError/TryRecvError (sync), AcquireError/TryAcquireError, time::error::Error, Elapsed, TryCurrentError, BroadcastStreamRecvError",
+    "myc": "nicht",
+    "myc_begruendung": "LIMIT 20: Testfunktionen, 13x 'Error | TypeAlias' (assoziierte Typen 'type Error = ...'), ein Modul 'errors'; einziger echter Fehlertyp BroadcastStreamRecvError",
+    "ohne": "teilweise",
+    "ohne_begruendung": "Deklarationszeilen stehen in 2.388 grep-Zeilen aus 278 Dateien"
+   }
+  },
+  {
+   "repo": "fastapi",
+   "language": "python",
+   "id": "callers",
+   "label": "Who calls solve_dependencies?",
+   "repo_commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "variante": "skip",
+   "grep_pattern": "solve_dependencies",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'solve_dependencies' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 30051,
+    "aufrufe": 5,
+    "zeichen_glob": 98678,
+    "zeichen_grep": 1303,
+    "bytes_gelesen": 20226,
+    "dateien_gelesen": 3,
+    "anteil_glob_pct": 82.09006131090536
+   },
+   "mit": {
+    "tokens": 35,
+    "aufrufe": 1,
+    "zeichen": 140,
+    "ausgabe_status": "ok",
+    "zeilen": 7,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\nsolve_dependencies | Function\napp | Function\n_solve_dependencies | Method\n\n3 row(s)"
+   },
+   "token_reduktion_pct": 99.8835313300722,
+   "aufruf_reduktion_pct": 80.0,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 325,
+    "token_reduktion_pct": 89.23076923076924
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 29963,
+    "tokens_mit": 27,
+    "aufrufe_ohne": 4,
+    "token_reduktion_pct": 99.90988886293096,
+    "aufruf_reduktion_pct": 75.0
+   },
+   "gleichwertigkeit": {
+    "referenz": "solve_dependencies (rekursiv, dependencies/utils.py), innere Funktion app in get_request_handler, innere Funktion app in get_websocket_app, _FrontendRouteGroup._solve_dependencies (routing.py)",
+    "myc": "beantwortet",
+    "myc_begruendung": "solve_dependencies, app, _solve_dependencies; vollstaendig, aber 'app' steht ununterscheidbar fuer zwei verschiedene innere Funktionen; ohne Fundort",
+    "ohne": "teilweise",
+    "ohne_begruendung": "grep zeigt alle 7 Fundzeilen; beide Dateien sind > 8.000 Bytes, gelesen werden nur die ersten 200 Zeilen, die Aufrufstellen (Zeile 511/828/2304) liegen dahinter -> umschliessende Funktionen fehlen"
+   }
+  },
+  {
+   "repo": "fastapi",
+   "language": "python",
+   "id": "classes",
+   "label": "List all classes",
+   "repo_commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "variante": "skip",
+   "grep_pattern": "class ",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30\"",
+   "ohne": {
+    "tokens": 49366,
+    "aufrufe": 22,
+    "zeichen_glob": 98678,
+    "zeichen_grep": 86867,
+    "bytes_gelesen": 11921,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 49.97214710380521
+   },
+   "mit": {
+    "tokens": 251,
+    "aufrufe": 1,
+    "zeichen": 1004,
+    "ausgabe_status": "ok",
+    "zeilen": 34,
+    "ausgabe_anfang": "s.name\n----------------------------------------\nCookieModelRequiredStr\nCookieModelRequiredAlias\nCookieModelRequiredValidationAlias\nCookieModelRequiredAliasAndValidationAlias\nCookieModelOptionalStr\nCookieModelOptionalAlias\nCookieModelOptionalValidationAlias\nCookieModelOptionalAliasAndValidationAlias\nFormModelRequiredListStr\nFormModelRequiredListAlias\nFormModelRequiredListValidationAlias\nFormModelRe"
+   },
+   "token_reduktion_pct": 99.4915528906535,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 21716,
+    "token_reduktion_pct": 98.8441701970897
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 51901,
+    "tokens_mit": 251,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.5163869674958,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "fastapi",
+   "language": "python",
+   "id": "blast_radius",
+   "label": "Blast radius of get_request_handler",
+   "repo_commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "variante": "skip",
+   "grep_pattern": "get_request_handler",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'get_request_handler' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 29830,
+    "aufrufe": 5,
+    "zeichen_glob": 98678,
+    "zeichen_grep": 1361,
+    "bytes_gelesen": 19284,
+    "dateien_gelesen": 3,
+    "anteil_glob_pct": 82.69822247177828
+   },
+   "mit": {
+    "tokens": 36,
+    "aufrufe": 1,
+    "zeichen": 146,
+    "ausgabe_status": "ok",
+    "zeilen": 6,
+    "ausgabe_anfang": "s.kind | s.name\n----------------------------------------\nFunction | get_request_handler_with_endpoint_wrapper\nMethod | get_route_handler\n\n2 row(s)"
+   },
+   "token_reduktion_pct": 99.87931612470668,
+   "aufruf_reduktion_pct": 80.0,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 340,
+    "token_reduktion_pct": 89.41176470588236
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 28223,
+    "tokens_mit": 23,
+    "aufrufe_ohne": 3,
+    "token_reduktion_pct": 99.91850618290047,
+    "aufruf_reduktion_pct": 66.66666666666666
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "fastapi",
+   "language": "python",
+   "id": "error_types",
+   "label": "Find all Exception types",
+   "repo_commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "variante": "skip",
+   "grep_pattern": "Exception",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.name CONTAINS 'Exception' RETURN s.name, s.kind LIMIT 20\"",
+   "ohne": {
+    "tokens": 37497,
+    "aufrufe": 22,
+    "zeichen_glob": 98678,
+    "zeichen_grep": 35941,
+    "bytes_gelesen": 15372,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 65.78928069017475
+   },
+   "mit": {
+    "tokens": 276,
+    "aufrufe": 1,
+    "zeichen": 1106,
+    "ausgabe_status": "ok",
+    "zeilen": 24,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\nno_body_status_code_exception | Function\nno_body_status_code_with_detail_exception | Function\ntest_no_body_status_code_exception_handlers | Function\ntest_no_body_status_code_with_detail_exception_handlers | Function\ntest_custom_middleware_exception | Function\ntest_custom_middleware_exception_not_raised | Function\ntest_dependency_gets_excepti"
+   },
+   "token_reduktion_pct": 99.26394111528923,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 8985,
+    "token_reduktion_pct": 96.92821368948246
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 38336,
+    "tokens_mit": 239,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.37656510851419,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "HTTPException, WebSocketException, FastAPIError, DependencyScopeError, ValidationException, RequestValidationError, WebSocketRequestValidationError, ResponseValidationError (fastapi/exceptions.py)",
+    "myc": "nicht",
+    "myc_begruendung": "20 Zeilen (LIMIT 20) mit Namen, die 'exception' enthalten: fast nur Testfunktionen (test_*_exception), dazu eine Testklasse ExceptionCapture; keine einzige der acht Exception-Klassen",
+    "ohne": "teilweise",
+    "ohne_begruendung": "6 der 8 Klassenzeilen stehen in 280 grep-Zeilen (FastAPIError/DependencyScopeError enthalten 'Exception' nicht)"
+   }
+  },
+  {
+   "repo": "fastapi",
+   "language": "python",
+   "id": "call_graph",
+   "label": "What does get_openapi call?",
+   "repo_commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "variante": "skip",
+   "grep_pattern": "openapi",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE s.name = 'get_openapi' RETURN s.name, t.name LIMIT 20\"",
+   "ohne": {
+    "tokens": 88630,
+    "aufrufe": 22,
+    "zeichen_glob": 98678,
+    "zeichen_grep": 193091,
+    "bytes_gelesen": 62752,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 27.83417625472116
+   },
+   "mit": {
+    "tokens": 91,
+    "aufrufe": 1,
+    "zeichen": 367,
+    "ausgabe_status": "ok",
+    "zeilen": 13,
+    "ausgabe_anfang": "t.name | s.name\n----------------------------------------\nget_fields_from_routes | get_openapi\nget_flat_models_from_fields | get_openapi\nget_model_name_map | get_openapi\nget_definitions | get_openapi\niter_route_contexts | get_openapi\n_get_api_route_for_openapi | get_openapi\nget_openapi_path | get_openapi\njsonable_encoder | get_openapi\nOpenAPI | get_openapi\n\n9 row(s)"
+   },
+   "token_reduktion_pct": 99.89732596186393,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 48272,
+    "token_reduktion_pct": 99.8114849187935
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 92048,
+    "tokens_mit": 73,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.92069355119068,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "fastapi",
+   "language": "python",
+   "id": "semantic",
+   "label": "Search dependency injection code",
+   "repo_commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "variante": "skip",
+   "grep_pattern": "Depends",
+   "myc_befehl": "myc search 'dependency injection'",
+   "ohne": {
+    "tokens": 47780,
+    "aufrufe": 22,
+    "zeichen_glob": 98678,
+    "zeichen_grep": 80685,
+    "bytes_gelesen": 11757,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 51.63143574717455
+   },
+   "mit": {
+    "tokens": 412,
+    "aufrufe": 1,
+    "zeichen": 1648,
+    "ausgabe_status": "ok",
+    "zeilen": 20,
+    "ausgabe_anfang": "Search results for 'dependency injection' in fastapi:\n\n  1. Dependency Injection { #dependency-injection } (Section) — docs/hi/docs/tutorial/background-tasks.md:48-63  [score: 17.18]\n     ## Dependency Injection { #dependency-injection }\n  2. Dependency Injection { #dependency-injection } (Section) — docs/hi/docs/features.md:137-147  [score: 17.18]\n     ### Dependency Injection { #dependency-injec"
+   },
+   "token_reduktion_pct": 99.13771452490582,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 20171,
+    "token_reduktion_pct": 97.95746368548906
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 48634,
+    "tokens_mit": 317,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.34819262244521,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "fastapi/dependencies/* (Depends, solve_dependencies, get_dependant) bzw. Depends-Nutzungen",
+    "myc": "nicht",
+    "myc_begruendung": "BM25 liefert (auf 20 Zeilen gekuerzt) 9 Markdown-Ueberschriften 'Dependency Injection' aus uebersetzten Dokus, keinen Code",
+    "ohne": "teilweise",
+    "ohne_begruendung": "603 Depends-Zeilen; die 20 gelesenen Dateien sind docs_src/dependencies-Tutorials, also DI-Beispielcode, nicht die Implementierung"
+   }
+  },
+  {
+   "repo": "fastapi",
+   "language": "python",
+   "id": "process_flow",
+   "label": "Trace request handler flow",
+   "repo_commit": "bb7f314287bf36e04539c572a2256d94ea45f0d6",
+   "variante": "skip",
+   "grep_pattern": "get_request_handler",
+   "myc_befehl": "myc processes --entry 'get_request_handler'",
+   "ohne": {
+    "tokens": 29830,
+    "aufrufe": 5,
+    "zeichen_glob": 98678,
+    "zeichen_grep": 1361,
+    "bytes_gelesen": 19284,
+    "dateien_gelesen": 3,
+    "anteil_glob_pct": 82.69822247177828
+   },
+   "mit": {
+    "tokens": 115,
+    "aufrufe": 1,
+    "zeichen": 461,
+    "ausgabe_status": "ok",
+    "zeilen": 15,
+    "ausgabe_anfang": "Processes in fastapi:\n(filtered)\n\n  1. get_request_handler_with_endpoint_wrapper flow (11 steps, entry: get_request_handler_with_endpoint_wrapper)\n     Flow: ├─ get_request_handler_with_endpoint_wrapper\n  ├─ get_request_handler\n    ├─ Default\n      ├─ DefaultPlaceholder\n    ├─ _is_coroutine_callable\n      ├─ _is_coroutine_callable_cached\n        ├─ _impartial\n        ├─ _unwrapped_call\n          ├"
+   },
+   "token_reduktion_pct": 99.6144820650352,
+   "aufruf_reduktion_pct": 80.0,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 340,
+    "token_reduktion_pct": 66.17647058823529
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 28223,
+    "tokens_mit": 8,
+    "aufrufe_ohne": 3,
+    "token_reduktion_pct": 99.97165432448712,
+    "aufruf_reduktion_pct": 66.66666666666666
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "zod",
+   "language": "typescript",
+   "id": "callers",
+   "label": "Who calls safeParse?",
+   "repo_commit": "680d19f7d1e042e55934209caeb79bc843b94f44",
+   "variante": "skip",
+   "grep_pattern": "safeParse",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'safeParse' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 88302,
+    "aufrufe": 22,
+    "zeichen_glob": 34688,
+    "zeichen_grep": 259027,
+    "bytes_gelesen": 59493,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 9.820842110031483
+   },
+   "mit": {
+    "tokens": 194,
+    "aufrufe": 1,
+    "zeichen": 777,
+    "ausgabe_status": "ok",
+    "zeilen": 32,
+    "ausgabe_anfang": "s.kind | s.name\n----------------------------------------\nFunction | installCompiledUserMethods\nFunction | checkSeed\nFunction | differential\nFunction | assertUnionSound\nFunction | expectMatch\nConstant | valid\nConstant | invalid\nConstant | snap\nMethod | safeParse\nFunction | checkObjectGuards\nFunction | checkArrayGuards\nMethod | isOptional\nMethod | isNullable\nMethod | parse\nFunction | _parse\nConstant"
+   },
+   "token_reduktion_pct": 99.78029942696655,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 64756,
+    "token_reduktion_pct": 99.70041386126383
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 59376,
+    "tokens_mit": 34,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.94273780652115,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "157 Dateien mit safeParse; Produktionscode-Aufrufer u. a. ZodType.parse (v3), isOptional/isNullable (v3 und v4 classic), safeParse-Methoden (v4 classic/mini -> parse.safeParse), checkObjectGuards/checkArrayGuards (from-json-schema), ZodFunction-Validierung (v3, anonyme Closure)",
+    "myc": "teilweise",
+    "myc_begruendung": "28 Aufrufernamen ohne Datei; enthaelt parse, isOptional, isNullable, safeParse, checkObjectGuards, checkArrayGuards, _parse, runtimeParse, dazu Test-/Bench-Namen; Aufrufe in anonymen Closures (Mehrzahl der 157 Dateien, v. a. Tests) fehlen; 'safeParse' als Methode und als Funktion nicht unterschieden",
+    "ohne": "teilweise",
+    "ohne_begruendung": "grep-Ausgabe enthaelt alle 1.788 Fundzeilen (Datei + Zeilentext, ohne Zeilennummer); die 20 gelesenen Dateien sind alphabetisch die ersten (alle packages/bench/*), kein Kernmodul; umschliessende Funktion nur durch weiteres Lesen"
+   }
+  },
+  {
+   "repo": "zod",
+   "language": "typescript",
+   "id": "classes",
+   "label": "List all classes",
+   "repo_commit": "680d19f7d1e042e55934209caeb79bc843b94f44",
+   "variante": "skip",
+   "grep_pattern": "class ",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.kind = 'Class' RETURN s.name LIMIT 30\"",
+   "ohne": {
+    "tokens": 38133,
+    "aufrufe": 22,
+    "zeichen_glob": 34688,
+    "zeichen_grep": 15210,
+    "bytes_gelesen": 102635,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 22.741308438174034
+   },
+   "mit": {
+    "tokens": 90,
+    "aufrufe": 1,
+    "zeichen": 363,
+    "ausgabe_status": "ok",
+    "zeilen": 34,
+    "ausgabe_anfang": "s.name\n----------------------------------------\nJSONSchemaGenerator\n$ZodRegistry\n$ZodCyclicError\nDoc\nZodCompileAsyncError\nZodCompileUnsupportedError\nMyClass\nTest\nUser\nDefinition\n$ZodAsyncError\n$ZodEncodeError\nCached\nA\nA\nStringSchema\nTest\nSubtest\nBar\nTest\nCountingError\nMocker\nTest\nSubtest\nBar\nParseInputLazyPath\nZodString\nZodNumber\nZodBigInt\nZodBoolean\n\n30 row(s)"
+   },
+   "token_reduktion_pct": 99.76398395090867,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 3802,
+    "token_reduktion_pct": 97.63282482903735
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 30933,
+    "tokens_mit": 82,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.73491093654026,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "zod",
+   "language": "typescript",
+   "id": "blast_radius",
+   "label": "Blast radius of addIssueToContext",
+   "repo_commit": "680d19f7d1e042e55934209caeb79bc843b94f44",
+   "variante": "skip",
+   "grep_pattern": "addIssueToContext",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE t.name = 'addIssueToContext' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 13250,
+    "aufrufe": 4,
+    "zeichen_glob": 34688,
+    "zeichen_grep": 7207,
+    "bytes_gelesen": 11106,
+    "dateien_gelesen": 2,
+    "anteil_glob_pct": 65.44782173921246
+   },
+   "mit": {
+    "tokens": 39,
+    "aufrufe": 1,
+    "zeichen": 159,
+    "ausgabe_status": "ok",
+    "zeilen": 8,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\n_parse | Function\n_getInvalidInput | Method\nhandleResults | Function\nhandleParsed | Function\n\n4 row(s)"
+   },
+   "token_reduktion_pct": 99.7056603773585,
+   "aufruf_reduktion_pct": 75.0,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 1801,
+    "token_reduktion_pct": 97.83453636868407
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 12663,
+    "tokens_mit": 39,
+    "aufrufe_ohne": 4,
+    "token_reduktion_pct": 99.69201610992656,
+    "aufruf_reduktion_pct": 75.0
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "zod",
+   "language": "typescript",
+   "id": "call_graph",
+   "label": "What does parse call?",
+   "repo_commit": "680d19f7d1e042e55934209caeb79bc843b94f44",
+   "variante": "skip",
+   "grep_pattern": "parse",
+   "myc_befehl": "myc query \"MATCH (s)-[:CALLS]->(t) WHERE s.name = 'parse' RETURN s.name, t.name LIMIT 20\"",
+   "ohne": {
+    "tokens": 200644,
+    "aufrufe": 22,
+    "zeichen_glob": 34688,
+    "zeichen_grep": 703922,
+    "bytes_gelesen": 63967,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 4.32207750782791
+   },
+   "mit": {
+    "tokens": 24,
+    "aufrufe": 1,
+    "zeichen": 98,
+    "ausgabe_status": "ok",
+    "zeilen": 6,
+    "ausgabe_anfang": "s.name | t.name\n----------------------------------------\nparse | parse\nparse | safeParse\n\n2 row(s)"
+   },
+   "token_reduktion_pct": 99.98803851597854,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 175980,
+    "token_reduktion_pct": 99.98636208660075
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 158139,
+    "tokens_mit": 24,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.9848234780794,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  },
+  {
+   "repo": "zod",
+   "language": "typescript",
+   "id": "error_types",
+   "label": "Find all Error interfaces",
+   "repo_commit": "680d19f7d1e042e55934209caeb79bc843b94f44",
+   "variante": "skip",
+   "grep_pattern": "Error",
+   "myc_befehl": "myc query \"MATCH (s) WHERE s.name CONTAINS 'Error' AND s.kind = 'Interface' RETURN s.name, s.kind\"",
+   "ohne": {
+    "tokens": 83307,
+    "aufrufe": 22,
+    "zeichen_glob": 34688,
+    "zeichen_grep": 210802,
+    "bytes_gelesen": 87739,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 10.409658223023806
+   },
+   "mit": {
+    "tokens": 40,
+    "aufrufe": 1,
+    "zeichen": 160,
+    "ausgabe_status": "ok",
+    "zeilen": 8,
+    "ausgabe_anfang": "s.name | s.kind\n----------------------------------------\n$ZodErrorMap | Interface\n$ZodError | Interface\n$ZodRealError | Interface\nZodError | Interface\n\n4 row(s)"
+   },
+   "token_reduktion_pct": 99.9519848272054,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 52700,
+    "token_reduktion_pct": 99.92409867172675
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 67883,
+    "tokens_mit": 40,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.94107508507285,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": {
+    "referenz": "$ZodErrorMap, $ZodError, $ZodRealError (v4 core), ZodError (v4 classic)",
+    "myc": "beantwortet",
+    "myc_begruendung": "genau die vier Interfaces, keine Fehltreffer (ohne Fundort)",
+    "ohne": "teilweise",
+    "ohne_begruendung": "die vier Deklarationszeilen stehen in 1.572 grep-Zeilen aus 210 Dateien; gelesen werden Bench-Dateien"
+   }
+  },
+  {
+   "repo": "zod",
+   "language": "typescript",
+   "id": "process_flow",
+   "label": "Trace parse execution flow",
+   "repo_commit": "680d19f7d1e042e55934209caeb79bc843b94f44",
+   "variante": "skip",
+   "grep_pattern": "parse",
+   "myc_befehl": "myc processes --entry 'parse'",
+   "ohne": {
+    "tokens": 200644,
+    "aufrufe": 22,
+    "zeichen_glob": 34688,
+    "zeichen_grep": 703922,
+    "bytes_gelesen": 63967,
+    "dateien_gelesen": 20,
+    "anteil_glob_pct": 4.32207750782791
+   },
+   "mit": {
+    "tokens": 10111,
+    "aufrufe": 1,
+    "zeichen": 40445,
+    "ausgabe_status": "ok",
+    "zeilen": 1362,
+    "ausgabe_anfang": "Processes in zod:\n(filtered)\n\n  1. \"base64url compiled.safeParse\" flow (127 steps, entry: \"base64url compiled.safeParse\")\n     Flow: ├─ \"base64url compiled.safeParse\"\n  ├─ safeParse\n    ├─ getParsedType\n    ├─ _parseSync\n      ├─ _parse\n        ├─ _getType\n          ├─ getParsedType\n        ├─ _getOrReturnCtx\n          ├─ getParsedType\n        ├─ addIssueToContext\n          ├─ getErrorMap\n        "
+   },
+   "token_reduktion_pct": 94.96072646079624,
+   "aufruf_reduktion_pct": 95.45454545454545,
+   "runsh_status": "PASS",
+   "sensitivitaet_nur_grep": {
+    "tokens_ohne": 175980,
+    "token_reduktion_pct": 94.25446073417434
+   },
+   "veroeffentlicht": {
+    "tokens_ohne": 158139,
+    "tokens_mit": 8,
+    "aufrufe_ohne": 22,
+    "token_reduktion_pct": 99.99494115935981,
+    "aufruf_reduktion_pct": 95.45454545454545
+   },
+   "gleichwertigkeit": null
+  }
+ ],
+ "gleichwertigkeit_kriterien": {
+  "beantwortet": "Die Ausgabe nennt die gefragten Symbole/Zusammenhaenge vollstaendig gegen eine per grep und Lesen des Quelltexts erstellte Referenz, ohne relevante Fehlzuordnung. Fehlender Fundort (Datei/Zeile) wird vermerkt, zaehlt aber nicht als Abzug.",
+  "teilweise": "Richtig, aber unvollstaendig (LIMIT-Abschnitt, fehlende Eintraege), mehrdeutig (gleichnamige Symbole vermischt) oder in so viel Rauschen eingebettet, dass ein weiterer Schritt noetig ist.",
+  "nicht": "Die gefragte Information steht nicht in der Ausgabe (leere Antwort, falsche Entitaet, nur Rauschen)."
+ },
+ "gleichwertigkeit_auswahl": "13 Fragen, je 2 pro Repo (fastapi 3), so gewaehlt, dass jeder Fragetyp (callers, blast_radius, call_graph, error_types, semantic, process_flow) vorkommt. Nicht zufaellig und in Kenntnis der meisten Ausgaben ausgewaehlt; die Quote ist deshalb keine Schaetzung fuer alle 34 Fragen. Die mechanische Pruefung aller 34 Ausgaben steht in BERICHT.md.",
+ "hinweise": [
+  "analyze lief mit --skip-embeddings: keine der 34 Fragen liest Vektoren (query=Cypher, search ohne --hybrid = BM25, processes). Gegenprobe zod mit Embeddings: identische Zahlen fuer alle 6 Fragen, Laufzeit 1794 s statt 290 s.",
+  "express laeuft wie in run.sh mit Dateimuster '*' (get_ext kennt javascript nicht); Variante '*.js' aendert express auf 99,77 % / 90,77 % und das Gesamt auf 98,90 % / 94,05 %.",
+  "gin, express und tokio wurden zweimal unabhaengig gemessen (zweites HOME): alle Zahlen identisch, Ausgaben unterscheiden sich nur in der Spaltenreihenfolge (gleiche Bytezahl).",
+  "Repo-Pfad /tmp/myc-nachrechnung-repos/<name> statt /tmp/myceliums-benchmarks/repos/<lang>/<name>: die absoluten Pfade in find/grep-Ausgabe sind kuerzer, die ohne-Seite dadurch etwas kleiner (konservativ fuer myc)."
+ ],
+ "gleichwertigkeit_ergebnis": {
+  "myc": {
+   "teilweise": 4,
+   "beantwortet": 3,
+   "nicht": 6
+  },
+  "ohne": {
+   "teilweise": 7,
+   "beantwortet": 4,
+   "nicht": 2
+  },
+  "n": 13
+ }
+}

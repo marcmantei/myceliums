@@ -1,0 +1,6 @@
+s.name | t.name
+----------------------------------------
+parse | parse
+parse | safeParse
+
+2 row(s)

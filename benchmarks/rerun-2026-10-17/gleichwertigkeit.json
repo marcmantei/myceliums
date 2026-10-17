@@ -1,0 +1,140 @@
+{
+ "kriterien": {
+  "beantwortet": "Die Ausgabe nennt die gefragten Symbole/Zusammenhaenge vollstaendig gegen eine per grep und Lesen des Quelltexts erstellte Referenz, ohne relevante Fehlzuordnung. Fehlender Fundort (Datei/Zeile) wird vermerkt, zaehlt aber nicht als Abzug.",
+  "teilweise": "Richtig, aber unvollstaendig (LIMIT-Abschnitt, fehlende Eintraege), mehrdeutig (gleichnamige Symbole vermischt) oder in so viel Rauschen eingebettet, dass ein weiterer Schritt noetig ist.",
+  "nicht": "Die gefragte Information steht nicht in der Ausgabe (leere Antwort, falsche Entitaet, nur Rauschen)."
+ },
+ "fragen": [
+  {
+   "repo": "zod",
+   "id": "callers",
+   "frage": "Who calls safeParse?",
+   "referenz": "157 Dateien mit safeParse; Produktionscode-Aufrufer u. a. ZodType.parse (v3), isOptional/isNullable (v3 und v4 classic), safeParse-Methoden (v4 classic/mini -> parse.safeParse), checkObjectGuards/checkArrayGuards (from-json-schema), ZodFunction-Validierung (v3, anonyme Closure)",
+   "myc": "teilweise",
+   "myc_begruendung": "28 Aufrufernamen ohne Datei; enthaelt parse, isOptional, isNullable, safeParse, checkObjectGuards, checkArrayGuards, _parse, runtimeParse, dazu Test-/Bench-Namen; Aufrufe in anonymen Closures (Mehrzahl der 157 Dateien, v. a. Tests) fehlen; 'safeParse' als Methode und als Funktion nicht unterschieden",
+   "ohne": "teilweise",
+   "ohne_begruendung": "grep-Ausgabe enthaelt alle 1.788 Fundzeilen (Datei + Zeilentext, ohne Zeilennummer); die 20 gelesenen Dateien sind alphabetisch die ersten (alle packages/bench/*), kein Kernmodul; umschliessende Funktion nur durch weiteres Lesen"
+  },
+  {
+   "repo": "zod",
+   "id": "error_types",
+   "frage": "Find all Error interfaces",
+   "referenz": "$ZodErrorMap, $ZodError, $ZodRealError (v4 core), ZodError (v4 classic)",
+   "myc": "beantwortet",
+   "myc_begruendung": "genau die vier Interfaces, keine Fehltreffer (ohne Fundort)",
+   "ohne": "teilweise",
+   "ohne_begruendung": "die vier Deklarationszeilen stehen in 1.572 grep-Zeilen aus 210 Dateien; gelesen werden Bench-Dateien"
+  },
+  {
+   "repo": "fastapi",
+   "id": "callers",
+   "frage": "Who calls solve_dependencies?",
+   "referenz": "solve_dependencies (rekursiv, dependencies/utils.py), innere Funktion app in get_request_handler, innere Funktion app in get_websocket_app, _FrontendRouteGroup._solve_dependencies (routing.py)",
+   "myc": "beantwortet",
+   "myc_begruendung": "solve_dependencies, app, _solve_dependencies; vollstaendig, aber 'app' steht ununterscheidbar fuer zwei verschiedene innere Funktionen; ohne Fundort",
+   "ohne": "teilweise",
+   "ohne_begruendung": "grep zeigt alle 7 Fundzeilen; beide Dateien sind > 8.000 Bytes, gelesen werden nur die ersten 200 Zeilen, die Aufrufstellen (Zeile 511/828/2304) liegen dahinter -> umschliessende Funktionen fehlen"
+  },
+  {
+   "repo": "fastapi",
+   "id": "error_types",
+   "frage": "Find all Exception types",
+   "referenz": "HTTPException, WebSocketException, FastAPIError, DependencyScopeError, ValidationException, RequestValidationError, WebSocketRequestValidationError, ResponseValidationError (fastapi/exceptions.py)",
+   "myc": "nicht",
+   "myc_begruendung": "20 Zeilen (LIMIT 20) mit Namen, die 'exception' enthalten: fast nur Testfunktionen (test_*_exception), dazu eine Testklasse ExceptionCapture; keine einzige der acht Exception-Klassen",
+   "ohne": "teilweise",
+   "ohne_begruendung": "6 der 8 Klassenzeilen stehen in 280 grep-Zeilen (FastAPIError/DependencyScopeError enthalten 'Exception' nicht)"
+  },
+  {
+   "repo": "django",
+   "id": "callers",
+   "frage": "Who calls get_response?",
+   "referenz": "MiddlewareMixin.__call__/__acall__ (middleware/__init__.py), convert_exception_to_response.inner (core/handlers/exception.py), WSGIHandler.__call__ (core/handlers/wsgi.py), ClientHandler.__call__ (test/client.py), Methoden in contrib/auth/middleware.py, ein get_response-Override in test/testcases.py",
+   "myc": "teilweise",
+   "myc_begruendung": "18 Namen, davon 13 Testmethoden; __call__ steht ununterscheidbar fuer mehrere Klassen, inner/__acall__/get_response/middleware ohne Fundort",
+   "ohne": "beantwortet",
+   "ohne_begruendung": "270 grep-Zeilen; unter den 20 gelesenen Dateien sind middleware/__init__.py, exception.py, wsgi.py (ganz) sowie client.py und auth/middleware.py bis Zeile 200, in denen die Aufrufe stehen (nur testcases.py:1692 liegt ausserhalb)"
+  },
+  {
+   "repo": "django",
+   "id": "call_graph",
+   "frage": "What does setup call?",
+   "referenz": "django.setup(): configure_logging, set_script_prefix, apps.populate (django/__init__.py); daneben gibt es View.setup und weitere setup-Methoden",
+   "myc": "teilweise",
+   "myc_begruendung": "configure_logging, set_script_prefix, populate sind enthalten, aber vermischt mit Aufrufen anderer setup-Symbole (super, update, replace, value, connect, add_node, setup); keine Zuordnung, welches setup was ruft",
+   "ohne": "beantwortet",
+   "ohne_begruendung": "django/__init__.py (825 Bytes) ist unter den gelesenen Dateien und enthaelt den vollstaendigen Rumpf von setup()"
+  },
+  {
+   "repo": "fastapi",
+   "id": "semantic",
+   "frage": "Search dependency injection code",
+   "referenz": "fastapi/dependencies/* (Depends, solve_dependencies, get_dependant) bzw. Depends-Nutzungen",
+   "myc": "nicht",
+   "myc_begruendung": "BM25 liefert (auf 20 Zeilen gekuerzt) 9 Markdown-Ueberschriften 'Dependency Injection' aus uebersetzten Dokus, keinen Code",
+   "ohne": "teilweise",
+   "ohne_begruendung": "603 Depends-Zeilen; die 20 gelesenen Dateien sind docs_src/dependencies-Tutorials, also DI-Beispielcode, nicht die Implementierung"
+  },
+  {
+   "repo": "express",
+   "id": "callers",
+   "frage": "Who calls app.handle?",
+   "referenz": "innere Funktion app in createApplication (lib/express.js: app.handle(req, res, next)); in app.use gemountete Apps rufen fn.handle (lib/application.js)",
+   "myc": "nicht",
+   "myc_begruendung": "'(no results)' - 12 Zeichen, von run.sh als 99,9 % Reduktion und PASS gezaehlt",
+   "ohne": "beantwortet",
+   "ohne_begruendung": "grep findet lib/express.js und lib/application.js; express.js (1.636 Bytes) wird ganz gelesen und zeigt createApplication mit app.handle"
+  },
+  {
+   "repo": "express",
+   "id": "process_flow",
+   "frage": "Trace request handling flow",
+   "referenz": "app(req,res) -> app.handle -> this.router.handle (Router aus dem Paket 'router')",
+   "myc": "nicht",
+   "myc_begruendung": "drei 2-Schritt-Flows handleHeaders/handler1/handler2 aus Tests/Beispielen, nicht der Anfragepfad",
+   "ohne": "beantwortet",
+   "ohne_begruendung": "unter den 20 gelesenen Dateien sind lib/express.js (ganz) und lib/application.js (erste 200 Zeilen, enthalten app.handle bis router.handle)"
+  },
+  {
+   "repo": "gin",
+   "id": "blast_radius",
+   "frage": "Blast radius of handleHTTPRequest",
+   "referenz": "Engine.ServeHTTP, Engine.HandleContext (gin.go)",
+   "myc": "beantwortet",
+   "myc_begruendung": "genau ServeHTTP und HandleContext (ohne Fundort)",
+   "ohne": "teilweise",
+   "ohne_begruendung": "grep zeigt die zwei Aufrufzeilen in gin.go; gin.go wird nur bis Zeile 200 gelesen, die Funktionen stehen bei Zeile 691/709"
+  },
+  {
+   "repo": "gin",
+   "id": "call_graph",
+   "frage": "What does Run call?",
+   "referenz": "Engine.Run: isUnsafeTrustedProxies, debugPrint, updateRouteTrees, resolveAddress, Handler, getReadHeaderTimeout, http.Server.ListenAndServe, debugPrintError (defer-Closure)",
+   "myc": "teilweise",
+   "myc_begruendung": "6 von 8 Aufrufen (isUnsafeTrustedProxies, debugPrint, updateRouteTrees, resolveAddress, Handler, getReadHeaderTimeout); es fehlen http.Server.ListenAndServe - der Aufruf, der den Server startet - und debugPrintError (defer-Closure); dazu Rauschen 'Run', 'engine'",
+   "ohne": "nicht",
+   "ohne_begruendung": "grep 'func.*Run' liefert nur 23 Signaturzeilen; der Rumpf von Run (gin.go Zeile 566) liegt hinter den gelesenen 200 Zeilen"
+  },
+  {
+   "repo": "tokio",
+   "id": "call_graph",
+   "frage": "What does Runtime::new call?",
+   "referenz": "Builder::new_multi_thread().enable_all().build() (tokio/src/runtime/runtime.rs:179)",
+   "myc": "nicht",
+   "myc_begruendung": "'(no results)' (die Abfrage filtert auf s.file CONTAINS 'runtime') - als 99,9 % Reduktion und PASS gezaehlt",
+   "ohne": "nicht",
+   "ohne_begruendung": "grep 'fn new' trifft 258 Dateien, die Signaturzeile von Runtime::new ist dabei, der Rumpf nicht; die 20 gelesenen Dateien sind benches/examples/tokio-stream"
+  },
+  {
+   "repo": "tokio",
+   "id": "error_types",
+   "frage": "Find all Error types",
+   "referenz": "u. a. JoinError, SendError/RecvError/TryRecvError (sync), AcquireError/TryAcquireError, time::error::Error, Elapsed, TryCurrentError, BroadcastStreamRecvError",
+   "myc": "nicht",
+   "myc_begruendung": "LIMIT 20: Testfunktionen, 13x 'Error | TypeAlias' (assoziierte Typen 'type Error = ...'), ein Modul 'errors'; einziger echter Fehlertyp BroadcastStreamRecvError",
+   "ohne": "teilweise",
+   "ohne_begruendung": "Deklarationszeilen stehen in 2.388 grep-Zeilen aus 278 Dateien"
+  }
+ ],
+ "auswahl": "13 Fragen, je 2 pro Repo (fastapi 3), so gewaehlt, dass jeder Fragetyp (callers, blast_radius, call_graph, error_types, semantic, process_flow) vorkommt. Nicht zufaellig und in Kenntnis der meisten Ausgaben ausgewaehlt; die Quote ist deshalb keine Schaetzung fuer alle 34 Fragen. Die mechanische Pruefung aller 34 Ausgaben steht in BERICHT.md."
+}

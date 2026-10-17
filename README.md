@@ -33,7 +33,7 @@ Repository ID: my-project-a1b2c3
 |---|---|
 | AI grep-searches across hundreds of files | One graph query returns exact results |
 | "What calls this function?" → hallucinated guesses | Heuristic caller/callee chains from name-based resolution |
-| Full source files sent to AI (thousands of tokens) | Structural summaries (~200 tokens) |
+| Full source files sent to AI (thousands of tokens) | Structural summaries: signatures, callers, callees |
 | No understanding of code architecture | Community detection reveals code clusters |
 | Manual impact analysis | `myc impact` traces blast radius (with confidence flags) |
 
@@ -42,7 +42,7 @@ Repository ID: my-project-a1b2c3
 - **23 languages** — TypeScript, JavaScript, Python, Go, Rust, Java, C#, C, C++, Ruby, Kotlin, Swift, PHP, TSX, Lua, Zig, PowerShell, Elixir, Scala, Objective-C, Dart, Vue, Svelte
 - **Content files** — Markdown, MDX, and plain text indexed alongside code (headings as Section symbols, links as References edges)
 - **Cypher queries** — Query your codebase like a database: `MATCH (s)-[:CALLS]->(t) RETURN t.name`
-- **Token-optimized reviews** — `get_review_context` returns minimal structural summaries instead of full source, reducing AI token usage by 5-20x
+- **Token-optimized reviews** — `get_review_context` returns minimal structural summaries (signatures, callers, callees) instead of full source
 - **Interactive visualization** — `myc serve` launches a D3.js force-directed graph explorer in your browser
 - **Community detection** — Leiden algorithm automatically discovers code clusters and architectural boundaries
 - **Process tracing** — Maps execution flows from entry points through entire call chains
@@ -142,7 +142,7 @@ myc serve
 
 ## Token-optimized AI reviews
 
-The `get_review_context` MCP tool dramatically reduces token consumption by returning structural summaries instead of full source code:
+The `get_review_context` MCP tool returns structural summaries instead of full source code. An example response (the symbols and figures in it are illustrative):
 
 ```
 Review context for 3 changed symbols across 2 files:
@@ -160,10 +160,10 @@ Callees (dependencies):
 
 Communities touched: [request-handling, input-validation]
 
-Token estimate: ~187 tokens (vs ~4,200 for full files — 22x reduction)
+Token estimate: ~187 tokens (vs ~4,200 for full source — 22x reduction)
 ```
 
-AI agents get everything they need for a code review in ~200 tokens instead of thousands.
+The `Token estimate` line is a size estimate, not a measured saving: it divides the character count of the summary by four and sets it against the character count of the indexed symbols in the affected files, also divided by four. It does not measure how many tokens an agent actually spends on a review, or whether the summary alone is enough for it. See [How token savings work](docs/guides/token-savings.md).
 
 ---
 
@@ -419,6 +419,12 @@ benchmark deliberately does not do — not because the features are missing._
 BM25 is strong when a query names the symbol (exact-name MRR **0.93**) and much weaker when it does not (paraphrase MRR **0.40**) — which is precisely the gap the semantic and hybrid modes exist to close. The three model-backed modes are reported as unmeasured rather than estimated: scoring them requires downloading model weights, which the offline benchmark deliberately does not do. **The claim that hybrid and reranking improve accuracy is therefore untested in these numbers.**
 
 Reproduce with `cargo run -p myceliums-benchmarks --bin retrieval-eval`. Methodology, labelling rules and limitations: [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
+
+### How much text does a query print?
+
+A scripted comparison, re-run on 17 October 2026 with `myc 0.3.2` on 34 questions over six open-source repositories (django, express, gin, tokio, fastapi, zod), sets the output of one `myc` command against a baseline of `find` + `grep -r` + reading up to 20 matching files, both counted as characters ÷ 4. Summed over all questions the `myc` output was 98.9 % smaller. Per question it printed a median of ~370× less text across the 30 questions where it printed a result, and ~51× less than the `grep` output alone. One call replaced 3 to 22, a ratio the script itself fixes.
+
+**This is not a measured agent saving, and the answers were only spot-checked.** No agent was involved, and the script does not check whether either side answers the question: 4 of the 34 `myc` queries printed `(no results)` and still counted as savings. In a hand spot check of 16 questions the `myc` output fully answered 4, partly 6 and not 6 (grep baseline: 4 / 10 / 2). The previously published 99.8 % / 94.1 % (v0.2.0) are withdrawn: 21 of those 34 values could not be reproduced with `benchmarks/run.sh`, which also had to be patched for this re-run because it skips Go, JavaScript and Rust. Method, all limits and raw data: [`benchmarks/README.md`](benchmarks/README.md#re-run-of-17-october-2026).
 
 ---
 

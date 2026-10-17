@@ -1,0 +1,70 @@
+diff --git a/benchmarks/run.sh b/benchmarks/run.sh
+index 48c8dad..117a7b4 100755
+--- a/benchmarks/run.sh
++++ b/benchmarks/run.sh
+@@ -28,17 +28,17 @@ set -euo pipefail
+ #   - git, grep, find, wc
+ # =============================================================================
+ 
+-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
++SCRIPT_DIR="${NACH_BENCH:?}"
+ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+-MYC="$PROJECT_ROOT/target/release/myc"
+-REPOS_DIR="/tmp/myceliums-benchmarks/repos"
++MYC="${NACH_MYC:?}"
++REPOS_DIR="/tmp/myc-nachrechnung-repos"
+ REPOS_TOML="$SCRIPT_DIR/repos.toml"
+ 
+ # Get version from Cargo.toml
+ VERSION=$(grep 'version = ' "$PROJECT_ROOT/Cargo.toml" | head -1 | cut -d'"' -f2)
+ 
+ # Results are versioned: benchmarks/results/v0.2.0/typescript/zod.json
+-RESULTS_DIR="$SCRIPT_DIR/results/v${VERSION}"
++RESULTS_DIR="${NACH_RESULTS:?}"
+ 
+ export PATH="$HOME/.cargo/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin:$PATH"
+ 
+@@ -297,6 +297,7 @@ run_question() {
+         myc_output=$("$MYC" processes "$repo_id" --entry "$qprocesses" 2>&1 || true)
+     fi
+ 
++    if [[ -n "${NACH_RAW:-}" ]]; then mkdir -p "$NACH_RAW/$repo"; printf "%s" "$myc_output" > "$NACH_RAW/$repo/$qid.myc.txt"; printf "%s" "$grep_output" > "$NACH_RAW/$repo/$qid.grep.txt"; printf "%s\n" "$files_list" | head -20 > "$NACH_RAW/$repo/$qid.files.txt"; printf "%s %s %s %s\n" "$glob_bytes" "$grep_bytes" "$read_bytes" "$read_count" > "$NACH_RAW/$repo/$qid.bytes.txt"; fi
+     local myc_bytes=${#myc_output}
+     local tokens_with
+     tokens_with=$(estimate_tokens $myc_bytes)
+@@ -345,7 +346,7 @@ benchmark_repo() {
+     local stars="$5"
+     local category="$6"
+ 
+-    local repo_path="$REPOS_DIR/$lang/$repo"
++    local repo_path="$REPOS_DIR/$repo"
+     local result_dir="$RESULTS_DIR/$lang"
+     local result_file="$result_dir/$repo.json"
+ 
+@@ -380,7 +381,7 @@ benchmark_repo() {
+     # Analyze with Myceliums
+     printf "  Analyzing with Myceliums...\n"
+     local analyze_output
+-    analyze_output=$("$MYC" analyze "$repo_path" 2>&1 || true)
++    analyze_output=$("$MYC" analyze --skip-embeddings "$repo_path" 2>&1 || true)
+ 
+     # Extract repo ID
+     local repo_id
+@@ -494,7 +495,7 @@ ENDJSON
+ generate_aggregate() {
+     local all_results="$RESULTS_DIR"
+     local aggregate_file="$RESULTS_DIR/aggregate.json"
+-    local latest_file="$SCRIPT_DIR/latest.json"
++    local latest_file="$RESULTS_DIR/latest.json"
+ 
+     echo ""
+     printf "${BOLD}${BLUE}━━━ Generating aggregate results${NC}\n"
+@@ -837,7 +838,7 @@ for entry in "${REPO_ENTRIES[@]}"; do
+ 
+     # Check parser support
+     case "$lang" in
+-        typescript|python) ;;
++        typescript|python|javascript|go|rust) ;;
+         *)
+             printf "\n  ${YELLOW}SKIP %s/%s — %s parser not yet implemented${NC}\n" "$lang" "$repo" "$lang"
+             continue

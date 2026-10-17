@@ -42,7 +42,7 @@ Communities touched:
   - auth-core (5 members)
 ```
 
-This gives the model the same understanding in roughly **200 tokens** instead of 4,000+. That is a **5-22x reduction** depending on the size of the files involved.
+This is shorter than the files it summarises, because it leaves out bodies, imports and unrelated code. How much shorter depends on the files involved. Each response ends with a `Token estimate` line that sets the size of the summary against the size of the indexed symbols in the affected files (characters divided by four for both). That line is a size estimate, not a measured token saving: there is no measurement yet of how many tokens an agent spends on a review with and without myceliums, or of whether it reaches the same conclusion from the summary alone.
 
 ## Token Savings Are Not Automatic
 
@@ -86,10 +86,9 @@ If you want to minimize setup overhead, run `myc analyze --skip-embeddings`. You
 
 ## Summary
 
-| Approach | Tokens per query | Setup needed |
-|----------|-----------------|--------------|
-| Raw file reads | 4,000-16,000 | None |
-| Myceliums structural summary | 200-800 | `myc setup` + analysis |
-| Savings | 5-22x reduction | One-time |
+| Approach | What the model receives | Setup needed |
+|----------|-------------------------|--------------|
+| Raw file reads | Whole files: bodies, imports and unrelated code included | None |
+| Myceliums structural summary | Signatures, callers, callees and touched communities | `myc setup` + analysis |
 
-The savings compound over a session. A typical development session might involve 20-50 context lookups. At 5x savings per lookup, that adds up to tens of thousands of tokens saved per session.
+There is no measured figure for the saving yet. The `Token estimate` line tells you roughly how much smaller one summary is than the source behind it; it cannot tell you how many tokens an agent would have spent otherwise, because that depends on what the agent would have read instead.

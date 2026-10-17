@@ -1,0 +1,24 @@
+s.name | s.kind
+----------------------------------------
+no_body_status_code_exception | Function
+no_body_status_code_with_detail_exception | Function
+test_no_body_status_code_exception_handlers | Function
+test_no_body_status_code_with_detail_exception_handlers | Function
+test_custom_middleware_exception | Function
+test_custom_middleware_exception_not_raised | Function
+test_dependency_gets_exception | Function
+test_dependency_no_exception | Function
+test_real_otlp_exception_export_without_traces_or_metrics | Function
+test_exception_is_logged_once_with_trace_context | Function
+test_handled_exceptions_and_validation_are_not_error_logs | Function
+test_http_exception_records_status_without_exception_telemetry | Function
+test_exception_handler_failure_is_logged_once_as_unhandled | Function
+test_exception_type_matches_spans_metrics_and_logs | Function
+test_unexpected_exception | Function
+test_handled_websocket_exception | Function
+test_logfire_native_spans_and_exception_logs | Function
+ExceptionCapture | Class
+test_get_exception | Function
+test_exception_handler_body_access | Function
+
+20 row(s)
