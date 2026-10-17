@@ -9,6 +9,11 @@
 > percentages are arithmetic on the assumptions, not observed improvements.
 > Earlier versions of this document described them as measured; that was
 > wrong.
+>
+> The output-size comparison of `run.sh` is a different benchmark: it does run
+> `grep` and `myc` commands. Its re-run of 17 October 2026, with method and
+> limits, and the withdrawal of the 99.8 % / 94.1 % published for v0.2.0 are
+> in [README.md](./README.md#re-run-of-17-october-2026).
 
 ## Overview
 

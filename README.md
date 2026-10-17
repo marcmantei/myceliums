@@ -420,6 +420,12 @@ BM25 is strong when a query names the symbol (exact-name MRR **0.93**) and much 
 
 Reproduce with `cargo run -p myceliums-benchmarks --bin retrieval-eval`. Methodology, labelling rules and limitations: [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
 
+### How much text does a query print?
+
+A scripted comparison, re-run on 17 October 2026 with `myc 0.3.2` on 34 questions over six open-source repositories (django, express, gin, tokio, fastapi, zod), sets the output of one `myc` command against a baseline of `find` + `grep -r` + reading up to 20 matching files, both counted as characters ÷ 4. Summed over all questions the `myc` output was 98.9 % smaller. Per question it printed a median of ~370× less text across the 30 questions where it printed a result, and ~51× less than the `grep` output alone. One call replaced 3 to 22, a ratio the script itself fixes.
+
+**This is not a measured agent saving, and the answers were only spot-checked.** No agent was involved, and the script does not check whether either side answers the question: 4 of the 34 `myc` queries printed `(no results)` and still counted as savings. In a hand spot check of 16 questions the `myc` output fully answered 4, partly 6 and not 6 (grep baseline: 4 / 10 / 2). The previously published 99.8 % / 94.1 % (v0.2.0) are withdrawn: 21 of those 34 values could not be reproduced with `benchmarks/run.sh`, which also had to be patched for this re-run because it skips Go, JavaScript and Rust. Method, all limits and raw data: [`benchmarks/README.md`](benchmarks/README.md#re-run-of-17-october-2026).
+
 ---
 
 ## Architecture
