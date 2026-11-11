@@ -2,20 +2,17 @@ use std::path::Path;
 use walkdir::WalkDir;
 
 /// Benchmark infrastructure module
-pub mod baseline;
+pub mod ann;
 pub mod eval;
 pub mod fixtures;
 pub mod large_repo;
 pub mod metrics;
 pub mod report;
-pub mod scenarios;
 
-pub use baseline::*;
 pub use fixtures::*;
 pub use large_repo::*;
 pub use metrics::*;
 pub use report::*;
-pub use scenarios::*;
 
 /// Count the number of files in a directory recursively
 pub fn count_files(path: &Path) -> usize {

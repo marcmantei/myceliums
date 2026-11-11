@@ -77,6 +77,14 @@ pub enum QueryIntent {
 }
 
 impl QueryIntent {
+    /// Every intent, in report order.
+    pub const ALL: [QueryIntent; 4] = [
+        QueryIntent::ExactName,
+        QueryIntent::Paraphrase,
+        QueryIntent::Behavioural,
+        QueryIntent::Conceptual,
+    ];
+
     /// Short label used in reports.
     pub fn label(&self) -> &'static str {
         match self {
