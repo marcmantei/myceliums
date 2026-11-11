@@ -1,0 +1,32 @@
+# Dependency updates. Grouped so a routine week is one PR per ecosystem, not
+# dozens; semver-major Cargo bumps stay separate because they usually need code
+# changes. Security updates are not limited by these schedules.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      cargo-minor-patch:
+        update-types: [minor, patch]
+
+  # Workflows under .github/workflows and the composite action under
+  # .github/actions. Actions are pinned to commit SHAs; Dependabot moves the SHA
+  # and the `# vX.Y.Z` comment together.
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions:
+        patterns: ["*"]
