@@ -13,6 +13,10 @@ resolver = "2"
 [workspace.package]
 version = "0.3.2"
 edition = "2021"
+# Minimum supported Rust version. Set by the dependency tree, not by our own
+# code: the newest `rust-version` among locked dependencies (lancedb,
+# datafusion, time, ...) is 1.88. CI checks it in the `MSRV` job.
+rust-version = "1.88"
 license = "Apache-2.0"
 authors = ["Marc Mantei"]
 repository = "https://github.com/marcmantei/myceliums"
