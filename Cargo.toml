@@ -71,7 +71,7 @@ tree-sitter-objc = "3"
 tree-sitter-dart = "0.1"
 
 # Graph
-graphrs = "0.11"
+graphrs = "0.12"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
