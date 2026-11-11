@@ -13,7 +13,7 @@ use myceliums_core::{
     ArchDecisionRecord, CommunityDetector, GraphService, MermaidDiagramType, Ontology,
     ProcessFilter, ProcessTracer, RenamePlan,
 };
-use myceliums_storage::{RepoInfo, RepoRegistry, Store};
+use myceliums_storage::{RepoIdError, RepoInfo, RepoRegistry, Store};
 use rmcp::handler::server::tool::ToolRouter;
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::model::*;
@@ -26,6 +26,9 @@ use std::path::PathBuf;
 use tracing::info;
 
 mod format;
+pub mod http_security;
+
+pub use http_security::McpHttpOptions;
 
 fn data_dir() -> PathBuf {
     // `MYCELIUMS_DATA_DIR` overrides the data home so the server can be pointed
@@ -44,6 +47,24 @@ fn data_dir() -> PathBuf {
 
 fn registry_path() -> PathBuf {
     data_dir().join("repos.json")
+}
+
+/// Database directory for a caller-supplied repo id.
+///
+/// This is the MCP side of the repo-id choke point
+/// ([`RepoRegistry::registered_db_path`]): malformed or unregistered ids are
+/// rejected with an error that lists the known ids, before any path is built
+/// or any directory is created.
+fn registered_db_path(repo_id: &str) -> Result<PathBuf, rmcp::ErrorData> {
+    RepoRegistry::load(&registry_path())
+        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
+        .registered_db_path(&data_dir(), repo_id)
+        .map_err(repo_id_error)
+}
+
+/// A rejected repo id is a problem with the request, not with the server.
+fn repo_id_error(e: RepoIdError) -> rmcp::ErrorData {
+    rmcp::ErrorData::invalid_params(e.to_string(), None)
 }
 
 pub struct MyceliumsMcp {
@@ -122,6 +143,25 @@ impl MyceliumsMcp {
     /// Invoke the `semantic_search` handler.
     pub async fn semantic_search_for_test(&self, params: SearchParams) -> Result<String, String> {
         self.semantic_search(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `list_repos` handler.
+    pub async fn list_repos_for_test(&self) -> Result<String, String> {
+        self.list_repos()
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `symbol_context` handler.
+    pub async fn symbol_context_for_test(
+        &self,
+        params: SymbolContextParams,
+    ) -> Result<String, String> {
+        self.symbol_context(Parameters(params))
             .await
             .map(|json| json.0.text)
             .map_err(|e| e.message.to_string())
@@ -1184,7 +1224,7 @@ impl MyceliumsMcp {
                     cache::check_cache(repo_info, &abs_path, &cache_config)
                 {
                     info!("Using cached analysis: {}", reason);
-                    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+                    let db_path = registered_db_path(&repo_id)?;
                     let store = Store::open(&db_path, &repo_id).await.map_err(|e| {
                         rmcp::ErrorData::internal_error(format!("Store error: {}", e), None)
                     })?;
@@ -1228,6 +1268,8 @@ impl MyceliumsMcp {
             }
         }
 
+        // Write path: `repo_id` was derived from the canonical project path
+        // above, not supplied by the caller, and this run registers it.
         let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
         std::fs::create_dir_all(&db_path).map_err(|e| {
             rmcp::ErrorData::internal_error(format!("Failed to create dir: {}", e), None)
@@ -1330,6 +1372,18 @@ impl MyceliumsMcp {
         }))
     }
 
+    #[tool(
+        name = "list_repos",
+        description = "List the analyzed repositories (id, name, path, last analysis, size). Read-only. Use it to find the repo_id the other tools expect."
+    )]
+    async fn list_repos(&self) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+        let registry = RepoRegistry::load(&registry_path())
+            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        Ok(Json(TextOutput {
+            text: format::format_repo_list(&registry.list()),
+        }))
+    }
+
     #[tool(name = "delete", description = "Delete a repository's analysis data")]
     async fn delete(
         &self,
@@ -1338,16 +1392,15 @@ impl MyceliumsMcp {
         let mut registry = RepoRegistry::load(&registry_path())
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let info = registry.remove(&params.repo_id).ok_or_else(|| {
-            rmcp::ErrorData::internal_error(
-                format!("Repository not found: {}", params.repo_id),
-                None,
-            )
-        })?;
+        let db_path = registry
+            .registered_db_path(&data_dir(), &params.repo_id)
+            .map_err(repo_id_error)?;
+        let info = registry
+            .remove(&params.repo_id)
+            .expect("registered_db_path accepted the id, so it is registered");
         registry
             .save()
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
         if db_path.exists() {
             std::fs::remove_dir_all(&db_path)
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1450,7 +1503,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<HybridSearchParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1538,7 +1591,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<CypherQueryParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1565,7 +1618,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<DetectImpactParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1615,7 +1668,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<RenameParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1650,7 +1703,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<SearchParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1702,7 +1755,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ReviewContextParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1902,7 +1955,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetProcessesParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1942,7 +1995,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCommunitiesParams>,
     ) -> Result<Json<CommunitiesOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -1974,7 +2027,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCommunityDetailParams>,
     ) -> Result<Json<CommunityDetailOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2068,7 +2121,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetSymbolDefinitionParams>,
     ) -> Result<Json<SymbolDefinitionOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2136,7 +2189,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<FindDeadCodeParams>,
     ) -> Result<Json<DeadCodeOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2210,7 +2263,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCallersParams>,
     ) -> Result<Json<CallersOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2333,7 +2386,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCalleesParams>,
     ) -> Result<Json<CalleesOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2455,7 +2508,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetFileSymbolsParams>,
     ) -> Result<Json<FileSymbolsOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2496,7 +2549,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetGodNodesParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2550,7 +2603,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetSurprisingConnectionsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2603,7 +2656,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<FindPathParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2741,7 +2794,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<QueryKnowledgeParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2868,7 +2921,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetRationaleParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -2980,7 +3033,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetKnowledgeGapsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -3325,7 +3378,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetStatsParams>,
     ) -> Result<Json<StatsOutput>, rmcp::ErrorData> {
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -3396,7 +3449,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetSuggestedQuestionsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -3451,7 +3504,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetGraphDiffParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
 
         // Load previous snapshot
         let previous = load_snapshot(&data_dir(), &repo_id)
@@ -3536,7 +3589,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<SearchEmailsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -3608,11 +3661,7 @@ impl MyceliumsMcp {
             params.query
         );
         for s in &results {
-            let snippet = if s.content.len() > 200 {
-                format!("{}...", &s.content[..200])
-            } else {
-                s.content.clone()
-            };
+            let snippet = myceliums_core::text::snippet(&s.content, 200);
             output.push_str(&format!(
                 "- **{}**\n  {}\n  Body: {}\n  UID: {}\n\n",
                 s.name, s.signature, snippet, s.uid
@@ -3631,7 +3680,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetConversationParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -3694,11 +3743,7 @@ impl MyceliumsMcp {
                 .and_then(|r| symbols.iter().find(|s| s.uid == r.target_uid))
                 .map(|s| s.name.as_str());
 
-            let snippet = if email.content.len() > 300 {
-                format!("{}...", &email.content[..300])
-            } else {
-                email.content.clone()
-            };
+            let snippet = myceliums_core::text::snippet(&email.content, 300);
 
             output.push_str(&format!(
                 "---\nFrom: {}\nSubject: {}\n{}\n\n{}\n\n",
@@ -3721,7 +3766,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetPersonContextParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -3831,7 +3876,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetGitContextParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(Some(&params.repo_id))?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -3905,7 +3950,7 @@ impl MyceliumsMcp {
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         use myceliums_core::cross_repo::{self, IsolateConfig};
 
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -3977,7 +4022,7 @@ impl MyceliumsMcp {
         };
 
         // Isolate intent in source repo
-        let src_db = RepoRegistry::repo_db_path(&data_dir(), &params.source_repo_id);
+        let src_db = registered_db_path(&params.source_repo_id)?;
         let src_store = Store::open(&src_db, &params.source_repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("Source store: {}", e), None))?;
@@ -4018,7 +4063,7 @@ impl MyceliumsMcp {
         .map_err(|e| rmcp::ErrorData::internal_error(format!("Source isolation: {}", e), None))?;
 
         // Isolate intent in target repo
-        let tgt_db = RepoRegistry::repo_db_path(&data_dir(), &params.target_repo_id);
+        let tgt_db = registered_db_path(&params.target_repo_id)?;
         let tgt_store = Store::open(&tgt_db, &params.target_repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("Target store: {}", e), None))?;
@@ -4105,7 +4150,7 @@ impl MyceliumsMcp {
         };
 
         // Isolate both repos
-        let src_db = RepoRegistry::repo_db_path(&data_dir(), &params.source_repo_id);
+        let src_db = registered_db_path(&params.source_repo_id)?;
         let src_store = Store::open(&src_db, &params.source_repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4143,7 +4188,7 @@ impl MyceliumsMcp {
         .await
         .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let tgt_db = RepoRegistry::repo_db_path(&data_dir(), &params.target_repo_id);
+        let tgt_db = registered_db_path(&params.target_repo_id)?;
         let tgt_store = Store::open(&tgt_db, &params.target_repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4309,7 +4354,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetCentralityParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4396,7 +4441,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetCommunityMetricsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4454,7 +4499,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<DetectCyclesParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4509,7 +4554,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetDependenciesParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4550,7 +4595,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetModuleCouplingParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4599,7 +4644,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ExportMermaidParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4633,7 +4678,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<QualityHotspotsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4664,7 +4709,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ArchitectureLintParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4700,7 +4745,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ArchitectureViewParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4734,7 +4779,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<DetectDriftParams2>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4782,7 +4827,7 @@ impl MyceliumsMcp {
             .get(&params.repo_id)
             .ok_or_else(|| rmcp::ErrorData::internal_error("Repo not found".to_string(), None))?;
 
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &params.repo_id);
+        let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -4813,6 +4858,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<MapServiceParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+        self.resolve_repo_id(Some(&params.repo_id))?;
         save_service_mapping(
             &data_dir(),
             &params.repo_id,
@@ -4886,6 +4932,7 @@ impl MyceliumsMcp {
             updated_at: now,
         };
 
+        self.resolve_repo_id(Some(&params.repo_id))?;
         save_decision(&data_dir(), &params.repo_id, &adr)
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
@@ -4928,6 +4975,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<LinkDecisionParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+        self.resolve_repo_id(Some(&params.repo_id))?;
         link_decision_to_symbol(
             &data_dir(),
             &params.repo_id,
@@ -4959,7 +5007,7 @@ impl MyceliumsMcp {
             .get(&repo_id)
             .ok_or_else(|| rmcp::ErrorData::internal_error("Repo not found".to_string(), None))?;
 
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
+        let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
             .await
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -5106,12 +5154,18 @@ impl MyceliumsMcp {
         }
     }
 
+    /// Turns an optional caller-supplied repo id into a registered one.
+    ///
+    /// An explicit id must pass [`RepoRegistry::require`]; without one, the
+    /// repo containing the working directory (or else the most recently
+    /// analyzed repo) is used.
     fn resolve_repo_id(&self, repo_id: Option<&str>) -> Result<String, rmcp::ErrorData> {
-        if let Some(id) = repo_id {
-            return Ok(id.to_string());
-        }
         let registry = RepoRegistry::load(&registry_path())
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        if let Some(id) = repo_id {
+            registry.require(id).map_err(repo_id_error)?;
+            return Ok(id.to_string());
+        }
 
         // Try to match current working directory to a registered repo
         if let Ok(cwd) = std::env::current_dir() {
@@ -5170,12 +5224,7 @@ impl MyceliumsMcp {
         }
 
         let repo_id = parts[0];
-        let registry =
-            RepoRegistry::load(&registry_path()).map_err(|e| mcp_err(format!("{}", e)))?;
-        let _repo_info = registry
-            .get(repo_id)
-            .ok_or_else(|| mcp_err(format!("Repository not found: {}", repo_id)))?;
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), repo_id);
+        let db_path = registered_db_path(repo_id)?;
         let store = Store::open(&db_path, repo_id)
             .await
             .map_err(|e| mcp_err(format!("{}", e)))?;
@@ -5638,15 +5687,39 @@ pub async fn run_mcp_server() -> Result<()> {
 /// This uses rmcp's native `StreamableHttpService` which implements the
 /// MCP Streamable HTTP transport specification (SSE-based).
 /// Clients connect via `POST /mcp` with JSON-RPC messages.
-pub async fn run_mcp_http_server(addr: &str) -> Result<()> {
+///
+/// Access control follows [`http_security`]: loopback unless
+/// `opts.allow_remote`, a bearer token for remote use, Host and Origin
+/// validation, and CORS for loopback origins only. A refused configuration
+/// is returned as an error before anything binds.
+pub async fn run_mcp_http_server(opts: McpHttpOptions) -> Result<()> {
+    use http_security::HttpSecurity;
     use rmcp::transport::streamable_http_server::{
         session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
     };
     use std::sync::Arc;
     use tokio_util::sync::CancellationToken;
-    use tower_http::cors::{Any, CorsLayer};
 
+    let security = HttpSecurity::plan(&opts)?;
+    let addr = opts.addr.as_str();
     info!("Starting Myceliums MCP HTTP server on {}", addr);
+    if !security.loopback_only {
+        eprintln!(
+            "WARNING: MCP HTTP server accepts remote clients on {addr}. Every request needs \
+             `Authorization: Bearer <token>`; the transport is plain HTTP, so put TLS in front \
+             of it on untrusted networks."
+        );
+    }
+    if security.token_generated {
+        if let Some(token) = security.token.as_deref() {
+            eprintln!(
+                "Generated bearer token (set {} to choose your own):\n  {token}",
+                http_security::TOKEN_ENV
+            );
+        }
+    } else if security.token.is_some() {
+        eprintln!("Bearer token required (from {}).", http_security::TOKEN_ENV);
+    }
 
     let ct = CancellationToken::new();
 
@@ -5655,6 +5728,11 @@ pub async fn run_mcp_http_server(addr: &str) -> Result<()> {
     config.json_response = false;
     config.sse_keep_alive = Some(std::time::Duration::from_secs(15));
     config.cancellation_token = ct.child_token();
+    if !security.loopback_only {
+        // Remote clients reach us under names we can not know in advance; the
+        // bearer token protects this mode instead of the Host allow-list.
+        config = config.disable_allowed_hosts();
+    }
 
     let service: StreamableHttpService<
         rmcp::handler::server::router::Router<MyceliumsMcp>,
@@ -5670,17 +5748,14 @@ pub async fn run_mcp_http_server(addr: &str) -> Result<()> {
         config,
     );
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
-    let app = axum::Router::new()
-        .nest_service("/mcp", service)
-        .layer(cors);
+    let app = http_security::secure(
+        axum::Router::new().nest_service("/mcp", service),
+        Arc::new(security),
+    );
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!("MCP server listening on http://{}/mcp", addr);
+    eprintln!("MCP server listening on http://{}/mcp", addr);
     axum::serve(listener, app).await?;
 
     Ok(())

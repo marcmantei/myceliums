@@ -350,11 +350,7 @@ fn write_index(
             .map(|c| c.summary.as_str())
             .unwrap_or("");
         // Truncate summary for table
-        let short_summary = if summary.len() > 80 {
-            format!("{}...", &summary[..77])
-        } else {
-            summary.to_string()
-        };
+        let short_summary = crate::text::truncate_ellipsis(summary, 80);
         md.push_str(&format!(
             "| [[{}]] | {} | {} |\n",
             filename,

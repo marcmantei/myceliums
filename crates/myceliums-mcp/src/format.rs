@@ -523,20 +523,30 @@ pub fn format_review_context(ctx: &ReviewContext) -> String {
     out
 }
 
+/// Renders the `list_repos` tool output: one block per registered repo.
+pub fn format_repo_list(repos: &[&myceliums_storage::RepoInfo]) -> String {
+    if repos.is_empty() {
+        return "No repositories analyzed yet. Run the `analyze` tool on a project path first."
+            .to_string();
+    }
+    let mut out = format!("{} repositories (use `id` as repo_id):\n\n", repos.len());
+    for r in repos {
+        out.push_str(&format!(
+            "- id: {}\n  name: {}\n  path: {}\n  analyzed_at: {}\n  symbols: {}, files: {}\n",
+            r.id, r.name, r.path, r.analyzed_at, r.symbol_count, r.file_count
+        ));
+    }
+    out
+}
+
 // --- helpers ---
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() > max && max > 3 {
-        format!("{}...", &s[..max - 3])
-    } else if s.len() > max {
-        s[..max].to_string()
-    } else {
-        s.to_string()
-    }
+    myceliums_core::text::truncate_ellipsis(s, max)
 }
 
 fn shorten_path(path: &str, max: usize) -> String {
-    if path.len() <= max {
+    if path.chars().count() <= max {
         return path.to_string();
     }
     // Try to show the most relevant part (from the right)
@@ -548,7 +558,7 @@ fn shorten_path(path: &str, max: usize) -> String {
         } else {
             format!("{}/{}", part, result)
         };
-        if candidate.len() > max && !result.is_empty() {
+        if candidate.chars().count() > max && !result.is_empty() {
             return format!(".../{}", result);
         }
         result = candidate;
@@ -1827,6 +1837,60 @@ pub fn format_contracts(report: &ContractsReport) -> String {
 mod tests {
     use super::*;
     use crate::{CentralityNodeOutput, CohesionEntry, CycleItemOutput, ModuleCouplingEntry};
+
+    #[test]
+    fn truncate_never_splits_multibyte_characters() {
+        // Byte-index slicing panicked here: 'ü' straddles byte 4.
+        assert_eq!(truncate("Größenänderung", 8), "Größe...");
+        assert_eq!(truncate("🦀🦀🦀🦀🦀🦀", 5), "🦀🦀...");
+        assert_eq!(truncate("äöü", 2), "äö");
+        assert_eq!(truncate("kurz", 10), "kurz");
+    }
+
+    #[test]
+    fn shorten_path_handles_non_ascii_segments() {
+        // A single over-long segment falls through to `truncate`.
+        let one_segment = "🦀".repeat(50);
+        assert_eq!(shorten_path(&one_segment, 40).chars().count(), 40);
+        let nested = format!("src/ünïcödé/dirëctory/{}.rs", "ä".repeat(45));
+        assert!(!shorten_path(&nested, 40).is_empty());
+    }
+
+    #[test]
+    fn search_results_with_umlaut_and_emoji_names_render() {
+        let item = |name: &str| SearchResultItem {
+            name: name.to_string(),
+            qualified_name: name.to_string(),
+            kind: "Funktiönchen🦀🦀🦀".to_string(),
+            file_path: "src/ä.rs".to_string(),
+            start_line: 1,
+            end_line: 2,
+            signature: String::new(),
+            score: 1.0,
+            explain: None,
+        };
+        let long = format!("{}{}", "ä".repeat(40), "😀".repeat(10));
+        let out = format_search_results("q", &[item(&long), item("x")]);
+        assert!(out.contains("..."), "{out}");
+    }
+
+    #[test]
+    fn repo_list_shows_ids_or_explains_how_to_get_one() {
+        assert!(format_repo_list(&[]).contains("analyze"));
+        let info = myceliums_storage::RepoInfo {
+            id: "proj-1a2b".into(),
+            name: "proj".into(),
+            path: "/src/proj".into(),
+            analyzed_at: "2026-01-01T00:00:00Z".into(),
+            symbol_count: 3,
+            file_count: 1,
+            analyzed_commit: None,
+            vector_geometry_version: 0,
+        };
+        let out = format_repo_list(&[&info]);
+        assert!(out.contains("id: proj-1a2b"), "{out}");
+        assert!(out.contains("path: /src/proj"), "{out}");
+    }
 
     #[test]
     fn test_format_centrality_output() {

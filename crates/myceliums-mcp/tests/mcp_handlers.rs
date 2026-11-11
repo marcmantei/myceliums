@@ -14,6 +14,7 @@ mod harness;
 
 use myceliums_mcp::{
     CypherQueryParams, DetectImpactParams, MyceliumsMcp, RenameParams, SearchParams,
+    SymbolContextParams,
 };
 
 fn server() -> MyceliumsMcp {
@@ -172,4 +173,80 @@ async fn cypher_query_handler_blocks_mutations() {
         .await
         .expect_err("write clauses must be rejected");
     assert!(!err.is_empty(), "mutation rejection should carry a message");
+}
+
+// ── repo_id validation / list_repos (#89) ────────────────────────────
+
+#[tokio::test]
+async fn list_repos_lists_registered_repo() {
+    harness::ensure_indexed().await;
+    let out = server()
+        .list_repos_for_test()
+        .await
+        .expect("list_repos should succeed");
+    assert!(
+        out.contains(&format!("id: {}", harness::REPO_ID)),
+        "list_repos should show the registered id, got: {out}"
+    );
+}
+
+#[tokio::test]
+async fn unknown_repo_id_is_an_error_that_lists_known_ids() {
+    let data = harness::ensure_indexed().await;
+    let err = server()
+        .cypher_query_for_test(CypherQueryParams {
+            query: "MATCH (s:CodeSymbol) RETURN s.name".to_string(),
+            repo_id: "no-such-repo".to_string(),
+        })
+        .await
+        .expect_err("an unknown repo_id must not silently return []");
+    assert!(
+        err.contains("unknown repo_id") && err.contains(harness::REPO_ID),
+        "error should name the known ids, got: {err}"
+    );
+    assert!(
+        !data.join("data").join("no-such-repo").exists(),
+        "a read path must not create a directory for an unknown id"
+    );
+}
+
+#[tokio::test]
+async fn path_traversal_repo_id_is_rejected_on_every_entry_path() {
+    let data = harness::ensure_indexed().await;
+    let srv = server();
+    let bad = "../escape";
+
+    // Direct store open (`registered_db_path`).
+    let err = srv
+        .cypher_query_for_test(CypherQueryParams {
+            query: "MATCH (s:CodeSymbol) RETURN s.name".to_string(),
+            repo_id: bad.to_string(),
+        })
+        .await
+        .expect_err("traversal id must be rejected");
+    assert!(err.contains("invalid repo_id"), "got: {err}");
+
+    // Optional repo_id resolved by the handler.
+    let err = srv
+        .context_search_for_test(SearchParams {
+            query: "x".to_string(),
+            repo_id: Some(bad.to_string()),
+            limit: None,
+            explain: None,
+        })
+        .await
+        .expect_err("traversal id must be rejected");
+    assert!(err.contains("invalid repo_id"), "got: {err}");
+
+    // GraphService-backed handler.
+    let err = srv
+        .symbol_context_for_test(SymbolContextParams {
+            symbol_name: harness::fixture::GET_USER.to_string(),
+            repo_id: bad.to_string(),
+        })
+        .await
+        .expect_err("traversal id must be rejected");
+    assert!(err.contains("invalid repo_id"), "got: {err}");
+
+    assert!(!data.join("escape").exists());
 }

@@ -582,14 +582,7 @@ fn build_embedding_text_with_budget(s: &CodeSymbol, content_budget: usize) -> St
 /// Truncate a string to at most `max_chars` characters, splitting on a char
 /// boundary so the result is always valid UTF-8.
 pub fn truncate_content(s: &str, max_chars: usize) -> &str {
-    if s.len() <= max_chars {
-        // Fast path: byte length already within limit, so char length is too.
-        return s;
-    }
-    match s.char_indices().nth(max_chars) {
-        Some((byte_idx, _)) => &s[..byte_idx],
-        None => s,
-    }
+    crate::text::prefix_chars(s, max_chars)
 }
 
 // ── Embedder ──────────────────────────────────────────────────────────
