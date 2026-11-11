@@ -1,0 +1,1 @@
+MATCH (f) WHERE f.name CONTAINS 'main' AND NOT f.kind = 'Class' RETURN f.name, f.file_path ORDER BY f.name DESC SKIP 1 LIMIT 3

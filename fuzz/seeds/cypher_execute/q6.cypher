@@ -1,0 +1,1 @@
+MATCH path = allPaths((a:CodeSymbol)-[*..3]->(b)) RETURN path LIMIT 10

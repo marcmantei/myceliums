@@ -8,6 +8,8 @@ members = [
     "crates/myceliums-benchmarks",
     "myc",
 ]
+# cargo-fuzz targets: nightly-only, built as their own workspace (#91).
+exclude = ["fuzz"]
 resolver = "2"
 
 [workspace.package]

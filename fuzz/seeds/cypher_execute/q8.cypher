@@ -1,0 +1,1 @@
+MATCH (s) WHERE s.metadata IS NOT NULL RETURN s.metadata ORDER BY s.metadata

@@ -1,0 +1,8 @@
+import os
+class A(B):
+    @dec
+    def m(self, x):
+        return helper(x)
+
+def helper(y):
+    pass

@@ -1,0 +1,1 @@
+MATCH path = shortestPath((a)-[*..5]->(b)) WHERE a.name = 'main' AND b.name = 'leaf' RETURN path
