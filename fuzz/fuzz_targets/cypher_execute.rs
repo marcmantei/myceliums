@@ -23,7 +23,11 @@ fuzz_target!(|data: &[u8]| {
     if let Ok(rows) = executor().execute(query) {
         if let Ok(ast) = myceliums_cypher::parser::parse_cypher(query) {
             if let Some(limit) = ast.limit {
-                assert!(rows.len() as i64 <= limit, "LIMIT {limit} returned {} rows", rows.len());
+                assert!(
+                    rows.len() as i64 <= limit,
+                    "LIMIT {limit} returned {} rows",
+                    rows.len()
+                );
             }
         }
     }
