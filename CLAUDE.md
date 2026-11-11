@@ -7,10 +7,14 @@ Always run `cargo fmt --all` before creating a commit. Rustfmt failures block CI
 ## CI requirements
 
 All PRs must pass these checks before merge:
-- **Build**: `cargo build --workspace`
-- **Test**: `cargo test --workspace`
-- **Clippy**: `cargo clippy --workspace --all-targets -- -D warnings`
+- **Build**: `cargo build --workspace --locked`
+- **Test**: `cargo test --workspace --locked` (Linux and macOS)
+- **Clippy**: `cargo clippy --workspace --all-targets --locked -- -D warnings`
 - **Rustfmt**: `cargo fmt --all -- --check`
+- **MSRV**: `cargo check --workspace --all-targets` on the `rust-version` from `Cargo.toml`
+- **cargo-deny**: `cargo deny check` — policy in `deny.toml`. A new advisory with no fix gets a commented `ignore` entry there, never a disabled check.
+
+Workflow hygiene: pin third-party actions to a full commit SHA with the version in a comment, and give each workflow `permissions: contents: read` plus job-scoped extras only where needed.
 
 ## Commit style
 
@@ -20,4 +24,4 @@ All PRs must pass these checks before merge:
 ## PR workflow
 
 - PRs with all CI checks green auto-merge via squash
-- If rustfmt fails, the autofix workflow will push a format commit — wait for re-run before investigating other failures
+- If rustfmt fails, fix it locally with `cargo fmt --all` and push. Nothing reformats automatically: `autofix.yml` is manual-only (`gh workflow run autofix.yml --ref <branch>` pushes a format commit to that branch).
