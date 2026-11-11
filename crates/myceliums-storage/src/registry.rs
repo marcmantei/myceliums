@@ -171,7 +171,7 @@ fn known_ids_hint(known: &[String]) -> String {
             .to_string()
     } else {
         format!(
-            "Known repo ids: {}. Use one of these (MCP tool `list_repos` or `myc list` shows them).",
+            "Known repo ids: {}. Use one of these (the MCP tool `list_repos` or `myc list --json` shows them).",
             known.join(", ")
         )
     }
