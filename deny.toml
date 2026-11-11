@@ -1,0 +1,89 @@
+# cargo-deny configuration — run locally with `cargo deny check`.
+# CI runs the same command in the `cargo-deny` job (.github/workflows/ci.yml).
+# Reference: https://embarkstudios.github.io/cargo-deny/
+
+[graph]
+# Check the dependency graph that ships, for every platform a release targets
+# (see .github/workflows/release.yml). Platform-specific crates for Windows,
+# Android, WASM, ... are then not evaluated.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+]
+all-features = true
+
+[advisories]
+# RustSec advisory database. Vulnerabilities fail the check. Unmaintained and
+# unsound crates fail when the workspace depends on them directly or
+# transitively, unless ignored below with a reason.
+yanked = "deny"
+ignore = [
+    # Every entry: advisory id, affected crate, why it cannot be fixed now.
+    # Re-check these whenever the parent dependency is bumped; delete an entry
+    # as soon as cargo-deny reports it as unused ("advisory-not-detected").
+
+    # --- Vulnerabilities, not reachable from myceliums ---------------------
+    # quick-xml < 0.41 (via graphrs 0.11): quadratic attribute check and
+    # unbounded NsReader namespace allocation. graphrs only uses quick-xml for
+    # its GraphML reader/writer; myceliums calls only centrality, community and
+    # component algorithms and never parses XML through graphrs. Fix: graphrs
+    # 0.12 (semver-major, needs a code change in myceliums-core).
+    { id = "RUSTSEC-2026-0194", reason = "quick-xml via graphrs GraphML I/O, which myceliums never calls" },
+    { id = "RUSTSEC-2026-0195", reason = "quick-xml via graphrs GraphML I/O, which myceliums never calls" },
+    # rmcp < 3.9: unbounded response buffering in the Streamable HTTP *client*.
+    # myceliums enables only server features (server, transport-io,
+    # transport-streamable-http-server); the client transports are not compiled.
+    # Fix: rmcp 3.x (semver-major from 1.x, needs an MCP code migration).
+    { id = "RUSTSEC-2026-0462", reason = "affects rmcp HTTP client transports, which are not enabled" },
+
+    # --- Unmaintained, no maintained release of the parent available --------
+    { id = "RUSTSEC-2021-0139", reason = "ansi_term: via graphrs 0.11 -> assert_unordered; fixed only by graphrs 0.12 (semver-major)" },
+    { id = "RUSTSEC-2024-0384", reason = "instant: via notify 7 (notify-types); notify 8 drops it, semver-major bump" },
+    { id = "RUSTSEC-2025-0119", reason = "number_prefix: via indicatif 0.17 (direct and via fastembed/hf-hub); indicatif 0.18 drops it, semver-major" },
+    { id = "RUSTSEC-2024-0436", reason = "paste: via datafusion/lance (lancedb 0.26); no upstream release without it" },
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils (unmaintained): via async-imap; still a dependency in async-imap 0.12, so upgrading does not remove it" },
+    { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml: via serde_yaml 0.9 (deprecated); replacing serde_yaml is a code change, out of scope for #90" },
+]
+
+[licenses]
+# Permissive licenses only. Every entry is in the current tree; add a license
+# here only after checking it is compatible with Apache-2.0 distribution.
+# Crates offering a choice (e.g. `Apache-2.0 OR GPL-2.0-only`) pass because
+# one alternative is allowed; GPL/LGPL themselves stay off this list.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0", # webpki-roots (Mozilla CA bundle data)
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",             # option-ext, htmlescape — file-level copyleft, unmodified use is fine
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+    "zlib-acknowledgement",
+]
+confidence-threshold = 0.9
+
+[bans]
+# Duplicate versions are common in a tree this size (arrow/datafusion/lance,
+# tree-sitter grammars) and are not a supply-chain risk; report, do not fail.
+multiple-versions = "warn"
+wildcards = "deny"
+# Workspace crates depend on each other by path + version, which is not a
+# wildcard; private path-only crates (no version) are exempt.
+allow-wildcard-paths = true
+
+[sources]
+# Only crates.io. A git dependency must be added here explicitly.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

@@ -1,2 +1,6 @@
+# Dependency updates must not pull in crates that need a newer Rust than rust-version.
+[resolver]
+incompatible-rust-versions = "fallback"
+
 [target.x86_64-unknown-linux-musl]
 linker = "musl-gcc"

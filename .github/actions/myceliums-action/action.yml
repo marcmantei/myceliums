@@ -20,14 +20,18 @@ inputs:
     required: false
     default: ${{ github.token }}
 
+# Inputs and event fields reach the scripts below only through `env:`, never
+# by `${{ }}` interpolation inside `run:` — interpolated text becomes part of
+# the script before bash parses it, so a crafted value would run as code.
 runs:
   using: 'composite'
   steps:
     - name: Install myc
       shell: bash
+      env:
+        VERSION: ${{ inputs.myc-version }}
       run: |
         set -eu
-        VERSION="${{ inputs.myc-version }}"
         OS=$(uname -s | tr '[:upper:]' '[:lower:]')
         ARCH=$(uname -m)
 
@@ -94,12 +98,13 @@ runs:
       id: impact
       env:
         DEPTH: ${{ inputs.depth }}
+        BASE_REF: ${{ github.base_ref }}
       run: |
         set -e
 
         # Generate diff between base and head
-        git fetch origin ${{ github.base_ref }} --depth=1 2>/dev/null || true
-        DIFF=$(git diff origin/${{ github.base_ref }}...HEAD 2>/dev/null || git diff HEAD~1 2>/dev/null || echo "")
+        git fetch origin "$BASE_REF" --depth=1 2>/dev/null || true
+        DIFF=$(git diff "origin/${BASE_REF}...HEAD" 2>/dev/null || git diff HEAD~1 2>/dev/null || echo "")
 
         if [ -z "$DIFF" ]; then
           echo "comment=No code changes detected." >> $GITHUB_OUTPUT
@@ -163,14 +168,13 @@ runs:
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+        REPO: ${{ github.repository }}
       run: |
         if [ ! -f /tmp/impact_comment.md ]; then
           echo "No impact comment to post"
           exit 0
         fi
-
-        PR_NUMBER=${{ github.event.pull_request.number }}
-        REPO=${{ github.repository }}
 
         # Check for existing comment to update
         EXISTING_COMMENT_ID=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \

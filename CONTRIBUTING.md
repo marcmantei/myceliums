@@ -16,7 +16,10 @@ asked for is still a PR that may get declined.
 
 ### Prerequisites
 
-- Rust toolchain (stable) — includes `cargo`, `clippy`, `rustfmt`
+- Rust toolchain (stable) — includes `cargo`, `clippy`, `rustfmt`. The minimum
+  supported version is the `rust-version` in `Cargo.toml` (currently 1.88); CI
+  checks it in the `MSRV` job.
+- `protoc` (Protocol Buffers compiler), needed by the LanceDB build
 - Git
 
 ### Clone and build
@@ -61,6 +64,10 @@ behavior as described there.
    cargo clippy --workspace --all-targets -- -D warnings
    cargo fmt --all -- --check
    ```
+   CI also runs `cargo deny check` (advisories, licenses, sources — policy in
+   [`deny.toml`](deny.toml)), the test suite on macOS, and an MSRV build. A new
+   dependency must pass `cargo deny check` locally (`cargo install cargo-deny
+   --locked`).
 6. **Follow the [pull request template](.github/pull_request_template.md)** — it
    restates the CI gates above and asks for [Conventional
    Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`,
