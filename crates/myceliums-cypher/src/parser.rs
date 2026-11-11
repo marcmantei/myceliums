@@ -21,7 +21,19 @@ pub enum ParseError {
     /// Input ended before a complete query could be parsed.
     #[error("Unexpected end of input")]
     UnexpectedEnd,
+    /// Expressions are nested deeper than [`MAX_NESTING_DEPTH`] (nested
+    /// `NOT`s, function calls, or aggregations). Rejected up front so hostile
+    /// input cannot overflow the stack of the recursive-descent parser.
+    #[error("Expression nested too deeply (limit {0})")]
+    TooDeeplyNested(usize),
 }
+
+/// Maximum expression nesting depth the parser accepts.
+///
+/// Every nested `NOT`, function call, or aggregation costs one level. Real
+/// queries stay in single digits; the limit only exists so adversarial input
+/// fails with [`ParseError::TooDeeplyNested`] instead of a stack overflow.
+pub const MAX_NESTING_DEPTH: usize = 64;
 
 /// A parsed, read-only Cypher query.
 #[derive(Debug, Clone)]
@@ -241,12 +253,17 @@ pub enum BinOp {
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    depth: usize,
 }
 
 impl Parser {
     /// Creates a parser over the given token stream.
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
+        Self {
+            tokens,
+            pos: 0,
+            depth: 0,
+        }
     }
 
     /// Parses the token stream into a [`Query`], rejecting write operations.
@@ -590,7 +607,26 @@ impl Parser {
         Ok(WhereClause { expr })
     }
 
+    /// Runs `f` one nesting level deeper, failing once the depth exceeds
+    /// [`MAX_NESTING_DEPTH`].
+    fn nested<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<T, ParseError>,
+    ) -> Result<T, ParseError> {
+        if self.depth >= MAX_NESTING_DEPTH {
+            return Err(ParseError::TooDeeplyNested(MAX_NESTING_DEPTH));
+        }
+        self.depth += 1;
+        let result = f(self);
+        self.depth -= 1;
+        result
+    }
+
     fn parse_or_expr(&mut self) -> Result<Expr, ParseError> {
+        self.nested(Self::parse_or_expr_inner)
+    }
+
+    fn parse_or_expr_inner(&mut self) -> Result<Expr, ParseError> {
         let mut left = self.parse_and_expr()?;
         while self.peek_is(&Token::Or) {
             self.advance();
@@ -613,7 +649,7 @@ impl Parser {
     fn parse_comparison(&mut self) -> Result<Expr, ParseError> {
         if self.peek_is(&Token::Not) {
             self.advance();
-            let expr = self.parse_comparison()?;
+            let expr = self.nested(Self::parse_comparison)?;
             return Ok(Expr::Not(Box::new(expr)));
         }
 
@@ -922,6 +958,50 @@ mod tests {
         } else {
             panic!("Expected ShortestPath");
         }
+    }
+
+    /// Regression (#91): deeply nested input used to recurse once per level
+    /// and overflow the stack (process abort, not a recoverable error).
+    #[test]
+    fn deeply_nested_not_is_rejected_not_overflowed() {
+        let query = format!("RETURN {}x", "NOT ".repeat(200_000));
+        assert!(matches!(
+            parse_cypher(&query),
+            Err(ParseError::TooDeeplyNested(_))
+        ));
+    }
+
+    /// Regression (#91): nested function calls / aggregations recurse through
+    /// `parse_expr` and must hit the same depth limit.
+    #[test]
+    fn deeply_nested_calls_are_rejected_not_overflowed() {
+        let query = format!(
+            "RETURN {}x{}",
+            "count(".repeat(200_000),
+            ")".repeat(200_000)
+        );
+        assert!(matches!(
+            parse_cypher(&query),
+            Err(ParseError::TooDeeplyNested(_))
+        ));
+        let query = format!("RETURN {}x{}", "f(".repeat(200_000), ")".repeat(200_000));
+        assert!(matches!(
+            parse_cypher(&query),
+            Err(ParseError::TooDeeplyNested(_))
+        ));
+    }
+
+    /// Nesting up to the limit still parses.
+    #[test]
+    fn nesting_within_the_limit_parses() {
+        let depth = MAX_NESTING_DEPTH - 2;
+        let query = format!("RETURN {}x{}", "f(".repeat(depth), ")".repeat(depth));
+        assert!(parse_cypher(&query).is_ok());
+        let query = format!(
+            "MATCH (n) WHERE {}n.name = 'a' RETURN n",
+            "NOT ".repeat(depth)
+        );
+        assert!(parse_cypher(&query).is_ok());
     }
 
     #[test]
