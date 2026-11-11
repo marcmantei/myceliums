@@ -563,6 +563,19 @@ omit the un-embedded symbols (see [Partial indexes](#partial-indexes)). The MCP
 tool has no strictness knob; use the `myc analyze --strict-embeddings` CLI flag to
 fail CI on a partial index.
 
+### `list_repos`
+
+List the analyzed repositories: id, name, path, time of the last analysis, and
+symbol/file counts. Read-only, no parameters. Use it to find the `repo_id` the
+other tools expect.
+
+### Repository ids
+
+Every `repo_id` parameter is checked before anything touches the disk. The id
+must be registered (shown by `list_repos`) and must be a plain name: no `/`,
+`\`, `:`, control characters, `.` or `..`. An unknown id is an error that lists
+the known ids; it no longer returns an empty result.
+
 ### `delete`
 
 Delete a repository's analysis data.
