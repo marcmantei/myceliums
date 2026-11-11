@@ -74,4 +74,4 @@ pull requests.
 [Unreleased]: https://github.com/marcmantei/myceliums/compare/v0.3.2...HEAD
 [0.3.2]: https://github.com/marcmantei/myceliums/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/marcmantei/myceliums/compare/v0.3.0...v0.3.1
-[0.3.0]: https://github.com/marcmantei/myceliums/releases/tag/v0.3.0
+[0.3.0]: https://github.com/marcmantei/myceliums/tree/v0.3.0

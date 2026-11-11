@@ -43,7 +43,7 @@ ignore = [
     { id = "RUSTSEC-2024-0384", reason = "instant: via notify 7 (notify-types); notify 8 drops it, semver-major bump" },
     { id = "RUSTSEC-2025-0119", reason = "number_prefix: via indicatif 0.17 (direct and via fastembed/hf-hub); indicatif 0.18 drops it, semver-major" },
     { id = "RUSTSEC-2024-0436", reason = "paste: via datafusion/lance (lancedb 0.26); no upstream release without it" },
-    { id = "RUSTSEC-2026-0441", reason = "pin-utils: via async-imap 0.10, latest release" },
+    { id = "RUSTSEC-2026-0441", reason = "pin-utils (unmaintained): via async-imap; still a dependency in async-imap 0.12, so upgrading does not remove it" },
     { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml: via serde_yaml 0.9 (deprecated); replacing serde_yaml is a code change, out of scope for #90" },
 ]
 
