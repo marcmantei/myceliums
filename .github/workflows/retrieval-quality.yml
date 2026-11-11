@@ -52,7 +52,7 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
       - name: Build the evaluator
-        run: cargo build -p myceliums-benchmarks --bin retrieval-eval
+        run: cargo build -p myceliums-benchmarks --bin retrieval-eval --locked
       - name: Resolve the model weights cache
         id: models
         # fastembed reads HF_HOME, myceliums reads FASTEMBED_CACHE_DIR first:

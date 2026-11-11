@@ -47,7 +47,7 @@ Semantic search uses vector embeddings to find code by meaning rather than exact
 - Understands natural language queries
 - Finds conceptually similar code, even when different words are used
 - Requires embeddings (run `myc analyze --force` if you previously skipped them)
-- First run downloads the embedding model (~100 MB, cached at `.fastembed_cache/`)
+- First run downloads the embedding model (about 0.5 GB for the default model, cached at `.fastembed_cache/`)
 
 **Best for:**
 - Natural language queries ("function that validates user input")
@@ -69,10 +69,10 @@ This will find authorization-related code even if it uses words like `authorize`
 Hybrid search combines BM25 and semantic search using Reciprocal Rank Fusion (RRF). Both search modes run independently, and their rankings are merged to produce a final result list that benefits from the strengths of each approach.
 
 **Characteristics:**
-- Best overall result quality for most queries
+- Matches exact terms and meaning together. On the [fixture benchmark](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#recorded-results) it clearly beats BM25, but not semantic search alone
 - Requires embeddings
 - Slightly slower than BM25 alone (runs both searches)
-- Optional: add `--rerank` for cross-encoder reranking (highest quality, slowest)
+- Optional: add `--rerank` for cross-encoder reranking (slowest; downloads a ~2.2 GB reranker on first use)
 
 **Best for:**
 - General-purpose code search where you want the best results
@@ -88,7 +88,7 @@ myc search "user authentication middleware" --hybrid
 myc search "user authentication middleware" --hybrid --rerank
 ```
 
-The `--rerank` flag adds a cross-encoder pass that re-scores the top results. This produces the highest quality ranking but takes longer.
+The `--rerank` flag adds a cross-encoder pass that re-scores the top 20 results. It is meant to sharpen the ordering and takes noticeably longer; on the [fixture benchmark](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#recorded-results) its gain over plain hybrid was not distinguishable from zero.
 
 ## Decision Guide
 
@@ -96,8 +96,8 @@ The `--rerank` flag adds a cross-encoder pass that re-scores the top results. Th
 |----------------|-----|-------------------|
 | Find exact function name | `myc search "functionName"` | No |
 | Find code by description | `myc semantic-search "validates email"` | Yes |
-| Best results overall | `myc search "query" --hybrid` | Yes |
-| Highest precision | `myc search "query" --hybrid --rerank` | Yes |
+| Exact terms and meaning together | `myc search "query" --hybrid` | Yes |
+| Re-score the top results (slower) | `myc search "query" --hybrid --rerank` | Yes |
 
 ## Do I Need Embeddings?
 

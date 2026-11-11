@@ -1,14 +1,26 @@
 # Myceliums Benchmark Suite
 
-A comprehensive, reproducible benchmark suite for measuring Myceliums's performance across indexing, query, and agent task categories.
+Two kinds of measurement live in this crate:
 
-## Overview
+- **Retrieval quality** — `retrieval-eval` scores lexical, semantic, hybrid and
+  hybrid+rerank search against a hand-labelled golden set (recall@k, hit@k,
+  MRR@10, nDCG@10, R-precision, with paired bootstrap confidence intervals) and
+  gates CI on significant regressions. `ann-recall` measures what the IVF-PQ
+  vector index costs against exact search. Method, numbers and limits:
+  [`benchmarks/METHODOLOGY.md`](benchmarks/METHODOLOGY.md).
+- **Timings** — Criterion benchmarks for indexing, parsing and queries on
+  synthetic fixtures, described below.
 
-This benchmark suite enables anyone to:
-- Measure Myceliumss's real performance metrics locally
-- Compare performance with and without indexing
-- Verify improvements over time
-- Generate shareable reports for CI/CD integration
+```bash
+cargo run -p myceliums-benchmarks --bin retrieval-eval                          # lexical only, offline
+cargo run -p myceliums-benchmarks --bin retrieval-eval -- --allow-model-download # all four modes
+cargo run -p myceliums-benchmarks --release --bin ann-recall
+```
+
+The Criterion suite has no agent in the loop and makes no claim about agent
+speed-ups. An earlier `agent_tasks` bench multiplied a constant by 0.65 and
+called it a 35% time reduction, and a `verified_metrics` bench serialised
+hard-coded estimates; both were removed in #92.
 
 ## Benchmark Categories
 
@@ -30,15 +42,6 @@ Benchmarks symbol lookup and graph traversal operations:
 - **Complex Call Graph Query** - Traverse call relationships (~500ms target)
 - **Graph Traversal** - BFS through dependency graph (~1s for large graphs)
 
-### 3. Agent Task Completion
-
-Simulates agent workflows to measure end-to-end performance:
-
-- **Code Understanding** - Parse and analyze code structure
-- **Context Search** - Find related code through semantic search
-- **Impact Analysis** - Determine what code depends on a change
-- **Combined Workflow** - Full agent task simulation with Myceliums optimization
-
 ## Running Benchmarks
 
 ### Run All Benchmarks
@@ -56,8 +59,8 @@ cargo bench -p myceliums-benchmarks --bench indexing
 # Query benchmarks only
 cargo bench -p myceliums-benchmarks --bench query
 
-# Agent task benchmarks only
-cargo bench -p myceliums-benchmarks --bench agent_tasks
+# Parsing benchmarks only
+cargo bench -p myceliums-benchmarks --bench parsing
 ```
 
 ### Generate Reports
@@ -156,7 +159,6 @@ Based on the issue specification:
 | Query | Simple lookup | < 100ms |
 | Query | Complex call graph | < 500ms |
 | Query | Graph traversal | < 1s |
-| Agent | Task completion | 30%+ faster with Myceliums |
 
 ## Future Enhancements
 

@@ -386,11 +386,11 @@ Alternatively, set `provider = "openai-compatible"` to use any server speaking t
 
 **Why the same model matters:** Each embedding model defines its own vector space. Queries and documents must be embedded with the same model — mixing models produces meaningless similarity scores. Myceliums records the model inside each index and always queries with that model; switching models in the config takes effect on the next full `myc analyze`, which rebuilds the vectors.
 
-Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector database (no server required). For repositories with more than 10,000 symbols, an approximate nearest neighbor (IVF-PQ) index is built automatically.
+Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector database (no server required). For repositories with 5,000 symbols or more, an approximate nearest neighbor (IVF-PQ) index is built automatically. It is fast but lossy: on a synthetic 5,000-vector benchmark it returns about 4 of the true 10 nearest neighbours ([measurement](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs)).
 
 ### Hybrid search — best of both worlds
 
-`myc search --hybrid` runs BM25 and semantic search in parallel, then merges results using [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) (RRF, k=60). This catches both exact keyword matches and semantically related symbols. A cross-encoder reranker (default: the multilingual [bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3), configurable via `[embedding] reranker`) optionally re-scores the top candidates. Reranking is intended to improve ordering; its effect is [not yet measured](#how-well-does-search-actually-work).
+`myc search --hybrid` runs BM25 and semantic search in parallel, then merges results using [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) (RRF, k=60). This catches both exact keyword matches and semantically related symbols. A cross-encoder reranker (default: the multilingual [bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3), configurable via `[embedding] reranker`) optionally re-scores the top candidates. Reranking is intended to improve ordering; on the fixture benchmark its gain over plain hybrid is [not distinguishable from zero](#how-well-does-search-actually-work).
 
 ### When to use which
 
@@ -404,22 +404,24 @@ Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector databa
 
 ### How well does search actually work?
 
-Retrieval quality is measured, not asserted. A golden set of 51 hand-labelled queries over the in-repo fixture corpus scores each mode with recall@k and MRR:
+Retrieval quality is measured, not asserted. A golden set of 51 hand-labelled queries over the in-repo fixture corpus (96 symbols) scores every mode through the code that ships, with the default models (`multilingual-e5-small`, reranker `bge-reranker-v2-m3`):
 
-| Mode | recall@1 | recall@5 | recall@10 | MRR |
+| Mode | MRR@10 | nDCG@10 | recall@10 | hit@10 |
 |---|---:|---:|---:|---:|
-| BM25 (lexical) | 0.3765 | 0.6468 | 0.6983 | 0.6405 |
-| Semantic | _not measured — needs model weights_ | | | |
-| Hybrid | _not measured — needs model weights_ | | | |
-| Hybrid + rerank | _not measured — needs model weights_ | | | |
+| BM25 (lexical) | 0.641 | 0.626 | 0.698 | 0.824 |
+| Semantic | 0.803 | 0.790 | 0.842 | 0.941 |
+| Hybrid | 0.771 | 0.744 | 0.810 | 0.941 |
+| Hybrid + rerank | 0.811 | 0.777 | 0.833 | 0.922 |
 
-_These three modes are **implemented and working**. They are unmeasured here
-because scoring them means downloading model weights, which this offline
-benchmark deliberately does not do — not because the features are missing._
+Differences with paired bootstrap 95% confidence intervals:
 
-BM25 is strong when a query names the symbol (exact-name MRR **0.93**) and much weaker when it does not (paraphrase MRR **0.40**) — which is precisely the gap the semantic and hybrid modes exist to close. The three model-backed modes are reported as unmeasured rather than estimated: scoring them requires downloading model weights, which the offline benchmark deliberately does not do. **The claim that hybrid and reranking improve accuracy is therefore untested in these numbers.**
+- **Semantic, hybrid and hybrid+rerank all beat BM25**, by 0.13–0.17 MRR (e.g. hybrid − BM25: +0.131, CI [+0.059, +0.209]). The gain is in paraphrase and behavioural queries, where BM25 has no shared words to match.
+- **Hybrid does not beat semantic search alone on this set** (MRR −0.031, CI [−0.093, +0.026]; nDCG@10 −0.046, CI [−0.096, −0.007]).
+- **Reranking is not measurably better than hybrid** (MRR +0.039, CI [−0.045, +0.126]).
 
-Reproduce with `cargo run -p myceliums-benchmarks --bin retrieval-eval`. Methodology, labelling rules and limitations: [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
+The set is small and synthetic, so read this as "the semantic leg matters", not as a verdict on which mode to use on a real repository; tuning on these 51 queries would only overfit them. The CI job scores all four modes on every pull request and fails only on a regression that is both statistically significant and at least 0.02 in size.
+
+Reproduce with `cargo run -p myceliums-benchmarks --bin retrieval-eval -- --allow-model-download` (downloads ~2.7 GB of model weights once). Methodology, the decision rule, per-intent results and limitations: [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
 
 ### How much text does a query print?
 

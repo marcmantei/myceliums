@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the methodology, assumptions, and validation approach for the Myceliums benchmark suite.
+This document describes the methodology, assumptions, and validation approach for the Criterion timing benchmarks. Retrieval *quality* — whether search returns the right symbols — has its own methodology, with measured numbers and confidence intervals: [`benchmarks/METHODOLOGY.md`](benchmarks/METHODOLOGY.md).
 
 ## Benchmark Categories
 
@@ -56,30 +56,14 @@ This document describes the methodology, assumptions, and validation approach fo
 - Complex query (1000-node graph): < 500ms
 - Large traversal (10,000 nodes): < 1s
 
-### 3. Agent Task Performance
+### 3. Agent task performance — removed
 
-**Purpose:** Measure end-to-end performance improvements when agents use Myceliums for code understanding.
-
-**Scope:**
-- Simulates typical agent workflow: understanding → searching → analyzing impact
-- Compares with and without Myceliums indexing
-- Focuses on time reduction and improved accuracy
-
-**Simulated Tasks:**
-1. Code understanding - Parse and analyze code structure
-2. Context search - Find related code through search
-3. Impact analysis - Determine affected code from changes
-4. Combined workflow - Full agent task simulation
-
-**Metrics Collected:**
-- Duration (milliseconds)
-- Tasks completed (count)
-- Accuracy improvement (% where applicable)
-
-**Performance Targets:**
-- 30-40% time reduction with Myceliums
-- 50%+ reduction in tokens needed for context
-- 60%+ improvement in code comprehension accuracy
+An `agent_tasks` bench used to "simulate" agent workflows by timing string
+operations and multiplying the result by a constant 0.65, and the targets here
+promised 30–40% time and 50%+ token reductions. None of that was measured. The
+bench and its targets were removed in #92. Retrieval quality — the part of an
+agent's experience this crate can actually measure — is scored against labelled
+queries in [`benchmarks/METHODOLOGY.md`](benchmarks/METHODOLOGY.md).
 
 ## Benchmark Framework
 
@@ -230,15 +214,6 @@ Results are specific to the machine running them:
 
 **Mitigation:** Run benchmarks in isolated CI environment, same hardware for each run.
 
-### Agent Task Simulation
-
-Agent benchmarks are simulated, not actual:
-- Don't include LLM API latency
-- Don't include real agent planning overhead
-- Are simplified versions of actual tasks
-
-**Mitigation:** These are "best-case" improvements; real-world improvements may be lower.
-
 ## Future Enhancements
 
 ### Phase 2: Real Benchmarks
@@ -264,7 +239,7 @@ Agent benchmarks are simulated, not actual:
 
 ## Acceptance Criteria
 
-✅ Benchmark crate with 3 categories created
+✅ Benchmark crate with timing categories created (the agent-task category was removed in #92)
 ✅ Criterion.rs integration working
 ✅ Synthetic fixtures implemented and reproducible
 ✅ JSON and Markdown report generation
