@@ -1,4 +1,9 @@
 [target.aarch64-unknown-linux-gnu]
+# Build image pinned by digest (translates to
+# ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:...): the `main` tag this
+# replaces moves with every push to cross-rs/cross. This digest is `main` as of
+# the cross revision release.yml installs (a9301e9); bump both together.
+image = "@sha256:b21dae958336873d41668ec24bac664fee9f52438dc2ee59e2ca76b83d576b22"
 pre-build = [
     "apt-get update && apt-get install -y protobuf-compiler libssl-dev pkg-config"
 ]
