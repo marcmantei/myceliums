@@ -1,24 +1,29 @@
 name: Autofix
 
-# Auto-triggers disabled — cargo fmt runs locally on liralot now
+# Manual only: run it from the Actions tab (or `gh workflow run autofix.yml
+# --ref <branch>`) against a PR branch, and it pushes a `style: apply rustfmt`
+# commit there. It never runs on its own — format locally with
+# `cargo fmt --all` before committing.
 on:
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   rustfmt:
     name: Rustfmt Autofix
     runs-on: ubuntu-latest
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Format a branch, never main directly.
+    if: github.ref != 'refs/heads/main'
+    permissions:
+      # Push the format commit to the dispatched branch.
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      # Checks out the branch the workflow was dispatched on.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
         with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
+          toolchain: stable
           components: rustfmt
       - run: cargo fmt --all
       - name: Commit fixes
