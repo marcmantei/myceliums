@@ -131,8 +131,10 @@ impl SourceLanguage {
         )
     }
 
-    fn tree_sitter_language(&self) -> Language {
-        match self {
+    /// The tree-sitter grammar for this language, or `None` for languages
+    /// that are not parsed with tree-sitter (content files, notebooks).
+    fn tree_sitter_language(&self) -> Option<Language> {
+        Some(match self {
             SourceLanguage::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
             SourceLanguage::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
             SourceLanguage::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
@@ -163,14 +165,10 @@ impl SourceLanguage {
             | SourceLanguage::PlainText
             | SourceLanguage::Jupyter
             | SourceLanguage::Email
-            | SourceLanguage::Mbox => {
-                unreachable!("content languages do not use tree-sitter")
-            }
+            | SourceLanguage::Mbox => return None,
             #[cfg(feature = "pdf")]
-            SourceLanguage::Pdf => {
-                unreachable!("PDF content language does not use tree-sitter")
-            }
-        }
+            SourceLanguage::Pdf => return None,
+        })
     }
 }
 
@@ -309,8 +307,14 @@ pub struct ParseResult {
 impl SourceParser {
     pub fn new(lang: SourceLanguage) -> Result<Self> {
         let mut parser = Parser::new();
+        let language = lang.tree_sitter_language().with_context(|| {
+            format!(
+                "{} is not parsed with tree-sitter; use the content/notebook parsers",
+                lang.name()
+            )
+        })?;
         parser
-            .set_language(&lang.tree_sitter_language())
+            .set_language(&language)
             .context("Failed to set language")?;
         Ok(Self { parser, lang })
     }

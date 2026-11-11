@@ -120,3 +120,6 @@ openssl = { version = "0.10", features = ["vendored"] }
 # Benchmarking
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3"
+
+# Property-based testing (dev-dependency only)
+proptest = "1"
