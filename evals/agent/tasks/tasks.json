@@ -1,0 +1,2019 @@
+{
+ "description": "Code-understanding tasks for the agent benchmark (issue #99). Gold answers were derived from the pinned checkouts with grep, reading, and compiler tooling (Go: go/packages + x/tools call graphs; TypeScript: the language service's findReferences / call hierarchy; Python: ast) - never from myceliums output. Each gold item lists evidence lines that check-tasks re-verifies.",
+ "tasks": [
+  {
+   "id": "fzf-callers-execute-command",
+   "repo": "fzf",
+   "type": "callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods call the `executeCommand` method of `Terminal` (defined in src/terminal.go)? Only consider non-test Go files.",
+   "gold": [
+    {
+     "name": "Terminal.Loop",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 7220,
+       "contains": "t.executeCommand("
+      },
+      {
+       "file": "src/terminal.go",
+       "line": 7222,
+       "contains": "t.executeCommand("
+      }
+     ],
+     "note": "inside an action closure of Loop"
+    },
+    {
+     "name": "Terminal.captureLine",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5719,
+       "contains": "t.executeCommand("
+      }
+     ]
+    },
+    {
+     "name": "Terminal.captureLines",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5723,
+       "contains": "t.executeCommand("
+      }
+     ]
+    },
+    {
+     "name": "Terminal.printInfoImpl",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3592,
+       "contains": "t.executeCommand("
+      }
+     ]
+    }
+   ],
+   "rationale": "`grep -n \"executeCommand(\" src/*.go` lists five call sites outside tests, all in src/terminal.go; the enclosing function of each was read off the source (lines 7220/7222 are in a closure inside Loop). Cross-checked with a class-hierarchy call graph (golang.org/x/tools/go/callgraph/cha), which reports the same callers (Loop$17, captureLine, captureLines, printInfoImpl).",
+   "verified_with": [
+    "grep",
+    "x/tools CHA call graph"
+   ]
+  },
+  {
+   "id": "fzf-callers-item-asstring",
+   "repo": "fzf",
+   "type": "callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods call the `AsString` method of the `Item` type (defined in src/item.go)? Only consider non-test Go files.",
+   "gold": [
+    {
+     "name": "Item.acceptNth",
+     "evidence": [
+      {
+       "file": "src/item.go",
+       "line": 56,
+       "contains": "item.AsString("
+      }
+     ]
+    },
+    {
+     "name": "Terminal.dumpItem",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 8896,
+       "contains": "i.AsString("
+      }
+     ]
+    },
+    {
+     "name": "Terminal.environImpl",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1486,
+       "contains": "item.AsString("
+      }
+     ]
+    },
+    {
+     "name": "Terminal.output",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 2265,
+       "contains": "item.AsString("
+      }
+     ],
+     "note": "inside a closure in output"
+    },
+    {
+     "name": "Terminal.trackKeyFor",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6103,
+       "contains": "item.AsString("
+      }
+     ]
+    },
+    {
+     "name": "buildItemTransformer",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 50,
+       "contains": "item.AsString("
+      }
+     ],
+     "note": "inside the returned closure"
+    },
+    {
+     "name": "replacePlaceholder",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5639,
+       "contains": "item.AsString("
+      },
+      {
+       "file": "src/terminal.go",
+       "line": 5641,
+       "contains": "item.AsString("
+      },
+      {
+       "file": "src/terminal.go",
+       "line": 5662,
+       "contains": "item.AsString("
+      }
+     ],
+     "note": "inside closures of replacePlaceholder"
+    }
+   ],
+   "rationale": "`grep -n \"\\.AsString(\" src` gives eleven call sites; two of them (matcher.go:119 in Matcher.Loop, pattern.go:269 in Pattern.buildCacheKey) call `Pattern.AsString`, a different method, and are excluded. The remaining nine sites map to seven enclosing functions. The CHA call graph for `(*Item).AsString` lists exactly these callers (closures folded into their enclosing function).",
+   "verified_with": [
+    "grep",
+    "x/tools CHA call graph"
+   ]
+  },
+  {
+   "id": "fzf-callees-pattern-match",
+   "repo": "fzf",
+   "type": "callees",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods defined in this repository does `Pattern.Match` (src/pattern.go) call directly? Exclude standard-library and third-party calls.",
+   "gold": [
+    {
+     "name": "Pattern.CacheKey",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 303,
+       "contains": "p.CacheKey()"
+      }
+     ]
+    },
+    {
+     "name": "ChunkCache.Lookup",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 308,
+       "contains": "p.cache.Lookup("
+      }
+     ]
+    },
+    {
+     "name": "ChunkCache.Search",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 311,
+       "contains": "p.cache.Search("
+      }
+     ]
+    },
+    {
+     "name": "Pattern.matchChunk",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 314,
+       "contains": "p.matchChunk("
+      }
+     ]
+    },
+    {
+     "name": "ChunkCache.Add",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 317,
+       "contains": "p.cache.Add("
+      }
+     ]
+    }
+   ],
+   "rationale": "Read off the body of `func (p *Pattern) Match` (src/pattern.go:302-320); `p.cache` is a `*ChunkCache` (src/cache.go). No other calls appear in the body.",
+   "verified_with": [
+    "reading",
+    "x/tools CHA call graph"
+   ]
+  },
+  {
+   "id": "fzf-impact-istty",
+   "repo": "fzf",
+   "type": "impact",
+   "answer_kind": "files",
+   "question": "If the signature of `IsTty` in src/util/util.go changed, which Go files outside `src/util/` contain calls that would have to be updated? Include platform-specific files; exclude test files.",
+   "gold": [
+    {
+     "name": "src/options.go",
+     "evidence": [
+      {
+       "file": "src/options.go",
+       "line": 3964,
+       "contains": "util.IsTty("
+      }
+     ]
+    },
+    {
+     "name": "src/proxy.go",
+     "evidence": [
+      {
+       "file": "src/proxy.go",
+       "line": 156,
+       "contains": "util.IsTty("
+      }
+     ]
+    },
+    {
+     "name": "src/reader.go",
+     "evidence": [
+      {
+       "file": "src/reader.go",
+       "line": 138,
+       "contains": "util.IsTty("
+      }
+     ]
+    },
+    {
+     "name": "src/terminal.go",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5828,
+       "contains": "util.IsTty("
+      }
+     ]
+    },
+    {
+     "name": "src/tui/light_unix.go",
+     "evidence": [
+      {
+       "file": "src/tui/light_unix.go",
+       "line": 52,
+       "contains": "util.IsTty("
+      }
+     ]
+    }
+   ],
+   "rationale": "`grep -rn \"util.IsTty(\" --include=*.go .` outside tests; no other references (the name is not passed as a value; `IsTty` is only used qualified as `util.IsTty`).",
+   "verified_with": [
+    "grep"
+   ]
+  },
+  {
+   "id": "fzf-impact-tochars",
+   "repo": "fzf",
+   "type": "impact",
+   "answer_kind": "files",
+   "question": "If the signature of `ToChars` in src/util/chars.go changed, which Go files outside `src/util/` contain calls that would have to be updated? Exclude test files.",
+   "gold": [
+    {
+     "name": "src/core.go",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 90,
+       "contains": "util.ToChars("
+      }
+     ]
+    },
+    {
+     "name": "src/pattern.go",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 480,
+       "contains": "util.ToChars("
+      }
+     ]
+    },
+    {
+     "name": "src/terminal.go",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1688,
+       "contains": "util.ToChars("
+      }
+     ]
+    },
+    {
+     "name": "src/tokenizer.go",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 142,
+       "contains": "util.ToChars("
+      }
+     ]
+    }
+   ],
+   "rationale": "`grep -rn \"util.ToChars(\" --include=*.go .` outside tests lists call sites in exactly these four files; there are no unqualified uses outside src/util.",
+   "verified_with": [
+    "grep"
+   ]
+  },
+  {
+   "id": "fzf-where-tiebreak",
+   "repo": "fzf",
+   "type": "where",
+   "answer_kind": "symbols",
+   "question": "Which function computes the per-criterion sort points of a matched item according to the `--tiebreak` option (criteria such as length, begin, end, chunk and pathname)?",
+   "gold": [
+    {
+     "name": "buildResultFromBounds",
+     "evidence": [
+      {
+       "file": "src/result.go",
+       "line": 55,
+       "contains": "func buildResultFromBounds("
+      },
+      {
+       "file": "src/result.go",
+       "line": 59,
+       "contains": "for idx, criterion := range sortCriteria"
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "buildResult",
+     "why": "thin wrapper that computes the offset bounds and delegates to buildResultFromBounds"
+    }
+   ],
+   "rationale": "`buildResultFromBounds` loops over `sortCriteria` (the parsed --tiebreak list) and fills `result.points` per criterion (byScore, byChunk, byLength, byPathname, byBegin, byEnd). `buildResult` only prepares the bounds.",
+   "verified_with": [
+    "reading"
+   ]
+  },
+  {
+   "id": "fzf-where-keychords",
+   "repo": "fzf",
+   "type": "where",
+   "answer_kind": "symbols",
+   "question": "Which function parses a comma-separated list of key names such as `ctrl-a,alt-enter,f1` (as given to `--expect`, or on the left side of a `--bind` entry) into fzf key events?",
+   "gold": [
+    {
+     "name": "parseKeyChords",
+     "evidence": [
+      {
+       "file": "src/options.go",
+       "line": 1004,
+       "contains": "func parseKeyChords("
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "parseKeymap",
+     "why": "parses --bind and calls parseKeyChords for the key part"
+    },
+    {
+     "name": "parseOptions",
+     "why": "handles --expect and calls parseKeyChords"
+    },
+    {
+     "name": "parseToggleSort",
+     "why": "calls parseKeyChords"
+    },
+    {
+     "name": "parseActionList",
+     "why": "calls parseKeyChords"
+    }
+   ],
+   "rationale": "`parseKeyChords` (src/options.go:1004) splits the list on commas and maps each name (up, down, ctrl-*, alt-*, f1..f12, ...) to a `tui.Event`; every option that takes key names calls it.",
+   "verified_with": [
+    "reading",
+    "grep"
+   ]
+  },
+  {
+   "id": "fzf-dead-util",
+   "repo": "fzf",
+   "type": "dead_code",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods defined in src/util/chars.go and src/util/util.go are never called anywhere in the repository, including tests and platform-specific files? Ignore `String()` methods, which `fmt` can call implicitly.",
+   "gold": [
+    {
+     "name": "RunOnce",
+     "evidence": [
+      {
+       "file": "src/util/util.go",
+       "line": 83,
+       "contains": "func RunOnce("
+      }
+     ]
+    },
+    {
+     "name": "Chars.SliceRight",
+     "evidence": [
+      {
+       "file": "src/util/chars.go",
+       "line": 335,
+       "contains": "func (chars *Chars) SliceRight("
+      }
+     ]
+    },
+    {
+     "name": "Chars.TrimSuffix",
+     "evidence": [
+      {
+       "file": "src/util/chars.go",
+       "line": 318,
+       "contains": "func (chars *Chars) TrimSuffix("
+      }
+     ]
+    }
+   ],
+   "rationale": "Type-checked with go/packages for GOOS=darwin, linux and windows, tests included: these three are the only functions or methods of the two files with no use anywhere (besides `Chars.String`, excluded by the question). Cross-checked with grep: `RunOnce` and `SliceRight` occur only at their definitions; every `.TrimSuffix(` call in the repository is `strings.TrimSuffix`.",
+   "verified_with": [
+    "go/types uses across GOOS",
+    "grep"
+   ]
+  },
+  {
+   "id": "fzf-flow-default-command",
+   "repo": "fzf",
+   "type": "flow",
+   "answer_kind": "symbols",
+   "question": "When fzf starts with the `FZF_DEFAULT_COMMAND` environment variable set and stdin is a terminal, the output of that command becomes the list of items. List every function or method on the call chain from `Run` (src/core.go) to the method that reads the command's output and splits it into items, including both ends.",
+   "gold": [
+    {
+     "name": "Run",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 55,
+       "contains": "func Run("
+      },
+      {
+       "file": "src/core.go",
+       "line": 210,
+       "contains": "reader.ReadSource("
+      }
+     ]
+    },
+    {
+     "name": "Reader.ReadSource",
+     "evidence": [
+      {
+       "file": "src/reader.go",
+       "line": 125,
+       "contains": "func (r *Reader) ReadSource("
+      },
+      {
+       "file": "src/reader.go",
+       "line": 144,
+       "contains": "r.readFromCommand("
+      }
+     ]
+    },
+    {
+     "name": "Reader.readFromCommand",
+     "evidence": [
+      {
+       "file": "src/reader.go",
+       "line": 383,
+       "contains": "func (r *Reader) readFromCommand("
+      },
+      {
+       "file": "src/reader.go",
+       "line": 409,
+       "contains": "r.feed("
+      }
+     ]
+    },
+    {
+     "name": "Reader.feed",
+     "evidence": [
+      {
+       "file": "src/reader.go",
+       "line": 153,
+       "contains": "func (r *Reader) feed("
+      }
+     ]
+    }
+   ],
+   "rationale": "Run starts `reader.ReadSource` (core.go:210); with stdin a TTY and FZF_DEFAULT_COMMAND set, ReadSource calls `readFromCommand` (reader.go:144), which pipes the command's stdout into `feed` (reader.go:409); feed splits the stream into lines and pushes items.",
+   "verified_with": [
+    "reading"
+   ]
+  },
+  {
+   "id": "fzf-flow-matcher",
+   "repo": "fzf",
+   "type": "flow",
+   "answer_kind": "symbols",
+   "question": "List every function or method on the call chain from `Matcher.Loop` (src/matcher.go) down to `Pattern.MatchItem` (src/pattern.go), including both ends.",
+   "gold": [
+    {
+     "name": "Matcher.Loop",
+     "evidence": [
+      {
+       "file": "src/matcher.go",
+       "line": 81,
+       "contains": "func (m *Matcher) Loop("
+      },
+      {
+       "file": "src/matcher.go",
+       "line": 138,
+       "contains": "m.scan("
+      }
+     ]
+    },
+    {
+     "name": "Matcher.scan",
+     "evidence": [
+      {
+       "file": "src/matcher.go",
+       "line": 161,
+       "contains": "func (m *Matcher) scan("
+      },
+      {
+       "file": "src/matcher.go",
+       "line": 198,
+       "contains": "request.pattern.Match("
+      }
+     ]
+    },
+    {
+     "name": "Pattern.Match",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 302,
+       "contains": "func (p *Pattern) Match("
+      },
+      {
+       "file": "src/pattern.go",
+       "line": 314,
+       "contains": "p.matchChunk("
+      }
+     ]
+    },
+    {
+     "name": "Pattern.matchChunk",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 322,
+       "contains": "func (p *Pattern) matchChunk("
+      },
+      {
+       "file": "src/pattern.go",
+       "line": 363,
+       "contains": "p.MatchItem("
+      }
+     ]
+    },
+    {
+     "name": "Pattern.MatchItem",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 388,
+       "contains": "func (p *Pattern) MatchItem("
+      }
+     ]
+    }
+   ],
+   "rationale": "Loop calls `m.scan(request)`; scan starts worker goroutines that call `request.pattern.Match(chunk, slab)`; Match calls `p.matchChunk`, which calls `p.MatchItem` per item (pattern.go:363 and 378). No other path connects Loop to MatchItem.",
+   "verified_with": [
+    "reading",
+    "x/tools CHA call graph"
+   ]
+  },
+  {
+   "id": "hono-callers-cookie-parse",
+   "repo": "hono",
+   "type": "callers",
+   "answer_kind": "symbols",
+   "question": "Which functions call the `parse` function exported from src/utils/cookie.ts? Only consider non-test source files.",
+   "gold": [
+    {
+     "name": "parseSigned",
+     "evidence": [
+      {
+       "file": "src/utils/cookie.ts",
+       "line": 155,
+       "contains": "parse(cookie, name)"
+      }
+     ]
+    },
+    {
+     "name": "getCookie",
+     "evidence": [
+      {
+       "file": "src/helper/cookie/index.ts",
+       "line": 39,
+       "contains": "parse(cookie, finalKey)"
+      },
+      {
+       "file": "src/helper/cookie/index.ts",
+       "line": 45,
+       "contains": "parse(cookie)"
+      }
+     ]
+    }
+   ],
+   "rationale": "TypeScript language service `findReferences` on the declaration (src/utils/cookie.ts:110): besides tests, the only references are the call in parseSigned (same file) and the import plus two calls in getCookie (src/helper/cookie/index.ts). Many unrelated `parse` / `JSON.parse` calls exist elsewhere.",
+   "verified_with": [
+    "TypeScript findReferences",
+    "TypeScript call hierarchy"
+   ]
+  },
+  {
+   "id": "hono-callers-check-optional-parameter",
+   "repo": "hono",
+   "type": "callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods call `checkOptionalParameter` (src/utils/url.ts)? Only consider non-test source files.",
+   "gold": [
+    {
+     "name": "RegExpRouter.add",
+     "evidence": [
+      {
+       "file": "src/router/reg-exp-router/router.ts",
+       "line": 73,
+       "contains": "checkOptionalParameter(path)"
+      }
+     ]
+    },
+    {
+     "name": "TrieRouter.add",
+     "evidence": [
+      {
+       "file": "src/router/trie-router/router.ts",
+       "line": 10,
+       "contains": "checkOptionalParameter(path)"
+      }
+     ]
+    },
+    {
+     "name": "LinearRouter.add",
+     "evidence": [
+      {
+       "file": "src/router/linear-router/router.ts",
+       "line": 17,
+       "contains": "checkOptionalParameter(path)"
+      }
+     ]
+    }
+   ],
+   "rationale": "TypeScript incoming call hierarchy of checkOptionalParameter: the `add` methods of the three routers (plus tests). PatternRouter and SmartRouter do not call it.",
+   "verified_with": [
+    "TypeScript call hierarchy",
+    "grep"
+   ]
+  },
+  {
+   "id": "hono-callers-parse-accept",
+   "repo": "hono",
+   "type": "callers",
+   "answer_kind": "symbols",
+   "question": "Which functions call `parseAccept` (src/utils/accept.ts)? Only consider non-test source files.",
+   "gold": [
+    {
+     "name": "serveStatic",
+     "evidence": [
+      {
+       "file": "src/middleware/serve-static/index.ts",
+       "line": 111,
+       "contains": "parseAccept("
+      }
+     ],
+     "note": "inside the returned middleware closure"
+    },
+    {
+     "name": "accepts",
+     "evidence": [
+      {
+       "file": "src/helper/accepts/accepts.ts",
+       "line": 104,
+       "contains": "parseAccept(acceptHeader)"
+      }
+     ]
+    },
+    {
+     "name": "selectEncoding",
+     "evidence": [
+      {
+       "file": "src/middleware/compress/index.ts",
+       "line": 31,
+       "contains": "parseAccept(header)"
+      }
+     ]
+    },
+    {
+     "name": "parseAcceptLanguage",
+     "evidence": [
+      {
+       "file": "src/middleware/language/language.ts",
+       "line": 75,
+       "contains": "parseAccept(header)"
+      }
+     ]
+    }
+   ],
+   "rationale": "TypeScript incoming call hierarchy and grep agree on four call sites in four files.",
+   "verified_with": [
+    "TypeScript call hierarchy",
+    "grep"
+   ]
+  },
+  {
+   "id": "hono-callees-parse-form-data",
+   "repo": "hono",
+   "type": "callees",
+   "answer_kind": "symbols",
+   "question": "Which functions defined in this repository does `parseFormData` in src/utils/body.ts call directly? Exclude built-in and Web API calls.",
+   "gold": [
+    {
+     "name": "isRawRequest",
+     "evidence": [
+      {
+       "file": "src/utils/body.ts",
+       "line": 130,
+       "contains": "isRawRequest(request)"
+      },
+      {
+       "file": "src/utils/body.ts",
+       "line": 136,
+       "contains": "isRawRequest(request)"
+      }
+     ]
+    },
+    {
+     "name": "convertFormDataToBodyData",
+     "evidence": [
+      {
+       "file": "src/utils/body.ts",
+       "line": 131,
+       "contains": "convertFormDataToBodyData<T>("
+      },
+      {
+       "file": "src/utils/body.ts",
+       "line": 146,
+       "contains": "convertFormDataToBodyData<T>("
+      }
+     ]
+    },
+    {
+     "name": "bufferToFormData",
+     "evidence": [
+      {
+       "file": "src/utils/body.ts",
+       "line": 138,
+       "contains": "bufferToFormData("
+      }
+     ]
+    }
+   ],
+   "rationale": "Read off the body of parseFormData (src/utils/body.ts:125-150). `request.arrayBuffer()` is the Fetch API; `bufferToFormData` is defined in src/utils/buffer.ts.",
+   "verified_with": [
+    "reading"
+   ]
+  },
+  {
+   "id": "hono-impact-http-exception",
+   "repo": "hono",
+   "type": "impact",
+   "answer_kind": "files",
+   "question": "If the constructor of `HTTPException` (src/http-exception.ts) gained a required parameter, which non-test source files under src/ would need updating because they construct an `HTTPException`? Exclude src/http-exception.ts itself.",
+   "gold": [
+    {
+     "name": "src/request.ts",
+     "evidence": [
+      {
+       "file": "src/request.ts",
+       "line": 488,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/middleware/jwt/jwt.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/jwt/jwt.ts",
+       "line": 87,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/middleware/timeout/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/timeout/index.ts",
+       "line": 12,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/middleware/jwk/jwk.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/jwk/jwk.ts",
+       "line": 87,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/middleware/csrf/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/csrf/index.ts",
+       "line": 146,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/middleware/bearer-auth/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/bearer-auth/index.ts",
+       "line": 149,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/middleware/body-limit/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/body-limit/index.ts",
+       "line": 57,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/middleware/basic-auth/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/basic-auth/index.ts",
+       "line": 151,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/middleware/ip-restriction/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/ip-restriction/index.ts",
+       "line": 232,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/utils/mount.ts",
+     "evidence": [
+      {
+       "file": "src/utils/mount.ts",
+       "line": 69,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/validator/validator.ts",
+     "evidence": [
+      {
+       "file": "src/validator/validator.ts",
+       "line": 103,
+       "contains": "new HTTPException("
+      }
+     ]
+    },
+    {
+     "name": "src/helper/proxy/index.ts",
+     "evidence": [
+      {
+       "file": "src/helper/proxy/index.ts",
+       "line": 70,
+       "contains": "new HTTPException("
+      }
+     ]
+    }
+   ],
+   "rationale": "`grep -rln \"new HTTPException(\" src` minus tests; the match in src/http-exception.ts is inside a doc comment. Each remaining match was checked to be code, not a comment. No class extends HTTPException.",
+   "verified_with": [
+    "grep",
+    "reading"
+   ]
+  },
+  {
+   "id": "hono-impact-resolve-callback",
+   "repo": "hono",
+   "type": "impact",
+   "answer_kind": "files",
+   "question": "If the signature of `resolveCallback` in src/utils/html.ts changed, which other non-test source files contain calls that would need to be updated?",
+   "gold": [
+    {
+     "name": "src/jsx/streaming.ts",
+     "evidence": [
+      {
+       "file": "src/jsx/streaming.ts",
+       "line": 138,
+       "contains": "resolveCallback("
+      }
+     ]
+    },
+    {
+     "name": "src/jsx/components.ts",
+     "evidence": [
+      {
+       "file": "src/jsx/components.ts",
+       "line": 205,
+       "contains": "resolveCallback("
+      }
+     ]
+    },
+    {
+     "name": "src/context.ts",
+     "evidence": [
+      {
+       "file": "src/context.ts",
+       "line": 749,
+       "contains": "resolveCallback("
+      }
+     ]
+    },
+    {
+     "name": "src/helper/streaming/sse.ts",
+     "evidence": [
+      {
+       "file": "src/helper/streaming/sse.ts",
+       "line": 19,
+       "contains": "resolveCallback("
+      }
+     ]
+    }
+   ],
+   "rationale": "TypeScript findReferences on resolveCallback: outside its own file and tests it is imported and called in exactly these four files. `resolveCallbackSync` is a different function.",
+   "verified_with": [
+    "TypeScript findReferences"
+   ]
+  },
+  {
+   "id": "hono-where-cookie-serialize",
+   "repo": "hono",
+   "type": "where",
+   "answer_kind": "symbols",
+   "question": "Which function builds the `Set-Cookie` header value, appending attributes such as `Max-Age`, `Domain`, `Path` and `SameSite` and enforcing the rules for `__Secure-` and `__Host-` cookie prefixes?",
+   "gold": [
+    {
+     "name": "_serialize",
+     "evidence": [
+      {
+       "file": "src/utils/cookie.ts",
+       "line": 174,
+       "contains": "const _serialize = "
+      },
+      {
+       "file": "src/utils/cookie.ts",
+       "line": 181,
+       "contains": "__secure-"
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "serialize",
+     "why": "exported wrapper around _serialize"
+    },
+    {
+     "name": "serializeSigned",
+     "why": "signs, then calls _serialize"
+    },
+    {
+     "name": "generateCookie",
+     "why": "helper that applies prefix options, then calls serialize"
+    },
+    {
+     "name": "generateSignedCookie",
+     "why": "signed variant of generateCookie"
+    },
+    {
+     "name": "setCookie",
+     "why": "sets the header using generateCookie"
+    },
+    {
+     "name": "setSignedCookie",
+     "why": "signed variant of setCookie"
+    }
+   ],
+   "rationale": "All attribute handling and prefix checks live in `_serialize` (src/utils/cookie.ts:174-260); the exported functions are wrappers.",
+   "verified_with": [
+    "reading"
+   ]
+  },
+  {
+   "id": "hono-where-etag-match",
+   "repo": "hono",
+   "type": "where",
+   "answer_kind": "symbols",
+   "question": "In the ETag middleware, which function decides whether the request's `If-None-Match` header matches the response's ETag, so that a 304 response is sent?",
+   "gold": [
+    {
+     "name": "etagMatches",
+     "evidence": [
+      {
+       "file": "src/middleware/etag/index.ts",
+       "line": 32,
+       "contains": "function etagMatches("
+      },
+      {
+       "file": "src/middleware/etag/index.ts",
+       "line": 115,
+       "contains": "etagMatches(etag, ifNoneMatch)"
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "etag",
+     "why": "the middleware that calls etagMatches and also accepts `*`"
+    },
+    {
+     "name": "stripWeak",
+     "why": "helper used by etagMatches"
+    }
+   ],
+   "rationale": "`etagMatches` (src/middleware/etag/index.ts:32) compares each tag in If-None-Match with the weak-stripped ETag; the middleware returns 304 when it matches.",
+   "verified_with": [
+    "reading"
+   ]
+  },
+  {
+   "id": "hono-dead-utils",
+   "repo": "hono",
+   "type": "dead_code",
+   "answer_kind": "symbols",
+   "question": "Which exported functions defined directly in `src/utils/*.ts` files (not in subdirectories, not test files) are not used by any non-test code in the repository, so that only tests exercise them?",
+   "gold": [
+    {
+     "name": "equal",
+     "evidence": [
+      {
+       "file": "src/utils/buffer.ts",
+       "line": 8,
+       "contains": "export const equal = "
+      }
+     ]
+    },
+    {
+     "name": "bufferToString",
+     "evidence": [
+      {
+       "file": "src/utils/buffer.ts",
+       "line": 98,
+       "contains": "export const bufferToString = "
+      }
+     ]
+    },
+    {
+     "name": "sha1",
+     "evidence": [
+      {
+       "file": "src/utils/crypto.ts",
+       "line": 21,
+       "contains": "export const sha1 = "
+      }
+     ]
+    },
+    {
+     "name": "md5",
+     "evidence": [
+      {
+       "file": "src/utils/crypto.ts",
+       "line": 27,
+       "contains": "export const md5 = "
+      }
+     ]
+    },
+    {
+     "name": "getFilePath",
+     "evidence": [
+      {
+       "file": "src/utils/filepath.ts",
+       "line": 12,
+       "contains": "export const getFilePath = "
+      }
+     ]
+    },
+    {
+     "name": "expandIPv6",
+     "evidence": [
+      {
+       "file": "src/utils/ipaddr.ts",
+       "line": 13,
+       "contains": "export const expandIPv6 = "
+      }
+     ]
+    },
+    {
+     "name": "getQueryStrings",
+     "evidence": [
+      {
+       "file": "src/utils/url.ts",
+       "line": 156,
+       "contains": "export const getQueryStrings = "
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "getFilePathWithoutDefaultDocument",
+     "why": "called only by getFilePath, which is itself unused, so only tests exercise it; the question does not say whether such transitive cases count (amended after the first pilot session surfaced it)"
+    }
+   ],
+   "rationale": "For every exported function in src/utils/*.ts, TypeScript findReferences was run over all of src/; these seven have no reference outside tests (other than their own declaration). A grep over the whole repository (runtime-tests, benchmarks, perf-measures included) finds no other use. They remain public API through the `hono/utils/*` export, but nothing in the repository uses them. getFilePathWithoutDefaultDocument is reached only through the unused getFilePath; it is optional because the question admits both readings.",
+   "verified_with": [
+    "TypeScript findReferences",
+    "grep"
+   ]
+  },
+  {
+   "id": "hono-flow-fetch",
+   "repo": "hono",
+   "type": "flow",
+   "answer_kind": "symbols",
+   "question": "For a route with more than one handler (for example a middleware followed by the route handler), list every function or method on the call chain from the app's `fetch` entry point to the function that invokes the handlers one after another, including both ends.",
+   "gold": [
+    {
+     "name": "Hono.fetch",
+     "aliases": [
+      "HonoBase.fetch"
+     ],
+     "evidence": [
+      {
+       "file": "src/hono-base.ts",
+       "line": 503,
+       "contains": "this.#dispatch("
+      }
+     ],
+     "note": "class Hono in src/hono-base.ts, exported as HonoBase"
+    },
+    {
+     "name": "Hono.#dispatch",
+     "aliases": [
+      "HonoBase.#dispatch"
+     ],
+     "evidence": [
+      {
+       "file": "src/hono-base.ts",
+       "line": 425,
+       "contains": "#dispatch("
+      },
+      {
+       "file": "src/hono-base.ts",
+       "line": 469,
+       "contains": "compose("
+      }
+     ]
+    },
+    {
+     "name": "compose",
+     "aliases": [
+      "dispatch",
+      "compose.dispatch"
+     ],
+     "evidence": [
+      {
+       "file": "src/compose.ts",
+       "line": 15,
+       "contains": "export const compose = "
+      },
+      {
+       "file": "src/compose.ts",
+       "line": 51,
+       "contains": "await handler(context"
+      }
+     ],
+     "note": "the inner `dispatch` function of the closure compose returns calls each handler"
+    }
+   ],
+   "optional": [
+    {
+     "name": "Hono.request",
+     "why": "test helper that also calls fetch",
+     "aliases": [
+      "HonoBase.request"
+     ]
+    }
+   ],
+   "rationale": "`fetch` (hono-base.ts:499-504) calls `this.#dispatch`; with more than one matched handler #dispatch calls `compose(...)` (line 469) and invokes the returned function; that closure's inner `dispatch(i)` calls each handler with a `next` that dispatches i+1 (compose.ts:52).",
+   "verified_with": [
+    "reading"
+   ]
+  },
+  {
+   "id": "fastapi-callers-jsonable-encoder",
+   "repo": "fastapi",
+   "type": "callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods in the `fastapi/` package (not tests, not docs_src) call `jsonable_encoder`, other than `jsonable_encoder` itself?",
+   "gold": [
+    {
+     "name": "request_validation_exception_handler",
+     "evidence": [
+      {
+       "file": "fastapi/exception_handlers.py",
+       "line": 25,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    },
+    {
+     "name": "websocket_request_validation_exception_handler",
+     "evidence": [
+      {
+       "file": "fastapi/exception_handlers.py",
+       "line": 33,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    },
+    {
+     "name": "get_swagger_ui_html",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/docs.py",
+       "line": 172,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    },
+    {
+     "name": "_get_openapi_security_definitions",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 140,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    },
+    {
+     "name": "_get_openapi_operation_parameters",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 214,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    },
+    {
+     "name": "get_openapi_operation_request_body",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 249,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    },
+    {
+     "name": "get_openapi",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 671,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    },
+    {
+     "name": "serialize_response",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 360,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    },
+    {
+     "name": "get_request_handler",
+     "aliases": [
+      "_serialize_data",
+      "_serialize_sse_item"
+     ],
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 550,
+       "contains": "jsonable_encoder("
+      },
+      {
+       "file": "fastapi/routing.py",
+       "line": 573,
+       "contains": "jsonable_encoder("
+      }
+     ],
+     "note": "calls are in nested functions of the returned app"
+    }
+   ],
+   "optional": [
+    {
+     "name": "jsonable_encoder",
+     "why": "recursive self-calls, excluded by the question"
+    }
+   ],
+   "rationale": "An `ast` walk over fastapi/ for `Call` nodes whose callee is named jsonable_encoder (helper script in evals/agent/groundtruth/py_refs.py) gives these sites; jsonable_encoder is never passed as a value. Calls inside nested functions are attributed to the outermost function, as the prompt instructs.",
+   "verified_with": [
+    "python ast"
+   ]
+  },
+  {
+   "id": "fastapi-callers-is-body-allowed",
+   "repo": "fastapi",
+   "type": "callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods in the `fastapi/` package call `is_body_allowed_for_status_code` (fastapi/utils.py)?",
+   "gold": [
+    {
+     "name": "http_exception_handler",
+     "evidence": [
+      {
+       "file": "fastapi/exception_handlers.py",
+       "line": 13,
+       "contains": "is_body_allowed_for_status_code("
+      }
+     ]
+    },
+    {
+     "name": "get_openapi_path",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 411,
+       "contains": "is_body_allowed_for_status_code("
+      }
+     ]
+    },
+    {
+     "name": "get_request_handler",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 788,
+       "contains": "is_body_allowed_for_status_code("
+      }
+     ],
+     "note": "inside the nested app function"
+    },
+    {
+     "name": "_populate_api_route_state",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1096,
+       "contains": "is_body_allowed_for_status_code("
+      },
+      {
+       "file": "fastapi/routing.py",
+       "line": 1157,
+       "contains": "is_body_allowed_for_status_code("
+      }
+     ]
+    }
+   ],
+   "rationale": "python `ast` walk over fastapi/ for calls named is_body_allowed_for_status_code; four enclosing top-level functions.",
+   "verified_with": [
+    "python ast"
+   ]
+  },
+  {
+   "id": "fastapi-callers-auth-scheme-param",
+   "repo": "fastapi",
+   "type": "callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods in the `fastapi/` package call `get_authorization_scheme_param` (fastapi/security/utils.py)?",
+   "gold": [
+    {
+     "name": "HTTPBase.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/http.py",
+       "line": 98,
+       "contains": "get_authorization_scheme_param("
+      }
+     ]
+    },
+    {
+     "name": "HTTPBasic.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/http.py",
+       "line": 208,
+       "contains": "get_authorization_scheme_param("
+      }
+     ]
+    },
+    {
+     "name": "HTTPBearer.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/http.py",
+       "line": 309,
+       "contains": "get_authorization_scheme_param("
+      }
+     ]
+    },
+    {
+     "name": "HTTPDigest.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/http.py",
+       "line": 412,
+       "contains": "get_authorization_scheme_param("
+      }
+     ]
+    },
+    {
+     "name": "OAuth2PasswordBearer.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/oauth2.py",
+       "line": 538,
+       "contains": "get_authorization_scheme_param("
+      }
+     ]
+    },
+    {
+     "name": "OAuth2AuthorizationCodeBearer.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/oauth2.py",
+       "line": 644,
+       "contains": "get_authorization_scheme_param("
+      }
+     ]
+    }
+   ],
+   "rationale": "python `ast` walk: six call sites, each in the `__call__` method of a security scheme class.",
+   "verified_with": [
+    "python ast",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-callees-get-openapi",
+   "repo": "fastapi",
+   "type": "callees",
+   "answer_kind": "symbols",
+   "question": "Which functions defined in this repository does `get_openapi` in fastapi/openapi/utils.py call directly? Exclude standard-library, Pydantic and Starlette calls.",
+   "gold": [
+    {
+     "name": "get_fields_from_routes",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 612,
+       "contains": "get_fields_from_routes("
+      }
+     ]
+    },
+    {
+     "name": "get_flat_models_from_fields",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 613,
+       "contains": "get_flat_models_from_fields("
+      }
+     ],
+     "note": "defined in fastapi/_compat/v2.py"
+    },
+    {
+     "name": "get_model_name_map",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 614,
+       "contains": "get_model_name_map("
+      }
+     ],
+     "note": "defined in fastapi/_compat/v2.py"
+    },
+    {
+     "name": "get_definitions",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 615,
+       "contains": "get_definitions("
+      }
+     ],
+     "note": "defined in fastapi/_compat/v2.py"
+    },
+    {
+     "name": "iter_route_contexts",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 620,
+       "contains": "routing.iter_route_contexts("
+      },
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 640,
+       "contains": "routing.iter_route_contexts("
+      }
+     ]
+    },
+    {
+     "name": "_get_api_route_for_openapi",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 621,
+       "contains": "_get_api_route_for_openapi("
+      }
+     ]
+    },
+    {
+     "name": "get_openapi_path",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 623,
+       "contains": "get_openapi_path("
+      }
+     ]
+    },
+    {
+     "name": "jsonable_encoder",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 671,
+       "contains": "jsonable_encoder("
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "OpenAPI",
+     "why": "Pydantic model class instantiated in the return statement"
+    }
+   ],
+   "rationale": "Read off the body of get_openapi (fastapi/openapi/utils.py:577-671); the three model helpers are imported from fastapi._compat and defined in fastapi/_compat/v2.py.",
+   "verified_with": [
+    "reading",
+    "python ast"
+   ]
+  },
+  {
+   "id": "fastapi-callees-solve-dependencies",
+   "repo": "fastapi",
+   "type": "callees",
+   "answer_kind": "symbols",
+   "question": "Which functions defined in this repository does `solve_dependencies` in fastapi/dependencies/utils.py call directly? Exclude standard-library, Pydantic and Starlette calls and class instantiations.",
+   "gold": [
+    {
+     "name": "get_dependant",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 689,
+       "contains": "get_dependant("
+      }
+     ]
+    },
+    {
+     "name": "_get_oauth_scopes",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 693,
+       "contains": "_get_oauth_scopes("
+      },
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 783,
+       "contains": "_get_oauth_scopes("
+      }
+     ],
+     "note": "defined in fastapi/dependencies/models.py"
+    },
+    {
+     "name": "_get_cache_key",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 713,
+       "contains": "_get_cache_key("
+      }
+     ],
+     "note": "defined in fastapi/dependencies/models.py"
+    },
+    {
+     "name": "_is_gen_callable",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 719,
+       "contains": "_is_gen_callable("
+      }
+     ]
+    },
+    {
+     "name": "_is_async_gen_callable",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 719,
+       "contains": "_is_async_gen_callable("
+      }
+     ]
+    },
+    {
+     "name": "_solve_generator",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 725,
+       "contains": "_solve_generator("
+      }
+     ]
+    },
+    {
+     "name": "_is_coroutine_callable",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 730,
+       "contains": "_is_coroutine_callable("
+      }
+     ]
+    },
+    {
+     "name": "request_params_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 738,
+       "contains": "request_params_to_args("
+      }
+     ]
+    },
+    {
+     "name": "request_body_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 762,
+       "contains": "request_body_to_args("
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "solve_dependencies",
+     "why": "recursive self-call"
+    },
+    {
+     "name": "run_in_threadpool",
+     "why": "imported from starlette.concurrency"
+    },
+    {
+     "name": "BackgroundTasks",
+     "why": "class instantiation"
+    },
+    {
+     "name": "SecurityScopes",
+     "why": "class instantiation"
+    },
+    {
+     "name": "SolvedDependency",
+     "why": "dataclass instantiation"
+    },
+    {
+     "name": "Response",
+     "why": "Starlette class instantiation"
+    }
+   ],
+   "rationale": "Read off the body of solve_dependencies (fastapi/dependencies/utils.py:643-792) and resolved each callee's definition: _get_oauth_scopes, _get_cache_key and the _is_*_callable helpers are in fastapi/dependencies/models.py, the rest in fastapi/dependencies/utils.py. `run_in_threadpool` comes from Starlette.",
+   "verified_with": [
+    "reading",
+    "python ast"
+   ]
+  },
+  {
+   "id": "fastapi-impact-lenient-issubclass",
+   "repo": "fastapi",
+   "type": "impact",
+   "answer_kind": "files",
+   "question": "If the signature of `lenient_issubclass` (defined in fastapi/_compat/shared.py) changed, which other files in the `fastapi/` package contain calls that would need to be updated?",
+   "gold": [
+    {
+     "name": "fastapi/_compat/v2.py",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 406,
+       "contains": "lenient_issubclass("
+      }
+     ]
+    },
+    {
+     "name": "fastapi/dependencies/utils.py",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 174,
+       "contains": "lenient_issubclass("
+      }
+     ]
+    },
+    {
+     "name": "fastapi/openapi/utils.py",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 450,
+       "contains": "lenient_issubclass("
+      }
+     ]
+    },
+    {
+     "name": "fastapi/routing.py",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 422,
+       "contains": "lenient_issubclass("
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "fastapi/_compat/__init__.py",
+     "why": "re-exports the name but does not call it"
+    }
+   ],
+   "rationale": "python `ast` walk for calls named lenient_issubclass: besides shared.py itself, calls exist in these four files. fastapi/_compat/__init__.py only re-exports it.",
+   "verified_with": [
+    "python ast",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-where-validation-422",
+   "repo": "fastapi",
+   "type": "where",
+   "answer_kind": "symbols",
+   "question": "Which function produces the default HTTP 422 JSON response that is returned when request validation fails?",
+   "gold": [
+    {
+     "name": "request_validation_exception_handler",
+     "evidence": [
+      {
+       "file": "fastapi/exception_handlers.py",
+       "line": 20,
+       "contains": "async def request_validation_exception_handler("
+      },
+      {
+       "file": "fastapi/exception_handlers.py",
+       "line": 24,
+       "contains": "status_code=422"
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "FastAPI.__init__",
+     "why": "registers the handler for RequestValidationError"
+    },
+    {
+     "name": "get_request_handler",
+     "why": "raises RequestValidationError when validation fails"
+    }
+   ],
+   "rationale": "`request_validation_exception_handler` (fastapi/exception_handlers.py:20) returns `JSONResponse(status_code=422, content={\"detail\": ...})`; FastAPI.__init__ registers it as the default handler for RequestValidationError (applications.py:1001-1003).",
+   "verified_with": [
+    "reading"
+   ]
+  },
+  {
+   "id": "fastapi-where-operation-id",
+   "repo": "fastapi",
+   "type": "where",
+   "answer_kind": "symbols",
+   "question": "When a path operation has no explicit `operation_id`, which function builds the default operationId string used in the OpenAPI schema (for example `read_item_items__item_id__get`)?",
+   "gold": [
+    {
+     "name": "generate_unique_id",
+     "evidence": [
+      {
+       "file": "fastapi/utils.py",
+       "line": 95,
+       "contains": "def generate_unique_id("
+      },
+      {
+       "file": "fastapi/routing.py",
+       "line": 1043,
+       "contains": "generate_unique_id"
+      }
+     ]
+    }
+   ],
+   "optional": [
+    {
+     "name": "_populate_api_route_state",
+     "why": "assigns route.unique_id from the configured generator"
+    },
+    {
+     "name": "get_openapi_operation_metadata",
+     "why": "copies route.unique_id into the schema"
+    },
+    {
+     "name": "APIRoute.__init__",
+     "why": "constructs the route"
+    },
+    {
+     "name": "generate_operation_id",
+     "why": "deprecated and unused"
+    },
+    {
+     "name": "generate_operation_id_for_path",
+     "why": "deprecated and unused"
+    }
+   ],
+   "rationale": "`generate_unique_id` (fastapi/utils.py:95) is the default `generate_unique_id_function` (routing.py:1042-1044); `_populate_api_route_state` sets `route.unique_id = route.operation_id or generator(route)` (routing.py:1081) and get_openapi_operation_metadata emits it (openapi/utils.py:288). The older generate_operation_id* functions are deprecated and not called.",
+   "verified_with": [
+    "reading",
+    "python ast"
+   ]
+  },
+  {
+   "id": "fastapi-dead-deprecated",
+   "repo": "fastapi",
+   "type": "dead_code",
+   "answer_kind": "symbols",
+   "question": "Which module-level functions defined in fastapi/routing.py, fastapi/utils.py and fastapi/openapi/utils.py are not referenced anywhere else in the `fastapi/` package, neither called nor passed as a value? Count a function as unreferenced if its only references come from functions that are themselves unreferenced. Ignore tests, docs and docs_src.",
+   "gold": [
+    {
+     "name": "generate_operation_id",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 258,
+       "contains": "def generate_operation_id("
+      }
+     ]
+    },
+    {
+     "name": "generate_operation_id_for_path",
+     "evidence": [
+      {
+       "file": "fastapi/utils.py",
+       "line": 80,
+       "contains": "def generate_operation_id_for_path("
+      },
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 270,
+       "contains": "generate_operation_id_for_path("
+      }
+     ],
+     "note": "only called by generate_operation_id"
+    },
+    {
+     "name": "_iter_included_route_candidates",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1885,
+       "contains": "def _iter_included_route_candidates("
+      }
+     ],
+     "note": "only used by tests"
+    }
+   ],
+   "optional": [
+    {
+     "name": "_frontend_dependency_endpoint",
+     "why": "never called directly and marked `pragma: no cover`, but passed as `call=` in two places, so it is referenced"
+    }
+   ],
+   "rationale": "An `ast` pass counting Name/Attribute references (not string mentions) inside fastapi/ for every module-level function of the three files: generate_operation_id and _iter_included_route_candidates have none; generate_operation_id_for_path is referenced only from generate_operation_id. Every other function has at least one reference from live code. Two functions are referenced but never called directly: generate_unique_id (the default `generate_unique_id_function`, called through that variable) and _frontend_dependency_endpoint (passed as `call=`); the question counts references, so neither is in the gold set.",
+   "verified_with": [
+    "python ast",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-flow-query-validation",
+   "repo": "fastapi",
+   "type": "flow",
+   "answer_kind": "symbols",
+   "question": "For a plain (non-model) query parameter, list every function or method on the call chain from `solve_dependencies` (fastapi/dependencies/utils.py) to the method that validates the parameter's value against its declared type, including both ends.",
+   "gold": [
+    {
+     "name": "solve_dependencies",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 643,
+       "contains": "async def solve_dependencies("
+      },
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 741,
+       "contains": "request_params_to_args("
+      }
+     ]
+    },
+    {
+     "name": "request_params_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 926,
+       "contains": "def request_params_to_args("
+      },
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 948,
+       "contains": "_validate_value_with_model_field("
+      }
+     ]
+    },
+    {
+     "name": "_validate_value_with_model_field",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 794,
+       "contains": "def _validate_value_with_model_field("
+      },
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 803,
+       "contains": "field.validate("
+      }
+     ]
+    },
+    {
+     "name": "ModelField.validate",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 173,
+       "contains": "def validate("
+      }
+     ]
+    }
+   ],
+   "rationale": "solve_dependencies calls request_params_to_args for query params (utils.py:741); for a non-model field it calls _validate_value_with_model_field (948), which returns `field.validate(...)` (803), i.e. ModelField.validate in fastapi/_compat/v2.py:173.",
+   "verified_with": [
+    "reading"
+   ]
+  }
+ ]
+}
