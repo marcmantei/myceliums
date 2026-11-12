@@ -1,0 +1,2820 @@
+[
+  {
+    "description": "Analyze a codebase and build its knowledge graph. Parses TypeScript and Python files, extracts symbols, resolves call relationships, detects communities, and traces execution flows. Uses cached analysis if fresh enough (set force=true to bypass cache).",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "force": {
+          "description": "Force full re-analysis even if cache is fresh (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "max_age_minutes": {
+          "description": "Maximum cache age in minutes before re-analysis (default: 60)",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "path": {
+          "description": "Path to the project directory to analyze",
+          "type": "string"
+        },
+        "skip_embeddings": {
+          "description": "Skip embedding generation for faster analysis (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "AnalyzeParams",
+      "type": "object"
+    },
+    "name": "analyze",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Run architecture quality checks: circular dependencies, god nodes, high fan-out, unstable dependencies. Returns findings with severity levels and affected entities.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "god_node_threshold": {
+          "description": "God node degree threshold (default: 20)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rules": {
+          "description": "Comma-separated rule IDs to check (default: all). Available: circular_dependency, god_node, high_fan_out, unstable_dependency",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "ArchitectureLintParams",
+      "type": "object"
+    },
+    "name": "architecture_lint",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Generate a service-level architecture diagram from the knowledge graph. Communities become service nodes, cross-community edges become connections. Returns both structured JSON and a Mermaid diagram string.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "ArchitectureViewParams",
+      "type": "object"
+    },
+    "name": "architecture_view",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Search for functions, classes, and symbols in the knowledge graph. Preferred over grep for finding code entities — returns structured results with file locations, types, and relevance scores.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "explain": {
+          "description": "Show scoring breakdown and graph paths for each result (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Maximum results to return",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "Search query string",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "SearchParams",
+      "type": "object"
+    },
+    "name": "context_search",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Execute a Cypher query against the knowledge graph. Supports MATCH, RETURN, WHERE, ORDER BY, LIMIT, SKIP, CONTAINS, IS NULL. Blocks write operations.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "query": {
+          "description": "Cypher query string",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query",
+        "repo_id"
+      ],
+      "title": "CypherQueryParams",
+      "type": "object"
+    },
+    "name": "cypher_query",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Delete a repository's analysis data",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID to delete",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id"
+      ],
+      "title": "DeleteParams",
+      "type": "object"
+    },
+    "name": "delete",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Detect architectural drift by comparing the current knowledge graph against the last saved snapshot. Returns a drift score (0-100, higher = less drift) and details on structural changes.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "DetectDriftParams2",
+      "type": "object"
+    },
+    "name": "detect_architecture_drift",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Detect circular dependencies in the codebase using Tarjan's strongly connected components algorithm. Returns groups of symbols that form dependency cycles. Use to find architectural issues like mutual imports or call cycles.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "include_calls": {
+          "description": "Include CALLS edges in cycle detection (default: true)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "include_imports": {
+          "description": "Include IMPORTS edges in cycle detection (default: true)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "min_cycle_size": {
+          "description": "Minimum number of symbols in a cycle to report (default: 2)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "DetectCyclesParams",
+      "type": "object"
+    },
+    "name": "detect_circular_dependencies",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "depth": {
+          "description": "Graph traversal depth (default: 2)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "diff": {
+          "description": "Diff string (optional -- if omitted, runs git diff HEAD in repo path)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "DetectImpactParams",
+      "type": "object"
+    },
+    "name": "detect_impact",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compare how two repositories implement the same intent/feature. Isolates the relevant symbols in each repo, aligns them via embedding similarity, and reports structural differences. Returns: matched symbol pairs, unmatched symbols, and structural comparison metrics.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "intent": {
+          "description": "Natural language description of the intent to compare\n(e.g., \"tree-sitter parsing\", \"authentication flow\")",
+          "type": "string"
+        },
+        "max_symbols": {
+          "description": "Maximum symbols per slice (default: 50)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "similarity_threshold": {
+          "description": "Similarity threshold for symbol alignment (default: 0.65, range 0.0-1.0)",
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "source_repo_id": {
+          "description": "Source repository ID (the approach to compare FROM)",
+          "type": "string"
+        },
+        "target_repo_id": {
+          "description": "Target repository ID (the approach to compare TO)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent",
+        "source_repo_id",
+        "target_repo_id"
+      ],
+      "title": "DifferentiateIntentParams",
+      "type": "object"
+    },
+    "name": "differentiate_intent",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Export the knowledge graph as a Mermaid diagram. Supports flowchart (call graph), class (class hierarchy), and graph (community-grouped) views. Returns a Mermaid-syntax string that can be rendered by any Mermaid-compatible tool.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "diagram_type": {
+          "description": "Diagram type: \"flowchart\", \"class\", or \"graph\" (default: \"flowchart\")",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "ExportMermaidParams",
+      "type": "object"
+    },
+    "name": "export_mermaid",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Find symbols with no incoming function calls (potential dead code). Exclude common entry points with exclude_patterns. Use before cleanup/refactoring.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "exclude_patterns": {
+          "description": "Exclude patterns (comma-separated regexes) for known entry points (optional)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Limit number of results",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id"
+      ],
+      "title": "FindDeadCodeParams",
+      "type": "object"
+    },
+    "name": "find_dead_code",
+    "outputSchema": {
+      "$defs": {
+        "DeadCodeItem": {
+          "properties": {
+            "end_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "file_path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "qualified_name": {
+              "type": "string"
+            },
+            "signature": {
+              "type": "string"
+            },
+            "start_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "qualified_name",
+            "kind",
+            "file_path",
+            "start_line",
+            "end_line",
+            "signature"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "symbols": {
+          "items": {
+            "$ref": "#/$defs/DeadCodeItem"
+          },
+          "type": "array"
+        },
+        "total_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "symbols",
+        "total_count"
+      ],
+      "title": "DeadCodeOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Find the shortest path between two symbols in the knowledge graph using BFS across all relationship types (CALLS, CONTAINED_BY, IMPORTS, etc.). Answers 'how are these two things connected?' directly. Returns the ordered list of symbols and edge types along the path.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "from_symbol": {
+          "description": "Symbol name or qualified name for the start of the path",
+          "type": "string"
+        },
+        "max_depth": {
+          "description": "Maximum BFS depth (default: 10)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_symbol": {
+          "description": "Symbol name or qualified name for the end of the path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from_symbol",
+        "to_symbol"
+      ],
+      "title": "FindPathParams",
+      "type": "object"
+    },
+    "name": "find_path",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "max_depth": {
+          "description": "Maximum transitive depth (default: 3)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        },
+        "symbol_name": {
+          "description": "Symbol name or qualified name to find callees for",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "symbol_name"
+      ],
+      "title": "GetCalleesParams",
+      "type": "object"
+    },
+    "name": "get_callees",
+    "outputSchema": {
+      "$defs": {
+        "CalleeItem": {
+          "properties": {
+            "depth": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "end_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "file_path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "qualified_name": {
+              "type": "string"
+            },
+            "start_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "qualified_name",
+            "kind",
+            "file_path",
+            "start_line",
+            "end_line",
+            "depth"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "callees": {
+          "items": {
+            "$ref": "#/$defs/CalleeItem"
+          },
+          "type": "array"
+        },
+        "depth_limited": {
+          "type": "boolean"
+        },
+        "symbol_name": {
+          "type": "string"
+        },
+        "total_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "symbol_name",
+        "callees",
+        "total_count",
+        "depth_limited"
+      ],
+      "title": "CalleesOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "max_depth": {
+          "description": "Maximum transitive depth (default: 3)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        },
+        "symbol_name": {
+          "description": "Symbol name or qualified name to find callers for",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "symbol_name"
+      ],
+      "title": "GetCallersParams",
+      "type": "object"
+    },
+    "name": "get_callers",
+    "outputSchema": {
+      "$defs": {
+        "CallerItem": {
+          "properties": {
+            "depth": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "end_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "file_path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "qualified_name": {
+              "type": "string"
+            },
+            "start_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "qualified_name",
+            "kind",
+            "file_path",
+            "start_line",
+            "end_line",
+            "depth"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "callers": {
+          "items": {
+            "$ref": "#/$defs/CallerItem"
+          },
+          "type": "array"
+        },
+        "depth_limited": {
+          "type": "boolean"
+        },
+        "symbol_name": {
+          "type": "string"
+        },
+        "total_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "symbol_name",
+        "callers",
+        "total_count",
+        "depth_limited"
+      ],
+      "title": "CallersOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compute centrality metrics (degree, betweenness, closeness, eigenvector) for all symbols in the call graph. Returns the top-N symbols ranked by the chosen metric. Betweenness identifies bridge/bottleneck symbols, closeness measures how central a symbol is, eigenvector highlights symbols connected to other important symbols.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "metric": {
+          "description": "Centrality metric to sort by: \"degree\", \"betweenness\", \"closeness\", \"eigenvector\" (default: \"betweenness\")",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "top_n": {
+          "description": "Number of top nodes to return (default: 15)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "title": "GetCentralityParams",
+      "type": "object"
+    },
+    "name": "get_centrality_report",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "List all detected communities with summary stats and top symbols. Use to understand code organization and find related modules.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id"
+      ],
+      "title": "GetCommunitiesParams",
+      "type": "object"
+    },
+    "name": "get_communities",
+    "outputSchema": {
+      "$defs": {
+        "CommunityItem": {
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "member_count": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "top_symbols": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "uid",
+            "label",
+            "member_count",
+            "top_symbols",
+            "summary"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "communities": {
+          "items": {
+            "$ref": "#/$defs/CommunityItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "communities"
+      ],
+      "title": "CommunitiesOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get full details of a community: member symbols, internal relationships, and entry points. Use to understand community structure before refactoring.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "community_id": {
+          "description": "Community UID or label to get details for",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "community_id"
+      ],
+      "title": "GetCommunityDetailParams",
+      "type": "object"
+    },
+    "name": "get_community_detail",
+    "outputSchema": {
+      "$defs": {
+        "SymbolItem": {
+          "properties": {
+            "end_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "file_path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "qualified_name": {
+              "type": "string"
+            },
+            "signature": {
+              "type": "string"
+            },
+            "start_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "uid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "uid",
+            "name",
+            "qualified_name",
+            "kind",
+            "file_path",
+            "start_line",
+            "end_line",
+            "signature"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "external_edge_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "internal_edge_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "label": {
+          "type": "string"
+        },
+        "member_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "symbols": {
+          "items": {
+            "$ref": "#/$defs/SymbolItem"
+          },
+          "type": "array"
+        },
+        "uid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uid",
+        "label",
+        "member_count",
+        "summary",
+        "symbols",
+        "internal_edge_count",
+        "external_edge_count"
+      ],
+      "title": "CommunityDetailOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compute quality metrics for the Leiden community partitioning: overall modularity score (higher = better separation), per-community cohesion (internal edge density), and inter-community coupling (edge counts between community pairs). Use to assess code architecture quality.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetCommunityMetricsParams",
+      "type": "object"
+    },
+    "name": "get_community_metrics",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Detect API contracts (OpenAPI, Protobuf) in the repository and match endpoints to handler symbols. Returns linked and unlinked endpoints.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetContractsParams",
+      "type": "object"
+    },
+    "name": "get_contracts",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get a full email thread by conversation symbol UID. Returns all emails in the thread with their relationships.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "conversation_uid": {
+          "description": "Conversation symbol UID",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "conversation_uid"
+      ],
+      "title": "GetConversationParams",
+      "type": "object"
+    },
+    "name": "get_conversation",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "List Architecture Decision Records (ADRs) for a repository. Optionally filter by status.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "description": "Filter by status (optional)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetDecisionsParams",
+      "type": "object"
+    },
+    "name": "get_decisions",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compute file-level dependencies: direct imports, transitive closure (all files reachable via import chains), and reverse dependents (files that import this file). Use before refactoring to understand the full impact of moving or deleting a file.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "file_path": {
+          "description": "File path to analyze dependencies for",
+          "type": "string"
+        },
+        "max_depth": {
+          "description": "Maximum transitive depth (default: unlimited)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "title": "GetDependenciesParams",
+      "type": "object"
+    },
+    "name": "get_dependencies",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "List all symbols defined in a specific file with kinds and signatures. Use for file-level navigation and understanding file contents.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "file_path": {
+          "description": "File path to list symbols for",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "file_path"
+      ],
+      "title": "GetFileSymbolsParams",
+      "type": "object"
+    },
+    "name": "get_file_symbols",
+    "outputSchema": {
+      "$defs": {
+        "FileSymbolItem": {
+          "properties": {
+            "end_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "qualified_name": {
+              "type": "string"
+            },
+            "signature": {
+              "type": "string"
+            },
+            "start_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "qualified_name",
+            "kind",
+            "start_line",
+            "end_line",
+            "signature"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "file_path": {
+          "type": "string"
+        },
+        "symbols": {
+          "items": {
+            "$ref": "#/$defs/FileSymbolItem"
+          },
+          "type": "array"
+        },
+        "total_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file_path",
+        "symbols",
+        "total_count"
+      ],
+      "title": "FileSymbolsOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get git ownership and history metadata for a symbol. Returns last author, modification date, commit count, and age in days.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": "string"
+        },
+        "symbol_name": {
+          "description": "Symbol name to look up git metadata for",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol_name",
+        "repo_id"
+      ],
+      "title": "GetGitContextParams",
+      "type": "object"
+    },
+    "name": "get_git_context",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Identify the highest-degree symbols (god nodes) in the call graph. Returns the top-N most connected symbols ranked by total incoming + outgoing CALLS edges. High-coupling nodes (degree > threshold) are flagged as architectural bottlenecks.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "coupling_threshold": {
+          "description": "Coupling threshold: nodes with degree > this are flagged as high-coupling (default: 20)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "top_n": {
+          "description": "Number of top nodes to return (default: 10)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "title": "GetGodNodesParams",
+      "type": "object"
+    },
+    "name": "get_god_nodes",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compare the current knowledge graph against the last stored snapshot to detect architectural drift. Shows new/removed symbols and relationships since the last analysis that saved a snapshot.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetGraphDiffParams",
+      "type": "object"
+    },
+    "name": "get_graph_diff",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Detect structural weaknesses in the codebase: untested code (functions with no test callers), isolated modules (communities with few external connections), documentation gaps (files with many symbols but no rationale/doc nodes), and single points of failure (symbols that are the only bridge between communities). Use to prioritize testing, documentation, and refactoring efforts.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "category": {
+          "description": "Filter by gap category: \"untested\", \"isolated\", \"undocumented\", \"single_point_of_failure\" (optional — returns all if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetKnowledgeGapsParams",
+      "type": "object"
+    },
+    "name": "get_knowledge_gaps",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compute module-level coupling metrics (afferent Ca, efferent Ce, instability I) for all files or directories. Instability ranges from 0 (maximally stable, many dependents) to 1 (maximally unstable, depends on many others). Use to find fragile modules.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "group_by_directory": {
+          "description": "Group by directory instead of individual files (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Maximum results to return (default: 30)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetModuleCouplingParams",
+      "type": "object"
+    },
+    "name": "get_module_coupling",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Resolve file ownership from CODEOWNERS rules. Parses .github/CODEOWNERS or CODEOWNERS and matches symbols to their owners.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id"
+      ],
+      "title": "GetOwnershipParams",
+      "type": "object"
+    },
+    "name": "get_ownership",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get all emails involving a specific person (sent by or received by). Returns the person's email activity summary.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "limit": {
+          "description": "Maximum results to return (default: 50)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "person": {
+          "description": "Person email address or name to search for",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "person"
+      ],
+      "title": "GetPersonContextParams",
+      "type": "object"
+    },
+    "name": "get_person_context",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get execution flows showing how functions chain together (e.g. request handler → validation → database → response). Use to understand architecture and data flow before refactoring.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "entry": {
+          "description": "Filter by entry point name (case-insensitive substring match)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "filter": {
+          "description": "Filter by keyword in process description/flow (case-insensitive substring match)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Limit number of processes to return",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "min_steps": {
+          "description": "Show only processes with N or more steps",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id"
+      ],
+      "title": "GetProcessesParams",
+      "type": "object"
+    },
+    "name": "get_processes",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get design rationale comments (NOTE:, HACK:, WHY:, TODO:, FIXME:, IMPORTANT:) linked to a symbol or file. Use to understand *why* code was written a certain way — surfaces inline reasoning from comments.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "file_path": {
+          "description": "File path to get all rationale comments for (optional — provide this OR symbol_name)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_name": {
+          "description": "Symbol name or qualified name to get rationale for (optional — provide this OR file_path)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetRationaleParams",
+      "type": "object"
+    },
+    "name": "get_rationale",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get a compact structural summary of code changes for efficient review. Analyzes a diff to identify changed symbols, their callers and callees, and affected communities — returning signatures instead of full source to minimize token usage.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "depth": {
+          "description": "Graph traversal depth for blast radius (default: 1)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "diff": {
+          "description": "Diff string (optional — if omitted, runs git diff HEAD in repo path)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "include_source": {
+          "description": "Include full source code of changed symbols (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "ReviewContextParams",
+      "type": "object"
+    },
+    "name": "get_review_context",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get property definitions and schema information for entity types or edge types in the ontology. Returns detailed information about what properties are expected for each specified entity type.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "entity_types": {
+          "description": "Entity type name(s) to get schema for (comma-separated, e.g., \"Function,Class,Method\")",
+          "type": "string"
+        },
+        "include_edges": {
+          "description": "Whether to include edge type schemas in addition to entity schemas (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "entity_types"
+      ],
+      "title": "GetSchemaParams",
+      "type": "object"
+    },
+    "name": "get_schema",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "List all community-to-service name mappings for a repository.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetServiceMapParams",
+      "type": "object"
+    },
+    "name": "get_service_map",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get codebase statistics: symbol counts by kind, files, relationships, languages, and communities. Use to understand overall codebase structure.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id"
+      ],
+      "title": "GetStatsParams",
+      "type": "object"
+    },
+    "name": "get_stats",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "community_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "language_counts": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "process_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "relationship_counts": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "symbol_counts": {
+          "additionalProperties": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "object"
+        },
+        "total_files": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total_relationships": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total_symbols": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "symbol_counts",
+        "total_symbols",
+        "total_files",
+        "total_relationships",
+        "relationship_counts",
+        "language_counts",
+        "community_count",
+        "process_count"
+      ],
+      "title": "StatsOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Auto-generate contextual code review questions based on code graph structure and git diff. Returns ranked questions about potential issues like missing test coverage, high caller counts, or API contract violations.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "diff": {
+          "description": "Diff string (optional — if omitted, runs git diff HEAD in repo path)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Maximum number of questions to return (default: 5)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetSuggestedQuestionsParams",
+      "type": "object"
+    },
+    "name": "get_suggested_questions",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Detect surprising cross-community CALLS edges: connections between symbols in different Leiden communities that rarely interact. Ranked by surprise score (0–1); higher means more isolated/unexpected coupling. Use to find hidden architectural dependencies.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "limit": {
+          "description": "Maximum number of connections to return (default: 50)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "min_surprise_score": {
+          "description": "Minimum surprise score in [0.0, 1.0] to include in results (default: 0.1)",
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "GetSurprisingConnectionsParams",
+      "type": "object"
+    },
+    "name": "get_surprising_connections",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get the complete definition and source code of a symbol. Use to understand what a function/class does before using or modifying it.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        },
+        "symbol_name": {
+          "description": "Symbol name or qualified name to find",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "symbol_name"
+      ],
+      "title": "GetSymbolDefinitionParams",
+      "type": "object"
+    },
+    "name": "get_symbol_definition",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "end_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "file_path": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "qualified_name": {
+          "type": "string"
+        },
+        "signature": {
+          "type": "string"
+        },
+        "start_line": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "uid": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "uid",
+        "name",
+        "qualified_name",
+        "kind",
+        "file_path",
+        "start_line",
+        "end_line",
+        "signature",
+        "content"
+      ],
+      "title": "SymbolDefinitionOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "explain": {
+          "description": "Show scoring breakdown and graph paths for each result (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Maximum results to return",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "Search query string",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rerank": {
+          "description": "Apply cross-encoder reranking to results (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "HybridSearchParams",
+      "type": "object"
+    },
+    "name": "hybrid_search",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Isolate the symbols implementing a specific intent/feature in a repository. Uses hybrid search to find seed symbols, then expands via call graph traversal with community-aware pruning. Returns the IntentSlice: seed symbols, expanded symbols, internal relationships, and structural metadata.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "depth": {
+          "description": "Call graph expansion depth (default: 2)",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "intent": {
+          "description": "Natural language description of the intent/feature to isolate\n(e.g., \"tree-sitter parsing\", \"authentication flow\", \"API routing\")",
+          "type": "string"
+        },
+        "max_symbols": {
+          "description": "Maximum symbols to include in the slice (default: 50)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID to isolate from",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent",
+        "repo_id"
+      ],
+      "title": "IsolateIntentParams",
+      "type": "object"
+    },
+    "name": "isolate_intent",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Link an Architecture Decision Record to a code symbol. Creates a traceability connection between the decision and the code it affects.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "decision_id": {
+          "description": "ADR ID to link",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        },
+        "symbol_name": {
+          "description": "Symbol name to link to",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "decision_id",
+        "symbol_name"
+      ],
+      "title": "LinkDecisionParams",
+      "type": "object"
+    },
+    "name": "link_decision",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "List the analyzed repositories (id, name, path, last analysis, size). Read-only. Use it to find the repo_id the other tools expect.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "list_repos",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Assign a human-readable service name to a community. Use with architecture_view to create meaningful service labels.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "community_label": {
+          "description": "Community label to map",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        },
+        "service_name": {
+          "description": "Human-readable service name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "community_label",
+        "service_name"
+      ],
+      "title": "MapServiceParams",
+      "type": "object"
+    },
+    "name": "map_service",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Generate an actionable adaptation plan for migrating one repository's approach to another. Compares intent implementations, then produces ordered steps with dependency tracking, effort estimates, and risk analysis.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "direction": {
+          "description": "Direction: \"source_to_target\" (adapt target to match source) or \"target_to_source\" (default: \"source_to_target\")",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intent": {
+          "description": "Natural language description of the intent",
+          "type": "string"
+        },
+        "max_symbols": {
+          "description": "Maximum symbols per slice (default: 50)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "source_repo_id": {
+          "description": "Repository whose approach to adapt FROM",
+          "type": "string"
+        },
+        "target_repo_id": {
+          "description": "Repository whose approach to adapt TO",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent",
+        "source_repo_id",
+        "target_repo_id"
+      ],
+      "title": "PlanAdaptationParams",
+      "type": "object"
+    },
+    "name": "plan_adaptation",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Identify refactoring hotspots by combining graph centrality, git churn, and module instability into a composite score. High-scoring symbols are architecturally critical AND frequently changed — prime candidates for refactoring.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "top_n": {
+          "description": "Number of top hotspots to return (default: 20)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "title": "QualityHotspotsParams",
+      "type": "object"
+    },
+    "name": "quality_hotspots",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Query cross-domain knowledge: find emails and documents that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "include_sources": {
+          "description": "Include source citations with line numbers and context (default: true)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Maximum results to return (default: 20)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "Natural language query or symbol name to search for across all knowledge",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID or path (auto-detects if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "QueryKnowledgeParams",
+      "type": "object"
+    },
+    "name": "query_knowledge",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Create an Architecture Decision Record (ADR). Records architectural decisions with context, rationale, and consequences. Link to code symbols with link_decision.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "consequences": {
+          "description": "Expected consequences (optional)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "context": {
+          "description": "Context and motivation",
+          "type": "string"
+        },
+        "decision": {
+          "description": "The decision made",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        },
+        "status": {
+          "description": "Status: \"proposed\", \"accepted\", \"deprecated\", \"superseded\" (default: \"proposed\")",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "title": {
+          "description": "ADR title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo_id",
+        "title",
+        "context",
+        "decision"
+      ],
+      "title": "RecordDecisionParams",
+      "type": "object"
+    },
+    "name": "record_decision",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Preview renaming a symbol across the codebase. Returns a rename plan with all edits needed (does not modify files).",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "new_name": {
+          "description": "New name for the symbol",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        },
+        "symbol_name": {
+          "description": "Name of the symbol to rename",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol_name",
+        "new_name",
+        "repo_id"
+      ],
+      "title": "RenameParams",
+      "type": "object"
+    },
+    "name": "rename_symbol",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Search through all analyzed code content using BM25 text search",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "explain": {
+          "description": "Show scoring breakdown and graph paths for each result (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Maximum results to return",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "Search query string",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "SearchParams",
+      "type": "object"
+    },
+    "name": "search_documents",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Search indexed emails by keyword, with optional person and date filters. Returns matching Email symbols with subject, sender, date, and body snippet.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "date": {
+          "description": "Filter by date (ISO 8601 prefix, e.g. \"2026-04\") (optional)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Maximum results to return (default: 20)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "person": {
+          "description": "Filter by person email address (optional)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "Search keyword to match in email subject or body",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "SearchEmailsParams",
+      "type": "object"
+    },
+    "name": "search_emails",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Search for symbols using semantic similarity (vector embeddings). Returns symbols most similar in meaning to the query.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "explain": {
+          "description": "Show scoring breakdown and graph paths for each result (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Maximum results to return",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "Search query string",
+          "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "SearchParams",
+      "type": "object"
+    },
+    "name": "semantic_search",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Compare two graph snapshots to see architectural changes over time. Shows added/removed symbols and relationships. Defaults to comparing the two most recent snapshots.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "from_snapshot": {
+          "description": "Snapshot ID to compare FROM (default: second-to-latest)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (optional, uses most recent if omitted)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_snapshot": {
+          "description": "Snapshot ID to compare TO (default: latest)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "SnapshotDiffParams",
+      "type": "object"
+    },
+    "name": "snapshot_diff",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  },
+  {
+    "description": "Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it — reveals dependencies that file reading alone cannot.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "repo_id": {
+          "description": "Repository ID",
+          "type": "string"
+        },
+        "symbol_name": {
+          "description": "Name of the symbol to look up",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol_name",
+        "repo_id"
+      ],
+      "title": "SymbolContextParams",
+      "type": "object"
+    },
+    "name": "symbol_context",
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "TextOutput",
+      "type": "object"
+    }
+  }
+]
