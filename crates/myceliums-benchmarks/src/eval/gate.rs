@@ -7,7 +7,9 @@
 //! golden queries ([`super::bootstrap`]). A difference is a **regression**
 //! only when both hold:
 //!
-//! 1. it is *significant*: the upper end of the 95% interval is below zero, and
+//! 1. it is *significant*: the upper end of the 95% interval is below zero —
+//!    a per-comparison interval, not corrected for the 36 mode × metric
+//!    comparisons the gate makes — and
 //! 2. it is *material*: the point estimate is at least [`MIN_EFFECT`] below zero.
 //!
 //! The build fails when any [`GATED_METRICS`] entry regresses in any mode.
@@ -34,7 +36,8 @@ use super::report::{format_delta, rounded, RunReport, REGENERATE_BASELINE};
 /// Smallest drop that can fail the build, in absolute metric units.
 ///
 /// 0.02 is about one query of 51 going from a perfect score to nothing
-/// (1/51 ≈ 0.0196). A significant change smaller than that is a real but
+/// (1/51 ≈ 0.0196). A change whose (uncorrected) interval excludes zero but
+/// that is smaller than this is a real but
 /// immaterial shift; it is reported, not blocked.
 pub const MIN_EFFECT: f64 = 0.02;
 
@@ -145,8 +148,10 @@ pub fn compare(current: &RunReport, baseline: &RunReport) -> Result<GateOutcome>
     if current.platform != baseline.platform {
         outcome.notes.push(format!(
             "baseline recorded on {}, this run on {}. Model inference is reproducible \
-             per platform, not bit-identical across them, so small model-mode deltas can \
-             be platform noise; the significance rule is what keeps them from failing.",
+             per platform, not guaranteed bit-identical across them, so small model-mode \
+             deltas can be platform noise; requiring both a 95% interval below zero \
+             (uncorrected) and a drop of at least the minimal effect is what keeps them \
+             from failing.",
             baseline.platform, current.platform
         ));
     }

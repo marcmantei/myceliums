@@ -24,7 +24,8 @@
 //! # The gate
 //!
 //! `--check-baseline` exits non-zero when a gated metric regresses
-//! significantly and materially against `golden/baseline.json`, or when the
+//! materially against `golden/baseline.json` with its 95% interval (per
+//! comparison, uncorrected) below zero, or when the
 //! comparison cannot be made (see `eval::gate` for the rule). Without it the
 //! comparison is printed and never fails.
 //!

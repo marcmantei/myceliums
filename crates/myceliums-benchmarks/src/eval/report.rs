@@ -203,7 +203,7 @@ pub struct RunReport {
     #[serde(default)]
     pub models: Option<ModelProvenance>,
     /// Platform the numbers were produced on. Model inference is reproducible
-    /// on one platform, not bit-identical across them.
+    /// on one platform, not guaranteed bit-identical across them.
     pub platform: String,
     pub bootstrap: BootstrapConfig,
     /// One entry per mode, keyed by mode id.
