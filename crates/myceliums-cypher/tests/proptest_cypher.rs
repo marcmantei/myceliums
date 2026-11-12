@@ -15,6 +15,7 @@ mod support;
 use myceliums_cypher::lexer::{lex, Token};
 use myceliums_cypher::parser::{parse_cypher, ParseError, MAX_NESTING_DEPTH};
 use proptest::prelude::*;
+use proptest::test_runner::RngSeed;
 use support::small_graph::small_graph_executor;
 
 /// Fragments of the supported Cypher subset plus a few hostile extras.
@@ -157,12 +158,28 @@ fn scramble_case(s: &str, mask: &[bool]) -> String {
         .collect()
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig {
-        cases: 512,
+/// Proptest config with a seed that is always printed, so a failure (which
+/// shows the test's captured stderr) can be replayed exactly with
+/// `PROPTEST_RNG_SEED=<seed> cargo test …`. Without that variable a fresh
+/// seed is drawn each run, as proptest does by default.
+fn config(cases: u32) -> ProptestConfig {
+    let mut config = ProptestConfig {
+        cases,
         failure_persistence: None,
-        .. ProptestConfig::default()
-    })]
+        ..ProptestConfig::default()
+    };
+    if matches!(config.rng_seed, RngSeed::Random) {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos() as u64);
+        config.rng_seed = RngSeed::Fixed(nanos ^ u64::from(std::process::id()));
+    }
+    eprintln!("proptest seed: PROPTEST_RNG_SEED={}", config.rng_seed);
+    config
+}
+
+proptest! {
+    #![proptest_config(config(512))]
 
     /// The parser returns `Ok` or `Err` for any Unicode string.
     #[test]
@@ -206,11 +223,7 @@ proptest! {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig {
-        cases: 256,
-        failure_persistence: None,
-        .. ProptestConfig::default()
-    })]
+    #![proptest_config(config(256))]
 
     /// A write keyword that the lexer recognises as a token is always
     /// rejected, whatever surrounds it and however it is cased. (Text the
@@ -308,8 +321,8 @@ proptest! {
             close.repeat(depth)
         );
         match parse_cypher(&query) {
-            Ok(_) => prop_assert!(depth < MAX_NESTING_DEPTH),
-            Err(ParseError::TooDeeplyNested(_)) => prop_assert!(depth >= MAX_NESTING_DEPTH - 1),
+            Ok(_) => prop_assert!(depth <= MAX_NESTING_DEPTH),
+            Err(ParseError::TooDeeplyNested(_)) => prop_assert!(depth > MAX_NESTING_DEPTH),
             Err(e) => prop_assert!(false, "unexpected error at depth {depth}: {e}"),
         }
         let _ = small_graph_executor().execute(&query);
