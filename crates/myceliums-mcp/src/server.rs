@@ -217,12 +217,15 @@ fn mcp_http_app(security: http_security::HttpSecurity) -> axum::Router {
         config = config.disable_allowed_hosts();
     }
 
+    // One graph service for all sessions: each session gets its own server
+    // value, but they share the store handles and the cached graphs.
+    let graphs = Arc::new(myceliums_core::GraphService::new(crate::repo::data_dir()));
     let service: StreamableHttpService<
         rmcp::handler::server::router::Router<MyceliumsMcp>,
         LocalSessionManager,
     > = StreamableHttpService::new(
-        || {
-            let server = MyceliumsMcp::new();
+        move || {
+            let server = MyceliumsMcp::with_service(graphs.clone());
             let router = rmcp::handler::server::router::Router::new(server)
                 .with_tools(MyceliumsMcp::tool_router());
             Ok(router)

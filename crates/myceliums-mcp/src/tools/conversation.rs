@@ -13,19 +13,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<SearchEmailsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let limit = params.limit.unwrap_or(20);
         let query_lower = params.query.to_lowercase();
@@ -104,19 +94,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetConversationParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         // Find the conversation symbol
         let conv = symbols
@@ -190,19 +170,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetPersonContextParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let limit = params.limit.unwrap_or(50);
         let person_lower = params.person.to_lowercase();

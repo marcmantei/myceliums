@@ -64,15 +64,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<HybridSearchParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let store = self.store(&repo_id).await?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
 
         let embedder = myceliums_core::embedder_for_index(&store)
             .await
@@ -86,11 +80,11 @@ impl MyceliumsMcp {
         let explain = params.explain.unwrap_or(false);
         let limit = params.limit.unwrap_or(20);
         let mut results = if explain {
-            core_hybrid_search_explain(&embedder, &symbols, &store, &params.query, limit)
+            core_hybrid_search_explain(&embedder, &symbols, store.as_ref(), &params.query, limit)
                 .await
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
         } else {
-            core_hybrid_search(&embedder, &symbols, &store, &params.query, limit)
+            core_hybrid_search(&embedder, &symbols, store.as_ref(), &params.query, limit)
                 .await
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
         };
@@ -105,10 +99,7 @@ impl MyceliumsMcp {
 
         // Attach graph edges for explain mode
         if explain {
-            let relationships = store
-                .get_relationships()
-                .await
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            let relationships = self.relationships(&repo_id).await?;
             let uid_to_name: std::collections::HashMap<&str, &str> = symbols
                 .iter()
                 .map(|s| (s.uid.as_str(), s.name.as_str()))
@@ -152,14 +143,15 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<CypherQueryParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
+        let files = self.files(&params.repo_id).await?;
+        let relationships = self.relationships(&params.repo_id).await?;
 
-        let executor = myceliums_cypher::CypherExecutor::from_store(&store)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let executor = myceliums_cypher::CypherExecutor::from_shared(
+            symbols.shared(),
+            files.shared(),
+            relationships.shared(),
+        );
         let results = executor
             .execute(&params.query)
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -179,10 +171,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<SearchParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let store = self.store(&repo_id).await?;
         let embedder = myceliums_core::embedder_for_index(&store)
             .await
             .map_err(|e| {

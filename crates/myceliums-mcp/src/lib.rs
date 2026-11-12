@@ -29,13 +29,15 @@ pub use server::{run_mcp_http_server, run_mcp_server};
 
 use myceliums_core::GraphService;
 use rmcp::handler::server::tool::ToolRouter;
+use std::sync::Arc;
 
 pub struct MyceliumsMcp {
     #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
-    /// Owns store lifecycle, repo resolution, and graph assembly so handlers
-    /// stay thin transport adapters.
-    service: GraphService,
+    /// Owns store lifecycle, repo resolution, the per-repo graph cache, and
+    /// graph assembly so handlers stay thin transport adapters. Shared by
+    /// every HTTP session, so the cache is per process, not per session.
+    service: Arc<GraphService>,
 }
 
 impl Default for MyceliumsMcp {
@@ -46,9 +48,14 @@ impl Default for MyceliumsMcp {
 
 impl MyceliumsMcp {
     pub fn new() -> Self {
+        Self::with_service(Arc::new(GraphService::new(repo::data_dir())))
+    }
+
+    /// A server that reads through an existing (shared) [`GraphService`].
+    pub(crate) fn with_service(service: Arc<GraphService>) -> Self {
         Self {
             tool_router: Self::tool_router(),
-            service: GraphService::new(repo::data_dir()),
+            service,
         }
     }
 }
