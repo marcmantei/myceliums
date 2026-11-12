@@ -67,6 +67,15 @@ fn repo_id_error(e: RepoIdError) -> rmcp::ErrorData {
     rmcp::ErrorData::invalid_params(e.to_string(), None)
 }
 
+/// Maps a [`GraphService`] error: a rejected repo id is `invalid_params`,
+/// anything else stays an internal error.
+fn service_error(e: myceliums_core::error::MyceliumError) -> rmcp::ErrorData {
+    match e {
+        myceliums_core::error::MyceliumError::Repo(e) => repo_id_error(e),
+        other => rmcp::ErrorData::internal_error(other.to_string(), None),
+    }
+}
+
 pub struct MyceliumsMcp {
     #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
@@ -145,6 +154,51 @@ impl MyceliumsMcp {
         self.semantic_search(Parameters(params))
             .await
             .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `delete` handler.
+    pub async fn delete_for_test(&self, params: DeleteParams) -> Result<String, String> {
+        self.delete(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `map_service` handler.
+    pub async fn map_service_for_test(&self, params: MapServiceParams) -> Result<String, String> {
+        self.map_service(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `record_decision` handler.
+    pub async fn record_decision_for_test(
+        &self,
+        params: RecordDecisionParams,
+    ) -> Result<String, String> {
+        self.record_decision(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `link_decision` handler.
+    pub async fn link_decision_for_test(
+        &self,
+        params: LinkDecisionParams,
+    ) -> Result<String, String> {
+        self.link_decision(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Read a `repository://...` resource.
+    pub async fn read_resource_for_test(&self, uri: &str) -> Result<String, String> {
+        self.read_resource_inner(uri)
+            .await
             .map_err(|e| e.message.to_string())
     }
 
@@ -1208,6 +1262,8 @@ impl MyceliumsMcp {
             .map_err(|e| rmcp::ErrorData::internal_error(format!("Invalid path: {}", e), None))?;
 
         let repo_id = analyzer::repo_id_from_path(&abs_path);
+        // Derived ids are sanitized; checking keeps the write path honest too.
+        RepoRegistry::validate_repo_id(&repo_id).map_err(repo_id_error)?;
         let repo_name = analyzer::repo_name_from_path(&abs_path);
         let force = params.force.unwrap_or(false);
 
@@ -1421,13 +1477,13 @@ impl MyceliumsMcp {
         let repo_id = self
             .service
             .resolve_repo_id(params.repo_id.as_deref())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(service_error)?;
         let explain = params.explain.unwrap_or(false);
         let results = self
             .service
             .search_context(&repo_id, &params.query, explain)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(service_error)?;
 
         let limit = params.limit.unwrap_or(20);
         let items: Vec<SearchResultItem> = results
@@ -1462,7 +1518,7 @@ impl MyceliumsMcp {
             .service
             .get_symbol_context(&params.repo_id, &params.symbol_name)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(service_error)?;
 
         let symbol = context.symbol;
         let output = SymbolContextOutput {
@@ -1627,12 +1683,7 @@ impl MyceliumsMcp {
             None => {
                 let registry = RepoRegistry::load(&registry_path())
                     .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                let repo_info = registry.get(&repo_id).ok_or_else(|| {
-                    rmcp::ErrorData::internal_error(
-                        format!("Repository not found: {}", repo_id),
-                        None,
-                    )
-                })?;
+                let repo_info = registry.require(&repo_id).map_err(repo_id_error)?;
                 run_git_diff(&repo_info.path).map_err(|e| {
                     rmcp::ErrorData::internal_error(format!("git diff failed: {}", e), None)
                 })?
@@ -1765,12 +1816,7 @@ impl MyceliumsMcp {
             None => {
                 let registry = RepoRegistry::load(&registry_path())
                     .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                let repo_info = registry.get(&repo_id).ok_or_else(|| {
-                    rmcp::ErrorData::internal_error(
-                        format!("Repository not found: {}", repo_id),
-                        None,
-                    )
-                })?;
+                let repo_info = registry.require(&repo_id).map_err(repo_id_error)?;
                 run_git_diff(&repo_info.path).map_err(|e| {
                     rmcp::ErrorData::internal_error(format!("git diff failed: {}", e), None)
                 })?
@@ -3474,12 +3520,7 @@ impl MyceliumsMcp {
             None => {
                 let registry = RepoRegistry::load(&registry_path())
                     .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                let repo_info = registry.get(&repo_id).ok_or_else(|| {
-                    rmcp::ErrorData::internal_error(
-                        format!("Repository not found: {}", repo_id),
-                        None,
-                    )
-                })?;
+                let repo_info = registry.require(&repo_id).map_err(repo_id_error)?;
                 run_git_diff(&repo_info.path).map_err(|e| {
                     rmcp::ErrorData::internal_error(format!("git diff failed: {}", e), None)
                 })?
@@ -4823,9 +4864,7 @@ impl MyceliumsMcp {
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let registry = RepoRegistry::load(&registry_path())
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let repo = registry
-            .get(&params.repo_id)
-            .ok_or_else(|| rmcp::ErrorData::internal_error("Repo not found".to_string(), None))?;
+        let repo = registry.require(&params.repo_id).map_err(repo_id_error)?;
 
         let db_path = registered_db_path(&params.repo_id)?;
         let store = Store::open(&db_path, &params.repo_id)
@@ -5003,9 +5042,7 @@ impl MyceliumsMcp {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let registry = RepoRegistry::load(&registry_path())
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let repo = registry
-            .get(&repo_id)
-            .ok_or_else(|| rmcp::ErrorData::internal_error("Repo not found".to_string(), None))?;
+        let repo = registry.require(&repo_id).map_err(repo_id_error)?;
 
         let db_path = registered_db_path(&repo_id)?;
         let store = Store::open(&db_path, &repo_id)
@@ -5694,11 +5731,6 @@ pub async fn run_mcp_server() -> Result<()> {
 /// is returned as an error before anything binds.
 pub async fn run_mcp_http_server(opts: McpHttpOptions) -> Result<()> {
     use http_security::HttpSecurity;
-    use rmcp::transport::streamable_http_server::{
-        session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
-    };
-    use std::sync::Arc;
-    use tokio_util::sync::CancellationToken;
 
     let security = HttpSecurity::plan(&opts)?;
     let addr = opts.addr.as_str();
@@ -5720,6 +5752,25 @@ pub async fn run_mcp_http_server(opts: McpHttpOptions) -> Result<()> {
     } else if security.token.is_some() {
         eprintln!("Bearer token required (from {}).", http_security::TOKEN_ENV);
     }
+
+    let app = mcp_http_app(security);
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    info!("MCP server listening on http://{}/mcp", addr);
+    eprintln!("MCP server listening on http://{}/mcp", addr);
+    axum::serve(listener, app).await?;
+
+    Ok(())
+}
+
+/// The complete HTTP app served by [`run_mcp_http_server`]: rmcp's
+/// Streamable HTTP service at `/mcp`, wrapped by the access-control layers.
+fn mcp_http_app(security: http_security::HttpSecurity) -> axum::Router {
+    use rmcp::transport::streamable_http_server::{
+        session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
+    };
+    use std::sync::Arc;
+    use tokio_util::sync::CancellationToken;
 
     let ct = CancellationToken::new();
 
@@ -5748,23 +5799,120 @@ pub async fn run_mcp_http_server(opts: McpHttpOptions) -> Result<()> {
         config,
     );
 
-    let app = http_security::secure(
+    http_security::secure(
         axum::Router::new().nest_service("/mcp", service),
         Arc::new(security),
-    );
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    info!("MCP server listening on http://{}/mcp", addr);
-    eprintln!("MCP server listening on http://{}/mcp", addr);
-    axum::serve(listener, app).await?;
-
-    Ok(())
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, SymbolKind};
+
+    // ── HTTP transport: the real app, not a stub router ───────────────
+
+    mod http_app {
+        use super::super::http_security::HttpSecurity;
+        use super::super::mcp_http_app;
+        use axum::body::Body;
+        use axum::http::{Request, StatusCode};
+        use tower::ServiceExt;
+
+        const TOKEN: &str = "0123456789abcdef0123456789abcdef";
+
+        fn app(loopback_only: bool, token: Option<&str>) -> axum::Router {
+            mcp_http_app(HttpSecurity {
+                loopback_only,
+                token: token.map(str::to_string),
+                token_generated: false,
+            })
+        }
+
+        async fn send(app: &axum::Router, method: &str, headers: &[(&str, &str)]) -> StatusCode {
+            let mut req = Request::builder().method(method).uri("/mcp");
+            for (k, v) in headers {
+                req = req.header(*k, *v);
+            }
+            let body = if method == "POST" {
+                Body::from(
+                    r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}"#,
+                )
+            } else {
+                Body::empty()
+            };
+            app.clone()
+                .oneshot(req.body(body).unwrap())
+                .await
+                .unwrap()
+                .status()
+        }
+
+        const JSON: [(&str, &str); 2] = [
+            ("content-type", "application/json"),
+            ("accept", "application/json, text/event-stream"),
+        ];
+
+        #[tokio::test]
+        async fn every_method_is_guarded_against_rebinding_and_foreign_origins() {
+            let app = app(true, None);
+            for method in ["GET", "POST", "DELETE"] {
+                let mut h = vec![("host", "evil.example:9999")];
+                h.extend(JSON);
+                assert_eq!(
+                    send(&app, method, &h).await,
+                    StatusCode::FORBIDDEN,
+                    "{method}"
+                );
+
+                let mut h = vec![
+                    ("host", "127.0.0.1:9999"),
+                    ("origin", "https://evil.example"),
+                ];
+                h.extend(JSON);
+                assert_eq!(
+                    send(&app, method, &h).await,
+                    StatusCode::FORBIDDEN,
+                    "{method}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn every_method_needs_the_token_when_one_is_set() {
+            let app = app(false, Some(TOKEN));
+            for method in ["GET", "POST", "DELETE"] {
+                let mut h = vec![("host", "mcp.example:9999")];
+                h.extend(JSON);
+                assert_eq!(
+                    send(&app, method, &h).await,
+                    StatusCode::UNAUTHORIZED,
+                    "{method}"
+                );
+            }
+        }
+
+        #[tokio::test]
+        async fn guarded_requests_reach_rmcp() {
+            let app = app(false, Some(TOKEN));
+            let auth = format!("Bearer {TOKEN}");
+            let mut h = vec![
+                ("host", "mcp.example:9999"),
+                ("authorization", auth.as_str()),
+            ];
+            h.extend(JSON);
+            // `initialize` succeeds end to end through the guard.
+            assert_eq!(send(&app, "POST", &h).await, StatusCode::OK);
+            // GET/DELETE without a session pass the guard; rmcp answers them.
+            for method in ["GET", "DELETE"] {
+                let status = send(&app, method, &h).await;
+                assert!(
+                    status != StatusCode::UNAUTHORIZED && status != StatusCode::FORBIDDEN,
+                    "{method}: {status}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_generate_suggested_questions_high_caller_count() {

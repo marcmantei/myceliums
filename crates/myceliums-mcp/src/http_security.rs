@@ -29,8 +29,11 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 /// Environment variable that holds the bearer token for the HTTP transport.
 pub const TOKEN_ENV: &str = "MYC_MCP_TOKEN";
 
+/// Shortest bearer token accepted for `--allow-remote`.
+pub const MIN_REMOTE_TOKEN_CHARS: usize = 32;
+
 /// How `myc mcp --http` was asked to listen.
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct McpHttpOptions {
     /// Listen address, e.g. `127.0.0.1:9999`.
     pub addr: String,
@@ -40,8 +43,18 @@ pub struct McpHttpOptions {
     pub token: Option<String>,
 }
 
+impl std::fmt::Debug for McpHttpOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("McpHttpOptions")
+            .field("addr", &self.addr)
+            .field("allow_remote", &self.allow_remote)
+            .field("token", &redacted(&self.token))
+            .finish()
+    }
+}
+
 /// The access policy derived from [`McpHttpOptions`].
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct HttpSecurity {
     /// Listen address only reaches this machine; enforce a loopback `Host`.
     pub loopback_only: bool,
@@ -51,10 +64,38 @@ pub struct HttpSecurity {
     pub token_generated: bool,
 }
 
+impl std::fmt::Debug for HttpSecurity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpSecurity")
+            .field("loopback_only", &self.loopback_only)
+            .field("token", &redacted(&self.token))
+            .field("token_generated", &self.token_generated)
+            .finish()
+    }
+}
+
+/// Debug view of a secret: whether it is set, never its value.
+fn redacted(token: &Option<String>) -> &'static str {
+    if token.is_some() {
+        "Some(<redacted>)"
+    } else {
+        "None"
+    }
+}
+
 impl HttpSecurity {
     /// Decides the policy for `opts`, or explains why the address is refused.
+    ///
+    /// The token is trimmed (a trailing newline from `$(cat file)` is not part
+    /// of it); an empty token counts as unset. In remote mode a supplied token
+    /// must have at least [`MIN_REMOTE_TOKEN_CHARS`] characters.
     pub fn plan(opts: &McpHttpOptions) -> anyhow::Result<Self> {
-        let token = opts.token.clone().filter(|t| !t.trim().is_empty());
+        let token = opts
+            .token
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map(str::to_string);
         let loopback = bind_addr_is_loopback(&opts.addr).ok_or_else(|| {
             anyhow::anyhow!(
                 "invalid listen address {:?}: expected host:port, e.g. 127.0.0.1:9999",
@@ -79,6 +120,11 @@ impl HttpSecurity {
             );
         }
         let (token, token_generated) = match token {
+            Some(t) if t.chars().count() < MIN_REMOTE_TOKEN_CHARS => anyhow::bail!(
+                "{TOKEN_ENV} is too short for --allow-remote: use at least \
+                 {MIN_REMOTE_TOKEN_CHARS} characters (e.g. `openssl rand -hex 32`), or unset it \
+                 to get a generated token"
+            ),
             Some(t) => (t, false),
             None => (generate_token(), true),
         };
@@ -90,7 +136,7 @@ impl HttpSecurity {
     }
 }
 
-/// 256 bits from the OS RNG (two v4 UUIDs), hex-encoded.
+/// Two v4 UUIDs from the OS RNG (244 random bits), as 64 hex characters.
 fn generate_token() -> String {
     format!(
         "{}{}",
@@ -208,11 +254,13 @@ mod tests {
         assert!(err.contains("--allow-remote"), "{err}");
     }
 
+    const LONG: &str = "0123456789abcdef0123456789abcdef";
+
     #[test]
     fn remote_bind_always_has_a_token() {
-        let sec = HttpSecurity::plan(&opts("0.0.0.0:9999", true, Some("given"))).unwrap();
+        let sec = HttpSecurity::plan(&opts("0.0.0.0:9999", true, Some(LONG))).unwrap();
         assert!(!sec.loopback_only);
-        assert_eq!(sec.token.as_deref(), Some("given"));
+        assert_eq!(sec.token.as_deref(), Some(LONG));
         assert!(!sec.token_generated);
 
         // Unset and empty tokens both lead to a generated one.
@@ -221,6 +269,49 @@ mod tests {
             assert!(sec.token_generated);
             assert_eq!(sec.token.as_deref().map(str::len), Some(64));
         }
+    }
+
+    #[test]
+    fn tokens_are_trimmed() {
+        let padded = format!("  {LONG}\n");
+        let sec = HttpSecurity::plan(&opts("0.0.0.0:9999", true, Some(&padded))).unwrap();
+        assert_eq!(sec.token.as_deref(), Some(LONG));
+        let sec = HttpSecurity::plan(&opts("127.0.0.1:9", false, Some(" t \n"))).unwrap();
+        assert_eq!(sec.token.as_deref(), Some("t"));
+    }
+
+    #[test]
+    fn remote_mode_rejects_short_tokens() {
+        let err = HttpSecurity::plan(&opts("0.0.0.0:9999", true, Some("short")))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("too short"), "{err}");
+        assert!(
+            !err.contains("short\""),
+            "the token must not be echoed: {err}"
+        );
+    }
+
+    #[test]
+    fn debug_output_redacts_tokens() {
+        let o = opts("0.0.0.0:9999", true, Some(LONG));
+        let sec = HttpSecurity::plan(&o).unwrap();
+        for dbg in [format!("{o:?}"), format!("{sec:?}")] {
+            assert!(!dbg.contains(LONG), "{dbg}");
+            assert!(dbg.contains("<redacted>"), "{dbg}");
+        }
+    }
+
+    #[test]
+    fn ipv4_mapped_addresses_are_classified_by_their_ipv4_part() {
+        // `[::ffff:127.0.0.1]` is loopback; `[::ffff:0.0.0.0]` is not.
+        assert!(
+            HttpSecurity::plan(&opts("[::ffff:127.0.0.1]:9999", false, None))
+                .unwrap()
+                .loopback_only
+        );
+        assert!(HttpSecurity::plan(&opts("[::ffff:0.0.0.0]:9999", false, None)).is_err());
+        assert!(HttpSecurity::plan(&opts("[::ffff:192.168.1.5]:9999", false, None)).is_err());
     }
 
     #[test]

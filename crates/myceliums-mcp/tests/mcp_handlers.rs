@@ -13,8 +13,8 @@
 mod harness;
 
 use myceliums_mcp::{
-    CypherQueryParams, DetectImpactParams, MyceliumsMcp, RenameParams, SearchParams,
-    SymbolContextParams,
+    CypherQueryParams, DeleteParams, DetectImpactParams, LinkDecisionParams, MapServiceParams,
+    MyceliumsMcp, RecordDecisionParams, RenameParams, SearchParams, SymbolContextParams,
 };
 
 fn server() -> MyceliumsMcp {
@@ -249,4 +249,82 @@ async fn path_traversal_repo_id_is_rejected_on_every_entry_path() {
     assert!(err.contains("invalid repo_id"), "got: {err}");
 
     assert!(!data.join("escape").exists());
+}
+
+#[tokio::test]
+async fn write_tools_reject_traversal_and_unknown_ids_without_writing() {
+    let data = harness::ensure_indexed().await;
+    let srv = server();
+    for bad in ["../escape", "..", "no-such-repo"] {
+        let errs = [
+            srv.delete_for_test(DeleteParams {
+                repo_id: bad.to_string(),
+            })
+            .await
+            .expect_err("delete"),
+            srv.map_service_for_test(MapServiceParams {
+                repo_id: bad.to_string(),
+                community_label: "c".to_string(),
+                service_name: "s".to_string(),
+            })
+            .await
+            .expect_err("map_service"),
+            srv.record_decision_for_test(RecordDecisionParams {
+                repo_id: bad.to_string(),
+                title: "t".to_string(),
+                context: "c".to_string(),
+                decision: "d".to_string(),
+                ..Default::default()
+            })
+            .await
+            .expect_err("record_decision"),
+            srv.link_decision_for_test(LinkDecisionParams {
+                repo_id: bad.to_string(),
+                decision_id: "x".to_string(),
+                symbol_name: harness::fixture::GET_USER.to_string(),
+            })
+            .await
+            .expect_err("link_decision"),
+        ];
+        for err in errs {
+            assert!(
+                err.contains("invalid repo_id") || err.contains("unknown repo_id"),
+                "{bad}: {err}"
+            );
+        }
+    }
+    // Nothing was written next to or above the data dir.
+    for dir in ["services", "decisions"] {
+        assert!(!data.join(dir).exists(), "{dir} must not be created");
+    }
+    assert!(!data.parent().unwrap().join("escape.json").exists());
+    // The real repo survived the `delete` attempts.
+    assert!(server()
+        .list_repos_for_test()
+        .await
+        .unwrap()
+        .contains(harness::REPO_ID));
+}
+
+#[tokio::test]
+async fn resources_reject_traversal_and_unknown_repo_ids() {
+    harness::ensure_indexed().await;
+    let srv = server();
+    for uri in [
+        "repository://../x/schema",
+        "repository://../x",
+        "repository://..",
+        "repository://no-such-repo/map",
+    ] {
+        let err = srv.read_resource_for_test(uri).await.expect_err(uri);
+        assert!(
+            err.contains("invalid repo_id") || err.contains("unknown repo_id"),
+            "{uri}: {err}"
+        );
+    }
+    let ok = srv
+        .read_resource_for_test(&format!("repository://{}/schema", harness::REPO_ID))
+        .await
+        .expect("registered repo resource");
+    assert!(ok.contains("symbol_count"), "{ok}");
 }

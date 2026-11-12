@@ -1053,6 +1053,7 @@ async fn cmd_analyze(
         .with_context(|| format!("Path does not exist: {}", path.display()))?;
 
     let repo_id = analyzer::repo_id_from_path(&abs_path);
+    RepoRegistry::validate_repo_id(&repo_id)?;
     let repo_name = analyzer::repo_name_from_path(&abs_path);
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
 
@@ -1280,6 +1281,7 @@ async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> {
     let abs_path = std::fs::canonicalize(path)
         .with_context(|| format!("Path does not exist: {}", path.display()))?;
     let repo_id = analyzer::repo_id_from_path(&abs_path);
+    RepoRegistry::validate_repo_id(&repo_id)?;
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
 
     // Load project config if present
@@ -3408,6 +3410,7 @@ async fn cmd_session(
     }
 
     let repo_id = analyzer::repo_id_from_path(&abs_path);
+    RepoRegistry::validate_repo_id(&repo_id)?;
 
     // In auto mode (--yes), output JSON for Claude Code's SessionStart hook
     if auto_yes {

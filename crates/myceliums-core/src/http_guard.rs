@@ -51,7 +51,9 @@ pub fn is_loopback_hostname(host: &str) -> bool {
     if host.eq_ignore_ascii_case("localhost") {
         return true;
     }
-    host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback())
+    // `to_canonical` maps `::ffff:127.0.0.1` to `127.0.0.1`.
+    host.parse::<IpAddr>()
+        .is_ok_and(|ip| ip.to_canonical().is_loopback())
 }
 
 /// True if a `Host` header value names this machine via loopback.
@@ -84,7 +86,7 @@ pub fn is_loopback_origin(origin: &str) -> bool {
 /// public interface.
 pub fn bind_addr_is_loopback(addr: &str) -> Option<bool> {
     if let Ok(sock) = addr.parse::<SocketAddr>() {
-        return Some(sock.ip().is_loopback());
+        return Some(sock.ip().to_canonical().is_loopback());
     }
     let (host, port) = addr.rsplit_once(':')?;
     if !valid_port(port) || host.is_empty() || host.contains(':') {
@@ -126,6 +128,7 @@ mod tests {
             "127.1.2.3:80",
             "[::1]",
             "[::1]:9999",
+            "[::ffff:127.0.0.1]:9999",
         ] {
             assert!(is_loopback_host(host), "{host}");
         }
@@ -142,6 +145,7 @@ mod tests {
             "0.0.0.0:9999",
             "192.168.1.10:9999",
             "[::]:9999",
+            "[::ffff:10.0.0.1]:9999",
             "::1",
             "localhost:notaport",
             "user@localhost",
@@ -185,6 +189,8 @@ mod tests {
         assert_eq!(bind_addr_is_loopback("localhost:9999"), Some(true));
         assert_eq!(bind_addr_is_loopback("0.0.0.0:9999"), Some(false));
         assert_eq!(bind_addr_is_loopback("[::]:9999"), Some(false));
+        assert_eq!(bind_addr_is_loopback("[::ffff:127.0.0.1]:9999"), Some(true));
+        assert_eq!(bind_addr_is_loopback("[::ffff:0.0.0.0]:9999"), Some(false));
         assert_eq!(bind_addr_is_loopback("192.168.1.5:80"), Some(false));
         assert_eq!(bind_addr_is_loopback("myhost:80"), Some(false));
         assert_eq!(bind_addr_is_loopback("9999"), None);

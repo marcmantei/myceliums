@@ -82,10 +82,13 @@ impl RepoRegistry {
 
     /// Checks that `repo_id` is safe to use as one path component.
     ///
-    /// Repo ids are derived from a directory name plus a hash, so they can
-    /// hold spaces and non-ASCII letters. What they can never hold is anything
-    /// that changes which directory `data/<repo_id>` points at: path
-    /// separators, `.`/`..`, a drive prefix, NUL or other control characters.
+    /// Repo ids are derived from a directory name plus a hash, so they hold
+    /// whatever a folder name on this platform can hold: spaces, non-ASCII
+    /// letters, and on Unix also `:` and `\` (Finder shows `/` as `:`, so a
+    /// folder `Plan 2024/25` is stored as `Plan 2024:25`). What an id can never
+    /// hold is anything that changes which directory `data/<repo_id>` points
+    /// at: this platform's path separators, `.`/`..`, NUL, and on Windows `:`
+    /// (drive prefixes and alternate data streams).
     pub fn validate_repo_id(repo_id: &str) -> Result<(), RepoIdError> {
         let invalid = |reason: &'static str| {
             Err(RepoIdError::Invalid {
@@ -102,13 +105,30 @@ impl RepoRegistry {
         if repo_id == "." || repo_id == ".." {
             return invalid("it is a relative directory reference");
         }
-        if repo_id
-            .chars()
-            .any(|c| matches!(c, '/' | '\\' | ':') || c.is_control())
-        {
-            return invalid("it contains a path separator, ':' or a control character");
+        if repo_id.chars().any(is_forbidden_id_char) {
+            return invalid(FORBIDDEN_CHARS_REASON);
         }
         Ok(())
+    }
+
+    /// Turns a folder name into the name part of a repo id that
+    /// [`RepoRegistry::validate_repo_id`] accepts.
+    ///
+    /// Characters that may not appear in an id are replaced by `_`, and the
+    /// result is cut (on a character boundary) so that `<name>-<8 hex>` stays
+    /// within the 255-byte limit. Deterministic, and a no-op for every name
+    /// that already produced a valid id.
+    pub fn sanitize_repo_name(name: &str) -> String {
+        const SUFFIX_BYTES: usize = 9; // "-" + 8 hex digits
+        let mut out = String::with_capacity(name.len());
+        for c in name.chars() {
+            let c = if is_forbidden_id_char(c) { '_' } else { c };
+            if out.len() + c.len_utf8() > MAX_REPO_ID_BYTES - SUFFIX_BYTES {
+                break;
+            }
+            out.push(c);
+        }
+        out
     }
 
     /// The single choke point for caller-supplied repo ids.
@@ -142,6 +162,17 @@ impl RepoRegistry {
 
 /// Upper bound for a repo id; matches the common file-name limit.
 const MAX_REPO_ID_BYTES: usize = 255;
+
+/// A character that would let an id name something other than one directory
+/// below `data/` on this platform.
+fn is_forbidden_id_char(c: char) -> bool {
+    c == '\0' || std::path::is_separator(c) || (cfg!(windows) && c == ':')
+}
+
+#[cfg(windows)]
+const FORBIDDEN_CHARS_REASON: &str = "it contains a path separator, ':' or NUL";
+#[cfg(not(windows))]
+const FORBIDDEN_CHARS_REASON: &str = "it contains a path separator or NUL";
 
 /// Why a caller-supplied repo id was rejected.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -213,17 +244,11 @@ mod tests {
 
     #[test]
     fn rejects_ids_that_escape_the_data_dir() {
-        for id in [
-            "",
-            ".",
-            "..",
-            "../etc",
-            "a/b",
-            "..\\x",
-            "C:evil",
-            "nul\0byte",
-            "line\nbreak",
-        ] {
+        let mut bad = vec!["", ".", "..", "../etc", "a/b", "nul\0byte"];
+        if cfg!(windows) {
+            bad.extend(["..\\x", "C:evil", "stream:x"]);
+        }
+        for id in bad {
             assert!(
                 matches!(
                     RepoRegistry::validate_repo_id(id),
@@ -234,6 +259,56 @@ mod tests {
         }
         let long = "a".repeat(256);
         assert!(RepoRegistry::validate_repo_id(&long).is_err());
+    }
+
+    /// macOS stores a folder typed as `Plan 2024/25` as `Plan 2024:25`;
+    /// `analyze` derives the id from that name, so such ids (and legacy
+    /// registrations) must stay usable on Unix.
+    #[cfg(not(windows))]
+    #[test]
+    fn unix_accepts_colon_and_backslash_from_folder_names() {
+        for id in [
+            "Plan 2024:25-1a2b3c4d",
+            "a\\b-1a2b3c4d",
+            "tab\there-1a2b3c4d",
+        ] {
+            assert_eq!(RepoRegistry::validate_repo_id(id), Ok(()), "{id:?}");
+        }
+        let legacy = registry_with(&["Plan 2024:25-1a2b3c4d"]);
+        assert!(legacy.require("Plan 2024:25-1a2b3c4d").is_ok());
+        assert_eq!(
+            legacy
+                .registered_db_path(Path::new("/d"), "Plan 2024:25-1a2b3c4d")
+                .unwrap(),
+            PathBuf::from("/d/data/Plan 2024:25-1a2b3c4d")
+        );
+    }
+
+    #[test]
+    fn sanitized_names_always_form_valid_ids() {
+        let long = "ä".repeat(200);
+        let names = [
+            "plain",
+            "Plan 2024:25",
+            "a\\b",
+            "nul\0in name",
+            "",
+            ".",
+            "..",
+            long.as_str(),
+        ];
+        for name in names {
+            let id = format!("{}-1a2b3c4d", RepoRegistry::sanitize_repo_name(name));
+            assert_eq!(
+                RepoRegistry::validate_repo_id(&id),
+                Ok(()),
+                "{name:?} -> {id:?}"
+            );
+        }
+        // Names that were already valid are left alone.
+        assert_eq!(RepoRegistry::sanitize_repo_name("My Repo ü"), "My Repo ü");
+        assert_eq!(RepoRegistry::sanitize_repo_name("nul\0x"), "nul_x");
+        assert!(RepoRegistry::sanitize_repo_name(&long).len() <= 255 - 9);
     }
 
     #[test]
