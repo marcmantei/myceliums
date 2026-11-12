@@ -2812,9 +2812,8 @@ async fn cmd_processes(
 }
 
 async fn cmd_doctor(download: bool) -> Result<()> {
-    use myceliums_core::parser::SourceLanguage;
+    use myceliums_core::parser::{SourceLanguage, SourceParser};
     use std::process::Command;
-    use tree_sitter::Parser as TsParser;
 
     println!("Myceliums Health Check");
     println!("=====================");
@@ -3024,51 +3023,18 @@ async fn cmd_doctor(download: bool) -> Result<()> {
         ("Vue", SourceLanguage::Vue),
         ("Svelte", SourceLanguage::Svelte),
     ];
+    // The grammar for each language comes from core's single table
+    // (`SourceLanguage::tree_sitter_language`), via the same constructor the
+    // analyzer uses.
     for (name, lang) in &parsers_to_check {
-        let mut parser = TsParser::new();
-        let ts_lang: tree_sitter::Language = match lang {
-            SourceLanguage::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-            SourceLanguage::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
-            SourceLanguage::JavaScript => tree_sitter_javascript::LANGUAGE.into(),
-            SourceLanguage::Python => tree_sitter_python::LANGUAGE.into(),
-            SourceLanguage::Go => tree_sitter_go::LANGUAGE.into(),
-            SourceLanguage::Rust => tree_sitter_rust::LANGUAGE.into(),
-            SourceLanguage::Java => tree_sitter_java::LANGUAGE.into(),
-            SourceLanguage::CSharp => tree_sitter_c_sharp::LANGUAGE.into(),
-            SourceLanguage::C => tree_sitter_c::LANGUAGE.into(),
-            SourceLanguage::Cpp => tree_sitter_cpp::LANGUAGE.into(),
-            SourceLanguage::Ruby => tree_sitter_ruby::LANGUAGE.into(),
-            SourceLanguage::Kotlin => tree_sitter_kotlin::LANGUAGE.into(),
-            SourceLanguage::Swift => tree_sitter_swift::LANGUAGE.into(),
-            SourceLanguage::Php => tree_sitter_php::LANGUAGE_PHP_ONLY.into(),
-            SourceLanguage::Lua => tree_sitter_lua::LANGUAGE.into(),
-            SourceLanguage::Zig => tree_sitter_zig::LANGUAGE.into(),
-            SourceLanguage::PowerShell => tree_sitter_powershell::LANGUAGE.into(),
-            SourceLanguage::Elixir => tree_sitter_elixir::LANGUAGE.into(),
-            SourceLanguage::Scala => tree_sitter_scala::LANGUAGE.into(),
-            SourceLanguage::ObjectiveC => tree_sitter_objc::LANGUAGE.into(),
-            SourceLanguage::Dart => tree_sitter_dart::LANGUAGE.into(),
-            SourceLanguage::Vue | SourceLanguage::Svelte => {
-                // Vue/Svelte parse script blocks as TypeScript
-                tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()
-            }
-            SourceLanguage::Markdown
-            | SourceLanguage::Mdx
-            | SourceLanguage::PlainText
-            | SourceLanguage::Jupyter
-            | SourceLanguage::Email
-            | SourceLanguage::Mbox => {
-                unreachable!("content/notebook languages not in parsers_to_check")
-            }
-            #[cfg(feature = "pdf")]
-            SourceLanguage::Pdf => {
-                unreachable!("PDF language not in parsers_to_check")
-            }
-        };
-        match parser.set_language(&ts_lang) {
+        match SourceParser::new(*lang) {
             Ok(_) => println!("\u{2713} tree-sitter grammar: {}", name),
             Err(e) => {
-                println!("\u{2717} tree-sitter grammar: {} — {}", name, e);
+                println!(
+                    "\u{2717} tree-sitter grammar: {} — {}",
+                    name,
+                    e.root_cause()
+                );
                 issues += 1;
             }
         }
