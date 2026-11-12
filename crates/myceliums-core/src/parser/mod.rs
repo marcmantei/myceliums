@@ -5,7 +5,7 @@
 //! [`ImportInfo`] records that feed the call-graph resolver.
 //!
 //! Layout: this file holds the public types, the language→grammar table
-//! (`SourceLanguage::tree_sitter_language`) and the per-language dispatch
+//! ([`SourceLanguage::tree_sitter_language`]) and the per-language dispatch
 //! in [`SourceParser::parse`]. Each submodule adds the `extract_*` methods for
 //! one language family to `SourceParser`, with its tests alongside; `common`
 //! holds the helpers they share.
@@ -156,7 +156,11 @@ impl SourceLanguage {
 
     /// The tree-sitter grammar for this language, or `None` for languages
     /// that are not parsed with tree-sitter (content files, notebooks).
-    fn tree_sitter_language(&self) -> Option<Language> {
+    ///
+    /// This is the single language→grammar table: [`SourceParser::new`] and
+    /// `myc doctor` both resolve grammars through it, so a language added here
+    /// is parsed and health-checked without touching any other crate.
+    pub fn tree_sitter_language(&self) -> Option<Language> {
         Some(match self {
             SourceLanguage::TypeScript => tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
             SourceLanguage::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
@@ -591,5 +595,27 @@ mod tests {
     #[test]
     fn test_pdf_extension_not_recognized_without_feature() {
         assert_eq!(SourceLanguage::from_extension("pdf"), None);
+    }
+
+    /// The exported grammar table covers exactly the languages that are not
+    /// content files or notebooks; `myc doctor` relies on it for every code
+    /// language it checks.
+    #[test]
+    fn grammar_table_covers_exactly_the_code_languages() {
+        let exts = [
+            "ts", "tsx", "js", "py", "go", "rs", "java", "cs", "c", "cpp", "rb", "kt", "swift",
+            "php", "lua", "zig", "ps1", "ex", "scala", "m", "dart", "vue", "svelte", "md", "mdx",
+            "txt", "ipynb", "eml", "mbox",
+        ];
+        for ext in exts {
+            let lang = SourceLanguage::from_extension(ext).unwrap();
+            let is_code = !lang.is_content() && lang != SourceLanguage::Jupyter;
+            assert_eq!(
+                lang.tree_sitter_language().is_some(),
+                is_code,
+                "{}",
+                lang.name()
+            );
+        }
     }
 }

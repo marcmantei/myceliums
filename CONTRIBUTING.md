@@ -75,13 +75,13 @@ behavior as described there.
 
 ## Adding a new language
 
-New language support lives in `crates/myceliums-core/src/parser.rs`. The steps are:
+New language support lives in `crates/myceliums-core/src/parser/`: `mod.rs` holds the public types, the language→grammar table and the dispatch; each language family has its own file (`go.rs`, `rust.rs`, `jvm.rs`, ...) with its tests alongside. The steps are:
 
-1. Add the tree-sitter grammar dependency to `Cargo.toml` (workspace and `myceliums-core`).
-2. Extend the `SourceLanguage` enum with the new variant.
-3. Implement the `extract_*` methods for the language (symbols, calls, imports).
-4. Map file extensions to the new language.
-5. Add tests covering the new parser.
+1. Add the tree-sitter grammar dependency to `Cargo.toml` (workspace and `myceliums-core` only — `myc` gets grammars through core).
+2. Extend the `SourceLanguage` enum with the new variant and map its file extensions (`from_extension`, `name`).
+3. Add the grammar to `SourceLanguage::tree_sitter_language` — the single language→grammar table, also used by `myc doctor`.
+4. Implement the `extract_*` methods (symbols, calls, imports) in a new `parser/<family>.rs` (or the existing family file) and call them from `SourceParser::parse`.
+5. Add tests covering the new parser in the same file.
 
 Look at the existing Go or Rust implementations as templates — they cover the full pattern including structs, functions, methods, and relationships.
 
