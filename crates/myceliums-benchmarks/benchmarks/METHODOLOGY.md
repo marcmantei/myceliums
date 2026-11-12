@@ -15,7 +15,7 @@ Run it with:
 cargo run -p myceliums-benchmarks --bin retrieval-eval
 # all four modes — downloads the model weights once if they are not cached
 cargo run -p myceliums-benchmarks --bin retrieval-eval -- --allow-model-download
-# what CI runs: fail on a significant, material regression
+# what CI runs: fail on a material regression whose 95% interval is below zero
 cargo run -p myceliums-benchmarks --bin retrieval-eval -- --check-baseline
 # re-record the baseline (every mode must run)
 MYC_EVAL_MODELS=1 cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline
@@ -166,9 +166,14 @@ that record with `embedder_for_index`, exactly as every query path does. The
 reranker reorders the 20 results `--rerank` reorders by default, so the
 measurement covers the pool users actually get.
 
-The BM25 leg of `hybrid` receives the corpus in the same order the `lexical`
-mode ranks it, so `hybrid` vs `lexical` differs only by the vector leg and the
-fusion.
+Both BM25 rankings — the `lexical` mode and the BM25 leg of `hybrid` — rank
+`store.get_symbols()`, the slice every product search path hands to BM25, in
+the order the store returns it. BM25 and RRF break exact ties in that order, so
+this is what makes tie-breaking match `myc search` and `myc search --hybrid`.
+Without model weights the lexical mode reads the symbols back from a store
+built without embeddings (as `--skip-embeddings` builds it); with them, from the
+embedded index. `hybrid` vs `lexical` then differs only by the vector leg and
+the fusion.
 
 ### Model weights are opt-in
 
@@ -206,6 +211,10 @@ The model-backed modes add three sources of variation, each handled:
   upserts by uid and fusion matches its two legs by uid, so the corpus replaces
   it with a digest of file, qualified name, kind and start line — opaque like a
   UUID, identical on every run, and checked for uniqueness at load.
+- **Symbol order.** Ties in BM25 and RRF break by input order, and the
+  product's input order is whatever `store.get_symbols()` returns. The
+  benchmark ranks that slice rather than the parse order (see above) and prints
+  whether the two coincide.
 - **Fusion ties.** RRF routinely produces exactly equal scores (BM25 rank 1 +
   vector rank 2 equals BM25 rank 2 + vector rank 1). `reciprocal_rank_fusion`
   used to collect candidates from a `HashMap`, so ties came back in per-process
@@ -222,7 +231,9 @@ The model-backed modes add three sources of variation, each handled:
 Two consecutive runs on one machine produce byte-identical report JSON for all
 four modes (verified by diffing two runs; `evaluation_is_deterministic` and
 `corpus_uids_are_stable_and_unique` pin the lexical and corpus parts in unit
-tests). Floats are rounded to four decimals so the JSON is diffable.
+tests), and the CI run on linux-x86_64 reproduced the macos-aarch64 baseline
+to the fourth decimal. Floats are rounded to four decimals so the JSON is
+diffable, and a rounded `-0.0` is written as `0.0`.
 
 ## Comparing runs: paired bootstrap
 
@@ -244,7 +255,18 @@ limitations below.
 
 Each report carries these intervals for five mode pairs (each model-backed mode
 vs `lexical`, `hybrid` vs `semantic`, `hybrid+rerank` vs `hybrid`) on every
-metric, and the gate computes the same interval for current vs baseline.
+metric, and the gate computes the same interval for current vs baseline. Both
+pair the queries in one fixed order (sorted query id), so the same per-query
+data always yields the same interval.
+
+**What "significant" means here.** Throughout this document, the README and
+the CI summary, a difference is called *significant* when its 95% interval
+excludes zero — nothing more. Each interval is computed on its own and **not
+corrected for multiple comparisons**: a report computes 45 of them (5 pairs × 9
+metrics) and the gate 36 (4 modes × 9 metrics). With no real differences at
+all, about two of 45 would still exclude zero by chance, and the metrics are
+strongly correlated, so several "significant" cells can share one cause. Read a
+lone significant cell as a lead, not a finding.
 
 ## The CI gate
 
@@ -257,9 +279,19 @@ not discard the download. The evaluation step itself has no download opt-in: if
 the weights are still missing, the modes report `UNAVAILABLE` and the gate fails
 loudly rather than silently skipping them.
 
+The cache is *restored* on every run but *saved* only from pushes to `main`:
+the repository's 10 GB cache budget cannot hold a 1.5 GB copy per pull request,
+so a pull request that misses downloads the weights and discards them. The key
+(`retrieval-eval --model-cache-key`) is the locked fastembed version plus the
+HuggingFace repositories of both models, e.g.
+`fastembed-4.9.1-intfloat--multilingual-e5-small-rozgo--bge-reranker-v2-m3`.
+It does **not** pin a HuggingFace revision — fastembed downloads each
+repository's `main` — so if a repository is re-uploaded under the same name, a
+cache hit keeps serving the old files while a fresh download gets the new ones.
+
 **Decision rule.** For each mode measured in the baseline and each metric, take
-the paired bootstrap difference `current − baseline`. It is a **regression**
-only when
+the paired bootstrap difference `current − baseline` (95% interval, per
+comparison, uncorrected — see above). It is a **regression** only when
 
 1. the whole 95% interval lies below zero (upper bound < 0), **and**
 2. the point estimate is at least **0.02** below zero (`MIN_EFFECT`).
@@ -456,26 +488,30 @@ top 10 with the brute-force top 10 for 200 held-out queries:
 | clustered (64 topical clusters) | 70 | 1.0000 | 0.3735 [0.3555, 0.3910] | 0.115 |
 | uniform (no structure) | 70 | 1.0000 | 0.0960 [0.0835, 0.1090] | 0.010 |
 
-**This is a real problem, not a benchmark artefact.** On the structured data —
-the friendlier case, closer to how embeddings of related code cluster — the
-index returns fewer than four of the true ten nearest neighbours, and the true
-nearest neighbour first in one query of nine. Every repository at or above
-5,000 symbols gets semantic and hybrid results this approximate. The likely
-cause is product quantisation without a refine step: 16 one-byte codes per
-384-dimensional vector, ranked on quantised distances (`refine_factor` is
-unset), while LanceDB's default 20 probes of 70 partitions should reach the
-right cluster. That is a hypothesis to test, not a measured cause.
+**What this does and does not show.** On these synthetic tables, at exactly
+5,000 rows, the index returns fewer than four of the true ten nearest
+neighbours on the clustered data, and the true nearest neighbour first in about
+one query of nine. That is a large loss and worth chasing, but it was measured
+on synthetic vectors at a single size. It does not establish how much real
+embeddings of real code lose, or how the loss changes with repository size,
+dimension or model; both may differ in either direction. A plausible cause is
+ranking on product-quantised distances without a refine step (16 one-byte codes
+per 384-dimensional vector, `refine_factor` unset), with LanceDB's default 20
+probes of 70 partitions — a hypothesis, not a measured cause. Measuring real
+embeddings at several sizes and testing the index settings is tracked in #117;
+nothing about the index was changed here.
+
 `ann_recall_at_production_threshold` (ignored by default; run with
 `--release -- --ignored`) reproduces the measurement, and
 `the_harness_checks_itself_on_a_small_table` runs on every `cargo test`.
-Tuning the index is out of scope here and needs its own issue.
 
 ## Known limitations
 
 - **Fixture-scale corpus.** 96 symbols in five small projects. Larger real
   repositories behave differently — BM25 precision usually degrades as the
-  corpus grows, and the vector leg searches an approximate index from 5,000
-  symbols up (see the ANN section). These numbers are a regression guard and a
+  corpus grows, and from 5,000 symbols up the vector leg searches an
+  approximate index whose recall on real embeddings is unmeasured (see the ANN
+  section and #117). These numbers are a regression guard and a
   first comparison of modes, not a promise about real repositories.
 - **No development split.** Every query is in the one evaluation set. Nothing
   was tuned on it, and tuning must not happen on it; that needs a separate

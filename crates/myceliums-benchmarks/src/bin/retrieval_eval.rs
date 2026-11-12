@@ -112,7 +112,7 @@ impl Options {
                     println!(
                         "retrieval-eval [options]\n\n  \
                          {ALLOW_DOWNLOAD_FLAG}  download missing model weights (or set {MODELS_ENV_VAR}=1)\n  \
-                         --check-baseline        exit non-zero on a significant, material regression\n  \
+                         --check-baseline        exit non-zero on a material regression whose 95% CI is below zero\n  \
                          --update-baseline       rewrite golden/baseline.json (every mode must run)\n  \
                          --out <path>            write the JSON report here (default {DEFAULT_REPORT})\n  \
                          --summary <path>        append a Markdown summary (e.g. $GITHUB_STEP_SUMMARY)\n  \
@@ -177,9 +177,23 @@ async fn main() -> Result<()> {
         None
     };
     let retrieval = match &model_index {
-        Some(index) => Retrieval::with_models(&corpus, index),
-        None => Retrieval::lexical_only(&corpus),
+        Some(index) => Retrieval::with_models(index),
+        None => Retrieval::lexical_only(&corpus).await?,
     };
+    // BM25 and RRF break ties in store order; say whether it is the parse order.
+    let same_order = retrieval
+        .symbols()
+        .iter()
+        .map(|s| &s.uid)
+        .eq(corpus.symbols().iter().map(|s| &s.uid));
+    println!(
+        "symbol order: store.get_symbols() ({})",
+        if same_order {
+            "same as parse order"
+        } else {
+            "differs from parse order"
+        }
+    );
 
     let mut results = BTreeMap::new();
     let mut scores: Vec<ModeScore> = Vec::new();
@@ -227,7 +241,8 @@ async fn main() -> Result<()> {
     let comparisons = markdown_comparisons(&report, &HEADLINE_METRICS);
     if !comparisons.is_empty() {
         summary.push_str(&format!(
-            "\n### Mode vs mode (paired bootstrap, 95% CI)\n\n{comparisons}"
+            "\n### Mode vs mode (paired bootstrap, 95% CI)\n\nEach interval is uncorrected \
+             for multiple comparisons (about 45 are computed per run).\n\n{comparisons}"
         ));
     }
 
@@ -345,7 +360,7 @@ fn print_comparisons(report: &RunReport) {
     if report.comparisons.is_empty() {
         return;
     }
-    println!("\nmode vs mode — Δ [95% paired bootstrap CI]");
+    println!("\nmode vs mode — Δ [95% paired bootstrap CI, uncorrected for multiple comparisons]");
     for (treatment, control) in MODE_COMPARISONS {
         let key = format!("{} vs {}", treatment.id(), control.id());
         let Some(by_metric) = report.comparisons.get(&key) else {

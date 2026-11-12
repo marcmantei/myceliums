@@ -215,7 +215,9 @@ pub fn markdown(outcome: &GateOutcome) -> String {
         "Δ = current − baseline, paired bootstrap 95% CI over the golden queries. \
          The build fails only on a **gated** metric whose interval lies wholly below \
          zero *and* whose drop is at least {MIN_EFFECT} — see \
-         `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.\n"
+         `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`. Intervals are \
+         per comparison, uncorrected for the {} mode × metric comparisons below.\n",
+        outcome.findings.len()
     );
     if !outcome.findings.is_empty() {
         let _ = writeln!(
@@ -260,7 +262,7 @@ pub fn markdown(outcome: &GateOutcome) -> String {
             "**FAILED** — the comparison could not be made (see errors above).".to_string()
         } else {
             format!(
-                "**FAILED** — significant, material regression in {}. If the drop is \
+                "**FAILED** — regression of at least {MIN_EFFECT} with its 95% CI below zero in {}. If the drop is \
                  intended, re-record the baseline in this PR and say why: `{REGENERATE_BASELINE}`",
                 regressions.join(", ")
             )

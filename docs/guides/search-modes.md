@@ -75,7 +75,7 @@ Hybrid search combines BM25 and semantic search using Reciprocal Rank Fusion (RR
 - Optional: add `--rerank` for cross-encoder reranking (slowest; downloads a ~2.2 GB reranker on first use)
 
 **Best for:**
-- General-purpose code search where you want the best results
+- Queries that mix exact identifiers with natural-language words, when you want both kinds of match in one list
 - Queries that mix exact terms with natural language
 
 **Example:**

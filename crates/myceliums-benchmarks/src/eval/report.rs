@@ -33,9 +33,18 @@ pub const REGENERATE_BASELINE: &str = "MYC_EVAL_MODELS=1 cargo run -p myceliums-
 const REPORTED_DECIMALS: i32 = 4;
 
 /// Round to [`REPORTED_DECIMALS`] so the report is diffable and free of float noise.
+///
+/// A tiny negative difference rounds to `-0.0`, which serialises as `-0.0` and
+/// prints as `-0.0000` — a sign with no magnitude behind it. It is folded to
+/// `0.0`.
 pub fn round(value: f64) -> f64 {
     let scale = 10_f64.powi(REPORTED_DECIMALS);
-    (value * scale).round() / scale
+    let rounded = (value * scale).round() / scale;
+    if rounded == 0.0 {
+        0.0
+    } else {
+        rounded
+    }
 }
 
 /// The `status` values a mode report carries.
@@ -228,7 +237,7 @@ impl RunReport {
             results,
             comparisons: BTreeMap::new(),
         };
-        let query_ids: Vec<String> = golden.queries.iter().map(|q| q.id.clone()).collect();
+        let query_ids = report.query_ids();
         for (treatment, control) in MODE_COMPARISONS {
             let (Some(t), Some(c)) = (
                 report.measured(treatment.id()),
@@ -257,6 +266,10 @@ impl RunReport {
     }
 
     /// Query ids this report has per-query scores for, in sorted order.
+    ///
+    /// This is the one resampling order: the mode-vs-mode intervals here and
+    /// the current-vs-baseline intervals in the gate both pair queries in it,
+    /// so the same per-query data always yields the same interval.
     pub fn query_ids(&self) -> Vec<String> {
         self.results
             .values()
@@ -504,5 +517,36 @@ mod tests {
     fn rounding_keeps_four_decimals() {
         assert_eq!(round(1.0 / 3.0), 0.3333);
         assert_eq!(round(0.66666), 0.6667);
+    }
+
+    #[test]
+    fn rounding_never_produces_negative_zero() {
+        for value in [-0.0, -0.00001, -0.0000499] {
+            let r = round(value);
+            assert!(r == 0.0 && r.is_sign_positive(), "{value} rounded to {r:?}");
+            assert_eq!(serde_json::to_string(&r).unwrap(), "0.0");
+        }
+        assert_eq!(round(-0.00005), -0.0001);
+    }
+
+    #[test]
+    fn report_and_gate_resample_in_the_same_order() {
+        // The same per-query data must give the same interval whether the
+        // report computes it (mode vs mode) or the gate does (current vs
+        // baseline): both pair queries in `query_ids()` order.
+        let report = report_with(0.5, Some(0.75));
+        let ids = report.query_ids();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        assert_eq!(ids, sorted);
+        let lexical = report.results["lexical"]
+            .aligned(Metric::Mrr, &ids)
+            .unwrap();
+        let hybrid = report.results["hybrid"].aligned(Metric::Mrr, &ids).unwrap();
+        let direct = rounded(paired_bootstrap_default(&hybrid, &lexical).unwrap());
+        assert_eq!(
+            report.comparisons[&comparison_key("hybrid", "lexical")]["mrr"],
+            direct
+        );
     }
 }

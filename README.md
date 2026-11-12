@@ -386,7 +386,7 @@ Alternatively, set `provider = "openai-compatible"` to use any server speaking t
 
 **Why the same model matters:** Each embedding model defines its own vector space. Queries and documents must be embedded with the same model — mixing models produces meaningless similarity scores. Myceliums records the model inside each index and always queries with that model; switching models in the config takes effect on the next full `myc analyze`, which rebuilds the vectors.
 
-Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector database (no server required). For repositories with 5,000 symbols or more, an approximate nearest neighbor (IVF-PQ) index is built automatically. It is fast but lossy: on a synthetic 5,000-vector benchmark it returns about 4 of the true 10 nearest neighbours ([measurement](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs)).
+Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector database (no server required). For repositories with 5,000 symbols or more, an approximate nearest neighbor (IVF-PQ) index is built automatically. It is approximate: on a synthetic 5,000-vector table it returned about 4 of the true 10 nearest neighbours ([measurement](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs)); how much it loses on real embeddings is not yet measured (#117).
 
 ### Hybrid search — best of both worlds
 
@@ -398,7 +398,7 @@ Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector databa
 |---|---|---|---|
 | BM25 | `myc search` | Instant | Exact names, known symbols |
 | Semantic | `myc semantic-search` | Fast | Natural-language questions, concept search |
-| Hybrid | `myc search --hybrid` | Fast | General-purpose — recommended default |
+| Hybrid | `myc search --hybrid` | Fast | Exact identifiers and meaning in one list |
 
 > **Embeddings are optional.** BM25 search, Cypher queries, impact detection, and process tracing all work without embeddings. Use `--skip-embeddings` during analysis for faster startup when semantic search isn't needed.
 
@@ -419,7 +419,7 @@ Differences with paired bootstrap 95% confidence intervals:
 - **Hybrid does not beat semantic search alone on this set** (MRR −0.031, CI [−0.093, +0.026]; nDCG@10 −0.046, CI [−0.096, −0.007]).
 - **Reranking is not measurably better than hybrid** (MRR +0.039, CI [−0.045, +0.126]).
 
-The set is small and synthetic, so read this as "the semantic leg matters", not as a verdict on which mode to use on a real repository; tuning on these 51 queries would only overfit them. The CI job scores all four modes on every pull request and fails only on a regression that is both statistically significant and at least 0.02 in size.
+The set is small and synthetic, so read this as "the semantic leg matters", not as a verdict on which mode to use on a real repository; tuning on these 51 queries would only overfit them. The CI job scores all four modes on every pull request and fails only on a regression of at least 0.02 whose 95% confidence interval lies wholly below zero. "Significant" here always means a 95% interval that excludes zero, per comparison and not corrected for the roughly 45 intervals a run reports — expect about two of them to exclude zero by chance alone.
 
 Reproduce with `cargo run -p myceliums-benchmarks --bin retrieval-eval -- --allow-model-download` (downloads ~2.7 GB of model weights once). Methodology, the decision rule, per-intent results and limitations: [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
 

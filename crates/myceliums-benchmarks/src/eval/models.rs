@@ -52,6 +52,9 @@ pub const SHIPPED_HYBRID_LIMIT: usize = 20;
 /// report's provenance, not used to compute anything here.
 pub const SHIPPED_RRF_K: u32 = 60;
 
+/// fastembed version in `Cargo.lock`, read by the build script.
+pub const FASTEMBED_VERSION: &str = env!("MYC_FASTEMBED_VERSION");
+
 /// Embedding batch size `myc analyze` uses when the project sets none.
 const SHIPPED_EMBEDDING_BATCH: usize = 256;
 
@@ -133,11 +136,22 @@ impl ModelSetup {
         })
     }
 
-    /// Cache key for CI: changes exactly when the set of weights changes.
+    /// Cache key for the CI weights cache.
+    ///
+    /// Built from what decides which files fastembed fetches: the locked
+    /// fastembed version (its model list maps registry entries to repositories
+    /// and file names) and the HuggingFace repositories of both models. Not
+    /// covered: the HuggingFace *revision*. fastembed downloads each
+    /// repository's `main` branch and nothing pins a commit, so if a repository
+    /// is re-uploaded under the same name, a cache hit keeps serving the old
+    /// files while a fresh download would get the new ones.
     pub fn cache_key(&self) -> String {
+        let repo = |code: &str| code.replace('/', "--");
         format!(
-            "fastembed-models-{}-{}",
-            self.embedding.model, self.reranker_id
+            "fastembed-{}-{}-{}",
+            FASTEMBED_VERSION,
+            repo(&self.embedding_model_code),
+            repo(&self.reranker_model_code)
         )
     }
 
@@ -273,6 +287,9 @@ pub struct ModelIndex {
     /// Keeps the on-disk store alive for as long as the index is used.
     _dir: tempfile::TempDir,
     store: Store,
+    /// `store.get_symbols()` after indexing — the slice, in the order, that
+    /// `myc search` and `myc search --hybrid` hand to BM25 for this index.
+    symbols: Vec<CodeSymbol>,
     embedder: Arc<Embedder>,
     setup: ModelSetup,
     policy: ModelPolicy,
@@ -330,13 +347,24 @@ impl ModelIndex {
         // Resolve the query-side embedder from the index record, exactly as
         // every query path does, rather than reusing the indexing handle.
         let embedder = embedder_for_index(&store).await?;
+        let symbols = store
+            .get_symbols()
+            .await
+            .context("reading the indexed symbols back")?;
         Ok(Self {
             _dir: dir,
             store,
+            symbols,
             embedder,
             setup: setup.clone(),
             policy,
         })
+    }
+
+    /// The indexed symbols in store order, as every product search path reads
+    /// them (`store.get_symbols()`).
+    pub fn symbols(&self) -> &[CodeSymbol] {
+        &self.symbols
     }
 
     /// Rank corpus symbols for `query` under a model-backed `mode`, best first,
@@ -344,7 +372,6 @@ impl ModelIndex {
     pub async fn rank(
         &self,
         mode: SearchMode,
-        corpus_symbols: &[CodeSymbol],
         query: &str,
         depth: usize,
     ) -> Result<Vec<CodeSymbol>> {
@@ -366,7 +393,7 @@ impl ModelIndex {
                     .collect())
             }
             SearchMode::Hybrid => Ok(self
-                .hybrid(corpus_symbols, query, depth.max(SHIPPED_HYBRID_LIMIT))
+                .hybrid(query, depth.max(SHIPPED_HYBRID_LIMIT))
                 .await?
                 .into_iter()
                 .take(depth)
@@ -374,9 +401,7 @@ impl ModelIndex {
                 .collect()),
             SearchMode::HybridRerank => {
                 // Rerank the pool `--rerank` reorders by default, then cut.
-                let pool = self
-                    .hybrid(corpus_symbols, query, SHIPPED_HYBRID_LIMIT)
-                    .await?;
+                let pool = self.hybrid(query, SHIPPED_HYBRID_LIMIT).await?;
                 let reranker = self.embedder.meta().reranker.clone();
                 Ok(rerank_results(query, pool, reranker.as_deref())
                     .await?
@@ -390,15 +415,35 @@ impl ModelIndex {
 
     async fn hybrid(
         &self,
-        corpus_symbols: &[CodeSymbol],
         query: &str,
         limit: usize,
     ) -> Result<Vec<myceliums_core::HybridSearchResult>> {
-        // The BM25 leg gets the corpus in corpus order — the same input the
-        // lexical mode ranks — so the lexical-vs-hybrid comparison differs only
-        // by the vector leg and the fusion.
-        hybrid_search(&self.embedder, corpus_symbols, &self.store, query, limit).await
+        // The BM25 leg gets `store.get_symbols()`, exactly as `myc search
+        // --hybrid` and the MCP tool pass it, so RRF and BM25 ties break the
+        // way they do in the product. The lexical mode ranks the same slice.
+        hybrid_search(&self.embedder, &self.symbols, &self.store, query, limit).await
     }
+}
+
+/// The corpus as an index built without embeddings presents it: written with
+/// `Store::store_symbols` and read back with `Store::get_symbols`, which is
+/// what `myc search` ranks on an index analysed with `--skip-embeddings`.
+///
+/// The lexical mode uses this when no embedding index is built, so BM25 sees
+/// the product's symbol order whether or not model weights are present.
+pub async fn stored_symbols(corpus: &Corpus) -> Result<Vec<CodeSymbol>> {
+    let dir = tempfile::tempdir().context("creating a scratch directory for the store")?;
+    let store = Store::open(dir.path(), CORPUS_REPO_ID)
+        .await
+        .context("opening the scratch LanceDB store")?;
+    store
+        .store_symbols(corpus.symbols())
+        .await
+        .context("storing corpus symbols")?;
+    store
+        .get_symbols()
+        .await
+        .context("reading the stored symbols back")
 }
 
 #[cfg(test)]
@@ -424,8 +469,15 @@ mod tests {
             myceliums_core::DEFAULT_LOCAL_EMBEDDING_MODEL
         );
         assert_eq!(setup.reranker_id, myceliums_core::DEFAULT_RERANKER_MODEL);
-        assert!(setup.cache_key().contains(&setup.embedding.model));
-        assert!(setup.cache_key().contains(&setup.reranker_id));
+        let key = setup.cache_key();
+        assert!(key.contains("intfloat--multilingual-e5-small"), "{key}");
+        assert!(key.contains("rozgo--bge-reranker-v2-m3"), "{key}");
+        assert!(key.contains(FASTEMBED_VERSION), "{key}");
+        assert!(!key.contains('/'), "{key}");
+        assert_ne!(
+            FASTEMBED_VERSION, "unknown",
+            "the build script found no fastembed in Cargo.lock"
+        );
         assert_eq!(
             setup.provenance().embedding_text_version,
             EMBEDDING_TEXT_VERSION

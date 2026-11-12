@@ -4,10 +4,10 @@ name: Retrieval Quality
 # against the golden set on every push and pull request, with the shipped
 # default models, and writes the tables to the job summary.
 #
-# Fails only on a significant, material regression against
+# Fails only on a material regression against
 # crates/myceliums-benchmarks/golden/baseline.json: a gated metric whose paired
-# bootstrap 95% interval lies wholly below zero AND whose drop is at least the
-# documented minimal effect. Every other difference is reported, not blocking.
+# bootstrap 95% interval (per comparison, uncorrected for multiplicity) lies
+# wholly below zero AND whose drop is at least the documented minimal effect. Every other difference is reported, not blocking.
 # The rule and its rationale: crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md.
 # An intended drop is accepted by re-recording the baseline in the same PR.
 
@@ -57,8 +57,9 @@ jobs:
         id: models
         # fastembed reads HF_HOME, myceliums reads FASTEMBED_CACHE_DIR first:
         # point both at one directory outside the workspace. The key comes from
-        # the evaluator itself, so it changes exactly when the shipped model ids
-        # do.
+        # the evaluator: the locked fastembed version plus the HuggingFace
+        # repositories of both models. The HF revision is not pinned (fastembed
+        # fetches `main`), so an upstream re-upload does not change the key.
         run: |
           echo "FASTEMBED_CACHE_DIR=$HOME/.cache/myceliums-eval-models" >> "$GITHUB_ENV"
           echo "HF_HOME=$HOME/.cache/myceliums-eval-models" >> "$GITHUB_ENV"
@@ -73,9 +74,11 @@ jobs:
         if: steps.model-cache.outputs.cache-hit != 'true'
         run: target/debug/retrieval-eval --fetch-models
       # Saved straight after the download rather than at the end of the job, so
-      # a failing gate does not throw the ~2.8 GB download away.
+      # a failing gate does not throw the ~2.8 GB download away — but only from
+      # pushes to main. The repository's 10 GB cache budget cannot hold a copy
+      # per pull request; PRs restore main's copy and download on a miss.
       - name: Save model weights
-        if: steps.model-cache.outputs.cache-hit != 'true'
+        if: steps.model-cache.outputs.cache-hit != 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/myceliums-eval-models

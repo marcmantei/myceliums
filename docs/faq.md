@@ -78,15 +78,17 @@ Each search mode uses a different strategy:
 |---------|--------|----------|
 | `myc search` | BM25 keyword matching | Exact names, known identifiers |
 | `myc semantic-search` | Vector embeddings | Natural language queries, fuzzy concepts |
-| `myc hybrid-search` | Both combined via RRF | General-purpose, best overall recall |
+| `myc search --hybrid` | Both combined via RRF | Queries that mix exact identifiers with natural language |
 
 Example:
 
 ```bash
 myc search "validateUserInput"
 myc semantic-search "where does authentication happen"
-myc hybrid-search "rate limiting middleware"
+myc search --hybrid "rate limiting middleware"
 ```
+
+On the [fixture benchmark](../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#recorded-results) semantic search alone scored highest (recall@10 0.842, MRR@10 0.803); hybrid came second (0.810 / 0.771) and BM25 last (0.698 / 0.641). The set is small and synthetic, so treat this as a hint, not a ranking for every repository.
 
 ### 7. How do I query the knowledge graph with Cypher?
 

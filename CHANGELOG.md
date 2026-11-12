@@ -10,7 +10,7 @@ pull requests.
 
 ### Added
 - Retrieval-quality measurement against a golden dataset, reported on every PR (#76, #34).
-- The retrieval evaluation scores semantic, hybrid and hybrid+rerank search through the shipped code paths, adds hit@k, nDCG@10 and R-precision with per-intent and per-query results, and reports paired bootstrap confidence intervals. CI caches the model weights, scores all four modes and fails only on a significant regression of at least 0.02 (#92).
+- The retrieval evaluation scores semantic, hybrid and hybrid+rerank search through the shipped code paths, adds hit@k, nDCG@10 and R-precision with per-intent and per-query results, and reports paired bootstrap confidence intervals. CI caches the model weights, scores all four modes and fails only on a regression of at least 0.02 whose 95% interval lies below zero — per comparison, not corrected for multiple comparisons (#92).
 - `ann-recall` measures the recall of the IVF-PQ vector index against exact search (#92).
 - Supply-chain checks in CI: `cargo-deny` (advisories, licenses, sources), Dependabot for Cargo and GitHub Actions, an MSRV job (`rust-version = "1.88"`), and the test suite on macOS (#90).
 - Release assets now include a CycloneDX SBOM per target and a signed build-provenance attestation (#90).
@@ -20,7 +20,7 @@ pull requests.
 - MCP handlers go through a `GraphService` layer (#37, #53).
 - The Homebrew tap sync can be re-run manually and is idempotent (#74).
 - CI pins every third-party action to a commit SHA, runs with read-only token permissions by default, and builds with `--locked` (#90).
-- The index fingerprint covers the version of the embedding-text template and its budget constants. Indexes written by earlier releases are re-embedded on the next full `myc analyze` (#92).
+- The index fingerprint covers the version of the embedding-text template and its budget constants. Indexes written by earlier releases are re-embedded on the next full `myc analyze`; until then, incremental re-indexing with embeddings is refused rather than mixing two templates in one index (#92).
 - `myc` is installed from crates.io; the unpublished Docker image is no longer advertised (#72, #73).
 
 ### Fixed

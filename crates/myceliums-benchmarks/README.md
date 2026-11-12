@@ -5,7 +5,7 @@ Two kinds of measurement live in this crate:
 - **Retrieval quality** — `retrieval-eval` scores lexical, semantic, hybrid and
   hybrid+rerank search against a hand-labelled golden set (recall@k, hit@k,
   MRR@10, nDCG@10, R-precision, with paired bootstrap confidence intervals) and
-  gates CI on significant regressions. `ann-recall` measures what the IVF-PQ
+  gates CI on regressions whose 95% interval lies below zero (per comparison, uncorrected). `ann-recall` measures what the IVF-PQ
   vector index costs against exact search. Method, numbers and limits:
   [`benchmarks/METHODOLOGY.md`](benchmarks/METHODOLOGY.md).
 - **Timings** — Criterion benchmarks for indexing, parsing and queries on

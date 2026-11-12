@@ -349,9 +349,9 @@ mod tests {
     /// `cargo test -p myceliums-benchmarks --release -- --ignored ann_recall`.
     ///
     /// Recorded result (METHODOLOGY.md): recall@10 0.37 on the clustered
-    /// table — far below what exact search returns. The floor sits under that
-    /// so the test reproduces the measurement and catches further loss; raise
-    /// it when the index is tuned (refine step, probe count).
+    /// synthetic table. The floor sits under that so the test reproduces the
+    /// measurement and catches further loss; raise it if the index is tuned
+    /// (#117).
     const CLUSTERED_RECALL_FLOOR: f64 = 0.3;
 
     #[tokio::test]

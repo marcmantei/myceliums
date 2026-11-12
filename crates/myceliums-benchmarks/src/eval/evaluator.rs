@@ -13,7 +13,8 @@ use super::golden_set::{GoldenQuery, GoldenSet, QueryIntent, SymbolRef};
 use super::metrics::{
     hit_at_k, mean, ndcg_at_k, r_precision, recall_at_k, reciprocal_rank, RelevantSet,
 };
-use super::models::ModelIndex;
+use super::models::{stored_symbols, ModelIndex};
+use myceliums_storage::CodeSymbol;
 
 /// The cutoffs recall and hit rate are reported at.
 pub const RECALL_CUTOFFS: [usize; 3] = [1, 5, 10];
@@ -229,28 +230,38 @@ impl SearchMode {
     }
 }
 
-/// What the modes search: the parsed corpus, plus the embedding index when the
-/// model-backed modes are available.
+/// What the modes search: the corpus as the product reads it back from its
+/// store, plus the embedding index when the model-backed modes are available.
+///
+/// Every product search path ranks `store.get_symbols()`, and BM25 and RRF
+/// break ties in that order. The lexical mode and the BM25 leg of hybrid
+/// therefore rank the stored symbols, not the parse order.
 pub struct Retrieval<'a> {
-    corpus: &'a Corpus,
+    symbols: Vec<CodeSymbol>,
     models: Option<&'a ModelIndex>,
 }
 
 impl<'a> Retrieval<'a> {
-    /// Lexical search only — no model is loaded or downloaded.
-    pub fn lexical_only(corpus: &'a Corpus) -> Self {
-        Self {
-            corpus,
+    /// Lexical search only — no model is loaded or downloaded. Symbols come
+    /// from a store built without embeddings, as `--skip-embeddings` builds it.
+    pub async fn lexical_only(corpus: &Corpus) -> Result<Retrieval<'static>> {
+        Ok(Retrieval {
+            symbols: stored_symbols(corpus).await?,
             models: None,
+        })
+    }
+
+    /// Every mode, served by the embedding index and its stored symbols.
+    pub fn with_models(models: &'a ModelIndex) -> Self {
+        Self {
+            symbols: models.symbols().to_vec(),
+            models: Some(models),
         }
     }
 
-    /// Every mode, with the model-backed ones served by `models`.
-    pub fn with_models(corpus: &'a Corpus, models: &'a ModelIndex) -> Self {
-        Self {
-            corpus,
-            models: Some(models),
-        }
+    /// The symbols the lexical mode ranks, in store order.
+    pub fn symbols(&self) -> &[CodeSymbol] {
+        &self.symbols
     }
 
     /// Rank corpus symbols for `query` under `mode`, best first.
@@ -261,7 +272,7 @@ impl<'a> Retrieval<'a> {
     /// nothing — so the one thing this must never do is stay quiet.
     pub async fn rank(&self, mode: SearchMode, query: &str) -> Result<Vec<SymbolRef>> {
         let symbols = match mode {
-            SearchMode::Lexical => myceliums_core::search_symbols(self.corpus.symbols(), query)
+            SearchMode::Lexical => myceliums_core::search_symbols(&self.symbols, query)
                 .into_iter()
                 .take(RANKING_DEPTH)
                 .map(|hit| hit.symbol)
@@ -274,9 +285,7 @@ impl<'a> Retrieval<'a> {
                         mode.id()
                     );
                 };
-                models
-                    .rank(mode, self.corpus.symbols(), query, RANKING_DEPTH)
-                    .await?
+                models.rank(mode, query, RANKING_DEPTH).await?
             }
         };
         Ok(symbols.iter().map(symbol_ref).collect())
@@ -416,7 +425,8 @@ mod tests {
     async fn scored() -> ModeScore {
         let corpus = Corpus::load(&fixtures_root().unwrap()).unwrap();
         let set = GoldenSet::embedded().unwrap();
-        evaluate(SearchMode::Lexical, &Retrieval::lexical_only(&corpus), &set)
+        let retrieval = Retrieval::lexical_only(&corpus).await.unwrap();
+        evaluate(SearchMode::Lexical, &retrieval, &set)
             .await
             .unwrap()
     }
@@ -489,7 +499,7 @@ mod tests {
         // An empty ranking would report a plausible-looking 0.0 instead of
         // failing, which is the one outcome this harness must not produce.
         let corpus = Corpus::load(&fixtures_root().unwrap()).unwrap();
-        let retrieval = Retrieval::lexical_only(&corpus);
+        let retrieval = Retrieval::lexical_only(&corpus).await.unwrap();
         let set = GoldenSet::embedded().unwrap();
         for mode in [
             SearchMode::Semantic,
@@ -503,6 +513,19 @@ mod tests {
             assert!(error.to_string().contains(mode.id()), "{error}");
             assert!(evaluate(mode, &retrieval, &set).await.is_err());
         }
+    }
+
+    #[tokio::test]
+    async fn lexical_ranks_the_stored_symbols() {
+        // What `myc search` ranks is `store.get_symbols()`, not the parse
+        // order; the two must hold the same symbols.
+        let corpus = Corpus::load(&fixtures_root().unwrap()).unwrap();
+        let retrieval = Retrieval::lexical_only(&corpus).await.unwrap();
+        let mut stored: Vec<&str> = retrieval.symbols().iter().map(|s| s.uid.as_str()).collect();
+        let mut parsed: Vec<&str> = corpus.symbols().iter().map(|s| s.uid.as_str()).collect();
+        stored.sort();
+        parsed.sort();
+        assert_eq!(stored, parsed);
     }
 
     #[tokio::test]
