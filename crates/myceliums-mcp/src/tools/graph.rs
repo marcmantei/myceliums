@@ -45,14 +45,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetProcessesParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let processes = store
-            .get_processes()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let processes = self.processes(&params.repo_id).await?;
 
         // Apply filters
         let filter = ProcessFilter {
@@ -85,24 +78,16 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCommunitiesParams>,
     ) -> Result<Json<CommunitiesOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let communities = store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let communities = self.communities(&params.repo_id).await?;
 
         let items: Vec<CommunityItem> = communities
-            .into_iter()
+            .iter()
             .map(|c| CommunityItem {
-                uid: c.uid,
-                label: c.label,
+                uid: c.uid.clone(),
+                label: c.label.clone(),
                 member_count: c.member_count,
-                top_symbols: c.top_symbols,
-                summary: c.summary,
+                top_symbols: c.top_symbols.clone(),
+                summary: c.summary.clone(),
             })
             .collect();
 
@@ -117,25 +102,11 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCommunityDetailParams>,
     ) -> Result<Json<CommunityDetailOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let communities = self.communities(&params.repo_id).await?;
 
-        let communities = store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&params.repo_id).await?;
 
         let community = communities
             .iter()
@@ -211,15 +182,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetSymbolDefinitionParams>,
     ) -> Result<Json<SymbolDefinitionOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
 
         // Try qualified name first (exact), then short name
         let matches: Vec<_> = symbols
@@ -275,24 +238,13 @@ impl MyceliumsMcp {
         name = "get_callers",
         description = "Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns."
     )]
-    async fn get_callers(
+    pub(crate) async fn get_callers(
         &self,
         Parameters(params): Parameters<GetCallersParams>,
     ) -> Result<Json<CallersOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&params.repo_id).await?;
 
         let matches: Vec<_> = symbols
             .iter()
@@ -402,20 +354,9 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCalleesParams>,
     ) -> Result<Json<CalleesOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&params.repo_id).await?;
 
         let matches: Vec<_> = symbols
             .iter()
@@ -524,15 +465,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetFileSymbolsParams>,
     ) -> Result<Json<FileSymbolsOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
 
         let file_symbols: Vec<FileSymbolItem> = symbols
             .iter()
@@ -565,20 +498,10 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<FindPathParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
 
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&repo_id).await?;
 
         // Resolve from_symbol
         let from_symbol = Self::resolve_symbol(&symbols, &params.from_symbol)?;
@@ -698,39 +621,19 @@ impl MyceliumsMcp {
         name = "get_stats",
         description = "Get codebase statistics: symbol counts by kind, files, relationships, languages, and communities. Use to understand overall codebase structure."
     )]
-    async fn get_stats(
+    pub(crate) async fn get_stats(
         &self,
         Parameters(params): Parameters<GetStatsParams>,
     ) -> Result<Json<StatsOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let files = self.files(&params.repo_id).await?;
 
-        let files = store
-            .get_files()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&params.repo_id).await?;
 
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let communities = self.communities(&params.repo_id).await?;
 
-        let communities = store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let processes = store
-            .get_processes()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let processes = self.processes(&params.repo_id).await?;
 
         // Count symbols by kind
         let mut symbol_counts = std::collections::HashMap::new();

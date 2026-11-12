@@ -159,14 +159,7 @@ impl MyceliumsMcp {
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
         let repo = registry.require(&repo_id).map_err(repo_id_error)?;
 
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
 
         let report = detect_contracts(std::path::Path::new(&repo.path), &symbols);
 

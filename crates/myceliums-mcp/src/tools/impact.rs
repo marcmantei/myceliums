@@ -13,10 +13,6 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<DetectImpactParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
         let diff_text = match params.diff {
             Some(d) => d,
             None => {
@@ -33,14 +29,8 @@ impl MyceliumsMcp {
                 text: "No changes detected (empty diff).".to_string(),
             }));
         }
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
         let depth = params.depth.unwrap_or(2);
         let report = detect_impact(&diff_text, &symbols, &relationships, depth);
         let json_report = serde_json::to_value(&report)
@@ -58,18 +48,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<RenameParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
+        let relationships = self.relationships(&params.repo_id).await?;
         let plan = RenamePlan::create(
             &symbols,
             &relationships,
@@ -93,10 +73,6 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ReviewContextParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
         let diff_text = match params.diff {
             Some(d) => d,
@@ -116,18 +92,9 @@ impl MyceliumsMcp {
             }));
         }
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let communities = store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
+        let communities = self.communities(&repo_id).await?;
 
         let depth = params.depth.unwrap_or(1);
         let include_source = params.include_source.unwrap_or(false);
@@ -289,25 +256,12 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetSuggestedQuestionsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
 
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&repo_id).await?;
 
-        let files = store
-            .get_files()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let files = self.files(&repo_id).await?;
 
         let diff_text = match params.diff {
             Some(d) => d,
@@ -339,7 +293,6 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetGraphDiffParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
 
         // Load previous snapshot
         let previous = load_snapshot(&data_dir(), &repo_id)
@@ -357,17 +310,8 @@ impl MyceliumsMcp {
         };
 
         // Build current snapshot from graph
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
         let current = build_snapshot(&repo_id, &symbols, &relationships);
 
         let diff = diff_snapshots(&previous, &current);

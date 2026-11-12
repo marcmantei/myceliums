@@ -13,20 +13,10 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<QueryKnowledgeParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
 
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let limit = params.limit.unwrap_or(20).min(100);
         let include_sources = params.include_sources.unwrap_or(true);
@@ -140,20 +130,10 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetRationaleParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
 
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&repo_id).await?;
 
         use myceliums_storage::RelationshipKind;
 
@@ -252,23 +232,10 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetKnowledgeGapsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let communities = store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
+        let communities = self.communities(&repo_id).await?;
 
         use myceliums_storage::RelationshipKind;
 

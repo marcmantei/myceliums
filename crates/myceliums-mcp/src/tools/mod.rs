@@ -55,7 +55,7 @@ mod prelude {
     pub(crate) use crate::index_status::{load_embedding_stats, partial_index_warning};
     pub(crate) use crate::output::*;
     pub(crate) use crate::params::*;
-    pub(crate) use crate::repo::{data_dir, registered_db_path, registry_path};
+    pub(crate) use crate::repo::{data_dir, registry_path};
     pub(crate) use crate::MyceliumsMcp;
 }
 

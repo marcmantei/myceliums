@@ -8,7 +8,7 @@ impl MyceliumsMcp {
         name = "analyze",
         description = "Analyze a codebase and build its knowledge graph. Parses TypeScript and Python files, extracts symbols, resolves call relationships, detects communities, and traces execution flows. Uses cached analysis if fresh enough (set force=true to bypass cache)."
     )]
-    async fn analyze(
+    pub(crate) async fn analyze(
         &self,
         Parameters(params): Parameters<AnalyzeParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
@@ -35,30 +35,12 @@ impl MyceliumsMcp {
                     cache::check_cache(repo_info, &abs_path, &cache_config)
                 {
                     info!("Using cached analysis: {}", reason);
-                    let db_path = registered_db_path(&repo_id)?;
-                    let store = Store::open(&db_path, &repo_id).await.map_err(|e| {
-                        rmcp::ErrorData::internal_error(format!("Store error: {}", e), None)
-                    })?;
-                    let symbols = store
-                        .get_symbols()
-                        .await
-                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                    let files = store
-                        .get_files()
-                        .await
-                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                    let relationships = store
-                        .get_relationships()
-                        .await
-                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                    let communities = store
-                        .get_communities()
-                        .await
-                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                    let processes = store
-                        .get_processes()
-                        .await
-                        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+                    let store = self.store(&repo_id).await?;
+                    let symbols = self.symbols(&repo_id).await?;
+                    let files = self.files(&repo_id).await?;
+                    let relationships = self.relationships(&repo_id).await?;
+                    let communities = self.communities(&repo_id).await?;
+                    let processes = self.processes(&repo_id).await?;
                     let embedding_stats = load_embedding_stats(&store, symbols.len()).await?;
                     let output = AnalyzeOutput {
                         repo_id,
@@ -81,6 +63,9 @@ impl MyceliumsMcp {
 
         // Write path: `repo_id` was derived from the canonical project path
         // above, not supplied by the caller, and this run registers it.
+        // The index is about to be rewritten: drop the cached graph now, and
+        // again once the new index is complete (below).
+        self.service.invalidate(&repo_id);
         let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
         std::fs::create_dir_all(&db_path).map_err(|e| {
             rmcp::ErrorData::internal_error(format!("Failed to create dir: {}", e), None)
@@ -160,6 +145,8 @@ impl MyceliumsMcp {
         registry
             .save()
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        // Reads from here on see the new index, not a graph cached mid-run.
+        self.service.invalidate(&repo_id);
 
         // Save lightweight snapshot for future diff comparisons
         let snapshot = build_snapshot(&repo_id, &symbols, &relationships);
@@ -212,6 +199,7 @@ impl MyceliumsMcp {
         registry
             .save()
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        self.service.invalidate(&params.repo_id);
         if db_path.exists() {
             std::fs::remove_dir_all(&db_path)
                 .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;

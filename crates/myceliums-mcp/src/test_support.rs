@@ -140,4 +140,39 @@ impl MyceliumsMcp {
             .map(|json| json.0.text)
             .map_err(|e| e.message.to_string())
     }
+
+    /// Invoke the `get_callers` handler (rendered as JSON).
+    pub async fn get_callers_for_test(&self, params: GetCallersParams) -> Result<String, String> {
+        self.get_callers(Parameters(params))
+            .await
+            .map(|json| serde_json::to_string(&json.0).expect("serialize"))
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `get_stats` handler (rendered as JSON).
+    pub async fn get_stats_for_test(&self, params: GetStatsParams) -> Result<String, String> {
+        self.get_stats(Parameters(params))
+            .await
+            .map(|json| serde_json::to_string(&json.0).expect("serialize"))
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// Invoke the `analyze` handler.
+    pub async fn analyze_for_test(&self, params: AnalyzeParams) -> Result<String, String> {
+        self.analyze(Parameters(params))
+            .await
+            .map(|json| json.0.text)
+            .map_err(|e| e.message.to_string())
+    }
+
+    /// How many graph tables the server has read from disk so far (see
+    /// `GraphService::table_loads`).
+    pub fn graph_table_loads_for_test(&self) -> usize {
+        self.service.table_loads()
+    }
+
+    /// Whether the server currently holds a cached graph for `repo_id`.
+    pub fn graph_is_cached_for_test(&self, repo_id: &str) -> bool {
+        self.service.is_cached(repo_id)
+    }
 }

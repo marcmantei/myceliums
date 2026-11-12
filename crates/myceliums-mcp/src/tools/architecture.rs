@@ -12,20 +12,9 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<FindDeadCodeParams>,
     ) -> Result<Json<DeadCodeOutput>, rmcp::ErrorData> {
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let relationships = self.relationships(&params.repo_id).await?;
 
         use myceliums_storage::RelationshipKind;
 
@@ -87,19 +76,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetGodNodesParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let top_n = params.top_n.unwrap_or(10);
         let coupling_threshold = params.coupling_threshold.unwrap_or(20);
@@ -141,19 +120,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetSurprisingConnectionsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let min_surprise = params.min_surprise_score.unwrap_or(0.1);
         let limit = params.limit.unwrap_or(50);
@@ -194,15 +163,8 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetGitContextParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(Some(&params.repo_id))?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
 
         let symbol_lower = params.symbol_name.to_lowercase();
         let matching_symbols: Vec<&myceliums_storage::CodeSymbol> = symbols
@@ -267,19 +229,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetCentralityParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let centrality = compute_centrality(&relationships)
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -354,19 +306,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetCommunityMetricsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let metrics = compute_community_metrics(&symbols, &relationships)
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -412,19 +354,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<DetectCyclesParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let include_calls = params.include_calls.unwrap_or(true);
         let include_imports = params.include_imports.unwrap_or(true);
@@ -467,19 +399,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetDependenciesParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let dep = compute_file_dependencies(
             &symbols,
@@ -508,19 +430,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<GetModuleCouplingParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let group_by_dir = params.group_by_directory.unwrap_or(false);
         let mut coupling = compute_module_coupling(&symbols, &relationships, group_by_dir);
@@ -557,19 +469,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ExportMermaidParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let diagram_type = match params.diagram_type.as_deref() {
             Some("class") => MermaidDiagramType::ClassDiagram,
@@ -591,19 +493,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<QualityHotspotsParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let top_n = params.top_n.unwrap_or(20);
         let hotspots = compute_hotspot_scores(&symbols, &relationships, top_n);
@@ -622,19 +514,9 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ArchitectureLintParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
 
         let rules: Option<Vec<&str>> = params
             .rules
@@ -658,23 +540,10 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ArchitectureViewParams>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let communities = store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
+        let communities = self.communities(&repo_id).await?;
 
         let diagram = generate_architecture_diagram(&symbols, &relationships, &communities);
 
@@ -692,10 +561,6 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<DetectDriftParams2>,
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let db_path = registered_db_path(&repo_id)?;
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
         let baseline = load_snapshot(&data_dir(), &repo_id)
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
@@ -706,18 +571,9 @@ impl MyceliumsMcp {
                 )
             })?;
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let communities = store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
+        let communities = self.communities(&repo_id).await?;
 
         let report = detect_drift(&baseline, &symbols, &relationships, &communities, &[]);
 
@@ -738,14 +594,7 @@ impl MyceliumsMcp {
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
         let repo = registry.require(&params.repo_id).map_err(repo_id_error)?;
 
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
 
         let repo_path = std::path::Path::new(&repo.path);
         let codeowners_content = ["CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS"]

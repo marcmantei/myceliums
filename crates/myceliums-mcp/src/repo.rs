@@ -1,9 +1,13 @@
 //! Data-home paths and repository/symbol resolution shared by the tools.
 
-use crate::errors::repo_id_error;
+use crate::errors::{repo_id_error, service_error};
 use crate::MyceliumsMcp;
-use myceliums_storage::RepoRegistry;
+use myceliums_core::GraphTable;
+use myceliums_storage::{
+    CodeSymbol, Community, FileNode, Process, Relationship, RepoRegistry, Store,
+};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub(crate) fn data_dir() -> PathBuf {
     // `MYCELIUMS_DATA_DIR` overrides the data home so the server can be pointed
@@ -106,5 +110,61 @@ impl MyceliumsMcp {
         repos.last().map(|r| r.id.clone()).ok_or_else(|| {
             rmcp::ErrorData::internal_error("No repositories analyzed yet".to_string(), None)
         })
+    }
+}
+
+/// Graph reads for the tools, served from the [`myceliums_core::GraphService`]
+/// cache: each table is read from disk once per repository and reused until
+/// `analyze`/`delete` (or an on-disk change) invalidates it. Every read
+/// validates `repo_id` first — malformed or unknown ids are `invalid_params`.
+impl MyceliumsMcp {
+    /// The shared store handle, for reads the graph cache does not cover
+    /// (vector search, embeddings, index metadata).
+    pub(crate) async fn store(&self, repo_id: &str) -> Result<Arc<Store>, rmcp::ErrorData> {
+        self.service
+            .open_store(repo_id)
+            .await
+            .map_err(service_error)
+    }
+
+    pub(crate) async fn symbols(
+        &self,
+        repo_id: &str,
+    ) -> Result<GraphTable<CodeSymbol>, rmcp::ErrorData> {
+        self.service.symbols(repo_id).await.map_err(service_error)
+    }
+
+    pub(crate) async fn relationships(
+        &self,
+        repo_id: &str,
+    ) -> Result<GraphTable<Relationship>, rmcp::ErrorData> {
+        self.service
+            .relationships(repo_id)
+            .await
+            .map_err(service_error)
+    }
+
+    pub(crate) async fn files(
+        &self,
+        repo_id: &str,
+    ) -> Result<GraphTable<FileNode>, rmcp::ErrorData> {
+        self.service.files(repo_id).await.map_err(service_error)
+    }
+
+    pub(crate) async fn communities(
+        &self,
+        repo_id: &str,
+    ) -> Result<GraphTable<Community>, rmcp::ErrorData> {
+        self.service
+            .communities(repo_id)
+            .await
+            .map_err(service_error)
+    }
+
+    pub(crate) async fn processes(
+        &self,
+        repo_id: &str,
+    ) -> Result<GraphTable<Process>, rmcp::ErrorData> {
+        self.service.processes(repo_id).await.map_err(service_error)
     }
 }

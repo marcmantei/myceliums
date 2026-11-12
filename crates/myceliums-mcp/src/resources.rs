@@ -2,7 +2,7 @@
 
 use crate::repo::{registered_db_path, registry_path};
 use crate::MyceliumsMcp;
-use myceliums_storage::{RepoRegistry, Store};
+use myceliums_storage::RepoRegistry;
 use std::collections::HashMap;
 
 // Resource reading implementation
@@ -39,34 +39,17 @@ impl MyceliumsMcp {
         }
 
         let repo_id = parts[0];
-        let db_path = registered_db_path(repo_id)?;
-        let store = Store::open(&db_path, repo_id)
-            .await
-            .map_err(|e| mcp_err(format!("{}", e)))?;
+        // Reject malformed and unknown ids up front, whatever the sub-path.
+        registered_db_path(repo_id)?;
         let sub_path = if parts.len() > 1 { parts[1] } else { "" };
 
         match sub_path {
             "schema" => {
-                let symbols = store
-                    .get_symbols()
-                    .await
-                    .map_err(|e| mcp_err(format!("{}", e)))?;
-                let files = store
-                    .get_files()
-                    .await
-                    .map_err(|e| mcp_err(format!("{}", e)))?;
-                let relationships = store
-                    .get_relationships()
-                    .await
-                    .map_err(|e| mcp_err(format!("{}", e)))?;
-                let communities = store
-                    .get_communities()
-                    .await
-                    .map_err(|e| mcp_err(format!("{}", e)))?;
-                let processes = store
-                    .get_processes()
-                    .await
-                    .map_err(|e| mcp_err(format!("{}", e)))?;
+                let symbols = self.symbols(repo_id).await?;
+                let files = self.files(repo_id).await?;
+                let relationships = self.relationships(repo_id).await?;
+                let communities = self.communities(repo_id).await?;
+                let processes = self.processes(repo_id).await?;
                 let mut kind_counts: HashMap<String, usize> = HashMap::new();
                 for s in &symbols {
                     *kind_counts.entry(s.kind.to_string()).or_default() += 1;
@@ -83,10 +66,7 @@ impl MyceliumsMcp {
                 serde_json::to_string_pretty(&result).map_err(|e| mcp_err(format!("{}", e)))
             }
             "map" => {
-                let communities = store
-                    .get_communities()
-                    .await
-                    .map_err(|e| mcp_err(format!("{}", e)))?;
+                let communities = self.communities(repo_id).await?;
                 let result: Vec<serde_json::Value> = communities.iter().map(|c| {
                     serde_json::json!({"uid": c.uid, "label": c.label, "member_count": c.member_count, "top_symbols": c.top_symbols, "summary": c.summary})
                 }).collect();
@@ -96,10 +76,7 @@ impl MyceliumsMcp {
                 let sub_parts: Vec<&str> = rest.splitn(2, '/').collect();
                 match sub_parts.as_slice() {
                     ["community", community_id] => {
-                        let communities = store
-                            .get_communities()
-                            .await
-                            .map_err(|e| mcp_err(format!("{}", e)))?;
+                        let communities = self.communities(repo_id).await?;
                         let community = communities
                             .iter()
                             .find(|c| c.uid == *community_id)
@@ -110,10 +87,7 @@ impl MyceliumsMcp {
                         serde_json::to_string_pretty(&result).map_err(|e| mcp_err(format!("{}", e)))
                     }
                     ["process", process_id] => {
-                        let processes = store
-                            .get_processes()
-                            .await
-                            .map_err(|e| mcp_err(format!("{}", e)))?;
+                        let processes = self.processes(repo_id).await?;
                         let process = processes
                             .iter()
                             .find(|p| p.uid == *process_id)

@@ -14,10 +14,7 @@ impl MyceliumsMcp {
     ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
         use myceliums_core::cross_repo::{self, IsolateConfig};
 
-        let db_path = registered_db_path(&params.repo_id)?;
-        let store = Store::open(&db_path, &params.repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let store = self.store(&params.repo_id).await?;
 
         let registry = RepoRegistry::load(&registry_path())
             .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
@@ -26,18 +23,9 @@ impl MyceliumsMcp {
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.repo_id.clone());
 
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let communities = store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let symbols = self.symbols(&params.repo_id).await?;
+        let relationships = self.relationships(&params.repo_id).await?;
+        let communities = self.communities(&params.repo_id).await?;
 
         let config = IsolateConfig {
             max_symbols: params.max_symbols.unwrap_or(50),
@@ -53,7 +41,7 @@ impl MyceliumsMcp {
             &params.repo_id,
             &repo_name,
             &symbols,
-            &store,
+            store.as_ref(),
             &relationships,
             &communities,
             &config,
@@ -86,26 +74,14 @@ impl MyceliumsMcp {
         };
 
         // Isolate intent in source repo
-        let src_db = registered_db_path(&params.source_repo_id)?;
-        let src_store = Store::open(&src_db, &params.source_repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("Source store: {}", e), None))?;
+        let src_store = self.store(&params.source_repo_id).await?;
         let src_name = registry
             .get(&params.source_repo_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.source_repo_id.clone());
-        let src_symbols = src_store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let src_rels = src_store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let src_communities = src_store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let src_symbols = self.symbols(&params.source_repo_id).await?;
+        let src_rels = self.relationships(&params.source_repo_id).await?;
+        let src_communities = self.communities(&params.source_repo_id).await?;
 
         let src_embedder = myceliums_core::embedder_for_index(&src_store)
             .await
@@ -118,7 +94,7 @@ impl MyceliumsMcp {
             &params.source_repo_id,
             &src_name,
             &src_symbols,
-            &src_store,
+            src_store.as_ref(),
             &src_rels,
             &src_communities,
             &config,
@@ -127,26 +103,14 @@ impl MyceliumsMcp {
         .map_err(|e| rmcp::ErrorData::internal_error(format!("Source isolation: {}", e), None))?;
 
         // Isolate intent in target repo
-        let tgt_db = registered_db_path(&params.target_repo_id)?;
-        let tgt_store = Store::open(&tgt_db, &params.target_repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("Target store: {}", e), None))?;
+        let tgt_store = self.store(&params.target_repo_id).await?;
         let tgt_name = registry
             .get(&params.target_repo_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.target_repo_id.clone());
-        let tgt_symbols = tgt_store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let tgt_rels = tgt_store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let tgt_communities = tgt_store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let tgt_symbols = self.symbols(&params.target_repo_id).await?;
+        let tgt_rels = self.relationships(&params.target_repo_id).await?;
+        let tgt_communities = self.communities(&params.target_repo_id).await?;
 
         let tgt_embedder = myceliums_core::embedder_for_index(&tgt_store)
             .await
@@ -159,7 +123,7 @@ impl MyceliumsMcp {
             &params.target_repo_id,
             &tgt_name,
             &tgt_symbols,
-            &tgt_store,
+            tgt_store.as_ref(),
             &tgt_rels,
             &tgt_communities,
             &config,
@@ -214,26 +178,14 @@ impl MyceliumsMcp {
         };
 
         // Isolate both repos
-        let src_db = registered_db_path(&params.source_repo_id)?;
-        let src_store = Store::open(&src_db, &params.source_repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let src_store = self.store(&params.source_repo_id).await?;
         let src_name = registry
             .get(&params.source_repo_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.source_repo_id.clone());
-        let src_symbols = src_store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let src_rels = src_store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let src_communities = src_store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let src_symbols = self.symbols(&params.source_repo_id).await?;
+        let src_rels = self.relationships(&params.source_repo_id).await?;
+        let src_communities = self.communities(&params.source_repo_id).await?;
 
         let src_embedder = myceliums_core::embedder_for_index(&src_store)
             .await
@@ -244,7 +196,7 @@ impl MyceliumsMcp {
             &params.source_repo_id,
             &src_name,
             &src_symbols,
-            &src_store,
+            src_store.as_ref(),
             &src_rels,
             &src_communities,
             &config,
@@ -252,26 +204,14 @@ impl MyceliumsMcp {
         .await
         .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
 
-        let tgt_db = registered_db_path(&params.target_repo_id)?;
-        let tgt_store = Store::open(&tgt_db, &params.target_repo_id)
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let tgt_store = self.store(&params.target_repo_id).await?;
         let tgt_name = registry
             .get(&params.target_repo_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.target_repo_id.clone());
-        let tgt_symbols = tgt_store
-            .get_symbols()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let tgt_rels = tgt_store
-            .get_relationships()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let tgt_communities = tgt_store
-            .get_communities()
-            .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let tgt_symbols = self.symbols(&params.target_repo_id).await?;
+        let tgt_rels = self.relationships(&params.target_repo_id).await?;
+        let tgt_communities = self.communities(&params.target_repo_id).await?;
 
         let tgt_embedder = myceliums_core::embedder_for_index(&tgt_store)
             .await
@@ -282,7 +222,7 @@ impl MyceliumsMcp {
             &params.target_repo_id,
             &tgt_name,
             &tgt_symbols,
-            &tgt_store,
+            tgt_store.as_ref(),
             &tgt_rels,
             &tgt_communities,
             &config,
