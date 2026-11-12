@@ -4,7 +4,8 @@ Does myceliums help a coding agent? This directory measures it directly: a
 headless Claude Code agent answers code-understanding questions about pinned
 open-source repositories, once with only its built-in read and search tools
 and once with the myceliums MCP server added. Answers are graded
-automatically against hand-verified gold sets. A second, smaller eval checks
+automatically against gold sets derived with grep, reading and compiler
+tooling and verified by an agent (human review still pending). A second, smaller eval checks
 whether a model picks the right myceliums tool for a request.
 
 Results: [`results/`](results/). Each run directory holds the compact per-session

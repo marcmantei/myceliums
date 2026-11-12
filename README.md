@@ -348,7 +348,7 @@ something is implemented, dead code, call chains — about pinned checkouts of
 fzf (Go), hono (TypeScript) and FastAPI (Python). Each question ran three
 times with the agent's own read and search tools only, and three times with
 the myceliums MCP server added; nothing else differed. Answers were graded
-against hand-verified gold sets. Brackets are 95 % paired bootstrap intervals
+against gold sets derived with grep, reading and compiler tooling and verified by an agent (not yet reviewed by a person). Brackets are 95 % paired bootstrap intervals
 over the 30 tasks.
 
 | Per session | without myceliums | with myceliums | with − without |
@@ -373,8 +373,9 @@ What this run shows, plainly:
 - **The server still costs.** Its tool names and instructions add 1,882
   tokens to every model call, which is where the 25 % more input tokens come
   from; sessions with the server also took 2.6 s (20 %) longer.
-- **The tool descriptions themselves work.** Asked to pick one myceliums
-  tool for each of 54 developer requests, `claude-haiku-5-5` chose an
+- **The tool descriptions are not the obstacle, as far as a single-turn test
+  shows.** Asked to pick one myceliums tool for each of 54 developer requests
+  (Haiku only, the pick is not executed), `claude-haiku-5-5` chose an
   acceptable tool for 53 of 54 in each of two passes.
 
 This is a pilot with clear limits: three repositories, one model and effort
