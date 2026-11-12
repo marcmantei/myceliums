@@ -39,8 +39,11 @@
 //! [`GraphService`] is the entry point for transport adapters (MCP tools, HTTP
 //! handlers, CLI commands). It owns store lifecycle — one
 //! `myceliums_storage::Store` per repository per process, opened lazily and
-//! cached — resolves repository ids, and provides the read-and-stitch routines
-//! handlers used to duplicate.
+//! cached — keeps each repository's graph tables (symbols, relationships,
+//! files, communities, processes) in memory after the first read, resolves
+//! repository ids, and provides the read-and-stitch routines handlers used to
+//! duplicate. Call [`GraphService::invalidate`] after rewriting or deleting an
+//! index; writes by other processes are detected from the on-disk state.
 //!
 //! ```rust,no_run
 //! use myceliums_core::GraphService;
@@ -208,7 +211,7 @@ pub use rename::RenamePlan;
 pub use search::{search_symbols, search_symbols_explain, SearchExplain, TermScore};
 /// Service layer: store lifecycle, repo resolution, and graph assembly for
 /// transport adapters. See the crate-level "Service Layer" section.
-pub use service::{GraphService, SymbolContext};
+pub use service::{GraphService, GraphTable, IndexFingerprint, SymbolContext};
 pub use service_map::{load_service_mappings, save_service_mapping, ServiceMapping};
 pub use snapshot::{
     build_snapshot, diff_snapshots, list_snapshots, load_snapshot, load_snapshot_by_id,
