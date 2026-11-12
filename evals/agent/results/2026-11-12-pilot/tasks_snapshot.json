@@ -1,0 +1,242 @@
+[
+ {
+  "id": "fzf-callers-execute-command",
+  "repo": "fzf",
+  "type": "callers",
+  "answer_kind": "symbols",
+  "n_gold": 4,
+  "question": "Which functions or methods call the `executeCommand` method of `Terminal` (defined in src/terminal.go)? Only consider non-test Go files."
+ },
+ {
+  "id": "fzf-callers-item-asstring",
+  "repo": "fzf",
+  "type": "callers",
+  "answer_kind": "symbols",
+  "n_gold": 7,
+  "question": "Which functions or methods call the `AsString` method of the `Item` type (defined in src/item.go)? Only consider non-test Go files."
+ },
+ {
+  "id": "fzf-callees-pattern-match",
+  "repo": "fzf",
+  "type": "callees",
+  "answer_kind": "symbols",
+  "n_gold": 5,
+  "question": "Which functions or methods defined in this repository does `Pattern.Match` (src/pattern.go) call directly? Exclude standard-library and third-party calls."
+ },
+ {
+  "id": "fzf-impact-istty",
+  "repo": "fzf",
+  "type": "impact",
+  "answer_kind": "files",
+  "n_gold": 5,
+  "question": "If the signature of `IsTty` in src/util/util.go changed, which Go files outside `src/util/` contain calls that would have to be updated? Include platform-specific files; exclude test files."
+ },
+ {
+  "id": "fzf-impact-tochars",
+  "repo": "fzf",
+  "type": "impact",
+  "answer_kind": "files",
+  "n_gold": 4,
+  "question": "If the signature of `ToChars` in src/util/chars.go changed, which Go files outside `src/util/` contain calls that would have to be updated? Exclude test files."
+ },
+ {
+  "id": "fzf-where-tiebreak",
+  "repo": "fzf",
+  "type": "where",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "Which function computes the per-criterion sort points of a matched item according to the `--tiebreak` option (criteria such as length, begin, end, chunk and pathname)?"
+ },
+ {
+  "id": "fzf-where-keychords",
+  "repo": "fzf",
+  "type": "where",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "Which function parses a comma-separated list of key names such as `ctrl-a,alt-enter,f1` (as given to `--expect`, or on the left side of a `--bind` entry) into fzf key events?"
+ },
+ {
+  "id": "fzf-dead-util",
+  "repo": "fzf",
+  "type": "dead_code",
+  "answer_kind": "symbols",
+  "n_gold": 3,
+  "question": "Which functions or methods defined in src/util/chars.go and src/util/util.go are never called anywhere in the repository, including tests and platform-specific files? Ignore `String()` methods, which `fmt` can call implicitly."
+ },
+ {
+  "id": "fzf-flow-default-command",
+  "repo": "fzf",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 4,
+  "question": "When fzf starts with the `FZF_DEFAULT_COMMAND` environment variable set and stdin is a terminal, the output of that command becomes the list of items. List every function or method on the call chain from `Run` (src/core.go) to the method that reads the command's output and splits it into items, including both ends."
+ },
+ {
+  "id": "fzf-flow-matcher",
+  "repo": "fzf",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 5,
+  "question": "List every function or method on the call chain from `Matcher.Loop` (src/matcher.go) down to `Pattern.MatchItem` (src/pattern.go), including both ends."
+ },
+ {
+  "id": "hono-callers-cookie-parse",
+  "repo": "hono",
+  "type": "callers",
+  "answer_kind": "symbols",
+  "n_gold": 2,
+  "question": "Which functions call the `parse` function exported from src/utils/cookie.ts? Only consider non-test source files."
+ },
+ {
+  "id": "hono-callers-check-optional-parameter",
+  "repo": "hono",
+  "type": "callers",
+  "answer_kind": "symbols",
+  "n_gold": 3,
+  "question": "Which functions or methods call `checkOptionalParameter` (src/utils/url.ts)? Only consider non-test source files."
+ },
+ {
+  "id": "hono-callers-parse-accept",
+  "repo": "hono",
+  "type": "callers",
+  "answer_kind": "symbols",
+  "n_gold": 4,
+  "question": "Which functions call `parseAccept` (src/utils/accept.ts)? Only consider non-test source files."
+ },
+ {
+  "id": "hono-callees-parse-form-data",
+  "repo": "hono",
+  "type": "callees",
+  "answer_kind": "symbols",
+  "n_gold": 3,
+  "question": "Which functions defined in this repository does `parseFormData` in src/utils/body.ts call directly? Exclude built-in and Web API calls."
+ },
+ {
+  "id": "hono-impact-http-exception",
+  "repo": "hono",
+  "type": "impact",
+  "answer_kind": "files",
+  "n_gold": 12,
+  "question": "If the constructor of `HTTPException` (src/http-exception.ts) gained a required parameter, which non-test source files under src/ would need updating because they construct an `HTTPException`? Exclude src/http-exception.ts itself."
+ },
+ {
+  "id": "hono-impact-resolve-callback",
+  "repo": "hono",
+  "type": "impact",
+  "answer_kind": "files",
+  "n_gold": 4,
+  "question": "If the signature of `resolveCallback` in src/utils/html.ts changed, which other non-test source files contain calls that would need to be updated?"
+ },
+ {
+  "id": "hono-where-cookie-serialize",
+  "repo": "hono",
+  "type": "where",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "Which function builds the `Set-Cookie` header value, appending attributes such as `Max-Age`, `Domain`, `Path` and `SameSite` and enforcing the rules for `__Secure-` and `__Host-` cookie prefixes?"
+ },
+ {
+  "id": "hono-where-etag-match",
+  "repo": "hono",
+  "type": "where",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "In the ETag middleware, which function decides whether the request's `If-None-Match` header matches the response's ETag, so that a 304 response is sent?"
+ },
+ {
+  "id": "hono-dead-utils",
+  "repo": "hono",
+  "type": "dead_code",
+  "answer_kind": "symbols",
+  "n_gold": 7,
+  "question": "Which exported functions defined directly in `src/utils/*.ts` files (not in subdirectories, not test files) are not used by any non-test code in the repository, so that only tests exercise them?"
+ },
+ {
+  "id": "hono-flow-fetch",
+  "repo": "hono",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 3,
+  "question": "For a route with more than one handler (for example a middleware followed by the route handler), list every function or method on the call chain from the app's `fetch` entry point to the function that invokes the handlers one after another, including both ends."
+ },
+ {
+  "id": "fastapi-callers-jsonable-encoder",
+  "repo": "fastapi",
+  "type": "callers",
+  "answer_kind": "symbols",
+  "n_gold": 9,
+  "question": "Which functions or methods in the `fastapi/` package (not tests, not docs_src) call `jsonable_encoder`, other than `jsonable_encoder` itself?"
+ },
+ {
+  "id": "fastapi-callers-is-body-allowed",
+  "repo": "fastapi",
+  "type": "callers",
+  "answer_kind": "symbols",
+  "n_gold": 4,
+  "question": "Which functions or methods in the `fastapi/` package call `is_body_allowed_for_status_code` (fastapi/utils.py)?"
+ },
+ {
+  "id": "fastapi-callers-auth-scheme-param",
+  "repo": "fastapi",
+  "type": "callers",
+  "answer_kind": "symbols",
+  "n_gold": 6,
+  "question": "Which functions or methods in the `fastapi/` package call `get_authorization_scheme_param` (fastapi/security/utils.py)?"
+ },
+ {
+  "id": "fastapi-callees-get-openapi",
+  "repo": "fastapi",
+  "type": "callees",
+  "answer_kind": "symbols",
+  "n_gold": 8,
+  "question": "Which functions defined in this repository does `get_openapi` in fastapi/openapi/utils.py call directly? Exclude standard-library, Pydantic and Starlette calls."
+ },
+ {
+  "id": "fastapi-callees-solve-dependencies",
+  "repo": "fastapi",
+  "type": "callees",
+  "answer_kind": "symbols",
+  "n_gold": 9,
+  "question": "Which functions defined in this repository does `solve_dependencies` in fastapi/dependencies/utils.py call directly? Exclude standard-library, Pydantic and Starlette calls and class instantiations."
+ },
+ {
+  "id": "fastapi-impact-lenient-issubclass",
+  "repo": "fastapi",
+  "type": "impact",
+  "answer_kind": "files",
+  "n_gold": 4,
+  "question": "If the signature of `lenient_issubclass` (defined in fastapi/_compat/shared.py) changed, which other files in the `fastapi/` package contain calls that would need to be updated?"
+ },
+ {
+  "id": "fastapi-where-validation-422",
+  "repo": "fastapi",
+  "type": "where",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "Which function produces the default HTTP 422 JSON response that is returned when request validation fails?"
+ },
+ {
+  "id": "fastapi-where-operation-id",
+  "repo": "fastapi",
+  "type": "where",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "When a path operation has no explicit `operation_id`, which function builds the default operationId string used in the OpenAPI schema (for example `read_item_items__item_id__get`)?"
+ },
+ {
+  "id": "fastapi-dead-deprecated",
+  "repo": "fastapi",
+  "type": "dead_code",
+  "answer_kind": "symbols",
+  "n_gold": 3,
+  "question": "Which module-level functions defined in fastapi/routing.py, fastapi/utils.py and fastapi/openapi/utils.py are not referenced anywhere else in the `fastapi/` package, neither called nor passed as a value? Count a function as unreferenced if its only references come from functions that are themselves unreferenced. Ignore tests, docs and docs_src."
+ },
+ {
+  "id": "fastapi-flow-query-validation",
+  "repo": "fastapi",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 4,
+  "question": "For a plain (non-model) query parameter, list every function or method on the call chain from `solve_dependencies` (fastapi/dependencies/utils.py) to the method that validates the parameter's value against its declared type, including both ends."
+ }
+]

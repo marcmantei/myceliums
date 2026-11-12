@@ -282,10 +282,15 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     L.append("- First tool called in *with* sessions: "
              + ", ".join(f"`{k}` {v}" for k, v in first.most_common()) + ".")
     L.append("")
-    L.append("| myceliums tool | Calls | Calls that returned an error |")
-    L.append("|---|---:|---:|")
-    for k, v in calls.most_common():
-        L.append(f"| `{k}` | {v} | {errors.get(k, 0)} |")
+    if calls:
+        L.append("| myceliums tool | Calls | Calls that returned an error |")
+        L.append("|---|---:|---:|")
+        for k, v in calls.most_common():
+            L.append(f"| `{k}` | {v} | {errors.get(k, 0)} |")
+    else:
+        searches = sum((r["tool_calls_by_name"] or {}).get("ToolSearch", 0) for r in with_rows)
+        L.append(f"No myceliums tool was called in any session (`ToolSearch`, which loads deferred "
+                 f"tool definitions, was called {searches} times).")
     L.append("")
 
     L.append("## Sessions")

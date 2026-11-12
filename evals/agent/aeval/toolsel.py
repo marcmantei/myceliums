@@ -112,13 +112,14 @@ def run(label: str, intents: list[dict], passes: int, model: str, myc: str, clau
     if results_path.exists():
         for line in results_path.read_text().splitlines():
             if line.strip():
-                done.add(json.loads(line)["key"])
+                row = json.loads(line)
+                done.add(row.get("run_id") or row.get("key"))
     lock = threading.Lock()
     ledger = config.RUNS_DIR / "ledger.jsonl"
 
     def one(it: dict, p: int) -> None:
-        key = f"{it['id']}__p{p}"
-        if key in done:
+        run_id = f"{it['id']}__p{p}"
+        if run_id in done:
             return
         with tempfile.TemporaryDirectory(prefix="aeval-toolsel-") as tmp:
             tmpd = Path(tmp)
@@ -136,11 +137,11 @@ def run(label: str, intents: list[dict], passes: int, model: str, myc: str, clau
                    "--strict-mcp-config", "--mcp-config", str(tmpd / "mcp.json"),
                    "--setting-sources", "", "--disable-slash-commands", "--no-session-persistence"]
             env = config.session_env({"ENABLE_TOOL_SEARCH": "false"})
-            transcript = out_dir / "sessions" / f"{key}.jsonl"
+            transcript = out_dir / "sessions" / f"{run_id}.jsonl"
             transcript.parent.mkdir(parents=True, exist_ok=True)
             with lock:
                 with open(ledger, "a") as fh:
-                    fh.write(json.dumps({"label": label, "run_id": key, "attempt": 1, "model": model,
+                    fh.write(json.dumps({"label": label, "run_id": run_id, "attempt": 1, "model": model,
                                          "started": dt.datetime.now(dt.timezone.utc).isoformat()}) + "\n")
             with open(transcript, "w") as fh:
                 proc = subprocess.run(cmd, input=PROMPT.format(intent=it["intent"]), stdout=fh,
@@ -153,7 +154,7 @@ def run(label: str, intents: list[dict], passes: int, model: str, myc: str, clau
         # but it is recorded so the report can tell it apart from a wrong pick.
         m = re.search(re.escape(MCP_PREFIX) + r"(\w+)", t.final_text or "") if not t.tool_calls else None
         row = {
-            "key": key, "intent_id": it["id"], "pass": p, "chosen": chosen,
+            "run_id": run_id, "intent_id": it["id"], "pass": p, "chosen": chosen,
             "expected": it["expected"], "correct": chosen in it["expected"],
             "text_choice": m.group(1) if m else None,
             "n_tools_offered": len((t.init or {}).get("tools") or []),
@@ -166,7 +167,7 @@ def run(label: str, intents: list[dict], passes: int, model: str, myc: str, clau
         with lock:
             with open(results_path, "a") as fh:
                 fh.write(json.dumps(row, sort_keys=True) + "\n")
-        print(f"{key:<40} chose {chosen!s:<28} expected {it['expected']} -> "
+        print(f"{run_id:<40} chose {chosen!s:<28} expected {it['expected']} -> "
               f"{'OK' if row['correct'] else 'MISS'}", flush=True)
 
     jobs = [(it, p) for p in range(1, passes + 1) for it in intents]
@@ -184,7 +185,10 @@ def rescore(label: str, intents: list[dict]) -> list[dict]:
         if not line.strip():
             continue
         row = json.loads(line)
-        t = parse_transcript(str(config.RUNS_DIR / label / "sessions" / f"{row['key']}.jsonl"))
+        # Rows written before the field was renamed carry "key" (gitleaks reads
+        # a "key" field holding an id as a leaked secret).
+        row["run_id"] = row.pop("key", None) or row["run_id"]
+        t = parse_transcript(str(config.RUNS_DIR / label / "sessions" / f"{row['run_id']}.jsonl"))
         first = t.tool_calls[0]["name"] if t.tool_calls else None
         chosen = first[len(MCP_PREFIX):] if first and first.startswith(MCP_PREFIX) else first
         m = re.search(re.escape(MCP_PREFIX) + r"(\w+)", t.final_text or "") if not t.tool_calls else None

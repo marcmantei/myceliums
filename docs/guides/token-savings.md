@@ -44,6 +44,8 @@ Communities touched:
 
 This is shorter than the files it summarises, because it leaves out bodies, imports and unrelated code. How much shorter depends on the files involved. Each response ends with a `Token estimate` line that sets the size of the summary against the size of the indexed symbols in the affected files (characters divided by four for both). That line is a size estimate, not a measured token saving: there is no measurement yet of how many tokens an agent spends on a review with and without myceliums, or of whether it reaches the same conclusion from the summary alone.
 
+What has been measured is the agent side for code-understanding questions (callers, callees, impact, where something is implemented, dead code, call chains): the [agent benchmark](../../evals/agent/README.md) ran a headless Claude Code agent on 30 such tasks with and without the myceliums MCP server. On 12 November 2026 (myc 0.3.2, `claude-sonnet-5-5`) the sessions with the server used 25 % more input tokens per session (95 % CI +17 % to +34 %) and reached the same accuracy; the agent called a myceliums tool in 0 of 90 sessions. Numbers, intervals and limits: [report](../../evals/agent/results/2026-11-12-pilot/REPORT.md).
+
 ## Token Savings Are Not Automatic
 
 This is an important point: myceliums does not intercept or modify the AI agent's behavior. The agent must **choose** to call myceliums tools instead of reading files directly. If the agent reads the file anyway, you get no savings.
@@ -60,7 +62,7 @@ In Step 2 of the wizard, enable AI instructions. This configures the SessionStar
 
 ### Step 2: Verify the Hook Is Active
 
-After setup, start a new session. You should see a message from myceliums in the session initialization indicating the knowledge graph is available. The AI agent will then prefer calling `context_search`, `symbol_context`, and `get_review_context` over reading raw files.
+After setup, start a new session. You should see a message from myceliums in the session initialization indicating the knowledge graph is available. The hook is meant to make the agent prefer `context_search`, `symbol_context`, and `get_review_context` over reading raw files; how much it does is not measured. Without the hook, with only the MCP server and its instructions in context, the agent in the [agent benchmark](../../evals/agent/README.md) called a myceliums tool in 0 of 90 sessions.
 
 ### Step 3: For Cursor Users
 

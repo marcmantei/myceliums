@@ -194,7 +194,7 @@ def cmd_toolsel_report(args) -> int:
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "toolsel_meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n")
         with open(out_dir / "toolsel_results.jsonl", "w") as fh:
-            for r in sorted(rows, key=lambda r: r["key"]):
+            for r in sorted(rows, key=lambda r: r["run_id"]):
                 fh.write(json.dumps(r, sort_keys=True) + "\n")
     meta = config.load_json(out_dir / "toolsel_meta.json")
     rows = [json.loads(x) for x in (out_dir / "toolsel_results.jsonl").read_text().splitlines() if x.strip()]

@@ -9,6 +9,7 @@ pull requests.
 ## [Unreleased]
 
 ### Added
+- Agent benchmark (`evals/agent/`): 30 code-understanding tasks on pinned fzf, hono and FastAPI checkouts, run by a headless Claude Code agent with and without the myceliums MCP server and graded against hand-verified answers, plus a tool-selection eval over the live `tools/list`. The first pilot run and its report are committed (#99).
 - Retrieval-quality measurement against a golden dataset, reported on every PR (#76, #34).
 - Supply-chain checks in CI: `cargo-deny` (advisories, licenses, sources), Dependabot for Cargo and GitHub Actions, an MSRV job (`rust-version = "1.88"`), and the test suite on macOS (#90).
 - Release assets now include a CycloneDX SBOM per target and a signed build-provenance attestation (#90).
