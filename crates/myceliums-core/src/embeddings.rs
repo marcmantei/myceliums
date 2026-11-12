@@ -217,6 +217,12 @@ pub struct IndexEmbeddingMeta {
     /// Reranker registry id chosen at indexing time.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reranker: Option<String>,
+    /// [`EMBEDDING_TEXT_VERSION`] of the document template the stored vectors
+    /// were built from. `0` for records written before the version was
+    /// recorded: which template built them cannot be known, so they never match
+    /// a current configuration and the next full analysis re-embeds.
+    #[serde(default)]
+    pub text_version: u32,
 }
 
 impl IndexEmbeddingMeta {
@@ -235,7 +241,9 @@ impl IndexEmbeddingMeta {
     ///   `meta_version` existed read back as version `1`).
     /// - `2`: fingerprint extended with host-normalized `base_url` and the
     ///   query/passage prefixes (issue #35).
-    pub const META_VERSION: u32 = 2;
+    /// - `3`: fingerprint extended with `text_version`, the version of the
+    ///   embedding-document template and its budget constants (issue #92).
+    pub const META_VERSION: u32 = 3;
 
     /// serde default for records written before `meta_version` existed: they
     /// predate the extended fingerprint, so they read back as version `1`.
@@ -272,6 +280,7 @@ impl IndexEmbeddingMeta {
                     base_url: None,
                     api_key_env: None,
                     reranker: Some(cfg.reranker.clone()),
+                    text_version: EMBEDDING_TEXT_VERSION,
                 })
             }
             "openai-compatible" => {
@@ -294,6 +303,7 @@ impl IndexEmbeddingMeta {
                     base_url: Some(base_url),
                     api_key_env: Some(cfg.api_key_env.clone()),
                     reranker: Some(cfg.reranker.clone()),
+                    text_version: EMBEDDING_TEXT_VERSION,
                 })
             }
             other => bail!(
@@ -319,6 +329,8 @@ impl IndexEmbeddingMeta {
             base_url: None,
             api_key_env: None,
             reranker: None,
+            // Which template built a legacy index is unknown.
+            text_version: 0,
         }
     }
 
@@ -337,8 +349,9 @@ impl IndexEmbeddingMeta {
     /// vectors. Two indexes are vector-comparable iff their fingerprints match,
     /// so this doubles as the embedder-instance cache key.
     ///
-    /// Included: provider, model, dim, host-normalized `base_url`, and the
-    /// query/passage prefixes — a change to any of these produces different
+    /// Included: provider, model, dim, host-normalized `base_url`, the
+    /// query/passage prefixes, and `text_version` (the document template and
+    /// its budget constants) — a change to any of these produces different
     /// vectors, so it must invalidate the index.
     ///
     /// Excluded on purpose:
@@ -351,7 +364,7 @@ impl IndexEmbeddingMeta {
     ///   config" with "stale schema" in the same signal.
     pub fn fingerprint(&self) -> String {
         format!(
-            "{}:{}:{}|base_url={}|query_prefix={}|passage_prefix={}",
+            "{}:{}:{}|base_url={}|query_prefix={}|passage_prefix={}|text_version={}",
             self.provider,
             self.model,
             self.dim,
@@ -361,6 +374,7 @@ impl IndexEmbeddingMeta {
                 .unwrap_or_default(),
             self.query_prefix.as_deref().unwrap_or_default(),
             self.passage_prefix.as_deref().unwrap_or_default(),
+            self.text_version,
         )
     }
 }
@@ -472,6 +486,21 @@ pub fn embedding_cache_info() -> ModelCacheInfo {
 }
 
 // ── Embedding text construction ───────────────────────────────────────
+
+/// Version of the embedding-document template.
+///
+/// What a stored vector encodes is decided by the text it was computed from:
+/// the field order and separators of [`build_embedding_text_for`], the
+/// header/content split, and the budget constants [`BYTES_PER_TOKEN`] and
+/// [`HEADER_TOKEN_RESERVE`]. Change any of them and new vectors no longer share
+/// a space with old ones, even under the same model. The version is recorded in
+/// each index ([`IndexEmbeddingMeta::text_version`]) and folded into the
+/// fingerprint, so bumping it makes the next full analysis re-embed instead of
+/// silently mixing two templates in one index.
+///
+/// Bump on *any* change to the template or those constants;
+/// `embedding_text_template_is_pinned_to_its_version` fails until you do.
+pub const EMBEDDING_TEXT_VERSION: u32 = 1;
 
 /// Truncate a byte-oriented slice to at most `max` bytes, ensuring the cut
 /// lands on a valid UTF-8 character boundary.
@@ -1241,6 +1270,69 @@ mod tests {
         assert_ne!(
             normalize_base_url("https://a.example/v1"),
             normalize_base_url("https://b.example/v1")
+        );
+    }
+
+    #[test]
+    fn fingerprint_covers_text_version() {
+        // Issue #92: a template change must invalidate the stored vectors.
+        let current = IndexEmbeddingMeta::from_config(&EmbeddingSection::default()).unwrap();
+        assert_eq!(current.text_version, EMBEDDING_TEXT_VERSION);
+        let mut older = current.clone();
+        older.text_version = EMBEDDING_TEXT_VERSION - 1;
+        assert_ne!(current.fingerprint(), older.fingerprint());
+    }
+
+    #[test]
+    fn a_record_without_text_version_never_matches_a_current_config() {
+        // Written before the template was versioned: the template that built
+        // those vectors is unknown, so the record must not pass as current.
+        let json = r#"{"meta_version":2,"provider":"local","model":"multilingual-e5-small","dim":384,"query_prefix":"query: ","passage_prefix":"passage: ","reranker":"bge-reranker-v2-m3"}"#;
+        let recorded: IndexEmbeddingMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(recorded.text_version, 0);
+        assert!(recorded.meta_version < IndexEmbeddingMeta::META_VERSION);
+        let current = IndexEmbeddingMeta::from_config(&EmbeddingSection::default()).unwrap();
+        assert_ne!(recorded.fingerprint(), current.fingerprint());
+    }
+
+    #[test]
+    fn embedding_text_template_is_pinned_to_its_version() {
+        // If this fails you changed what every stored vector encodes. Bump
+        // EMBEDDING_TEXT_VERSION, then update the pins below to the new output
+        // — the bump is what makes existing indexes re-embed instead of mixing
+        // two templates in one vector space.
+        assert_eq!(
+            EMBEDDING_TEXT_VERSION, 1,
+            "pins below belong to template version 1"
+        );
+        assert_eq!((BYTES_PER_TOKEN, HEADER_TOKEN_RESERVE), (4, 64));
+        let meta = r#"{"decorators":["@cached"],"return_type":"User","superclasses":["Base"]}"#;
+        let sym = make_symbol(
+            "get_user",
+            SymbolKind::Method,
+            "def get_user(self, user_id)",
+            "return self.db.find(user_id)",
+            Some(meta),
+        );
+        assert_eq!(
+            build_embedding_text_for(&sym, 512),
+            "Method get_user @cached def get_user(self, user_id) User Base return self.db.find(user_id)"
+        );
+        // The content budget: (tokens - 64 reserved) * 4 bytes, floored at 256.
+        let long = make_symbol(
+            "big",
+            SymbolKind::Function,
+            "fn big()",
+            &"x".repeat(4096),
+            None,
+        );
+        assert_eq!(
+            build_embedding_text_for(&long, 512).len(),
+            "Function big  fn big()   ".len() + 1792
+        );
+        assert_eq!(
+            build_embedding_text_for(&long, 64).len(),
+            "Function big  fn big()   ".len() + 256
         );
     }
 

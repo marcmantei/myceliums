@@ -129,3 +129,45 @@ fn baseline_matches_the_current_dataset_version() {
         provenance.dataset_version, golden.dataset_version
     );
 }
+
+/// The baseline must cover every mode, with per-query scores.
+///
+/// The CI gate compares only modes the baseline measured, and pairs queries by
+/// id. A baseline recorded without model weights would quietly stop gating
+/// semantic, hybrid and rerank; one without per-query scores could not be
+/// compared at all. `--update-baseline` refuses both, and this pins the
+/// committed file to the same standard.
+#[test]
+fn baseline_measures_every_mode_query_by_query() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("golden/baseline.json");
+    let baseline = crate::eval::report::RunReport::read(&path)
+        .expect("the committed baseline must parse with the current schema");
+    let golden = crate::eval::golden_set::GoldenSet::embedded().unwrap();
+    let mut golden_ids: Vec<String> = golden.queries.iter().map(|q| q.id.clone()).collect();
+    golden_ids.sort();
+    for mode in crate::eval::evaluator::SearchMode::all() {
+        let report = baseline
+            .measured(mode.id())
+            .unwrap_or_else(|| panic!("baseline does not measure '{}'", mode.id()));
+        let per_query = report
+            .per_query
+            .as_ref()
+            .unwrap_or_else(|| panic!("'{}' has no per-query scores", mode.id()));
+        let ids: Vec<String> = per_query.keys().cloned().collect();
+        assert_eq!(
+            ids,
+            golden_ids,
+            "'{}' does not score exactly the golden queries",
+            mode.id()
+        );
+        assert!(
+            report.by_intent.is_some(),
+            "'{}' has no per-intent breakdown",
+            mode.id()
+        );
+    }
+    assert!(
+        baseline.models.is_some(),
+        "a baseline with model-backed scores must record which models produced them"
+    );
+}

@@ -1,12 +1,15 @@
 //! Loading the benchmark corpus: fixture sources parsed into searchable symbols.
 //!
-//! The corpus is the existing `tests/fixtures/sample-*-project/` tree. Parsing
-//! it directly (rather than indexing into a store) keeps the evaluation
-//! offline, deterministic and free of embedding-model downloads.
+//! The corpus is the existing `tests/fixtures/sample-*-project/` tree, parsed
+//! directly. The lexical mode ranks these symbols in memory; the model-backed
+//! modes index the very same symbols into a scratch store (see
+//! [`super::models`]), so every mode searches an identical corpus.
 
 use anyhow::{Context, Result};
 use myceliums_core::parser::{to_code_symbols, SourceLanguage, SourceParser};
 use myceliums_storage::CodeSymbol;
+use sha2::{Digest, Sha256};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -25,6 +28,10 @@ const CORPUS_PROJECTS: &[&str] = &[
     "sample-go-project",
     "sample-csharp-project",
 ];
+
+/// Repository id the corpus symbols carry. The store-backed modes scope their
+/// vector search to it, exactly as a real index scopes to its repository.
+pub const CORPUS_REPO_ID: &str = "benchmark-corpus";
 
 /// The parsed corpus: every symbol the engine can retrieve, in a stable order.
 #[derive(Debug)]
@@ -85,11 +92,11 @@ impl Corpus {
                     .parse(&source)
                     .with_context(|| format!("parsing {relative}"))?;
 
-                symbols.extend(to_code_symbols(
-                    &parsed.symbols,
-                    &relative,
-                    "benchmark-corpus",
-                ));
+                symbols.extend(
+                    to_code_symbols(&parsed.symbols, &relative, CORPUS_REPO_ID)
+                        .into_iter()
+                        .map(with_stable_uid),
+                );
             }
 
             if symbols.len() == before {
@@ -99,6 +106,19 @@ impl Corpus {
                      silently moves every reported metric.",
                     project,
                     project_dir.display()
+                );
+            }
+        }
+
+        let mut seen = BTreeSet::new();
+        for symbol in &symbols {
+            if !seen.insert(symbol.uid.as_str()) {
+                anyhow::bail!(
+                    "two corpus symbols share the identity {}::{} at line {} — the \
+                     store keys symbols by uid and would silently keep only one",
+                    symbol.file_path,
+                    symbol.qualified_name,
+                    symbol.start_line
                 );
             }
         }
@@ -130,6 +150,27 @@ impl Corpus {
             .iter()
             .any(|symbol| symbol_ref(symbol) == *reference)
     }
+}
+
+/// Replace the parser's random uid with one derived from the symbol's identity.
+///
+/// The parser mints a fresh UUID per symbol per parse. Retrieval never reads
+/// the value, but it does key on it: the store upserts by uid, and fusion
+/// matches the lexical and vector legs by uid. A uid that changes every run
+/// would let anything that iterates or orders by it vary between two runs over
+/// the same tree, so the corpus uses a digest of file, qualified name, kind and
+/// start line instead — opaque like a UUID, but the same on every run.
+fn with_stable_uid(mut symbol: CodeSymbol) -> CodeSymbol {
+    let identity = format!(
+        "{}\0{}\0{}\0{}",
+        symbol.file_path, symbol.qualified_name, symbol.kind, symbol.start_line
+    );
+    let digest = Sha256::digest(identity.as_bytes());
+    symbol.uid = digest[..16]
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    symbol
 }
 
 /// Project a corpus symbol onto its stable golden-set reference.
@@ -241,6 +282,18 @@ mod tests {
                 .collect()
         };
         assert_eq!(names(&first), names(&second));
+    }
+
+    #[test]
+    fn corpus_uids_are_stable_and_unique() {
+        let root = fixtures_root().unwrap();
+        let first = Corpus::load(&root).unwrap();
+        let second = Corpus::load(&root).unwrap();
+        let uids =
+            |c: &Corpus| -> Vec<String> { c.symbols().iter().map(|s| s.uid.clone()).collect() };
+        assert_eq!(uids(&first), uids(&second));
+        let distinct: BTreeSet<String> = uids(&first).into_iter().collect();
+        assert_eq!(distinct.len(), first.len());
     }
 
     #[test]

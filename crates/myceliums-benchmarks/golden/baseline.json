@@ -1,36 +1,2811 @@
 {
-  "commit_sha": "5892b16b593abd6c0d16b4dc3668829de34a6ae4",
-  "corpus_symbols": 96,
+  "schema_version": "2.0",
+  "regenerate_with": "MYC_EVAL_MODELS=1 cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline",
+  "timestamp": "2026-11-12T09:49:37Z",
+  "commit_sha": "acde60cc932bfd77c8e9a5584de290fb217a9441",
   "dataset_digest": "05ff3a8c7b12b939192f6a03de4285aa158c273ddff33ed31e3c1c125c8f9308",
   "dataset_version": "2026-07-30",
+  "corpus_symbols": 96,
   "queries": 51,
-  "regenerate_with": "cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline",
+  "models": {
+    "embedding_model": "multilingual-e5-small",
+    "embedding_weights": "intfloat/multilingual-e5-small",
+    "embedding_dim": 384,
+    "embedding_fingerprint": "local:multilingual-e5-small:384|base_url=|query_prefix=query: |passage_prefix=passage: |text_version=1",
+    "embedding_text_version": 1,
+    "reranker": "bge-reranker-v2-m3",
+    "reranker_weights": "rozgo/bge-reranker-v2-m3",
+    "rerank_pool": 20,
+    "rrf_k": 60
+  },
+  "platform": "macos-aarch64",
+  "bootstrap": {
+    "method": "paired bootstrap over queries, percentile interval",
+    "resamples": 10000,
+    "seed": 41288892181733101,
+    "confidence": 0.95
+  },
   "results": {
     "hybrid": {
-      "metrics": null,
-      "reason": "requires the semantic leg's model weights — run where the fastembed weights are already cached",
-      "status": "UNAVAILABLE"
+      "status": "MEASURED",
+      "reason": null,
+      "metrics": {
+        "recall_at_1": 0.477,
+        "recall_at_5": 0.7157,
+        "recall_at_10": 0.8102,
+        "hit_at_1": 0.7255,
+        "hit_at_5": 0.8235,
+        "hit_at_10": 0.9412,
+        "mrr": 0.7713,
+        "ndcg_at_10": 0.7435,
+        "r_precision": 0.6419
+      },
+      "by_intent": {
+        "behavioural": {
+          "queries": 14,
+          "metrics": {
+            "recall_at_1": 0.4405,
+            "recall_at_5": 0.6905,
+            "recall_at_10": 0.8095,
+            "hit_at_1": 0.7857,
+            "hit_at_5": 0.9286,
+            "hit_at_10": 0.9286,
+            "mrr": 0.8393,
+            "ndcg_at_10": 0.743,
+            "r_precision": 0.5774
+          }
+        },
+        "conceptual": {
+          "queries": 10,
+          "metrics": {
+            "recall_at_1": 0.1408,
+            "recall_at_5": 0.4835,
+            "recall_at_10": 0.6787,
+            "hit_at_1": 0.6,
+            "hit_at_5": 0.7,
+            "hit_at_10": 1.0,
+            "mrr": 0.6708,
+            "ndcg_at_10": 0.613,
+            "r_precision": 0.4989
+          }
+        },
+        "exact-name": {
+          "queries": 15,
+          "metrics": {
+            "recall_at_1": 0.7611,
+            "recall_at_5": 0.9333,
+            "recall_at_10": 0.9333,
+            "hit_at_1": 0.9333,
+            "hit_at_5": 0.9333,
+            "hit_at_10": 0.9333,
+            "mrr": 0.9333,
+            "ndcg_at_10": 0.9333,
+            "r_precision": 0.9333
+          }
+        },
+        "paraphrase": {
+          "queries": 12,
+          "metrics": {
+            "recall_at_1": 0.4444,
+            "recall_at_5": 0.6667,
+            "recall_at_10": 0.7667,
+            "hit_at_1": 0.5,
+            "hit_at_5": 0.6667,
+            "hit_at_10": 0.9167,
+            "mrr": 0.573,
+            "ndcg_at_10": 0.6155,
+            "r_precision": 0.4722
+          }
+        }
+      },
+      "per_query": {
+        "behavioural-delay-running-a-function-until-calls-stop": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-delete-returns-bool": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-empty-string-guard": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "behavioural-format-host-and-port-into-an-address-string": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-generate-a-random-unique-identifier": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-json-response": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-log-on-delete": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.6309,
+          "r_precision": 0.0
+        },
+        "behavioural-look-up-a-stored-user-by-id": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.75,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.8541,
+          "r_precision": 0.5
+        },
+        "behavioural-print-to-console": {
+          "recall_at_1": 0.1667,
+          "recall_at_5": 0.1667,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.3937,
+          "r_precision": 0.1667
+        },
+        "behavioural-read-request-body": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.3333,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.25,
+          "ndcg_at_10": 0.4998,
+          "r_precision": 0.0
+        },
+        "behavioural-reject-nameless-user": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-return-every-stored-item-as-a-list": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 0.6667,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9066,
+          "r_precision": 0.6667
+        },
+        "behavioural-trim-whitespace": {
+          "recall_at_1": 0.5,
+          "recall_at_5": 0.5,
+          "recall_at_10": 0.5,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.6131,
+          "r_precision": 0.5
+        },
+        "behavioural-validate-then-transform": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.25,
+          "recall_at_10": 0.5,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.5032,
+          "r_precision": 0.25
+        },
+        "conceptual-application-entry-point": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.6,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.125,
+          "ndcg_at_10": 0.3071,
+          "r_precision": 0.0
+        },
+        "conceptual-http-request-handling": {
+          "recall_at_1": 0.125,
+          "recall_at_5": 0.625,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9963,
+          "r_precision": 0.875
+        },
+        "conceptual-http-server-setup": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-input-validation": {
+          "recall_at_1": 0.2,
+          "recall_at_5": 0.8,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9668,
+          "r_precision": 0.8
+        },
+        "conceptual-interface-contracts": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-persistence-layer": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.2,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.125,
+          "ndcg_at_10": 0.107,
+          "r_precision": 0.0
+        },
+        "conceptual-string-formatting-helpers": {
+          "recall_at_1": 0.1667,
+          "recall_at_5": 0.3333,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.4197,
+          "r_precision": 0.3333
+        },
+        "conceptual-type-declarations": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9558,
+          "r_precision": 0.75
+        },
+        "conceptual-user-crud-operations": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0769,
+          "recall_at_10": 0.1538,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.3333,
+          "ndcg_at_10": 0.1834,
+          "r_precision": 0.2308
+        },
+        "conceptual-value-objects": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.5,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.125,
+          "ndcg_at_10": 0.1934,
+          "r_precision": 0.0
+        },
+        "exact-name-database-findbyid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-debounce": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-format-name": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-formatname": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-generateid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-maxretries": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-newserver": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-parseuser": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-person-record": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-process-request": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-processid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-servehttp": {
+          "recall_at_1": 0.5,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-status-enum": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-userid-type": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-userservice-get-user": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-add-new-user": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1,
+          "ndcg_at_10": 0.1357,
+          "r_precision": 0.0
+        },
+        "paraphrase-build-a-fresh-server-instance": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-capitalize-a-word": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9675,
+          "r_precision": 0.6667
+        },
+        "paraphrase-extract-user-fields": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-look-up-record": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.2,
+          "ndcg_at_10": 0.3869,
+          "r_precision": 0.0
+        },
+        "paraphrase-reject-empty-payloads": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-remove-a-record-by-identifier": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.2,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1,
+          "ndcg_at_10": 0.098,
+          "r_precision": 0.0
+        },
+        "paraphrase-retry-limit": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-shout-text": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-spin-up-the-http-listener": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.3333,
+          "ndcg_at_10": 0.5,
+          "r_precision": 0.0
+        },
+        "paraphrase-store-a-record": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-tidy-up-a-person-s-name-for-display": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.6667,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1429,
+          "ndcg_at_10": 0.2977,
+          "r_precision": 0.0
+        }
+      }
     },
     "hybrid+rerank": {
-      "metrics": null,
-      "reason": "requires the semantic leg plus cross-encoder reranker weights — run where the fastembed and reranker weights are already cached",
-      "status": "UNAVAILABLE"
+      "status": "MEASURED",
+      "reason": null,
+      "metrics": {
+        "recall_at_1": 0.4802,
+        "recall_at_5": 0.7609,
+        "recall_at_10": 0.833,
+        "hit_at_1": 0.7647,
+        "hit_at_5": 0.8824,
+        "hit_at_10": 0.9216,
+        "mrr": 0.8106,
+        "ndcg_at_10": 0.7773,
+        "r_precision": 0.6783
+      },
+      "by_intent": {
+        "behavioural": {
+          "queries": 14,
+          "metrics": {
+            "recall_at_1": 0.5119,
+            "recall_at_5": 0.6667,
+            "recall_at_10": 0.8214,
+            "hit_at_1": 0.8571,
+            "hit_at_5": 0.9286,
+            "hit_at_10": 0.9286,
+            "mrr": 0.8714,
+            "ndcg_at_10": 0.7686,
+            "r_precision": 0.6369
+          }
+        },
+        "conceptual": {
+          "queries": 10,
+          "metrics": {
+            "recall_at_1": 0.1908,
+            "recall_at_5": 0.4875,
+            "recall_at_10": 0.5985,
+            "hit_at_1": 0.7,
+            "hit_at_5": 0.7,
+            "hit_at_10": 0.9,
+            "mrr": 0.7225,
+            "ndcg_at_10": 0.6059,
+            "r_precision": 0.5077
+          }
+        },
+        "exact-name": {
+          "queries": 15,
+          "metrics": {
+            "recall_at_1": 0.6944,
+            "recall_at_5": 0.9333,
+            "recall_at_10": 0.9333,
+            "hit_at_1": 0.8667,
+            "hit_at_5": 0.9333,
+            "hit_at_10": 0.9333,
+            "mrr": 0.8889,
+            "ndcg_at_10": 0.9,
+            "r_precision": 0.8667
+          }
+        },
+        "paraphrase": {
+          "queries": 12,
+          "metrics": {
+            "recall_at_1": 0.4167,
+            "recall_at_5": 0.8833,
+            "recall_at_10": 0.9167,
+            "hit_at_1": 0.5833,
+            "hit_at_5": 0.9167,
+            "hit_at_10": 0.9167,
+            "mrr": 0.7153,
+            "ndcg_at_10": 0.7771,
+            "r_precision": 0.6333
+          }
+        }
+      },
+      "per_query": {
+        "behavioural-delay-running-a-function-until-calls-stop": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-delete-returns-bool": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.3333,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.2,
+          "ndcg_at_10": 0.49,
+          "r_precision": 0.0
+        },
+        "behavioural-empty-string-guard": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "behavioural-format-host-and-port-into-an-address-string": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-generate-a-random-unique-identifier": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-json-response": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-log-on-delete": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-look-up-a-stored-user-by-id": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.75,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.8486,
+          "r_precision": 0.5
+        },
+        "behavioural-print-to-console": {
+          "recall_at_1": 0.1667,
+          "recall_at_5": 0.1667,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.4104,
+          "r_precision": 0.3333
+        },
+        "behavioural-read-request-body": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-reject-nameless-user": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-return-every-stored-item-as-a-list": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 0.3333,
+          "recall_at_10": 0.6667,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.6364,
+          "r_precision": 0.3333
+        },
+        "behavioural-trim-whitespace": {
+          "recall_at_1": 0.5,
+          "recall_at_5": 0.5,
+          "recall_at_10": 0.5,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.6131,
+          "r_precision": 0.5
+        },
+        "behavioural-validate-then-transform": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.25,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.7612,
+          "r_precision": 0.25
+        },
+        "conceptual-application-entry-point": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.2,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1,
+          "ndcg_at_10": 0.098,
+          "r_precision": 0.0
+        },
+        "conceptual-http-request-handling": {
+          "recall_at_1": 0.125,
+          "recall_at_5": 0.625,
+          "recall_at_10": 0.875,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9032,
+          "r_precision": 0.75
+        },
+        "conceptual-http-server-setup": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 0.6667,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9325,
+          "r_precision": 0.6667
+        },
+        "conceptual-input-validation": {
+          "recall_at_1": 0.2,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-interface-contracts": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-persistence-layer": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "conceptual-string-formatting-helpers": {
+          "recall_at_1": 0.1667,
+          "recall_at_5": 0.3333,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.4935,
+          "r_precision": 0.3333
+        },
+        "conceptual-type-declarations": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.75,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9494,
+          "r_precision": 0.75
+        },
+        "conceptual-user-crud-operations": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0769,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.125,
+          "ndcg_at_10": 0.0694,
+          "r_precision": 0.0769
+        },
+        "conceptual-value-objects": {
+          "recall_at_1": 0.5,
+          "recall_at_5": 0.5,
+          "recall_at_10": 0.5,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.6131,
+          "r_precision": 0.5
+        },
+        "exact-name-database-findbyid": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.3333,
+          "ndcg_at_10": 0.5,
+          "r_precision": 0.0
+        },
+        "exact-name-debounce": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-format-name": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-formatname": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-generateid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-maxretries": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-newserver": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-parseuser": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-person-record": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-process-request": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-processid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-servehttp": {
+          "recall_at_1": 0.5,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-status-enum": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-userid-type": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-userservice-get-user": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-add-new-user": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-build-a-fresh-server-instance": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-capitalize-a-word": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-extract-user-fields": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-look-up-record": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.25,
+          "ndcg_at_10": 0.4307,
+          "r_precision": 0.0
+        },
+        "paraphrase-reject-empty-payloads": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-remove-a-record-by-identifier": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.6,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.7635,
+          "r_precision": 0.6
+        },
+        "paraphrase-retry-limit": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-shout-text": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.3333,
+          "ndcg_at_10": 0.5,
+          "r_precision": 0.0
+        },
+        "paraphrase-spin-up-the-http-listener": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.6309,
+          "r_precision": 0.0
+        },
+        "paraphrase-store-a-record": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-tidy-up-a-person-s-name-for-display": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        }
+      }
     },
     "lexical": {
-      "metrics": {
-        "mrr": 0.6405,
-        "recall_at_1": 0.3765,
-        "recall_at_10": 0.6983,
-        "recall_at_5": 0.6468
-      },
+      "status": "MEASURED",
       "reason": null,
-      "status": "MEASURED"
+      "metrics": {
+        "recall_at_1": 0.3765,
+        "recall_at_5": 0.6468,
+        "recall_at_10": 0.6983,
+        "hit_at_1": 0.5294,
+        "hit_at_5": 0.7647,
+        "hit_at_10": 0.8235,
+        "mrr": 0.6405,
+        "ndcg_at_10": 0.6255,
+        "r_precision": 0.5242
+      },
+      "by_intent": {
+        "behavioural": {
+          "queries": 14,
+          "metrics": {
+            "recall_at_1": 0.3095,
+            "recall_at_5": 0.6071,
+            "recall_at_10": 0.6905,
+            "hit_at_1": 0.3571,
+            "hit_at_5": 0.8571,
+            "hit_at_10": 0.9286,
+            "mrr": 0.5893,
+            "ndcg_at_10": 0.5686,
+            "r_precision": 0.4286
+          }
+        },
+        "conceptual": {
+          "queries": 10,
+          "metrics": {
+            "recall_at_1": 0.1119,
+            "recall_at_5": 0.4156,
+            "recall_at_10": 0.4614,
+            "hit_at_1": 0.5,
+            "hit_at_5": 0.6,
+            "hit_at_10": 0.7,
+            "mrr": 0.5667,
+            "ndcg_at_10": 0.4776,
+            "r_precision": 0.4399
+          }
+        },
+        "exact-name": {
+          "queries": 15,
+          "metrics": {
+            "recall_at_1": 0.7611,
+            "recall_at_5": 0.9333,
+            "recall_at_10": 0.9333,
+            "hit_at_1": 0.9333,
+            "hit_at_5": 0.9333,
+            "hit_at_10": 0.9333,
+            "mrr": 0.9333,
+            "ndcg_at_10": 0.929,
+            "r_precision": 0.8889
+          }
+        },
+        "paraphrase": {
+          "queries": 12,
+          "metrics": {
+            "recall_at_1": 0.1944,
+            "recall_at_5": 0.5278,
+            "recall_at_10": 0.6111,
+            "hit_at_1": 0.25,
+            "hit_at_5": 0.5833,
+            "hit_at_10": 0.6667,
+            "mrr": 0.3958,
+            "ndcg_at_10": 0.4359,
+            "r_precision": 0.25
+          }
+        }
+      },
+      "per_query": {
+        "behavioural-delay-running-a-function-until-calls-stop": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-delete-returns-bool": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.6667,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.6653,
+          "r_precision": 0.3333
+        },
+        "behavioural-empty-string-guard": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "behavioural-format-host-and-port-into-an-address-string": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-generate-a-random-unique-identifier": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-json-response": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.6797,
+          "r_precision": 0.3333
+        },
+        "behavioural-log-on-delete": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.3333,
+          "ndcg_at_10": 0.5,
+          "r_precision": 0.0
+        },
+        "behavioural-look-up-a-stored-user-by-id": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.25,
+          "recall_at_10": 0.5,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.3638,
+          "r_precision": 0.25
+        },
+        "behavioural-print-to-console": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.1667,
+          "recall_at_10": 0.1667,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.1909,
+          "r_precision": 0.1667
+        },
+        "behavioural-read-request-body": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1667,
+          "ndcg_at_10": 0.1672,
+          "r_precision": 0.0
+        },
+        "behavioural-reject-nameless-user": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-return-every-stored-item-as-a-list": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 0.6667,
+          "recall_at_10": 0.6667,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.7654,
+          "r_precision": 0.6667
+        },
+        "behavioural-trim-whitespace": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.5,
+          "recall_at_10": 0.5,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.25,
+          "ndcg_at_10": 0.2641,
+          "r_precision": 0.0
+        },
+        "behavioural-validate-then-transform": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.25,
+          "recall_at_10": 0.5,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.3638,
+          "r_precision": 0.25
+        },
+        "conceptual-application-entry-point": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "conceptual-http-request-handling": {
+          "recall_at_1": 0.125,
+          "recall_at_5": 0.625,
+          "recall_at_10": 0.75,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.8219,
+          "r_precision": 0.625
+        },
+        "conceptual-http-server-setup": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-input-validation": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.8,
+          "recall_at_10": 0.8,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.6608,
+          "r_precision": 0.8
+        },
+        "conceptual-interface-contracts": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-persistence-layer": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "conceptual-string-formatting-helpers": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1667,
+          "ndcg_at_10": 0.2032,
+          "r_precision": 0.1667
+        },
+        "conceptual-type-declarations": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.5,
+          "recall_at_10": 0.5,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.6367,
+          "r_precision": 0.5
+        },
+        "conceptual-user-crud-operations": {
+          "recall_at_1": 0.0769,
+          "recall_at_5": 0.2308,
+          "recall_at_10": 0.2308,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.4537,
+          "r_precision": 0.3077
+        },
+        "conceptual-value-objects": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "exact-name-database-findbyid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-debounce": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-format-name": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9675,
+          "r_precision": 0.6667
+        },
+        "exact-name-formatname": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9675,
+          "r_precision": 0.6667
+        },
+        "exact-name-generateid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-maxretries": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-newserver": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-parseuser": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-person-record": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-process-request": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-processid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-servehttp": {
+          "recall_at_1": 0.5,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-status-enum": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-userid-type": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-userservice-get-user": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-add-new-user": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-build-a-fresh-server-instance": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-capitalize-a-word": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9469,
+          "r_precision": 0.6667
+        },
+        "paraphrase-extract-user-fields": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-look-up-record": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1667,
+          "ndcg_at_10": 0.3562,
+          "r_precision": 0.0
+        },
+        "paraphrase-reject-empty-payloads": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-remove-a-record-by-identifier": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-retry-limit": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-shout-text": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.6309,
+          "r_precision": 0.0
+        },
+        "paraphrase-spin-up-the-http-listener": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.25,
+          "ndcg_at_10": 0.4307,
+          "r_precision": 0.0
+        },
+        "paraphrase-store-a-record": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.6309,
+          "r_precision": 0.0
+        },
+        "paraphrase-tidy-up-a-person-s-name-for-display": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.3333,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.3333,
+          "ndcg_at_10": 0.2346,
+          "r_precision": 0.3333
+        }
+      }
     },
     "semantic": {
-      "metrics": null,
-      "reason": "requires fastembed model weights (network download) — run where the fastembed weights are already cached",
-      "status": "UNAVAILABLE"
+      "status": "MEASURED",
+      "reason": null,
+      "metrics": {
+        "recall_at_1": 0.5021,
+        "recall_at_5": 0.767,
+        "recall_at_10": 0.8422,
+        "hit_at_1": 0.7647,
+        "hit_at_5": 0.8627,
+        "hit_at_10": 0.9412,
+        "mrr": 0.8027,
+        "ndcg_at_10": 0.7896,
+        "r_precision": 0.6877
+      },
+      "by_intent": {
+        "behavioural": {
+          "queries": 14,
+          "metrics": {
+            "recall_at_1": 0.5179,
+            "recall_at_5": 0.75,
+            "recall_at_10": 0.8452,
+            "hit_at_1": 0.8571,
+            "hit_at_5": 0.9286,
+            "hit_at_10": 0.9286,
+            "mrr": 0.8714,
+            "ndcg_at_10": 0.8022,
+            "r_precision": 0.6369
+          }
+        },
+        "conceptual": {
+          "queries": 10,
+          "metrics": {
+            "recall_at_1": 0.1408,
+            "recall_at_5": 0.5369,
+            "recall_at_10": 0.7287,
+            "hit_at_1": 0.6,
+            "hit_at_5": 0.7,
+            "hit_at_10": 1.0,
+            "mrr": 0.6593,
+            "ndcg_at_10": 0.6519,
+            "r_precision": 0.5487
+          }
+        },
+        "exact-name": {
+          "queries": 15,
+          "metrics": {
+            "recall_at_1": 0.7611,
+            "recall_at_5": 0.95,
+            "recall_at_10": 0.9667,
+            "hit_at_1": 0.9333,
+            "hit_at_5": 1.0,
+            "hit_at_10": 1.0,
+            "mrr": 0.9467,
+            "ndcg_at_10": 0.9521,
+            "r_precision": 0.9333
+          }
+        },
+        "paraphrase": {
+          "queries": 12,
+          "metrics": {
+            "recall_at_1": 0.4611,
+            "recall_at_5": 0.75,
+            "recall_at_10": 0.7778,
+            "hit_at_1": 0.5833,
+            "hit_at_5": 0.75,
+            "hit_at_10": 0.8333,
+            "mrr": 0.662,
+            "ndcg_at_10": 0.6866,
+            "r_precision": 0.5556
+          }
+        }
+      },
+      "per_query": {
+        "behavioural-delay-running-a-function-until-calls-stop": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-delete-returns-bool": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9675,
+          "r_precision": 0.6667
+        },
+        "behavioural-empty-string-guard": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "behavioural-format-host-and-port-into-an-address-string": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-generate-a-random-unique-identifier": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-json-response": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9675,
+          "r_precision": 0.6667
+        },
+        "behavioural-log-on-delete": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-look-up-a-stored-user-by-id": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 0.75,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.962,
+          "r_precision": 0.75
+        },
+        "behavioural-print-to-console": {
+          "recall_at_1": 0.1667,
+          "recall_at_5": 0.3333,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.4539,
+          "r_precision": 0.3333
+        },
+        "behavioural-read-request-body": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 0.6667,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.818,
+          "r_precision": 0.3333
+        },
+        "behavioural-reject-nameless-user": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "behavioural-return-every-stored-item-as-a-list": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.906,
+          "r_precision": 0.6667
+        },
+        "behavioural-trim-whitespace": {
+          "recall_at_1": 0.5,
+          "recall_at_5": 0.5,
+          "recall_at_10": 0.5,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.6131,
+          "r_precision": 0.5
+        },
+        "behavioural-validate-then-transform": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.25,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.2,
+          "ndcg_at_10": 0.5434,
+          "r_precision": 0.0
+        },
+        "conceptual-application-entry-point": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.6,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.125,
+          "ndcg_at_10": 0.3071,
+          "r_precision": 0.0
+        },
+        "conceptual-http-request-handling": {
+          "recall_at_1": 0.125,
+          "recall_at_5": 0.625,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-http-server-setup": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.8855,
+          "r_precision": 0.6667
+        },
+        "conceptual-input-validation": {
+          "recall_at_1": 0.2,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-interface-contracts": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-persistence-layer": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.2,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.125,
+          "ndcg_at_10": 0.107,
+          "r_precision": 0.0
+        },
+        "conceptual-string-formatting-helpers": {
+          "recall_at_1": 0.1667,
+          "recall_at_5": 0.6667,
+          "recall_at_10": 0.8333,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.8662,
+          "r_precision": 0.6667
+        },
+        "conceptual-type-declarations": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "conceptual-user-crud-operations": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0769,
+          "recall_at_10": 0.1538,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.2,
+          "ndcg_at_10": 0.1488,
+          "r_precision": 0.1538
+        },
+        "conceptual-value-objects": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.5,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1429,
+          "ndcg_at_10": 0.2044,
+          "r_precision": 0.0
+        },
+        "exact-name-database-findbyid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-debounce": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-format-name": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-formatname": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-generateid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-maxretries": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-newserver": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-parseuser": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-person-record": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-process-request": {
+          "recall_at_1": 0.25,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-processid": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-servehttp": {
+          "recall_at_1": 0.5,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-status-enum": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-userid-type": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "exact-name-userservice-get-user": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.25,
+          "recall_at_10": 0.5,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.2,
+          "ndcg_at_10": 0.2811,
+          "r_precision": 0.0
+        },
+        "paraphrase-add-new-user": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.3333,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.1111,
+          "ndcg_at_10": 0.1413,
+          "r_precision": 0.0
+        },
+        "paraphrase-build-a-fresh-server-instance": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-capitalize-a-word": {
+          "recall_at_1": 0.3333,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 0.9675,
+          "r_precision": 0.6667
+        },
+        "paraphrase-extract-user-fields": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-look-up-record": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.3333,
+          "ndcg_at_10": 0.5,
+          "r_precision": 0.0
+        },
+        "paraphrase-reject-empty-payloads": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        },
+        "paraphrase-remove-a-record-by-identifier": {
+          "recall_at_1": 0.2,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-retry-limit": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-shout-text": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-spin-up-the-http-listener": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 0.5,
+          "ndcg_at_10": 0.6309,
+          "r_precision": 0.0
+        },
+        "paraphrase-store-a-record": {
+          "recall_at_1": 1.0,
+          "recall_at_5": 1.0,
+          "recall_at_10": 1.0,
+          "hit_at_1": 1.0,
+          "hit_at_5": 1.0,
+          "hit_at_10": 1.0,
+          "mrr": 1.0,
+          "ndcg_at_10": 1.0,
+          "r_precision": 1.0
+        },
+        "paraphrase-tidy-up-a-person-s-name-for-display": {
+          "recall_at_1": 0.0,
+          "recall_at_5": 0.0,
+          "recall_at_10": 0.0,
+          "hit_at_1": 0.0,
+          "hit_at_5": 0.0,
+          "hit_at_10": 0.0,
+          "mrr": 0.0,
+          "ndcg_at_10": 0.0,
+          "r_precision": 0.0
+        }
+      }
     }
   },
-  "timestamp": "2026-08-11T12:35:24Z"
+  "comparisons": {
+    "hybrid vs lexical": {
+      "hit_at_1": {
+        "delta": 0.1961,
+        "ci_low": 0.0784,
+        "ci_high": 0.3137
+      },
+      "hit_at_10": {
+        "delta": 0.1176,
+        "ci_low": 0.0392,
+        "ci_high": 0.2157
+      },
+      "hit_at_5": {
+        "delta": 0.0588,
+        "ci_low": -0.0196,
+        "ci_high": 0.1373
+      },
+      "mrr": {
+        "delta": 0.1307,
+        "ci_low": 0.0561,
+        "ci_high": 0.2108
+      },
+      "ndcg_at_10": {
+        "delta": 0.1179,
+        "ci_low": 0.0689,
+        "ci_high": 0.1745
+      },
+      "r_precision": {
+        "delta": 0.1178,
+        "ci_low": 0.0475,
+        "ci_high": 0.1978
+      },
+      "recall_at_1": {
+        "delta": 0.1005,
+        "ci_low": 0.0384,
+        "ci_high": 0.1746
+      },
+      "recall_at_10": {
+        "delta": 0.1119,
+        "ci_low": 0.0559,
+        "ci_high": 0.1771
+      },
+      "recall_at_5": {
+        "delta": 0.0689,
+        "ci_low": 0.0106,
+        "ci_high": 0.1405
+      }
+    },
+    "hybrid vs semantic": {
+      "hit_at_1": {
+        "delta": -0.0392,
+        "ci_low": -0.1176,
+        "ci_high": 0.0392
+      },
+      "hit_at_10": {
+        "delta": 0.0,
+        "ci_low": -0.0588,
+        "ci_high": 0.0588
+      },
+      "hit_at_5": {
+        "delta": -0.0392,
+        "ci_low": -0.098,
+        "ci_high": 0.0
+      },
+      "mrr": {
+        "delta": -0.0314,
+        "ci_low": -0.094,
+        "ci_high": 0.0252
+      },
+      "ndcg_at_10": {
+        "delta": -0.0462,
+        "ci_low": -0.0954,
+        "ci_high": -0.0068
+      },
+      "r_precision": {
+        "delta": -0.0457,
+        "ci_low": -0.1161,
+        "ci_high": 0.0113
+      },
+      "recall_at_1": {
+        "delta": -0.0252,
+        "ci_low": -0.0732,
+        "ci_high": 0.0069
+      },
+      "recall_at_10": {
+        "delta": -0.032,
+        "ci_low": -0.0843,
+        "ci_high": 0.0163
+      },
+      "recall_at_5": {
+        "delta": -0.0513,
+        "ci_low": -0.102,
+        "ci_high": -0.0147
+      }
+    },
+    "hybrid+rerank vs hybrid": {
+      "hit_at_1": {
+        "delta": 0.0392,
+        "ci_low": -0.0588,
+        "ci_high": 0.1569
+      },
+      "hit_at_10": {
+        "delta": -0.0196,
+        "ci_low": -0.0588,
+        "ci_high": 0.0
+      },
+      "hit_at_5": {
+        "delta": 0.0588,
+        "ci_low": -0.0196,
+        "ci_high": 0.1569
+      },
+      "mrr": {
+        "delta": 0.0394,
+        "ci_low": -0.0425,
+        "ci_high": 0.1268
+      },
+      "ndcg_at_10": {
+        "delta": 0.0339,
+        "ci_low": -0.0318,
+        "ci_high": 0.1056
+      },
+      "r_precision": {
+        "delta": 0.0364,
+        "ci_low": -0.0719,
+        "ci_high": 0.1466
+      },
+      "recall_at_1": {
+        "delta": 0.0033,
+        "ci_low": -0.0719,
+        "ci_high": 0.0752
+      },
+      "recall_at_10": {
+        "delta": 0.0228,
+        "ci_low": -0.025,
+        "ci_high": 0.0782
+      },
+      "recall_at_5": {
+        "delta": 0.0452,
+        "ci_low": -0.0242,
+        "ci_high": 0.1242
+      }
+    },
+    "hybrid+rerank vs lexical": {
+      "hit_at_1": {
+        "delta": 0.2353,
+        "ci_low": 0.098,
+        "ci_high": 0.3725
+      },
+      "hit_at_10": {
+        "delta": 0.098,
+        "ci_low": 0.0196,
+        "ci_high": 0.1961
+      },
+      "hit_at_5": {
+        "delta": 0.1176,
+        "ci_low": 0.0196,
+        "ci_high": 0.2353
+      },
+      "mrr": {
+        "delta": 0.1701,
+        "ci_low": 0.0649,
+        "ci_high": 0.2781
+      },
+      "ndcg_at_10": {
+        "delta": 0.1518,
+        "ci_low": 0.0684,
+        "ci_high": 0.2404
+      },
+      "r_precision": {
+        "delta": 0.1541,
+        "ci_low": 0.0509,
+        "ci_high": 0.2631
+      },
+      "recall_at_1": {
+        "delta": 0.1037,
+        "ci_low": 0.0214,
+        "ci_high": 0.1897
+      },
+      "recall_at_10": {
+        "delta": 0.1347,
+        "ci_low": 0.0601,
+        "ci_high": 0.2181
+      },
+      "recall_at_5": {
+        "delta": 0.1141,
+        "ci_low": 0.032,
+        "ci_high": 0.2078
+      }
+    },
+    "semantic vs lexical": {
+      "hit_at_1": {
+        "delta": 0.2353,
+        "ci_low": 0.1176,
+        "ci_high": 0.3725
+      },
+      "hit_at_10": {
+        "delta": 0.1176,
+        "ci_low": 0.0196,
+        "ci_high": 0.2353
+      },
+      "hit_at_5": {
+        "delta": 0.098,
+        "ci_low": 0.0,
+        "ci_high": 0.1961
+      },
+      "mrr": {
+        "delta": 0.1622,
+        "ci_low": 0.0699,
+        "ci_high": 0.2579
+      },
+      "ndcg_at_10": {
+        "delta": 0.1641,
+        "ci_low": 0.0945,
+        "ci_high": 0.241
+      },
+      "r_precision": {
+        "delta": 0.1635,
+        "ci_low": 0.075,
+        "ci_high": 0.2592
+      },
+      "recall_at_1": {
+        "delta": 0.1256,
+        "ci_low": 0.0549,
+        "ci_high": 0.2065
+      },
+      "recall_at_10": {
+        "delta": 0.1439,
+        "ci_low": 0.0731,
+        "ci_high": 0.2223
+      },
+      "recall_at_5": {
+        "delta": 0.1202,
+        "ci_low": 0.0467,
+        "ci_high": 0.2039
+      }
+    }
+  }
 }

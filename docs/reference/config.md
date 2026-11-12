@@ -99,6 +99,7 @@ rebuilt with a full analysis (`myc analyze`) before the change takes effect.
 | `dim` | Different vector length; the stored table is physically rebuilt |
 | `base_url` (host-normalized) | The same model name behind a different endpoint can be a different model. Cosmetic differences — trailing slash, host case, an explicit default port (`:80`/`:443`) — are folded and do **not** invalidate |
 | `query_prefix` / `passage_prefix` | E5-style prefixes change the text sent to the model, so they change the vectors |
+| _embedding-text version_ (not a config field) | Each symbol is embedded from a document built by a fixed template (kind, name, decorators, signature, return type, superclasses, then content cut to the model's token budget). The template and its budget constants carry a version that is recorded in the index; a release that changes them bumps it, and the next full analysis re-embeds. Indexes written before this version was recorded (before `meta_version` 3) cannot say which template built them and are re-embedded on the next full analysis. Until then an incremental run with embeddings (`myc watch`, re-indexing changed files) is refused with a message naming `myc analyze`, instead of adding vectors from a second template to the index |
 
 **Fields *not* in the fingerprint — a change does not invalidate the index:**
 

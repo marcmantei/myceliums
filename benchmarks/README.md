@@ -1,12 +1,14 @@
 # Benchmark data
 
-This directory holds three different kinds of numbers. None of them is a
+This directory holds two different kinds of numbers. Neither of them is a
 measured token saving of an AI agent: no benchmark here puts an agent in the
 loop, and none checks that the approaches it compares return an equivalent
 answer.
 
 A benchmark that does score results against labelled expectations is the
-retrieval evaluation (hand-labelled golden set, recall@k and MRR) — see
+retrieval evaluation (hand-labelled golden set; recall@k, hit@k, MRR, nDCG@10
+and R-precision for lexical, semantic, hybrid and hybrid+rerank search, with
+bootstrap confidence intervals) — see
 [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
 
 ## Output-size comparison — `run.sh`, `results/`, `latest.json`, `rerun-2026-10-17/`
@@ -120,13 +122,11 @@ other languages and the steps of the re-run.
 Indexing and query timings on a generated 5,010-file project. See
 [RESULTS.md](./RESULTS.md) for the setup and how to reproduce it.
 
-## Scenario assumptions — `METHODOLOGY.md`, `metrics/`
+## Scenario assumptions — retired
 
-[METHODOLOGY.md](./METHODOLOGY.md) describes the five scenarios of the
-`verified_metrics` Criterion bench. Despite its name, that bench measures
-nothing: every baseline and "with Myceliums" value is a constant in
-[`crates/myceliums-benchmarks/src/scenarios.rs`](../crates/myceliums-benchmarks/src/scenarios.rs),
-commented there as an estimate and returned with `is_verified: false`. Its
-output is a set of scenario assumptions, not a result. `metrics/` is empty;
-the bench does not write into this directory (see
-[METHODOLOGY.md](./METHODOLOGY.md#running-it)).
+Earlier versions shipped a `verified_metrics` Criterion bench whose every
+time, token and tool-call figure was a constant in `scenarios.rs`, serialised
+with `is_verified: false`. Despite its name it measured nothing. It was removed
+in #92 together with its constants, its `METHODOLOGY.md` and the empty
+`metrics/` directory it was meant to write to. Measured retrieval quality is in
+[`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).

@@ -147,6 +147,7 @@ impl Analyzer {
             .and_then(|json| serde_json::from_str(&json).ok());
 
         let meta = if incremental {
+            refuse_incremental_template_mix(existing.as_ref())?;
             self.reconcile_incremental_embedding(existing, configured)
         } else {
             // Full analysis switches to the configured model. If it differs
@@ -173,6 +174,9 @@ impl Analyzer {
     }
 
     /// Decide which embedding model an *incremental* run must use.
+    ///
+    /// Only reached once [`refuse_incremental_template_mix`] has confirmed the
+    /// index's vectors share this build's embedding-text template.
     ///
     /// Incremental runs never switch models: mixing vectors from two models in
     /// one index silently corrupts search. So the model recorded in the index
@@ -2290,6 +2294,41 @@ struct EmailSymbolMeta {
     file_path: String,
 }
 
+/// Refuse an incremental run whose vectors would not share a space with the
+/// index's existing ones.
+///
+/// The model recorded in the index can be kept for an incremental run, but the
+/// embedding-text template cannot: it is this build's code. When the index was
+/// embedded from a different template version — or from one that was never
+/// recorded (`text_version` 0, indexes written before issue #92) — embedding the
+/// changed files now would put two document templates into one vector space,
+/// and nothing would ever detect it. The refusal happens before the run touches
+/// the store, so the index stays consistent, only stale, until a full analysis
+/// re-embeds everything.
+#[cfg(feature = "embeddings")]
+fn refuse_incremental_template_mix(
+    existing: Option<&crate::embeddings::IndexEmbeddingMeta>,
+) -> Result<()> {
+    use crate::embeddings::EMBEDDING_TEXT_VERSION;
+    let Some(existing) = existing else {
+        return Ok(());
+    };
+    if existing.text_version == EMBEDDING_TEXT_VERSION {
+        return Ok(());
+    }
+    let recorded = match existing.text_version {
+        0 => "an unrecorded embedding-text template (the index predates template versioning)"
+            .to_string(),
+        version => format!("embedding-text template version {version}"),
+    };
+    anyhow::bail!(
+        "Incremental re-index refused: the index's vectors were built from {recorded}, but \
+         this build embeds with version {EMBEDDING_TEXT_VERSION}. Embedding the changed files \
+         now would mix two templates in one vector space. Run a full analysis (`myc analyze`) \
+         to re-embed the index, or re-index with --skip-embeddings."
+    )
+}
+
 /// Summary statistics returned after a full or incremental analysis.
 #[derive(Debug)]
 pub struct AnalysisResult {
@@ -3032,11 +3071,12 @@ mod tests {
             );
         }
 
-        /// A pre-change meta record (no `meta_version`, i.e. version 1) must be
-        /// detected on an incremental run and handled with the migration guard:
-        /// the run keeps the index's embedder and instructs a full re-analysis.
+        /// A pre-change meta record (no `meta_version`, i.e. version 1, and no
+        /// `text_version`) cannot say which document template built its
+        /// vectors, so an incremental run refuses to add vectors to it rather
+        /// than mix templates (issue #92), and names the full re-analysis.
         #[tokio::test]
-        async fn incremental_detects_pre_change_meta_record() {
+        async fn incremental_refuses_pre_change_meta_record() {
             let (analyzer, _dir) =
                 analyzer_with_embedding(openai_section("https://host.example/v1")).await;
 
@@ -3049,12 +3089,75 @@ mod tests {
                 .await
                 .unwrap();
 
-            let chosen = analyzer.prepare_embeddings(true).await.unwrap().unwrap();
+            let error = analyzer
+                .prepare_embeddings(true)
+                .await
+                .expect_err("an unrecorded template must not be extended incrementally");
+            let message = error.to_string();
+            assert!(message.contains("unrecorded"), "{message}");
+            assert!(message.contains("myc analyze"), "{message}");
+
+            // A full analysis is the way out: it adopts the current template.
+            let chosen = analyzer.prepare_embeddings(false).await.unwrap().unwrap();
             assert_eq!(
-                chosen.meta_version, 1,
-                "a record written before meta_version existed must read back as v1"
+                chosen.text_version,
+                crate::embeddings::EMBEDDING_TEXT_VERSION
             );
-            assert!(chosen.meta_version < IndexEmbeddingMeta::META_VERSION);
+            assert_eq!(chosen.meta_version, IndexEmbeddingMeta::META_VERSION);
+        }
+
+        /// An index embedded from another template version must not be extended
+        /// incrementally, and the refusal comes before the run touches the
+        /// store: the changed file's existing rows survive (issue #92).
+        #[tokio::test]
+        async fn incremental_refuses_a_text_version_change_before_touching_the_store() {
+            let (analyzer, dir) =
+                analyzer_with_embedding(openai_section("https://host.example/v1")).await;
+            let mut recorded =
+                IndexEmbeddingMeta::from_config(&openai_section("https://host.example/v1"))
+                    .unwrap();
+            recorded.text_version = crate::embeddings::EMBEDDING_TEXT_VERSION + 1;
+            analyzer.store.set_embedding_dim(recorded.dim as i32);
+            analyzer
+                .store
+                .store_symbols(&[make_embedding_symbol("kept")])
+                .await
+                .unwrap();
+            record(&analyzer, &recorded).await;
+
+            let changed = make_test_root(&dir).join("src").join("lib.rs");
+            std::fs::create_dir_all(changed.parent().unwrap()).unwrap();
+            std::fs::write(&changed, "fn replaced() {}\n").unwrap();
+            let error = analyzer
+                .analyze_files(&[changed])
+                .await
+                .expect_err("a template change must not be mixed into the index");
+            assert!(
+                error.to_string().contains(&format!(
+                    "version {}",
+                    crate::embeddings::EMBEDDING_TEXT_VERSION + 1
+                )),
+                "{error}"
+            );
+            assert_eq!(
+                analyzer.store.symbol_count().await.unwrap(),
+                1,
+                "the refused run must leave the index as it was"
+            );
+        }
+
+        /// The common case is unaffected: an index embedded from this build's
+        /// template is extended incrementally as before.
+        #[tokio::test]
+        async fn incremental_accepts_the_current_template() {
+            let (analyzer, _dir) =
+                analyzer_with_embedding(openai_section("https://host.example/v1")).await;
+            let recorded =
+                IndexEmbeddingMeta::from_config(&openai_section("https://host.example/v1"))
+                    .unwrap();
+            record(&analyzer, &recorded).await;
+            let chosen = analyzer.prepare_embeddings(true).await.unwrap().unwrap();
+            assert_eq!(chosen.fingerprint(), recorded.fingerprint());
         }
 
         /// Helper: build a symbol so the store creates the symbols table at the

@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Criterion benchmarks for the Myceliums code intelligence engine — indexing, query, agent tasks, and verified metrics"
+description = "Benchmarks for the Myceliums code intelligence engine — Criterion timings for indexing, parsing and queries, and a labelled retrieval-quality evaluation"
 categories = ["development-tools"]
 keywords = ["code-analysis", "knowledge-graph", "benchmarks", "developer-tools"]
 readme = "../../README.md"
@@ -15,6 +15,9 @@ publish = false
 [dependencies]
 myceliums-core = { workspace = true }
 myceliums-storage = { workspace = true }
+# Same version and features as myceliums-core's; used only to name the
+# reranker weights a run needs (see `eval::models`).
+fastembed = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -30,7 +33,6 @@ tree-sitter-python = { workspace = true }
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3"
 chrono = { workspace = true }
-num_cpus = "1.16"
 
 [lib]
 name = "myceliums_benchmarks"
@@ -44,20 +46,16 @@ path = "src/bin/retrieval_eval.rs"
 name = "corpus-inventory"
 path = "src/bin/corpus_inventory.rs"
 
+[[bin]]
+name = "ann-recall"
+path = "src/bin/ann_recall.rs"
+
 [[bench]]
 name = "indexing"
 harness = false
 
 [[bench]]
 name = "query"
-harness = false
-
-[[bench]]
-name = "agent_tasks"
-harness = false
-
-[[bench]]
-name = "verified_metrics"
 harness = false
 
 [[bench]]

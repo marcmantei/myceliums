@@ -103,22 +103,36 @@ pub fn reciprocal_rank_fusion(
     // Ranks are 1-based.
     let mut bm25_map: HashMap<String, (usize, f64, CodeSymbol, Option<SearchExplain>)> =
         HashMap::new();
+    let mut bm25_order: Vec<String> = Vec::new();
     for (rank, (sym, score, explain)) in bm25_results.into_iter().enumerate() {
         let rank1 = rank + 1;
+        if !bm25_map.contains_key(&sym.uid) {
+            bm25_order.push(sym.uid.clone());
+        }
         bm25_map.insert(sym.uid.clone(), (rank1, score, sym, explain));
     }
 
     let mut vector_map: HashMap<String, (usize, f64, CodeSymbol)> = HashMap::new();
+    let mut vector_order: Vec<String> = Vec::new();
     for (rank, (sym, score)) in vector_results.into_iter().enumerate() {
         let rank1 = rank + 1;
+        if !vector_map.contains_key(&sym.uid) {
+            vector_order.push(sym.uid.clone());
+        }
         vector_map.insert(sym.uid.clone(), (rank1, score, sym));
     }
 
-    // Collect all unique uids
-    let mut all_uids: Vec<String> = bm25_map.keys().cloned().collect();
-    for uid in vector_map.keys() {
-        if !bm25_map.contains_key(uid) {
-            all_uids.push(uid.clone());
+    // Collect all unique uids in list order — BM25 ranking first, then the
+    // vector-only candidates in vector rank order. The sort below is stable, so
+    // this order is the tie-break for equal fused scores, which RRF produces
+    // routinely (BM25 rank 1 + vector rank 2 scores exactly the same as BM25
+    // rank 2 + vector rank 1). Collecting from the HashMaps instead left ties in
+    // per-process random order, so the same query could return a different
+    // ranking on every run (issue #92).
+    let mut all_uids: Vec<String> = bm25_order;
+    for uid in vector_order {
+        if !bm25_map.contains_key(&uid) {
+            all_uids.push(uid);
         }
     }
 
@@ -427,6 +441,28 @@ mod tests {
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].symbol.uid, "a");
         assert_eq!(results[1].symbol.uid, "b");
+    }
+
+    #[test]
+    fn test_rrf_breaks_exact_ties_deterministically() {
+        // a: bm25 1 + vector 2, b: bm25 2 + vector 1 — identical fused scores.
+        // The order must not depend on HashMap iteration order: BM25 order
+        // decides ties, so `a` comes first on every run (issue #92).
+        for _ in 0..32 {
+            let bm25 = vec![
+                (make_symbol("a", "alpha"), 10.0, None),
+                (make_symbol("b", "beta"), 8.0, None),
+            ];
+            let vector = vec![
+                (make_symbol("b", "beta"), 0.95),
+                (make_symbol("a", "alpha"), 0.90),
+                (make_symbol("d", "delta"), 0.85),
+                (make_symbol("e", "epsilon"), 0.80),
+            ];
+            let results = reciprocal_rank_fusion(bm25, vector, 60.0, 10);
+            let order: Vec<&str> = results.iter().map(|r| r.symbol.uid.as_str()).collect();
+            assert_eq!(order, ["a", "b", "d", "e"]);
+        }
     }
 
     #[test]
