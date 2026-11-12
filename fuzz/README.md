@@ -51,7 +51,8 @@ growing corpus) and `fuzz/artifacts/` are git-ignored.
 
 ## CI
 
-`.github/workflows/fuzz.yml` runs each target for 60 seconds on nightly — weekly,
-on demand, and on pull requests that touch the Cypher crate, the extractors, or
-this directory. It is not a required check; crash reproducers are uploaded as
-workflow artifacts.
+`.github/workflows/fuzz.yml` builds the targets once and runs each for 60
+seconds on nightly, in a single job — weekly, on demand, and on pull requests
+that touch the Cypher crate, the extractors, the Cargo manifests/lock, or this
+directory. It is not a required check; crash reproducers are uploaded as a
+workflow artifact.

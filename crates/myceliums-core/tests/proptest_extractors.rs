@@ -12,6 +12,7 @@
 
 use myceliums_core::parser::{to_code_symbols, ParseResult, SourceLanguage, SourceParser};
 use proptest::prelude::*;
+use proptest::test_runner::RngSeed;
 
 /// Every language that goes through `SourceParser` (tree-sitter).
 const TREE_SITTER_LANGUAGES: &[SourceLanguage] = &[
@@ -174,12 +175,28 @@ fn check_invariants(lang: SourceLanguage, source: &str, result: &ParseResult) {
     assert_eq!(code_symbols.len(), result.symbols.len());
 }
 
-proptest! {
-    #![proptest_config(ProptestConfig {
-        cases: 256,
+/// Proptest config with a seed that is always printed, so a failure (which
+/// shows the test's captured stderr) can be replayed exactly with
+/// `PROPTEST_RNG_SEED=<seed> cargo test …`. Without that variable a fresh
+/// seed is drawn each run, as proptest does by default.
+fn config(cases: u32) -> ProptestConfig {
+    let mut config = ProptestConfig {
+        cases,
         failure_persistence: None,
-        .. ProptestConfig::default()
-    })]
+        ..ProptestConfig::default()
+    };
+    if matches!(config.rng_seed, RngSeed::Random) {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos() as u64);
+        config.rng_seed = RngSeed::Fixed(nanos ^ u64::from(std::process::id()));
+    }
+    eprintln!("proptest seed: PROPTEST_RNG_SEED={}", config.rng_seed);
+    config
+}
+
+proptest! {
+    #![proptest_config(config(256))]
 
     /// Raw bytes, decoded the way the analyzer decodes files it reads.
     #[test]
@@ -201,11 +218,7 @@ proptest! {
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig {
-        cases: 1024,
-        failure_persistence: None,
-        .. ProptestConfig::default()
-    })]
+    #![proptest_config(config(1024))]
 
     /// Code-shaped token soup, which exercises declaration/call/import paths.
     #[test]
