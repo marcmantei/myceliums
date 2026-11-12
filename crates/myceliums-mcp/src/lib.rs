@@ -111,6 +111,14 @@ impl MyceliumsMcp {
 /// error message on failure — the two things an integration test asserts on.
 #[cfg(feature = "test-support")]
 impl MyceliumsMcp {
+    /// The tool definitions the server advertises on `tools/list` — names,
+    /// descriptions, and input/output schemas, sorted by name. Built from the
+    /// same router [`run_mcp_server`] serves, so a snapshot of this list pins
+    /// the agent-visible tool surface.
+    pub fn tool_list_for_test() -> Vec<rmcp::model::Tool> {
+        Self::tool_router().list_all()
+    }
+
     /// Invoke the `context_search` handler.
     pub async fn context_search_for_test(&self, params: SearchParams) -> Result<String, String> {
         self.context_search(Parameters(params))
