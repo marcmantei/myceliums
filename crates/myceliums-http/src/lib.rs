@@ -411,8 +411,15 @@ fn registry_path() -> PathBuf {
     data_dir().join("repos.json")
 }
 
+/// Opens the store for a `repo_id` taken from the URL.
+///
+/// The id goes through the shared choke point
+/// ([`RepoRegistry::registered_db_path`]): malformed or unregistered ids are
+/// rejected (handlers answer 404) before a path is built, so a request can
+/// neither escape the data dir nor create a directory for a made-up id.
 async fn open_store(state: &AppState, repo_id: &str) -> Result<Store> {
-    let db_path = RepoRegistry::repo_db_path(&state.data_dir, repo_id);
+    let db_path =
+        RepoRegistry::load(&state.registry_path)?.registered_db_path(&state.data_dir, repo_id)?;
     Store::open(&db_path, repo_id).await
 }
 
@@ -1997,17 +2004,44 @@ async fn latency_logger(request: Request<axum::body::Body>, next: Next) -> Respo
     response
 }
 
-/// Start the HTTP server on the given port.
+/// Rejects requests that a web page could have forged.
 ///
-/// If `repo_id` is provided, it will be pre-selected in the UI.
-pub async fn start_server(port: u16, repo_id: Option<String>) -> Result<()> {
-    let state = Arc::new(AppState {
-        data_dir: data_dir(),
-        registry_path: registry_path(),
-        default_repo_id: repo_id,
-    });
+/// The dashboard listens on loopback, but a page in the user's browser can
+/// still reach it: via DNS rebinding (the browser then sends the attacker's
+/// host name in `Host`) or with a direct cross-origin request (the browser
+/// sends the page's `Origin`). Both are refused here, which keeps endpoints
+/// such as `POST /api/llm/config` out of reach. Requests from the dashboard
+/// itself and from CLI tools pass.
+async fn local_only(request: Request<axum::body::Body>, next: Next) -> Response {
+    use myceliums_core::http_guard::{is_loopback_host, is_loopback_origin};
 
-    let app = Router::new()
+    let host_ok = request
+        .headers()
+        .get(header::HOST)
+        .and_then(|h| h.to_str().ok())
+        .is_some_and(is_loopback_host);
+    if !host_ok {
+        return (
+            StatusCode::FORBIDDEN,
+            "Forbidden: open the dashboard via localhost or 127.0.0.1",
+        )
+            .into_response();
+    }
+    if let Some(origin) = request.headers().get(header::ORIGIN) {
+        if !origin.to_str().is_ok_and(is_loopback_origin) {
+            return (
+                StatusCode::FORBIDDEN,
+                "Forbidden: cross-origin requests are not allowed",
+            )
+                .into_response();
+        }
+    }
+    next.run(request).await
+}
+
+/// Builds the dashboard router with all routes and middleware.
+fn build_router(state: Arc<AppState>) -> Router {
+    Router::new()
         .route("/", get(index_handler))
         .route("/favicon.ico", get(favicon_handler))
         .route("/api/repos", get(list_repos))
@@ -2037,8 +2071,21 @@ pub async fn start_server(port: u16, repo_id: Option<String>) -> Result<()> {
             get(graph_v1_node),
         )
         .route("/api/v1/graph/search/{repo_id}", get(graph_v1_search))
+        .layer(axum::middleware::from_fn(local_only))
         .layer(axum::middleware::from_fn(latency_logger))
-        .with_state(state);
+        .with_state(state)
+}
+
+/// Start the HTTP server on the given port.
+///
+/// If `repo_id` is provided, it will be pre-selected in the UI.
+pub async fn start_server(port: u16, repo_id: Option<String>) -> Result<()> {
+    let state = Arc::new(AppState {
+        data_dir: data_dir(),
+        registry_path: registry_path(),
+        default_repo_id: repo_id,
+    });
+    let app = build_router(state);
 
     // Served on loopback only; the SPA is same-origin so no CORS layer is added.
     // A wildcard CORS layer here previously let any website read the API graph and
@@ -2334,7 +2381,25 @@ mod tests {
 
     /// Seed a real store with one embedded symbol so `graph_v1_node` reaches the
     /// semantic-neighbor vector search on a healthy backend.
+    /// Registers `repo_id` in the registry `app_state` points at, as
+    /// `analyze` would; unregistered ids are rejected by `open_store`.
+    fn register_repo(data_dir: &std::path::Path, repo_id: &str) {
+        let mut registry = RepoRegistry::load(&data_dir.join("registry.json")).unwrap();
+        registry.register(myceliums_storage::RepoInfo {
+            id: repo_id.to_string(),
+            name: repo_id.to_string(),
+            path: format!("/nonexistent/{repo_id}"),
+            analyzed_at: String::new(),
+            symbol_count: 1,
+            file_count: 1,
+            analyzed_commit: None,
+            vector_geometry_version: 0,
+        });
+        registry.save().unwrap();
+    }
+
     async fn seed_healthy_store(data_dir: &std::path::Path, repo_id: &str, node_id: &str) {
+        register_repo(data_dir, repo_id);
         let db_path = RepoRegistry::repo_db_path(data_dir, repo_id);
         std::fs::create_dir_all(&db_path).unwrap();
         let store = Store::open(&db_path, repo_id).await.unwrap();
@@ -2452,5 +2517,102 @@ mod tests {
             resp.status()
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn unknown_or_traversal_repo_id_is_404_and_creates_nothing() {
+        let dir = test_data_dir("unknown_repo");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        register_repo(&dir, "known-1");
+
+        for bad in ["made-up", "..", "../outside"] {
+            let resp = get_stats(State(app_state(dir.clone())), Path(bad.to_string()))
+                .await
+                .into_response();
+            assert_eq!(resp.status(), StatusCode::NOT_FOUND, "{bad}");
+        }
+        assert!(
+            !dir.join("data").exists(),
+            "a read must never create a repo directory"
+        );
+        assert!(!dir.join("outside").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    async fn dashboard_status(method: &str, uri: &str, headers: &[(&str, &str)]) -> StatusCode {
+        use tower::ServiceExt;
+        let dir = test_data_dir("guard");
+        let mut req = Request::builder().method(method).uri(uri);
+        for (k, v) in headers {
+            req = req.header(*k, *v);
+        }
+        build_router(app_state(dir))
+            .oneshot(req.body(axum::body::Body::empty()).unwrap())
+            .await
+            .unwrap()
+            .status()
+    }
+
+    #[tokio::test]
+    async fn dashboard_rejects_foreign_host_headers() {
+        // DNS rebinding: the browser sends the attacker's host name.
+        assert_eq!(
+            dashboard_status(
+                "POST",
+                "/api/llm/config",
+                &[
+                    ("host", "evil.example:8888"),
+                    ("content-type", "application/json")
+                ]
+            )
+            .await,
+            StatusCode::FORBIDDEN
+        );
+        assert_eq!(
+            dashboard_status("GET", "/favicon.ico", &[]).await,
+            StatusCode::FORBIDDEN,
+            "a request without Host is not trusted either"
+        );
+    }
+
+    #[tokio::test]
+    async fn dashboard_rejects_cross_origin_requests() {
+        assert_eq!(
+            dashboard_status(
+                "POST",
+                "/api/llm/config",
+                &[
+                    ("host", "127.0.0.1:8888"),
+                    ("origin", "https://evil.example"),
+                    ("content-type", "application/json")
+                ]
+            )
+            .await,
+            StatusCode::FORBIDDEN
+        );
+    }
+
+    #[tokio::test]
+    async fn dashboard_serves_loopback_requests() {
+        for host in ["localhost:8888", "127.0.0.1:8888", "[::1]:8888"] {
+            assert_eq!(
+                dashboard_status("GET", "/favicon.ico", &[("host", host)]).await,
+                StatusCode::OK,
+                "{host}"
+            );
+        }
+        assert_eq!(
+            dashboard_status(
+                "GET",
+                "/favicon.ico",
+                &[
+                    ("host", "localhost:8888"),
+                    ("origin", "http://localhost:8888")
+                ]
+            )
+            .await,
+            StatusCode::OK
+        );
     }
 }

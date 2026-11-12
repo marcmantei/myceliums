@@ -318,7 +318,7 @@ myc setup-continue    # Continue
 
 Any other MCP-compatible editor can use myceliums by pointing to `myc mcp`.
 
-**Most-used MCP tools** — the server exposes 54 in total; see the
+**Most-used MCP tools** — the server exposes 55 in total; see the
 [MCP tools reference](docs/reference/mcp-tools.md) for the complete list:
 
 | Tool | Description |
@@ -334,6 +334,7 @@ Any other MCP-compatible editor can use myceliums by pointing to `myc mcp`.
 | `get_review_context` | Token-optimized structural summary for code reviews |
 | `rename_symbol` | Preview a cross-codebase symbol rename |
 | `get_processes` | Retrieve traced execution flows with optional filtering |
+| `list_repos` | List analyzed repositories and their `repo_id`s |
 | `delete` | Remove a repository's analysis data |
 
 ---

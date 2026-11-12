@@ -2335,12 +2335,16 @@ impl AnalysisResult {
 /// Derive a deterministic repository ID from a filesystem path.
 ///
 /// The ID combines the directory name with a hash of the full path,
-/// producing a value like `my-repo-a1b2c3d4`.
+/// producing a value like `my-repo-a1b2c3d4`. The name part goes through
+/// [`RepoRegistry::sanitize_repo_name`](myceliums_storage::RepoRegistry::sanitize_repo_name),
+/// so the result always passes
+/// [`RepoRegistry::validate_repo_id`](myceliums_storage::RepoRegistry::validate_repo_id).
 pub fn repo_id_from_path(path: &Path) -> String {
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
+    let name = myceliums_storage::RepoRegistry::sanitize_repo_name(&name);
 
     // Use a hash of the full path for uniqueness
     let hash = {
@@ -2348,7 +2352,9 @@ pub fn repo_id_from_path(path: &Path) -> String {
         use std::hash::{Hash, Hasher};
         let mut hasher = DefaultHasher::new();
         path.hash(&mut hasher);
-        format!("{:x}", hasher.finish())
+        // Zero-padded so the 8-digit prefix below always exists; values that
+        // already had 8+ digits format exactly as before.
+        format!("{:08x}", hasher.finish())
     };
 
     format!("{}-{}", name, &hash[..8])
@@ -2459,6 +2465,30 @@ mod tests {
     use crate::parser::SourceParser;
     use std::fs;
     use tempfile::TempDir;
+
+    #[test]
+    fn repo_id_from_path_always_passes_validation() {
+        use myceliums_storage::RepoRegistry;
+        let long = "ü".repeat(200);
+        for name in ["plain", "Plan 2024:25", "a\\b", "größe 🦀", long.as_str()] {
+            let id = repo_id_from_path(&std::path::Path::new("/projects").join(name));
+            assert_eq!(
+                RepoRegistry::validate_repo_id(&id),
+                Ok(()),
+                "{name:?} -> {id:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn repo_id_from_path_is_stable_for_ordinary_names() {
+        let p = std::path::Path::new("/projects/my-repo");
+        let id = repo_id_from_path(p);
+        assert_eq!(id, repo_id_from_path(p));
+        let (name, hash) = id.rsplit_once('-').unwrap();
+        assert_eq!(name, "my-repo");
+        assert_eq!(hash.len(), 8);
+    }
 
     /// Create a test root directory inside a TempDir.
     /// TempDir on macOS creates dirs like `.tmpXXXXXX` (dot-prefixed), which

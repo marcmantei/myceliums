@@ -349,9 +349,15 @@ enum Commands {
     },
     /// Start the MCP server (stdio transport by default, or HTTP with --http)
     Mcp {
-        /// Run as HTTP server instead of stdio (e.g., "0.0.0.0:9999" or "127.0.0.1:3000")
+        /// Run as HTTP server instead of stdio on this address (e.g. "127.0.0.1:9999").
+        /// Non-loopback addresses are refused unless --allow-remote is given.
         #[arg(long)]
         http: Option<String>,
+        /// Allow a non-loopback --http address (e.g. "0.0.0.0:9999"). Every request
+        /// then needs `Authorization: Bearer <token>`, taken from MYC_MCP_TOKEN or
+        /// generated and printed at startup.
+        #[arg(long, requires = "http")]
+        allow_remote: bool,
     },
     /// Check the health of the Myceliums installation
     Doctor {
@@ -709,10 +715,14 @@ async fn main() -> Result<()> {
             cache,
             yes,
         } => cmd_clean(repo, orphans, all, cache, yes).await,
-        Commands::Mcp { http } => {
+        Commands::Mcp { http, allow_remote } => {
             if let Some(addr) = http {
-                eprintln!("MCP server listening on http://{}/mcp", addr);
-                myceliums_mcp::run_mcp_http_server(&addr).await
+                myceliums_mcp::run_mcp_http_server(myceliums_mcp::McpHttpOptions {
+                    addr,
+                    allow_remote,
+                    token: std::env::var(myceliums_mcp::http_security::TOKEN_ENV).ok(),
+                })
+                .await
             } else {
                 myceliums_mcp::run_mcp_server().await
             }
@@ -777,15 +787,35 @@ async fn main() -> Result<()> {
     }
 }
 
+/// Resolves a user-supplied repository reference (registered id or project
+/// path) to a registered repo id.
+///
+/// Ids go through [`RepoRegistry::require`], the shared choke point, so a
+/// malformed id is never turned into a path and an unknown one yields an
+/// error that lists the known ids.
+fn lookup_repo_id(registry: &RepoRegistry, repo: &str) -> Result<String> {
+    match registry.require(repo) {
+        Ok(info) => Ok(info.id.clone()),
+        Err(err) => match registry.find_by_path(repo) {
+            Some(info) => {
+                RepoRegistry::validate_repo_id(&info.id)?;
+                Ok(info.id.clone())
+            }
+            None => Err(anyhow::anyhow!(
+                "{err} A registered project path is accepted too."
+            )),
+        },
+    }
+}
+
 fn resolve_repo(repo: &str) -> Result<(String, RepoInfo)> {
     let registry = RepoRegistry::load(&registry_path())?;
-    if let Some(info) = registry.get(repo) {
-        return Ok((repo.to_string(), info.clone()));
-    }
-    if let Some(info) = registry.find_by_path(repo) {
-        return Ok((info.id.clone(), info.clone()));
-    }
-    anyhow::bail!("Repository not found: {}", repo);
+    let repo_id = lookup_repo_id(&registry, repo)?;
+    let info = registry
+        .get(&repo_id)
+        .cloned()
+        .expect("lookup_repo_id returns registered ids");
+    Ok((repo_id, info))
 }
 
 fn resolve_repo_or_latest(repo: Option<&str>) -> Result<(String, RepoInfo)> {
@@ -1023,6 +1053,7 @@ async fn cmd_analyze(
         .with_context(|| format!("Path does not exist: {}", path.display()))?;
 
     let repo_id = analyzer::repo_id_from_path(&abs_path);
+    RepoRegistry::validate_repo_id(&repo_id)?;
     let repo_name = analyzer::repo_name_from_path(&abs_path);
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
 
@@ -1250,6 +1281,7 @@ async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> {
     let abs_path = std::fs::canonicalize(path)
         .with_context(|| format!("Path does not exist: {}", path.display()))?;
     let repo_id = analyzer::repo_id_from_path(&abs_path);
+    RepoRegistry::validate_repo_id(&repo_id)?;
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
 
     // Load project config if present
@@ -1377,13 +1409,7 @@ async fn cmd_list(json: bool) -> Result<()> {
 async fn cmd_delete(repo: &str) -> Result<()> {
     let mut registry = RepoRegistry::load(&registry_path())?;
 
-    let repo_id = if registry.get(repo).is_some() {
-        repo.to_string()
-    } else if let Some(info) = registry.find_by_path(repo) {
-        info.id.clone()
-    } else {
-        anyhow::bail!("Repository not found: {}", repo);
-    };
+    let repo_id = lookup_repo_id(&registry, repo)?;
 
     let info = registry.remove(&repo_id).unwrap();
     registry.save()?;
@@ -1538,11 +1564,7 @@ async fn cmd_status() -> Result<()> {
 }
 
 fn truncate_str(s: &str, max: usize) -> String {
-    if s.len() <= max {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
-    }
+    myceliums_core::text::truncate_ellipsis(s, max)
 }
 
 async fn cmd_clean(
@@ -1621,13 +1643,7 @@ async fn cmd_clean(
     if let Some(repo_ref) = repo {
         // Clean a specific repo (with confirmation, unlike bare delete)
         let registry = RepoRegistry::load(&registry_path())?;
-        let repo_id = if registry.get(&repo_ref).is_some() {
-            repo_ref.clone()
-        } else if let Some(info) = registry.find_by_path(&repo_ref) {
-            info.id.clone()
-        } else {
-            anyhow::bail!("Repository not found: {}", repo_ref);
-        };
+        let repo_id = lookup_repo_id(&registry, &repo_ref)?;
 
         let db_path = RepoRegistry::repo_db_path(&data, &repo_id);
         let size = if db_path.exists() {
@@ -3394,6 +3410,7 @@ async fn cmd_session(
     }
 
     let repo_id = analyzer::repo_id_from_path(&abs_path);
+    RepoRegistry::validate_repo_id(&repo_id)?;
 
     // In auto mode (--yes), output JSON for Claude Code's SessionStart hook
     if auto_yes {
@@ -3619,11 +3636,7 @@ fn format_hook_message(
     result: &serde_json::Value,
 ) -> String {
     fn truncate(s: &str, max: usize) -> String {
-        if s.len() > max {
-            format!("{}...", &s[..max])
-        } else {
-            s.to_string()
-        }
+        myceliums_core::text::snippet(s, max)
     }
 
     // All tools now return { "text": "..." } with formatted output.
@@ -5008,6 +5021,63 @@ mod tests {
         assert_eq!(truncate_str("hello", 10), "hello");
         assert_eq!(truncate_str("hello world", 8), "hello...");
         assert_eq!(truncate_str("hi", 2), "hi");
+        // Multi-byte names used to panic on a byte-index slice.
+        assert_eq!(truncate_str("Größenänderung", 8), "Größe...");
+        assert_eq!(truncate_str("🦀🦀🦀🦀🦀🦀", 5), "🦀🦀...");
+    }
+
+    #[test]
+    fn hook_message_truncation_is_char_safe() {
+        let input = serde_json::json!({ "query": "ä".repeat(100) });
+        let result = serde_json::json!({ "text": "😀".repeat(500) });
+        // Must not panic on multi-byte content.
+        let _ = format_hook_message("context_search", &input, &result);
+    }
+
+    fn registry_with(ids: &[(&str, &str)]) -> RepoRegistry {
+        let mut registry = RepoRegistry::default();
+        for (id, path) in ids {
+            registry.register(RepoInfo {
+                id: id.to_string(),
+                name: id.to_string(),
+                path: path.to_string(),
+                analyzed_at: String::new(),
+                symbol_count: 0,
+                file_count: 0,
+                analyzed_commit: None,
+                vector_geometry_version: 0,
+            });
+        }
+        registry
+    }
+
+    #[test]
+    fn lookup_repo_id_accepts_registered_id_or_path() {
+        let registry = registry_with(&[("proj-1a2b", "/src/proj")]);
+        assert_eq!(lookup_repo_id(&registry, "proj-1a2b").unwrap(), "proj-1a2b");
+        assert_eq!(lookup_repo_id(&registry, "/src/proj").unwrap(), "proj-1a2b");
+    }
+
+    #[test]
+    fn lookup_repo_id_rejects_unknown_and_traversal_with_known_ids() {
+        let registry = registry_with(&[("proj-1a2b", "/src/proj")]);
+        for bad in ["nope", "../proj-1a2b", "/elsewhere"] {
+            let msg = lookup_repo_id(&registry, bad).unwrap_err().to_string();
+            assert!(
+                msg.contains("proj-1a2b") || msg.contains("invalid"),
+                "{msg}"
+            );
+        }
+        let msg = lookup_repo_id(&registry, "nope").unwrap_err().to_string();
+        assert!(msg.contains("Known repo ids: proj-1a2b"), "{msg}");
+    }
+
+    #[test]
+    fn lookup_repo_id_never_returns_a_path_like_registered_id() {
+        // A tampered registry entry must not reach `remove_dir_all`.
+        let registry = registry_with(&[("../../victim", "/src/victim")]);
+        assert!(lookup_repo_id(&registry, "/src/victim").is_err());
+        assert!(lookup_repo_id(&registry, "../../victim").is_err());
     }
 
     #[test]

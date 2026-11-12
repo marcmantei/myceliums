@@ -85,14 +85,17 @@ impl GraphService {
 
     /// Resolves an optional caller-supplied repository id to a concrete id.
     ///
-    /// If `repo_id` is `Some`, it is returned verbatim. Otherwise the current
-    /// working directory is matched against registered repositories, falling
-    /// back to the most recently registered repo. Errors if nothing matches.
+    /// If `repo_id` is `Some`, it must pass [`RepoRegistry::require`]
+    /// (well-formed and registered); an unknown id is an error that lists the
+    /// known ids. Otherwise the current working directory is matched against
+    /// registered repositories, falling back to the most recently registered
+    /// repo. Errors if nothing matches.
     pub fn resolve_repo_id(&self, repo_id: Option<&str>) -> Result<String> {
+        let registry = self.load_registry()?;
         if let Some(id) = repo_id {
+            registry.require(id)?;
             return Ok(id.to_string());
         }
-        let registry = self.load_registry()?;
 
         // Prefer the registered repo whose path contains the current directory.
         if let Ok(cwd) = std::env::current_dir() {
@@ -124,9 +127,14 @@ impl GraphService {
             .ok_or_else(|| MyceliumError::Storage(format!("Repository not found: {repo_id}")))
     }
 
-    /// On-disk database path for a repository.
-    fn db_path(&self, repo_id: &str) -> PathBuf {
-        RepoRegistry::repo_db_path(&self.data_dir, repo_id)
+    /// On-disk database path for a registered repository.
+    ///
+    /// Rejects malformed and unknown ids before any path is built, so a bad
+    /// id never reaches `Store::open` (which would create the directory).
+    fn db_path(&self, repo_id: &str) -> Result<PathBuf> {
+        Ok(self
+            .load_registry()?
+            .registered_db_path(&self.data_dir, repo_id)?)
     }
 
     /// Returns the process-wide [`Store`] handle for `repo_id`, opening it on
@@ -136,11 +144,14 @@ impl GraphService {
     /// the handle; every later call returns that same [`Arc<Store>`] without
     /// touching disk. There is therefore exactly one open handle per
     /// repository per process, shared by all callers — reads and writes alike.
+    ///
+    /// Only registered repositories can be opened; see
+    /// [`RepoRegistry::require`].
     pub async fn open_store(&self, repo_id: &str) -> Result<Arc<Store>> {
         if let Some(existing) = self.stores.get(repo_id) {
             return Ok(existing.clone());
         }
-        let store = Store::open(&self.db_path(repo_id), repo_id)
+        let store = Store::open(&self.db_path(repo_id)?, repo_id)
             .await
             .map_err(|e| MyceliumError::Storage(e.to_string()))?;
         // Two callers can both miss the cache above and both open the database,
@@ -376,10 +387,56 @@ mod tests {
         assert!(callers.is_empty());
     }
 
+    /// A service whose registry holds exactly `ids`.
+    fn service_with_repos(ids: &[&str]) -> (GraphService, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let mut registry = RepoRegistry::load(&dir.path().join("repos.json")).unwrap();
+        for id in ids {
+            registry.register(RepoInfo {
+                id: id.to_string(),
+                name: id.to_string(),
+                path: format!("/nonexistent/{id}"),
+                analyzed_at: String::new(),
+                symbol_count: 0,
+                file_count: 0,
+                analyzed_commit: None,
+                vector_geometry_version: 0,
+            });
+        }
+        registry.save().unwrap();
+        (GraphService::new(dir.path()), dir)
+    }
+
     #[test]
-    fn resolve_repo_id_passthrough_when_supplied() {
-        let (svc, _dir) = service_with_empty_registry();
+    fn resolve_repo_id_passthrough_when_registered() {
+        let (svc, _dir) = service_with_repos(&["explicit"]);
         assert_eq!(svc.resolve_repo_id(Some("explicit")).unwrap(), "explicit");
+    }
+
+    #[test]
+    fn resolve_repo_id_rejects_unknown_id_and_lists_known_ones() {
+        let (svc, _dir) = service_with_repos(&["alpha-1", "beta-2"]);
+        let err = svc.resolve_repo_id(Some("gamma")).unwrap_err();
+        assert!(matches!(err, MyceliumError::Repo(_)), "{err:?}");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("gamma") && msg.contains("alpha-1, beta-2"),
+            "{msg}"
+        );
+    }
+
+    #[tokio::test]
+    async fn open_store_rejects_unknown_and_traversal_ids_without_touching_disk() {
+        let (svc, dir) = service_with_repos(&["known-1"]);
+        for bad in ["unknown-1", "../escape", ".."] {
+            let err = svc.open_store(bad).await.err().expect("must be rejected");
+            assert!(matches!(err, MyceliumError::Repo(_)), "{bad}: {err:?}");
+        }
+        assert!(
+            !dir.path().join("data").exists(),
+            "no data dir may be created"
+        );
+        assert!(!dir.path().join("escape").exists());
     }
 
     #[test]

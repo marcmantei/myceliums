@@ -501,15 +501,33 @@ Start the MCP (Model Context Protocol) server. By default uses stdio transport. 
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--http` | string, optional | stdio | Run as HTTP server (e.g., `0.0.0.0:9999` or `127.0.0.1:3000`) |
+| `--http` | string, optional | stdio | Run as Streamable HTTP server on this address (e.g. `127.0.0.1:9999`). Non-loopback addresses are refused without `--allow-remote`. |
+| `--allow-remote` | flag | off | Allow a non-loopback `--http` address (e.g. `0.0.0.0:9999`). Every request must then send `Authorization: Bearer <token>`. |
 
 ```bash
 # Stdio transport (used by editor integrations)
 myc mcp
 
-# HTTP transport
+# HTTP transport, loopback only
 myc mcp --http 127.0.0.1:9999
+
+# HTTP transport for remote clients (bearer token required)
+MYC_MCP_TOKEN=$(openssl rand -hex 32) myc mcp --http 0.0.0.0:9999 --allow-remote
 ```
+
+Access control for the HTTP transport:
+
+- **Loopback by default.** The `Host` header must be `localhost`, `127.0.0.1`
+  or `[::1]` (this blocks DNS rebinding).
+- **Origin.** A request whose `Origin` header is present and is not a loopback
+  origin is rejected with 403, as the MCP specification requires. CORS headers
+  are only sent to loopback origins.
+- **Bearer token.** With `--allow-remote`, a token is required: the value of
+  `MYC_MCP_TOKEN` (surrounding whitespace is trimmed; at least 32 characters
+  in this mode), or a generated one that is printed once at startup. On
+  loopback, the token is enforced only when `MYC_MCP_TOKEN` is set.
+- The transport is plain HTTP. Put a TLS-terminating proxy in front of it on
+  untrusted networks.
 
 ### `myc hook`
 
@@ -538,6 +556,10 @@ Start the interactive graph visualization server. Opens a web-based UI to explor
 myc serve
 myc serve --port 3000 --repo my-project
 ```
+
+The server listens on `127.0.0.1` only and rejects requests whose `Host` is
+not loopback (DNS rebinding) or whose `Origin` is a foreign site, so other web
+pages cannot call its API (for example `POST /api/llm/config`).
 
 ### `myc email`
 

@@ -32,6 +32,10 @@ pub enum MyceliumError {
     #[error("symbol not found: {0}")]
     SymbolNotFound(String),
 
+    /// A caller-supplied repository id is malformed or not registered.
+    #[error(transparent)]
+    Repo(#[from] myceliums_storage::RepoIdError),
+
     /// A storage operation (LanceDB / store) failed.
     #[error("storage error: {0}")]
     Storage(String),

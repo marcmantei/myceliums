@@ -6502,7 +6502,10 @@ impl SourceParser {
     /// Falls back to the full source if no script block is found.
     fn extract_script_block(source: &str) -> String {
         // Match <script ...> (with optional attributes like lang="ts", setup, etc.)
-        let lower = source.to_lowercase();
+        // ASCII-only lowercasing keeps every byte offset identical to `source`;
+        // full Unicode lowercasing changes lengths (e.g. 'K' KELVIN SIGN →
+        // 'k'), and slicing `source` with those offsets panicked.
+        let lower = source.to_ascii_lowercase();
         if let Some(tag_start) = lower.find("<script") {
             // Find the closing > of the opening tag
             if let Some(content_start) = source[tag_start..].find('>') {
@@ -7018,6 +7021,17 @@ pub fn to_code_symbols(parsed: &[ParsedSymbol], file_path: &str, repo_id: &str) 
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn script_block_extraction_survives_case_changing_unicode() {
+        // U+212A KELVIN SIGN lowercases to a 1-byte 'k'; offsets from a
+        // Unicode-lowercased copy used to land inside it and panic.
+        let src = "\u{212A}<script>const a = 1;</script>";
+        assert_eq!(SourceParser::extract_script_block(src), "const a = 1;");
+        let src = "<p>İstanbul</p><SCRIPT lang=\"ts\">let x = 2;</SCRIPT>";
+        assert_eq!(SourceParser::extract_script_block(src), "let x = 2;");
+        assert_eq!(SourceParser::extract_script_block("\u{212A} no script"), "");
+    }
+
     use super::*;
 
     #[test]

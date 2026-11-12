@@ -446,11 +446,9 @@ pub async fn extract_mentions_llm(
         let text = &content_sym.content;
 
         // Truncate content to manage token budget
-        let truncated_content = if text.len() > max_content_chars {
-            format!(
-                "{}... [truncated]",
-                &text[..max_content_chars.min(text.len())]
-            )
+        let kept = crate::text::prefix_chars(text, max_content_chars);
+        let truncated_content = if kept.len() < text.len() {
+            format!("{kept}... [truncated]")
         } else {
             text.clone()
         };

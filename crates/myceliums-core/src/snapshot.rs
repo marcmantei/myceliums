@@ -237,6 +237,16 @@ pub fn load_snapshot_by_id(
     repo_id: &str,
     snapshot_id: &str,
 ) -> anyhow::Result<Option<GraphSnapshot>> {
+    // The id becomes a file name; it must not be able to leave the
+    // snapshot directory.
+    if snapshot_id.is_empty()
+        || snapshot_id.contains(['/', '\\', ':'])
+        || snapshot_id.starts_with("..")
+    {
+        anyhow::bail!(
+            "invalid snapshot id {snapshot_id:?}: it must be a plain snapshot name, not a path"
+        );
+    }
     let path = snapshot_dir(data_dir, repo_id).join(format!("{}.json", snapshot_id));
     if !path.exists() {
         return Ok(None);
@@ -255,6 +265,22 @@ struct VersionedSnapshotWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn load_snapshot_by_id_rejects_path_like_ids() {
+        let dir = tempfile::tempdir().unwrap();
+        for bad in ["", "../repos", "a/b", "..\\x", "C:x"] {
+            assert!(
+                load_snapshot_by_id(dir.path(), "repo", bad).is_err(),
+                "{bad:?}"
+            );
+        }
+        assert!(
+            load_snapshot_by_id(dir.path(), "repo", "2026-01-01T00-00-00Z")
+                .unwrap()
+                .is_none()
+        );
+    }
 
     #[test]
     fn test_diff_detects_additions_and_removals() {

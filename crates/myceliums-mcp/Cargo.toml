@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "MCP server for Myceliums — exposes 54 code-intelligence tools and 5 resource endpoints (1 static, 4 templated) over stdio transport for AI agent integration"
+description = "MCP server for Myceliums — exposes 55 code-intelligence tools and 5 resource endpoints (1 static, 4 templated) over stdio transport for AI agent integration"
 readme = "../../README.md"
 keywords = ["code-analysis", "knowledge-graph", "mcp", "ai-agent", "developer-tools"]
 categories = ["development-tools", "command-line-utilities"]
@@ -50,3 +50,5 @@ myceliums-mcp = { path = ".", features = ["test-support"] }
 # after issue #49 was filed) — no longer redundant with core's copy (#49 was
 # right when filed, but the integration suite landed a genuine second user).
 tempfile = { workspace = true }
+# `ServiceExt::oneshot` drives the HTTP access-control middleware in unit tests.
+tower = { version = "0.5", features = ["util"] }
