@@ -14,6 +14,8 @@ The following Cypher clauses and operators are supported:
 
 **Write operations are blocked.** You cannot use `CREATE`, `DELETE`, `SET`, or `MERGE`. The graph is read-only through Cypher queries.
 
+**Limits.** An expression may contain at most 64 nested `NOT`s, function calls, or aggregations (counted together, e.g. `NOT f(count(x))` uses 3); a 65th level fails with a parse error. `AND`/`OR` chains may be any length. `ORDER BY` sorts a column that mixes value types by type first, in openCypher order — maps < lists < strings < booleans < numbers < `null` — then by value within each type, so `null` comes last ascending and first with `DESC`.
+
 ## Node Types
 
 These are the types of nodes in the knowledge graph:

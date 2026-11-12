@@ -1,0 +1,5 @@
+use std::fmt;
+pub struct S;
+impl S { pub fn m(&self) -> u8 { helper() } }
+fn helper() -> u8 { 1 }
+trait T { fn t(); }

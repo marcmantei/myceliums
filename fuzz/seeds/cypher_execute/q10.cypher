@@ -1,0 +1,1 @@
+MATCH (s {name: 'main'}) WHERE starts_with(s.name, 'ma') OR ends_with(s.file_path, '.ts') RETURN s

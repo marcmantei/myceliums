@@ -1,0 +1,1 @@
+MATCH (f:File) RETURN f.path, f.language ORDER BY f.num_symbols

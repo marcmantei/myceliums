@@ -62,6 +62,24 @@ impl CypherExecutor {
         })
     }
 
+    /// Builds an executor over graph data already held in memory.
+    ///
+    /// Equivalent to [`CypherExecutor::from_store`] without the storage round
+    /// trip; useful for tests, fuzzing, and callers that already loaded the
+    /// graph.
+    pub fn from_parts(
+        symbols: Vec<CodeSymbol>,
+        files: Vec<FileNode>,
+        relationships: Vec<Relationship>,
+    ) -> Self {
+        Self {
+            symbols,
+            files,
+            relationships,
+            ontology: None,
+        }
+    }
+
     /// Builds an executor from the store and attaches an ontology for
     /// entity/edge-type validation.
     pub async fn from_store_with_ontology(store: &Store, ontology: Ontology) -> Result<Self> {
@@ -1284,15 +1302,42 @@ fn expr_key(expr: &Expr) -> String {
     }
 }
 
+/// Total order over JSON values used by `ORDER BY`.
+///
+/// Values of different types are ordered by type the way openCypher orders
+/// them — `map < list < string < boolean < number < null` — so `null` sorts
+/// last in ascending and first in descending order. Values of the same type
+/// use their natural order (lists lexicographically, maps by their serialized
+/// form). It must be a *total* order: `slice::sort_by` may panic on a
+/// comparator that is not, and earlier versions treated every cross-type pair
+/// as equal (#91).
 fn compare_values(a: &Value, b: &Value) -> std::cmp::Ordering {
+    fn type_rank(v: &Value) -> u8 {
+        match v {
+            Value::Object(_) => 0,
+            Value::Array(_) => 1,
+            Value::String(_) => 2,
+            Value::Bool(_) => 3,
+            Value::Number(_) => 4,
+            Value::Null => 5,
+        }
+    }
     match (a, b) {
-        (Value::String(a), Value::String(b)) => a.cmp(b),
+        (Value::Bool(a), Value::Bool(b)) => a.cmp(b),
+        // JSON numbers are never NaN, so `total_cmp` agrees with `<`.
         (Value::Number(a), Value::Number(b)) => a
             .as_f64()
             .unwrap_or(0.0)
-            .partial_cmp(&b.as_f64().unwrap_or(0.0))
-            .unwrap_or(std::cmp::Ordering::Equal),
-        _ => std::cmp::Ordering::Equal,
+            .total_cmp(&b.as_f64().unwrap_or(0.0)),
+        (Value::String(a), Value::String(b)) => a.cmp(b),
+        (Value::Array(a), Value::Array(b)) => a
+            .iter()
+            .zip(b.iter())
+            .map(|(x, y)| compare_values(x, y))
+            .find(|o| o.is_ne())
+            .unwrap_or_else(|| a.len().cmp(&b.len())),
+        (Value::Object(_), Value::Object(_)) => a.to_string().cmp(&b.to_string()),
+        _ => type_rank(a).cmp(&type_rank(b)),
     }
 }
 

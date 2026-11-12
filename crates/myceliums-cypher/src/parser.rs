@@ -21,7 +21,21 @@ pub enum ParseError {
     /// Input ended before a complete query could be parsed.
     #[error("Unexpected end of input")]
     UnexpectedEnd,
+    /// Expressions are nested deeper than [`MAX_NESTING_DEPTH`] (nested
+    /// `NOT`s, function calls, or aggregations). Rejected up front so hostile
+    /// input cannot overflow the stack of the recursive-descent parser.
+    #[error("Expression nested too deeply (limit {0})")]
+    TooDeeplyNested(usize),
 }
+
+/// Maximum number of nested `NOT`s, function calls, and aggregations (in any
+/// combination) inside one expression.
+///
+/// Each of those wraps one more level around its operand; `AND`/`OR` chains
+/// of any length do not count (they are folded into a balanced tree). Real
+/// queries stay in single digits; the limit only exists so adversarial input
+/// fails with [`ParseError::TooDeeplyNested`] instead of a stack overflow.
+pub const MAX_NESTING_DEPTH: usize = 64;
 
 /// A parsed, read-only Cypher query.
 #[derive(Debug, Clone)]
@@ -241,12 +255,17 @@ pub enum BinOp {
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    depth: usize,
 }
 
 impl Parser {
     /// Creates a parser over the given token stream.
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self { tokens, pos: 0 }
+        Self {
+            tokens,
+            pos: 0,
+            depth: 0,
+        }
     }
 
     /// Parses the token stream into a [`Query`], rejecting write operations.
@@ -590,30 +609,49 @@ impl Parser {
         Ok(WhereClause { expr })
     }
 
+    /// Runs `f` one nesting level deeper, failing once the depth exceeds
+    /// [`MAX_NESTING_DEPTH`].
+    fn nested<T>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Result<T, ParseError>,
+    ) -> Result<T, ParseError> {
+        // The top-level expression takes one level; nested constructs may
+        // add up to MAX_NESTING_DEPTH more.
+        if self.depth > MAX_NESTING_DEPTH {
+            return Err(ParseError::TooDeeplyNested(MAX_NESTING_DEPTH));
+        }
+        self.depth += 1;
+        let result = f(self);
+        self.depth -= 1;
+        result
+    }
+
     fn parse_or_expr(&mut self) -> Result<Expr, ParseError> {
-        let mut left = self.parse_and_expr()?;
+        self.nested(Self::parse_or_expr_inner)
+    }
+
+    fn parse_or_expr_inner(&mut self) -> Result<Expr, ParseError> {
+        let mut operands = vec![self.parse_and_expr()?];
         while self.peek_is(&Token::Or) {
             self.advance();
-            let right = self.parse_and_expr()?;
-            left = Expr::BinOp(Box::new(left), BinOp::Or, Box::new(right));
+            operands.push(self.parse_and_expr()?);
         }
-        Ok(left)
+        Ok(balanced(operands, BinOp::Or))
     }
 
     fn parse_and_expr(&mut self) -> Result<Expr, ParseError> {
-        let mut left = self.parse_comparison()?;
+        let mut operands = vec![self.parse_comparison()?];
         while self.peek_is(&Token::And) {
             self.advance();
-            let right = self.parse_comparison()?;
-            left = Expr::BinOp(Box::new(left), BinOp::And, Box::new(right));
+            operands.push(self.parse_comparison()?);
         }
-        Ok(left)
+        Ok(balanced(operands, BinOp::And))
     }
 
     fn parse_comparison(&mut self) -> Result<Expr, ParseError> {
         if self.peek_is(&Token::Not) {
             self.advance();
-            let expr = self.parse_comparison()?;
+            let expr = self.nested(Self::parse_comparison)?;
             return Ok(Expr::Not(Box::new(expr)));
         }
 
@@ -816,6 +854,27 @@ impl Parser {
     }
 }
 
+/// Folds a chain `a OP b OP c …` of an associative operator into a balanced
+/// binary tree.
+///
+/// A left-deep fold would make the AST as deep as the chain is long, so a
+/// query with a few hundred thousand `OR`s overflowed the stack when the tree
+/// was evaluated, printed, or dropped (#91). Balanced, the depth is
+/// `log2(len)`. `AND`/`OR` evaluate both sides to plain booleans without side
+/// effects, so regrouping does not change any result.
+fn balanced(mut operands: Vec<Expr>, op: BinOp) -> Expr {
+    debug_assert!(!operands.is_empty());
+    if operands.len() == 1 {
+        return operands.pop().expect("one operand");
+    }
+    let right = operands.split_off(operands.len() / 2);
+    Expr::BinOp(
+        Box::new(balanced(operands, op.clone())),
+        op.clone(),
+        Box::new(balanced(right, op)),
+    )
+}
+
 /// Lexes and parses a Cypher query string into a [`Query`] AST in one step.
 pub fn parse_cypher(input: &str) -> Result<Query, ParseError> {
     let tokens: Vec<Token> = crate::lexer::lex(input)
@@ -921,6 +980,81 @@ mod tests {
             assert_eq!(args.max_depth, Some(7));
         } else {
             panic!("Expected ShortestPath");
+        }
+    }
+
+    /// Regression (#91): deeply nested input used to recurse once per level
+    /// and overflow the stack (process abort, not a recoverable error).
+    #[test]
+    fn deeply_nested_not_is_rejected_not_overflowed() {
+        let query = format!("RETURN {}x", "NOT ".repeat(200_000));
+        assert!(matches!(
+            parse_cypher(&query),
+            Err(ParseError::TooDeeplyNested(_))
+        ));
+    }
+
+    /// Regression (#91): nested function calls / aggregations recurse through
+    /// `parse_expr` and must hit the same depth limit.
+    #[test]
+    fn deeply_nested_calls_are_rejected_not_overflowed() {
+        let query = format!(
+            "RETURN {}x{}",
+            "count(".repeat(200_000),
+            ")".repeat(200_000)
+        );
+        assert!(matches!(
+            parse_cypher(&query),
+            Err(ParseError::TooDeeplyNested(_))
+        ));
+        let query = format!("RETURN {}x{}", "f(".repeat(200_000), ")".repeat(200_000));
+        assert!(matches!(
+            parse_cypher(&query),
+            Err(ParseError::TooDeeplyNested(_))
+        ));
+    }
+
+    /// Exactly `MAX_NESTING_DEPTH` nested constructs parse; one more fails.
+    #[test]
+    fn nesting_limit_is_exact() {
+        for wrapper in ["f(", "count(", "NOT "] {
+            let close = if wrapper.ends_with('(') { ")" } else { "" };
+            let query = |depth: usize| {
+                format!(
+                    "MATCH (n) WHERE {}n.name = 'a'{} RETURN n",
+                    wrapper.repeat(depth),
+                    close.repeat(depth)
+                )
+            };
+            assert!(parse_cypher(&query(MAX_NESTING_DEPTH)).is_ok(), "{wrapper}");
+            assert!(
+                matches!(
+                    parse_cypher(&query(MAX_NESTING_DEPTH + 1)),
+                    Err(ParseError::TooDeeplyNested(_))
+                ),
+                "{wrapper}"
+            );
+        }
+    }
+
+    /// `AND`/`OR` chains become balanced trees: depth grows with log2(len).
+    #[test]
+    fn boolean_chains_are_balanced() {
+        fn depth(e: &Expr) -> usize {
+            match e {
+                Expr::BinOp(l, _, r) => 1 + depth(l).max(depth(r)),
+                _ => 0,
+            }
+        }
+        for op in ["OR", "AND"] {
+            let n = 1000;
+            let chain = std::iter::repeat_n("n.name = 'a'", n)
+                .collect::<Vec<_>>()
+                .join(format!(" {op} ").as_str());
+            let q = parse_cypher(&format!("MATCH (n) WHERE {chain} RETURN n")).unwrap();
+            let d = depth(&q.where_clause.unwrap().expr);
+            // 10 levels of AND/OR plus one comparison level.
+            assert_eq!(d, 11, "{op}");
         }
     }
 

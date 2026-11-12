@@ -1,0 +1,1 @@
+MATCH (a)-[r:CALLS]->(b) RETURN a.name, b.name

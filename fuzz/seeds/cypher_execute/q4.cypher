@@ -1,0 +1,1 @@
+MATCH (a)<-[:CALLS]-(b) WHERE b.start_line >= 3 RETURN count(a) AS n, b.name

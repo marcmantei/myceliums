@@ -1,0 +1,1 @@
+MATCH (s:CodeSymbol) RETURN s.name LIMIT 5

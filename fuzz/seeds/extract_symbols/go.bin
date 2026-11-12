@@ -1,0 +1,5 @@
+package main
+import "fmt"
+type T struct{}
+func (t *T) M() { fmt.Println(helper()) }
+func helper() int { return 1 }

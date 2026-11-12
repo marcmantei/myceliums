@@ -1,0 +1,1 @@
+MATCH (s) RETURN collect(s.name), min(s.start_line), max(s.end_line), avg(s.start_line), sum(s.end_line)
