@@ -205,7 +205,7 @@ The lexical mode is offline and reproducible by construction: the corpus is
 parsed from in-repo fixtures, files are visited in sorted order, BM25 scoring
 and its stable sort are deterministic.
 
-The model-backed modes add three sources of variation, each handled:
+The model-backed modes add more sources of variation; each is handled:
 
 - **Symbol ids.** The parser mints a random UUID per symbol per parse. The store
   upserts by uid and fusion matches its two legs by uid, so the corpus replaces
@@ -222,11 +222,12 @@ The model-backed modes add three sources of variation, each handled:
   ranking first, then vector-only candidates), which the stable sort makes the
   tie-break.
 - **Model arithmetic.** ONNX inference is deterministic on one machine with one
-  runtime build, but not bit-identical across CPU architectures. A baseline
+  runtime build, but not guaranteed to be bit-identical across CPU
+  architectures. A baseline
   recorded on one platform and compared on another can differ where two
   candidates score within float noise of each other. The report records its
-  `platform`, the gate notes a mismatch, and the significance rule below is
-  what keeps such noise from failing a build.
+  `platform`, the gate notes a mismatch, and the interval-plus-minimal-effect
+  rule below is what keeps such noise from failing a build.
 
 Two consecutive runs on one machine produce byte-identical report JSON for all
 four modes (verified by diffing two runs; `evaluation_is_deterministic` and
