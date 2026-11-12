@@ -9,6 +9,7 @@ pull requests.
 ## [Unreleased]
 
 ### Added
+- Agent benchmark (`evals/agent/`): 30 code-understanding tasks on pinned fzf, hono and FastAPI checkouts, run by a headless Claude Code agent with and without the myceliums MCP server and graded against hand-verified answers, plus a tool-selection eval over the live `tools/list`. The first pilot run and its report are committed (#99).
 - Retrieval-quality measurement against a golden dataset, reported on every PR (#76, #34).
 - The retrieval evaluation scores semantic, hybrid and hybrid+rerank search through the shipped code paths, adds hit@k, nDCG@10 and R-precision with per-intent and per-query results, and reports paired bootstrap confidence intervals. CI caches the model weights, scores all four modes and fails only on a regression of at least 0.02 whose 95% interval lies below zero — per comparison, not corrected for multiple comparisons (#92).
 - `ann-recall` measures the recall of the IVF-PQ vector index against exact search (#92).

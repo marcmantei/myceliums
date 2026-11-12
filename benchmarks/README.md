@@ -11,6 +11,11 @@ and R-precision for lexical, semantic, hybrid and hybrid+rerank search, with
 bootstrap confidence intervals) — see
 [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
 
+The benchmark that does put an agent in the loop — a headless Claude Code
+agent answering graded code-understanding questions with and without the
+myceliums MCP server, measuring accuracy, tokens, tool calls and time — is
+[`evals/agent/`](../evals/agent/README.md).
+
 ## Output-size comparison — `run.sh`, `results/`, `latest.json`, `rerun-2026-10-17/`
 
 `run.sh` clones the repositories listed in `repos.toml` and, for each

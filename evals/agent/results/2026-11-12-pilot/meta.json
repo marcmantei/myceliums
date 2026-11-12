@@ -1,0 +1,119 @@
+{
+  "attempts_total": 180,
+  "claude_version": "2.1.322",
+  "date": "2026-11-12",
+  "effort": "medium",
+  "index": {
+    "fastapi": {
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "communities": 625,
+      "embedded": 7370,
+      "files": 1066,
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_seconds": 1082.8,
+      "indexed_at": "2026-11-12T10:12:43.090884+00:00",
+      "myc_sha256": "268c200c49429e5a072404382c2bfa5a2368a9388cda6606aaacdc3f50750273",
+      "myc_version": "myc 0.3.2",
+      "processes": 2358,
+      "relationships": 13109,
+      "repo": "fastapi",
+      "repo_id": "fastapi-5b57bc04",
+      "symbols": 7370,
+      "work_path": "/private/tmp/aeval/fastapi"
+    },
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "communities": 43,
+      "embedded": 2817,
+      "files": 112,
+      "index_exclude_extra": [],
+      "index_seconds": 634.0,
+      "indexed_at": "2026-11-12T09:16:36.685739+00:00",
+      "myc_sha256": "268c200c49429e5a072404382c2bfa5a2368a9388cda6606aaacdc3f50750273",
+      "myc_version": "myc 0.3.2",
+      "processes": 646,
+      "relationships": 8046,
+      "repo": "fzf",
+      "repo_id": "fzf-93a6746c",
+      "symbols": 2817,
+      "work_path": "/private/tmp/aeval/fzf"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "communities": 297,
+      "embedded": 10538,
+      "files": 447,
+      "index_exclude_extra": [],
+      "index_seconds": 2188.3,
+      "indexed_at": "2026-11-12T09:57:21.796542+00:00",
+      "myc_sha256": "268c200c49429e5a072404382c2bfa5a2368a9388cda6606aaacdc3f50750273",
+      "myc_version": "myc 0.3.2",
+      "processes": 231,
+      "relationships": 12446,
+      "repo": "hono",
+      "repo_id": "hono-ef795c18",
+      "symbols": 10538,
+      "work_path": "/private/tmp/aeval/hono"
+    }
+  },
+  "label": "2026-11-12-pilot",
+  "max_turns": 40,
+  "mcp_tools_offered": 54,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "c2cac9ca39cb",
+  "myc_sha256": "268c200c49429e5a072404382c2bfa5a2368a9388cda6606aaacdc3f50750273",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "The with condition adds only the MCP server: `myc setup-claude` also installs a SessionStart hook (re-index plus a status line in the session) and a PostToolUse hook; neither is part of this run.",
+    "Claude Code defers MCP tool definitions by default: with myceliums attached, the agent saw the 54 tool names and the server's instructions (\"WHEN TO USE MYCELIUMS (always try first for these tasks)\"; checked in a separate dry run) but not the tool schemas until it called ToolSearch.",
+    "FastAPI was indexed with docs/ excluded (index-time .myceliums.toml): with the 1,709 Markdown files in 13 languages the analysis produced 23,941 symbols and its community detection had not finished after 13 minutes, before any embedding. The agent could still read docs/.",
+    "Gold amended after the run started: hono-dead-utils gained getFilePathWithoutDefaultDocument as an optional (neutral) item, because the question admits a transitive reading (it is called only by the unused getFilePath). Every session is re-graded from its stored answer. The fastapi-dead-deprecated question was reworded (called -> referenced) before any FastAPI session ran.",
+    "Sessions ran in three batches by repository as the indexes became ready (fzf, then hono, then FastAPI); within a repository the order is repetition-major with the two conditions adjacent. The fzf batch stopped once at the account-utilisation guard (0.95) and was resumed with the guard at 0.97.",
+    "The benchmark machine was heavily loaded by unrelated builds (load average 300-500 on 10 cores); wall times include that.",
+    "`--effort medium` was fixed (the CLI default is served per model and would otherwise vary); `cost_usd` is the CLI's list-price estimate and depends on prompt caching across sessions."
+  ],
+  "repos": {
+    "fastapi": {
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "display_name": "FastAPI",
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_note": "docs/ (1,709 Markdown files in 13 languages) is excluded from the index: with it, `myc analyze` produced 23,941 symbols and its community detection had not finished after 13 minutes on the benchmark machine, before any embedding. The agent still sees docs/.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "fastapi",
+      "ref": "0.162.5",
+      "url": "https://github.com/fastapi/fastapi.git"
+    },
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "display_name": "fzf",
+      "language": "go",
+      "language_name": "Go",
+      "name": "fzf",
+      "ref": "v0.75.0",
+      "url": "https://github.com/junegunn/fzf.git"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "display_name": "hono",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "hono",
+      "ref": "v4.13.18",
+      "url": "https://github.com/honojs/hono.git"
+    }
+  },
+  "reps": 3,
+  "retried_runs": [],
+  "runs_final": 180,
+  "sessions_launched_ledger": 180,
+  "success_threshold": 0.8,
+  "tasks_sha256": "8f4472a54350f0d75316f74005790289ebdea422e92e2be5bb971decb8f71808",
+  "timeout_s": 900,
+  "tool_search": null
+}

@@ -1,0 +1,45 @@
+name: Agent Eval
+
+# The agent benchmark itself needs Claude credentials and runs locally (see
+# evals/agent/README.md). This job checks only what needs no secrets: the
+# harness's unit tests, the task file's schema, and that every committed report
+# is exactly what the generator makes of the committed results.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'evals/agent/**'
+      - '.github/workflows/agent-eval.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'evals/agent/**'
+      - '.github/workflows/agent-eval.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  agent-eval:
+    name: Agent Eval (offline checks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Unit tests
+        run: python3 -m unittest discover -s evals/agent/tests -v
+      - name: Task schema
+        run: python3 evals/agent/agent_eval.py check-tasks --schema-only
+      - name: Committed reports match their data
+        run: |
+          set -e
+          for dir in evals/agent/results/*/; do
+            label=$(basename "$dir")
+            if [ -f "$dir/results.jsonl" ]; then
+              python3 evals/agent/agent_eval.py report "$label" --check
+            fi
+            if [ -f "$dir/toolsel_results.jsonl" ]; then
+              python3 evals/agent/agent_eval.py toolsel-report "$label" --check
+            fi
+          done

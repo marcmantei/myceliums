@@ -10,7 +10,7 @@
 
 **The code knowledge graph that gives AI agents structural understanding — not just text search.**
 
-AI coding tools re-read your entire codebase on every task—burning tokens, hallucinating connections, and missing architectural context. Myceliums parses your code into a queryable graph of symbols, call chains, communities, and execution flows. One query replaces thousands of lines of context.
+Myceliums parses your code into a queryable graph of symbols, call chains, communities, and execution flows, and serves it to AI agents over MCP and to you on the command line. Whether that makes an agent more accurate, cheaper or faster is measured rather than assumed — see [Does it help an agent?](#does-it-help-an-agent).
 
 ```
 $ myc analyze ./my-project
@@ -29,13 +29,14 @@ Repository ID: my-project-a1b2c3
 
 ## Why Myceliums?
 
-| Without Myceliums | With Myceliums |
+| Text search alone | With Myceliums |
 |---|---|
-| AI grep-searches across hundreds of files | One graph query returns exact results |
-| "What calls this function?" → hallucinated guesses | Heuristic caller/callee chains from name-based resolution |
-| Full source files sent to AI (thousands of tokens) | Structural summaries: signatures, callers, callees |
-| No understanding of code architecture | Community detection reveals code clusters |
-| Manual impact analysis | `myc impact` traces blast radius (with confidence flags) |
+| Finds the lines where a name appears | Also knows the symbol each line belongs to and what calls what (heuristic, name-based resolution) |
+| Reads whole files for context | Returns a symbol's signature, callers and callees |
+| No notion of the code's structure | Community detection groups related code |
+| Impact analysis by hand | `myc impact` traces the blast radius of a diff (with confidence flags) |
+
+These are capabilities, not measured outcomes. Measured on 30 code-understanding questions, a Claude Code agent with grep and file reading alone answered as accurately as with myceliums added, and never called myceliums when it had it: [results](#does-it-help-an-agent).
 
 ### Key capabilities
 
@@ -68,7 +69,7 @@ myc analyze ./my-project
 claude
 ```
 
-That's it. Claude Code will automatically use the knowledge graph for code exploration.
+That's it. Claude Code can now call the knowledge-graph tools. Whether it does is up to the model: in the [agent benchmark](#does-it-help-an-agent) it never did, and kept to its own search tools.
 
 For the full walkthrough, see the [Getting Started guide](docs/getting-started.md).
 
@@ -336,6 +337,54 @@ Any other MCP-compatible editor can use myceliums by pointing to `myc mcp`.
 | `get_processes` | Retrieve traced execution flows with optional filtering |
 | `list_repos` | List analyzed repositories and their `repo_id`s |
 | `delete` | Remove a repository's analysis data |
+
+---
+
+## Does it help an agent?
+
+Measured on 12 November 2026 with `myc 0.3.2`: a headless Claude Code agent
+(2.1.322, `claude-sonnet-5-5`, `--effort medium`) answered 30
+code-understanding questions — callers, callees, impact of a change, where
+something is implemented, dead code, call chains — about pinned checkouts of
+fzf (Go), hono (TypeScript) and FastAPI (Python). Each question ran three
+times with the agent's own read and search tools only, and three times with
+the myceliums MCP server added; nothing else differed. Answers were graded
+against gold sets derived with grep, reading and compiler tooling and verified by an agent (not yet reviewed by a person). Brackets are 95 % paired bootstrap intervals
+over the 30 tasks.
+
+| Per session | without myceliums | with myceliums | with − without |
+|---|---:|---:|---:|
+| Success rate (F1 ≥ 0.8) | 100 % | 99 % | −1 pp [−3 pp, 0 pp] |
+| Mean F1 | 0.997 | 0.991 | −0.006 [−0.018, +0.003] |
+| Input tokens (incl. cache reads) | 24,344 | 30,456 | +6,112 [+3,769, +9,250] (+25 %) |
+| Output tokens | 795 | 807 | +13 [−42, +69] |
+| Cost, USD (CLI list-price estimate) | 0.026 | 0.027 | +0.001 [−0.001, +0.003] |
+| Tool calls | 2.8 | 2.8 | 0.0 [−0.3, +0.2] |
+| Wall time, s | 12.7 | 15.3 | +2.6 [+1.6, +3.6] (+20 %) |
+
+What this run shows, plainly:
+
+- **No benefit on these tasks.** With grep and file reading alone the agent
+  already answered almost every question correctly, so there was no accuracy
+  to gain, and none was gained.
+- **The agent never used myceliums.** It called a myceliums tool in 0 of 90
+  sessions that had the server, although the server's instructions ("always
+  try first") and the names of its 54 tools were in its context. Claude Code
+  defers MCP tool definitions by default; the agent never loaded them.
+- **The server still costs.** Its tool names and instructions add 1,882
+  tokens to every model call, which is where the 25 % more input tokens come
+  from; sessions with the server also took 2.6 s (20 %) longer.
+- **The tool descriptions are not the obstacle, as far as a single-turn test
+  shows.** Asked to pick one myceliums tool for each of 54 developer requests
+  (Haiku only, the pick is not executed), `claude-haiku-5-5` chose an
+  acceptable tool for 53 of 54 in each of two passes.
+
+This is a pilot with clear limits: three repositories, one model and effort
+level, tasks a grep-based agent handles well, labels checked with compiler
+tooling by an agent rather than reviewed by a human, and only the MCP server
+(not the SessionStart hook that `myc setup-claude` also installs). Method,
+per-task results and caveats: [`evals/agent/`](evals/agent/README.md) and the
+[pilot report](evals/agent/results/2026-11-12-pilot/REPORT.md).
 
 ---
 
@@ -615,6 +664,7 @@ The workspace has seven crates:
 | Editor setup (all 14 editors) | [docs/editors/overview.md](docs/editors/overview.md) |
 | Call resolution limitations | [docs/guides/call-resolution-limitations.md](docs/guides/call-resolution-limitations.md) |
 | Token savings | [docs/guides/token-savings.md](docs/guides/token-savings.md) |
+| Agent benchmark (with vs without myceliums) | [evals/agent/README.md](evals/agent/README.md) |
 | Cypher query guide | [docs/guides/cypher-queries.md](docs/guides/cypher-queries.md) |
 | Search modes | [docs/guides/search-modes.md](docs/guides/search-modes.md) |
 | Large codebases | [docs/guides/large-codebases.md](docs/guides/large-codebases.md) |

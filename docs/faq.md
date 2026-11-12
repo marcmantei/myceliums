@@ -121,7 +121,7 @@ See [docs/reference/cypher-queries.md](reference/cypher-queries.md) for the full
 
 ### 8. Does myceliums save tokens automatically?
 
-No. The AI assistant must actively call myceliums tools (like `context_search` or `symbol_context`) instead of reading files with grep and cat. Myceliums returns structured results with exact locations, types, and relationships in a single call, which is far more token-efficient than multiple rounds of file reading.
+No. The AI assistant must actively call myceliums tools (like `context_search` or `symbol_context`) instead of reading files with grep and cat. Myceliums returns structured results with exact locations, types, and relationships in a single call; whether that saves tokens in practice depends on whether the agent uses it. In the [agent benchmark](../evals/agent/README.md) (12 November 2026, Claude Code with `claude-sonnet-5-5`, 30 code-understanding tasks), the agent called a myceliums tool in 0 of 90 sessions that had the server, and those sessions used 25 % more input tokens than the ones without it — see the [report](../evals/agent/results/2026-11-12-pilot/REPORT.md).
 
 The setup wizard can add instructions to your editor configuration that guide the AI to prefer myceliums tools. See [docs/guides/token-savings.md](guides/token-savings.md) for details on how this works.
 

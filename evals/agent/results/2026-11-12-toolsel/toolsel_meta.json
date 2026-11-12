@@ -1,0 +1,470 @@
+{
+  "claude_version": "2.1.322 (Claude Code)",
+  "date": "2026-11-12",
+  "intents": [
+    {
+      "expected": [
+        "context_search",
+        "hybrid_search",
+        "semantic_search",
+        "search_documents"
+      ],
+      "id": "search-config-parser",
+      "intent": "Find the function that parses the configuration file."
+    },
+    {
+      "expected": [
+        "hybrid_search",
+        "semantic_search",
+        "context_search",
+        "search_documents",
+        "isolate_intent"
+      ],
+      "id": "search-auth-where",
+      "intent": "Where is user authentication handled in this codebase?"
+    },
+    {
+      "expected": [
+        "context_search",
+        "get_symbol_definition",
+        "symbol_context",
+        "search_documents",
+        "hybrid_search"
+      ],
+      "id": "search-class-by-name",
+      "intent": "Look up the class named RequestHandler."
+    },
+    {
+      "expected": [
+        "semantic_search",
+        "hybrid_search"
+      ],
+      "id": "search-concept-retry",
+      "intent": "Show me code that deals with retrying failed network calls, even if it never uses the word 'retry'."
+    },
+    {
+      "expected": [
+        "get_symbol_definition",
+        "symbol_context"
+      ],
+      "id": "def-source",
+      "intent": "Show me the source code of the function normalize_path."
+    },
+    {
+      "expected": [
+        "symbol_context"
+      ],
+      "id": "def-with-neighbours",
+      "intent": "Before I change save_user, show me its code together with who calls it and what it calls."
+    },
+    {
+      "expected": [
+        "get_file_symbols"
+      ],
+      "id": "file-symbols",
+      "intent": "List every function and class defined in src/server/router.ts."
+    },
+    {
+      "expected": [
+        "get_callers",
+        "symbol_context"
+      ],
+      "id": "callers-direct",
+      "intent": "What calls validate_token?"
+    },
+    {
+      "expected": [
+        "get_callees",
+        "symbol_context"
+      ],
+      "id": "callees-direct",
+      "intent": "Which functions does process_order call?"
+    },
+    {
+      "expected": [
+        "get_callees"
+      ],
+      "id": "callees-deep",
+      "intent": "Show the call tree below main, three levels deep."
+    },
+    {
+      "expected": [
+        "get_callers"
+      ],
+      "id": "callers-deep",
+      "intent": "Which code depends on encode_frame, including callers of its callers?"
+    },
+    {
+      "expected": [
+        "detect_impact",
+        "get_review_context"
+      ],
+      "id": "impact-diff",
+      "intent": "I have uncommitted changes. What else in the codebase could they break?"
+    },
+    {
+      "expected": [
+        "get_review_context",
+        "detect_impact"
+      ],
+      "id": "review-diff",
+      "intent": "Give me a compact summary of my current diff for code review: changed functions with their callers and callees."
+    },
+    {
+      "expected": [
+        "get_suggested_questions"
+      ],
+      "id": "review-questions",
+      "intent": "What questions should a reviewer ask about my current changes?"
+    },
+    {
+      "expected": [
+        "find_path"
+      ],
+      "id": "path-between",
+      "intent": "How is handle_login connected to write_audit_log?"
+    },
+    {
+      "expected": [
+        "get_processes"
+      ],
+      "id": "flow-http-db",
+      "intent": "Show how a request flows from the HTTP entry point down to the database layer."
+    },
+    {
+      "expected": [
+        "get_processes"
+      ],
+      "id": "flow-overview",
+      "intent": "What are the main execution flows in this project?"
+    },
+    {
+      "expected": [
+        "get_communities",
+        "architecture_view"
+      ],
+      "id": "modules-overview",
+      "intent": "How is the code organised into clusters of related modules?"
+    },
+    {
+      "expected": [
+        "get_community_detail"
+      ],
+      "id": "community-members",
+      "intent": "List all members of community 12 and its entry points."
+    },
+    {
+      "expected": [
+        "architecture_view",
+        "export_mermaid"
+      ],
+      "id": "arch-diagram",
+      "intent": "Draw a service-level architecture diagram of this repository."
+    },
+    {
+      "expected": [
+        "export_mermaid"
+      ],
+      "id": "mermaid-callgraph",
+      "intent": "Export the call graph as a Mermaid flowchart."
+    },
+    {
+      "expected": [
+        "get_god_nodes",
+        "get_centrality_report"
+      ],
+      "id": "god-objects",
+      "intent": "Which functions have the most incoming and outgoing calls?"
+    },
+    {
+      "expected": [
+        "get_centrality_report"
+      ],
+      "id": "betweenness",
+      "intent": "Rank functions by betweenness so I can find bottlenecks."
+    },
+    {
+      "expected": [
+        "get_community_metrics"
+      ],
+      "id": "modularity",
+      "intent": "How cleanly are the detected modules separated? I want a modularity score."
+    },
+    {
+      "expected": [
+        "detect_circular_dependencies",
+        "architecture_lint"
+      ],
+      "id": "cycles",
+      "intent": "Are there import or call cycles between modules?"
+    },
+    {
+      "expected": [
+        "architecture_lint"
+      ],
+      "id": "arch-lint",
+      "intent": "Run architecture quality checks on this repository."
+    },
+    {
+      "expected": [
+        "get_dependencies"
+      ],
+      "id": "file-deps",
+      "intent": "Which files does src/db/pool.go import, directly and transitively, and which files import it?"
+    },
+    {
+      "expected": [
+        "get_module_coupling"
+      ],
+      "id": "coupling",
+      "intent": "Compute afferent and efferent coupling and instability for each directory."
+    },
+    {
+      "expected": [
+        "get_surprising_connections"
+      ],
+      "id": "surprising",
+      "intent": "Find calls between parts of the code that normally have nothing to do with each other."
+    },
+    {
+      "expected": [
+        "get_graph_diff",
+        "detect_architecture_drift",
+        "snapshot_diff"
+      ],
+      "id": "drift-since-snapshot",
+      "intent": "What symbols and relationships were added or removed since the last snapshot?"
+    },
+    {
+      "expected": [
+        "detect_architecture_drift"
+      ],
+      "id": "drift-score",
+      "intent": "Give me a single drift score comparing the current graph with the last snapshot."
+    },
+    {
+      "expected": [
+        "find_dead_code"
+      ],
+      "id": "dead-code",
+      "intent": "Find functions that nothing calls anymore."
+    },
+    {
+      "expected": [
+        "get_knowledge_gaps"
+      ],
+      "id": "untested",
+      "intent": "Which functions are not called by any test?"
+    },
+    {
+      "expected": [
+        "quality_hotspots"
+      ],
+      "id": "hotspots",
+      "intent": "Which code is both central and frequently changed, so it is the best refactoring target?"
+    },
+    {
+      "expected": [
+        "get_stats"
+      ],
+      "id": "stats",
+      "intent": "How many functions, classes and files does this repository have, per language?"
+    },
+    {
+      "expected": [
+        "get_schema"
+      ],
+      "id": "schema",
+      "intent": "What properties does a Function node have in the graph schema?"
+    },
+    {
+      "expected": [
+        "cypher_query"
+      ],
+      "id": "cypher-raw",
+      "intent": "Run this graph query: MATCH (f)-[:CALLS]->(g) WHERE g.name = 'log' RETURN f.name"
+    },
+    {
+      "expected": [
+        "cypher_query"
+      ],
+      "id": "implements",
+      "intent": "Find all classes that implement the Storage interface."
+    },
+    {
+      "expected": [
+        "rename_symbol"
+      ],
+      "id": "rename",
+      "intent": "Preview renaming getUser to fetchUser across the codebase."
+    },
+    {
+      "expected": [
+        "get_git_context"
+      ],
+      "id": "git-history",
+      "intent": "Who last modified apply_discount, and how many commits have touched it?"
+    },
+    {
+      "expected": [
+        "get_ownership"
+      ],
+      "id": "codeowners",
+      "intent": "Who owns src/billing according to CODEOWNERS?"
+    },
+    {
+      "expected": [
+        "get_rationale"
+      ],
+      "id": "rationale",
+      "intent": "Why was retry_backoff written this way? Show the NOTE and HACK comments about it."
+    },
+    {
+      "expected": [
+        "query_knowledge"
+      ],
+      "id": "docs-mention",
+      "intent": "Find documents and emails that mention the TokenBucket class."
+    },
+    {
+      "expected": [
+        "search_emails"
+      ],
+      "id": "emails-search",
+      "intent": "Search my indexed emails for messages from Alice about the release."
+    },
+    {
+      "expected": [
+        "get_conversation"
+      ],
+      "id": "email-thread",
+      "intent": "Show me the whole email thread for conversation UID conv-1234."
+    },
+    {
+      "expected": [
+        "record_decision"
+      ],
+      "id": "adr-record",
+      "intent": "Record an architecture decision: we use PostgreSQL for persistence."
+    },
+    {
+      "expected": [
+        "get_decisions"
+      ],
+      "id": "adr-list",
+      "intent": "List the architecture decision records of this repository."
+    },
+    {
+      "expected": [
+        "map_service"
+      ],
+      "id": "service-name",
+      "intent": "Call community 7 'billing-service' from now on."
+    },
+    {
+      "expected": [
+        "get_contracts"
+      ],
+      "id": "contracts",
+      "intent": "Match the OpenAPI endpoints in this repo to their handler functions."
+    },
+    {
+      "expected": [
+        "isolate_intent",
+        "hybrid_search",
+        "semantic_search"
+      ],
+      "id": "isolate-feature",
+      "intent": "Collect all code that implements rate limiting in this repository."
+    },
+    {
+      "expected": [
+        "differentiate_intent"
+      ],
+      "id": "compare-repos",
+      "intent": "Compare how repository A and repository B implement authentication."
+    },
+    {
+      "expected": [
+        "plan_adaptation"
+      ],
+      "id": "port-plan",
+      "intent": "Plan the steps to port the caching approach of repository A to repository B."
+    },
+    {
+      "expected": [
+        "analyze"
+      ],
+      "id": "index",
+      "intent": "Index this project so I can query it."
+    },
+    {
+      "expected": [
+        "delete"
+      ],
+      "id": "delete-index",
+      "intent": "Remove the stored analysis data for repository foo-1234."
+    }
+  ],
+  "model": "claude-haiku-5-5",
+  "model_alias": "haiku",
+  "myc_version": "myc 0.3.2",
+  "n_tools": 54,
+  "tool_names": [
+    "analyze",
+    "architecture_lint",
+    "architecture_view",
+    "context_search",
+    "cypher_query",
+    "delete",
+    "detect_architecture_drift",
+    "detect_circular_dependencies",
+    "detect_impact",
+    "differentiate_intent",
+    "export_mermaid",
+    "find_dead_code",
+    "find_path",
+    "get_callees",
+    "get_callers",
+    "get_centrality_report",
+    "get_communities",
+    "get_community_detail",
+    "get_community_metrics",
+    "get_contracts",
+    "get_conversation",
+    "get_decisions",
+    "get_dependencies",
+    "get_file_symbols",
+    "get_git_context",
+    "get_god_nodes",
+    "get_graph_diff",
+    "get_knowledge_gaps",
+    "get_module_coupling",
+    "get_ownership",
+    "get_person_context",
+    "get_processes",
+    "get_rationale",
+    "get_review_context",
+    "get_schema",
+    "get_service_map",
+    "get_stats",
+    "get_suggested_questions",
+    "get_surprising_connections",
+    "get_symbol_definition",
+    "hybrid_search",
+    "isolate_intent",
+    "link_decision",
+    "map_service",
+    "plan_adaptation",
+    "quality_hotspots",
+    "query_knowledge",
+    "record_decision",
+    "rename_symbol",
+    "search_documents",
+    "search_emails",
+    "semantic_search",
+    "snapshot_diff",
+    "symbol_context"
+  ],
+  "tools_sha256": "5703072ff242ae1dd7cda984c1b830794b184936baaf77a92e15698b8ab2f5c2"
+}

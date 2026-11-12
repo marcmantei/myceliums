@@ -1,0 +1,36 @@
+{
+  "description": "Pinned target repositories. Fetched into the cache (agent_eval.py fetch), never vendored. Chosen as mid-size, actively maintained projects in three languages myceliums parses: an application (fzf, Go), a library with many small modules (hono, TypeScript) and a library whose repository is dominated by docs and tests (fastapi, Python).",
+  "repos": [
+    {
+      "name": "fzf",
+      "display_name": "fzf",
+      "language": "go",
+      "language_name": "Go",
+      "url": "https://github.com/junegunn/fzf.git",
+      "ref": "v0.75.0",
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb"
+    },
+    {
+      "name": "hono",
+      "display_name": "hono",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "url": "https://github.com/honojs/hono.git",
+      "ref": "v4.13.18",
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823"
+    },
+    {
+      "name": "fastapi",
+      "display_name": "FastAPI",
+      "language": "python",
+      "language_name": "Python",
+      "url": "https://github.com/fastapi/fastapi.git",
+      "ref": "0.162.5",
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_note": "docs/ (1,709 Markdown files in 13 languages) is excluded from the index: with it, `myc analyze` produced 23,941 symbols and its community detection had not finished after 13 minutes on the benchmark machine, before any embedding. The agent still sees docs/."
+    }
+  ]
+}
