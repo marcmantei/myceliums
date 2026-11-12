@@ -47,7 +47,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 lancedb = "0.26"
 arrow-array = "57"
 arrow-data = "57"
-arrow-schema = "57"
+arrow-schema = "60"
 
 # Parsing
 tree-sitter = "0.25"
