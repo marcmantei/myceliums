@@ -523,7 +523,8 @@ Access control for the HTTP transport:
   origin is rejected with 403, as the MCP specification requires. CORS headers
   are only sent to loopback origins.
 - **Bearer token.** With `--allow-remote`, a token is required: the value of
-  `MYC_MCP_TOKEN`, or a generated one that is printed once at startup. On
+  `MYC_MCP_TOKEN` (surrounding whitespace is trimmed; at least 32 characters
+  in this mode), or a generated one that is printed once at startup. On
   loopback, the token is enforced only when `MYC_MCP_TOKEN` is set.
 - The transport is plain HTTP. Put a TLS-terminating proxy in front of it on
   untrusted networks.

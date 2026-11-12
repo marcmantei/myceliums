@@ -572,9 +572,12 @@ other tools expect.
 ### Repository ids
 
 Every `repo_id` parameter is checked before anything touches the disk. The id
-must be registered (shown by `list_repos`) and must be a plain name: no `/`,
-`\`, `:`, control characters, `.` or `..`. An unknown id is an error that lists
-the known ids; it no longer returns an empty result.
+must be registered (shown by `list_repos`) and must name a single directory:
+it may not be `.` or `..` and may not contain a path separator or NUL (`/` on
+macOS/Linux; `/`, `\` and `:` on Windows). An unknown or malformed id is an
+`invalid_params` error that lists the known ids; it no longer returns an empty
+result. `analyze` derives ids from the folder name and replaces any such
+character with `_`, so derived ids always pass.
 
 ### `delete`
 
