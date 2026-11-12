@@ -406,15 +406,16 @@ unchanged from the previous baseline (MRR 0.6405, recall@10 0.6983): adding the
 other modes moved no lexical number.
 
 Differences, paired bootstrap 95% CI (10 000 resamples, fixed seed). **Bold**
-intervals exclude zero:
+intervals exclude zero — per comparison, uncorrected for the 45 intervals the
+run computes (see "What significant means here"):
 
 | Comparison | Δ MRR@10 | Δ nDCG@10 | Δ recall@10 |
 | --- | ---: | ---: | ---: |
-| semantic − lexical | **+0.162 [+0.073, +0.258]** | **+0.164 [+0.096, +0.241]** | **+0.144 [+0.074, +0.224]** |
-| hybrid − lexical | **+0.131 [+0.059, +0.209]** | **+0.118 [+0.070, +0.173]** | **+0.112 [+0.056, +0.178]** |
-| hybrid+rerank − lexical | **+0.170 [+0.066, +0.278]** | **+0.152 [+0.069, +0.241]** | **+0.135 [+0.061, +0.220]** |
-| hybrid − semantic | −0.031 [−0.093, +0.026] | **−0.046 [−0.096, −0.007]** | −0.032 [−0.086, +0.016] |
-| hybrid+rerank − hybrid | +0.039 [−0.045, +0.126] | +0.034 [−0.033, +0.106] | +0.023 [−0.024, +0.078] |
+| semantic − lexical | **+0.162 [+0.070, +0.258]** | **+0.164 [+0.095, +0.241]** | **+0.144 [+0.073, +0.222]** |
+| hybrid − lexical | **+0.131 [+0.056, +0.211]** | **+0.118 [+0.069, +0.174]** | **+0.112 [+0.056, +0.177]** |
+| hybrid+rerank − lexical | **+0.170 [+0.065, +0.278]** | **+0.152 [+0.068, +0.240]** | **+0.135 [+0.060, +0.218]** |
+| hybrid − semantic | −0.031 [−0.094, +0.025] | **−0.046 [−0.095, −0.007]** | −0.032 [−0.084, +0.016] |
+| hybrid+rerank − hybrid | +0.039 [−0.043, +0.127] | +0.034 [−0.032, +0.106] | +0.023 [−0.025, +0.078] |
 
 By intent, MRR@10 / nDCG@10:
 
@@ -436,14 +437,14 @@ differ, not as estimates precise to the second decimal.
   BM25 has no shared tokens to match. On exact-name queries all four modes are
   within a query or two of each other.
 - **Hybrid does not beat semantic search on this set.** Fusing BM25 into the
-  vector ranking costs 0.03–0.05 on MRR, nDCG@10 and recall@10; the nDCG@10
-  loss is significant, the others are not. The loss is concentrated in
+  vector ranking costs 0.03–0.05 on MRR, nDCG@10 and recall@10; only the
+  nDCG@10 interval excludes zero (uncorrected, and its upper end is −0.007). The loss is concentrated in
   paraphrase queries (MRR 0.66 → 0.57), where BM25 has little to contribute,
   while exact-name queries — where BM25 should help — were already solved by
   the vector leg. A plausible reading is that RRF's equal weighting lets the
   weaker ranking pull good vector results down; it has not been tested.
 - **Reranking is not measurably better than hybrid.** +0.04 MRR with an
-  interval from −0.05 to +0.13: it helps paraphrase queries and hurts a few
+  interval from −0.04 to +0.13: it helps paraphrase queries and hurts a few
   exact-name ones (`exact-name-database-findbyid` drops from rank 1 to rank 3),
   and 51 queries cannot tell the net effect from zero.
 - **This set is too small and too synthetic to choose a default from.** 96

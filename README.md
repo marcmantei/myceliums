@@ -415,9 +415,9 @@ Retrieval quality is measured, not asserted. A golden set of 51 hand-labelled qu
 
 Differences with paired bootstrap 95% confidence intervals:
 
-- **Semantic, hybrid and hybrid+rerank all beat BM25**, by 0.13–0.17 MRR (e.g. hybrid − BM25: +0.131, CI [+0.059, +0.209]). The gain is in paraphrase and behavioural queries, where BM25 has no shared words to match.
-- **Hybrid does not beat semantic search alone on this set** (MRR −0.031, CI [−0.093, +0.026]; nDCG@10 −0.046, CI [−0.096, −0.007]).
-- **Reranking is not measurably better than hybrid** (MRR +0.039, CI [−0.045, +0.126]).
+- **Semantic, hybrid and hybrid+rerank all beat BM25**, by 0.13–0.17 MRR (e.g. hybrid − BM25: +0.131, CI [+0.056, +0.211]). The gain is in paraphrase and behavioural queries, where BM25 has no shared words to match.
+- **Hybrid does not beat semantic search alone on this set** (MRR −0.031, CI [−0.094, +0.025]; nDCG@10 −0.046, CI [−0.095, −0.007]).
+- **Reranking is not measurably better than hybrid** (MRR +0.039, CI [−0.043, +0.127]).
 
 The set is small and synthetic, so read this as "the semantic leg matters", not as a verdict on which mode to use on a real repository; tuning on these 51 queries would only overfit them. The CI job scores all four modes on every pull request and fails only on a regression of at least 0.02 whose 95% confidence interval lies wholly below zero. "Significant" here always means a 95% interval that excludes zero, per comparison and not corrected for the roughly 45 intervals a run reports — expect about two of them to exclude zero by chance alone.
 

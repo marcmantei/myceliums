@@ -88,7 +88,7 @@ myc semantic-search "where does authentication happen"
 myc search --hybrid "rate limiting middleware"
 ```
 
-On the [fixture benchmark](../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#recorded-results) semantic search alone scored highest (recall@10 0.842, MRR@10 0.803); hybrid came second (0.810 / 0.771) and BM25 last (0.698 / 0.641). The set is small and synthetic, so treat this as a hint, not a ranking for every repository.
+On the [fixture benchmark](../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#recorded-results) semantic search alone had the highest recall@10 (0.842, against 0.810 for hybrid and 0.698 for BM25), and on MRR@10 semantic and hybrid with reranking were close (0.803 and 0.811, against 0.771 for hybrid and 0.641 for BM25). Hybrid did not beat semantic search alone. The set is small and synthetic, so treat this as a hint, not a ranking for every repository.
 
 ### 7. How do I query the knowledge graph with Cypher?
 
