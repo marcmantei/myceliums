@@ -16,6 +16,7 @@ pull requests.
 ### Changed
 - Vector scores use one similarity scale across search paths, and the ANN index is used (#68, #71).
 - MCP handlers go through a `GraphService` layer (#37, #53).
+- The MCP crate is split into modules by tool group, and every read tool and resource is served from `GraphService`'s per-repository graph cache: the graph tables are read from disk once, not on every call; `analyze` and `delete` invalidate the cache, and index changes made by another process are detected. The HTTP transport shares one cache across sessions. The `tools/list` output is pinned by a snapshot test (#93).
 - The Homebrew tap sync can be re-run manually and is idempotent (#74).
 - CI pins every third-party action to a commit SHA, runs with read-only token permissions by default, and builds with `--locked` (#90).
 - `myc` is installed from crates.io; the unpublished Docker image is no longer advertised (#72, #73).
