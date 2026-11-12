@@ -51,14 +51,16 @@ fn mixed_type_executor(seed: u64, n: usize, kinds: u32) -> CypherExecutor {
     CypherExecutor::from_parts(symbols, vec![], vec![])
 }
 
+/// openCypher's cross-type ascending order: map < list < string < boolean
+/// < number < null.
 fn rank(v: &Value) -> u8 {
     match v {
-        Value::Null => 0,
-        Value::Bool(_) => 1,
-        Value::Number(_) => 2,
-        Value::String(_) => 3,
-        Value::Array(_) => 4,
-        Value::Object(_) => 5,
+        Value::Object(_) => 0,
+        Value::Array(_) => 1,
+        Value::String(_) => 2,
+        Value::Bool(_) => 3,
+        Value::Number(_) => 4,
+        Value::Null => 5,
     }
 }
 
@@ -91,7 +93,7 @@ fn order_by_mixed_types_sort_groups_by_type() {
 
 fn assert_sorted(rows: &[std::collections::HashMap<String, Value>]) {
     let values: Vec<&Value> = rows.iter().map(|r| &r["s.metadata"]).collect();
-    // Types are grouped: null < bool < number < string < array < object.
+    // Types are grouped in openCypher order; nulls come last.
     let ranks: Vec<u8> = values.iter().map(|v| rank(v)).collect();
     assert!(ranks.windows(2).all(|w| w[0] <= w[1]), "{ranks:?}");
     // Within one type the natural order holds.
@@ -121,4 +123,22 @@ fn order_by_mixed_types_desc_is_the_reverse() {
     let mut reversed = ranks(&asc);
     reversed.reverse();
     assert_eq!(ranks(&desc), reversed);
+}
+
+/// openCypher: `null` sorts last ascending and first descending.
+#[test]
+fn nulls_sort_last_ascending_and_first_descending() {
+    let exec = mixed_type_executor(3, 60, 3);
+    let asc = exec
+        .execute("MATCH (s) RETURN s.metadata ORDER BY s.metadata")
+        .unwrap();
+    let desc = exec
+        .execute("MATCH (s) RETURN s.metadata ORDER BY s.metadata DESC")
+        .unwrap();
+    let nulls = asc.iter().filter(|r| r["s.metadata"].is_null()).count();
+    assert!(nulls > 0 && nulls < asc.len());
+    assert!(asc[asc.len() - nulls..]
+        .iter()
+        .all(|r| r["s.metadata"].is_null()));
+    assert!(desc[..nulls].iter().all(|r| r["s.metadata"].is_null()));
 }

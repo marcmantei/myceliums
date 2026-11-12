@@ -14,7 +14,7 @@ The following Cypher clauses and operators are supported:
 
 **Write operations are blocked.** You cannot use `CREATE`, `DELETE`, `SET`, or `MERGE`. The graph is read-only through Cypher queries.
 
-**Limits.** Expressions may be nested at most 64 levels deep (nested `NOT`, function calls, or aggregations); deeper queries fail with a parse error. `ORDER BY` sorts a column that mixes value types by type first — `null` < booleans < numbers < strings < lists < maps — then by value within each type.
+**Limits.** An expression may contain at most 64 nested `NOT`s, function calls, or aggregations (counted together, e.g. `NOT f(count(x))` uses 3); a 65th level fails with a parse error. `AND`/`OR` chains may be any length. `ORDER BY` sorts a column that mixes value types by type first, in openCypher order — maps < lists < strings < booleans < numbers < `null` — then by value within each type, so `null` comes last ascending and first with `DESC`.
 
 ## Node Types
 

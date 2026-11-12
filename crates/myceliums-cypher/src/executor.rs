@@ -1304,21 +1304,22 @@ fn expr_key(expr: &Expr) -> String {
 
 /// Total order over JSON values used by `ORDER BY`.
 ///
-/// Values of different types are ordered by type
-/// (`null < bool < number < string < array < object`); values of the same
-/// type by their natural order (arrays lexicographically, objects by their
-/// serialized form). It must be a *total* order: `slice::sort_by` may panic
-/// on a comparator that is not, and earlier versions treated every
-/// cross-type pair as equal (#91).
+/// Values of different types are ordered by type the way openCypher orders
+/// them — `map < list < string < boolean < number < null` — so `null` sorts
+/// last in ascending and first in descending order. Values of the same type
+/// use their natural order (lists lexicographically, maps by their serialized
+/// form). It must be a *total* order: `slice::sort_by` may panic on a
+/// comparator that is not, and earlier versions treated every cross-type pair
+/// as equal (#91).
 fn compare_values(a: &Value, b: &Value) -> std::cmp::Ordering {
     fn type_rank(v: &Value) -> u8 {
         match v {
-            Value::Null => 0,
-            Value::Bool(_) => 1,
-            Value::Number(_) => 2,
-            Value::String(_) => 3,
-            Value::Array(_) => 4,
-            Value::Object(_) => 5,
+            Value::Object(_) => 0,
+            Value::Array(_) => 1,
+            Value::String(_) => 2,
+            Value::Bool(_) => 3,
+            Value::Number(_) => 4,
+            Value::Null => 5,
         }
     }
     match (a, b) {
