@@ -447,6 +447,7 @@ impl Analyzer {
 
         // Phase 2: Parallel parse of code + content files via rayon
         let use_dsl = config.use_dsl;
+        let parse_timeout = parse_timeout(config);
         let code_files_count = code_files.len();
 
         // Set up progress tracking for the parallel parse
@@ -477,51 +478,66 @@ impl Analyzer {
             None
         };
 
-        let parse_results: Vec<FileParseResult> = tokio::task::spawn_blocking(move || {
-            use rayon::prelude::*;
-            code_files
-                .par_iter()
-                .filter_map(|(rel_path, lang, source)| {
-                    let result = if lang.is_content() {
-                        let result = parse_content(source, *lang);
-                        Some(FileParseResult {
-                            rel_path: rel_path.clone(),
-                            language: *lang,
-                            parse_result: result,
-                        })
-                    } else {
-                        let mut parser = match SourceParser::new(*lang) {
-                            Ok(p) => p,
-                            Err(e) => {
-                                warn!("Skipping {} — failed to initialize parser: {}", rel_path, e);
-                                parse_progress_clone.increment();
-                                return None;
-                            }
-                        };
-
-                        let parse_result = if use_dsl {
-                            parser.parse_with_dsl(source)
-                        } else {
-                            parser.parse(source)
-                        };
-                        match parse_result {
-                            Ok(result) => Some(FileParseResult {
+        // Each file either parses or is skipped, with a reason when the
+        // skip was a budget (time, nesting depth) rather than an error.
+        let parse_outcomes: Vec<Result<FileParseResult, Option<FileSkipReason>>> =
+            tokio::task::spawn_blocking(move || {
+                use rayon::prelude::*;
+                code_files
+                    .par_iter()
+                    .map(|(rel_path, lang, source)| {
+                        let result = if lang.is_content() {
+                            let result = parse_content(source, *lang);
+                            Ok(FileParseResult {
                                 rel_path: rel_path.clone(),
                                 language: *lang,
                                 parse_result: result,
-                            }),
-                            Err(e) => {
-                                warn!("Skipping {} — parse error: {}", rel_path, e);
-                                None
+                            })
+                        } else {
+                            let mut parser = match SourceParser::new(*lang) {
+                                Ok(p) => p,
+                                Err(e) => {
+                                    warn!(
+                                        "Skipping {} — failed to initialize parser: {}",
+                                        rel_path, e
+                                    );
+                                    parse_progress_clone.increment();
+                                    return Err(None);
+                                }
+                            };
+                            parser.set_timeout(parse_timeout);
+
+                            let parse_result = if use_dsl {
+                                parser.parse_with_dsl(source)
+                            } else {
+                                parser.parse(source)
+                            };
+                            match parse_result {
+                                Ok(result) => Ok(FileParseResult {
+                                    rel_path: rel_path.clone(),
+                                    language: *lang,
+                                    parse_result: result,
+                                }),
+                                Err(e) => {
+                                    warn!("Skipping {} — parse error: {}", rel_path, e);
+                                    Err(budget_skip_reason(&e))
+                                }
                             }
-                        }
-                    };
-                    parse_progress_clone.increment();
-                    result
-                })
-                .collect()
-        })
-        .await?;
+                        };
+                        parse_progress_clone.increment();
+                        result
+                    })
+                    .collect()
+            })
+            .await?;
+        let mut parse_results: Vec<FileParseResult> = Vec::with_capacity(parse_outcomes.len());
+        for outcome in parse_outcomes {
+            match outcome {
+                Ok(result) => parse_results.push(result),
+                Err(Some(reason)) => *skip_reasons.entry(reason).or_insert(0) += 1,
+                Err(None) => {}
+            }
+        }
 
         // Stop the progress polling task
         if let Some(handle) = poll_handle {
@@ -1555,6 +1571,12 @@ impl Analyzer {
                         continue;
                     }
                 };
+                ts_parser.set_timeout(parse_timeout(
+                    self.config
+                        .as_ref()
+                        .map(|c| &c.analysis)
+                        .unwrap_or(&crate::config::AnalysisSection::default()),
+                ));
 
                 match ts_parser.parse(&source) {
                     Ok(r) => r,
@@ -2278,6 +2300,22 @@ impl Analyzer {
 
 /// Result of parsing a single file, used to transfer data from the parallel
 /// rayon phase back to the sequential accumulation phase.
+/// The per-file tree-sitter budget configured by `analysis.parse_timeout_secs`
+/// (0 disables it).
+fn parse_timeout(config: &crate::config::AnalysisSection) -> Option<std::time::Duration> {
+    (config.parse_timeout_secs > 0)
+        .then(|| std::time::Duration::from_secs(config.parse_timeout_secs))
+}
+
+/// The skip reason for a parse that [`SourceParser`] abandoned on a budget
+/// (time or nesting depth); `None` for any other parse failure.
+fn budget_skip_reason(err: &anyhow::Error) -> Option<FileSkipReason> {
+    match err.downcast_ref::<parser::ParseAbort>()? {
+        parser::ParseAbort::Timeout(_) => Some(FileSkipReason::ParseTimeout),
+        parser::ParseAbort::TooDeep { .. } => Some(FileSkipReason::TooDeeplyNested),
+    }
+}
+
 struct FileParseResult {
     rel_path: String,
     language: SourceLanguage,
@@ -2537,6 +2575,65 @@ mod tests {
         let root = dir.path().join("project");
         fs::create_dir_all(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn parse_budget_errors_map_to_skip_reasons() {
+        let timeout = anyhow::Error::new(parser::ParseAbort::Timeout(
+            std::time::Duration::from_secs(1),
+        ));
+        assert_eq!(
+            budget_skip_reason(&timeout),
+            Some(FileSkipReason::ParseTimeout)
+        );
+        let deep = anyhow::Error::new(parser::ParseAbort::TooDeep { depth: 20_000 });
+        assert_eq!(
+            budget_skip_reason(&deep),
+            Some(FileSkipReason::TooDeeplyNested)
+        );
+        assert_eq!(
+            budget_skip_reason(&anyhow::anyhow!("Failed to parse source")),
+            None
+        );
+    }
+
+    /// #127: a file tree-sitter cannot parse within `parse_timeout_secs`, or
+    /// whose tree is too deep to walk, is skipped with a warning and the rest
+    /// of the repository is still indexed — `analyze` neither stalls nor
+    /// crashes on it.
+    #[tokio::test]
+    async fn files_over_a_parse_budget_are_skipped() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        fs::write(root.join("good.py"), "def ok():\n    return 1\n").unwrap();
+        // 15,000 levels of parentheses: deeper than `parser::MAX_TREE_DEPTH`.
+        fs::write(
+            root.join("deep.py"),
+            format!("x = {}1{}\n", "(\n".repeat(15_000), ")\n".repeat(15_000)),
+        )
+        .unwrap();
+        // The #127 fuzz input, repeated: tree-sitter-scala's error recovery is
+        // quadratic on it (~150 s for these 127 KB in a release build).
+        let garbage = "<\u{3}improttempublic class A extend: B4 lp#emiments C { @Override \u{FFFD}ublic voi; m() { hel\u{FFFD}elf) ->helpe&s\u{FFFD}elf) ->helper() } ";
+        fs::write(root.join("slow.scala"), garbage.repeat(1024)).unwrap();
+
+        let mut config = ProjectConfig::default();
+        config.analysis.parse_timeout_secs = 1;
+        // The garbage is one long line; let it reach the parser.
+        config.analysis.max_line_length_bytes = 0;
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::with_config(store, root, config).set_skip_embeddings(true);
+
+        let start = std::time::Instant::now();
+        let result = analyzer.analyze().await.unwrap();
+        assert_eq!(result.file_count, 1, "only good.py is indexed");
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(60),
+            "took {:?}",
+            start.elapsed()
+        );
     }
 
     /// A run where some symbols failed to embed must report those failures in

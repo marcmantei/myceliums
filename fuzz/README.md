@@ -46,8 +46,10 @@ A crash is written to `fuzz/artifacts/<target>/`. Reproduce it with
 `cargo +nightly fuzz run -s none -a <target> fuzz/artifacts/<target>/<file>`, fix
 it, and add a regression test next to the code it exercises.
 
-`fuzz/seeds/` holds a few hand-written starting inputs; `fuzz/corpus/` (the
-growing corpus) and `fuzz/artifacts/` are git-ignored.
+`fuzz/seeds/` holds a few hand-written starting inputs plus past findings
+(e.g. `extract_symbols/objc_error_recovery_127*.bin`, an input tree-sitter 0.25
+never finished parsing); `fuzz/corpus/` (the growing corpus) and
+`fuzz/artifacts/` are git-ignored.
 
 ## CI
 

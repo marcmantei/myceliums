@@ -12,7 +12,10 @@
 
 use anyhow::{Context, Result};
 use myceliums_storage::{CodeSymbol, SymbolKind, SymbolMetadata};
-use tree_sitter::{Language, Parser};
+use std::borrow::Cow;
+use std::ops::ControlFlow;
+use std::time::{Duration, Instant};
+use tree_sitter::{Language, ParseOptions, ParseState, Parser, Tree};
 use uuid::Uuid;
 
 mod c;
@@ -199,10 +202,63 @@ impl SourceLanguage {
     }
 }
 
+/// Default wall-clock budget for one tree-sitter parse, matching the
+/// `analysis.parse_timeout_secs` default. See [`SourceParser::set_timeout`].
+pub const DEFAULT_PARSE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Deepest syntax tree the extractors walk. They recurse once per tree level,
+/// so a deeper tree is refused with [`ParseAbort::TooDeep`] rather than given a
+/// stack of `MAX_TREE_DEPTH * STACK_BYTES_PER_LEVEL` bytes or more. Real code
+/// stays far below this; garbage such as a long run of `(` does not, since a
+/// tree's depth is bounded only by the file's size.
+pub const MAX_TREE_DEPTH: usize = 10_000;
+
+/// Trees up to this depth are walked on the caller's thread, whose stack is
+/// unknown (2 MiB for rayon workers and test threads). In an unoptimized build
+/// the extractors use up to ~11 KiB of stack per tree level (C++ nested calls;
+/// most languages overflow a fresh 2 MiB stack at depth 130-260), so this
+/// keeps the inline case under ~1 MiB.
+const INLINE_TREE_DEPTH: usize = 64;
+
+/// Stack reserved per tree level for deeper trees: about three times the
+/// worst per-level cost measured in an unoptimized build. The reservation is
+/// virtual memory; only the pages the walk touches are committed.
+const STACK_BYTES_PER_LEVEL: usize = 32 * 1024;
+
+/// Why [`SourceParser`] gave up on a file without extracting anything.
+///
+/// Returned inside the `anyhow::Error`, so callers can tell a budget skip from
+/// other failures with `err.downcast_ref::<ParseAbort>()`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ParseAbort {
+    /// Tree-sitter did not finish within the parse time budget.
+    Timeout(Duration),
+    /// The syntax tree is nested deeper than [`MAX_TREE_DEPTH`].
+    TooDeep {
+        /// Depth of the tree that was refused.
+        depth: usize,
+    },
+}
+
+impl std::fmt::Display for ParseAbort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Timeout(budget) => write!(f, "parsing took longer than {budget:?}"),
+            Self::TooDeep { depth } => write!(
+                f,
+                "syntax tree is {depth} levels deep (limit {MAX_TREE_DEPTH})"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ParseAbort {}
+
 /// Tree-sitter parser wrapper for a specific [`SourceLanguage`].
 pub struct SourceParser {
     parser: Parser,
     lang: SourceLanguage,
+    timeout: Option<Duration>,
 }
 
 /// A symbol extracted from source code (function, class, method, etc.).
@@ -343,29 +399,107 @@ impl SourceParser {
         parser
             .set_language(&language)
             .context("Failed to set language")?;
-        Ok(Self { parser, lang })
+        Ok(Self {
+            parser,
+            lang,
+            timeout: Some(DEFAULT_PARSE_TIMEOUT),
+        })
+    }
+
+    /// Set the wall-clock budget for each tree-sitter parse (`None`: no
+    /// limit). A parse that runs over fails with [`ParseAbort::Timeout`].
+    ///
+    /// Tree-sitter's error recovery has had inputs that never finish (#127,
+    /// fixed upstream in tree-sitter 0.26); this bounds the next one.
+    pub fn set_timeout(&mut self, timeout: Option<Duration>) {
+        self.timeout = timeout;
+    }
+
+    /// The source tree-sitter sees: the `<script>` block for Vue/Svelte, the
+    /// file itself otherwise.
+    fn effective_source<'a>(&self, source: &'a str) -> Cow<'a, str> {
+        if matches!(self.lang, SourceLanguage::Vue | SourceLanguage::Svelte) {
+            Cow::Owned(Self::extract_script_block(source))
+        } else {
+            Cow::Borrowed(source)
+        }
+    }
+
+    /// Parse `source` into a tree, within the time budget.
+    fn parse_tree(&mut self, source: &str) -> Result<Tree> {
+        let Some(budget) = self.timeout else {
+            return self
+                .parser
+                .parse(source, None)
+                .context("Failed to parse source");
+        };
+        let bytes = source.as_bytes();
+        let start = Instant::now();
+        let mut timed_out = false;
+        let mut progress = |_: &ParseState| {
+            if start.elapsed() > budget {
+                timed_out = true;
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        };
+        let tree = self.parser.parse_with_options(
+            &mut |offset, _| bytes.get(offset..).unwrap_or_default(),
+            None,
+            Some(ParseOptions::new().progress_callback(&mut progress)),
+        );
+        match tree {
+            Some(tree) => Ok(tree),
+            None if timed_out => {
+                // A cancelled parse is kept for resumption; drop it so the
+                // next call starts from scratch.
+                self.parser.reset();
+                Err(ParseAbort::Timeout(budget).into())
+            }
+            None => anyhow::bail!("Failed to parse source"),
+        }
+    }
+
+    /// Run `extract` (a recursive walk of `tree`) on a stack deep enough for
+    /// the tree: inline for ordinary trees, on a scoped thread with a stack
+    /// sized to the depth for deep ones, and not at all beyond
+    /// [`MAX_TREE_DEPTH`]. A panic inside `extract` propagates unchanged.
+    fn with_stack_for<T: Send>(tree: &Tree, extract: impl FnOnce() -> T + Send) -> Result<T> {
+        let depth = tree_depth(tree);
+        if depth <= INLINE_TREE_DEPTH {
+            return Ok(extract());
+        }
+        if depth > MAX_TREE_DEPTH {
+            return Err(ParseAbort::TooDeep { depth }.into());
+        }
+        let stack_size = (depth + INLINE_TREE_DEPTH) * STACK_BYTES_PER_LEVEL;
+        std::thread::scope(|scope| {
+            let handle = std::thread::Builder::new()
+                .name("myc-deep-extract".into())
+                .stack_size(stack_size)
+                .spawn_scoped(scope, extract)
+                .context("Failed to spawn extraction thread")?;
+            match handle.join() {
+                Ok(value) => Ok(value),
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+        })
     }
 
     /// Parse using the DSL engine if rules are available for this language.
     /// Falls back to the hand-coded path if no DSL rules exist.
     pub fn parse_with_dsl(&mut self, source: &str) -> Result<ParseResult> {
-        if let Some(rules) = crate::dsl::rules_for(self.lang) {
-            let effective_source: String;
-            let parse_source = if matches!(self.lang, SourceLanguage::Vue | SourceLanguage::Svelte)
-            {
-                effective_source = Self::extract_script_block(source);
-                effective_source.as_str()
-            } else {
-                source
-            };
+        let Some(rules) = crate::dsl::rules_for(self.lang) else {
+            // Fall back to hand-coded path
+            return self.parse(source);
+        };
+        let parse_source = self.effective_source(source);
+        let tree = self.parse_tree(&parse_source)?;
+        let source_bytes = parse_source.as_bytes();
 
-            let tree = self
-                .parser
-                .parse(parse_source, None)
-                .context("Failed to parse source")?;
+        Self::with_stack_for(&tree, || {
             let root = tree.root_node();
-            let source_bytes = parse_source.as_bytes();
-
             let engine = crate::dsl::DslEngine::new(&rules, source_bytes);
             let (symbols, calls, imports) = engine.extract(root);
 
@@ -383,36 +517,27 @@ impl SourceParser {
 
             let rationales = Self::extract_rationales(root, source_bytes);
 
-            return Ok(ParseResult {
+            ParseResult {
                 symbols,
                 calls,
                 imports,
                 rationales,
                 aliases: vec![],
-            });
-        }
-
-        // Fall back to hand-coded path
-        self.parse(source)
+            }
+        })
     }
 
     pub fn parse(&mut self, source: &str) -> Result<ParseResult> {
         // For Vue/Svelte, extract the <script> block and parse as TypeScript
-        let effective_source: String;
-        let parse_source = if matches!(self.lang, SourceLanguage::Vue | SourceLanguage::Svelte) {
-            effective_source = Self::extract_script_block(source);
-            effective_source.as_str()
-        } else {
-            source
-        };
-
-        let tree = self
-            .parser
-            .parse(parse_source, None)
-            .context("Failed to parse source")?;
-        let root = tree.root_node();
+        let parse_source = self.effective_source(source);
+        let tree = self.parse_tree(&parse_source)?;
         let source_bytes = parse_source.as_bytes();
+        let this = &*self;
+        Self::with_stack_for(&tree, || this.extract(tree.root_node(), source_bytes))
+    }
 
+    /// Run the hand-coded extractors for this language over a parsed tree.
+    fn extract(&self, root: tree_sitter::Node, source_bytes: &[u8]) -> ParseResult {
         let mut symbols = Vec::new();
         let mut calls = Vec::new();
         let mut imports = Vec::new();
@@ -539,13 +664,32 @@ impl SourceParser {
         // Extract rationale comments from the AST (language-agnostic)
         let rationales = Self::extract_rationales(root, source_bytes);
 
-        Ok(ParseResult {
+        ParseResult {
             symbols,
             calls,
             imports,
             rationales,
             aliases,
-        })
+        }
+    }
+}
+
+/// Maximum depth of `tree` (the root is depth 0), found without recursion.
+fn tree_depth(tree: &Tree) -> usize {
+    let mut cursor = tree.walk();
+    let (mut depth, mut max_depth) = (0usize, 0usize);
+    loop {
+        if cursor.goto_first_child() {
+            depth += 1;
+            max_depth = max_depth.max(depth);
+            continue;
+        }
+        while !cursor.goto_next_sibling() {
+            if !cursor.goto_parent() {
+                return max_depth;
+            }
+            depth -= 1;
+        }
     }
 }
 
