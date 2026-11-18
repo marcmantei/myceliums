@@ -132,6 +132,11 @@ impl<'a, T> IntoIterator for &'a GraphTable<T> {
 /// process (the CLI re-analyzing, a watcher) is noticed on the next read and
 /// the cached graph is rebuilt. Counting manifests, not just comparing mtimes,
 /// keeps two commits inside one coarse filesystem-timestamp tick apart.
+///
+/// Known gap (#129): a table dropped and recreated by another process with
+/// the same number of commits, inside one timestamp tick, yields the same
+/// fingerprint. In-process rewrites do not depend on it: `analyze` and
+/// `delete` call [`GraphService::invalidate`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexFingerprint(Vec<TableStamp>);
 
@@ -315,12 +320,22 @@ impl GraphService {
     /// repository per process, shared by all callers — reads and writes alike.
     ///
     /// Only registered repositories can be opened; see
-    /// [`RepoRegistry::require`].
+    /// [`RepoRegistry::require`]. The id is checked against the registry on
+    /// every call, also when a handle is already cached, so a repository
+    /// removed from the registry (by `delete` or by another process) is
+    /// rejected even before its cache entry is invalidated.
     pub async fn open_store(&self, repo_id: &str) -> Result<Arc<Store>> {
+        let db_path = self.db_path(repo_id)?;
+        self.open_store_at(repo_id, &db_path).await
+    }
+
+    /// [`GraphService::open_store`] for a `db_path` the caller has already
+    /// obtained from [`GraphService::db_path`] (which validated `repo_id`).
+    async fn open_store_at(&self, repo_id: &str, db_path: &Path) -> Result<Arc<Store>> {
         if let Some(existing) = self.stores.get(repo_id) {
             return Ok(existing.clone());
         }
-        let store = Store::open(&self.db_path(repo_id)?, repo_id)
+        let store = Store::open(db_path, repo_id)
             .await
             .map_err(|e| MyceliumError::Storage(e.to_string()))?;
         // Two callers can both miss the cache above and both open the database,
@@ -369,8 +384,8 @@ impl GraphService {
     /// The fingerprint is read *before* any table is loaded, so data loaded
     /// into the returned entry is at least as new as its fingerprint: a write
     /// that races with a load causes, at worst, one extra reload later.
-    fn cached_graph(&self, repo_id: &str) -> Result<Arc<CachedGraph>> {
-        let fingerprint = IndexFingerprint::read(&self.db_path(repo_id)?);
+    fn cached_graph(&self, repo_id: &str, db_path: &Path) -> Arc<CachedGraph> {
+        let fingerprint = IndexFingerprint::read(db_path);
         // `entry` holds the shard lock for the compare-and-replace, so
         // concurrent callers that observe the same new fingerprint share one
         // fresh entry (and one load) instead of replacing each other's.
@@ -389,7 +404,7 @@ impl GraphService {
                 .insert(Arc::new(CachedGraph::new(fingerprint)))
                 .clone(),
         };
-        Ok(graph)
+        graph
     }
 
     /// Reads one table into `cell` on first use; later calls share it.
@@ -416,8 +431,9 @@ impl GraphService {
 
     /// All symbols of a repository, read from disk once and then cached.
     pub async fn symbols(&self, repo_id: &str) -> Result<GraphTable<CodeSymbol>> {
-        let graph = self.cached_graph(repo_id)?;
-        let store = self.open_store(repo_id).await?;
+        let db_path = self.db_path(repo_id)?;
+        let graph = self.cached_graph(repo_id, &db_path);
+        let store = self.open_store_at(repo_id, &db_path).await?;
         self.load_table(
             &graph.symbols,
             store,
@@ -428,8 +444,9 @@ impl GraphService {
 
     /// All relationships of a repository, read from disk once and then cached.
     pub async fn relationships(&self, repo_id: &str) -> Result<GraphTable<Relationship>> {
-        let graph = self.cached_graph(repo_id)?;
-        let store = self.open_store(repo_id).await?;
+        let db_path = self.db_path(repo_id)?;
+        let graph = self.cached_graph(repo_id, &db_path);
+        let store = self.open_store_at(repo_id, &db_path).await?;
         self.load_table(&graph.relationships, store, |s| async move {
             s.get_relationships().await
         })
@@ -438,16 +455,18 @@ impl GraphService {
 
     /// All file nodes of a repository, read from disk once and then cached.
     pub async fn files(&self, repo_id: &str) -> Result<GraphTable<FileNode>> {
-        let graph = self.cached_graph(repo_id)?;
-        let store = self.open_store(repo_id).await?;
+        let db_path = self.db_path(repo_id)?;
+        let graph = self.cached_graph(repo_id, &db_path);
+        let store = self.open_store_at(repo_id, &db_path).await?;
         self.load_table(&graph.files, store, |s| async move { s.get_files().await })
             .await
     }
 
     /// All communities of a repository, read from disk once and then cached.
     pub async fn communities(&self, repo_id: &str) -> Result<GraphTable<Community>> {
-        let graph = self.cached_graph(repo_id)?;
-        let store = self.open_store(repo_id).await?;
+        let db_path = self.db_path(repo_id)?;
+        let graph = self.cached_graph(repo_id, &db_path);
+        let store = self.open_store_at(repo_id, &db_path).await?;
         self.load_table(&graph.communities, store, |s| async move {
             s.get_communities().await
         })
@@ -456,8 +475,9 @@ impl GraphService {
 
     /// All processes of a repository, read from disk once and then cached.
     pub async fn processes(&self, repo_id: &str) -> Result<GraphTable<Process>> {
-        let graph = self.cached_graph(repo_id)?;
-        let store = self.open_store(repo_id).await?;
+        let db_path = self.db_path(repo_id)?;
+        let graph = self.cached_graph(repo_id, &db_path);
+        let store = self.open_store_at(repo_id, &db_path).await?;
         self.load_table(&graph.processes, store, |s| async move {
             s.get_processes().await
         })
@@ -799,6 +819,92 @@ mod tests {
         // A second commit in the same timestamp tick still changes the count.
         std::fs::write(versions.join("2.manifest"), "").unwrap();
         assert_ne!(before, IndexFingerprint::read(dir.path()));
+    }
+
+    /// Lance 2.0 names manifests `u64::MAX - version`, zero-padded, so each
+    /// commit adds a name that sorts *before* the existing ones.
+    fn lance2_manifest(version: u64) -> String {
+        format!("{:020}.manifest", u64::MAX - version)
+    }
+
+    #[test]
+    fn fingerprint_tracks_lance2_inverted_manifest_names() {
+        assert_eq!(lance2_manifest(1), "18446744073709551614.manifest");
+        let dir = tempfile::tempdir().unwrap();
+        let versions = dir.path().join("symbols.lance").join("_versions");
+        std::fs::create_dir_all(&versions).unwrap();
+        let mut seen = Vec::new();
+        for version in 1..=4 {
+            std::fs::write(versions.join(lance2_manifest(version)), "").unwrap();
+            let fp = IndexFingerprint::read(dir.path());
+            assert_eq!(
+                fp,
+                IndexFingerprint::read(dir.path()),
+                "stable between commits"
+            );
+            assert!(
+                !seen.contains(&fp),
+                "commit {version} must change the fingerprint"
+            );
+            seen.push(fp);
+        }
+        // Lance cleanup removes old versions; the fingerprint follows that too.
+        std::fs::remove_file(versions.join(lance2_manifest(1))).unwrap();
+        assert!(!seen.contains(&IndexFingerprint::read(dir.path())));
+    }
+
+    /// Known gap, tracked in #129: a table dropped and recreated with the
+    /// same number of commits gets the same manifest names, so only the
+    /// directory modification times tell the two apart. Within one coarse
+    /// filesystem-timestamp tick they are equal and the change goes unseen
+    /// (simulated here by restoring the old times). In-process `analyze`
+    /// is unaffected — it calls [`GraphService::invalidate`] explicitly.
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "known gap: drop-and-recreate within one timestamp tick is not detected (#129)"]
+    fn fingerprint_detects_drop_and_recreate_within_one_tick() {
+        let dir = tempfile::tempdir().unwrap();
+        let table = dir.path().join("symbols.lance");
+        let versions = table.join("_versions");
+        std::fs::create_dir_all(&versions).unwrap();
+        std::fs::write(versions.join(lance2_manifest(1)), "").unwrap();
+        let mtime = |p: &std::path::Path| std::fs::metadata(p).unwrap().modified().unwrap();
+        let times = [
+            (dir.path().to_path_buf(), mtime(dir.path())),
+            (table.clone(), mtime(&table)),
+            (versions.clone(), mtime(&versions)),
+        ];
+        let before = IndexFingerprint::read(dir.path());
+
+        std::fs::remove_dir_all(&table).unwrap();
+        std::fs::create_dir_all(&versions).unwrap();
+        std::fs::write(versions.join(lance2_manifest(1)), "").unwrap();
+        for (path, time) in &times {
+            std::fs::File::open(path)
+                .unwrap()
+                .set_modified(*time)
+                .unwrap();
+        }
+
+        assert_ne!(before, IndexFingerprint::read(dir.path()));
+    }
+
+    #[tokio::test]
+    async fn open_store_revalidates_a_cached_handle_against_the_registry() {
+        let (svc, dir) = service_with_symbols(&["alpha"]).await;
+        svc.open_store("r").await.expect("registered");
+        svc.symbols("r").await.expect("registered");
+
+        // Another process (or `delete`) removes the repo from the registry;
+        // nothing invalidates this service's cache.
+        let mut registry = RepoRegistry::load(&dir.path().join("repos.json")).unwrap();
+        registry.remove("r");
+        registry.save().unwrap();
+
+        let err = svc.open_store("r").await.err().expect("must be rejected");
+        assert!(matches!(err, MyceliumError::Repo(_)), "{err:?}");
+        let err = svc.symbols("r").await.expect_err("must be rejected");
+        assert!(matches!(err, MyceliumError::Repo(_)), "{err:?}");
     }
 
     #[test]
