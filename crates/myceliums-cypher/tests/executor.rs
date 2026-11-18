@@ -202,3 +202,46 @@ async fn unknown_label_is_rejected() {
     let result = exec.execute("MATCH (s:Bogus) RETURN s.name");
     assert!(result.is_err(), "unknown label must be rejected");
 }
+
+/// GROUP BY on a property used to group every row under `null` (the key was
+/// read from the matched row, which holds `s`, not `s.file_path`), and the
+/// groups came out of a hash map in a different order on every run, so pages
+/// of them overlapped (#96). Groups are now keyed by the evaluated property
+/// and keep the order of their first row.
+#[test]
+fn group_by_rows_keep_first_seen_order_on_every_run() {
+    let symbols: Vec<CodeSymbol> = (0..40u32)
+        .map(|i| {
+            symbol(
+                &format!("u{i}"),
+                &format!("f{i}"),
+                SymbolKind::Function,
+                &format!("src/m{}.ts", i % 13),
+                i,
+            )
+        })
+        .collect();
+    let executor = CypherExecutor::from_shared(
+        std::sync::Arc::new(symbols),
+        std::sync::Arc::new(Vec::new()),
+        std::sync::Arc::new(Vec::new()),
+    );
+    let query = "MATCH (s:CodeSymbol) RETURN s.file_path, count(s)";
+    let first = executor.execute(query).expect("query runs");
+    let files: Vec<&str> = first
+        .iter()
+        .map(|row| row["s.file_path"].as_str().expect("file path"))
+        .collect();
+    let expected: Vec<String> = (0..13).map(|i| format!("src/m{i}.ts")).collect();
+    assert_eq!(files, expected);
+    // 40 symbols over 13 files: the first is hit 4 times, the rest 3.
+    let counts: Vec<u64> = first
+        .iter()
+        .map(|row| row["count(s)"].as_u64().expect("count"))
+        .collect();
+    assert_eq!(counts[0], 4);
+    assert_eq!(counts.iter().sum::<u64>(), 40);
+    for _ in 0..5 {
+        assert_eq!(executor.execute(query).expect("query runs"), first);
+    }
+}

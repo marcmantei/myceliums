@@ -516,11 +516,14 @@ impl CypherExecutor {
 
     fn apply_aggregation(&self, rows: Vec<Row>, query: &Query) -> Vec<Row> {
         // Infer GROUP BY columns from non-aggregated RETURN items
-        let group_by_cols: Vec<String> = query
+        let group_by_items: Vec<_> = query
             .return_clause
             .items
             .iter()
             .filter(|item| !contains_aggregation(&item.expr))
+            .collect();
+        let group_by_cols: Vec<String> = group_by_items
+            .iter()
             .map(|item| item.alias.clone().unwrap_or_else(|| expr_key(&item.expr)))
             .collect();
 
@@ -535,14 +538,26 @@ impl CypherExecutor {
             return vec![result];
         }
 
-        // GROUP BY: group rows by non-aggregated columns
-        let mut groups: HashMap<Vec<Value>, Vec<Row>> = HashMap::new();
+        // GROUP BY: group rows by non-aggregated columns. Groups keep the
+        // order in which their first row appeared, so the result order is
+        // the same on every run (a hash map's order is not), and pages taken
+        // from it do not overlap or skip.
+        let mut group_index: HashMap<Vec<Value>, usize> = HashMap::new();
+        let mut groups: Vec<(Vec<Value>, Vec<Row>)> = Vec::new();
         for row in rows {
-            let group_key: Vec<Value> = group_by_cols
+            // Evaluate each grouping expression on the matched row: the row
+            // holds bound variables (`s`), not projected columns (`s.kind`).
+            let group_key: Vec<Value> = group_by_items
                 .iter()
-                .map(|col| row.get(col).cloned().unwrap_or(Value::Null))
+                .map(|item| self.eval_expr(&item.expr, &row).to_value())
                 .collect();
-            groups.entry(group_key).or_default().push(row);
+            match group_index.get(&group_key) {
+                Some(&i) => groups[i].1.push(row),
+                None => {
+                    group_index.insert(group_key.clone(), groups.len());
+                    groups.push((group_key, vec![row]));
+                }
+            }
         }
 
         // Compute aggregations for each group
