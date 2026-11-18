@@ -17,6 +17,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use tracing_subscriber::EnvFilter;
 
+mod commands;
 mod setup;
 
 /// Progress bar reporter using `indicatif`. Draws on stderr so stdout
@@ -286,8 +287,16 @@ enum Commands {
         #[arg(long)]
         apply: bool,
     },
-    /// Detect impact of current changes via git diff
+    /// What depends on a symbol or file, or the impact of the current git diff
+    ///
+    /// With a TARGET (symbol name or file path): every symbol that calls or
+    /// imports it, transitively up to --depth, and the files they live in.
+    /// Without one: the symbols touched by `git diff HEAD` (or --diff) and
+    /// what they reach.
     Impact {
+        /// Symbol (`parse_query`, `Item.AsString`) or file (`src/query.rs`)
+        #[arg(conflicts_with = "diff")]
+        target: Option<String>,
         /// Repository ID or path
         #[arg(short, long)]
         repo: Option<String>,
@@ -297,6 +306,71 @@ enum Commands {
         /// Diff string or path to a .diff/.patch file (if omitted, runs git diff HEAD)
         #[arg(long)]
         diff: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+        /// Output budget in estimated tokens (with a TARGET)
+        #[arg(long, default_value_t = commands::nav::DEFAULT_BUDGET)]
+        budget: usize,
+    },
+    /// List the callers of a symbol with file:line (compact, for agents and hooks)
+    ///
+    /// Ambiguous names list the candidate definitions (exit code 2); unknown
+    /// names suggest similar ones (exit code 1). The index used is the one
+    /// covering the working directory, never another repository.
+    Callers {
+        /// Symbol name, qualified name or suffix (`parse_query`, `Item.AsString`)
+        symbol: String,
+        /// Follow calls transitively up to this many hops (1 = direct callers)
+        #[arg(short, long, default_value = "1")]
+        depth: u32,
+        /// Repository ID or path (default: the index covering the working directory)
+        #[arg(short, long)]
+        repo: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+        /// Output budget in estimated tokens (1 token ~ 4 characters)
+        #[arg(long, default_value_t = commands::nav::DEFAULT_BUDGET)]
+        budget: usize,
+    },
+    /// List what a symbol calls, with file:line (compact, for agents and hooks)
+    Callees {
+        /// Symbol name, qualified name or suffix
+        symbol: String,
+        /// Follow calls transitively up to this many hops (1 = direct callees)
+        #[arg(short, long, default_value = "1")]
+        depth: u32,
+        /// Repository ID or path (default: the index covering the working directory)
+        #[arg(short, long)]
+        repo: Option<String>,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+        /// Output budget in estimated tokens (1 token ~ 4 characters)
+        #[arg(long, default_value_t = commands::nav::DEFAULT_BUDGET)]
+        budget: usize,
+    },
+    /// Token-budgeted context pack for a task: relevant symbols, signatures,
+    /// callers/callees and files. `--json` is the prefetch API for custom
+    /// agent harnesses.
+    Context {
+        /// The task or question, as free text (quotes optional)
+        #[arg(required = true, num_args = 1..)]
+        query: Vec<String>,
+        /// Repository ID or path (default: the index covering the working directory)
+        #[arg(short, long)]
+        repo: Option<String>,
+        /// Rank with hybrid BM25 + vector search (needs embeddings; loads the
+        /// embedding model, so it takes seconds)
+        #[arg(long)]
+        hybrid: bool,
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+        /// Output budget in estimated tokens (1 token ~ 4 characters)
+        #[arg(long, default_value_t = commands::nav::DEFAULT_BUDGET)]
+        budget: usize,
     },
     /// Semantic search for symbols using vector embeddings
     SemanticSearch {
@@ -377,10 +451,31 @@ enum Commands {
     /// Format MCP tool output for Claude Code PostToolUse hooks (reads JSON from stdin)
     #[command(name = "format-hook")]
     FormatHook,
-    /// Set up Claude Code integration (MCP server + hooks) — run once after install
+    /// Claude Code PreToolUse hook: suggests the myc call when Grep or grep/rg
+    /// searches for a known symbol (reads hook JSON from stdin, never blocks)
+    #[command(name = "hook-grep")]
+    HookGrep,
+    /// Set up Claude Code integration: MCP server, hooks, CLAUDE.md routing
+    /// block and code-explorer subagent (project scope by default)
     #[command(name = "setup-claude")]
     SetupClaude {
-        /// Remove the myceliums integration from Claude Code
+        /// Where to install: the project (.mcp.json, .claude/, CLAUDE.md; commit
+        /// them for the team) or the user (~/.claude.json, ~/.claude/)
+        #[arg(long, value_enum, default_value = "project")]
+        scope: commands::setup_claude::Scope,
+        /// Project root for --scope project (default: git top level of the cwd)
+        #[arg(long)]
+        project: Option<PathBuf>,
+        /// Do not write the routing block into CLAUDE.md (removes an existing one)
+        #[arg(long)]
+        no_routing: bool,
+        /// Do not install the PreToolUse grep-redirect hook (removes an existing one)
+        #[arg(long)]
+        no_redirect_hook: bool,
+        /// Do not install the code-explorer subagent (removes an existing one)
+        #[arg(long)]
+        no_agent: bool,
+        /// Remove everything myceliums installed at this scope
         #[arg(long)]
         uninstall: bool,
     },
@@ -467,12 +562,16 @@ enum Commands {
         #[arg(long)]
         uninstall: bool,
     },
-    /// Set up OpenAI Codex CLI integration (MCP server config)
+    /// Set up OpenAI Codex CLI integration (MCP server config, plus the
+    /// routing block in the project's AGENTS.md when run inside a git repo)
     #[command(name = "setup-codex")]
     SetupCodex {
-        /// Remove myceliums from Codex CLI
+        /// Remove myceliums from Codex (and the AGENTS.md routing block)
         #[arg(long)]
         uninstall: bool,
+        /// Do not write the routing block into AGENTS.md
+        #[arg(long)]
+        no_routing: bool,
     },
     /// Set up GitHub Copilot CLI integration (MCP server config)
     #[command(name = "setup-copilot")]
@@ -604,7 +703,13 @@ enum EmailCommands {
     },
 }
 
+/// The myceliums data home. `MYCELIUMS_DATA_DIR` overrides `~/.myceliums`,
+/// the same test/dev seam the MCP server honours, so the CLI and hooks read
+/// the index the server in the same environment reads.
 fn data_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("MYCELIUMS_DATA_DIR") {
+        return PathBuf::from(dir);
+    }
     dirs::home_dir()
         .expect("Could not find home directory")
         .join(".myceliums")
@@ -691,8 +796,51 @@ async fn main() -> Result<()> {
             repo,
             apply,
         } => cmd_rename(&symbol_name, &new_name, repo.as_deref(), apply).await,
-        Commands::Impact { repo, depth, diff } => {
-            cmd_impact(repo.as_deref(), depth, diff.as_deref()).await
+        Commands::Impact {
+            target,
+            repo,
+            depth,
+            diff,
+            json,
+            budget,
+        } => match target {
+            Some(target) => {
+                let opts = commands::nav::OutputOptions { json, budget };
+                commands::nav::cmd_impact_target(&target, depth, repo.as_deref(), opts).await
+            }
+            None => cmd_impact(repo.as_deref(), depth, diff.as_deref(), json).await,
+        },
+        Commands::Callers {
+            symbol,
+            depth,
+            repo,
+            json,
+            budget,
+        } => {
+            let opts = commands::nav::OutputOptions { json, budget };
+            let dir = myceliums_core::navigation::CallDirection::Callers;
+            commands::nav::cmd_calls(&symbol, dir, depth, repo.as_deref(), opts).await
+        }
+        Commands::Callees {
+            symbol,
+            depth,
+            repo,
+            json,
+            budget,
+        } => {
+            let opts = commands::nav::OutputOptions { json, budget };
+            let dir = myceliums_core::navigation::CallDirection::Callees;
+            commands::nav::cmd_calls(&symbol, dir, depth, repo.as_deref(), opts).await
+        }
+        Commands::Context {
+            query,
+            repo,
+            hybrid,
+            json,
+            budget,
+        } => {
+            let opts = commands::nav::OutputOptions { json, budget };
+            commands::nav::cmd_context(&query.join(" "), repo.as_deref(), hybrid, opts).await
         }
         Commands::SemanticSearch { query, repo, limit } => {
             cmd_semantic_search(&query, repo.as_deref(), limit).await
@@ -730,7 +878,22 @@ async fn main() -> Result<()> {
         Commands::Doctor { download } => cmd_doctor(download).await,
         Commands::Configure { set, reset } => cmd_configure(set.as_deref(), reset).await,
         Commands::FormatHook => cmd_format_hook().await,
-        Commands::SetupClaude { uninstall } => cmd_setup_claude(uninstall).await,
+        Commands::HookGrep => commands::hook_grep::cmd_hook_grep().await,
+        Commands::SetupClaude {
+            scope,
+            project,
+            no_routing,
+            no_redirect_hook,
+            no_agent,
+            uninstall,
+        } => {
+            let layers = commands::setup_claude::Layers {
+                routing: !no_routing,
+                redirect_hook: !no_redirect_hook,
+                agent: !no_agent,
+            };
+            commands::setup_claude::cmd_setup_claude(scope, project.as_deref(), layers, uninstall)
+        }
         Commands::SetupSpacebot { uninstall } => {
             cmd_setup_mcp_platform("Spacebot", ".spacebot/mcp.json", uninstall)
         }
@@ -751,7 +914,10 @@ async fn main() -> Result<()> {
         Commands::SetupVscode { uninstall } => cmd_setup_editor("vscode", uninstall).await,
         Commands::SetupJetbrains { uninstall } => cmd_setup_editor("jetbrains", uninstall).await,
         Commands::SetupGemini { uninstall } => cmd_setup_editor("gemini", uninstall).await,
-        Commands::SetupCodex { uninstall } => cmd_setup_editor("codex", uninstall).await,
+        Commands::SetupCodex {
+            uninstall,
+            no_routing,
+        } => cmd_setup_codex(uninstall, no_routing).await,
         Commands::SetupCopilot { uninstall } => cmd_setup_editor("copilot", uninstall).await,
         Commands::SetupAider { uninstall } => cmd_setup_editor("aider", uninstall).await,
         Commands::SetupKiro { uninstall } => cmd_setup_editor("kiro", uninstall).await,
@@ -881,7 +1047,10 @@ async fn cmd_init() -> Result<()> {
 fn is_interactive_command(cmd: &Commands) -> bool {
     !matches!(
         cmd,
-        Commands::Mcp { .. } | Commands::FormatHook | Commands::Session { yes: true, .. }
+        Commands::Mcp { .. }
+            | Commands::FormatHook
+            | Commands::HookGrep
+            | Commands::Session { yes: true, .. }
     )
 }
 
@@ -2586,7 +2755,7 @@ async fn cmd_rename(
     Ok(())
 }
 
-async fn cmd_impact(repo: Option<&str>, depth: u32, diff: Option<&str>) -> Result<()> {
+async fn cmd_impact(repo: Option<&str>, depth: u32, diff: Option<&str>, json: bool) -> Result<()> {
     let (_, repo_info) = resolve_repo_or_latest(repo)?;
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
     let store = Store::open(&db_path, &repo_info.id).await?;
@@ -2605,7 +2774,7 @@ async fn cmd_impact(repo: Option<&str>, depth: u32, diff: Option<&str>) -> Resul
             .with_context(|| format!("Failed to run git diff in {}", repo_info.path))?,
     };
 
-    if diff_text.trim().is_empty() {
+    if diff_text.trim().is_empty() && !json {
         println!("No changes detected (empty diff).");
         return Ok(());
     }
@@ -2614,6 +2783,14 @@ async fn cmd_impact(repo: Option<&str>, depth: u32, diff: Option<&str>) -> Resul
     let relationships = store.get_relationships().await?;
 
     let report = detect_impact(&diff_text, &symbols, &relationships, depth);
+    if json {
+        let mut value = serde_json::to_value(&report)?;
+        if let Some(obj) = value.as_object_mut() {
+            obj.insert("repo".into(), serde_json::json!(repo_info.name));
+        }
+        println!("{value}");
+        return Ok(());
+    }
 
     println!("Impact Report for {}", repo_info.name);
     println!("{}", "=".repeat(60));
@@ -3714,212 +3891,39 @@ async fn cmd_setup_editor(editor_name: &str, uninstall: bool) -> Result<()> {
     }
 }
 
-async fn cmd_setup_claude(uninstall: bool) -> Result<()> {
-    let home = dirs::home_dir().context("Could not find home directory")?;
-    let myc_bin = std::env::current_exe().context("Could not determine myc binary path")?;
-    let myc_path = myc_bin.to_string_lossy().to_string();
-
-    if uninstall {
-        return cmd_setup_claude_uninstall(&home, &myc_path);
-    }
-
-    println!("Setting up Claude Code integration...");
-    println!();
-
-    // 1. Register MCP server via `claude mcp add`
-    let mcp_result = setup_mcp_server(&myc_path);
-    match &mcp_result {
-        Ok(_) => println!("  \u{2713} MCP server registered"),
-        Err(e) => println!("  \u{2717} MCP server: {}", e),
-    }
-
-    // 2. Add hooks to ~/.claude/settings.json
-    let hooks_result = setup_hooks(&home, &myc_path);
-    match &hooks_result {
-        Ok(_) => println!("  \u{2713} Hooks configured (SessionStart + PostToolUse)"),
-        Err(e) => println!("  \u{2717} Hooks: {}", e),
-    }
-
-    println!();
-
-    if mcp_result.is_ok() && hooks_result.is_ok() {
-        println!("  Setup complete! Start Claude Code in any git project:");
-        println!("    claude");
-        println!();
-        println!("  You should see:");
-        println!("    SessionStart:startup says: [myceliums] <project> ready | ...");
-        println!();
-        println!("  To remove: myc setup-claude --uninstall");
-    } else {
-        println!("  Setup completed with errors. Check messages above.");
-    }
-
-    Ok(())
-}
-
-fn setup_mcp_server(myc_path: &str) -> Result<()> {
-    // Try `claude mcp add` first (the official way)
-    let output = std::process::Command::new("claude")
-        .args([
-            "mcp",
-            "add",
-            "-s",
-            "user",
-            "myceliums",
-            "--",
-            myc_path,
-            "mcp",
-        ])
-        .output();
-
-    match output {
-        Ok(result) if result.status.success() => Ok(()),
-        Ok(result) => {
-            let stderr = String::from_utf8_lossy(&result.stderr);
-            // If server already exists, try removing and re-adding
-            if stderr.contains("already exists") {
-                // best-effort: remove the stale server before re-adding; the retry
-                // below is the authoritative operation whose result we check.
-                let _ = std::process::Command::new("claude")
-                    .args(["mcp", "remove", "-s", "user", "myceliums"])
-                    .output();
-                let retry = std::process::Command::new("claude")
-                    .args([
-                        "mcp",
-                        "add",
-                        "-s",
-                        "user",
-                        "myceliums",
-                        "--",
-                        myc_path,
-                        "mcp",
-                    ])
-                    .output()?;
-                if retry.status.success() {
-                    return Ok(());
-                }
-            }
-            // Fallback: edit ~/.claude.json directly
-            setup_mcp_server_manual(myc_path)
+/// `myc setup-codex`: the Codex MCP config, plus the routing block in the
+/// project's AGENTS.md when run inside a git repository (#126).
+async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result<()> {
+    cmd_setup_editor("codex", uninstall).await?;
+    let root = std::process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()));
+    let Some(root) = root else {
+        if !uninstall && !no_routing {
+            println!("  Not inside a git repository: no AGENTS.md routing block written.");
         }
-        Err(_) => {
-            // `claude` CLI not found, edit manually
-            setup_mcp_server_manual(myc_path)
-        }
-    }
-}
-
-fn setup_mcp_server_manual(myc_path: &str) -> Result<()> {
-    let home = dirs::home_dir().context("Could not find home directory")?;
-    let config_path = home.join(".claude.json");
-
-    let mut config: serde_json::Value = if config_path.exists() {
-        let content = std::fs::read_to_string(&config_path)?;
-        serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}))
-    } else {
-        serde_json::json!({})
+        return Ok(());
     };
-
-    let servers = config
-        .as_object_mut()
-        .context("Invalid .claude.json")?
-        .entry("mcpServers")
-        .or_insert_with(|| serde_json::json!({}));
-
-    servers
-        .as_object_mut()
-        .context("Invalid mcpServers")?
-        .insert(
-            "myceliums".to_string(),
-            serde_json::json!({
-                "type": "stdio",
-                "command": myc_path,
-                "args": ["mcp"],
-                "env": {}
-            }),
-        );
-
-    std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
-    Ok(())
-}
-
-fn setup_hooks(home: &std::path::Path, myc_path: &str) -> Result<()> {
-    let settings_dir = home.join(".claude");
-    std::fs::create_dir_all(&settings_dir)?;
-    let settings_path = settings_dir.join("settings.json");
-
-    let mut settings: serde_json::Value = if settings_path.exists() {
-        let content = std::fs::read_to_string(&settings_path)?;
-        serde_json::from_str(&content).unwrap_or_else(|_| serde_json::json!({}))
+    let agents_md = root.join("AGENTS.md");
+    use commands::routing::{self, FileChange, Flavor};
+    let change = if uninstall || no_routing {
+        routing::uninstall_block(&agents_md, true)?
     } else {
-        serde_json::json!({})
+        routing::install_block(&agents_md, &routing::routing_block(Flavor::Agents))?
     };
-
-    let obj = settings.as_object_mut().context("Invalid settings.json")?;
-
-    let hooks = obj
-        .entry("hooks")
-        .or_insert_with(|| serde_json::json!({}))
-        .as_object_mut()
-        .context("Invalid hooks object")?;
-
-    // SessionStart hook
-    let session_hook = serde_json::json!([{
-        "matcher": "",
-        "hooks": [{
-            "type": "command",
-            "command": format!("{} session . --yes --timeout 300 2>/dev/null; exit 0", myc_path)
-        }]
-    }]);
-
-    // PostToolUse hook
-    let post_tool_hook = serde_json::json!([{
-        "matcher": "mcp__myceliums__",
-        "hooks": [{
-            "type": "command",
-            "command": format!("{} format-hook 2>/dev/null", myc_path)
-        }]
-    }]);
-
-    // Merge with existing hooks (don't overwrite other hooks)
-    merge_hook_array(hooks, "SessionStart", session_hook, myc_path);
-    merge_hook_array(hooks, "PostToolUse", post_tool_hook, myc_path);
-
-    std::fs::write(&settings_path, serde_json::to_string_pretty(&settings)?)?;
+    let what = match change {
+        FileChange::Created => "written to new file",
+        FileChange::Updated => "written to",
+        FileChange::Unchanged => "up to date in",
+        FileChange::Removed => "removed from",
+        FileChange::Deleted => "removed; deleted the now empty",
+        FileChange::Absent => "not present in",
+    };
+    println!("  \u{2713} Routing block {what} {}", agents_md.display());
     Ok(())
-}
-
-fn merge_hook_array(
-    hooks: &mut serde_json::Map<String, serde_json::Value>,
-    event: &str,
-    new_hooks: serde_json::Value,
-    myc_path: &str,
-) {
-    if let Some(existing) = hooks.get_mut(event) {
-        if let Some(arr) = existing.as_array_mut() {
-            // Remove any existing myceliums hooks
-            arr.retain(|entry| {
-                let is_myceliums = entry["hooks"]
-                    .as_array()
-                    .map(|h| {
-                        h.iter().any(|hook| {
-                            hook["command"]
-                                .as_str()
-                                .map(|c| c.contains("myc ") || c.contains(myc_path))
-                                .unwrap_or(false)
-                        })
-                    })
-                    .unwrap_or(false);
-                !is_myceliums
-            });
-            // Add new hooks
-            if let Some(new_arr) = new_hooks.as_array() {
-                arr.extend(new_arr.iter().cloned());
-            }
-            return;
-        }
-    }
-    hooks.insert(event.to_string(), new_hooks);
 }
 
 /// Generic MCP config setup for platforms that use a simple JSON config file.
@@ -4192,85 +4196,6 @@ async fn cmd_serve(port: u16, repo: Option<String>) -> Result<()> {
     println!("Visualization ready at http://localhost:{}", port);
 
     myceliums_http::start_server(port, repo_id).await
-}
-
-fn cmd_setup_claude_uninstall(home: &std::path::Path, myc_path: &str) -> Result<()> {
-    println!("Removing Claude Code integration...");
-    println!();
-
-    // 1. Remove MCP server
-    let mcp_result = std::process::Command::new("claude")
-        .args(["mcp", "remove", "-s", "user", "myceliums"])
-        .output();
-    match mcp_result {
-        Ok(r) if r.status.success() => println!("  \u{2713} MCP server removed"),
-        _ => {
-            // Manual removal from .claude.json
-            let config_path = home.join(".claude.json");
-            if config_path.exists() {
-                if let Ok(content) = std::fs::read_to_string(&config_path) {
-                    if let Ok(mut config) = serde_json::from_str::<serde_json::Value>(&content) {
-                        if let Some(servers) =
-                            config.get_mut("mcpServers").and_then(|s| s.as_object_mut())
-                        {
-                            servers.remove("myceliums");
-                            let serialized = serde_json::to_string_pretty(&config)?;
-                            std::fs::write(&config_path, serialized).with_context(|| {
-                                format!("Failed to write {}", config_path.display())
-                            })?;
-                        }
-                    }
-                }
-            }
-            println!("  \u{2713} MCP server removed");
-        }
-    }
-
-    // 2. Remove hooks
-    let settings_path = home.join(".claude").join("settings.json");
-    if settings_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&settings_path) {
-            if let Ok(mut settings) = serde_json::from_str::<serde_json::Value>(&content) {
-                if let Some(hooks) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
-                    for event in ["SessionStart", "PostToolUse"] {
-                        if let Some(arr) = hooks.get_mut(event).and_then(|a| a.as_array_mut()) {
-                            arr.retain(|entry| {
-                                let is_myceliums = entry["hooks"]
-                                    .as_array()
-                                    .map(|h| {
-                                        h.iter().any(|hook| {
-                                            hook["command"]
-                                                .as_str()
-                                                .map(|c| c.contains("myc ") || c.contains(myc_path))
-                                                .unwrap_or(false)
-                                        })
-                                    })
-                                    .unwrap_or(false);
-                                !is_myceliums
-                            });
-                        }
-                    }
-                    // Clean up empty hook arrays
-                    let empty_events: Vec<String> = hooks
-                        .iter()
-                        .filter(|(_, v)| v.as_array().map(|a| a.is_empty()).unwrap_or(false))
-                        .map(|(k, _)| k.clone())
-                        .collect();
-                    for event in empty_events {
-                        hooks.remove(&event);
-                    }
-                }
-                let serialized = serde_json::to_string_pretty(&settings)?;
-                std::fs::write(&settings_path, serialized)
-                    .with_context(|| format!("Failed to write {}", settings_path.display()))?;
-            }
-        }
-    }
-    println!("  \u{2713} Hooks removed");
-
-    println!();
-    println!("  Done. Myceliums integration removed from Claude Code.");
-    Ok(())
 }
 
 const HOOK_BEGIN: &str = "# BEGIN myceliums";
