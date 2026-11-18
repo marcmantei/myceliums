@@ -3,6 +3,7 @@ use myceliums_core::Ontology;
 use myceliums_storage::{CodeSymbol, FileNode, Relationship, Store};
 use serde_json::{json, Value};
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 
 use crate::parser::{
     self, AggregationFunc, BinOp, Direction, Expr, PathFunction, PathVariableBinding, Pattern,
@@ -21,9 +22,11 @@ const MAX_INTERMEDIATE_ROWS: usize = 10_000;
 /// parsed [`Query`] values against them. An optional
 /// [`Ontology`] enables entity/edge-type validation.
 pub struct CypherExecutor {
-    symbols: Vec<CodeSymbol>,
-    files: Vec<FileNode>,
-    relationships: Vec<Relationship>,
+    // Shared, read-only graph tables: a caller that caches the graph (the
+    // MCP server's `GraphService`) hands them over without copying.
+    symbols: Arc<Vec<CodeSymbol>>,
+    files: Arc<Vec<FileNode>>,
+    relationships: Arc<Vec<Relationship>>,
     ontology: Option<Ontology>,
 }
 
@@ -54,12 +57,7 @@ impl CypherExecutor {
         let symbols = store.get_symbols().await?;
         let files = store.get_files().await?;
         let relationships = store.get_relationships().await?;
-        Ok(Self {
-            symbols,
-            files,
-            relationships,
-            ontology: None,
-        })
+        Ok(Self::from_parts(symbols, files, relationships))
     }
 
     /// Builds an executor over graph data already held in memory.
@@ -71,6 +69,17 @@ impl CypherExecutor {
         symbols: Vec<CodeSymbol>,
         files: Vec<FileNode>,
         relationships: Vec<Relationship>,
+    ) -> Self {
+        Self::from_shared(Arc::new(symbols), Arc::new(files), Arc::new(relationships))
+    }
+
+    /// Builds an executor over shared graph tables, without copying them.
+    ///
+    /// For callers that keep the graph cached in memory across queries.
+    pub fn from_shared(
+        symbols: Arc<Vec<CodeSymbol>>,
+        files: Arc<Vec<FileNode>>,
+        relationships: Arc<Vec<Relationship>>,
     ) -> Self {
         Self {
             symbols,
@@ -86,12 +95,7 @@ impl CypherExecutor {
         let symbols = store.get_symbols().await?;
         let files = store.get_files().await?;
         let relationships = store.get_relationships().await?;
-        Ok(Self {
-            symbols,
-            files,
-            relationships,
-            ontology: Some(ontology),
-        })
+        Ok(Self::from_parts(symbols, files, relationships).with_ontology(ontology))
     }
 
     /// Attaches (or replaces) the ontology used for type validation.
@@ -335,7 +339,7 @@ impl CypherExecutor {
                 let uid_to_symbol: HashMap<&str, &CodeSymbol> =
                     self.symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
 
-                for r in &self.relationships {
+                for r in self.relationships.iter() {
                     // Filter by relationship type if specified
                     if let Some(rt) = rel_type {
                         if r.kind.to_string() != rt {
@@ -814,7 +818,7 @@ impl CypherExecutor {
                 continue;
             }
 
-            for rel in &self.relationships {
+            for rel in self.relationships.iter() {
                 let next_uid = if rel.source_uid == current_uid {
                     &rel.target_uid
                 } else if rel.target_uid == current_uid {
@@ -963,7 +967,7 @@ impl CypherExecutor {
 
         visited.insert(current.to_string());
 
-        for rel in &self.relationships {
+        for rel in self.relationships.iter() {
             let next_uid = if rel.source_uid == current {
                 &rel.target_uid
             } else if rel.target_uid == current {
@@ -1093,7 +1097,7 @@ impl CypherExecutor {
 
         visited.insert(current.to_string());
 
-        for rel in &self.relationships {
+        for rel in self.relationships.iter() {
             let next_uid = if rel.source_uid == current {
                 &rel.target_uid
             } else if rel.target_uid == current {
