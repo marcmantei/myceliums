@@ -46,9 +46,17 @@ impl MyceliumsMcp {
                     max_age_minutes: params.max_age_minutes.unwrap_or(60),
                     ..Default::default()
                 };
-                if let CacheDecision::UseCached { repo_id, reason } =
-                    cache::check_cache(repo_info, &abs_path, &cache_config)
-                {
+                // The core cache tolerates a few changed files; the freshness
+                // line does not. Re-index whenever that line would call the
+                // index stale, so "run analyze to refresh" always refreshes.
+                let cached = match cache::check_cache(repo_info, &abs_path, &cache_config) {
+                    CacheDecision::UseCached { repo_id, reason } => {
+                        let freshness = crate::index_status::freshness(repo_info, true).await;
+                        (!freshness.is_stale()).then_some((repo_id, reason))
+                    }
+                    CacheDecision::ReanalyzeNeeded { .. } => None,
+                };
+                if let Some((repo_id, reason)) = cached {
                     info!("Using cached analysis: {}", reason);
                     let store = self.store(&repo_id).await?;
                     let symbols = self.symbols(&repo_id).await?;
@@ -73,6 +81,11 @@ impl MyceliumsMcp {
                 }
             }
         }
+
+        // Recorded as the index time and commit: files edited (or commits
+        // made) while the analysis runs then count as changes since indexing.
+        let started_at = chrono::Utc::now().to_rfc3339();
+        let analyzed_commit = cache::get_head_commit(&abs_path).ok();
 
         // Write path: `repo_id` was derived from the canonical project path
         // above, not supplied by the caller, and this run registers it.
@@ -139,15 +152,12 @@ impl MyceliumsMcp {
             .await
             .map_err(|e| ToolError::internal("cannot store processes", e))?;
 
-        // Get current git commit for cache tracking
-        let analyzed_commit = cache::get_head_commit(&abs_path).ok();
-
         let mut registry = registry()?;
         registry.register(RepoInfo {
             id: repo_id.clone(),
             name: repo_name,
             path: abs_path.to_string_lossy().to_string(),
-            analyzed_at: chrono::Utc::now().to_rfc3339(),
+            analyzed_at: started_at,
             symbol_count: result.symbol_count as u32,
             file_count: result.file_count as u32,
             analyzed_commit,

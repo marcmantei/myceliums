@@ -286,10 +286,59 @@ pub fn format_processes(processes: &[ProcessItem]) -> String {
     out
 }
 
-/// Renders an impact report. The page applies to the indirectly affected
-/// symbols (the long list); changed symbols and affected files are listed in
-/// full on the first page only.
+/// Renders one page of an impact report. The page runs over one list —
+/// changed symbols, then affected symbols, then affected files — so a large
+/// diff is budgeted as a whole. The core report comes out of hash sets, so
+/// each section is sorted first: pages are the same on every call.
 pub fn format_impact_report(report: &myceliums_core::ImpactReport, page: Page) -> String {
+    const CHANGED: &str = "Changed:";
+    const AFFECTED: &str = "Affected via name-resolved CALLS edges (verify common names):";
+    const FILES: &str = "Files:";
+
+    let mut changed: Vec<_> = report.directly_changed.iter().collect();
+    changed.sort_by(|a, b| {
+        (&a.file_path, &a.qualified_name, &a.kind).cmp(&(&b.file_path, &b.qualified_name, &b.kind))
+    });
+    let mut affected: Vec<_> = report.indirectly_affected.iter().collect();
+    affected.sort_by(|a, b| {
+        (a.distance, &a.qualified_name, &a.file_path, &a.relationship).cmp(&(
+            b.distance,
+            &b.qualified_name,
+            &b.file_path,
+            &b.relationship,
+        ))
+    });
+    let mut files: Vec<&String> = report.affected_files.iter().collect();
+    files.sort();
+
+    let mut lines: Vec<(&str, String)> = Vec::new();
+    lines.extend(changed.iter().map(|s| {
+        (
+            CHANGED,
+            format!(
+                "{} ({}, {}) {}",
+                s.qualified_name,
+                s.kind,
+                s.change_type,
+                shorten_path(&s.file_path, 60)
+            ),
+        )
+    }));
+    lines.extend(affected.iter().map(|s| {
+        (
+            AFFECTED,
+            format!(
+                "{} ({}) {} [{} {}]",
+                s.qualified_name,
+                s.kind,
+                shorten_path(&s.file_path, 60),
+                s.relationship,
+                s.distance
+            ),
+        )
+    }));
+    lines.extend(files.iter().map(|f| (FILES, f.to_string())));
+
     let mut out = format!(
         "Impact (risk {:.1}/10): {} changed, {} affected symbols in {} files.\n",
         report.risk_score,
@@ -297,42 +346,19 @@ pub fn format_impact_report(report: &myceliums_core::ImpactReport, page: Page) -
         report.indirectly_affected.len(),
         report.affected_files.len(),
     );
-    if page.offset == 0 {
-        out.push_str("\nChanged:\n");
-        if report.directly_changed.is_empty() {
-            out.push_str("  (no indexed symbol overlaps the diff)\n");
-        }
-        for s in &report.directly_changed {
-            out.push_str(&format!(
-                "  * {} ({}, {}) {}\n",
-                s.qualified_name,
-                s.kind,
-                s.change_type,
-                shorten_path(&s.file_path, 60)
-            ));
-        }
+    if report.directly_changed.is_empty() && page.offset == 0 {
+        out.push_str("\n(no indexed symbol overlaps the diff)\n");
     }
-    let affected = page.take(report.indirectly_affected.iter().collect::<Vec<_>>());
-    if !affected.items.is_empty() {
-        out.push_str("\nAffected via name-resolved CALLS edges (verify common names):\n");
-        for s in &affected.items {
-            out.push_str(&format!(
-                "  * {} ({}) {} [{} {}]\n",
-                s.qualified_name,
-                s.kind,
-                shorten_path(&s.file_path, 60),
-                s.relationship,
-                s.distance
-            ));
+    let lines = page.take(lines);
+    let mut section = "";
+    for (heading, line) in &lines.items {
+        if *heading != section {
+            section = heading;
+            out.push_str(&format!("\n{heading}\n"));
         }
+        out.push_str(&format!("  * {line}\n"));
     }
-    if page.offset == 0 && !report.affected_files.is_empty() {
-        out.push_str("\nFiles:\n");
-        for f in &report.affected_files {
-            out.push_str(&format!("  * {f}\n"));
-        }
-    }
-    affected.with_notice(out)
+    lines.with_notice(out)
 }
 
 /// Renders one page of a rename plan's edits. The edited lines are source
@@ -462,6 +488,18 @@ pub fn format_cypher_results(rows: &[serde_json::Value]) -> String {
         ));
     }
     out
+}
+
+/// Renders search results inside one untrusted block: result names and
+/// signatures come from indexed text (an email subject is a symbol name, a
+/// Markdown heading a signature). "No results" stays outside.
+pub fn framed_results<T>(query: &str, items: &[T], render: fn(&str, &[T]) -> String) -> String {
+    let table = render(query, items);
+    if items.is_empty() {
+        table
+    } else {
+        untrusted("search results", &table)
+    }
 }
 
 /// Frames indexed text (source, docs, email) as data, not instructions.
@@ -1805,7 +1843,9 @@ pub fn format_ownership(report: &OwnershipReport) -> String {
     out
 }
 
-pub fn format_decisions(decisions: &[ArchDecisionRecord]) -> String {
+/// Renders ADRs with ids cut to `id_len` characters — long enough to be
+/// unique among the repository's ADRs, so `link_decision` accepts them.
+pub fn format_decisions(decisions: &[ArchDecisionRecord], id_len: usize) -> String {
     if decisions.is_empty() {
         return "No ADRs found.".to_string();
     }
@@ -1815,7 +1855,7 @@ pub fn format_decisions(decisions: &[ArchDecisionRecord]) -> String {
     for adr in decisions {
         out.push_str(&format!(
             "  [{}] {} ({})\n",
-            adr.id.chars().take(8).collect::<String>(),
+            adr.id.chars().take(id_len).collect::<String>(),
             adr.title,
             adr.status,
         ));

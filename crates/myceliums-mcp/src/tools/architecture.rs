@@ -216,12 +216,10 @@ impl MyceliumsMcp {
             .collect();
 
         if matching_symbols.is_empty() {
-            return self
-                .graph_text(
-                    &repo_id,
-                    format!("No symbol found matching '{}'", params.symbol_name),
-                )
-                .await;
+            return Err(ToolError::recoverable(
+                format!("No symbol name contains `{}`.", params.symbol_name),
+                "check the spelling, or find the symbol with context_search",
+            ));
         }
 
         let page =
@@ -373,13 +371,15 @@ impl MyceliumsMcp {
             .into_iter()
             .map(|(community, density)| CohesionEntry { community, density })
             .collect();
+        // Both tables come out of hash maps: full tie-breaks keep pages stable.
         cohesion.sort_by(|a, b| {
             b.density
                 .partial_cmp(&a.density)
                 .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.community.cmp(&b.community))
         });
 
-        let coupling: Vec<CouplingEntry> = metrics
+        let mut coupling: Vec<CouplingEntry> = metrics
             .coupling
             .into_iter()
             .map(|c| CouplingEntry {
@@ -388,6 +388,12 @@ impl MyceliumsMcp {
                 edge_count: c.edge_count,
             })
             .collect();
+        coupling.sort_by(|a, b| {
+            b.edge_count
+                .cmp(&a.edge_count)
+                .then_with(|| a.community_a.cmp(&b.community_a))
+                .then_with(|| a.community_b.cmp(&b.community_b))
+        });
 
         let totals = [cohesion.len(), coupling.len()];
         let page = Page::new(params.limit, params.offset, Budget::LIST);
@@ -498,8 +504,12 @@ impl MyceliumsMcp {
             dep.dependents.len(),
         ];
         let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
-        let (lists, notice) =
-            page.take_lists(vec![dep.direct_deps, dep.transitive_deps, dep.dependents]);
+        // The core lists come out of hash sets: sort, so pages are stable.
+        let mut lists = vec![dep.direct_deps, dep.transitive_deps, dep.dependents];
+        for list in &mut lists {
+            list.sort();
+        }
+        let (lists, notice) = page.take_lists(lists);
         let [direct_deps, transitive_deps, dependents]: [Vec<String>; 3] =
             lists.try_into().expect("three lists in, three lists out");
         let output = DependenciesOutput {
@@ -656,6 +666,14 @@ impl MyceliumsMcp {
         let threshold = params.god_node_threshold.unwrap_or(20).max(1);
 
         let mut report = lint_architecture(&symbols, &relationships, rules.as_deref(), threshold);
+        // Stable pages whatever order the checks produced.
+        report.findings.sort_by(|a, b| {
+            (&a.rule_id, &a.message, &a.affected_entities).cmp(&(
+                &b.rule_id,
+                &b.message,
+                &b.affected_entities,
+            ))
+        });
         let page = Page::new(params.limit, params.offset, Budget::LIST)
             .take(std::mem::take(&mut report.findings));
         report.findings = page.items;

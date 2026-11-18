@@ -55,45 +55,71 @@ pub(crate) fn registered_db_path(repo_id: &str) -> Result<PathBuf, ToolError> {
 /// How many candidates an "ambiguous symbol" error lists.
 const AMBIGUOUS_SHOWN: usize = 8;
 
-/// Finds one symbol by qualified name, else by short name.
+/// `file_path:qualified_name`: the handle that tells same-named symbols apart
+/// (top-level definitions have `qualified_name == name`, so two files that
+/// each define `parse` share both).
+pub(crate) fn located_name(symbol: &CodeSymbol) -> String {
+    format!("{}:{}", symbol.file_path, symbol.qualified_name)
+}
+
+/// Whether `name` is `symbol`'s [`located_name`].
+fn is_located_name(symbol: &CodeSymbol, name: &str) -> bool {
+    name.strip_prefix(symbol.file_path.as_str())
+        .and_then(|rest| rest.strip_prefix(':'))
+        .is_some_and(|rest| rest == symbol.qualified_name)
+}
+
+/// Finds exactly one symbol by `file_path:qualified_name`, qualified name,
+/// or short name, in that order.
 ///
 /// Not found and ambiguous are recoverable: the error names the next step
-/// (search for it, or pass one of the listed qualified names).
+/// (search for it, or pass one of the listed `file_path:qualified_name`
+/// handles).
 pub(crate) fn resolve_symbol<'a>(
     symbols: &'a [CodeSymbol],
     name: &str,
 ) -> Result<&'a CodeSymbol, ToolError> {
-    // A qualified name is the disambiguation handle agents are told to pass,
-    // so it wins outright (the first one, if several symbols share it).
-    if let Some(symbol) = symbols.iter().find(|s| s.qualified_name == name) {
+    if let Some(symbol) = symbols.iter().find(|s| is_located_name(s, name)) {
         return Ok(symbol);
     }
-    let by_name: Vec<&CodeSymbol> = symbols.iter().filter(|s| s.name == name).collect();
-    match by_name.as_slice() {
-        [] => Err(ToolError::symbol_not_found(name)),
-        [one] => Ok(one),
-        many => {
-            let shown: Vec<String> = many
-                .iter()
-                .take(AMBIGUOUS_SHOWN)
-                .map(|s| format!("{} ({}:{})", s.qualified_name, s.file_path, s.start_line))
-                .collect();
-            let more = many.len().saturating_sub(AMBIGUOUS_SHOWN);
-            let more = if more > 0 {
-                format!(", +{more} more")
-            } else {
-                String::new()
-            };
-            Err(ToolError::recoverable(
-                format!(
-                    "Symbol `{name}` is ambiguous: {} matches: {}{more}.",
-                    many.len(),
-                    shown.join(", ")
-                ),
-                "pass one of these qualified names as the symbol name",
-            ))
-        }
+    let by_qualified: Vec<&CodeSymbol> = symbols
+        .iter()
+        .filter(|s| s.qualified_name == name)
+        .collect();
+    let matches = if by_qualified.is_empty() {
+        symbols.iter().filter(|s| s.name == name).collect()
+    } else {
+        by_qualified
+    };
+    let Some(first) = matches.first() else {
+        return Err(ToolError::symbol_not_found(name));
+    };
+    let mut handles: Vec<String> = matches.iter().map(|s| located_name(s)).collect();
+    handles.sort();
+    handles.dedup();
+    // Several symbols with one handle (e.g. overloads in one file) cannot be
+    // told apart any further: the first stands for them all.
+    if handles.len() == 1 {
+        return Ok(first);
     }
+    let more = handles.len().saturating_sub(AMBIGUOUS_SHOWN);
+    let more = if more > 0 {
+        format!(" (+{more} more)")
+    } else {
+        String::new()
+    };
+    let shown: Vec<String> = handles
+        .iter()
+        .take(AMBIGUOUS_SHOWN)
+        .map(|h| format!("`{h}`"))
+        .collect();
+    Err(ToolError::recoverable(
+        format!("Symbol `{name}` is ambiguous: {} matches.", handles.len()),
+        format!(
+            "pass one of these as the symbol name: {}{more}",
+            shown.join(", ")
+        ),
+    ))
 }
 
 /// Labels CALLS edges with how their target was resolved (`exact`,
@@ -257,7 +283,7 @@ mod tests {
     }
 
     #[test]
-    fn ambiguous_name_is_recoverable_and_lists_qualified_names() {
+    fn ambiguous_name_is_recoverable_and_lists_located_names() {
         let symbols = vec![
             sym("parse", "a.parse", "a.ts"),
             sym("parse", "b.parse", "b.ts"),
@@ -267,18 +293,55 @@ mod tests {
         assert!(matches!(err, ToolError::Recoverable { .. }));
         assert!(msg.contains("ambiguous: 2 matches"), "{msg}");
         assert!(
-            msg.contains("a.parse (a.ts:1)") && msg.contains("b.parse"),
+            msg.contains(
+                "Next: pass one of these as the symbol name: `a.ts:a.parse`, `b.ts:b.parse`"
+            ),
             "{msg}"
         );
-        assert!(
-            msg.contains("Next: pass one of these qualified names"),
-            "{msg}"
-        );
-        // The qualified name resolves it.
+        // A qualified name resolves it, and so does the listed handle.
         assert_eq!(
             resolve_symbol(&symbols, "b.parse").unwrap().file_path,
             "b.ts"
         );
+        assert_eq!(
+            resolve_symbol(&symbols, "b.ts:b.parse").unwrap().file_path,
+            "b.ts"
+        );
+    }
+
+    #[test]
+    fn shared_qualified_names_are_ambiguous_too() {
+        // Top-level definitions: qualified name == name in both files.
+        let symbols = vec![sym("parse", "parse", "a.ts"), sym("parse", "parse", "b.ts")];
+        let err = resolve_symbol(&symbols, "parse").unwrap_err();
+        assert!(
+            err.message().contains("`a.ts:parse`, `b.ts:parse`"),
+            "{}",
+            err.message()
+        );
+        assert_eq!(
+            resolve_symbol(&symbols, "b.ts:parse").unwrap().file_path,
+            "b.ts"
+        );
+        // Rust-style qualified names keep their `::`.
+        let rust = vec![
+            sym("f", "m::f", "src/lib.rs"),
+            sym("f", "n::f", "src/lib.rs"),
+        ];
+        assert_eq!(
+            resolve_symbol(&rust, "src/lib.rs:n::f")
+                .unwrap()
+                .qualified_name,
+            "n::f"
+        );
+    }
+
+    #[test]
+    fn one_handle_for_several_symbols_resolves_to_the_first() {
+        let mut overload = sym("f", "C.f", "a.ts");
+        overload.uid = "second".into();
+        let symbols = vec![sym("f", "C.f", "a.ts"), overload];
+        assert_eq!(resolve_symbol(&symbols, "f").unwrap().uid, "a.ts:C.f");
     }
 
     #[test]

@@ -95,6 +95,94 @@ fn next_offset(notice: &str) -> Option<usize> {
         .ok()
 }
 
+/// Rows of a one-column Cypher table: after the `----` rule, up to the end
+/// of the untrusted block.
+fn table_rows(text: &str) -> Vec<String> {
+    text.lines()
+        .skip_while(|l| l.is_empty() || !l.chars().all(|c| c == '-'))
+        .skip(1)
+        .take_while(|l| !l.starts_with(">>>END "))
+        .map(str::to_string)
+        .collect()
+}
+
+/// Rows of a multi-column Cypher table (same bounds as [`table_rows`]).
+fn any_table_rows(text: &str) -> Vec<String> {
+    text.lines()
+        .skip_while(|l| l.is_empty() || !l.chars().all(|c| c == '-' || c == ' '))
+        .skip(1)
+        .take_while(|l| !l.starts_with(">>>END "))
+        .map(str::to_string)
+        .collect()
+}
+
+/// `  * item` lines (impact reports), tagged with their section heading.
+fn bullet_items(text: &str) -> Vec<String> {
+    let mut section = String::new();
+    let mut items = Vec::new();
+    for line in text.lines() {
+        if let Some(item) = line.strip_prefix("  * ") {
+            items.push(format!("{section}|{item}"));
+        } else if line.ends_with(':') {
+            section = line.to_string();
+        }
+    }
+    items
+}
+
+/// Follows the `offset=` each page's notice names, from offset 0 to the
+/// end, and returns every item seen, in order.
+async fn walk_pages(
+    client: &Client,
+    tool: &str,
+    mut args: Value,
+    limit: usize,
+    items_of: fn(&str) -> Vec<String>,
+) -> Vec<String> {
+    let mut seen = Vec::new();
+    let mut offset = 0;
+    for _ in 0..100 {
+        args["limit"] = json!(limit);
+        args["offset"] = json!(offset);
+        let page = ok_text(client, tool, args.clone()).await;
+        let items = items_of(&page);
+        assert!(items.len() <= limit * 3, "{tool} page over budget: {page}");
+        seen.extend(items);
+        match page.lines().find(|l| l.contains("call again with offset=")) {
+            Some(notice) => offset = next_offset(notice).expect("notice names an offset"),
+            None => return seen,
+        }
+    }
+    panic!("{tool}: paging did not end");
+}
+
+/// Pages walked one at a time must add up to the single big page: nothing
+/// twice, nothing missing — even where the core produces hash-map order.
+async fn assert_pages_partition(
+    client: &Client,
+    tool: &str,
+    args: Value,
+    items_of: fn(&str) -> Vec<String>,
+) {
+    let mut whole_args = args.clone();
+    whole_args["limit"] = json!(500);
+    let whole = items_of(&ok_text(client, tool, whole_args).await);
+    assert!(whole.len() > 2, "{tool}: too few items to page: {whole:?}");
+    // Several walks: an unstable order would show up as overlap or gaps.
+    for _ in 0..3 {
+        let paged = walk_pages(client, tool, args.clone(), 2, items_of).await;
+        let mut unique = paged.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(
+            unique.len(),
+            paged.len(),
+            "{tool}: an item came twice: {paged:?}"
+        );
+        assert_eq!(paged, whole, "{tool}");
+    }
+}
+
 // ── Errors ───────────────────────────────────────────────────────────────
 
 #[tokio::test]
@@ -119,6 +207,16 @@ async fn recoverable_failures_are_is_error_results_with_a_next_step() {
         (
             "get_community_detail",
             json!({"repo_id": harness::REPO_ID, "community_id": "no-such-community"}),
+            "not found",
+        ),
+        (
+            "get_git_context",
+            json!({"repo_id": harness::REPO_ID, "symbol_name": "zzzNoSuchSymbolzzz"}),
+            "No symbol name contains",
+        ),
+        (
+            "link_decision",
+            json!({"repo_id": harness::REPO_ID, "decision_id": "no-such-adr", "symbol_name": "getUser"}),
             "not found",
         ),
     ];
@@ -202,16 +300,7 @@ async fn cut_lists_say_so_and_pages_round_trip() {
     )
     .await;
     assert!(!full.contains("offset="), "everything fits: {full}");
-    // Rows of a one-column table: after the `----` rule, up to the end of
-    // the untrusted block.
-    let rows = |text: &str| -> Vec<String> {
-        text.lines()
-            .skip_while(|l| l.is_empty() || !l.chars().all(|c| c == '-'))
-            .skip(1)
-            .take_while(|l| !l.starts_with(">>>END "))
-            .map(str::to_string)
-            .collect()
-    };
+    let rows = table_rows;
     let all = rows(&full);
     assert!(all.len() > 5, "fixture has enough symbols: {full}");
 
@@ -258,6 +347,40 @@ async fn cut_lists_say_so_and_pages_round_trip() {
         )),
         "{notice}"
     );
+}
+
+#[tokio::test]
+async fn pages_partition_lists_built_from_hash_maps() {
+    let client = connect().await;
+    let diff = "\
+diff --git a/src/services/user.ts b/src/services/user.ts
+--- a/src/services/user.ts
++++ b/src/services/user.ts
+@@ -16,3 +16,4 @@ export class UserService {
+     getUser(id: string): User | null {
++        // touched
+         return this.db.findById('users', id);
+     }
+";
+    assert_pages_partition(
+        &client,
+        "detect_impact",
+        json!({"repo_id": harness::REPO_ID, "diff": diff}),
+        bullet_items,
+    )
+    .await;
+    assert_pages_partition(
+        &client,
+        "cypher_query",
+        json!({
+            "repo_id": harness::REPO_ID,
+            "query": "MATCH (s:CodeSymbol) RETURN s.kind, count(s)"
+        }),
+        any_table_rows,
+    )
+    .await;
+    // `get_dependencies` sorts its hash-set lists the same way, but the
+    // fixture has no file-level IMPORTS edges to page through.
 }
 
 // ── Freshness, confidence, untrusted content ─────────────────────────────
@@ -339,6 +462,19 @@ async fn indexed_source_is_framed_as_untrusted() {
             .unwrap()
             .starts_with("<<<UNTRUSTED "),
         "{definition}"
+    );
+
+    // Search tables carry indexed names and signatures (email subjects,
+    // Markdown headings): framed once per response.
+    let search = ok_text(
+        &client,
+        "context_search",
+        json!({"repo_id": harness::REPO_ID, "query": "user"}),
+    )
+    .await;
+    assert!(
+        search.contains("<<<UNTRUSTED ") && search.contains(" search results\n"),
+        "{search}"
     );
 
     let info = client.peer_info().expect("server info");

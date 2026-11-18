@@ -182,6 +182,7 @@ pub struct ListReposParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Repos to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -195,6 +196,7 @@ pub struct SearchParams {
     #[schemars(range(min = 1, max = 100))]
     pub limit: Option<usize>,
     /// Results to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
     /// Show scoring breakdown and graph paths for each result (default: false)
     pub explain: Option<bool>,
@@ -202,7 +204,7 @@ pub struct SearchParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct SymbolContextParams {
-    /// Name or qualified name of the symbol to look up
+    /// Symbol: name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
     /// Repository ID
     pub repo_id: String,
@@ -218,12 +220,13 @@ pub struct CypherQueryParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Rows to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct RenameParams {
-    /// Name of the symbol to rename
+    /// Symbol to rename: name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
     /// New name for the symbol
     pub new_name: String,
@@ -233,6 +236,7 @@ pub struct RenameParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Edits to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -245,10 +249,11 @@ pub struct DetectImpactParams {
     /// Graph traversal depth (default: 2)
     #[schemars(range(min = 1, max = 10))]
     pub depth: Option<u32>,
-    /// Max affected symbols per page (default 50, max 500)
+    /// Max report lines (changed, affected, files) per page (default 50, max 500)
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
-    /// Affected symbols to skip, for the next page (default 0)
+    /// Report lines to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -262,8 +267,9 @@ pub struct HybridSearchParams {
     #[schemars(range(min = 1, max = 100))]
     pub limit: Option<usize>,
     /// Results to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
-    /// Apply cross-encoder reranking to results (default: false)
+    /// Rerank the top 50 hybrid results with a cross-encoder (default: false)
     pub rerank: Option<bool>,
     /// Show scoring breakdown and graph paths for each result (default: false)
     pub explain: Option<bool>,
@@ -297,6 +303,7 @@ pub struct GetProcessesParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Processes to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
     /// Show only processes with N or more steps
     pub min_steps: Option<u32>,
@@ -310,6 +317,7 @@ pub struct GetCommunitiesParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Communities to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -325,7 +333,7 @@ pub struct GetCommunityDetailParams {
 pub struct GetSymbolDefinitionParams {
     /// Repository ID
     pub repo_id: String,
-    /// Symbol name or qualified name to find
+    /// Symbol: name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
 }
 
@@ -339,6 +347,7 @@ pub struct FindDeadCodeParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Symbols to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -346,7 +355,7 @@ pub struct FindDeadCodeParams {
 pub struct GetCallersParams {
     /// Repository ID
     pub repo_id: String,
-    /// Symbol name or qualified name to find callers for
+    /// Symbol: name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
     /// Maximum transitive depth (default: 3)
     #[schemars(range(min = 1, max = 10))]
@@ -355,6 +364,7 @@ pub struct GetCallersParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Callers to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -362,7 +372,7 @@ pub struct GetCallersParams {
 pub struct GetCalleesParams {
     /// Repository ID
     pub repo_id: String,
-    /// Symbol name or qualified name to find callees for
+    /// Symbol: name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
     /// Maximum transitive depth (default: 3)
     #[schemars(range(min = 1, max = 10))]
@@ -371,6 +381,7 @@ pub struct GetCalleesParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Callees to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -384,6 +395,7 @@ pub struct GetFileSymbolsParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Symbols to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -401,6 +413,7 @@ pub struct GetGodNodesParams {
     #[schemars(range(min = 1, max = 200))]
     pub top_n: Option<usize>,
     /// Nodes to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
     /// Coupling threshold: nodes with degree > this are flagged as high-coupling (default: 20)
     #[schemars(range(min = 1))]
@@ -418,14 +431,15 @@ pub struct GetSurprisingConnectionsParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Connections to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct FindPathParams {
-    /// Symbol name or qualified name for the start of the path
+    /// Start symbol: name, qualified name, or file_path:qualified_name
     pub from_symbol: String,
-    /// Symbol name or qualified name for the end of the path
+    /// End symbol: name, qualified name, or file_path:qualified_name
     pub to_symbol: String,
     /// Repository ID (default: repo of the working directory, else the most recent)
     pub repo_id: Option<String>,
@@ -444,6 +458,7 @@ pub struct GetKnowledgeGapsParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Gaps to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -451,7 +466,7 @@ pub struct GetKnowledgeGapsParams {
 pub struct GetRationaleParams {
     /// Repository ID (default: repo of the working directory, else the most recent)
     pub repo_id: Option<String>,
-    /// Symbol name or qualified name to get rationale for (optional — provide this OR file_path)
+    /// Symbol (name, qualified name, or file_path:qualified_name) to get rationale for — provide this OR file_path
     pub symbol_name: Option<String>,
     /// File path to get all rationale comments for (optional — provide this OR symbol_name)
     pub file_path: Option<String>,
@@ -459,6 +474,7 @@ pub struct GetRationaleParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Comments to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -472,6 +488,7 @@ pub struct GetSuggestedQuestionsParams {
     #[schemars(range(min = 1, max = 50))]
     pub limit: Option<usize>,
     /// Questions to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -483,6 +500,7 @@ pub struct GetGraphDiffParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Changes to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -500,6 +518,7 @@ pub struct SearchEmailsParams {
     #[schemars(range(min = 1, max = 100))]
     pub limit: Option<usize>,
     /// Emails to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -513,6 +532,7 @@ pub struct GetConversationParams {
     #[schemars(range(min = 1, max = 100))]
     pub limit: Option<usize>,
     /// Emails to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -526,6 +546,7 @@ pub struct GetPersonContextParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Emails to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -541,6 +562,7 @@ pub struct QueryKnowledgeParams {
     #[schemars(range(min = 1, max = 100))]
     pub limit: Option<usize>,
     /// Mentions to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -596,6 +618,7 @@ pub struct GetGitContextParams {
     #[schemars(range(min = 1, max = 100))]
     pub limit: Option<usize>,
     /// Symbols to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -624,6 +647,7 @@ pub struct GetCentralityParams {
     #[schemars(range(min = 1, max = 200))]
     pub top_n: Option<usize>,
     /// Nodes to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -635,6 +659,7 @@ pub struct GetCommunityMetricsParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Rows to skip in each table, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -653,6 +678,7 @@ pub struct DetectCyclesParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Cycles to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -669,6 +695,7 @@ pub struct GetDependenciesParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Files to skip in each list, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -682,6 +709,7 @@ pub struct GetModuleCouplingParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Modules to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -693,6 +721,7 @@ pub struct QualityHotspotsParams {
     #[schemars(range(min = 1, max = 200))]
     pub top_n: Option<usize>,
     /// Hotspots to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -710,6 +739,7 @@ pub struct ArchitectureLintParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Findings to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -733,6 +763,7 @@ pub struct GetOwnershipParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Files to skip in each list, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -754,6 +785,7 @@ pub struct GetServiceMapParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Mappings to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -783,6 +815,7 @@ pub struct GetDecisionsParams {
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
     /// Decisions to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -790,7 +823,7 @@ pub struct GetDecisionsParams {
 pub struct LinkDecisionParams {
     /// Repository ID
     pub repo_id: String,
-    /// ADR ID to link
+    /// ADR id, or a unique prefix of it as listed by get_decisions
     pub decision_id: String,
     /// Symbol name to link to
     pub symbol_name: String,
@@ -808,6 +841,7 @@ pub struct SnapshotDiffParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Changes to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -819,6 +853,7 @@ pub struct GetContractsParams {
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
     /// Unlinked endpoints to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 

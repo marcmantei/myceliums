@@ -4,6 +4,14 @@ use super::prelude::*;
 
 /// Most results a search tool returns per page.
 const SEARCH: Budget = Budget::new(20, 100);
+/// Hybrid search pages are cut from at most this many top results. Up to
+/// 100 the vector leg's candidate pool is fixed, so every page comes from the
+/// same fused ranking.
+const HYBRID_WINDOW: usize = 100;
+/// With `rerank`, this many top hybrid results are reranked, whatever the
+/// page: reranking a window that grew with `offset` would reorder it and make
+/// pages overlap.
+const RERANK_WINDOW: usize = 50;
 
 /// The embedding model recorded for an index could not be loaded: that is
 /// fixable (keyword search still works; re-indexing picks a usable model).
@@ -56,7 +64,7 @@ impl MyceliumsMcp {
             })
             .collect();
         let body = with_notice(
-            format::format_search_results(&params.query, &items),
+            format::framed_results(&params.query, &items, format::format_search_results),
             page.notice.as_deref(),
         );
         self.graph_text(&repo_id, body).await
@@ -105,8 +113,14 @@ impl MyceliumsMcp {
 
         let explain = params.explain.unwrap_or(false);
         let page = Page::new(params.limit, params.offset, SEARCH);
-        // Ranked top-k: ask for one page past the cut to learn whether more exist.
-        let fetch = page.fetch();
+        let rerank = params.rerank.unwrap_or(false);
+        // Ranked top-k: ask for one past the page to learn whether more
+        // exist, within a window that does not depend on the page.
+        let fetch = if rerank {
+            RERANK_WINDOW
+        } else {
+            page.fetch().min(HYBRID_WINDOW)
+        };
         let mut results = if explain {
             core_hybrid_search_explain(&embedder, &symbols, store.as_ref(), &params.query, fetch)
                 .await
@@ -118,7 +132,7 @@ impl MyceliumsMcp {
         };
 
         // Apply reranking if requested, using the reranker recorded at indexing time
-        if params.rerank.unwrap_or(false) {
+        if rerank {
             let reranker_id = embedder.meta().reranker.clone();
             results = rerank_results(&params.query, results, reranker_id.as_deref())
                 .await
@@ -160,7 +174,7 @@ impl MyceliumsMcp {
         let body = format::with_index_warning(
             warning,
             with_notice(
-                format::format_hybrid_results(&params.query, &items),
+                format::framed_results(&params.query, &items, format::format_hybrid_results),
                 page.notice.as_deref(),
             ),
         );
@@ -268,7 +282,7 @@ impl MyceliumsMcp {
         let body = format::with_index_warning(
             warning,
             with_notice(
-                format::format_search_results(&params.query, &items),
+                format::framed_results(&params.query, &items, format::format_search_results),
                 page.notice.as_deref(),
             ),
         );

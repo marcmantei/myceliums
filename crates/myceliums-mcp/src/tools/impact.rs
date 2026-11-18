@@ -102,18 +102,9 @@ impl MyceliumsMcp {
         require_query("new_name", &params.new_name)?;
         let symbols = self.symbols(&params.repo_id).await?;
         let relationships = self.relationships(&params.repo_id).await?;
-        let plan = RenamePlan::create(
-            &symbols,
-            &relationships,
-            &params.symbol_name,
-            &params.new_name,
-        )
-        .map_err(|e| {
-            ToolError::recoverable(
-                format!("{e}."),
-                "check the spelling, or find the symbol with context_search",
-            )
-        })?;
+        let target = resolve_symbol(&symbols, &params.symbol_name)?;
+        let plan = RenamePlan::for_symbol(&symbols, &relationships, target, &params.new_name)
+            .map_err(|e| ToolError::internal("cannot build the rename plan", e))?;
         let page = Page::new(params.limit, params.offset, Budget::new(100, 500));
         let body = format::format_rename_plan(&plan, page);
         self.graph_text(&params.repo_id, body).await

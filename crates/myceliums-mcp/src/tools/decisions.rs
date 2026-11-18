@@ -123,6 +123,7 @@ impl MyceliumsMcp {
         let decisions = load_decisions(&data_dir(), &repo_id)
             .map_err(|e| ToolError::internal("cannot read decisions", e))?;
 
+        let id_len = unique_prefix_len(decisions.iter().map(|d| d.id.as_str()));
         let filtered: Vec<_> = match params.status {
             Some(status) => {
                 let wanted = adr_status(status);
@@ -135,7 +136,7 @@ impl MyceliumsMcp {
         };
 
         let page = Page::new(params.limit, params.offset, Budget::LIST).take(filtered);
-        text(page.with_notice(format::format_decisions(&page.items)))
+        text(page.with_notice(format::format_decisions(&page.items, id_len)))
     }
 
     #[tool(
@@ -155,23 +156,18 @@ impl MyceliumsMcp {
         self.resolve_repo_id(Some(&params.repo_id))?;
         let decisions = load_decisions(&data_dir(), &params.repo_id)
             .map_err(|e| ToolError::internal("cannot read decisions", e))?;
-        if !decisions.iter().any(|d| d.id == params.decision_id) {
-            return Err(ToolError::recoverable(
-                format!("Decision `{}` not found.", params.decision_id),
-                "pass an ADR id listed by get_decisions",
-            ));
-        }
+        let decision_id = resolve_decision_id(&decisions, &params.decision_id)?;
         link_decision_to_symbol(
             &data_dir(),
             &params.repo_id,
-            &params.decision_id,
+            decision_id,
             &params.symbol_name,
         )
         .map_err(|e| ToolError::internal("cannot save the decision link", e))?;
 
         text(format!(
             "Linked ADR {} to symbol '{}'",
-            params.decision_id, params.symbol_name
+            decision_id, params.symbol_name
         ))
     }
 
@@ -211,5 +207,104 @@ fn adr_status(status: DecisionStatus) -> AdrStatus {
         DecisionStatus::Accepted => AdrStatus::Accepted,
         DecisionStatus::Deprecated => AdrStatus::Deprecated,
         DecisionStatus::Superseded => AdrStatus::Superseded,
+    }
+}
+
+/// Shortest id prefix (at least 8 characters) that tells all `ids` apart.
+fn unique_prefix_len<'a>(ids: impl Iterator<Item = &'a str>) -> usize {
+    let mut ids: Vec<&str> = ids.collect();
+    ids.sort_unstable();
+    let shared = ids
+        .windows(2)
+        .map(|pair| {
+            pair[0]
+                .chars()
+                .zip(pair[1].chars())
+                .take_while(|(a, b)| a == b)
+                .count()
+        })
+        .max()
+        .unwrap_or(0);
+    (shared + 1).max(8)
+}
+
+/// The full ADR id for an exact id or a unique prefix of one.
+fn resolve_decision_id<'a>(
+    decisions: &'a [ArchDecisionRecord],
+    wanted: &str,
+) -> Result<&'a str, ToolError> {
+    if let Some(exact) = decisions.iter().find(|d| d.id == wanted) {
+        return Ok(&exact.id);
+    }
+    let matches: Vec<&str> = if wanted.is_empty() {
+        Vec::new()
+    } else {
+        decisions
+            .iter()
+            .filter(|d| d.id.starts_with(wanted))
+            .map(|d| d.id.as_str())
+            .collect()
+    };
+    match matches.as_slice() {
+        [one] => Ok(one),
+        [] => Err(ToolError::recoverable(
+            format!("Decision `{wanted}` not found."),
+            "pass an ADR id (or its prefix) listed by get_decisions",
+        )),
+        many => Err(ToolError::recoverable(
+            format!("Decision id prefix `{wanted}` matches {} ADRs.", many.len()),
+            format!("pass a longer prefix, one of: {}", many.join(", ")),
+        )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn adr(id: &str) -> ArchDecisionRecord {
+        ArchDecisionRecord {
+            id: id.to_string(),
+            title: "t".into(),
+            status: AdrStatus::Proposed,
+            context: String::new(),
+            decision: String::new(),
+            consequences: String::new(),
+            linked_symbols: Vec::new(),
+            superseded_by: None,
+            created_at: String::new(),
+            updated_at: String::new(),
+        }
+    }
+
+    #[test]
+    fn listed_id_prefixes_are_unique_and_accepted() {
+        let decisions = vec![adr("1234567890aa"), adr("1234567890bb"), adr("ffff000011")];
+        let len = unique_prefix_len(decisions.iter().map(|d| d.id.as_str()));
+        assert_eq!(len, 11);
+        assert_eq!(unique_prefix_len(["abc"].into_iter()), 8);
+        // The listed prefix resolves to the full id; so does the full id.
+        assert_eq!(
+            resolve_decision_id(&decisions, "1234567890b").unwrap(),
+            "1234567890bb"
+        );
+        assert_eq!(
+            resolve_decision_id(&decisions, "ffff").unwrap(),
+            "ffff000011"
+        );
+        assert_eq!(
+            resolve_decision_id(&decisions, "1234567890aa").unwrap(),
+            "1234567890aa"
+        );
+        let ambiguous = resolve_decision_id(&decisions, "1234")
+            .unwrap_err()
+            .message();
+        assert!(ambiguous.contains("matches 2 ADRs"), "{ambiguous}");
+        let missing = resolve_decision_id(&decisions, "zz").unwrap_err().message();
+        assert!(
+            missing.contains("not found") && missing.contains("Next: "),
+            "{missing}"
+        );
+        assert!(resolve_decision_id(&decisions, "").is_err());
     }
 }

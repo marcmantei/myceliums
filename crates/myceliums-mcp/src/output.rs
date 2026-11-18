@@ -13,6 +13,9 @@ pub(crate) struct Budget {
     pub(crate) max: usize,
 }
 
+/// Largest `offset` any tool accepts (larger values are clamped).
+pub(crate) const MAX_OFFSET: usize = 100_000;
+
 impl Budget {
     /// Most list tools: 20 per page, at most 200.
     pub(crate) const LIST: Budget = Budget::new(20, 200);
@@ -41,7 +44,7 @@ impl Page {
     /// clamped into `1..=max` (the notice then shows what was cut).
     pub(crate) fn new(limit: Option<usize>, offset: Option<usize>, budget: Budget) -> Page {
         Page {
-            offset: offset.unwrap_or(0),
+            offset: offset.unwrap_or(0).min(MAX_OFFSET),
             limit: limit.unwrap_or(budget.default).clamp(1, budget.max),
         }
     }
@@ -67,7 +70,7 @@ impl Page {
     /// Cuts this page out of the first [`Page::fetch`] items of a longer
     /// ranking whose total size is unknown.
     pub(crate) fn take_open<T>(&self, items: Vec<T>) -> Paged<T> {
-        let more = items.len() > self.offset.saturating_add(self.limit);
+        let more = items.len() > self.end();
         let items: Vec<T> = items
             .into_iter()
             .skip(self.offset)
@@ -77,9 +80,14 @@ impl Page {
         Paged { items, notice }
     }
 
+    /// One past the last index of this page.
+    fn end(&self) -> usize {
+        self.offset.saturating_add(self.limit)
+    }
+
     fn notice(&self, shown: usize, total: Option<usize>, more: bool) -> Option<String> {
-        let first = self.offset + 1;
-        let last = self.offset + shown;
+        let first = self.offset.saturating_add(1);
+        let last = self.offset.saturating_add(shown);
         match total {
             Some(total) if shown == 0 && self.offset > 0 && total > 0 => Some(format!(
                 "No results at offset={} ({total} in total) — use a smaller offset.",
@@ -109,13 +117,13 @@ impl Page {
     /// with the same offset and limit, under one notice.
     pub(crate) fn take_lists<T>(&self, lists: Vec<Vec<T>>) -> (Vec<Vec<T>>, Option<String>) {
         let longest = lists.iter().map(Vec::len).max().unwrap_or(0);
-        let more = longest > self.offset.saturating_add(self.limit);
+        let more = longest > self.end();
         let paged: Vec<Vec<T>> = lists
             .into_iter()
             .map(|l| l.into_iter().skip(self.offset).take(self.limit).collect())
             .collect();
-        let first = self.offset + 1;
-        let last = self.offset + self.limit;
+        let first = self.offset.saturating_add(1);
+        let last = self.end();
         let notice = if more {
             Some(format!(
                 "Lists show items {first}-{last} — call again with offset={last} for more."
@@ -688,6 +696,13 @@ mod tests {
                 limit: 200
             }
         );
+        // A huge offset is clamped instead of overflowing the arithmetic.
+        let far = Page::new(Some(200), Some(usize::MAX), budget);
+        assert_eq!(far.offset, MAX_OFFSET);
+        let past = far.take(vec![1, 2, 3]);
+        assert!(past.items.is_empty());
+        assert!(past.notice.unwrap().contains("smaller offset"));
+        assert!(far.take_open(vec![1]).items.is_empty());
     }
 
     #[test]

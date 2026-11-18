@@ -8,31 +8,48 @@ These rules hold for every tool; the per-tool sections below list only what is s
 
 **Errors.** A failure the agent can act on is returned as a normal tool result
 with `isError: true`. Its text names the problem and ends with a `Next:` line
-naming the next step — for example `Symbol `foo` is ambiguous: 3 matches: …` /
-`Next: pass one of these qualified names as the symbol name`, an unknown
+naming the next step — for example `Symbol `parse` is ambiguous: 2 matches.` /
+`Next: pass one of these as the symbol name: `src/a.ts:parse`, `src/b.ts:parse``, an unknown
 `repo_id` (lists the known ids), a missing snapshot, or a file that is not in
 the index. Bad arguments — a malformed `repo_id`, an unparsable or writing
 Cypher query, a value outside an enum, a missing or empty required argument,
 mutually exclusive options — are JSON-RPC `invalid_params` errors. Only genuine
 server faults (I/O, storage) are `internal_error`.
 
+**Symbols.** Every symbol parameter accepts a short name, a qualified name, or
+`file_path:qualified_name`. When a name matches several symbols — two files
+that each define a top-level `parse` share both names — the call fails with
+the candidates in the `file_path:qualified_name` form, and `rename_symbol`
+never guesses either.
+
 **Output budget.** Every list-returning tool takes `limit` and `offset`. Each
 tool has a default page size and a hard maximum (both stated in its input
-schema; a larger `limit` is clamped). When a list is cut, the result says so —
+schema; a larger `limit` is clamped, `offset` is capped at 100,000). Lists
+that the core builds from hash maps are sorted before paging, so pages never
+overlap or skip. When a list is cut, the result says so —
 `Showing 1-20 of 312 — call again with offset=20 for more.` (structured
 results carry the same text in a `notice` field) — so a cut is never silent.
 Top-N rankings that cannot know their total say `more exist` instead.
-`cypher_query` pages its rows the same way (default 50, max 500); in
+`hybrid_search` pages within its top 100 results (with `rerank`, within the
+top 50, which are reranked whatever the page). `detect_impact` pages one list
+of changed symbols, affected symbols and files. `cypher_query` pages its rows
+the same way (default 50, max 500), and `GROUP BY` results keep a fixed
+order; in
 multi-column rows a value longer than 60 characters is cut with a visible `…`
 and a footer explains it.
 
 **Freshness.** Every result read from a repository's graph starts with one
 `Index:` line comparing the analyzed commit with the current `HEAD` and
-counting files edited since indexing, e.g. `Index: commit 1a2b3c4 = HEAD, up
+counting files changed since indexing (modified, deleted or new untracked
+files newer than the analysis start), e.g. `Index: commit 1a2b3c4 = HEAD, up
 to date.` or `Index: commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run analyze
-to refresh.` Structured results carry it as `index_status`. Git is consulted
-with a short timeout and cached for a few seconds; without git the line says
-the freshness is unknown.
+to refresh.` Structured results carry it as `index_status`. Whenever the line
+calls an index stale or changed, `analyze` without `force` re-indexes instead
+of reusing the cached index, so the advice always works. Git runs read-only
+(`--no-optional-locks`, so it never takes the index lock beside your own git
+commands) with a short timeout and is cached for a few seconds; when
+`git status` fails or times out the line says `uncommitted edits unknown`
+rather than `up to date`, and without git it says the freshness is unknown.
 
 **Call-edge confidence.** CALLS edges are resolved by name. Each edge records
 how its target was picked: `exact` (a qualified name only one symbol has),
@@ -45,7 +62,8 @@ label existed get it derived at query time (`ambiguous` if the name is shared,
 else `name-match`); re-run `analyze` to record the exact labels.
 
 **Untrusted content.** Indexed text — source code, documents, email, code
-comments, Cypher rows — is framed as data:
+comments, Cypher rows, and search result tables (whose names and signatures
+can be email subjects or Markdown headings) — is framed as data:
 
 ```text
 <<<UNTRUSTED 3fa9c2d1 src/services/user.ts:18-21
@@ -269,7 +287,7 @@ Preview renaming a symbol across the codebase. Returns a rename plan with all ed
 
 ### `get_git_context`
 
-Get git ownership and history metadata for a symbol. Returns last author, modification date, commit count, and age in days.
+Get git ownership and history metadata for the symbols whose name contains `symbol_name` (case-insensitive). Returns last author, modification date, commit count, and age in days; no match is an `isError` result.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -600,7 +618,7 @@ Link an Architecture Decision Record to a code symbol. Creates a traceability co
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | yes | | Repository ID |
-| `decision_id` | string | yes | | ADR ID to link |
+| `decision_id` | string | yes | | ADR id, or a unique prefix of it (`get_decisions` lists ids cut to the shortest unique prefix, at least 8 characters) |
 | `symbol_name` | string | yes | | Symbol name to link to |
 
 ---
