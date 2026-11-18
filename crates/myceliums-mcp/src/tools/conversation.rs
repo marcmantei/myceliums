@@ -6,18 +6,24 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "search_emails",
-        description = "Search indexed emails by keyword, with optional person and date filters. Returns matching Email symbols with subject, sender, date, and body snippet."
+        description = "Search indexed emails by keyword, with optional person and date filters. Returns matching Email symbols with subject, sender, date, and body snippet.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn search_emails(
         &self,
         Parameters(params): Parameters<SearchEmailsParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
 
-        let limit = params.limit.unwrap_or(20);
+        require_query("query", &params.query)?;
         let query_lower = params.query.to_lowercase();
 
         // Filter email symbols by keyword
@@ -61,38 +67,49 @@ impl MyceliumsMcp {
             results.retain(|s| s.signature.contains(date_filter));
         }
 
-        results.truncate(limit);
-
         if results.is_empty() {
-            return Ok(Json(TextOutput {
-                text: format!("No emails found matching '{}'.", params.query),
-            }));
+            return self
+                .graph_text(
+                    &repo_id,
+                    format!("No emails found matching '{}'.", params.query),
+                )
+                .await;
         }
 
-        let mut output = format!(
-            "Found {} email(s) matching '{}':\n\n",
-            results.len(),
-            params.query
-        );
-        for s in &results {
+        let total = results.len();
+        let page = Page::new(params.limit, params.offset, Budget::new(20, 100)).take(results);
+        // Subjects, senders and bodies are indexed email text: untrusted.
+        let mut emails = String::new();
+        for s in &page.items {
             let snippet = myceliums_core::text::snippet(&s.content, 200);
-            output.push_str(&format!(
+            emails.push_str(&format!(
                 "- **{}**\n  {}\n  Body: {}\n  UID: {}\n\n",
                 s.name, s.signature, snippet, s.uid
             ));
         }
+        let output = format!(
+            "Found {total} email(s) matching '{}':\n\n{}\n",
+            params.query,
+            untrusted("emails", &emails)
+        );
 
-        Ok(Json(TextOutput { text: output }))
+        self.graph_text(&repo_id, page.with_notice(output)).await
     }
 
     #[tool(
         name = "get_conversation",
-        description = "Get a full email thread by conversation symbol UID. Returns all emails in the thread with their relationships."
+        description = "Get a full email thread by conversation symbol UID. Returns all emails in the thread with their relationships.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_conversation(
         &self,
         Parameters(params): Parameters<GetConversationParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -106,9 +123,9 @@ impl MyceliumsMcp {
                     && s.kind == myceliums_storage::SymbolKind::Conversation
             })
             .ok_or_else(|| {
-                rmcp::ErrorData::internal_error(
-                    format!("Conversation not found: {}", params.conversation_uid),
-                    None,
+                ToolError::recoverable(
+                    format!("Conversation `{}` not found.", params.conversation_uid),
+                    "pass a conversation UID from search_emails or get_person_context",
                 )
             })?;
 
@@ -129,14 +146,11 @@ impl MyceliumsMcp {
             .filter(|s| email_uid_set.contains(s.uid.as_str()))
             .collect();
 
-        let mut output = format!(
-            "Conversation: {}\n{}\n{} emails in thread:\n\n",
-            conv.name,
-            conv.signature,
-            emails.len()
-        );
+        let total = emails.len();
+        let page = Page::new(params.limit, params.offset, Budget::new(20, 100)).take(emails);
+        let mut thread = format!("Conversation: {}\n{}\n\n", conv.name, conv.signature);
 
-        for email in &emails {
+        for email in &page.items {
             // Find sender
             let sender: Option<&str> = relationships
                 .iter()
@@ -149,7 +163,7 @@ impl MyceliumsMcp {
 
             let snippet = myceliums_core::text::snippet(&email.content, 300);
 
-            output.push_str(&format!(
+            thread.push_str(&format!(
                 "---\nFrom: {}\nSubject: {}\n{}\n\n{}\n\n",
                 sender.unwrap_or("unknown"),
                 email.name,
@@ -158,23 +172,33 @@ impl MyceliumsMcp {
             ));
         }
 
-        Ok(Json(TextOutput { text: output }))
+        let output = format!(
+            "{total} emails in thread:\n\n{}\n",
+            untrusted(&format!("conversation {}", conv.uid), &thread)
+        );
+        self.graph_text(&repo_id, page.with_notice(output)).await
     }
 
     #[tool(
         name = "get_person_context",
-        description = "Get all emails involving a specific person (sent by or received by). Returns the person's email activity summary."
+        description = "Get all emails involving a specific person (sent by or received by). Returns the person's email activity summary.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_person_context(
         &self,
         Parameters(params): Parameters<GetPersonContextParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
 
-        let limit = params.limit.unwrap_or(50);
+        require_query("person", &params.person)?;
         let person_lower = params.person.to_lowercase();
 
         // Find matching person symbols
@@ -188,9 +212,12 @@ impl MyceliumsMcp {
             .collect();
 
         if person_syms.is_empty() {
-            return Ok(Json(TextOutput {
-                text: format!("No person found matching '{}'.", params.person),
-            }));
+            return self
+                .graph_text(
+                    &repo_id,
+                    format!("No person found matching '{}'.", params.person),
+                )
+                .await;
         }
 
         let person_uid_set: std::collections::HashSet<&str> =
@@ -219,11 +246,11 @@ impl MyceliumsMcp {
         all_email_uids.extend(sent_email_uids.iter());
         all_email_uids.extend(received_email_uids.iter());
 
-        let mut emails: Vec<&myceliums_storage::CodeSymbol> = symbols
+        let emails: Vec<&myceliums_storage::CodeSymbol> = symbols
             .iter()
             .filter(|s| all_email_uids.contains(s.uid.as_str()))
             .collect();
-        emails.truncate(limit);
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 200)).take(emails);
 
         let person_name = person_syms
             .first()
@@ -234,30 +261,28 @@ impl MyceliumsMcp {
             .map(|s| s.signature.as_str())
             .unwrap_or("");
 
-        let mut output = format!(
-            "Person: {} ({})\nSent: {} emails, Received: {} emails\nShowing {} of {} total:\n\n",
+        let mut listing = format!(
+            "Person: {} ({})\nSent: {} emails, Received: {} emails ({} total)\n\n",
             person_name,
             person_email,
             sent_email_uids.len(),
             received_email_uids.len(),
-            emails.len(),
             all_email_uids.len(),
         );
 
-        for email in &emails {
+        for email in &page.items {
             let role = if sent_email_uids.contains(&email.uid.as_str()) {
                 "sent"
             } else {
                 "received"
             };
-            output.push_str(&format!(
+            listing.push_str(&format!(
                 "- [{}] **{}**\n  {}\n  UID: {}\n\n",
                 role, email.name, email.signature, email.uid,
             ));
         }
 
-        Ok(Json(TextOutput { text: output }))
+        let output = format!("{}\n", untrusted("emails", &listing));
+        self.graph_text(&repo_id, page.with_notice(output)).await
     }
-
-    // ── Cross-repo comparison tools (premium) ────────────────────────────
 }

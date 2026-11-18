@@ -1,7 +1,159 @@
-//! Structured tool output types, rendered to text by [`crate::format`].
+//! Structured tool output types, rendered to text by [`crate::format`], and
+//! the shared output budget ([`Page`]) every list-returning tool applies.
 
 use rmcp::schemars;
 use serde::Serialize;
+
+// ── Output budget ────────────────────────────────────────────────────────
+
+/// Default and hard maximum page size of a list-returning tool.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Budget {
+    pub(crate) default: usize,
+    pub(crate) max: usize,
+}
+
+impl Budget {
+    /// Most list tools: 20 per page, at most 200.
+    pub(crate) const LIST: Budget = Budget::new(20, 200);
+    /// Cypher result rows: 50 per page, at most 500.
+    pub(crate) const ROWS: Budget = Budget::new(50, 500);
+
+    /// A budget with its own default (tools that always had one keep it).
+    pub(crate) const fn new(default: usize, max: usize) -> Budget {
+        Budget { default, max }
+    }
+}
+
+/// One page of a list result: `limit` items starting at `offset`.
+///
+/// Every list-returning tool cuts its results through a `Page`, so a cut is
+/// never silent: [`Paged::notice`] says how much was shown and which `offset`
+/// fetches the rest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Page {
+    pub(crate) offset: usize,
+    pub(crate) limit: usize,
+}
+
+impl Page {
+    /// The requested page; `limit` falls back to the budget's default and is
+    /// clamped into `1..=max` (the notice then shows what was cut).
+    pub(crate) fn new(limit: Option<usize>, offset: Option<usize>, budget: Budget) -> Page {
+        Page {
+            offset: offset.unwrap_or(0),
+            limit: limit.unwrap_or(budget.default).clamp(1, budget.max),
+        }
+    }
+
+    /// How many leading items a top-k source must produce so that
+    /// [`Page::take_open`] can fill this page and tell whether more exist.
+    pub(crate) fn fetch(&self) -> usize {
+        self.offset.saturating_add(self.limit).saturating_add(1)
+    }
+
+    /// Cuts this page out of the complete, ordered result list.
+    pub(crate) fn take<T>(&self, items: Vec<T>) -> Paged<T> {
+        let total = items.len();
+        let items: Vec<T> = items
+            .into_iter()
+            .skip(self.offset)
+            .take(self.limit)
+            .collect();
+        let notice = self.notice(items.len(), Some(total), false);
+        Paged { items, notice }
+    }
+
+    /// Cuts this page out of the first [`Page::fetch`] items of a longer
+    /// ranking whose total size is unknown.
+    pub(crate) fn take_open<T>(&self, items: Vec<T>) -> Paged<T> {
+        let more = items.len() > self.offset.saturating_add(self.limit);
+        let items: Vec<T> = items
+            .into_iter()
+            .skip(self.offset)
+            .take(self.limit)
+            .collect();
+        let notice = self.notice(items.len(), None, more);
+        Paged { items, notice }
+    }
+
+    fn notice(&self, shown: usize, total: Option<usize>, more: bool) -> Option<String> {
+        let first = self.offset + 1;
+        let last = self.offset + shown;
+        match total {
+            Some(total) if shown == 0 && self.offset > 0 && total > 0 => Some(format!(
+                "No results at offset={} ({total} in total) — use a smaller offset.",
+                self.offset
+            )),
+            Some(total) if last < total => Some(format!(
+                "Showing {first}-{last} of {total} — call again with offset={last} for more."
+            )),
+            Some(total) if self.offset > 0 => {
+                Some(format!("Showing {first}-{last} of {total} (end)."))
+            }
+            None if more => Some(format!(
+                "Showing {first}-{last}; more exist — call again with offset={last}."
+            )),
+            None if shown == 0 && self.offset > 0 => Some(format!(
+                "No results at offset={} — use a smaller offset.",
+                self.offset
+            )),
+            None if self.offset > 0 => Some(format!("Showing {first}-{last} (end).")),
+            _ => None,
+        }
+    }
+}
+
+impl Page {
+    /// Pages several parallel lists (e.g. direct / transitive / dependents)
+    /// with the same offset and limit, under one notice.
+    pub(crate) fn take_lists<T>(&self, lists: Vec<Vec<T>>) -> (Vec<Vec<T>>, Option<String>) {
+        let longest = lists.iter().map(Vec::len).max().unwrap_or(0);
+        let more = longest > self.offset.saturating_add(self.limit);
+        let paged: Vec<Vec<T>> = lists
+            .into_iter()
+            .map(|l| l.into_iter().skip(self.offset).take(self.limit).collect())
+            .collect();
+        let first = self.offset + 1;
+        let last = self.offset + self.limit;
+        let notice = if more {
+            Some(format!(
+                "Lists show items {first}-{last} — call again with offset={last} for more."
+            ))
+        } else if self.offset > 0 {
+            Some(format!("Lists show items from {first} (end)."))
+        } else {
+            None
+        };
+        (paged, notice)
+    }
+}
+
+/// One page of results plus the notice describing the cut, if any.
+#[derive(Debug)]
+pub(crate) struct Paged<T> {
+    pub(crate) items: Vec<T>,
+    pub(crate) notice: Option<String>,
+}
+
+impl<T> Paged<T> {
+    /// Appends the notice (if any) to a rendered body.
+    pub(crate) fn with_notice(&self, body: String) -> String {
+        with_notice(body, self.notice.as_deref())
+    }
+}
+
+/// Appends a truncation notice to a rendered body on its own line.
+pub(crate) fn with_notice(mut body: String, notice: Option<&str>) -> String {
+    if let Some(notice) = notice {
+        if !body.ends_with('\n') {
+            body.push('\n');
+        }
+        body.push('\n');
+        body.push_str(notice);
+    }
+    body
+}
 
 // Output types
 
@@ -30,6 +182,8 @@ pub struct CommunityMetricsOutput {
     pub community_count: usize,
     pub cohesion: Vec<CohesionEntry>,
     pub coupling: Vec<CouplingEntry>,
+    /// Sizes of the cohesion and coupling tables before paging.
+    pub totals: [usize; 2],
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -64,6 +218,8 @@ pub struct DependenciesOutput {
     pub direct_deps: Vec<String>,
     pub transitive_deps: Vec<String>,
     pub dependents: Vec<String>,
+    /// Sizes of the three lists before paging: direct, transitive, dependents.
+    pub totals: [usize; 3],
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -78,23 +234,6 @@ pub struct ModuleCouplingEntry {
     pub afferent: u32,
     pub efferent: u32,
     pub instability: f64,
-}
-
-#[derive(Serialize, schemars::JsonSchema)]
-pub struct GraphDiffOutput {
-    pub repo_id: String,
-    pub previous_snapshot_at: String,
-    pub current_snapshot_at: String,
-    pub added_symbols: Vec<GraphDiffEntry>,
-    pub removed_symbols: Vec<GraphDiffEntry>,
-    pub added_edges: Vec<GraphDiffEntry>,
-    pub removed_edges: Vec<GraphDiffEntry>,
-}
-
-#[derive(Serialize, schemars::JsonSchema)]
-pub struct GraphDiffEntry {
-    pub uid: String,
-    pub label: String,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -161,8 +300,14 @@ pub struct SymbolContextOutput {
     pub end_line: u32,
     pub signature: String,
     pub content: String,
+    /// Caller names (heuristic edges marked), at most one page.
     pub callers: Vec<String>,
+    /// All callers, including those not listed.
+    pub callers_total: usize,
+    /// Callee names (heuristic edges marked), at most one page.
     pub callees: Vec<String>,
+    /// All callees, including those not listed.
+    pub callees_total: usize,
     pub metadata: Option<String>,
 }
 
@@ -215,7 +360,13 @@ pub struct ProcessItem {
 // New output types
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct CommunitiesOutput {
+    /// Index freshness: analyzed commit vs current HEAD.
+    pub index_status: String,
     pub communities: Vec<CommunityItem>,
+    pub total_count: usize,
+    /// Set when results were cut: how to fetch the next page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -229,6 +380,8 @@ pub struct CommunityItem {
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct CommunityDetailOutput {
+    /// Index freshness: analyzed commit vs current HEAD.
+    pub index_status: String,
     pub uid: String,
     pub label: String,
     pub member_count: u32,
@@ -252,6 +405,8 @@ pub struct SymbolItem {
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct SymbolDefinitionOutput {
+    /// Index freshness: analyzed commit vs current HEAD.
+    pub index_status: String,
     pub uid: String,
     pub name: String,
     pub qualified_name: String,
@@ -260,13 +415,19 @@ pub struct SymbolDefinitionOutput {
     pub start_line: u32,
     pub end_line: u32,
     pub signature: String,
+    /// Source text, framed as untrusted indexed content.
     pub content: String,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct DeadCodeOutput {
+    /// Index freshness: analyzed commit vs current HEAD.
+    pub index_status: String,
     pub symbols: Vec<DeadCodeItem>,
     pub total_count: u32,
+    /// Set when results were cut: how to fetch the next page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -282,10 +443,15 @@ pub struct DeadCodeItem {
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct CallersOutput {
+    /// Index freshness: analyzed commit vs current HEAD.
+    pub index_status: String,
     pub symbol_name: String,
     pub callers: Vec<CallerItem>,
     pub total_count: u32,
     pub depth_limited: bool,
+    /// Set when results were cut: how to fetch the next page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -297,14 +463,22 @@ pub struct CallerItem {
     pub start_line: u32,
     pub end_line: u32,
     pub depth: u32,
+    /// How the CALLS edge reaching this symbol was resolved:
+    /// exact | import | name-match | ambiguous.
+    pub resolved: String,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct CalleesOutput {
+    /// Index freshness: analyzed commit vs current HEAD.
+    pub index_status: String,
     pub symbol_name: String,
     pub callees: Vec<CalleeItem>,
     pub total_count: u32,
     pub depth_limited: bool,
+    /// Set when results were cut: how to fetch the next page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -316,13 +490,21 @@ pub struct CalleeItem {
     pub start_line: u32,
     pub end_line: u32,
     pub depth: u32,
+    /// How the CALLS edge reaching this symbol was resolved:
+    /// exact | import | name-match | ambiguous.
+    pub resolved: String,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct FileSymbolsOutput {
+    /// Index freshness: analyzed commit vs current HEAD.
+    pub index_status: String,
     pub file_path: String,
     pub symbols: Vec<FileSymbolItem>,
     pub total_count: u32,
+    /// Set when results were cut: how to fetch the next page.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -337,6 +519,8 @@ pub struct FileSymbolItem {
 
 #[derive(Serialize, schemars::JsonSchema)]
 pub struct StatsOutput {
+    /// Index freshness: analyzed commit vs current HEAD.
+    pub index_status: String,
     pub symbol_counts: std::collections::HashMap<String, u32>,
     pub total_symbols: u32,
     pub total_files: u32,
@@ -480,4 +664,89 @@ pub struct KnowledgeResultItem {
     pub match_context: String,
     pub match_line: u32,
     pub confidence: f64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn limit_defaults_and_is_clamped_to_the_budget() {
+        let budget = Budget::new(20, 200);
+        assert_eq!(
+            Page::new(None, None, budget),
+            Page {
+                offset: 0,
+                limit: 20
+            }
+        );
+        assert_eq!(Page::new(Some(0), None, budget).limit, 1);
+        assert_eq!(
+            Page::new(Some(10_000), Some(7), budget),
+            Page {
+                offset: 7,
+                limit: 200
+            }
+        );
+    }
+
+    #[test]
+    fn a_cut_list_says_what_was_shown_and_how_to_continue() {
+        let items: Vec<u32> = (0..312).collect();
+        let first = Page::new(Some(20), None, Budget::LIST).take(items.clone());
+        assert_eq!(first.items, (0..20).collect::<Vec<_>>());
+        assert_eq!(
+            first.notice.as_deref(),
+            Some("Showing 1-20 of 312 — call again with offset=20 for more.")
+        );
+
+        let last = Page::new(Some(20), Some(300), Budget::LIST).take(items.clone());
+        assert_eq!(last.items.len(), 12);
+        assert_eq!(
+            last.notice.as_deref(),
+            Some("Showing 301-312 of 312 (end).")
+        );
+
+        let past = Page::new(Some(20), Some(400), Budget::LIST).take(items.clone());
+        assert!(past.items.is_empty());
+        assert!(past.notice.unwrap().contains("smaller offset"));
+
+        // Nothing cut, first page: no notice at all.
+        let whole = Page::new(Some(500), None, Budget::ROWS).take(items);
+        assert_eq!(whole.items.len(), 312);
+        assert_eq!(whole.notice, None);
+    }
+
+    #[test]
+    fn open_ended_rankings_report_more_without_a_total() {
+        let page = Page::new(Some(10), Some(10), Budget::LIST);
+        assert_eq!(page.fetch(), 21);
+        let more = page.take_open((0..21).collect::<Vec<u32>>());
+        assert_eq!(more.items, (10..20).collect::<Vec<_>>());
+        assert_eq!(
+            more.notice.as_deref(),
+            Some("Showing 11-20; more exist — call again with offset=20.")
+        );
+        let end = page.take_open((0..15).collect::<Vec<u32>>());
+        assert_eq!(end.items.len(), 5);
+        assert_eq!(end.notice.as_deref(), Some("Showing 11-15 (end)."));
+    }
+
+    #[test]
+    fn parallel_lists_share_one_notice() {
+        let page = Page::new(Some(2), None, Budget::LIST);
+        let (lists, notice) = page.take_lists(vec![vec![1, 2, 3], vec![4]]);
+        assert_eq!(lists, vec![vec![1, 2], vec![4]]);
+        assert_eq!(
+            notice.as_deref(),
+            Some("Lists show items 1-2 — call again with offset=2 for more.")
+        );
+    }
+
+    #[test]
+    fn notices_go_on_their_own_line() {
+        assert_eq!(with_notice("body".into(), Some("n")), "body\n\nn");
+        assert_eq!(with_notice("body\n".into(), Some("n")), "body\n\nn");
+        assert_eq!(with_notice("body".into(), None), "body");
+    }
 }

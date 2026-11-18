@@ -52,3 +52,6 @@ myceliums-mcp = { path = ".", features = ["test-support"] }
 tempfile = { workspace = true }
 # `ServiceExt::oneshot` drives the HTTP access-control middleware in unit tests.
 tower = { version = "0.5", features = ["util"] }
+# An in-process MCP client drives `tests/tool_contract.rs` over real JSON-RPC
+# (the `client` feature only adds `tokio-stream`, already in the lock file).
+rmcp = { workspace = true, features = ["client"] }

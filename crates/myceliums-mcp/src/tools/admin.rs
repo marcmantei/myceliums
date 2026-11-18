@@ -6,15 +6,31 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "analyze",
-        description = "Analyze a codebase and build its knowledge graph. Parses TypeScript and Python files, extracts symbols, resolves call relationships, detects communities, and traces execution flows. Uses cached analysis if fresh enough (set force=true to bypass cache)."
+        description = "Index a project into the knowledge graph: parses 20+ languages (TypeScript/JavaScript, Python, Go, Rust, Java, Kotlin, C/C++, C#, Ruby, PHP, Swift, …) plus Markdown, PDF and email, extracts symbols and call edges, detects communities and traces execution flows. Reuses a fresh index unless force=true. Writes only to the myceliums data directory, never to the project.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn analyze(
         &self,
         Parameters(params): Parameters<AnalyzeParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let path = PathBuf::from(&params.path);
-        let abs_path = std::fs::canonicalize(&path)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("Invalid path: {}", e), None))?;
+        let abs_path = std::fs::canonicalize(&path).map_err(|e| {
+            ToolError::invalid(format!(
+                "path {:?} is not an accessible directory: {e}",
+                params.path
+            ))
+        })?;
+        if !abs_path.is_dir() {
+            return Err(ToolError::invalid(format!(
+                "path {:?} is not a directory",
+                params.path
+            )));
+        }
 
         let repo_id = analyzer::repo_id_from_path(&abs_path);
         // Derived ids are sanitized; checking keeps the write path honest too.
@@ -24,8 +40,7 @@ impl MyceliumsMcp {
 
         // Cache check: return cached results if fresh enough
         if !force {
-            let registry = RepoRegistry::load(&registry_path())
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            let registry = registry()?;
             if let Some(repo_info) = registry.get(&repo_id) {
                 let cache_config = CacheCheckConfig {
                     max_age_minutes: params.max_age_minutes.unwrap_or(60),
@@ -54,9 +69,7 @@ impl MyceliumsMcp {
                         embedding_failures: embedding_stats.embedding_failures,
                         cached: true,
                     };
-                    return Ok(Json(TextOutput {
-                        text: format::format_analyze(&output),
-                    }));
+                    return text(format::format_analyze(&output));
                 }
             }
         }
@@ -67,17 +80,16 @@ impl MyceliumsMcp {
         // again once the new index is complete (below).
         self.service.invalidate(&repo_id);
         let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
-        std::fs::create_dir_all(&db_path).map_err(|e| {
-            rmcp::ErrorData::internal_error(format!("Failed to create dir: {}", e), None)
-        })?;
+        std::fs::create_dir_all(&db_path)
+            .map_err(|e| ToolError::internal("cannot create the index directory", e))?;
 
         let store = Store::open(&db_path, &repo_id)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("Store error: {}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot open the index", e))?;
         store
             .delete_repo_data()
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("Delete error: {}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot clear the old index", e))?;
 
         let skip_embeddings = params.skip_embeddings.unwrap_or(false);
         // Honor the project's .myceliums.toml (analysis filters, embedding
@@ -85,9 +97,9 @@ impl MyceliumsMcp {
         let config_path = abs_path.join(myceliums_core::config::CONFIG_FILENAME);
         let analyzer = if config_path.exists() {
             let cfg = myceliums_core::config::ProjectConfig::load(&config_path).map_err(|e| {
-                rmcp::ErrorData::internal_error(
-                    format!("Invalid {}: {}", config_path.display(), e),
-                    None,
+                ToolError::recoverable(
+                    format!("Invalid {}: {e}", config_path.display()),
+                    "fix or remove that config file, then call analyze again",
                 )
             })?;
             Analyzer::with_config(store, abs_path.clone(), cfg)
@@ -98,40 +110,39 @@ impl MyceliumsMcp {
         let result = analyzer
             .analyze()
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("Analysis error: {}", e), None))?;
+            .map_err(|e| ToolError::internal("analysis failed", e))?;
 
         // Community detection and process tracing
         let store = Store::open(&db_path, &repo_id)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("Store error: {}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot open the index", e))?;
         let symbols = store
             .get_symbols()
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot read symbols", e))?;
         let relationships = store
             .get_relationships()
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot read relationships", e))?;
 
         let communities = CommunityDetector::detect(&symbols, &relationships, &repo_id)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("community detection failed", e))?;
         let community_count = store
             .store_communities(&communities)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot store communities", e))?;
 
         let processes = ProcessTracer::trace(&symbols, &relationships, &repo_id)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("process tracing failed", e))?;
         let process_count = store
             .store_processes(&processes)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot store processes", e))?;
 
         // Get current git commit for cache tracking
         let analyzed_commit = cache::get_head_commit(&abs_path).ok();
 
-        let mut registry = RepoRegistry::load(&registry_path())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let mut registry = registry()?;
         registry.register(RepoInfo {
             id: repo_id.clone(),
             name: repo_name,
@@ -144,7 +155,7 @@ impl MyceliumsMcp {
         });
         registry
             .save()
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot save the repository registry", e))?;
         // Reads from here on see the new index, not a graph cached mid-run.
         self.service.invalidate(&repo_id);
 
@@ -165,47 +176,67 @@ impl MyceliumsMcp {
             embedding_failures: embedding_stats.embedding_failures,
             cached: false,
         };
-        Ok(Json(TextOutput {
-            text: format::format_analyze(&output),
-        }))
+        text(format::format_analyze(&output))
     }
 
     #[tool(
         name = "list_repos",
-        description = "List the analyzed repositories (id, name, path, last analysis, size). Read-only. Use it to find the repo_id the other tools expect."
+        description = "List the analyzed repositories (id, name, path, last analysis, size). Use it to find the repo_id the other tools expect.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
-    pub(crate) async fn list_repos(&self) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let registry = RepoRegistry::load(&registry_path())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        Ok(Json(TextOutput {
-            text: format::format_repo_list(&registry.list()),
-        }))
+    pub(crate) async fn list_repos(
+        &self,
+        Parameters(params): Parameters<ListReposParams>,
+    ) -> Result<Json<TextOutput>, ToolError> {
+        let registry = registry()?;
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(registry.list());
+        text(page.with_notice(format::format_repo_list(&page.items)))
     }
 
-    #[tool(name = "delete", description = "Delete a repository's analysis data")]
+    #[tool(
+        name = "delete",
+        description = "Permanently delete a repository's index (not the project files). Irreversible: requires confirm=true; only do it when the user asked for it.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
     pub(crate) async fn delete(
         &self,
         Parameters(params): Parameters<DeleteParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let mut registry = RepoRegistry::load(&registry_path())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+    ) -> Result<Json<TextOutput>, ToolError> {
+        let mut registry = registry()?;
 
         let db_path = registry
             .registered_db_path(&data_dir(), &params.repo_id)
             .map_err(repo_id_error)?;
+        if !params.confirm {
+            return Err(ToolError::recoverable(
+                format!(
+                    "Refusing to delete the index of {:?} without confirm=true.",
+                    params.repo_id
+                ),
+                "only if the user asked for the deletion, call delete again with confirm=true",
+            ));
+        }
         let info = registry
             .remove(&params.repo_id)
             .expect("registered_db_path accepted the id, so it is registered");
         registry
             .save()
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot save the repository registry", e))?;
         self.service.invalidate(&params.repo_id);
         if db_path.exists() {
             std::fs::remove_dir_all(&db_path)
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+                .map_err(|e| ToolError::internal("cannot remove the index directory", e))?;
         }
-        Ok(Json(TextOutput {
-            text: format!("Deleted: {} ({})", info.name, params.repo_id),
-        }))
+        text(format!("Deleted: {} ({})", info.name, params.repo_id))
     }
 }

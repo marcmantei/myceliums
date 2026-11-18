@@ -2,20 +2,36 @@
 
 use super::prelude::*;
 
+/// Most results a search tool returns per page.
+const SEARCH: Budget = Budget::new(20, 100);
+
+/// The embedding model recorded for an index could not be loaded: that is
+/// fixable (keyword search still works; re-indexing picks a usable model).
+fn embedder_error(e: impl std::fmt::Display) -> ToolError {
+    ToolError::recoverable(
+        format!("Cannot load the embedding model for this index: {e}."),
+        "use context_search (keyword search needs no model), or re-run analyze",
+    )
+}
+
 #[tool_router(router = search_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
     #[tool(
         name = "context_search",
-        description = "Search for functions, classes, and symbols in the knowledge graph. Preferred over grep for finding code entities — returns structured results with file locations, types, and relevance scores."
+        description = "Search for functions, classes, and symbols in the knowledge graph. Preferred over grep for finding code entities — returns structured results with file locations, types, and relevance scores.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn context_search(
         &self,
         Parameters(params): Parameters<SearchParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let repo_id = self
-            .service
-            .resolve_repo_id(params.repo_id.as_deref())
-            .map_err(service_error)?;
+    ) -> Result<Json<TextOutput>, ToolError> {
+        require_query("query", &params.query)?;
+        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let explain = params.explain.unwrap_or(false);
         let results = self
             .service
@@ -23,10 +39,10 @@ impl MyceliumsMcp {
             .await
             .map_err(service_error)?;
 
-        let limit = params.limit.unwrap_or(20);
-        let items: Vec<SearchResultItem> = results
+        let page = Page::new(params.limit, params.offset, SEARCH).take(results);
+        let items: Vec<SearchResultItem> = page
+            .items
             .into_iter()
-            .take(limit)
             .map(|r| SearchResultItem {
                 name: r.symbol.name,
                 qualified_name: r.symbol.qualified_name,
@@ -39,30 +55,45 @@ impl MyceliumsMcp {
                 explain: r.explain.and_then(|e| serde_json::to_value(e).ok()),
             })
             .collect();
-        Ok(Json(TextOutput {
-            text: format::format_search_results(&params.query, &items),
-        }))
+        let body = with_notice(
+            format::format_search_results(&params.query, &items),
+            page.notice.as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "search_documents",
-        description = "Search through all analyzed code content using BM25 text search"
+        description = "Search through all analyzed code content using BM25 text search",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn search_documents(
         &self,
         Parameters(params): Parameters<SearchParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         self.context_search(Parameters(params)).await
     }
 
     #[tool(
         name = "hybrid_search",
-        description = "Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality"
+        description = "Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn hybrid_search(
         &self,
         Parameters(params): Parameters<HybridSearchParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
+        require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let store = self.store(&repo_id).await?;
 
@@ -70,23 +101,20 @@ impl MyceliumsMcp {
 
         let embedder = myceliums_core::embedder_for_index(&store)
             .await
-            .map_err(|e| {
-                rmcp::ErrorData::internal_error(
-                    format!("Failed to load embedding model: {}", e),
-                    None,
-                )
-            })?;
+            .map_err(embedder_error)?;
 
         let explain = params.explain.unwrap_or(false);
-        let limit = params.limit.unwrap_or(20);
+        let page = Page::new(params.limit, params.offset, SEARCH);
+        // Ranked top-k: ask for one page past the cut to learn whether more exist.
+        let fetch = page.fetch();
         let mut results = if explain {
-            core_hybrid_search_explain(&embedder, &symbols, store.as_ref(), &params.query, limit)
+            core_hybrid_search_explain(&embedder, &symbols, store.as_ref(), &params.query, fetch)
                 .await
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
+                .map_err(|e| ToolError::internal("hybrid search failed", e))?
         } else {
-            core_hybrid_search(&embedder, &symbols, store.as_ref(), &params.query, limit)
+            core_hybrid_search(&embedder, &symbols, store.as_ref(), &params.query, fetch)
                 .await
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
+                .map_err(|e| ToolError::internal("hybrid search failed", e))?
         };
 
         // Apply reranking if requested, using the reranker recorded at indexing time
@@ -94,7 +122,7 @@ impl MyceliumsMcp {
             let reranker_id = embedder.meta().reranker.clone();
             results = rerank_results(&params.query, results, reranker_id.as_deref())
                 .await
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+                .map_err(|e| ToolError::internal("reranking failed", e))?;
         }
 
         // Attach graph edges for explain mode
@@ -107,7 +135,9 @@ impl MyceliumsMcp {
             attach_graph_edges(&mut results, &relationships, &uid_to_name);
         }
 
-        let items: Vec<HybridSearchResultItem> = results
+        let page = page.take_open(results);
+        let items: Vec<HybridSearchResultItem> = page
+            .items
             .into_iter()
             .map(|r| HybridSearchResultItem {
                 name: r.symbol.name,
@@ -127,22 +157,31 @@ impl MyceliumsMcp {
             })
             .collect();
         let warning = partial_index_warning(&store).await;
-        Ok(Json(TextOutput {
-            text: format::with_index_warning(
-                warning,
+        let body = format::with_index_warning(
+            warning,
+            with_notice(
                 format::format_hybrid_results(&params.query, &items),
+                page.notice.as_deref(),
             ),
-        }))
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "cypher_query",
-        description = "Execute a Cypher query against the knowledge graph. Supports MATCH, RETURN, WHERE, ORDER BY, LIMIT, SKIP, CONTAINS, IS NULL. Blocks write operations."
+        description = "Execute a read-only Cypher query against the knowledge graph. Supports MATCH, RETURN, WHERE, ORDER BY, LIMIT, SKIP, CONTAINS, IS NULL; write clauses are rejected. Rows are paged (limit/offset).",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn cypher_query(
         &self,
         Parameters(params): Parameters<CypherQueryParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
+        require_query("query", &params.query)?;
         let symbols = self.symbols(&params.repo_id).await?;
         let files = self.files(&params.repo_id).await?;
         let relationships = self.relationships(&params.repo_id).await?;
@@ -152,43 +191,66 @@ impl MyceliumsMcp {
             files.shared(),
             relationships.shared(),
         );
-        let results = executor
-            .execute(&params.query)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let json_results = serde_json::to_value(&results)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        Ok(Json(TextOutput {
-            text: format::format_cypher_results(&params.query, &json_results),
-        }))
+        // Every executor error is about the query (syntax, unsupported
+        // clause, unknown label, result too large): bad input.
+        let results = executor.execute(&params.query).map_err(|e| {
+            ToolError::invalid(format!(
+                "Cypher query rejected: {e}. Supported: MATCH … WHERE … RETURN … ORDER BY/SKIP/LIMIT (read-only)."
+            ))
+        })?;
+        let rows: Vec<serde_json::Value> = results
+            .iter()
+            .map(serde_json::to_value)
+            .collect::<Result<_, _>>()
+            .map_err(|e| ToolError::internal("cannot serialize Cypher rows", e))?;
+        let page = Page::new(params.limit, params.offset, Budget::ROWS).take(rows);
+        let table = format::format_cypher_results(&page.items);
+        let body = with_notice(
+            format!(
+                "Cypher: {}\n\n{}\n",
+                params.query,
+                untrusted("query results", &table)
+            ),
+            page.notice
+                .as_deref()
+                .map(|n| format!("{n} Or narrow the query with WHERE/LIMIT."))
+                .as_deref(),
+        );
+        self.graph_text(&params.repo_id, body).await
     }
 
     #[tool(
         name = "semantic_search",
-        description = "Search for symbols using semantic similarity (vector embeddings). Returns symbols most similar in meaning to the query."
+        description = "Search for symbols using semantic similarity (vector embeddings). Returns symbols most similar in meaning to the query.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn semantic_search(
         &self,
         Parameters(params): Parameters<SearchParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
+        require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let store = self.store(&repo_id).await?;
         let embedder = myceliums_core::embedder_for_index(&store)
             .await
-            .map_err(|e| {
-                rmcp::ErrorData::internal_error(
-                    format!("Failed to load embedding model: {}", e),
-                    None,
-                )
-            })?;
-        let query_vector = embedder.embed_query(&params.query).await.map_err(|e| {
-            rmcp::ErrorData::internal_error(format!("Failed to embed query: {}", e), None)
-        })?;
-        let limit = params.limit.unwrap_or(10);
-        let results = store
-            .vector_search(&query_vector, limit)
+            .map_err(embedder_error)?;
+        let query_vector = embedder
+            .embed_query(&params.query)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let items: Vec<SearchResultItem> = results
+            .map_err(|e| ToolError::internal("cannot embed the query", e))?;
+        let page = Page::new(params.limit, params.offset, Budget::new(10, SEARCH.max));
+        let results = store
+            .vector_search(&query_vector, page.fetch())
+            .await
+            .map_err(|e| ToolError::internal("vector search failed", e))?;
+        let page = page.take_open(results);
+        let items: Vec<SearchResultItem> = page
+            .items
             .into_iter()
             .map(|(sym, score)| SearchResultItem {
                 name: sym.name,
@@ -203,11 +265,13 @@ impl MyceliumsMcp {
             })
             .collect();
         let warning = partial_index_warning(&store).await;
-        Ok(Json(TextOutput {
-            text: format::with_index_warning(
-                warning,
+        let body = format::with_index_warning(
+            warning,
+            with_notice(
                 format::format_search_results(&params.query, &items),
+                page.notice.as_deref(),
             ),
-        }))
+        );
+        self.graph_text(&repo_id, body).await
     }
 }

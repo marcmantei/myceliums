@@ -32,6 +32,7 @@ async fn context_search_finds_indexed_symbol() {
             repo_id: Some(harness::REPO_ID.to_string()),
             limit: Some(10),
             explain: None,
+            offset: None,
         })
         .await
         .expect("context_search should succeed");
@@ -50,6 +51,7 @@ async fn context_search_unknown_symbol_reports_no_results() {
             repo_id: Some(harness::REPO_ID.to_string()),
             limit: Some(10),
             explain: None,
+            offset: None,
         })
         .await
         .expect("query for a missing symbol still succeeds");
@@ -81,6 +83,7 @@ index 0000000..1111111 100644
             repo_id: Some(harness::REPO_ID.to_string()),
             diff: Some(diff.to_string()),
             depth: Some(2),
+            ..Default::default()
         })
         .await
         .expect("detect_impact should succeed");
@@ -99,6 +102,7 @@ async fn detect_impact_empty_diff_reports_no_changes() {
             repo_id: Some(harness::REPO_ID.to_string()),
             diff: Some("   \n  ".to_string()),
             depth: None,
+            ..Default::default()
         })
         .await
         .expect("empty diff is a success with a no-op message");
@@ -118,6 +122,7 @@ async fn rename_symbol_produces_plan_for_known_symbol() {
             symbol_name: harness::fixture::GET_USER.to_string(),
             new_name: harness::fixture::FETCH_USER.to_string(),
             repo_id: harness::REPO_ID.to_string(),
+            ..Default::default()
         })
         .await
         .expect("rename of a known symbol should succeed");
@@ -135,6 +140,7 @@ async fn rename_symbol_unknown_symbol_errors() {
             symbol_name: "doesNotExist".to_string(),
             new_name: "whatever".to_string(),
             repo_id: harness::REPO_ID.to_string(),
+            ..Default::default()
         })
         .await
         .expect_err("renaming an unknown symbol must error");
@@ -153,6 +159,7 @@ async fn cypher_query_handler_returns_rows() {
         .cypher_query_for_test(CypherQueryParams {
             query: "MATCH (s:CodeSymbol) WHERE s.kind = 'Class' RETURN s.name".to_string(),
             repo_id: harness::REPO_ID.to_string(),
+            ..Default::default()
         })
         .await
         .expect("cypher_query should succeed");
@@ -169,6 +176,7 @@ async fn cypher_query_handler_blocks_mutations() {
         .cypher_query_for_test(CypherQueryParams {
             query: "CREATE (n:CodeSymbol {name: 'evil'})".to_string(),
             repo_id: harness::REPO_ID.to_string(),
+            ..Default::default()
         })
         .await
         .expect_err("write clauses must be rejected");
@@ -197,6 +205,7 @@ async fn unknown_repo_id_is_an_error_that_lists_known_ids() {
         .cypher_query_for_test(CypherQueryParams {
             query: "MATCH (s:CodeSymbol) RETURN s.name".to_string(),
             repo_id: "no-such-repo".to_string(),
+            ..Default::default()
         })
         .await
         .expect_err("an unknown repo_id must not silently return []");
@@ -221,6 +230,7 @@ async fn path_traversal_repo_id_is_rejected_on_every_entry_path() {
         .cypher_query_for_test(CypherQueryParams {
             query: "MATCH (s:CodeSymbol) RETURN s.name".to_string(),
             repo_id: bad.to_string(),
+            ..Default::default()
         })
         .await
         .expect_err("traversal id must be rejected");
@@ -233,6 +243,7 @@ async fn path_traversal_repo_id_is_rejected_on_every_entry_path() {
             repo_id: Some(bad.to_string()),
             limit: None,
             explain: None,
+            offset: None,
         })
         .await
         .expect_err("traversal id must be rejected");
@@ -259,6 +270,7 @@ async fn write_tools_reject_traversal_and_unknown_ids_without_writing() {
         let errs = [
             srv.delete_for_test(DeleteParams {
                 repo_id: bad.to_string(),
+                confirm: true,
             })
             .await
             .expect_err("delete"),

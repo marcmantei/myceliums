@@ -7,7 +7,11 @@
 //!   one router.
 //! * `server` — `ServerHandler`, stdio and HTTP transports; `resources` —
 //!   `repository://` resources.
-//! * `repo` / `errors` / `index_status` — shared helpers.
+//! * `errors` — the tool error contract (`isError` results vs JSON-RPC
+//!   errors); `output::Page` — the shared output budget (limit/offset and
+//!   truncation notices); `index_status` — the freshness line on every graph
+//!   result; `format::untrusted` — framing of indexed text.
+//! * `repo` — repository and symbol resolution.
 
 mod errors;
 mod format;

@@ -17,6 +17,7 @@ pull requests.
 - Release assets now include a CycloneDX SBOM per target and a signed build-provenance attestation (#90).
 
 ### Changed
+- MCP tool contract (#96): failures the agent can act on (unknown symbol or repo, ambiguous name, missing snapshot, file not indexed, `delete` without `confirm: true`) are `isError` results that end with a `Next:` step; bad arguments are `invalid_params`; only server faults are `internal_error`. Every list tool takes `limit`/`offset` with a default and a hard maximum and says `Showing 1-20 of 312 — call again with offset=20` when it cuts; `cypher_query` pages its rows and marks cut cells with `…`. Every graph result starts with an `Index:` line (analyzed commit vs `HEAD`, files edited since indexing). CALLS edges record how they were resolved (`exact`, `import`, `name-match`, `ambiguous`) and tools show it. Indexed source, document and email text is framed in `<<<UNTRUSTED <id>` … `>>>END <id>` blocks. All tools carry read-only/destructive/idempotent/open-world annotations; enum-like parameters are enums and numeric ones have bounds in the schema; stale descriptions and the server instructions (which called every tool read-only) are corrected. Without `repo_id`, tools now fall back to the most recently analyzed repo, as documented, instead of the last one by name.
 - Vector scores use one similarity scale across search paths, and the ANN index is used (#68, #71).
 - MCP handlers go through a `GraphService` layer (#37, #53).
 - The MCP crate is split into modules by tool group, and every read tool and resource is served from `GraphService`'s per-repository graph cache: the graph tables are read from disk once, not on every call; `analyze` and `delete` invalidate the cache, and index changes made by another process are detected. The HTTP transport shares one cache across sessions. The `tools/list` output is pinned by a snapshot test (#93).
@@ -26,6 +27,7 @@ pull requests.
 - `myc` is installed from crates.io; the unpublished Docker image is no longer advertised (#72, #73).
 
 ### Fixed
+- The MCP `detect_impact` and `rename_symbol` outputs listed only affected files and `Rename: ? -> …` because they read JSON keys that do not exist; they now render the changed and affected symbols and each edit (#96).
 - `--strict-embeddings` is honored in the session bootstrap path (#69).
 - The `embeddings` feature gate lost in #43 is restored (#70).
 - Benchmark baselines are content-addressed instead of tied to a git commit (#86).

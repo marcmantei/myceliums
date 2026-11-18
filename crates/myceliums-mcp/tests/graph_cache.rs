@@ -92,7 +92,7 @@ async fn reads_are_cached_and_analyze_or_delete_invalidates_the_cache() {
         .context_search_for_test(search(&repo_id, "zebraCacheProbe"))
         .await
         .unwrap();
-    assert!(before.starts_with("No results"), "{before}");
+    assert!(before.contains("No results"), "{before}");
 
     // ── analyze invalidates ─────────────────────────────────────────
     let utils = project.join("src/utils.ts");
@@ -113,7 +113,7 @@ async fn reads_are_cached_and_analyze_or_delete_invalidates_the_cache() {
         .await
         .unwrap();
     assert!(
-        !after.starts_with("No results") && after.contains("src/utils.ts"),
+        !after.contains("No results") && after.contains("src/utils.ts"),
         "{after}"
     );
     let cypher = server
@@ -121,6 +121,7 @@ async fn reads_are_cached_and_analyze_or_delete_invalidates_the_cache() {
             query: "MATCH (s:CodeSymbol) WHERE s.name = 'zebraCacheProbe' RETURN s.name"
                 .to_string(),
             repo_id: repo_id.clone(),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -130,6 +131,7 @@ async fn reads_are_cached_and_analyze_or_delete_invalidates_the_cache() {
     server
         .delete_for_test(DeleteParams {
             repo_id: repo_id.clone(),
+            confirm: true,
         })
         .await
         .unwrap();

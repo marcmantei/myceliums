@@ -1,6 +1,12 @@
 [
   {
-    "description": "Analyze a codebase and build its knowledge graph. Parses TypeScript and Python files, extracts symbols, resolves call relationships, detects communities, and traces execution flows. Uses cached analysis if fresh enough (set force=true to bypass cache).",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Index a project into the knowledge graph: parses 20+ languages (TypeScript/JavaScript, Python, Go, Rust, Java, Kotlin, C/C++, C#, Ruby, PHP, Swift, …) plus Markdown, PDF and email, extracts symbols and call edges, detects communities and traces execution flows. Reuses a fresh index unless force=true. Writes only to the myceliums data directory, never to the project.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -54,6 +60,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Run architecture quality checks: circular dependencies, god nodes, high fan-out, unstable dependencies. Returns findings with severity levels and affected entities.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -61,6 +73,25 @@
         "god_node_threshold": {
           "description": "God node degree threshold (default: 20)",
           "format": "uint32",
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Max findings per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Findings to skip, for the next page (default 0)",
+          "format": "uint",
           "minimum": 0,
           "type": [
             "integer",
@@ -68,16 +99,26 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
           ]
         },
         "rules": {
-          "description": "Comma-separated rule IDs to check (default: all). Available: circular_dependency, god_node, high_fan_out, unstable_dependency",
+          "description": "Rules to check (default: all)",
+          "items": {
+            "description": "Architecture lint rule.",
+            "enum": [
+              "circular_dependency",
+              "god_node",
+              "high_fan_out",
+              "unstable_dependency"
+            ],
+            "type": "string"
+          },
           "type": [
-            "string",
+            "array",
             "null"
           ]
         }
@@ -101,12 +142,18 @@
     }
   },
   {
-    "description": "Generate a service-level architecture diagram from the knowledge graph. Communities become service nodes, cross-community edges become connections. Returns both structured JSON and a Mermaid diagram string.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Generate a service-level architecture diagram from the knowledge graph. Communities become service nodes, cross-community edges become connections. Returns the services, their connections, and a Mermaid diagram.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -132,6 +179,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Search for functions, classes, and symbols in the knowledge graph. Preferred over grep for finding code entities — returns structured results with file locations, types, and relevance scores.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -144,7 +197,17 @@
           ]
         },
         "limit": {
-          "description": "Maximum results to return",
+          "description": "Max results per page (default 20, semantic_search 10; max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Results to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -157,7 +220,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -186,10 +249,35 @@
     }
   },
   {
-    "description": "Execute a Cypher query against the knowledge graph. Supports MATCH, RETURN, WHERE, ORDER BY, LIMIT, SKIP, CONTAINS, IS NULL. Blocks write operations.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Execute a read-only Cypher query against the knowledge graph. Supports MATCH, RETURN, WHERE, ORDER BY, LIMIT, SKIP, CONTAINS, IS NULL; write clauses are rejected. Rows are paged (limit/offset).",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max rows per page (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Rows to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "query": {
           "description": "Cypher query string",
           "type": "string"
@@ -222,10 +310,21 @@
     }
   },
   {
-    "description": "Delete a repository's analysis data",
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
+    "description": "Permanently delete a repository's index (not the project files). Irreversible: requires confirm=true; only do it when the user asked for it.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "confirm": {
+          "default": false,
+          "description": "Must be true: deletion is irreversible (re-run analyze to rebuild)",
+          "type": "boolean"
+        },
         "repo_id": {
           "description": "Repository ID to delete",
           "type": "string"
@@ -253,12 +352,18 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Detect architectural drift by comparing the current knowledge graph against the last saved snapshot. Returns a drift score (0-100, higher = less drift) and details on structural changes.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -284,6 +389,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Detect circular dependencies in the codebase using Tarjan's strongly connected components algorithm. Returns groups of symbols that form dependency cycles. Use to find architectural issues like mutual imports or call cycles.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -302,8 +413,27 @@
             "null"
           ]
         },
+        "limit": {
+          "description": "Max cycles per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "min_cycle_size": {
           "description": "Minimum number of symbols in a cycle to report (default: 2)",
+          "format": "uint",
+          "minimum": 2,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Cycles to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -312,7 +442,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -338,6 +468,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -345,7 +481,8 @@
         "depth": {
           "description": "Graph traversal depth (default: 2)",
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 10,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -358,8 +495,27 @@
             "null"
           ]
         },
+        "limit": {
+          "description": "Max affected symbols per page (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Affected symbols to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -385,6 +541,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Compare how two repositories implement the same intent/feature. Isolates the relevant symbols in each repo, aligns them via embedding similarity, and reports structural differences. Returns: matched symbol pairs, unmatched symbols, and structural comparison metrics.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -396,15 +558,18 @@
         "max_symbols": {
           "description": "Maximum symbols per slice (default: 50)",
           "format": "uint",
-          "minimum": 0,
+          "maximum": 200,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
           ]
         },
         "similarity_threshold": {
-          "description": "Similarity threshold for symbol alignment (default: 0.65, range 0.0-1.0)",
+          "description": "Similarity threshold for symbol alignment (default: 0.65)",
           "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": [
             "number",
             "null"
@@ -443,19 +608,31 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Export the knowledge graph as a Mermaid diagram. Supports flowchart (call graph), class (class hierarchy), and graph (community-grouped) views. Returns a Mermaid-syntax string that can be rendered by any Mermaid-compatible tool.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "diagram_type": {
-          "description": "Diagram type: \"flowchart\", \"class\", or \"graph\" (default: \"flowchart\")",
+          "description": "Diagram type (default: flowchart)",
+          "enum": [
+            "flowchart",
+            "class",
+            "graph",
+            null
+          ],
           "type": [
             "string",
             "null"
           ]
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -481,19 +658,35 @@
     }
   },
   {
-    "description": "Find symbols with no incoming function calls (potential dead code). Exclude common entry points with exclude_patterns. Use before cleanup/refactoring.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Find functions and methods with no incoming CALLS edges (potential dead code; calls the resolver missed make this a candidate list, not proof). Exclude known entry points with exclude_patterns. Use before cleanup/refactoring.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "exclude_patterns": {
-          "description": "Exclude patterns (comma-separated regexes) for known entry points (optional)",
+          "description": "Comma-separated substrings; symbols whose name contains one are skipped (e.g. known entry points)",
           "type": [
             "string",
             "null"
           ]
         },
         "limit": {
-          "description": "Limit number of results",
+          "description": "Max symbols per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Symbols to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -557,6 +750,17 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
+        },
+        "notice": {
+          "description": "Set when results were cut: how to fetch the next page.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "symbols": {
           "items": {
             "$ref": "#/$defs/DeadCodeItem"
@@ -570,6 +774,7 @@
         }
       },
       "required": [
+        "index_status",
         "symbols",
         "total_count"
       ],
@@ -578,6 +783,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Find the shortest path between two symbols in the knowledge graph using BFS across all relationship types (CALLS, CONTAINED_BY, IMPORTS, etc.). Answers 'how are these two things connected?' directly. Returns the ordered list of symbols and edge types along the path.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -589,14 +800,15 @@
         "max_depth": {
           "description": "Maximum BFS depth (default: 10)",
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 30,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
           ]
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -630,13 +842,39 @@
     }
   },
   {
-    "description": "Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains. Each callee carries how its CALLS edge was resolved.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max callees per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "max_depth": {
           "description": "Maximum transitive depth (default: 3)",
           "format": "uint32",
+          "maximum": 10,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Callees to skip, for the next page (default 0)",
+          "format": "uint",
           "minimum": 0,
           "type": [
             "integer",
@@ -686,6 +924,10 @@
             "qualified_name": {
               "type": "string"
             },
+            "resolved": {
+              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
+              "type": "string"
+            },
             "start_line": {
               "format": "uint32",
               "minimum": 0,
@@ -699,7 +941,8 @@
             "file_path",
             "start_line",
             "end_line",
-            "depth"
+            "depth",
+            "resolved"
           ],
           "type": "object"
         }
@@ -715,6 +958,17 @@
         "depth_limited": {
           "type": "boolean"
         },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
+        },
+        "notice": {
+          "description": "Set when results were cut: how to fetch the next page.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "symbol_name": {
           "type": "string"
         },
@@ -725,6 +979,7 @@
         }
       },
       "required": [
+        "index_status",
         "symbol_name",
         "callees",
         "total_count",
@@ -735,13 +990,39 @@
     }
   },
   {
-    "description": "Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns. Each caller carries how its CALLS edge was resolved.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max callers per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "max_depth": {
           "description": "Maximum transitive depth (default: 3)",
           "format": "uint32",
+          "maximum": 10,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Callers to skip, for the next page (default 0)",
+          "format": "uint",
           "minimum": 0,
           "type": [
             "integer",
@@ -791,6 +1072,10 @@
             "qualified_name": {
               "type": "string"
             },
+            "resolved": {
+              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
+              "type": "string"
+            },
             "start_line": {
               "format": "uint32",
               "minimum": 0,
@@ -804,7 +1089,8 @@
             "file_path",
             "start_line",
             "end_line",
-            "depth"
+            "depth",
+            "resolved"
           ],
           "type": "object"
         }
@@ -820,6 +1106,17 @@
         "depth_limited": {
           "type": "boolean"
         },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
+        },
+        "notice": {
+          "description": "Set when results were cut: how to fetch the next page.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "symbol_name": {
           "type": "string"
         },
@@ -830,6 +1127,7 @@
         }
       },
       "required": [
+        "index_status",
         "symbol_name",
         "callers",
         "total_count",
@@ -840,28 +1138,51 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Compute centrality metrics (degree, betweenness, closeness, eigenvector) for all symbols in the call graph. Returns the top-N symbols ranked by the chosen metric. Betweenness identifies bridge/bottleneck symbols, closeness measures how central a symbol is, eigenvector highlights symbols connected to other important symbols.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "metric": {
-          "description": "Centrality metric to sort by: \"degree\", \"betweenness\", \"closeness\", \"eigenvector\" (default: \"betweenness\")",
+          "description": "Centrality metric to sort by (default: betweenness)",
+          "enum": [
+            "degree",
+            "betweenness",
+            "closeness",
+            "eigenvector",
+            null
+          ],
           "type": [
             "string",
             "null"
           ]
         },
+        "offset": {
+          "description": "Nodes to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
           ]
         },
         "top_n": {
-          "description": "Number of top nodes to return (default: 15)",
+          "description": "Max nodes per page (default 15, max 200)",
           "format": "uint",
-          "minimum": 0,
+          "maximum": 200,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -887,10 +1208,35 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "List all detected communities with summary stats and top symbols. Use to understand code organization and find related modules.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max communities per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Communities to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
           "description": "Repository ID",
           "type": "string"
@@ -942,17 +1288,41 @@
             "$ref": "#/$defs/CommunityItem"
           },
           "type": "array"
+        },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
+        },
+        "notice": {
+          "description": "Set when results were cut: how to fetch the next page.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "total_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
-        "communities"
+        "index_status",
+        "communities",
+        "total_count"
       ],
       "title": "CommunitiesOutput",
       "type": "object"
     }
   },
   {
-    "description": "Get full details of a community: member symbols, internal relationships, and entry points. Use to understand community structure before refactoring.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Get a community's summary, its top member symbols, and its internal/external edge counts. Use to understand community structure before refactoring.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1026,6 +1396,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
+        },
         "internal_edge_count": {
           "format": "uint32",
           "minimum": 0,
@@ -1053,6 +1427,7 @@
         }
       },
       "required": [
+        "index_status",
         "uid",
         "label",
         "member_count",
@@ -1066,12 +1441,37 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Compute quality metrics for the Leiden community partitioning: overall modularity score (higher = better separation), per-community cohesion (internal edge density), and inter-community coupling (edge counts between community pairs). Use to assess code architecture quality.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max rows per table (cohesion, coupling) (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Rows to skip in each table, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1097,12 +1497,37 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Detect API contracts (OpenAPI, Protobuf) in the repository and match endpoints to handler symbols. Returns linked and unlinked endpoints.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max unlinked endpoints listed (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Unlinked endpoints to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1128,6 +1553,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get a full email thread by conversation symbol UID. Returns all emails in the thread with their relationships.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1136,8 +1567,27 @@
           "description": "Conversation symbol UID",
           "type": "string"
         },
+        "limit": {
+          "description": "Max emails per page (default 20, max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Emails to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1166,19 +1616,51 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "List Architecture Decision Records (ADRs) for a repository. Optionally filter by status.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max decisions per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Decisions to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
           ]
         },
         "status": {
-          "description": "Filter by status (optional)",
+          "description": "Only decisions with this status (optional)",
+          "enum": [
+            "proposed",
+            "accepted",
+            "deprecated",
+            "superseded",
+            null
+          ],
           "type": [
             "string",
             "null"
@@ -1204,6 +1686,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Compute file-level dependencies: direct imports, transitive closure (all files reachable via import chains), and reverse dependents (files that import this file). Use before refactoring to understand the full impact of moving or deleting a file.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1212,9 +1700,28 @@
           "description": "File path to analyze dependencies for",
           "type": "string"
         },
+        "limit": {
+          "description": "Max files per list (direct, transitive, dependents) (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "max_depth": {
           "description": "Maximum transitive depth (default: unlimited)",
           "format": "uint32",
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Files to skip in each list, for the next page (default 0)",
+          "format": "uint",
           "minimum": 0,
           "type": [
             "integer",
@@ -1222,7 +1729,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1251,6 +1758,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "List all symbols defined in a specific file with kinds and signatures. Use for file-level navigation and understanding file contents.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1258,6 +1771,25 @@
         "file_path": {
           "description": "File path to list symbols for",
           "type": "string"
+        },
+        "limit": {
+          "description": "Max symbols per page (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Symbols to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "repo_id": {
           "description": "Repository ID",
@@ -1315,6 +1847,17 @@
         "file_path": {
           "type": "string"
         },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
+        },
+        "notice": {
+          "description": "Set when results were cut: how to fetch the next page.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "symbols": {
           "items": {
             "$ref": "#/$defs/FileSymbolItem"
@@ -1328,6 +1871,7 @@
         }
       },
       "required": [
+        "index_status",
         "file_path",
         "symbols",
         "total_count"
@@ -1337,16 +1881,41 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get git ownership and history metadata for a symbol. Returns last author, modification date, commit count, and age in days.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max symbols per page (default 10, max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Symbols to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID",
           "type": "string"
         },
         "symbol_name": {
-          "description": "Symbol name to look up git metadata for",
+          "description": "Symbol name to look up git metadata for (case-insensitive substring match)",
           "type": "string"
         }
       },
@@ -1373,6 +1942,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Identify the highest-degree symbols (god nodes) in the call graph. Returns the top-N most connected symbols ranked by total incoming + outgoing CALLS edges. High-coupling nodes (degree > threshold) are flagged as architectural bottlenecks.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1380,6 +1955,15 @@
         "coupling_threshold": {
           "description": "Coupling threshold: nodes with degree > this are flagged as high-coupling (default: 20)",
           "format": "uint32",
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Nodes to skip, for the next page (default 0)",
+          "format": "uint",
           "minimum": 0,
           "type": [
             "integer",
@@ -1387,16 +1971,17 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
           ]
         },
         "top_n": {
-          "description": "Number of top nodes to return (default: 10)",
+          "description": "Max nodes per page (default 10, max 200)",
           "format": "uint",
-          "minimum": 0,
+          "maximum": 200,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -1422,12 +2007,37 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Compare the current knowledge graph against the last stored snapshot to detect architectural drift. Shows new/removed symbols and relationships since the last analysis that saved a snapshot.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max changes per page, across all change lists (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Changes to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1453,19 +2063,51 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Detect structural weaknesses in the codebase: untested code (functions with no test callers), isolated modules (communities with few external connections), documentation gaps (files with many symbols but no rationale/doc nodes), and single points of failure (symbols that are the only bridge between communities). Use to prioritize testing, documentation, and refactoring efforts.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "category": {
-          "description": "Filter by gap category: \"untested\", \"isolated\", \"undocumented\", \"single_point_of_failure\" (optional — returns all if omitted)",
+          "description": "Only this gap category (default: all)",
+          "enum": [
+            "untested",
+            "isolated",
+            "undocumented",
+            "single_point_of_failure",
+            null
+          ],
           "type": [
             "string",
             "null"
           ]
         },
+        "limit": {
+          "description": "Max gaps per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Gaps to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1491,6 +2133,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Compute module-level coupling metrics (afferent Ca, efferent Ce, instability I) for all files or directories. Instability ranges from 0 (maximally stable, many dependents) to 1 (maximally unstable, depends on many others). Use to find fragile modules.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1503,7 +2151,17 @@
           ]
         },
         "limit": {
-          "description": "Maximum results to return (default: 30)",
+          "description": "Max modules per page (default 30, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Modules to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -1512,7 +2170,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1538,10 +2196,35 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Resolve file ownership from CODEOWNERS rules. Parses .github/CODEOWNERS or CODEOWNERS and matches symbols to their owners.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max files per list (owned, unowned) (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Files to skip in each list, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
           "description": "Repository ID",
           "type": "string"
@@ -1569,12 +2252,28 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get all emails involving a specific person (sent by or received by). Returns the person's email activity summary.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
-          "description": "Maximum results to return (default: 50)",
+          "description": "Max emails per page (default 50, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Emails to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -1587,7 +2286,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1616,6 +2315,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get execution flows showing how functions chain together (e.g. request handler → validation → database → response). Use to understand architecture and data flow before refactoring.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1635,9 +2340,10 @@
           ]
         },
         "limit": {
-          "description": "Limit number of processes to return",
+          "description": "Max processes per page (default 20, max 200)",
           "format": "uint",
-          "minimum": 0,
+          "maximum": 200,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -1646,6 +2352,15 @@
         "min_steps": {
           "description": "Show only processes with N or more steps",
           "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Processes to skip, for the next page (default 0)",
+          "format": "uint",
           "minimum": 0,
           "type": [
             "integer",
@@ -1679,6 +2394,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get design rationale comments (NOTE:, HACK:, WHY:, TODO:, FIXME:, IMPORTANT:) linked to a symbol or file. Use to understand *why* code was written a certain way — surfaces inline reasoning from comments.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1690,8 +2411,27 @@
             "null"
           ]
         },
+        "limit": {
+          "description": "Max comments per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Comments to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1724,6 +2464,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get a compact structural summary of code changes for efficient review. Analyzes a diff to identify changed symbols, their callers and callees, and affected communities — returning signatures instead of full source to minimize token usage.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1731,7 +2477,8 @@
         "depth": {
           "description": "Graph traversal depth for blast radius (default: 1)",
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 10,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -1751,8 +2498,18 @@
             "null"
           ]
         },
+        "limit": {
+          "description": "Max callers and max callees listed (default 50, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1778,6 +2535,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get property definitions and schema information for entity types or edge types in the ontology. Returns detailed information about what properties are expected for each specified entity type.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1816,12 +2579,37 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "List all community-to-service name mappings for a repository.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max mappings per page (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Mappings to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1847,6 +2635,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get codebase statistics: symbol counts by kind, files, relationships, languages, and communities. Use to understand overall codebase structure.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1870,6 +2664,10 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
         },
         "language_counts": {
           "additionalProperties": {
@@ -1917,6 +2715,7 @@
         }
       },
       "required": [
+        "index_status",
         "symbol_counts",
         "total_symbols",
         "total_files",
@@ -1931,6 +2730,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Auto-generate contextual code review questions based on code graph structure and git diff. Returns ranked questions about potential issues like missing test coverage, high caller counts, or API contract violations.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1943,7 +2748,17 @@
           ]
         },
         "limit": {
-          "description": "Maximum number of questions to return (default: 5)",
+          "description": "Max questions per page (default 5, max 50)",
+          "format": "uint",
+          "maximum": 50,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Questions to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -1952,7 +2767,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -1978,14 +2793,21 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Detect surprising cross-community CALLS edges: connections between symbols in different Leiden communities that rarely interact. Ranked by surprise score (0–1); higher means more isolated/unexpected coupling. Use to find hidden architectural dependencies.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
-          "description": "Maximum number of connections to return (default: 50)",
+          "description": "Max connections per page (default 50, max 200)",
           "format": "uint",
-          "minimum": 0,
+          "maximum": 200,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -1994,13 +2816,24 @@
         "min_surprise_score": {
           "description": "Minimum surprise score in [0.0, 1.0] to include in results (default: 0.1)",
           "format": "double",
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": [
             "number",
             "null"
           ]
         },
+        "offset": {
+          "description": "Connections to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -2026,6 +2859,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get the complete definition and source code of a symbol. Use to understand what a function/class does before using or modifying it.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2051,6 +2890,7 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "content": {
+          "description": "Source text, framed as untrusted indexed content.",
           "type": "string"
         },
         "end_line": {
@@ -2059,6 +2899,10 @@
           "type": "integer"
         },
         "file_path": {
+          "type": "string"
+        },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
           "type": "string"
         },
         "kind": {
@@ -2083,6 +2927,7 @@
         }
       },
       "required": [
+        "index_status",
         "uid",
         "name",
         "qualified_name",
@@ -2098,6 +2943,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2110,7 +2961,17 @@
           ]
         },
         "limit": {
-          "description": "Maximum results to return",
+          "description": "Max results per page (default 20, max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Results to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -2123,7 +2984,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -2159,6 +3020,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Isolate the symbols implementing a specific intent/feature in a repository. Uses hybrid search to find seed symbols, then expands via call graph traversal with community-aware pruning. Returns the IntentSlice: seed symbols, expanded symbols, internal relationships, and structural metadata.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2166,7 +3033,8 @@
         "depth": {
           "description": "Call graph expansion depth (default: 2)",
           "format": "uint32",
-          "minimum": 0,
+          "maximum": 5,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -2179,7 +3047,8 @@
         "max_symbols": {
           "description": "Maximum symbols to include in the slice (default: 50)",
           "format": "uint",
-          "minimum": 0,
+          "maximum": 200,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -2213,6 +3082,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
     "description": "Link an Architecture Decision Record to a code symbol. Creates a traceability connection between the decision and the code it affects.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2254,9 +3129,37 @@
     }
   },
   {
-    "description": "List the analyzed repositories (id, name, path, last analysis, size). Read-only. Use it to find the repo_id the other tools expect.",
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "List the analyzed repositories (id, name, path, last analysis, size). Use it to find the repo_id the other tools expect.",
     "inputSchema": {
-      "properties": {},
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "limit": {
+          "description": "Max repos per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Repos to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "title": "ListReposParams",
       "type": "object"
     },
     "name": "list_repos",
@@ -2275,6 +3178,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
     "description": "Assign a human-readable service name to a community. Use with architecture_view to create meaningful service labels.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2316,12 +3225,23 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Generate an actionable adaptation plan for migrating one repository's approach to another. Compares intent implementations, then produces ordered steps with dependency tracking, effort estimates, and risk analysis.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "direction": {
-          "description": "Direction: \"source_to_target\" (adapt target to match source) or \"target_to_source\" (default: \"source_to_target\")",
+          "description": "Which side to adapt (default: source_to_target, i.e. adapt the target to match the source)",
+          "enum": [
+            "source_to_target",
+            "target_to_source",
+            null
+          ],
           "type": [
             "string",
             "null"
@@ -2334,7 +3254,8 @@
         "max_symbols": {
           "description": "Maximum symbols per slice (default: 50)",
           "format": "uint",
-          "minimum": 0,
+          "maximum": 200,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -2373,21 +3294,37 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Identify refactoring hotspots by combining graph centrality, git churn, and module instability into a composite score. High-scoring symbols are architecturally critical AND frequently changed — prime candidates for refactoring.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "offset": {
+          "description": "Hotspots to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
           ]
         },
         "top_n": {
-          "description": "Number of top hotspots to return (default: 20)",
+          "description": "Max hotspots per page (default 20, max 200)",
           "format": "uint",
-          "minimum": 0,
+          "maximum": 200,
+          "minimum": 1,
           "type": [
             "integer",
             "null"
@@ -2413,6 +3350,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Query cross-domain knowledge: find emails and documents that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2425,7 +3368,17 @@
           ]
         },
         "limit": {
-          "description": "Maximum results to return (default: 20)",
+          "description": "Max mentions per page (default 20, max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Mentions to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -2438,7 +3391,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID or path (auto-detects if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -2467,6 +3420,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false
+    },
     "description": "Create an Architecture Decision Record (ADR). Records architectural decisions with context, rationale, and consequences. Link to code symbols with link_decision.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2491,7 +3450,14 @@
           "type": "string"
         },
         "status": {
-          "description": "Status: \"proposed\", \"accepted\", \"deprecated\", \"superseded\" (default: \"proposed\")",
+          "description": "Status (default: proposed)",
+          "enum": [
+            "proposed",
+            "accepted",
+            "deprecated",
+            "superseded",
+            null
+          ],
           "type": [
             "string",
             "null"
@@ -2527,13 +3493,38 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Preview renaming a symbol across the codebase. Returns a rename plan with all edits needed (does not modify files).",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "limit": {
+          "description": "Max edits per page (default 100, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "new_name": {
           "description": "New name for the symbol",
           "type": "string"
+        },
+        "offset": {
+          "description": "Edits to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "repo_id": {
           "description": "Repository ID",
@@ -2568,6 +3559,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Search through all analyzed code content using BM25 text search",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2580,7 +3577,17 @@
           ]
         },
         "limit": {
-          "description": "Maximum results to return",
+          "description": "Max results per page (default 20, semantic_search 10; max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Results to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -2593,7 +3600,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -2622,6 +3629,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Search indexed emails by keyword, with optional person and date filters. Returns matching Email symbols with subject, sender, date, and body snippet.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2634,7 +3647,17 @@
           ]
         },
         "limit": {
-          "description": "Maximum results to return (default: 20)",
+          "description": "Max emails per page (default 20, max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Emails to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -2654,7 +3677,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -2683,6 +3706,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Search for symbols using semantic similarity (vector embeddings). Returns symbols most similar in meaning to the query.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2695,7 +3724,17 @@
           ]
         },
         "limit": {
-          "description": "Maximum results to return",
+          "description": "Max results per page (default 20, semantic_search 10; max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Results to skip, for the next page (default 0)",
           "format": "uint",
           "minimum": 0,
           "type": [
@@ -2708,7 +3747,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -2737,6 +3776,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Compare two graph snapshots to see architectural changes over time. Shows added/removed symbols and relationships. Defaults to comparing the two most recent snapshots.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2748,8 +3793,27 @@
             "null"
           ]
         },
+        "limit": {
+          "description": "Max changes per page, across added and removed (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Changes to skip, for the next page (default 0)",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (optional, uses most recent if omitted)",
+          "description": "Repository ID (default: repo of the working directory, else the most recent)",
           "type": [
             "string",
             "null"
@@ -2782,6 +3846,12 @@
     }
   },
   {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
     "description": "Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it — reveals dependencies that file reading alone cannot.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -2791,7 +3861,7 @@
           "type": "string"
         },
         "symbol_name": {
-          "description": "Name of the symbol to look up",
+          "description": "Name or qualified name of the symbol to look up",
           "type": "string"
         }
       },

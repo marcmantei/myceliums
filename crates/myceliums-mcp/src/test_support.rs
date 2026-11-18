@@ -12,8 +12,11 @@ use rmcp::handler::server::wrapper::Parameters;
 /// up a full stdio transport. These thin delegates expose that surface behind
 /// the `test-support` feature so the shipped API stays narrow.
 ///
-/// Each wrapper returns the rendered `text` payload on success, or the mapped
-/// error message on failure — the two things an integration test asserts on.
+/// Each wrapper returns the rendered `text` payload on success, or the
+/// agent-visible error text on failure (an `isError` result's text or a
+/// protocol error's message) — the two things an integration test asserts
+/// on. The exact wire shape of each tool call is covered end to end by
+/// `tests/tool_contract.rs`.
 impl MyceliumsMcp {
     /// The tool definitions the server advertises on `tools/list` — names,
     /// descriptions, and input/output schemas, sorted by name. Built from the
@@ -23,12 +26,18 @@ impl MyceliumsMcp {
         Self::tool_router().list_all()
     }
 
+    /// The full MCP router (tools included), for serving this server over an
+    /// in-process transport in end-to-end tests.
+    pub fn into_router_for_test(self) -> rmcp::handler::server::router::Router<Self> {
+        rmcp::handler::server::router::Router::new(self).with_tools(Self::tool_router())
+    }
+
     /// Invoke the `context_search` handler.
     pub async fn context_search_for_test(&self, params: SearchParams) -> Result<String, String> {
         self.context_search(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `hybrid_search` handler.
@@ -39,7 +48,7 @@ impl MyceliumsMcp {
         self.hybrid_search(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `detect_impact` handler.
@@ -50,7 +59,7 @@ impl MyceliumsMcp {
         self.detect_impact_tool(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `rename_symbol` handler.
@@ -58,7 +67,7 @@ impl MyceliumsMcp {
         self.rename_symbol(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `semantic_search` handler.
@@ -66,7 +75,7 @@ impl MyceliumsMcp {
         self.semantic_search(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `delete` handler.
@@ -74,7 +83,7 @@ impl MyceliumsMcp {
         self.delete(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `map_service` handler.
@@ -82,7 +91,7 @@ impl MyceliumsMcp {
         self.map_service(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `record_decision` handler.
@@ -93,7 +102,7 @@ impl MyceliumsMcp {
         self.record_decision(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `link_decision` handler.
@@ -104,7 +113,7 @@ impl MyceliumsMcp {
         self.link_decision(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Read a `repository://...` resource.
@@ -116,10 +125,10 @@ impl MyceliumsMcp {
 
     /// Invoke the `list_repos` handler.
     pub async fn list_repos_for_test(&self) -> Result<String, String> {
-        self.list_repos()
+        self.list_repos(Parameters(Default::default()))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `symbol_context` handler.
@@ -130,7 +139,7 @@ impl MyceliumsMcp {
         self.symbol_context(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `cypher_query` handler.
@@ -138,7 +147,7 @@ impl MyceliumsMcp {
         self.cypher_query(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `get_callers` handler (rendered as JSON).
@@ -146,7 +155,7 @@ impl MyceliumsMcp {
         self.get_callers(Parameters(params))
             .await
             .map(|json| serde_json::to_string(&json.0).expect("serialize"))
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `get_stats` handler (rendered as JSON).
@@ -154,7 +163,7 @@ impl MyceliumsMcp {
         self.get_stats(Parameters(params))
             .await
             .map(|json| serde_json::to_string(&json.0).expect("serialize"))
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// Invoke the `analyze` handler.
@@ -162,7 +171,7 @@ impl MyceliumsMcp {
         self.analyze(Parameters(params))
             .await
             .map(|json| json.0.text)
-            .map_err(|e| e.message.to_string())
+            .map_err(|e| e.message())
     }
 
     /// How many graph tables the server has read from disk so far (see

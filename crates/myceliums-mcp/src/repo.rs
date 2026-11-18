@@ -1,10 +1,10 @@
 //! Data-home paths and repository/symbol resolution shared by the tools.
 
-use crate::errors::{repo_id_error, service_error};
+use crate::errors::{repo_id_error, service_error, ToolError};
 use crate::MyceliumsMcp;
 use myceliums_core::GraphTable;
 use myceliums_storage::{
-    CodeSymbol, Community, FileNode, Process, Relationship, RepoRegistry, Store,
+    CodeSymbol, Community, FileNode, Process, Relationship, RepoInfo, RepoRegistry, Store,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -28,63 +28,129 @@ pub(crate) fn registry_path() -> PathBuf {
     data_dir().join("repos.json")
 }
 
+/// Loads the repository registry; a load failure is a server fault.
+pub(crate) fn registry() -> Result<RepoRegistry, ToolError> {
+    RepoRegistry::load(&registry_path())
+        .map_err(|e| ToolError::internal("cannot read the repository registry", e))
+}
+
+/// The registry entry of a caller-supplied repo id (malformed → invalid
+/// params, unknown → recoverable).
+pub(crate) fn repo_info(repo_id: &str) -> Result<RepoInfo, ToolError> {
+    registry()?.require(repo_id).cloned().map_err(repo_id_error)
+}
+
 /// Database directory for a caller-supplied repo id.
 ///
 /// This is the MCP side of the repo-id choke point
 /// ([`RepoRegistry::registered_db_path`]): malformed or unregistered ids are
 /// rejected with an error that lists the known ids, before any path is built
 /// or any directory is created.
-pub(crate) fn registered_db_path(repo_id: &str) -> Result<PathBuf, rmcp::ErrorData> {
-    RepoRegistry::load(&registry_path())
-        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
+pub(crate) fn registered_db_path(repo_id: &str) -> Result<PathBuf, ToolError> {
+    registry()?
         .registered_db_path(&data_dir(), repo_id)
         .map_err(repo_id_error)
 }
 
-impl MyceliumsMcp {
-    pub(crate) fn resolve_symbol<'a>(
-        symbols: &'a [myceliums_storage::CodeSymbol],
-        name: &str,
-    ) -> Result<&'a myceliums_storage::CodeSymbol, rmcp::ErrorData> {
-        // Try qualified_name first
-        let matches: Vec<_> = symbols
-            .iter()
-            .filter(|s| s.qualified_name == name)
-            .collect();
-        if matches.len() == 1 {
-            return Ok(matches[0]);
+/// How many candidates an "ambiguous symbol" error lists.
+const AMBIGUOUS_SHOWN: usize = 8;
+
+/// Finds one symbol by qualified name, else by short name.
+///
+/// Not found and ambiguous are recoverable: the error names the next step
+/// (search for it, or pass one of the listed qualified names).
+pub(crate) fn resolve_symbol<'a>(
+    symbols: &'a [CodeSymbol],
+    name: &str,
+) -> Result<&'a CodeSymbol, ToolError> {
+    // A qualified name is the disambiguation handle agents are told to pass,
+    // so it wins outright (the first one, if several symbols share it).
+    if let Some(symbol) = symbols.iter().find(|s| s.qualified_name == name) {
+        return Ok(symbol);
+    }
+    let by_name: Vec<&CodeSymbol> = symbols.iter().filter(|s| s.name == name).collect();
+    match by_name.as_slice() {
+        [] => Err(ToolError::symbol_not_found(name)),
+        [one] => Ok(one),
+        many => {
+            let shown: Vec<String> = many
+                .iter()
+                .take(AMBIGUOUS_SHOWN)
+                .map(|s| format!("{} ({}:{})", s.qualified_name, s.file_path, s.start_line))
+                .collect();
+            let more = many.len().saturating_sub(AMBIGUOUS_SHOWN);
+            let more = if more > 0 {
+                format!(", +{more} more")
+            } else {
+                String::new()
+            };
+            Err(ToolError::recoverable(
+                format!(
+                    "Symbol `{name}` is ambiguous: {} matches: {}{more}.",
+                    many.len(),
+                    shown.join(", ")
+                ),
+                "pass one of these qualified names as the symbol name",
+            ))
         }
-        if matches.is_empty() {
-            // Fall back to name
-            let by_name: Vec<_> = symbols.iter().filter(|s| s.name == name).collect();
-            match by_name.len() {
-                0 => Err(rmcp::ErrorData::internal_error(
-                    format!("Symbol not found: {}", name),
-                    None,
-                )),
-                1 => Ok(by_name[0]),
-                _ => {
-                    let names: Vec<_> = by_name.iter().map(|s| s.qualified_name.as_str()).collect();
-                    Err(rmcp::ErrorData::internal_error(
-                        format!("Ambiguous symbol '{}'. Matches: {}", name, names.join(", ")),
-                        None,
-                    ))
-                }
+    }
+}
+
+/// Labels CALLS edges with how their target was resolved (`exact`,
+/// `import`, `name-match`, `ambiguous`).
+///
+/// Edges indexed since #96 carry the label the resolver recorded. Older
+/// indexes have none; for those the label is derived here: `ambiguous` when
+/// several symbols share the target's name, else `name-match` — never
+/// `exact`, because the resolver's evidence is gone.
+pub(crate) struct CallLabels<'a> {
+    shared_names: std::collections::HashSet<&'a str>,
+}
+
+impl<'a> CallLabels<'a> {
+    pub(crate) fn new(symbols: &'a [CodeSymbol]) -> Self {
+        let mut seen = std::collections::HashSet::new();
+        let mut shared_names = std::collections::HashSet::new();
+        for s in symbols {
+            if !seen.insert(s.name.as_str()) {
+                shared_names.insert(s.name.as_str());
             }
-        } else {
-            // Multiple qualified_name matches (unlikely but handle it)
-            Ok(matches[0])
+        }
+        CallLabels { shared_names }
+    }
+
+    /// The label of `edge`, whose target symbol is named `target_name`.
+    pub(crate) fn label(&self, edge: &Relationship, target_name: &str) -> &'static str {
+        match myceliums_core::CallResolution::from_metadata(&edge.metadata) {
+            Some(resolution) => resolution.label(),
+            None if self.shared_names.contains(target_name) => "ambiguous",
+            None => "name-match",
         }
     }
 
+    /// `name`, followed by the label when the edge is a guess.
+    pub(crate) fn mark(label: &str, name: &str) -> String {
+        if Self::is_heuristic(label) {
+            format!("{name} (resolved: {label})")
+        } else {
+            name.to_string()
+        }
+    }
+
+    /// Whether the label marks a name-based guess rather than a certain edge.
+    pub(crate) fn is_heuristic(label: &str) -> bool {
+        matches!(label, "name-match" | "ambiguous")
+    }
+}
+
+impl MyceliumsMcp {
     /// Turns an optional caller-supplied repo id into a registered one.
     ///
     /// An explicit id must pass [`RepoRegistry::require`]; without one, the
     /// repo containing the working directory (or else the most recently
     /// analyzed repo) is used.
-    pub(crate) fn resolve_repo_id(&self, repo_id: Option<&str>) -> Result<String, rmcp::ErrorData> {
-        let registry = RepoRegistry::load(&registry_path())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+    pub(crate) fn resolve_repo_id(&self, repo_id: Option<&str>) -> Result<String, ToolError> {
+        let registry = registry()?;
         if let Some(id) = repo_id {
             registry.require(id).map_err(repo_id_error)?;
             return Ok(id.to_string());
@@ -105,66 +171,120 @@ impl MyceliumsMcp {
             }
         }
 
-        // Fallback: most recently analyzed repo
-        let repos = registry.list();
-        repos.last().map(|r| r.id.clone()).ok_or_else(|| {
-            rmcp::ErrorData::internal_error("No repositories analyzed yet".to_string(), None)
-        })
+        // Fallback: the most recently analyzed repo. RFC 3339 timestamps in
+        // the same offset sort chronologically as strings.
+        registry
+            .list()
+            .into_iter()
+            .max_by(|a, b| a.analyzed_at.cmp(&b.analyzed_at))
+            .map(|r| r.id.clone())
+            .ok_or_else(|| {
+                ToolError::recoverable(
+                    "No repository is indexed yet.",
+                    "run analyze with the project path",
+                )
+            })
     }
 }
 
 /// Graph reads for the tools, served from the [`myceliums_core::GraphService`]
 /// cache: each table is read from disk once per repository and reused until
 /// `analyze`/`delete` (or an on-disk change) invalidates it. Every read
-/// validates `repo_id` first — malformed or unknown ids are `invalid_params`.
+/// validates `repo_id` first — malformed ids are `invalid_params`, unknown
+/// ones a recoverable error.
 impl MyceliumsMcp {
     /// The shared store handle, for reads the graph cache does not cover
     /// (vector search, embeddings, index metadata).
-    pub(crate) async fn store(&self, repo_id: &str) -> Result<Arc<Store>, rmcp::ErrorData> {
+    pub(crate) async fn store(&self, repo_id: &str) -> Result<Arc<Store>, ToolError> {
         self.service
             .open_store(repo_id)
             .await
             .map_err(service_error)
     }
 
-    pub(crate) async fn symbols(
-        &self,
-        repo_id: &str,
-    ) -> Result<GraphTable<CodeSymbol>, rmcp::ErrorData> {
+    pub(crate) async fn symbols(&self, repo_id: &str) -> Result<GraphTable<CodeSymbol>, ToolError> {
         self.service.symbols(repo_id).await.map_err(service_error)
     }
 
     pub(crate) async fn relationships(
         &self,
         repo_id: &str,
-    ) -> Result<GraphTable<Relationship>, rmcp::ErrorData> {
+    ) -> Result<GraphTable<Relationship>, ToolError> {
         self.service
             .relationships(repo_id)
             .await
             .map_err(service_error)
     }
 
-    pub(crate) async fn files(
-        &self,
-        repo_id: &str,
-    ) -> Result<GraphTable<FileNode>, rmcp::ErrorData> {
+    pub(crate) async fn files(&self, repo_id: &str) -> Result<GraphTable<FileNode>, ToolError> {
         self.service.files(repo_id).await.map_err(service_error)
     }
 
     pub(crate) async fn communities(
         &self,
         repo_id: &str,
-    ) -> Result<GraphTable<Community>, rmcp::ErrorData> {
+    ) -> Result<GraphTable<Community>, ToolError> {
         self.service
             .communities(repo_id)
             .await
             .map_err(service_error)
     }
 
-    pub(crate) async fn processes(
-        &self,
-        repo_id: &str,
-    ) -> Result<GraphTable<Process>, rmcp::ErrorData> {
+    pub(crate) async fn processes(&self, repo_id: &str) -> Result<GraphTable<Process>, ToolError> {
         self.service.processes(repo_id).await.map_err(service_error)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use myceliums_storage::SymbolKind;
+
+    fn sym(name: &str, qualified: &str, file: &str) -> CodeSymbol {
+        CodeSymbol {
+            uid: format!("{file}:{qualified}"),
+            name: name.into(),
+            qualified_name: qualified.into(),
+            kind: SymbolKind::Function,
+            file_path: file.into(),
+            start_line: 1,
+            end_line: 2,
+            signature: String::new(),
+            content: String::new(),
+            repo_id: "r".into(),
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn ambiguous_name_is_recoverable_and_lists_qualified_names() {
+        let symbols = vec![
+            sym("parse", "a.parse", "a.ts"),
+            sym("parse", "b.parse", "b.ts"),
+        ];
+        let err = resolve_symbol(&symbols, "parse").unwrap_err();
+        let msg = err.message();
+        assert!(matches!(err, ToolError::Recoverable { .. }));
+        assert!(msg.contains("ambiguous: 2 matches"), "{msg}");
+        assert!(
+            msg.contains("a.parse (a.ts:1)") && msg.contains("b.parse"),
+            "{msg}"
+        );
+        assert!(
+            msg.contains("Next: pass one of these qualified names"),
+            "{msg}"
+        );
+        // The qualified name resolves it.
+        assert_eq!(
+            resolve_symbol(&symbols, "b.parse").unwrap().file_path,
+            "b.ts"
+        );
+    }
+
+    #[test]
+    fn missing_symbol_is_recoverable() {
+        let err = resolve_symbol(&[], "nope").unwrap_err();
+        assert!(err.message().starts_with("Symbol `nope` not found"));
+        assert!(err.message().contains("Next: "));
     }
 }

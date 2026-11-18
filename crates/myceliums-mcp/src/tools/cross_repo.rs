@@ -2,22 +2,51 @@
 
 use super::prelude::*;
 
+/// The embedding model of an index could not be loaded.
+fn embedder_error(e: impl std::fmt::Display) -> ToolError {
+    ToolError::recoverable(
+        format!("Cannot load the embedding model for this index: {e}."),
+        "re-run analyze on that repository without skip_embeddings",
+    )
+}
+
+impl MyceliumsMcp {
+    /// A result over two repositories: one freshness line for each.
+    async fn two_repo_text(
+        &self,
+        source: &str,
+        target: &str,
+        body: String,
+    ) -> Result<Json<TextOutput>, ToolError> {
+        let source_status = self.index_status(source).await?;
+        let target_status = self.index_status(target).await?;
+        text(format!(
+            "Source {source_status}\nTarget {target_status}\n\n{body}"
+        ))
+    }
+}
+
 #[tool_router(router = cross_repo_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
     #[tool(
         name = "isolate_intent",
-        description = "Isolate the symbols implementing a specific intent/feature in a repository. Uses hybrid search to find seed symbols, then expands via call graph traversal with community-aware pruning. Returns the IntentSlice: seed symbols, expanded symbols, internal relationships, and structural metadata."
+        description = "Isolate the symbols implementing a specific intent/feature in a repository. Uses hybrid search to find seed symbols, then expands via call graph traversal with community-aware pruning. Returns the IntentSlice: seed symbols, expanded symbols, internal relationships, and structural metadata.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn isolate_intent(
         &self,
         Parameters(params): Parameters<IsolateIntentParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         use myceliums_core::cross_repo::{self, IsolateConfig};
 
         let store = self.store(&params.repo_id).await?;
 
-        let registry = RepoRegistry::load(&registry_path())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let registry = registry()?;
         let repo_name = registry
             .get(&params.repo_id)
             .map(|r| r.name.clone())
@@ -28,13 +57,13 @@ impl MyceliumsMcp {
         let communities = self.communities(&params.repo_id).await?;
 
         let config = IsolateConfig {
-            max_symbols: params.max_symbols.unwrap_or(50),
-            expansion_depth: params.depth.unwrap_or(2),
+            max_symbols: params.max_symbols.unwrap_or(50).clamp(1, 200),
+            expansion_depth: params.depth.unwrap_or(2).clamp(1, 5),
         };
 
         let embedder = myceliums_core::embedder_for_index(&store)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(embedder_error)?;
         let slice = cross_repo::isolate_intent_hybrid(
             &embedder,
             &params.intent,
@@ -47,27 +76,31 @@ impl MyceliumsMcp {
             &config,
         )
         .await
-        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
 
-        Ok(Json(TextOutput {
-            text: format::format_intent_slice(&slice),
-        }))
+        self.graph_text(&params.repo_id, format::format_intent_slice(&slice))
+            .await
     }
 
     #[tool(
         name = "differentiate_intent",
-        description = "Compare how two repositories implement the same intent/feature. Isolates the relevant symbols in each repo, aligns them via embedding similarity, and reports structural differences. Returns: matched symbol pairs, unmatched symbols, and structural comparison metrics."
+        description = "Compare how two repositories implement the same intent/feature. Isolates the relevant symbols in each repo, aligns them via embedding similarity, and reports structural differences. Returns: matched symbol pairs, unmatched symbols, and structural comparison metrics.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn differentiate_intent(
         &self,
         Parameters(params): Parameters<DifferentiateIntentParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         use myceliums_core::cross_repo::{self, DifferentiateConfig, IsolateConfig};
 
-        let registry = RepoRegistry::load(&registry_path())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let registry = registry()?;
 
-        let max_symbols = params.max_symbols.unwrap_or(50);
+        let max_symbols = params.max_symbols.unwrap_or(50).clamp(1, 200);
         let config = IsolateConfig {
             max_symbols,
             expansion_depth: 2,
@@ -85,9 +118,7 @@ impl MyceliumsMcp {
 
         let src_embedder = myceliums_core::embedder_for_index(&src_store)
             .await
-            .map_err(|e| {
-                rmcp::ErrorData::internal_error(format!("Source isolation: {}", e), None)
-            })?;
+            .map_err(embedder_error)?;
         let source_slice = cross_repo::isolate_intent_hybrid(
             &src_embedder,
             &params.intent,
@@ -100,7 +131,7 @@ impl MyceliumsMcp {
             &config,
         )
         .await
-        .map_err(|e| rmcp::ErrorData::internal_error(format!("Source isolation: {}", e), None))?;
+        .map_err(|e| ToolError::internal("source isolation failed", e))?;
 
         // Isolate intent in target repo
         let tgt_store = self.store(&params.target_repo_id).await?;
@@ -114,9 +145,7 @@ impl MyceliumsMcp {
 
         let tgt_embedder = myceliums_core::embedder_for_index(&tgt_store)
             .await
-            .map_err(|e| {
-                rmcp::ErrorData::internal_error(format!("Target isolation: {}", e), None)
-            })?;
+            .map_err(embedder_error)?;
         let target_slice = cross_repo::isolate_intent_hybrid(
             &tgt_embedder,
             &params.intent,
@@ -129,20 +158,20 @@ impl MyceliumsMcp {
             &config,
         )
         .await
-        .map_err(|e| rmcp::ErrorData::internal_error(format!("Target isolation: {}", e), None))?;
+        .map_err(|e| ToolError::internal("target isolation failed", e))?;
 
         // Get vectors for differentiation
         let src_vectors = src_store
             .get_symbols_with_vectors()
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
         let tgt_vectors = tgt_store
             .get_symbols_with_vectors()
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
 
         let diff_config = DifferentiateConfig {
-            similarity_threshold: params.similarity_threshold.unwrap_or(0.65),
+            similarity_threshold: params.similarity_threshold.unwrap_or(0.65).clamp(0.0, 1.0),
         };
 
         let report = cross_repo::differentiate_with_vectors(
@@ -153,25 +182,33 @@ impl MyceliumsMcp {
             &diff_config,
         );
 
-        Ok(Json(TextOutput {
-            text: format::format_differentiation_report(&report),
-        }))
+        self.two_repo_text(
+            &params.source_repo_id,
+            &params.target_repo_id,
+            format::format_differentiation_report(&report),
+        )
+        .await
     }
 
     #[tool(
         name = "plan_adaptation",
-        description = "Generate an actionable adaptation plan for migrating one repository's approach to another. Compares intent implementations, then produces ordered steps with dependency tracking, effort estimates, and risk analysis."
+        description = "Generate an actionable adaptation plan for migrating one repository's approach to another. Compares intent implementations, then produces ordered steps with dependency tracking, effort estimates, and risk analysis.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn plan_adaptation(
         &self,
         Parameters(params): Parameters<PlanAdaptationParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         use myceliums_core::cross_repo::{self, DifferentiateConfig, IsolateConfig};
 
-        let registry = RepoRegistry::load(&registry_path())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let registry = registry()?;
 
-        let max_symbols = params.max_symbols.unwrap_or(50);
+        let max_symbols = params.max_symbols.unwrap_or(50).clamp(1, 200);
         let config = IsolateConfig {
             max_symbols,
             expansion_depth: 2,
@@ -189,7 +226,7 @@ impl MyceliumsMcp {
 
         let src_embedder = myceliums_core::embedder_for_index(&src_store)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(embedder_error)?;
         let source_slice = cross_repo::isolate_intent_hybrid(
             &src_embedder,
             &params.intent,
@@ -202,7 +239,7 @@ impl MyceliumsMcp {
             &config,
         )
         .await
-        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
 
         let tgt_store = self.store(&params.target_repo_id).await?;
         let tgt_name = registry
@@ -215,7 +252,7 @@ impl MyceliumsMcp {
 
         let tgt_embedder = myceliums_core::embedder_for_index(&tgt_store)
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(embedder_error)?;
         let target_slice = cross_repo::isolate_intent_hybrid(
             &tgt_embedder,
             &params.intent,
@@ -228,17 +265,17 @@ impl MyceliumsMcp {
             &config,
         )
         .await
-        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
 
         // Differentiate
         let src_vectors = src_store
             .get_symbols_with_vectors()
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
         let tgt_vectors = tgt_store
             .get_symbols_with_vectors()
             .await
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
 
         let diff_config = DifferentiateConfig {
             similarity_threshold: 0.65,
@@ -253,11 +290,14 @@ impl MyceliumsMcp {
         );
 
         // Generate adaptation plan
-        let direction = params.direction.as_deref().unwrap_or("source_to_target");
+        let direction = params.direction.unwrap_or_default().as_str();
         let plan = cross_repo::plan_adaptation(&report, direction);
 
-        Ok(Json(TextOutput {
-            text: format::format_adaptation_plan(&plan),
-        }))
+        self.two_repo_text(
+            &params.source_repo_id,
+            &params.target_repo_id,
+            format::format_adaptation_plan(&plan),
+        )
+        .await
     }
 }
