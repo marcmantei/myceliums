@@ -58,7 +58,30 @@ pub const SHIPPED_RRF_K: u32 = myceliums_core::DEFAULT_RRF_K as u32;
 pub const FASTEMBED_VERSION: &str = env!("MYC_FASTEMBED_VERSION");
 
 /// Embedding batch size `myc analyze` uses when the project sets none.
-const SHIPPED_EMBEDDING_BATCH: usize = 256;
+pub const SHIPPED_EMBEDDING_BATCH: usize = 256;
+
+/// Environment variable that lowers the embedding batch size, for machines
+/// whose memory the shipped batch exhausts.
+///
+/// A batch of 256 symbols at the model's 512-token budget holds attention
+/// buffers of several gigabytes — fine on a workstation, enough to take down
+/// a 16 GB CI runner on a real repository. The batch only decides which
+/// symbols are padded together; each symbol's vector is the same up to float
+/// noise, as `myc analyze` with a lower `embedding_batch_size` would produce.
+pub const EMBEDDING_BATCH_ENV: &str = "MYC_EVAL_EMBEDDING_BATCH";
+
+/// The embedding batch size of this run: [`EMBEDDING_BATCH_ENV`] when it holds
+/// a positive integer, else [`SHIPPED_EMBEDDING_BATCH`].
+pub fn embedding_batch() -> usize {
+    parse_batch(std::env::var(EMBEDDING_BATCH_ENV).ok().as_deref())
+}
+
+fn parse_batch(value: Option<&str>) -> usize {
+    value
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(SHIPPED_EMBEDDING_BATCH)
+}
 
 /// Whether this run may download model weights.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -321,7 +344,7 @@ impl ModelIndex {
             .await
             .context("loading the embedding model")?;
         let vectors = embedder
-            .embed_symbols(corpus.symbols(), SHIPPED_EMBEDDING_BATCH)
+            .embed_symbols(corpus.symbols(), embedding_batch())
             .await
             .context("embedding the corpus")?;
         let pairs: Vec<(String, Vec<f32>)> = corpus
@@ -548,6 +571,15 @@ mod tests {
         assert!(ModelPolicy::resolve(true, None).allow_download);
         assert!(ModelPolicy::resolve(false, Some("1")).allow_download);
         assert!(ModelPolicy::resolve(false, Some(" TRUE ")).allow_download);
+    }
+
+    #[test]
+    fn the_embedding_batch_defaults_to_the_shipped_one() {
+        assert_eq!(parse_batch(None), SHIPPED_EMBEDDING_BATCH);
+        assert_eq!(parse_batch(Some("")), SHIPPED_EMBEDDING_BATCH);
+        assert_eq!(parse_batch(Some("0")), SHIPPED_EMBEDDING_BATCH);
+        assert_eq!(parse_batch(Some("lots")), SHIPPED_EMBEDDING_BATCH);
+        assert_eq!(parse_batch(Some(" 32 ")), 32);
     }
 
     #[test]

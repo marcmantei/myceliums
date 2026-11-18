@@ -90,9 +90,16 @@ jobs:
           path: ~/.cache/myceliums-eval-repos
           key: ${{ steps.keys.outputs.repos }}
       - name: Score, sweep and confirm
+        # With the shipped embedding batch (256 symbols of up to 512 tokens)
+        # the evaluator was seen at ~11 GB RSS locally, and the first run on
+        # the 16 GB runner lost the runner mid-indexing. A batch of 32 changes
+        # only how symbols are padded together, not their vectors beyond float
+        # noise. `nice` leaves the runner agent CPU while ONNX uses every core.
+        env:
+          MYC_EVAL_EMBEDDING_BATCH: "32"
         run: |
           set -o pipefail
-          target/debug/real-repo-eval --out real-repo-report.json --summary "$GITHUB_STEP_SUMMARY" | tee real-repo.txt
+          nice -n 10 target/debug/real-repo-eval --out real-repo-report.json --summary "$GITHUB_STEP_SUMMARY" | tee real-repo.txt
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

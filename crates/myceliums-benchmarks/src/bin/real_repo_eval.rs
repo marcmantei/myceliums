@@ -37,7 +37,7 @@ use myceliums_benchmarks::eval::evaluator::{
 };
 use myceliums_benchmarks::eval::golden_set::GoldenQuery;
 use myceliums_benchmarks::eval::models::{
-    ModelIndex, ModelPolicy, ModelProvenance, ModelSetup, ALLOW_DOWNLOAD_FLAG,
+    embedding_batch, ModelIndex, ModelPolicy, ModelProvenance, ModelSetup, ALLOW_DOWNLOAD_FLAG,
 };
 use myceliums_benchmarks::eval::real_repos::{
     repos_dir, verify_checkout, RealRepoSet, Split, REPOS_DIR_ENV,
@@ -136,6 +136,8 @@ struct Report {
     review: ReviewState,
     repos: Vec<RepoReport>,
     models: Option<ModelProvenance>,
+    /// Symbols embedded per batch (`MYC_EVAL_EMBEDDING_BATCH`, default 256).
+    embedding_batch: usize,
     bootstrap: BootstrapConfig,
     split: SplitReport,
     /// Every mode over every query, per-query detail included.
@@ -426,6 +428,7 @@ async fn main() -> Result<()> {
             })
             .collect(),
         models: (!indices.is_empty()).then(|| setup.provenance()),
+        embedding_batch: embedding_batch(),
         bootstrap: BootstrapConfig::current(),
         split: SplitReport {
             rule: format!(
