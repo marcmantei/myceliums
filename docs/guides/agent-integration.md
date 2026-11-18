@@ -165,8 +165,11 @@ whole loop in a short Python script.
 
 ## Team mode
 
-For a team, build the index in CI on merge and serve it with
+Commit the project-scope files from `myc setup-claude` so every clone gets
+the same MCP entry, routing block, hooks and subagent; each developer needs
+`myc` on `PATH`. The CLI commands and the grep hook read a local index: the
+SessionStart hook builds and refreshes it, or point `MYCELIUMS_DATA_DIR` at an
+index built elsewhere (the CLI, the hooks and `myc mcp` all honour it). A
+central index built in CI can also be served with
 `myc mcp --http <addr> --allow-remote`, which requires a bearer token
-(`MYC_MCP_TOKEN`); commit the project-scope files from `myc setup-claude` so
-every clone gets the same routing, hooks and subagent. `MYCELIUMS_DATA_DIR`
-points the CLI, the hooks and the MCP server at the same index directory.
+(`MYC_MCP_TOKEN`); that serves the MCP tools only, not the CLI commands.
