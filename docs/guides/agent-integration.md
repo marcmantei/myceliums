@@ -26,7 +26,7 @@ hard, and what `myc setup-claude` installs for each.
 | 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | cheap, only a hint | ignored under pressure | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | 5–8 task-named core tools, loaded up front instead of deferred | the model sees and understands them | – | planned, [#97](https://github.com/marcmantei/myceliums/issues/97) |
 | 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | fires at the moment the agent reaches for grep | blocking grep would be wrong, so it never blocks | `myc setup-claude` |
-| 4. Subagent | A `code-explorer` agent with only the myceliums tools and Read; the main agent delegates structural questions | clean separation, good for teams | one extra hop | `myc setup-claude` |
+| 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | clean separation, good for teams | one extra hop | `myc setup-claude` |
 | 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | full control | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
 
 Layers 1, 3 and 4 work through the same one-shot CLI commands, which any
@@ -39,8 +39,10 @@ agent with a shell can call:
 | What breaks if X or a file changes? | `myc impact X`, `myc impact src/file.rs` |
 | Where/how is something implemented? | `myc context how are sessions refreshed` |
 
-They print compact text (or `--json`), stay within `--budget` estimated
-tokens (default 2000; one token is estimated as four characters), and end
+They print compact text (or `--json`), keep the text within `--budget`
+estimated tokens (default 2000; one token is estimated as four characters;
+`--json` returns the same items, which are larger because of the field
+names), and end
 with the index freshness (`index: abc1234 = HEAD`, or a warning when HEAD has
 moved since `myc analyze`). An ambiguous name lists its candidate definitions
 with file:line and exits with code 2; an unknown name suggests similar ones
@@ -119,7 +121,11 @@ files (`*.json`, `*.yaml`, `*.md`, ...), names the index does not define, and
 directories without an index. It never blocks or approves the tool call (it
 sets no permission decision), exits 0 on any failure, and gives up silently
 if the index lookup takes longer than 400 ms (`MYC_HOOK_DEADLINE_MS` changes
-the limit; `MYC_HOOK_DEBUG=1` prints why the hook stayed silent on stderr). The hook's input and output
+the limit; `MYC_HOOK_DEBUG=1` prints why the hook stayed silent on stderr).
+The installed command is `myc hook-grep 2>/dev/null || true`: a PreToolUse
+hook that exits with code 2 blocks the tool call, and an older `myc` without
+`hook-grep` (say, on a teammate's machine) would exit 2 on the unknown
+subcommand. The hook's input and output
 follow the [Claude Code hooks reference](https://code.claude.com/docs/en/hooks).
 
 ### 4. `code-explorer` subagent
@@ -128,8 +134,9 @@ follow the [Claude Code hooks reference](https://code.claude.com/docs/en/hooks).
 the main agent to delegate structural questions ("who calls", "what breaks",
 "where is X implemented") to it. Its tools are the whole myceliums MCP server
 (`mcp__myceliums__*`), `Read` to confirm results, and `ToolSearch` in case the
-session defers MCP tool schemas. It has no Bash: the subagent format can give
-or withhold a tool, but cannot limit Bash to `myc` commands.
+session defers MCP tool schemas. Its instructions start with `list_repos`,
+because most myceliums tools take a `repo_id`. It has no Bash: the subagent
+format can give or withhold a tool, but cannot limit Bash to `myc` commands.
 
 The file carries a marker comment in its frontmatter. Delete that line to make
 the file yours: `myc setup-claude` then neither overwrites nor removes it.

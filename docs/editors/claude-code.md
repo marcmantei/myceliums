@@ -60,11 +60,11 @@ Claude Code asks each user once to approve a project's MCP server.
         "command": "myc format-hook 2>/dev/null" }] }
     ],
     "PreToolUse": [
-      { "matcher": "Grep", "hooks": [{ "type": "command", "command": "myc hook-grep", "timeout": 5 }] },
+      { "matcher": "Grep", "hooks": [{ "type": "command", "command": "myc hook-grep 2>/dev/null || true", "timeout": 5 }] },
       { "matcher": "Bash", "hooks": [
-        { "type": "command", "if": "Bash(grep *)", "command": "myc hook-grep", "timeout": 5 },
-        { "type": "command", "if": "Bash(rg *)", "command": "myc hook-grep", "timeout": 5 },
-        { "type": "command", "if": "Bash(git grep *)", "command": "myc hook-grep", "timeout": 5 }
+        { "type": "command", "if": "Bash(grep *)", "command": "myc hook-grep 2>/dev/null || true", "timeout": 5 },
+        { "type": "command", "if": "Bash(rg *)", "command": "myc hook-grep 2>/dev/null || true", "timeout": 5 },
+        { "type": "command", "if": "Bash(git grep *)", "command": "myc hook-grep 2>/dev/null || true", "timeout": 5 }
       ] }
     ]
   }

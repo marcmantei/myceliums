@@ -353,15 +353,16 @@ Any other MCP-compatible editor can use myceliums by pointing to `myc mcp`.
 
 Attaching the MCP server is not enough: in the pilot below the agent called
 myceliums in 0 of 90 sessions, because Claude Code defers MCP tool schemas
-and nothing sent the agent from grep to the graph. Myceliums ships five ways
-to route an agent to it, from soft to hard:
+and nothing sent the agent from grep to the graph. There are five ways to
+route an agent to myceliums, from soft to hard; four ship with this release,
+the core toolset (layer 2) is planned:
 
 | Layer | What | Installed by |
 |---|---|---|
 | 1. Instructions | Routing block in CLAUDE.md / AGENTS.md: structural questions to myceliums, grep for literals and config | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | Small task-named core toolset, loaded up front | planned ([#97](https://github.com/marcmantei/myceliums/issues/97)) |
 | 3. Hooks | PreToolUse hook: a grep for a known symbol gets the matching `myc callers …` call as context (never blocks) | `myc setup-claude` |
-| 4. Subagent | `code-explorer` with only the myceliums tools and Read | `myc setup-claude` |
+| 4. Subagent | `code-explorer` with only the myceliums tools, Read and ToolSearch | `myc setup-claude` |
 | 5. Custom harness | Prefetch `myc context --json` into the prompt | [example](examples/agent-sdk-prefetch/) |
 
 The one-shot commands `myc callers`, `myc callees`, `myc impact <symbol|file>`

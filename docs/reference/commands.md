@@ -214,7 +214,7 @@ Without a target: detect the impact of current changes via git diff, tracing cha
 | `-d, --depth` | integer | `2` | Graph traversal depth |
 | `--diff` | string, optional | runs `git diff HEAD` | Diff string or path to a `.diff`/`.patch` file |
 | `--json` | bool | `false` | Output as JSON |
-| `--budget` | integer (tokens) | `2000` | With a target: output budget in estimated tokens |
+| `--budget` | integer (tokens) | `2000` | With a target: budget for the text output in estimated tokens; `--json` returns the same items |
 
 ```bash
 # Impact of uncommitted changes
@@ -241,7 +241,7 @@ Compact, one-shot answers for agents and hooks: the callers (or callees) of a sy
 | `-d, --depth` | integer | `1` | Follow calls transitively up to this many hops; each line then shows its depth and the symbol it was reached through |
 | `-r, --repo` | string, optional | index covering the cwd | Repository ID or path |
 | `--json` | bool | `false` | Output as JSON (`symbol`, `total`, `omitted`, `results`, `freshness`) |
-| `--budget` | integer (tokens) | `2000` | Output budget in estimated tokens (1 token ≈ 4 characters) |
+| `--budget` | integer (tokens) | `2000` | Budget for the text output in estimated tokens (1 token ≈ 4 characters); `--json` returns the same items, so its JSON is larger |
 
 ```bash
 myc callers parse_query
@@ -259,7 +259,7 @@ A token-budgeted context pack for a task: symbols the text names, then lexical s
 | `-r, --repo` | string, optional | index covering the cwd | Repository ID or path |
 | `--hybrid` | bool | `false` | Rank with BM25 + vector search (needs embeddings; loads the model, which takes seconds) |
 | `--json` | bool | `false` | Output as JSON |
-| `--budget` | integer (tokens) | `2000` | Upper bound for the pack in estimated tokens; the most relevant entry is always kept |
+| `--budget` | integer (tokens) | `2000` | Upper bound for the pack's text rendering in estimated tokens (`--json` holds the same entries); the most relevant entry is always kept |
 
 ```bash
 myc context how are sessions refreshed
