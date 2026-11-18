@@ -7,6 +7,57 @@ use crate::module_graph::ModuleGraph;
 use crate::parser::{CallReference, ExpressionStep, ImportInfo};
 use crate::string_pool::{StrId, StringPool};
 
+/// How the name-based resolver picked the target of a CALLS edge.
+///
+/// Recorded at extraction time in the edge's metadata (`resolved:<label>`)
+/// so consumers can tell a certain edge from a guess. Edges written before
+/// this existed carry no label; [`CallResolution::from_metadata`] returns
+/// `None` for them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallResolution {
+    /// Matched a qualified name (`Receiver.method`, `mod::f`) that exactly
+    /// one symbol has.
+    Exact,
+    /// Resolved through the module graph (an import binding).
+    Import,
+    /// Matched a bare name that exactly one symbol has.
+    NameMatch,
+    /// Several symbols share the matched name; one of them was picked.
+    Ambiguous,
+}
+
+impl CallResolution {
+    /// The label written to and read from edge metadata.
+    pub fn label(self) -> &'static str {
+        match self {
+            CallResolution::Exact => "exact",
+            CallResolution::Import => "import",
+            CallResolution::NameMatch => "name-match",
+            CallResolution::Ambiguous => "ambiguous",
+        }
+    }
+
+    /// Reads the label back from a CALLS edge's metadata
+    /// (`line:<n>;resolved:<label>`); `None` for unlabelled edges.
+    pub fn from_metadata(metadata: &str) -> Option<CallResolution> {
+        let label = metadata
+            .split(';')
+            .find_map(|part| part.strip_prefix("resolved:"))?;
+        match label {
+            "exact" => Some(CallResolution::Exact),
+            "import" => Some(CallResolution::Import),
+            "name-match" => Some(CallResolution::NameMatch),
+            "ambiguous" => Some(CallResolution::Ambiguous),
+            _ => None,
+        }
+    }
+}
+
+/// Whether a looked-up name was written qualified (`a.b`, `a::b`).
+fn is_qualified(name: &str) -> bool {
+    name.contains('.') || name.contains("::")
+}
+
 /// Resolves call references to actual symbol UIDs using name-based heuristics.
 /// Two-pass: first collects all definitions, then resolves calls.
 ///
@@ -52,6 +103,9 @@ pub struct CallResolver {
     name_to_uid: HashMap<StrId, StrId>,
     /// Map from qualified name -> symbol UID
     qualified_to_uid: HashMap<StrId, StrId>,
+    /// Names (short or qualified) that more than one symbol defines: a
+    /// match on one of them is a guess.
+    ambiguous: std::collections::HashSet<StrId>,
     /// Map from local import name -> original name
     import_aliases: HashMap<StrId, StrId>,
     /// Map from local variable alias -> target symbol name (SSA-derived)
@@ -72,6 +126,7 @@ impl CallResolver {
             pool: StringPool::new(),
             name_to_uid: HashMap::new(),
             qualified_to_uid: HashMap::new(),
+            ambiguous: std::collections::HashSet::new(),
             import_aliases: HashMap::new(),
             aliases: HashMap::new(),
             module_graph: None,
@@ -88,8 +143,16 @@ impl CallResolver {
         let name_id = self.pool.intern(name);
         let qualified_id = self.pool.intern(qualified_name);
         let uid_id = self.pool.intern(uid);
-        self.name_to_uid.insert(name_id, uid_id);
-        self.qualified_to_uid.insert(qualified_id, uid_id);
+        if let Some(previous) = self.name_to_uid.insert(name_id, uid_id) {
+            if previous != uid_id {
+                self.ambiguous.insert(name_id);
+            }
+        }
+        if let Some(previous) = self.qualified_to_uid.insert(qualified_id, uid_id) {
+            if previous != uid_id {
+                self.ambiguous.insert(qualified_id);
+            }
+        }
     }
 
     /// Register import aliases for resolution
@@ -131,6 +194,8 @@ impl CallResolver {
     /// - **Low confidence**: Bare-name calls to functions with common names (`parse`, `handle`, `validate`, `map`)
     ///
     /// See the struct-level documentation for details on false positives and mitigation.
+    /// Each edge records how its target was picked ([`CallResolution`]) in
+    /// its metadata: `line:<n>;resolved:<label>`.
     pub fn resolve_calls(&self, calls: &[CallReference], repo_id: &str) -> Vec<Relationship> {
         let mut relationships = Vec::new();
 
@@ -152,14 +217,14 @@ impl CallResolver {
                 }
             });
 
-            if let (Some(source), Some(target)) = (caller_uid, callee_uid) {
+            if let (Some((source, _)), Some((target, resolution))) = (caller_uid, callee_uid) {
                 relationships.push(Relationship {
                     uid: Uuid::new_v4().to_string(),
                     source_uid: source.to_string(),
                     target_uid: target.to_string(),
                     kind: RelationshipKind::Calls,
                     repo_id: repo_id.to_string(),
-                    metadata: format!("line:{}", call.line),
+                    metadata: format!("line:{};resolved:{}", call.line, resolution.label()),
                 });
             }
         }
@@ -178,7 +243,7 @@ impl CallResolver {
     ///
     /// Extracts the receiver identifier and builds a qualified name like
     /// `Receiver.method` for lookup.
-    fn resolve_with_chain(&self, call: &CallReference) -> Option<&str> {
+    fn resolve_with_chain(&self, call: &CallReference) -> Option<(&str, CallResolution)> {
         let chain = call.chain.as_ref()?;
 
         // Extract the receiver name from the chain (first Ident).
@@ -200,22 +265,36 @@ impl CallResolver {
         self.resolve_name(&qualified, call.file.as_deref())
     }
 
-    fn resolve_name(&self, name: &str, file: Option<&str>) -> Option<&str> {
+    fn resolve_name(&self, name: &str, file: Option<&str>) -> Option<(&str, CallResolution)> {
         // Intern readonly — if the string isn't in the pool, it can't match.
         if let Some(name_id) = self.pool.intern_readonly(name) {
+            let resolution = |unique: CallResolution| {
+                if self.ambiguous.contains(&name_id) {
+                    CallResolution::Ambiguous
+                } else {
+                    unique
+                }
+            };
             // First try qualified and simple name maps
             if let Some(&uid_id) = self.qualified_to_uid.get(&name_id) {
-                return Some(self.pool.get(uid_id));
+                // A bare name that happens to equal a qualified name (a
+                // top-level definition) is still only a name match.
+                let unique = if is_qualified(name) {
+                    CallResolution::Exact
+                } else {
+                    CallResolution::NameMatch
+                };
+                return Some((self.pool.get(uid_id), resolution(unique)));
             }
             if let Some(&uid_id) = self.name_to_uid.get(&name_id) {
-                return Some(self.pool.get(uid_id));
+                return Some((self.pool.get(uid_id), resolution(CallResolution::NameMatch)));
             }
         }
 
         // Fall back to the module graph for cross-file resolution
         if let (Some(graph), Some(file_path)) = (&self.module_graph, file) {
             if let Some(uid) = graph.resolve_import(file_path, name) {
-                return Some(uid);
+                return Some((uid, CallResolution::Import));
             }
         }
 
@@ -306,6 +385,54 @@ mod tests {
         // Both resolve to validate, but dedup collapses them to one edge
         assert_eq!(rels.len(), 1);
         assert_eq!(rels[0].target_uid, "uid-validate");
+    }
+
+    fn call(caller: &str, callee: &str) -> CallReference {
+        CallReference {
+            caller_name: caller.to_string(),
+            callee_name: callee.to_string(),
+            line: 7,
+            chain: None,
+            file: None,
+        }
+    }
+
+    #[test]
+    fn edges_record_how_their_target_was_resolved() {
+        let mut resolver = CallResolver::new();
+        resolver.register_symbol("main", "main", "uid-main");
+        resolver.register_symbol("unique", "unique", "uid-unique");
+        resolver.register_symbol("bar", "Foo.bar", "uid-foo-bar");
+        // Two different symbols named `parse`.
+        resolver.register_symbol("parse", "auth.parse", "uid-auth-parse");
+        resolver.register_symbol("parse", "config.parse", "uid-config-parse");
+        // Registering the same symbol twice is not an ambiguity.
+        resolver.register_symbol("unique", "unique", "uid-unique");
+
+        let resolution_of = |callee: &str| {
+            let rels = resolver.resolve_calls(&[call("main", callee)], "repo");
+            assert_eq!(rels.len(), 1, "{callee} should resolve");
+            assert!(
+                rels[0].metadata.starts_with("line:7;"),
+                "{}",
+                rels[0].metadata
+            );
+            CallResolution::from_metadata(&rels[0].metadata).expect("labelled edge")
+        };
+        assert_eq!(resolution_of("Foo.bar"), CallResolution::Exact);
+        assert_eq!(resolution_of("unique"), CallResolution::NameMatch);
+        assert_eq!(resolution_of("bar"), CallResolution::NameMatch);
+        assert_eq!(resolution_of("parse"), CallResolution::Ambiguous);
+    }
+
+    #[test]
+    fn unlabelled_metadata_has_no_resolution() {
+        assert_eq!(CallResolution::from_metadata("line:3"), None);
+        assert_eq!(CallResolution::from_metadata(""), None);
+        assert_eq!(
+            CallResolution::from_metadata("line:3;resolved:import"),
+            Some(CallResolution::Import)
+        );
     }
 
     #[test]
