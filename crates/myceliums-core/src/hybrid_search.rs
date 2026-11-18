@@ -66,20 +66,21 @@ pub struct HybridExplain {
 
 /// Reciprocal-rank-fusion constant the shipped hybrid search uses.
 ///
-/// Measured against alternatives (10–100) on the real-repository development
-/// split in #95; see `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`
-/// for the sweep and why the default stands.
+/// Swept from 10 to 100 on the development split of the real-repository set
+/// (#95) and confirmed or rejected on its held-out split; the protocol and the
+/// numbers are in `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.
 pub const DEFAULT_RRF_K: f64 = 60.0;
 
 /// Fewest vector candidates the hybrid vector leg fetches, however small the
 /// requested result count — the vector leg asks for
 /// `limit.max(vector_candidates)` so RRF has enough overlap with BM25.
 ///
-/// Measured against 50–400 on the real-repository development split in #95.
+/// Swept from 50 to 400 alongside [`DEFAULT_RRF_K`] (#95).
 pub const DEFAULT_VECTOR_CANDIDATES: usize = 100;
 
 /// Weight of the BM25 leg's reciprocal-rank contribution in the shipped fusion.
 /// The vector leg's weight is fixed at 1, so `1.0` is plain, unweighted RRF.
+/// Swept over 0.25, 0.5 and 1 alongside [`DEFAULT_RRF_K`] (#95).
 pub const DEFAULT_BM25_WEIGHT: f64 = 1.0;
 
 /// The tunable knobs of hybrid search.
