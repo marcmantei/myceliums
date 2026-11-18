@@ -108,6 +108,7 @@ pub mod embeddings;
 pub mod error;
 pub mod file_guard;
 pub mod git_metadata;
+pub mod git_read;
 pub mod global_config;
 pub mod god_nodes;
 pub mod graphml_export;

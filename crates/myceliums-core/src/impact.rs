@@ -8,7 +8,6 @@ use anyhow::Result;
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::process::Command;
 use tracing::info;
 
 /// Type of change detected in a diff.
@@ -177,19 +176,20 @@ fn parse_hunk_header(line: &str) -> Option<(u32, u32)> {
     Some((start, start + count - 1))
 }
 
+/// How long `git diff HEAD` may run before it is abandoned.
+const GIT_DIFF_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Run `git diff HEAD` in the given directory and return the diff string.
+///
+/// Runs read-only ([`crate::git_read`]): it never takes `.git/index.lock`,
+/// so it cannot break a commit running beside it, and it gives up after
+/// [`GIT_DIFF_TIMEOUT`].
 pub fn run_git_diff(repo_path: &str) -> Result<String> {
-    let output = Command::new("git")
-        .args(["diff", "HEAD"])
-        .current_dir(repo_path)
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        anyhow::bail!("git diff failed: {}", stderr);
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    crate::git_read::git_read(
+        std::path::Path::new(repo_path),
+        &["diff", "HEAD"],
+        GIT_DIFF_TIMEOUT,
+    )
 }
 
 /// Check if a line range overlaps with a symbol's line range.
