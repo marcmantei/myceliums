@@ -14,6 +14,9 @@
 //! - [`bootstrap`] — paired bootstrap confidence intervals for differences.
 //! - [`report`] — the report/baseline file format and mode-vs-mode comparisons.
 //! - [`gate`] — the CI decision rule against the recorded baseline.
+//! - [`real_repos`] — the held-out real-repository query set (#95), its
+//!   dev/held-out split and the pinned checkouts it is scored on.
+//! - [`sweep`] — tuning hybrid search on dev and confirming on held-out.
 //!
 //! Run it with `cargo run -p myceliums-benchmarks --bin retrieval-eval`; add
 //! `-- --allow-model-download` (or set `MYC_EVAL_MODELS=1`) to score the
@@ -31,15 +34,17 @@ pub mod gate;
 pub mod golden_set;
 pub mod metrics;
 pub mod models;
+pub mod real_repos;
 pub mod report;
+pub mod sweep;
 
 /// Guards on the committed `golden/baseline.json` — tests only, no public API.
 #[cfg(test)]
 mod baseline;
 
 pub use evaluator::{
-    evaluate, Metric, MetricValues, ModeScore, QueryScore, Retrieval, SearchMode, RANKING_DEPTH,
-    RECALL_CUTOFFS,
+    evaluate, evaluate_queries, Metric, MetricValues, ModeScore, QueryScore, Retrieval, SearchMode,
+    RANKING_DEPTH, RECALL_CUTOFFS,
 };
 pub use golden_set::{GoldenQuery, GoldenSet, QueryIntent, SymbolRef};
 pub use metrics::{

@@ -43,6 +43,14 @@ name = "retrieval-eval"
 path = "src/bin/retrieval_eval.rs"
 
 [[bin]]
+name = "real-repo-eval"
+path = "src/bin/real_repo_eval.rs"
+
+[[bin]]
+name = "real-repo-review"
+path = "src/bin/real_repo_review.rs"
+
+[[bin]]
 name = "corpus-inventory"
 path = "src/bin/corpus_inventory.rs"
 

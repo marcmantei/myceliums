@@ -1,12 +1,22 @@
-//! Loading the benchmark corpus: fixture sources parsed into searchable symbols.
+//! Loading the benchmark corpus: sources parsed into searchable symbols.
 //!
-//! The corpus is the existing `tests/fixtures/sample-*-project/` tree, parsed
-//! directly. The lexical mode ranks these symbols in memory; the model-backed
-//! modes index the very same symbols into a scratch store (see
-//! [`super::models`]), so every mode searches an identical corpus.
+//! Two corpora share one loader shape:
+//!
+//! - the **fixture corpus** ([`Corpus::load`]) — the in-repo
+//!   `tests/fixtures/sample-*-project/` tree the golden set is labelled
+//!   against;
+//! - a **real repository** ([`Corpus::load_repository`]) — one checkout of the
+//!   held-out real-repo set (#95), walked with the file-discovery rules of `myc
+//!   analyze`.
+//!
+//! The lexical mode ranks these symbols in memory; the model-backed modes index
+//! the very same symbols into a scratch store (see [`super::models`]), so every
+//! mode searches an identical corpus.
 
 use anyhow::{Context, Result};
+use myceliums_core::config::AnalysisSection;
 use myceliums_core::parser::{to_code_symbols, SourceLanguage, SourceParser};
+use myceliums_core::should_skip_file;
 use myceliums_storage::CodeSymbol;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -33,10 +43,27 @@ const CORPUS_PROJECTS: &[&str] = &[
 /// vector search to it, exactly as a real index scopes to its repository.
 pub const CORPUS_REPO_ID: &str = "benchmark-corpus";
 
+/// Directory names `myc analyze` never descends into (see the analyzer's
+/// `discover_files`). Hidden directories (`.git`, `.github`, ...) are skipped
+/// as well.
+const SKIPPED_DIRECTORIES: &[&str] = &[
+    "node_modules",
+    "__pycache__",
+    "target",
+    "dist",
+    "build",
+    ".venv",
+    "venv",
+];
+
 /// The parsed corpus: every symbol the engine can retrieve, in a stable order.
 #[derive(Debug)]
 pub struct Corpus {
+    /// Repository id every symbol carries; the store scopes vector search to it.
+    repo_id: String,
     symbols: Vec<CodeSymbol>,
+    /// Source files that were discovered but not parsed, with the reason.
+    skipped: Vec<(String, String)>,
 }
 
 impl Corpus {
@@ -123,7 +150,107 @@ impl Corpus {
             }
         }
 
-        Ok(Self { symbols })
+        Ok(Self {
+            repo_id: CORPUS_REPO_ID.to_string(),
+            symbols,
+            skipped: Vec::new(),
+        })
+    }
+
+    /// Parse one real-repository checkout the way `myc analyze` reads it.
+    ///
+    /// Files are discovered with the analyzer's rules — hidden directories and
+    /// `node_modules`, `__pycache__`, `target`, `dist`, `build`, `.venv`,
+    /// `venv` are not entered, symlinks are not followed, the language comes
+    /// from the extension — and filtered with the production
+    /// [`should_skip_file`] under the default `[analysis]` settings (512 KB,
+    /// 5 120-byte lines, minified bundles). Like the fixture corpus, content
+    /// files (Markdown, plain text) and notebooks are not corpus: the labels
+    /// are code symbols, and prose sections are a different retrieval problem.
+    ///
+    /// A file the parser rejects is skipped and recorded, as `myc analyze`
+    /// skips it with a warning; [`skipped`](Self::skipped) lists them so the
+    /// report can say what the corpus does not contain. Paths are relative to
+    /// `root`, forward-slashed — the form the real-repo labels use.
+    pub fn load_repository(root: &Path, repo_id: &str) -> Result<Self> {
+        if !root.is_dir() {
+            anyhow::bail!("repository checkout missing: {}", root.display());
+        }
+        let analysis = AnalysisSection::default();
+        let mut files: Vec<(PathBuf, SourceLanguage)> = WalkDir::new(root)
+            .follow_links(false)
+            .into_iter()
+            .filter_entry(|entry| {
+                let name = entry.file_name().to_string_lossy();
+                entry.depth() == 0
+                    || !(name.starts_with('.') || SKIPPED_DIRECTORIES.contains(&name.as_ref()))
+            })
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().is_file() && !entry.path_is_symlink())
+            .filter_map(|entry| {
+                let language = entry
+                    .path()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .and_then(SourceLanguage::from_extension)?;
+                Some((entry.into_path(), language))
+            })
+            .filter(|(_, language)| !language.is_content() && *language != SourceLanguage::Jupyter)
+            .collect();
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut symbols = Vec::new();
+        let mut skipped = Vec::new();
+        for (file, language) in files {
+            let relative = fixture_relative_path(root, &file)?;
+            let bytes = std::fs::read(&file)
+                .with_context(|| format!("reading repository file {}", file.display()))?;
+            if bytes.is_empty() {
+                skipped.push((relative, "empty file".to_string()));
+                continue;
+            }
+            if let Some(reason) = should_skip_file(&file, &bytes, &analysis) {
+                skipped.push((relative, reason.to_string()));
+                continue;
+            }
+            let Ok(source) = String::from_utf8(bytes) else {
+                skipped.push((relative, "not UTF-8".to_string()));
+                continue;
+            };
+            let parsed = SourceParser::new(language).and_then(|mut parser| parser.parse(&source));
+            match parsed {
+                Ok(parsed) => symbols.extend(
+                    to_code_symbols(&parsed.symbols, &relative, repo_id)
+                        .into_iter()
+                        .map(with_stable_uid),
+                ),
+                Err(error) => skipped.push((relative, format!("parse error: {error}"))),
+            }
+        }
+        if symbols.is_empty() {
+            anyhow::bail!(
+                "repository {} contributed no symbols — an empty checkout would \
+                 score every query zero",
+                root.display()
+            );
+        }
+        disambiguate_uids(&mut symbols);
+        Ok(Self {
+            repo_id: repo_id.to_string(),
+            symbols,
+            skipped,
+        })
+    }
+
+    /// Repository id the symbols carry.
+    pub fn repo_id(&self) -> &str {
+        &self.repo_id
+    }
+
+    /// Discovered source files that were not parsed, with the reason —
+    /// always empty for the fixture corpus, which fails on any such file.
+    pub fn skipped(&self) -> &[(String, String)] {
+        &self.skipped
     }
 
     /// The corpus symbols, as handed to the search engine.
@@ -171,6 +298,28 @@ fn with_stable_uid(mut symbol: CodeSymbol) -> CodeSymbol {
         .map(|byte| format!("{byte:02x}"))
         .collect();
     symbol
+}
+
+/// Make every uid unique while keeping it stable.
+///
+/// Real code occasionally yields two symbols with the same file, qualified
+/// name, kind and start line (two assignments on one line, an overload the
+/// grammar reports twice). The store upserts by uid and would keep only one,
+/// so a repeated identity gets an ordinal mixed into its digest — the n-th
+/// repeat in parse order, which is as stable as the parse itself.
+fn disambiguate_uids(symbols: &mut [CodeSymbol]) {
+    let mut seen: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
+    for symbol in symbols.iter_mut() {
+        let repeats = seen.entry(symbol.uid.clone()).or_insert(0);
+        if *repeats > 0 {
+            let digest = Sha256::digest(format!("{}\0{}", symbol.uid, repeats).as_bytes());
+            symbol.uid = digest[..16]
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect();
+        }
+        *repeats += 1;
+    }
 }
 
 /// Project a corpus symbol onto its stable golden-set reference.
@@ -241,6 +390,61 @@ mod tests {
         let error = Corpus::load(empty_root.path())
             .expect_err("an empty corpus project must not load quietly");
         assert!(error.to_string().contains("contributed no symbols"));
+    }
+
+    #[test]
+    fn a_repository_is_read_with_the_analyzer_discovery_rules() {
+        let root = tempfile::tempdir().unwrap();
+        let write = |path: &str, text: &str| {
+            let path = root.path().join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        };
+        write("pkg/core.py", "def wanted():\n    return 1\n");
+        write("node_modules/dep/index.js", "function vendored() {}\n");
+        write(".hidden/secret.py", "def hidden():\n    pass\n");
+        write("build/out.py", "def generated():\n    pass\n");
+        write("docs/guide.md", "# Guide\n\nprose\n");
+        write("static/app.min.js", "function minified() {}\n");
+        write("pkg/empty.py", "");
+
+        let corpus = Corpus::load_repository(root.path(), "demo").unwrap();
+        let names: Vec<String> = corpus
+            .symbols()
+            .iter()
+            .map(|s| symbol_ref(s).to_string())
+            .collect();
+        assert_eq!(names, ["pkg/core.py::wanted"]);
+        assert!(corpus.symbols().iter().all(|s| s.repo_id == "demo"));
+        assert_eq!(corpus.repo_id(), "demo");
+        let skipped: Vec<&str> = corpus.skipped().iter().map(|(f, _)| f.as_str()).collect();
+        assert!(skipped.contains(&"static/app.min.js"), "{skipped:?}");
+        assert!(skipped.contains(&"pkg/empty.py"), "{skipped:?}");
+    }
+
+    #[test]
+    fn repeated_identities_get_distinct_stable_uids() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("a.py"), "def f():\n    pass\n").unwrap();
+        let corpus = Corpus::load_repository(root.path(), "demo").unwrap();
+        let mut symbols = vec![corpus.symbols()[0].clone(), corpus.symbols()[0].clone()];
+        disambiguate_uids(&mut symbols);
+        assert_ne!(symbols[0].uid, symbols[1].uid);
+        assert_eq!(
+            symbols[0].uid,
+            corpus.symbols()[0].uid,
+            "the first keeps its uid"
+        );
+        let mut again = vec![corpus.symbols()[0].clone(), corpus.symbols()[0].clone()];
+        disambiguate_uids(&mut again);
+        assert_eq!(symbols[1].uid, again[1].uid);
+    }
+
+    #[test]
+    fn an_empty_repository_is_an_error() {
+        let root = tempfile::tempdir().unwrap();
+        assert!(Corpus::load_repository(root.path(), "demo").is_err());
+        assert!(Corpus::load_repository(&root.path().join("missing"), "demo").is_err());
     }
 
     #[test]
