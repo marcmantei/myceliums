@@ -401,7 +401,12 @@ async fn extract_processes(
     Ok(clusters)
 }
 
+/// The myceliums data home. `MYCELIUMS_DATA_DIR` overrides `~/.myceliums`,
+/// as in the CLI and the MCP server, so `myc serve` reads the same index.
 fn data_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("MYCELIUMS_DATA_DIR") {
+        return PathBuf::from(dir);
+    }
     dirs::home_dir()
         .expect("Could not find home directory")
         .join(".myceliums")

@@ -415,6 +415,16 @@ impl Store {
         Ok(symbols)
     }
 
+    /// Opens `name`, or `None` when the table does not exist yet. One call
+    /// instead of listing the tables first, for latency-bound readers.
+    async fn open_table_if_exists(&self, name: &str) -> Result<Option<lancedb::Table>> {
+        match self.db.open_table(name).execute().await {
+            Ok(table) => Ok(Some(table)),
+            Err(lancedb::Error::TableNotFound { .. }) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     /// Symbols whose `name` is exactly `name`, at most `limit` of them, with
     /// location columns only.
     ///
@@ -427,11 +437,9 @@ impl Store {
         name: &str,
         limit: usize,
     ) -> Result<Vec<SymbolLocation>> {
-        let tables = self.db.table_names().execute().await?;
-        if !tables.iter().any(|t| t == "symbols") {
+        let Some(table) = self.open_table_if_exists("symbols").await? else {
             return Ok(vec![]);
-        }
-        let table = self.db.open_table("symbols").execute().await?;
+        };
         let stream = table
             .query()
             .only_if(format!(
@@ -485,11 +493,9 @@ impl Store {
         if target_uids.is_empty() {
             return Ok(0);
         }
-        let tables = self.db.table_names().execute().await?;
-        if !tables.iter().any(|t| t == "relationships") {
+        let Some(table) = self.open_table_if_exists("relationships").await? else {
             return Ok(0);
-        }
-        let table = self.db.open_table("relationships").execute().await?;
+        };
         let targets = target_uids
             .iter()
             .map(|uid| format!("'{}'", escape_lance_str(uid)))

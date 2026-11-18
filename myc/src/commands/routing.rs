@@ -106,12 +106,16 @@ pub fn upsert_block(text: &str, block: &str) -> Result<String> {
     };
     let ranges = block_ranges(text)?;
     if ranges.is_empty() {
+        // One blank line separates the block from the text before it: a line
+        // break after the last line (when missing) plus one more.
+        // `remove_block` takes exactly that one extra line break away again.
         let mut out = text.to_string();
         if !out.is_empty() {
-            let nl = if text.contains("\r\n") { "\r\n" } else { "\n" };
-            while !out.ends_with(&format!("{nl}{nl}")) {
+            let nl = newline_of(text);
+            if !out.ends_with('\n') {
                 out.push_str(nl);
             }
+            out.push_str(nl);
         }
         out.push_str(&block);
         return Ok(out);
@@ -144,16 +148,24 @@ pub fn remove_block(text: &str) -> Result<Option<String>> {
     }
     let rest = &text[last..];
     if rest.trim().is_empty() {
-        // The block was at the end: drop the separator we added before it.
-        let trimmed = out.trim_end().len();
-        out.truncate(trimmed);
-        if !out.is_empty() {
-            out.push_str(if text.contains("\r\n") { "\r\n" } else { "\n" });
+        // The block was at the end: drop the one line break `upsert_block`
+        // added as a separator, and nothing else of the user's text.
+        let separator = format!("{nl}{nl}", nl = newline_of(text));
+        if out.ends_with(&separator) {
+            out.truncate(out.len() - separator.len() / 2);
         }
-    } else {
-        out.push_str(rest);
     }
+    out.push_str(rest);
     Ok(Some(out))
+}
+
+/// The line break `text` uses.
+fn newline_of(text: &str) -> &'static str {
+    if text.contains("\r\n") {
+        "\r\n"
+    } else {
+        "\n"
+    }
 }
 
 /// What happened to a file.
@@ -208,7 +220,8 @@ pub fn uninstall_block(path: &Path, delete_if_empty: bool) -> Result<FileChange>
     let Some(rest) = remove_block(&text).with_context(|| path.display().to_string())? else {
         return Ok(FileChange::Absent);
     };
-    if delete_if_empty && rest.trim().is_empty() {
+    if delete_if_empty && rest.trim().is_empty() && !crate::commands::setup_claude::is_symlink(path)
+    {
         std::fs::remove_file(path)
             .with_context(|| format!("Failed to delete {}", path.display()))?;
         return Ok(FileChange::Deleted);
@@ -276,11 +289,19 @@ mod tests {
 
     #[test]
     fn remove_restores_the_original_text() {
-        for original in ["# Project\n\nSome rules.\n", "", "only line\n"] {
+        for original in [
+            "# Project\n\nSome rules.\n",
+            "",
+            "only line\n",
+            "trailing blank lines stay\n\n\n",
+        ] {
             let with = upsert_block(original, &block()).unwrap();
             let back = remove_block(&with).unwrap().unwrap();
             assert_eq!(back, original, "round trip of {original:?}");
         }
+        // Text without a final line break gets one; nothing is trimmed.
+        let no_eol = upsert_block("x", &block()).unwrap();
+        assert_eq!(remove_block(&no_eol).unwrap().unwrap(), "x\n");
         let middle = format!("top\n{BEGIN}\nx\n{END}\nbottom\n");
         assert_eq!(remove_block(&middle).unwrap().unwrap(), "top\nbottom\n");
         assert_eq!(remove_block("no block here\n").unwrap(), None);
@@ -311,6 +332,39 @@ mod tests {
         let out = upsert_block(&prose, &block()).unwrap();
         assert!(out.starts_with(&prose));
         assert_eq!(remove_block(&out).unwrap().unwrap(), prose);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_claude_md_symlink_survives_install_and_uninstall() {
+        let dir = tempfile::tempdir().unwrap();
+        let agents = dir.path().join("AGENTS.md");
+        let claude = dir.path().join("CLAUDE.md");
+        std::fs::write(&agents, "shared rules\n").unwrap();
+        std::os::unix::fs::symlink("AGENTS.md", &claude).unwrap();
+        let is_link = |p: &std::path::Path| {
+            std::fs::symlink_metadata(p)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        };
+
+        assert_eq!(
+            install_block(&claude, &block()).unwrap(),
+            FileChange::Updated
+        );
+        assert!(is_link(&claude));
+        assert!(std::fs::read_to_string(&agents).unwrap().contains(BEGIN));
+        assert_eq!(uninstall_block(&claude, true).unwrap(), FileChange::Removed);
+        assert!(is_link(&claude));
+        assert_eq!(std::fs::read_to_string(&agents).unwrap(), "shared rules\n");
+
+        // Emptied through a link: the link and its target stay.
+        std::fs::write(&agents, "").unwrap();
+        install_block(&claude, &block()).unwrap();
+        uninstall_block(&claude, true).unwrap();
+        assert!(is_link(&claude));
+        assert_eq!(std::fs::read_to_string(&agents).unwrap(), "");
     }
 
     #[test]

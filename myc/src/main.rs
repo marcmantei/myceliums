@@ -309,7 +309,8 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
-        /// Output budget in estimated tokens (with a TARGET)
+        /// With a TARGET: budget for the text output in estimated tokens
+        /// (--json returns the same items)
         #[arg(long, default_value_t = commands::nav::DEFAULT_BUDGET)]
         budget: usize,
     },
@@ -330,7 +331,8 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
-        /// Output budget in estimated tokens (1 token ~ 4 characters)
+        /// Budget for the text output in estimated tokens (1 token ~ 4
+        /// characters); --json returns the same items
         #[arg(long, default_value_t = commands::nav::DEFAULT_BUDGET)]
         budget: usize,
     },
@@ -347,7 +349,8 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
-        /// Output budget in estimated tokens (1 token ~ 4 characters)
+        /// Budget for the text output in estimated tokens (1 token ~ 4
+        /// characters); --json returns the same items
         #[arg(long, default_value_t = commands::nav::DEFAULT_BUDGET)]
         budget: usize,
     },
@@ -368,7 +371,8 @@ enum Commands {
         /// Output as JSON
         #[arg(long)]
         json: bool,
-        /// Output budget in estimated tokens (1 token ~ 4 characters)
+        /// Budget for the text output in estimated tokens (1 token ~ 4
+        /// characters); --json returns the same items
         #[arg(long, default_value_t = commands::nav::DEFAULT_BUDGET)]
         budget: usize,
     },
@@ -719,8 +723,7 @@ fn registry_path() -> PathBuf {
     data_dir().join("repos.json")
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .with_target(false)
@@ -728,7 +731,17 @@ async fn main() -> Result<()> {
         .init();
 
     let cli = Cli::parse();
+    // The grep hook runs once per tool call and must answer fast: a
+    // single-threaded runtime starts without spawning a worker per core.
+    let mut runtime = if matches!(cli.command, Commands::HookGrep) {
+        tokio::runtime::Builder::new_current_thread()
+    } else {
+        tokio::runtime::Builder::new_multi_thread()
+    };
+    runtime.enable_all().build()?.block_on(run(cli))
+}
 
+async fn run(cli: Cli) -> Result<()> {
     // First-run detection: offer setup wizard on first interactive use
     if !data_dir().exists() && is_interactive_command(&cli.command) {
         let is_terminal = std::io::IsTerminal::is_terminal(&std::io::stdin());
@@ -3907,6 +3920,20 @@ async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result<()> {
         }
         return Ok(());
     };
+    // A home directory under version control is not a project: never write
+    // ~/AGENTS.md (the same guard as `myc setup-claude`).
+    let is_home = dirs::home_dir()
+        .and_then(|h| std::fs::canonicalize(h).ok())
+        .is_some_and(|h| std::fs::canonicalize(&root).is_ok_and(|r| r == h));
+    if is_home {
+        if !uninstall && !no_routing {
+            println!(
+                "  {} is your home directory: no AGENTS.md routing block written.",
+                root.display()
+            );
+        }
+        return Ok(());
+    }
     let agents_md = root.join("AGENTS.md");
     use commands::routing::{self, FileChange, Flavor};
     let change = if uninstall || no_routing {

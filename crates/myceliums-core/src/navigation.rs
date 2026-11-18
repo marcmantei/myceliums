@@ -64,16 +64,97 @@ fn one_line_signature(signature: &str, max_chars: usize) -> String {
 
 // ── Symbol resolution ────────────────────────────────────────────────
 
-/// What a symbol name resolved to.
+/// Whether `kind` is something call and dependency questions are about:
+/// functions, methods, types and modules.
+///
+/// Variables and constants are code definitions too, but parsers also record
+/// locals (`const result = parse(x)`), so they only count when nothing
+/// navigable carries the name. [`resolve_definition`] applies this rule; the
+/// `myc` commands and the grep hook both go through it, so a hook hint and
+/// the command it names agree on what a name refers to.
+pub fn is_navigable(kind: &SymbolKind) -> bool {
+    matches!(
+        kind,
+        SymbolKind::Function
+            | SymbolKind::Method
+            | SymbolKind::Class
+            | SymbolKind::Interface
+            | SymbolKind::TypeAlias
+            | SymbolKind::Enum
+            | SymbolKind::Module
+    )
+}
+
+/// Whether `kind` can have callers: functions and methods.
+pub fn is_callable(kind: &SymbolKind) -> bool {
+    matches!(kind, SymbolKind::Function | SymbolKind::Method)
+}
+
+/// A stored definition [`resolve_definition`] can work on: a full
+/// [`CodeSymbol`] or the location-only
+/// [`SymbolLocation`](myceliums_storage::SymbolLocation).
+pub trait Definition {
+    /// Short name.
+    fn name(&self) -> &str;
+    /// Fully qualified name.
+    fn qualified_name(&self) -> &str;
+    /// Symbol kind.
+    fn kind(&self) -> &SymbolKind;
+    /// Repository-relative file path.
+    fn file_path(&self) -> &str;
+    /// 1-based start line.
+    fn start_line(&self) -> u32;
+}
+
+impl Definition for CodeSymbol {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn qualified_name(&self) -> &str {
+        &self.qualified_name
+    }
+    fn kind(&self) -> &SymbolKind {
+        &self.kind
+    }
+    fn file_path(&self) -> &str {
+        &self.file_path
+    }
+    fn start_line(&self) -> u32 {
+        self.start_line
+    }
+}
+
+impl Definition for myceliums_storage::SymbolLocation {
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn qualified_name(&self) -> &str {
+        &self.qualified_name
+    }
+    fn kind(&self) -> &SymbolKind {
+        &self.kind
+    }
+    fn file_path(&self) -> &str {
+        &self.file_path
+    }
+    fn start_line(&self) -> u32 {
+        self.start_line
+    }
+}
+
+/// What a name resolved to.
 #[derive(Debug)]
-pub enum SymbolMatch<'a> {
-    /// Exactly one code definition matches.
-    Unique(&'a CodeSymbol),
+pub enum Resolution<'a, T> {
+    /// Exactly one definition matches.
+    Unique(&'a T),
     /// Several definitions match; sorted by file and line.
-    Ambiguous(Vec<&'a CodeSymbol>),
+    Ambiguous(Vec<&'a T>),
     /// Nothing matches.
     NotFound,
 }
+
+/// [`Resolution`] over full symbols, as the `myc` commands use it.
+pub type SymbolMatch<'a> = Resolution<'a, CodeSymbol>;
 
 /// Normalises a qualified name for suffix matching: `::`, `#`, `/` and `\`
 /// become `.`, and Go receiver decoration (`(*T).m`) is dropped.
@@ -83,7 +164,34 @@ fn normalize_qualified(name: &str) -> String {
         .replace(['(', ')', '*'], "")
 }
 
-/// Resolves a user- or agent-supplied symbol name to code definitions.
+/// Whether `qualified_name` ends with the qualified `query`
+/// (`fzf.Item.AsString` ends with `Item.AsString`; separators `.`, `::`,
+/// `#` and `/` are interchangeable).
+pub fn qualified_suffix_matches(qualified_name: &str, query: &str) -> bool {
+    let wanted = normalize_qualified(query);
+    let qn = normalize_qualified(qualified_name);
+    qn == wanted || qn.ends_with(&format!(".{wanted}"))
+}
+
+/// The short name a possibly qualified query refers to (`Item.AsString` →
+/// `AsString`).
+pub fn short_name(query: &str) -> String {
+    let wanted = normalize_qualified(query.trim());
+    wanted.rsplit('.').next().unwrap_or(&wanted).to_string()
+}
+
+/// Navigable hits when there are any, otherwise all hits.
+fn prefer_navigable<T: Definition>(hits: Vec<&T>) -> Vec<&T> {
+    if hits.iter().any(|h| is_navigable(h.kind())) {
+        hits.into_iter()
+            .filter(|h| is_navigable(h.kind()))
+            .collect()
+    } else {
+        hits
+    }
+}
+
+/// Resolves a user- or agent-supplied name to code definitions.
 ///
 /// Tried in order, the first non-empty step wins:
 /// 1. exact qualified name (`auth::login`);
@@ -91,59 +199,61 @@ fn normalize_qualified(name: &str) -> String {
 /// 3. qualified suffix (`Item.AsString` matches `fzf.Item.AsString`, and
 ///    `Item::as_string` matches `src/item.rs::Item::as_string`).
 ///
-/// More than one hit at the winning step is [`SymbolMatch::Ambiguous`]: the
-/// caller should show the candidates with file:line rather than guess.
-pub fn resolve_symbol<'a>(symbols: &'a [CodeSymbol], query: &str) -> SymbolMatch<'a> {
+/// Navigable definitions ([`is_navigable`]) win over variables and
+/// constants: steps 1 and 2 are first tried for navigable hits only, then
+/// for any. More than one remaining hit is
+/// [`Resolution::Ambiguous`]: show the candidates with file:line rather than
+/// guess.
+pub fn resolve_definition<'a, T: Definition>(items: &'a [T], query: &str) -> Resolution<'a, T> {
     let query = query.trim();
     if query.is_empty() {
-        return SymbolMatch::NotFound;
+        return Resolution::NotFound;
     }
-    let defs = || symbols.iter().filter(|s| is_code_definition(&s.kind));
+    let defs = || items.iter().filter(|s| is_code_definition(s.kind()));
 
-    let by_qualified: Vec<&CodeSymbol> = defs().filter(|s| s.qualified_name == query).collect();
-    if !by_qualified.is_empty() {
-        return to_match(by_qualified);
-    }
-    let by_name: Vec<&CodeSymbol> = defs().filter(|s| s.name == query).collect();
-    if !by_name.is_empty() {
-        return to_match(by_name);
-    }
-
-    let wanted = normalize_qualified(query);
-    let short = wanted.rsplit('.').next().unwrap_or(&wanted).to_string();
-    if wanted.contains('.') && !short.is_empty() {
-        let dotted = format!(".{wanted}");
-        let by_suffix: Vec<&CodeSymbol> = defs()
-            .filter(|s| s.name == short)
-            .filter(|s| {
-                let qn = normalize_qualified(&s.qualified_name);
-                qn == wanted || qn.ends_with(&dotted)
-            })
-            .collect();
-        if !by_suffix.is_empty() {
-            return to_match(by_suffix);
+    let by_qualified: Vec<&T> = defs().filter(|s| s.qualified_name() == query).collect();
+    let by_name: Vec<&T> = defs().filter(|s| s.name() == query).collect();
+    // A navigable exact match wins over a variable whose qualified name
+    // happens to equal the query; otherwise the steps apply in order.
+    for step in [&by_qualified, &by_name] {
+        if step.iter().any(|s| is_navigable(s.kind())) {
+            return to_match(prefer_navigable(step.clone()));
         }
     }
-    SymbolMatch::NotFound
+    for step in [by_qualified, by_name] {
+        if !step.is_empty() {
+            return to_match(step);
+        }
+    }
+    let short = short_name(query);
+    if normalize_qualified(query).contains('.') && !short.is_empty() {
+        let by_suffix: Vec<&T> = defs()
+            .filter(|s| s.name() == short && qualified_suffix_matches(s.qualified_name(), query))
+            .collect();
+        if !by_suffix.is_empty() {
+            return to_match(prefer_navigable(by_suffix));
+        }
+    }
+    Resolution::NotFound
 }
 
-fn to_match(mut hits: Vec<&CodeSymbol>) -> SymbolMatch<'_> {
+/// [`resolve_definition`] over full symbols.
+pub fn resolve_symbol<'a>(symbols: &'a [CodeSymbol], query: &str) -> SymbolMatch<'a> {
+    resolve_definition(symbols, query)
+}
+
+fn to_match<T: Definition>(mut hits: Vec<&T>) -> Resolution<'_, T> {
     if hits.len() == 1 {
-        return SymbolMatch::Unique(hits[0]);
+        return Resolution::Unique(hits[0]);
     }
     hits.sort_by(|a, b| {
-        (
-            a.file_path.as_str(),
-            a.start_line,
-            a.qualified_name.as_str(),
-        )
-            .cmp(&(
-                b.file_path.as_str(),
-                b.start_line,
-                b.qualified_name.as_str(),
-            ))
+        (a.file_path(), a.start_line(), a.qualified_name()).cmp(&(
+            b.file_path(),
+            b.start_line(),
+            b.qualified_name(),
+        ))
     });
-    SymbolMatch::Ambiguous(hits)
+    Resolution::Ambiguous(hits)
 }
 
 /// Up to `limit` definition names close to `query`, for "did you mean".
@@ -917,6 +1027,69 @@ mod tests {
             .map(|x| format!("{}:{}", x.file_path, x.start_line))
             .collect();
         assert_eq!(locs, ["src/a.rs:5", "src/b.rs:7"]);
+    }
+
+    #[test]
+    fn navigable_definitions_win_over_variables_of_the_same_name() {
+        let (mut s, _) = fixture();
+        s.push(sym(
+            "v",
+            "tokenize",
+            "t::tokenize",
+            SymbolKind::Variable,
+            "src/t.rs",
+            3,
+        ));
+        assert!(matches!(resolve_symbol(&s, "tokenize"), SymbolMatch::Unique(x) if x.uid == "tok"));
+        // Only variables carry the name: they still resolve.
+        s.push(sym(
+            "w",
+            "only_var",
+            "t::only_var",
+            SymbolKind::Constant,
+            "src/t.rs",
+            4,
+        ));
+        assert!(matches!(resolve_symbol(&s, "only_var"), SymbolMatch::Unique(x) if x.uid == "w"));
+    }
+
+    #[test]
+    fn locations_resolve_like_full_symbols() {
+        use myceliums_storage::SymbolLocation;
+        let (s, _) = fixture();
+        let locs: Vec<SymbolLocation> = s
+            .iter()
+            .map(|x| SymbolLocation {
+                uid: x.uid.clone(),
+                name: x.name.clone(),
+                qualified_name: x.qualified_name.clone(),
+                kind: x.kind.clone(),
+                file_path: x.file_path.clone(),
+                start_line: x.start_line,
+            })
+            .collect();
+        for q in ["parse", "parse_query", "Item.AsString", "a::parse", "nope"] {
+            let full = match resolve_symbol(&s, q) {
+                Resolution::Unique(x) => vec![x.uid.clone()],
+                Resolution::Ambiguous(xs) => xs.iter().map(|x| x.uid.clone()).collect(),
+                Resolution::NotFound => vec![],
+            };
+            let lite = match resolve_definition(&locs, q) {
+                Resolution::Unique(x) => vec![x.uid.clone()],
+                Resolution::Ambiguous(xs) => xs.iter().map(|x| x.uid.clone()).collect(),
+                Resolution::NotFound => vec![],
+            };
+            assert_eq!(full, lite, "{q}");
+        }
+        assert_eq!(short_name("(*Item).AsString"), "AsString");
+        assert!(qualified_suffix_matches(
+            "fzf.Item.AsString",
+            "Item::AsString"
+        ));
+        assert!(!qualified_suffix_matches(
+            "fzf.Other.AsString",
+            "Item.AsString"
+        ));
     }
 
     #[test]

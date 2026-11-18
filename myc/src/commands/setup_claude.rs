@@ -133,6 +133,7 @@ tools: mcp__myceliums__*, Read, ToolSearch\n\
 \n\
 You answer questions about the structure of this repository with the myceliums code graph, then confirm with Read.\n\
 \n\
+0. Most myceliums tools need a `repo_id`: call `list_repos` once and use the repository whose path contains the working directory.\n\
 1. Locate: `symbol_context` for a known name; `context_search` or `hybrid_search` for a description.\n\
 2. Follow edges: `get_callers` / `get_callees` (raise `max_depth` for transitive chains and for what a change would break), `find_path` for how A reaches B, `get_processes` for execution flows, `detect_impact` for the uncommitted diff.\n\
 3. Ambiguous names: list the candidates with file:line, pick by file or qualified name, and say which one you used.\n\
@@ -240,7 +241,11 @@ pub fn hook_groups(myc: &str, layers: Layers) -> Vec<(&'static str, Value)> {
         ),
     ];
     if layers.redirect_hook {
-        let grep = format!("{myc} hook-grep");
+        // `|| true`: a PreToolUse hook that exits 2 blocks the tool call. An
+        // older `myc` without `hook-grep` (a teammate's install, another
+        // binary first on PATH) would exit 2 on the unknown subcommand and
+        // deny every grep; this way the hook can only ever exit 0.
+        let grep = format!("{myc} hook-grep 2>/dev/null || true");
         let timeout = ("timeout", json!(5));
         groups.push((
             "PreToolUse",
@@ -336,7 +341,7 @@ fn edit_json(
     if !existed && map.is_empty() {
         return Ok(FileChange::Absent);
     }
-    if delete_if_empty && map.is_empty() {
+    if delete_if_empty && map.is_empty() && !is_symlink(path) {
         std::fs::remove_file(path)
             .with_context(|| format!("Failed to delete {}", path.display()))?;
         return Ok(FileChange::Deleted);
@@ -371,6 +376,12 @@ fn remove_mcp_server(map: &mut Map<String, Value>) {
             map.remove("mcpServers");
         }
     }
+}
+
+/// Whether `path` is a symbolic link. Files that are links are emptied, not
+/// deleted, so the link and its target stay as the user set them up.
+pub(crate) fn is_symlink(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
 }
 
 // ── Agent file ───────────────────────────────────────────────────────
@@ -719,6 +730,11 @@ pub fn cmd_setup_claude(
         let report = self::uninstall(&targets, registrar)?;
         print_report(&report);
         println!("\n  Done.");
+        if scope == Scope::Project && user_scope_has_our_hooks(&home) {
+            println!(
+                "  Note: myceliums is still installed at user scope (~/.claude/settings.json);\n        `myc setup-claude --scope user --uninstall` removes it too."
+            );
+        }
         return Ok(());
     }
 
@@ -766,6 +782,7 @@ mod tests {
             "/usr/local/bin/myc session . --yes --timeout 300 2>/dev/null; exit 0",
             "/opt/homebrew/bin/myc format-hook 2>/dev/null",
             "'/Users/a b/bin/myc' hook-grep",
+            "myc hook-grep 2>/dev/null || true",
         ] {
             assert!(is_myceliums_hook_command(ours), "{ours}");
         }
@@ -810,7 +827,7 @@ mod tests {
         assert_eq!(ifs, ["Bash(grep *)", "Bash(rg *)", "Bash(git grep *)"]);
         for g in &pre {
             for h in g["hooks"].as_array().unwrap() {
-                assert_eq!(h["command"], "myc hook-grep");
+                assert_eq!(h["command"], "myc hook-grep 2>/dev/null || true");
                 assert_eq!(h["timeout"], 5);
                 assert!(
                     h.get("onFailure").is_none(),
@@ -826,6 +843,58 @@ mod tests {
             },
         );
         assert!(without.iter().all(|(e, _)| *e != "PreToolUse"));
+    }
+
+    /// Exit code 2 from a PreToolUse hook blocks the tool call. Whatever the
+    /// `myc` on the machine does (old version without `hook-grep` exiting 2
+    /// on the unknown subcommand, a crash, no binary at all), the installed
+    /// command must exit 0.
+    #[cfg(unix)]
+    #[test]
+    fn installed_grep_hook_command_never_exits_non_zero() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let mut fakes = Vec::new();
+        for (name, body) in [
+            (
+                "old-myc",
+                "echo 'error: unrecognized subcommand' >&2; exit 2",
+            ),
+            ("crashing-myc", "kill -SEGV $$"),
+            ("noisy-myc", "echo '{\"decision\": \"block\"}' >&2; exit 1"),
+        ] {
+            let path = dir.path().join(name).join("myc");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            fakes.push(path.to_string_lossy().into_owned());
+        }
+        fakes.push(
+            dir.path()
+                .join("missing")
+                .join("myc")
+                .to_string_lossy()
+                .into_owned(),
+        );
+
+        for myc in &fakes {
+            for (event, group) in hook_groups(myc, Layers::ALL) {
+                if event != "PreToolUse" {
+                    continue;
+                }
+                for h in group["hooks"].as_array().unwrap() {
+                    let command = h["command"].as_str().unwrap();
+                    let status = std::process::Command::new("sh")
+                        .args(["-c", command])
+                        .stdin(std::process::Stdio::null())
+                        .stdout(std::process::Stdio::null())
+                        .stderr(std::process::Stdio::null())
+                        .status()
+                        .unwrap();
+                    assert_eq!(status.code(), Some(0), "{command}");
+                }
+            }
+        }
     }
 
     fn foreign_settings() -> Value {
@@ -1025,7 +1094,7 @@ mod tests {
         let settings = read(&home.path().join(".claude/settings.json"));
         assert_eq!(
             settings["hooks"]["PreToolUse"][0]["hooks"][0]["command"],
-            "/opt/myc/bin/myc hook-grep"
+            "/opt/myc/bin/myc hook-grep 2>/dev/null || true"
         );
         assert!(home.path().join(".claude/CLAUDE.md").exists());
         assert!(home.path().join(".claude/agents/code-explorer.md").exists());

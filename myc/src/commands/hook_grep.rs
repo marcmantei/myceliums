@@ -25,7 +25,8 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use myceliums_storage::{RelationshipKind, RepoRegistry, Store, SymbolKind, SymbolLocation};
+use myceliums_core::navigation::{is_callable, is_navigable, resolve_definition, Resolution};
+use myceliums_storage::{RelationshipKind, RepoRegistry, Store, SymbolLocation};
 
 /// Default upper bound for the whole index lookup. The hook answers well
 /// inside this on an indexed repository; if the store is slower (cold disk,
@@ -42,6 +43,9 @@ const DEBUG_ENV: &str = "MYC_HOOK_DEBUG";
 
 /// At most this many identifier candidates are looked up per tool call.
 const MAX_CANDIDATES: usize = 3;
+
+/// Most definitions of one name read from the index.
+const MAX_DEFINITIONS: usize = 100;
 
 /// Hook stdin larger than this is not a tool call we care about.
 const MAX_INPUT_BYTES: u64 = 1 << 20;
@@ -572,39 +576,24 @@ pub fn search_call_from_input(input: &serde_json::Value) -> SearchCall {
 pub struct Known {
     /// The candidate as searched.
     pub candidate: Candidate,
-    /// Matching definitions (functions, methods and types only).
+    /// The navigable definitions the name resolves to.
     pub definitions: Vec<SymbolLocation>,
     /// Direct callers of those definitions, when counted.
     pub callers: Option<usize>,
 }
 
-fn is_callable(kind: &SymbolKind) -> bool {
-    matches!(kind, SymbolKind::Function | SymbolKind::Method)
-}
-
-fn is_type(kind: &SymbolKind) -> bool {
-    matches!(
-        kind,
-        SymbolKind::Class | SymbolKind::Interface | SymbolKind::Enum | SymbolKind::TypeAlias
-    )
-}
-
-/// Keeps the definitions a qualified candidate (`Item.AsString`) names.
-fn matching_definitions(candidate: &Candidate, found: Vec<SymbolLocation>) -> Vec<SymbolLocation> {
-    let defs = found
-        .into_iter()
-        .filter(|d| is_callable(&d.kind) || is_type(&d.kind));
-    if candidate.query == candidate.short {
-        return defs.collect();
+/// The navigable definitions `candidate` resolves to among `found` (all
+/// symbols with its short name), by the same rules as `myc callers`
+/// ([`resolve_definition`]), so the hint and the command agree. Empty when
+/// the name resolves to nothing or only to variables and constants.
+fn navigable_definitions(candidate: &Candidate, found: &[SymbolLocation]) -> Vec<SymbolLocation> {
+    match resolve_definition(found, &candidate.query) {
+        Resolution::Unique(d) if is_navigable(&d.kind) => vec![d.clone()],
+        Resolution::Ambiguous(ds) if ds.iter().all(|d| is_navigable(&d.kind)) => {
+            ds.into_iter().cloned().collect()
+        }
+        _ => vec![],
     }
-    let norm = |s: &str| s.replace("::", ".").replace(['#', '/'], ".");
-    let wanted = norm(&candidate.query);
-    let dotted = format!(".{wanted}");
-    defs.filter(|d| {
-        let qn = norm(&d.qualified_name);
-        qn == wanted || qn.ends_with(&dotted)
-    })
-    .collect()
 }
 
 /// Wraps a name in backticks for the message, quoting it for the shell when
@@ -693,8 +682,10 @@ async fn lookup(
     let store = Store::open(&RepoRegistry::repo_db_path(data_dir, &info.id), &info.id).await?;
     let mut known = Vec::new();
     for candidate in candidates {
-        let found = store.find_symbols_named(&candidate.short, 25).await?;
-        let definitions = matching_definitions(candidate, found);
+        let found = store
+            .find_symbols_named(&candidate.short, MAX_DEFINITIONS)
+            .await?;
+        let definitions = navigable_definitions(candidate, &found);
         if definitions.is_empty() {
             continue;
         }
@@ -769,12 +760,18 @@ pub async fn cmd_hook_grep() -> anyhow::Result<()> {
         Err(reason) if debug => eprintln!("myc hook-grep: silent: {reason}"),
         Err(_) => {}
     }
-    Ok(())
+    // Exit right away: a store read abandoned at the deadline may still be
+    // running on a blocking thread, and shutting the runtime down would wait
+    // for it.
+    use std::io::Write as _;
+    let _ = std::io::stdout().flush();
+    std::process::exit(0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use myceliums_storage::SymbolKind;
 
     fn names(pattern: &str) -> Vec<String> {
         identifier_candidates(pattern)
@@ -1077,7 +1074,7 @@ mod tests {
     }
 
     #[test]
-    fn qualified_candidates_filter_definitions_and_drop_variables() {
+    fn candidates_resolve_like_myc_callers_and_skip_variables() {
         let found = vec![
             loc(
                 "1",
@@ -1097,10 +1094,30 @@ mod tests {
             ),
             loc("3", "AsString", "AsString", SymbolKind::Variable, "x.go", 1),
         ];
-        let kept = matching_definitions(&cand("Item.AsString"), found.clone());
+        let kept = navigable_definitions(&cand("Item.AsString"), &found);
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].uid, "1");
-        assert_eq!(matching_definitions(&cand("AsString"), found).len(), 2);
+        // The variable whose qualified name equals the query does not win
+        // over the two methods: ambiguous, as `myc callers AsString` says.
+        assert_eq!(navigable_definitions(&cand("AsString"), &found).len(), 2);
+        let only_var = vec![loc(
+            "v",
+            "MAX_SIZE",
+            "MAX_SIZE",
+            SymbolKind::Constant,
+            "c.go",
+            1,
+        )];
+        assert!(navigable_definitions(&cand("MAX_SIZE"), &only_var).is_empty());
+        let module = vec![loc(
+            "m",
+            "auth_utils",
+            "auth_utils",
+            SymbolKind::Module,
+            "a.py",
+            1,
+        )];
+        assert_eq!(navigable_definitions(&cand("auth_utils"), &module).len(), 1);
     }
 
     #[test]
