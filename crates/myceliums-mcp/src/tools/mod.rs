@@ -16,8 +16,11 @@ mod impact;
 mod knowledge;
 mod search;
 
+use crate::errors::{ToolError, ToolResult};
+use crate::output::TextOutput;
 use crate::MyceliumsMcp;
 use rmcp::handler::server::tool::ToolRouter;
+use rmcp::handler::server::wrapper::Json;
 
 /// Imports shared by every tool module.
 mod prelude {
@@ -50,13 +53,46 @@ mod prelude {
     pub(crate) use std::path::PathBuf;
     pub(crate) use tracing::info;
 
-    pub(crate) use crate::errors::{repo_id_error, service_error};
-    pub(crate) use crate::format;
+    pub(crate) use super::{require_query, text};
+    pub(crate) use crate::errors::{repo_id_error, service_error, ToolError, ToolResult};
+    pub(crate) use crate::format::{self, untrusted};
     pub(crate) use crate::index_status::{load_embedding_stats, partial_index_warning};
     pub(crate) use crate::output::*;
     pub(crate) use crate::params::*;
-    pub(crate) use crate::repo::{data_dir, registry_path};
+    pub(crate) use crate::repo::{data_dir, registry, repo_info, resolve_symbol};
     pub(crate) use crate::MyceliumsMcp;
+}
+
+/// Shared response shaping: every graph result starts with the index
+/// freshness line.
+impl MyceliumsMcp {
+    /// One line on how current `repo_id`'s index is (see
+    /// [`crate::index_status::freshness_line`]).
+    pub(crate) async fn index_status(&self, repo_id: &str) -> Result<String, ToolError> {
+        let info = crate::repo::repo_info(repo_id)?;
+        let indexed = self.files(repo_id).await?.shared();
+        Ok(crate::index_status::freshness_line(&info, indexed).await)
+    }
+
+    /// A text graph result: freshness line, then `body`.
+    pub(crate) async fn graph_text(&self, repo_id: &str, body: String) -> ToolResult<TextOutput> {
+        let status = self.index_status(repo_id).await?;
+        text(format!("{status}\n\n{body}"))
+    }
+}
+
+/// A plain text result (no graph read, so no freshness line).
+pub(crate) fn text(text: impl Into<String>) -> ToolResult<TextOutput> {
+    Ok(Json(TextOutput { text: text.into() }))
+}
+
+/// Rejects an empty query string up front: it is bad input, not "no results".
+pub(crate) fn require_query(field: &str, value: &str) -> Result<(), ToolError> {
+    if value.trim().is_empty() {
+        Err(ToolError::invalid(format!("`{field}` must not be empty")))
+    } else {
+        Ok(())
+    }
 }
 
 impl MyceliumsMcp {

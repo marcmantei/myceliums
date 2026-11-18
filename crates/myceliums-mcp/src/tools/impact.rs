@@ -2,128 +2,191 @@
 
 use super::prelude::*;
 
+/// The diff to analyze: the caller's, or `git diff HEAD` in the repo.
+fn diff_or_git(diff: Option<String>, repo_id: &str) -> Result<String, ToolError> {
+    if let Some(diff) = diff {
+        return Ok(diff);
+    }
+    let repo = repo_info(repo_id)?;
+    run_git_diff(&repo.path).map_err(|e| {
+        ToolError::recoverable(
+            format!("Cannot run `git diff HEAD` in {}: {e}", repo.path),
+            "pass the unified diff as `diff`",
+        )
+    })
+}
+
+/// One line of a graph or snapshot diff, for paging across all change lists.
+fn change_lines(diff: &myceliums_core::snapshot::GraphDiff) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.extend(
+        diff.added_symbols
+            .iter()
+            .map(|e| format!("+ symbol {}", e.label)),
+    );
+    lines.extend(
+        diff.removed_symbols
+            .iter()
+            .map(|e| format!("- symbol {}", e.label)),
+    );
+    lines.extend(
+        diff.added_edges
+            .iter()
+            .map(|e| format!("+ edge {}", e.label)),
+    );
+    lines.extend(
+        diff.removed_edges
+            .iter()
+            .map(|e| format!("- edge {}", e.label)),
+    );
+    lines
+}
+
+/// `+3 -1 symbols, +5 -0 relationships`.
+fn change_summary(diff: &myceliums_core::snapshot::GraphDiff) -> String {
+    format!(
+        "+{} -{} symbols, +{} -{} relationships",
+        diff.added_symbols.len(),
+        diff.removed_symbols.len(),
+        diff.added_edges.len(),
+        diff.removed_edges.len(),
+    )
+}
+
 #[tool_router(router = impact_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
     #[tool(
         name = "detect_impact",
-        description = "Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects."
+        description = "Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn detect_impact_tool(
         &self,
         Parameters(params): Parameters<DetectImpactParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let diff_text = match params.diff {
-            Some(d) => d,
-            None => {
-                let registry = RepoRegistry::load(&registry_path())
-                    .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                let repo_info = registry.require(&repo_id).map_err(repo_id_error)?;
-                run_git_diff(&repo_info.path).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("git diff failed: {}", e), None)
-                })?
-            }
-        };
+        let diff_text = diff_or_git(params.diff, &repo_id)?;
         if diff_text.trim().is_empty() {
-            return Ok(Json(TextOutput {
-                text: "No changes detected (empty diff).".to_string(),
-            }));
+            return self
+                .graph_text(&repo_id, "No changes detected (empty diff).".to_string())
+                .await;
         }
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
-        let depth = params.depth.unwrap_or(2);
+        let depth = params.depth.unwrap_or(2).clamp(1, 10);
         let report = detect_impact(&diff_text, &symbols, &relationships, depth);
-        let json_report = serde_json::to_value(&report)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        Ok(Json(TextOutput {
-            text: format::format_impact_report(&json_report),
-        }))
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
+        let body = format::format_impact_report(&report, page);
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "rename_symbol",
-        description = "Preview renaming a symbol across the codebase. Returns a rename plan with all edits needed (does not modify files)."
+        description = "Preview renaming a symbol across the codebase. Returns a rename plan with all edits needed (does not modify files).",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn rename_symbol(
         &self,
         Parameters(params): Parameters<RenameParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
+        require_query("new_name", &params.new_name)?;
         let symbols = self.symbols(&params.repo_id).await?;
         let relationships = self.relationships(&params.repo_id).await?;
-        let plan = RenamePlan::create(
-            &symbols,
-            &relationships,
-            &params.symbol_name,
-            &params.new_name,
-        )
-        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let json_plan = serde_json::to_value(&plan)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        Ok(Json(TextOutput {
-            text: format::format_rename_plan(&json_plan),
-        }))
+        let target = resolve_symbol(&symbols, &params.symbol_name)?;
+        let plan = RenamePlan::for_symbol(&symbols, &relationships, target, &params.new_name)
+            .map_err(|e| ToolError::internal("cannot build the rename plan", e))?;
+        let page = Page::new(params.limit, params.offset, Budget::new(100, 500));
+        let body = format::format_rename_plan(&plan, page);
+        self.graph_text(&params.repo_id, body).await
     }
 
     #[tool(
         name = "get_review_context",
-        description = "Get a compact structural summary of code changes for efficient review. Analyzes a diff to identify changed symbols, their callers and callees, and affected communities — returning signatures instead of full source to minimize token usage."
+        description = "Get a compact structural summary of code changes for efficient review. Analyzes a diff to identify changed symbols, their callers and callees, and affected communities — returning signatures instead of full source to minimize token usage.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_review_context(
         &self,
         Parameters(params): Parameters<ReviewContextParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-
-        let diff_text = match params.diff {
-            Some(d) => d,
-            None => {
-                let registry = RepoRegistry::load(&registry_path())
-                    .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                let repo_info = registry.require(&repo_id).map_err(repo_id_error)?;
-                run_git_diff(&repo_info.path).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("git diff failed: {}", e), None)
-                })?
-            }
-        };
+        let diff_text = diff_or_git(params.diff, &repo_id)?;
 
         if diff_text.trim().is_empty() {
-            return Ok(Json(TextOutput {
-                text: "No changes detected (empty diff).".to_string(),
-            }));
+            return self
+                .graph_text(&repo_id, "No changes detected (empty diff).".to_string())
+                .await;
         }
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
         let communities = self.communities(&repo_id).await?;
 
-        let depth = params.depth.unwrap_or(1);
+        let depth = params.depth.unwrap_or(1).clamp(1, 10);
         let include_source = params.include_source.unwrap_or(false);
+        let limit = Page::new(params.limit, None, Budget::new(50, 200)).limit;
         let report = detect_impact(&diff_text, &symbols, &relationships, depth);
 
         // Build uid -> symbol lookup
         let uid_to_symbol: HashMap<&str, &myceliums_storage::CodeSymbol> =
             symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
+        let labels = crate::repo::CallLabels::new(&symbols);
 
-        // Build caller/callee maps
+        // Build caller/callee maps (with the CALLS edge, for its resolution)
         use myceliums_storage::RelationshipKind;
-        let mut callers_of: HashMap<&str, Vec<&str>> = HashMap::new();
-        let mut callees_of: HashMap<&str, Vec<&str>> = HashMap::new();
+        let mut callers_of: HashMap<&str, Vec<(&str, &myceliums_storage::Relationship)>> =
+            HashMap::new();
+        let mut callees_of: HashMap<&str, Vec<(&str, &myceliums_storage::Relationship)>> =
+            HashMap::new();
         for rel in &relationships {
             if rel.kind == RelationshipKind::Calls {
                 callers_of
                     .entry(rel.target_uid.as_str())
                     .or_default()
-                    .push(rel.source_uid.as_str());
+                    .push((rel.source_uid.as_str(), rel));
                 callees_of
                     .entry(rel.source_uid.as_str())
                     .or_default()
-                    .push(rel.target_uid.as_str());
+                    .push((rel.target_uid.as_str(), rel));
             }
         }
 
+        let entry = |sym: &myceliums_storage::CodeSymbol, source: Option<String>| {
+            format::ReviewSymbolEntry {
+                signature: if sym.signature.is_empty() {
+                    sym.name.clone()
+                } else {
+                    sym.signature.clone()
+                },
+                file_path: sym.file_path.clone(),
+                start_line: sym.start_line,
+                kind: sym.kind.to_string(),
+                source,
+                resolved: None,
+            }
+        };
+
         // Collect changed symbol details
         let mut changed_entries: Vec<format::ReviewSymbolEntry> = Vec::new();
-        let mut changed_uids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        // Ordered, so the callers/callees lists (and what a limit cuts) are
+        // the same on every call.
+        let mut changed_uids: std::collections::BTreeSet<String> =
+            std::collections::BTreeSet::new();
 
         for cs in &report.directly_changed {
             if let Some(sym) = symbols
@@ -131,77 +194,43 @@ impl MyceliumsMcp {
                 .find(|s| s.qualified_name == cs.qualified_name)
             {
                 changed_uids.insert(sym.uid.clone());
-                changed_entries.push(format::ReviewSymbolEntry {
-                    signature: if sym.signature.is_empty() {
-                        sym.name.clone()
-                    } else {
-                        sym.signature.clone()
-                    },
-                    file_path: sym.file_path.clone(),
-                    start_line: sym.start_line,
-                    kind: sym.kind.to_string(),
-                    source: if include_source {
-                        Some(sym.content.clone())
-                    } else {
-                        None
-                    },
-                });
+                changed_entries.push(entry(sym, include_source.then(|| sym.content.clone())));
             }
         }
 
-        // Collect callers of changed symbols
-        let mut caller_entries: Vec<format::ReviewSymbolEntry> = Vec::new();
-        let mut seen_callers: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for uid in &changed_uids {
-            if let Some(caller_uids) = callers_of.get(uid.as_str()) {
-                for caller_uid in caller_uids {
-                    if !changed_uids.contains(*caller_uid)
-                        && seen_callers.insert(caller_uid.to_string())
-                    {
-                        if let Some(sym) = uid_to_symbol.get(caller_uid) {
-                            caller_entries.push(format::ReviewSymbolEntry {
-                                signature: if sym.signature.is_empty() {
-                                    sym.name.clone()
-                                } else {
-                                    sym.signature.clone()
-                                },
-                                file_path: sym.file_path.clone(),
-                                start_line: sym.start_line,
-                                kind: sym.kind.to_string(),
-                                source: None,
-                            });
-                        }
+        // Callers / callees of changed symbols, each once, with the
+        // resolution of the edge that links them.
+        let neighbours = |links: &HashMap<&str, Vec<(&str, &myceliums_storage::Relationship)>>,
+                          target_is_neighbour: bool| {
+            let mut entries: Vec<format::ReviewSymbolEntry> = Vec::new();
+            let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+            for uid in &changed_uids {
+                for &(other, rel) in links.get(uid.as_str()).map(Vec::as_slice).unwrap_or(&[]) {
+                    if changed_uids.contains(other) || !seen.insert(other) {
+                        continue;
+                    }
+                    if let Some(sym) = uid_to_symbol.get(other) {
+                        let target_name = if target_is_neighbour {
+                            sym.name.as_str()
+                        } else {
+                            uid_to_symbol
+                                .get(uid.as_str())
+                                .map(|s| s.name.as_str())
+                                .unwrap_or("")
+                        };
+                        let label = labels.label(rel, target_name);
+                        let mut e = entry(sym, None);
+                        e.resolved = crate::repo::CallLabels::is_heuristic(label).then_some(label);
+                        entries.push(e);
                     }
                 }
             }
-        }
-
-        // Collect callees of changed symbols
-        let mut callee_entries: Vec<format::ReviewSymbolEntry> = Vec::new();
-        let mut seen_callees: std::collections::HashSet<String> = std::collections::HashSet::new();
-        for uid in &changed_uids {
-            if let Some(callee_uids) = callees_of.get(uid.as_str()) {
-                for callee_uid in callee_uids {
-                    if !changed_uids.contains(*callee_uid)
-                        && seen_callees.insert(callee_uid.to_string())
-                    {
-                        if let Some(sym) = uid_to_symbol.get(callee_uid) {
-                            callee_entries.push(format::ReviewSymbolEntry {
-                                signature: if sym.signature.is_empty() {
-                                    sym.name.clone()
-                                } else {
-                                    sym.signature.clone()
-                                },
-                                file_path: sym.file_path.clone(),
-                                start_line: sym.start_line,
-                                kind: sym.kind.to_string(),
-                                source: None,
-                            });
-                        }
-                    }
-                }
-            }
-        }
+            entries
+        };
+        let caller_entries = neighbours(&callers_of, false);
+        let callee_entries = neighbours(&callees_of, true);
+        let callers_total = caller_entries.len();
+        let callees_total = callee_entries.len();
 
         // Find communities touched by changed symbols
         let mut touched_communities: Vec<String> = Vec::new();
@@ -235,26 +264,33 @@ impl MyceliumsMcp {
 
         let context = format::ReviewContext {
             changed: changed_entries,
-            callers: caller_entries,
-            callees: callee_entries,
+            callers: caller_entries.into_iter().take(limit).collect(),
+            callers_total,
+            callees: callee_entries.into_iter().take(limit).collect(),
+            callees_total,
             communities_touched: touched_communities,
             changed_file_count: changed_files.len(),
             full_source_tokens: full_source_chars / 4,
         };
 
-        Ok(Json(TextOutput {
-            text: format::format_review_context(&context),
-        }))
+        self.graph_text(&repo_id, format::format_review_context(&context))
+            .await
     }
 
     #[tool(
         name = "get_suggested_questions",
-        description = "Auto-generate contextual code review questions based on code graph structure and git diff. Returns ranked questions about potential issues like missing test coverage, high caller counts, or API contract violations."
+        description = "Auto-generate contextual code review questions based on code graph structure and git diff. Returns ranked questions about potential issues like missing test coverage, high caller counts, or API contract violations.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_suggested_questions(
         &self,
         Parameters(params): Parameters<GetSuggestedQuestionsParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -263,51 +299,46 @@ impl MyceliumsMcp {
 
         let files = self.files(&repo_id).await?;
 
-        let diff_text = match params.diff {
-            Some(d) => d,
-            None => {
-                let registry = RepoRegistry::load(&registry_path())
-                    .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-                let repo_info = registry.require(&repo_id).map_err(repo_id_error)?;
-                run_git_diff(&repo_info.path).map_err(|e| {
-                    rmcp::ErrorData::internal_error(format!("git diff failed: {}", e), None)
-                })?
-            }
-        };
+        let diff_text = diff_or_git(params.diff, &repo_id)?;
 
-        let limit = params.limit.unwrap_or(5);
+        let page = Page::new(params.limit, params.offset, Budget::new(5, 50));
         let questions =
-            generate_suggested_questions(&diff_text, &symbols, &relationships, &files, limit);
-
-        Ok(Json(TextOutput {
-            text: format::format_suggested_questions(&questions),
-        }))
+            generate_suggested_questions(&diff_text, &symbols, &relationships, &files, usize::MAX);
+        let page = page.take(questions.questions);
+        let body = with_notice(
+            format::format_suggested_questions(&SuggestedQuestionsOutput {
+                questions: page.items,
+            }),
+            page.notice.as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "get_graph_diff",
-        description = "Compare the current knowledge graph against the last stored snapshot to detect architectural drift. Shows new/removed symbols and relationships since the last analysis that saved a snapshot."
+        description = "Compare the current knowledge graph against the last stored snapshot to detect architectural drift. Shows new/removed symbols and relationships since the last analysis that saved a snapshot.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_graph_diff(
         &self,
         Parameters(params): Parameters<GetGraphDiffParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         // Load previous snapshot
         let previous = load_snapshot(&data_dir(), &repo_id)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let previous = match previous {
-            Some(s) => s,
-            None => {
-                return Ok(Json(TextOutput {
-                    text: format!(
-                        "No previous snapshot found for '{}'. Run `analyze` first to create a baseline.",
-                        repo_id
-                    ),
-                }));
-            }
-        };
+            .map_err(|e| ToolError::internal("cannot read the graph snapshot", e))?
+            .ok_or_else(|| {
+                ToolError::recoverable(
+                    format!("No snapshot saved for {repo_id:?} yet."),
+                    "run analyze to save a baseline snapshot",
+                )
+            })?;
 
         // Build current snapshot from graph
         let symbols = self.symbols(&repo_id).await?;
@@ -315,142 +346,97 @@ impl MyceliumsMcp {
         let current = build_snapshot(&repo_id, &symbols, &relationships);
 
         let diff = diff_snapshots(&previous, &current);
-
-        let output = GraphDiffOutput {
-            repo_id: diff.repo_id,
-            previous_snapshot_at: diff.previous_snapshot_at,
-            current_snapshot_at: diff.current_snapshot_at,
-            added_symbols: diff
-                .added_symbols
-                .into_iter()
-                .map(|e| GraphDiffEntry {
-                    uid: e.uid,
-                    label: e.label,
-                })
-                .collect(),
-            removed_symbols: diff
-                .removed_symbols
-                .into_iter()
-                .map(|e| GraphDiffEntry {
-                    uid: e.uid,
-                    label: e.label,
-                })
-                .collect(),
-            added_edges: diff
-                .added_edges
-                .into_iter()
-                .map(|e| GraphDiffEntry {
-                    uid: e.uid,
-                    label: e.label,
-                })
-                .collect(),
-            removed_edges: diff
-                .removed_edges
-                .into_iter()
-                .map(|e| GraphDiffEntry {
-                    uid: e.uid,
-                    label: e.label,
-                })
-                .collect(),
+        let lines = change_lines(&diff);
+        let body = if lines.is_empty() {
+            format!(
+                "No changes since the last snapshot ({}).",
+                diff.previous_snapshot_at
+            )
+        } else {
+            let page = Page::new(params.limit, params.offset, Budget::new(50, 500)).take(lines);
+            page.with_notice(format!(
+                "Graph diff (snapshot {} -> {}): {}\n\n{}\n",
+                diff.previous_snapshot_at,
+                diff.current_snapshot_at,
+                change_summary(&diff),
+                page.items.join("\n")
+            ))
         };
-
-        Ok(Json(TextOutput {
-            text: format::format_graph_diff(&output),
-        }))
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "snapshot_diff",
-        description = "Compare two graph snapshots to see architectural changes over time. Shows added/removed symbols and relationships. Defaults to comparing the two most recent snapshots."
+        description = "Compare two graph snapshots to see architectural changes over time. Shows added/removed symbols and relationships. Defaults to comparing the two most recent snapshots.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn snapshot_diff(
         &self,
         Parameters(params): Parameters<SnapshotDiffParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let snapshots = list_snapshots(&data_dir(), &repo_id)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("cannot list graph snapshots", e))?;
 
-        if snapshots.len() < 2 && params.from_snapshot.is_none() {
-            return Ok(Json(TextOutput {
-                text: "Need at least 2 snapshots to compare. Run analysis multiple times first."
-                    .to_string(),
-            }));
-        }
-
-        let from_snap = if let Some(from_id) = &params.from_snapshot {
-            load_snapshot_by_id(&data_dir(), &repo_id, from_id)
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
+        let load = |id: &str| -> Result<myceliums_core::snapshot::GraphSnapshot, ToolError> {
+            load_snapshot_by_id(&data_dir(), &repo_id, id)
+                .map_err(|e| ToolError::internal("cannot read the graph snapshot", e))?
                 .ok_or_else(|| {
-                    rmcp::ErrorData::internal_error(
-                        format!("Snapshot not found: {}", from_id),
-                        None,
+                    let known: Vec<&str> = snapshots
+                        .iter()
+                        .take(10)
+                        .map(|s| s.snapshot_id.as_str())
+                        .collect();
+                    ToolError::recoverable(
+                        format!("Snapshot {id:?} not found."),
+                        if known.is_empty() {
+                            "run analyze to save a snapshot".to_string()
+                        } else {
+                            format!("use one of the latest: {}", known.join(", "))
+                        },
                     )
-                })?
-        } else {
-            load_snapshot_by_id(&data_dir(), &repo_id, &snapshots[1].snapshot_id)
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
-                .ok_or_else(|| {
-                    rmcp::ErrorData::internal_error(
-                        "Could not load older snapshot".to_string(),
-                        None,
-                    )
-                })?
+                })
         };
-
-        let to_snap = if let Some(to_id) = &params.to_snapshot {
-            load_snapshot_by_id(&data_dir(), &repo_id, to_id)
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
-                .ok_or_else(|| {
-                    rmcp::ErrorData::internal_error(format!("Snapshot not found: {}", to_id), None)
-                })?
-        } else {
-            load_snapshot_by_id(&data_dir(), &repo_id, &snapshots[0].snapshot_id)
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
-                .ok_or_else(|| {
-                    rmcp::ErrorData::internal_error(
-                        "Could not load latest snapshot".to_string(),
-                        None,
-                    )
-                })?
+        let need_two = || {
+            ToolError::recoverable(
+                format!(
+                    "{} snapshot(s) saved for {repo_id:?}; a diff needs two.",
+                    snapshots.len()
+                ),
+                "run analyze again after the code changes to save another snapshot",
+            )
+        };
+        let from_snap = match &params.from_snapshot {
+            Some(id) => load(id)?,
+            None => load(&snapshots.get(1).ok_or_else(need_two)?.snapshot_id)?,
+        };
+        let to_snap = match &params.to_snapshot {
+            Some(id) => load(id)?,
+            None => load(&snapshots.first().ok_or_else(need_two)?.snapshot_id)?,
         };
 
         let diff = myceliums_core::diff_snapshots(&from_snap, &to_snap);
-
-        let mut out = format!(
-            "Snapshot diff: {} → {}\n\n",
+        let header = format!(
+            "Snapshot diff: {} → {}",
             diff.previous_snapshot_at, diff.current_snapshot_at
         );
-
-        if diff.added_symbols.is_empty()
-            && diff.removed_symbols.is_empty()
-            && diff.added_edges.is_empty()
-            && diff.removed_edges.is_empty()
-        {
-            out.push_str("No changes detected.");
+        let lines = change_lines(&diff);
+        let body = if lines.is_empty() {
+            format!("{header}\n\nNo changes detected.")
         } else {
-            out.push_str(&format!(
-                "Changes: +{} symbols, -{} symbols, +{} edges, -{} edges\n\n",
-                diff.added_symbols.len(),
-                diff.removed_symbols.len(),
-                diff.added_edges.len(),
-                diff.removed_edges.len(),
-            ));
-            if !diff.added_symbols.is_empty() {
-                out.push_str("Added symbols:\n");
-                for s in &diff.added_symbols {
-                    out.push_str(&format!("  + {}\n", s.label));
-                }
-            }
-            if !diff.removed_symbols.is_empty() {
-                out.push_str("Removed symbols:\n");
-                for s in &diff.removed_symbols {
-                    out.push_str(&format!("  - {}\n", s.label));
-                }
-            }
-        }
-
-        Ok(Json(TextOutput { text: out }))
+            let page = Page::new(params.limit, params.offset, Budget::new(50, 500)).take(lines);
+            page.with_notice(format!(
+                "{header}: {}\n\n{}\n",
+                change_summary(&diff),
+                page.items.join("\n")
+            ))
+        };
+        self.graph_text(&repo_id, body).await
     }
 }
 

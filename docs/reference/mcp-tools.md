@@ -2,6 +2,89 @@
 
 Complete reference for all tools available via the Myceliums MCP server (`myc mcp`). These tools are exposed to AI coding assistants through the Model Context Protocol.
 
+## Tool contract
+
+These rules hold for every tool; the per-tool sections below list only what is specific.
+
+**Errors.** A failure the agent can act on is returned as a normal tool result
+with `isError: true`. Its text names the problem and ends with a `Next:` line
+naming the next step — for example `Symbol `parse` is ambiguous: 2 matches.` /
+`Next: pass one of these as the symbol name: `src/a.ts:parse`, `src/b.ts:parse``, an unknown
+`repo_id` (lists the known ids), a missing snapshot, or a file that is not in
+the index. Bad arguments — a malformed `repo_id`, an unparsable or writing
+Cypher query, a value outside an enum, a missing or empty required argument,
+mutually exclusive options — are JSON-RPC `invalid_params` errors. Only genuine
+server faults (I/O, storage) are `internal_error`.
+
+**Symbols.** Every symbol parameter accepts a short name, a qualified name, or
+`file_path:qualified_name`. When a name matches several symbols — two files
+that each define a top-level `parse` share both names — the call fails with
+the candidates in the `file_path:qualified_name` form, and `rename_symbol`
+never guesses either.
+
+**Output budget.** Every list-returning tool takes `limit` and `offset`. Each
+tool has a default page size and a hard maximum (both stated in its input
+schema; a larger `limit` is clamped, `offset` is capped at 100,000). Lists
+that the core builds from hash maps are sorted before paging, so pages never
+overlap or skip. When a list is cut, the result says so —
+`Showing 1-20 of 312 — call again with offset=20 for more.` (structured
+results carry the same text in a `notice` field) — so a cut is never silent.
+Top-N rankings that cannot know their total say `more exist` instead.
+`hybrid_search` pages within its top 100 results (with `rerank`, within the
+top 50, which are reranked whatever the page). `detect_impact` pages one list
+of changed symbols, affected symbols and files. `cypher_query` pages its rows
+the same way (default 50, max 500), and `GROUP BY` results keep a fixed
+order; in
+multi-column rows a value longer than 60 characters is cut with a visible `…`
+and a footer explains it.
+
+**Freshness.** Every result read from a repository's graph starts with one
+`Index:` line comparing the analyzed commit with the current `HEAD` and
+counting files changed since indexing (modified or new untracked files newer
+than the analysis start, and deleted files the index still holds), e.g. `Index: commit 1a2b3c4 = HEAD, up
+to date.` or `Index: commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run analyze
+to refresh.` Structured results carry it as `index_status`. Whenever the line
+calls an index stale or changed, `analyze` without `force` re-indexes instead
+of reusing the cached index, so the advice always works. Git runs read-only
+(`--no-optional-locks`, so it never takes the index lock beside your own git
+commands) with a short timeout and is cached for a few seconds (the
+`git diff HEAD` that `detect_impact`, `get_review_context` and
+`get_suggested_questions` run when no `diff` is passed is read-only too, with
+a 30 s timeout); when
+`git status` fails or times out the line says `uncommitted edits unknown`
+rather than `up to date`, and without git it says the freshness is unknown.
+
+**Call-edge confidence.** CALLS edges are resolved by name. Each edge records
+how its target was picked: `exact` (a qualified name only one symbol has),
+`import` (through the module graph), `name-match` (a bare name only one symbol
+has) or `ambiguous` (several symbols share the name; one was picked).
+`get_callers`/`get_callees` return it as `resolved`; `symbol_context`,
+`find_path` and `get_review_context` mark the heuristic ones as
+`(resolved: name-match)` / `(resolved: ambiguous)`. Indexes built before this
+label existed get it derived at query time (`ambiguous` if the name is shared,
+else `name-match`); re-run `analyze` to record the exact labels.
+
+**Untrusted content.** Indexed text — source code, documents, email, code
+comments, Cypher rows, and search result tables (whose names and signatures
+can be email subjects or Markdown headings) — is framed as data:
+
+```text
+<<<UNTRUSTED 3fa9c2d1 src/services/user.ts:18-21
+…indexed text…
+>>>END 3fa9c2d1
+```
+
+The id is random per block, so the framed text cannot fake the end of the
+block. The server instructions tell the agent that such text is data, never
+instructions.
+
+**Annotations.** Every tool declares `readOnlyHint`, `destructiveHint`,
+`idempotentHint` and `openWorldHint` (always `false`: tools touch only the
+local index and project). All tools are read-only except `analyze`, `delete`
+(destructive), `map_service` (overwrites a mapping), `record_decision` and
+`link_decision`; they write only to the Myceliums data directory, never to the
+project. `delete` additionally requires `confirm: true`.
+
 ## Search
 
 Tools for finding code entities, symbols, and content across the knowledge graph.
@@ -207,7 +290,7 @@ Preview renaming a symbol across the codebase. Returns a rename plan with all ed
 
 ### `get_git_context`
 
-Get git ownership and history metadata for a symbol. Returns last author, modification date, commit count, and age in days.
+Get git ownership and history metadata for the symbols whose name contains `symbol_name` (case-insensitive). Returns last author, modification date, commit count, and age in days; no match is an `isError` result.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -304,7 +387,7 @@ Detect structural weaknesses in the codebase: untested code (functions with no t
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | no | most recent | Repository ID |
-| `category` | string | no | all categories | Filter: `"untested"`, `"isolated"`, `"undocumented"`, `"single_point_of_failure"` |
+| `category` | enum | no | all categories | `untested`, `isolated`, `undocumented` or `single_point_of_failure` |
 
 ### `get_centrality_report`
 
@@ -313,7 +396,7 @@ Compute centrality metrics (degree, betweenness, closeness, eigenvector) for all
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | no | most recent | Repository ID |
-| `metric` | string | no | `"betweenness"` | Sort by: `"degree"`, `"betweenness"`, `"closeness"`, `"eigenvector"` |
+| `metric` | enum | no | `betweenness` | Sort by: `degree`, `betweenness`, `closeness` or `eigenvector` |
 | `top_n` | integer | no | `15` | Number of top nodes to return |
 
 ### `get_community_metrics`
@@ -414,7 +497,7 @@ Run architecture quality checks: circular dependencies, god nodes, high fan-out,
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | no | most recent | Repository ID |
-| `rules` | string | no | all rules | Comma-separated rule IDs: `circular_dependency`, `god_node`, `high_fan_out`, `unstable_dependency` |
+| `rules` | enum list | no | all rules | Rule IDs: `circular_dependency`, `god_node`, `high_fan_out`, `unstable_dependency` (a comma-separated string is still accepted) |
 | `god_node_threshold` | integer | no | `20` | God node degree threshold |
 
 ### `architecture_view`
@@ -458,7 +541,7 @@ Export the knowledge graph as a Mermaid diagram. Supports flowchart (call graph)
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | no | most recent | Repository ID |
-| `diagram_type` | string | no | `"flowchart"` | Diagram type: `"flowchart"`, `"class"`, or `"graph"` |
+| `diagram_type` | enum | no | `flowchart` | `flowchart`, `class` or `graph` |
 
 ### `get_contracts`
 
@@ -517,7 +600,7 @@ Create an Architecture Decision Record (ADR). Records architectural decisions wi
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | yes | | Repository ID |
 | `title` | string | yes | | ADR title |
-| `status` | string | no | `"proposed"` | Status: `"proposed"`, `"accepted"`, `"deprecated"`, `"superseded"` |
+| `status` | enum | no | `proposed` | `proposed`, `accepted`, `deprecated` or `superseded` |
 | `context` | string | yes | | Context and motivation |
 | `decision` | string | yes | | The decision made |
 | `consequences` | string | no | | Expected consequences |
@@ -529,7 +612,7 @@ List Architecture Decision Records (ADRs) for a repository. Optionally filter by
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | no | most recent | Repository ID |
-| `status` | string | no | all | Filter by status |
+| `status` | enum | no | all | Only this status (same values as `record_decision`) |
 
 ### `link_decision`
 
@@ -538,7 +621,7 @@ Link an Architecture Decision Record to a code symbol. Creates a traceability co
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | yes | | Repository ID |
-| `decision_id` | string | yes | | ADR ID to link |
+| `decision_id` | string | yes | | ADR id, or a unique prefix of it (`get_decisions` lists ids cut to the shortest unique prefix, at least 8 characters) |
 | `symbol_name` | string | yes | | Symbol name to link to |
 
 ---
@@ -547,7 +630,7 @@ Link an Architecture Decision Record to a code symbol. Creates a traceability co
 
 ### `analyze`
 
-Analyze a codebase and build its knowledge graph. Parses source files, extracts symbols, resolves call relationships, detects communities, and traces execution flows. Uses cached analysis if fresh enough (set `force=true` to bypass cache).
+Analyze a codebase and build its knowledge graph. Parses source files in 20+ languages plus Markdown, PDF and email, extracts symbols, resolves call relationships, detects communities, and traces execution flows. Uses cached analysis if fresh enough (set `force=true` to bypass cache). Writes only to the Myceliums data directory. A path that does not exist is `invalid_params`.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -566,35 +649,42 @@ fail CI on a partial index.
 ### `list_repos`
 
 List the analyzed repositories: id, name, path, time of the last analysis, and
-symbol/file counts. Read-only, no parameters. Use it to find the `repo_id` the
-other tools expect.
+symbol/file counts. Read-only; takes only `limit`/`offset`. Use it to find the
+`repo_id` the other tools expect.
 
 ### Repository ids
 
 Every `repo_id` parameter is checked before anything touches the disk. The id
 must be registered (shown by `list_repos`) and must name a single directory:
 it may not be `.` or `..` and may not contain a path separator or NUL (`/` on
-macOS/Linux; `/`, `\` and `:` on Windows). An unknown or malformed id is an
-`invalid_params` error that lists the known ids; it no longer returns an empty
-result. `analyze` derives ids from the folder name and replaces any such
+macOS/Linux; `/`, `\` and `:` on Windows). A malformed id is an
+`invalid_params` error; an unknown one is an `isError` result that lists the
+known ids. Neither returns an empty result. Where `repo_id` is optional, the
+repository containing the server's working directory is used, else the most
+recently analyzed one. `analyze` derives ids from the folder name and replaces any such
 character with `_`, so derived ids always pass.
 
 ### `delete`
 
-Delete a repository's analysis data.
+Permanently delete a repository's index (not the project files). Without
+`confirm: true` the call is refused with an `isError` result and nothing is
+deleted.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | yes | | Repository ID to delete |
+| `confirm` | bool | no | `false` | Must be `true`; deletion is irreversible (re-run `analyze` to rebuild) |
 
 ### `cypher_query`
 
-Execute a Cypher query against the knowledge graph. Supports `MATCH`, `RETURN`, `WHERE`, `ORDER BY`, `LIMIT`, `SKIP`, `CONTAINS`, `IS NULL`. Write operations are blocked.
+Execute a read-only Cypher query against the knowledge graph. Supports `MATCH`, `RETURN`, `WHERE`, `ORDER BY`, `LIMIT`, `SKIP`, `CONTAINS`, `IS NULL`. Write operations and unparsable queries are `invalid_params` errors. Result rows are paged and framed as untrusted content.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `query` | string | yes | | Cypher query string |
 | `repo_id` | string | yes | | Repository ID |
+| `limit` | integer | no | `50` | Rows per page (max 500) |
+| `offset` | integer | no | `0` | Rows to skip, for the next page |
 
 ### `isolate_intent`
 
@@ -628,7 +718,7 @@ Generate an actionable adaptation plan for migrating one repository's approach t
 | `intent` | string | yes | | Natural language description of the intent |
 | `source_repo_id` | string | yes | | Repository whose approach to adapt FROM |
 | `target_repo_id` | string | yes | | Repository whose approach to adapt TO |
-| `direction` | string | no | `"source_to_target"` | `"source_to_target"` or `"target_to_source"` |
+| `direction` | enum | no | `source_to_target` | `source_to_target` or `target_to_source` |
 | `max_symbols` | integer | no | `50` | Maximum symbols per slice |
 
 ### `get_conversation`

@@ -169,6 +169,10 @@ impl RenamePlan {
     }
 
     /// Find all references to a symbol and generate rename edits.
+    ///
+    /// Takes the first symbol whose short or qualified name is `symbol_name`;
+    /// callers that must not guess between same-named symbols resolve the
+    /// target themselves and use [`RenamePlan::for_symbol`].
     pub fn create(
         symbols: &[CodeSymbol],
         relationships: &[Relationship],
@@ -179,7 +183,19 @@ impl RenamePlan {
             .iter()
             .find(|s| s.name == symbol_name || s.qualified_name == symbol_name)
             .ok_or_else(|| anyhow::anyhow!("Symbol not found: {}", symbol_name))?;
+        let mut plan = Self::for_symbol(symbols, relationships, target, new_name)?;
+        plan.symbol_name = symbol_name.to_string();
+        Ok(plan)
+    }
 
+    /// Rename edits for one already-resolved symbol: its definition plus the
+    /// callers and importers the graph links to it.
+    pub fn for_symbol(
+        symbols: &[CodeSymbol],
+        relationships: &[Relationship],
+        target: &CodeSymbol,
+        new_name: &str,
+    ) -> Result<Self> {
         let short_name = &target.name;
         let pattern = format!(r"\b{}\b", regex::escape(short_name));
         let re = Regex::new(&pattern)?;
@@ -247,7 +263,7 @@ impl RenamePlan {
         edits.dedup_by(|a, b| a.file_path == b.file_path && a.line == b.line);
 
         Ok(RenamePlan {
-            symbol_name: symbol_name.to_string(),
+            symbol_name: target.name.clone(),
             new_name: new_name.to_string(),
             edits,
         })

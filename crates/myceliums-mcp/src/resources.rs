@@ -1,18 +1,26 @@
 //! `repository://` resource reading.
 
-use crate::repo::{registered_db_path, registry_path};
+use crate::errors::ToolError;
+use crate::repo::{registered_db_path, registry};
 use crate::MyceliumsMcp;
-use myceliums_storage::RepoRegistry;
 use std::collections::HashMap;
 
 // Resource reading implementation
 impl MyceliumsMcp {
+    /// Reads a `repository://` resource. Resource reads have no `isError`
+    /// channel, so recoverable tool errors surface as `invalid_params`.
     pub(crate) async fn read_resource_inner(&self, uri: &str) -> Result<String, rmcp::ErrorData> {
-        let mcp_err = |msg: String| rmcp::ErrorData::internal_error(msg, None);
+        self.read_resource_text(uri)
+            .await
+            .map_err(ToolError::into_error_data)
+    }
+
+    async fn read_resource_text(&self, uri: &str) -> Result<String, ToolError> {
+        let mcp_err = |msg: String| ToolError::internal("resource read failed", msg);
+        let bad_uri = |msg: String| ToolError::invalid(msg);
 
         if uri == "repository://list" {
-            let registry =
-                RepoRegistry::load(&registry_path()).map_err(|e| mcp_err(format!("{}", e)))?;
+            let registry = registry()?;
             let repos: Vec<serde_json::Value> = registry
                 .list()
                 .iter()
@@ -32,10 +40,10 @@ impl MyceliumsMcp {
 
         let path = uri
             .strip_prefix("repository://")
-            .ok_or_else(|| mcp_err(format!("Unknown resource URI scheme: {}", uri)))?;
+            .ok_or_else(|| bad_uri(format!("Unknown resource URI scheme: {}", uri)))?;
         let parts: Vec<&str> = path.splitn(3, '/').collect();
         if parts.is_empty() {
-            return Err(mcp_err(format!("Invalid resource URI: {}", uri)));
+            return Err(bad_uri(format!("Invalid resource URI: {}", uri)));
         }
 
         let repo_id = parts[0];
@@ -81,7 +89,7 @@ impl MyceliumsMcp {
                             .iter()
                             .find(|c| c.uid == *community_id)
                             .ok_or_else(|| {
-                                mcp_err(format!("Community not found: {}", community_id))
+                                bad_uri(format!("Community not found: {}", community_id))
                             })?;
                         let result = serde_json::json!({"uid": community.uid, "label": community.label, "member_count": community.member_count, "top_symbols": community.top_symbols, "summary": community.summary});
                         serde_json::to_string_pretty(&result).map_err(|e| mcp_err(format!("{}", e)))
@@ -91,11 +99,11 @@ impl MyceliumsMcp {
                         let process = processes
                             .iter()
                             .find(|p| p.uid == *process_id)
-                            .ok_or_else(|| mcp_err(format!("Process not found: {}", process_id)))?;
+                            .ok_or_else(|| bad_uri(format!("Process not found: {}", process_id)))?;
                         let result = serde_json::json!({"uid": process.uid, "name": process.name, "entry_point": process.entry_point, "step_count": process.step_count, "description": process.description});
                         serde_json::to_string_pretty(&result).map_err(|e| mcp_err(format!("{}", e)))
                     }
-                    _ => Err(mcp_err(format!("Unknown resource path: {}", uri))),
+                    _ => Err(bad_uri(format!("Unknown resource path: {}", uri))),
                 }
             }
         }

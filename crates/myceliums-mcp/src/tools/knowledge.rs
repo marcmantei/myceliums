@@ -6,19 +6,26 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "query_knowledge",
-        description = "Query cross-domain knowledge: find emails and documents that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels."
+        description = "Query cross-domain knowledge: find emails and documents that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn query_knowledge(
         &self,
         Parameters(params): Parameters<QueryKnowledgeParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
 
         let relationships = self.relationships(&repo_id).await?;
 
-        let limit = params.limit.unwrap_or(20).min(100);
+        require_query("query", &params.query)?;
+        let page = Page::new(params.limit, params.offset, Budget::new(20, 100));
         let include_sources = params.include_sources.unwrap_or(true);
 
         // Step 1: Find matching code symbols using BM25 search
@@ -34,9 +41,9 @@ impl MyceliumsMcp {
                 unique_sources: 0,
                 results: vec![],
             };
-            return Ok(Json(TextOutput {
-                text: format::format_knowledge_query(&output),
-            }));
+            return self
+                .graph_text(&repo_id, format::format_knowledge_query(&output))
+                .await;
         }
 
         // Step 2: Find all Mentions relationships pointing to matched symbols
@@ -107,28 +114,36 @@ impl MyceliumsMcp {
         });
 
         let total_mentions = results.len();
-        results.truncate(limit);
+        let page = page.take(results);
 
         let output = KnowledgeQueryOutput {
             query: params.query,
             total_mentions,
             unique_sources: source_uids.len(),
-            results,
+            results: page.items,
         };
 
-        Ok(Json(TextOutput {
-            text: format::format_knowledge_query(&output),
-        }))
+        let body = with_notice(
+            format::format_knowledge_query(&output),
+            page.notice.as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "get_rationale",
-        description = "Get design rationale comments (NOTE:, HACK:, WHY:, TODO:, FIXME:, IMPORTANT:) linked to a symbol or file. Use to understand *why* code was written a certain way — surfaces inline reasoning from comments."
+        description = "Get design rationale comments (NOTE:, HACK:, WHY:, TODO:, FIXME:, IMPORTANT:) linked to a symbol or file. Use to understand *why* code was written a certain way — surfaces inline reasoning from comments.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_rationale(
         &self,
         Parameters(params): Parameters<GetRationaleParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -156,17 +171,13 @@ impl MyceliumsMcp {
             }
         }
 
+        if params.symbol_name.is_some() && params.file_path.is_some() {
+            return Err(ToolError::invalid(
+                "pass either symbol_name or file_path, not both",
+            ));
+        }
         let items: Vec<RationaleItem> = if let Some(ref symbol_name) = params.symbol_name {
-            // Find the target symbol
-            let target = symbols
-                .iter()
-                .find(|s| s.qualified_name == *symbol_name || s.name == *symbol_name)
-                .ok_or_else(|| {
-                    rmcp::ErrorData::internal_error(
-                        format!("Symbol not found: {}", symbol_name),
-                        None,
-                    )
-                })?;
+            let target = resolve_symbol(&symbols, symbol_name)?;
 
             // Find rationale nodes linked to this symbol via RATIONALE_FOR
             let linked_rationale_uids: std::collections::HashSet<&str> = relationships
@@ -214,23 +225,29 @@ impl MyceliumsMcp {
         };
 
         let total_count = items.len() as u32;
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(items);
         let output = RationaleOutput {
-            rationales: items,
+            rationales: page.items,
             total_count,
         };
-        Ok(Json(TextOutput {
-            text: format::format_rationale(&output),
-        }))
+        let body = with_notice(format::format_rationale(&output), page.notice.as_deref());
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "get_knowledge_gaps",
-        description = "Detect structural weaknesses in the codebase: untested code (functions with no test callers), isolated modules (communities with few external connections), documentation gaps (files with many symbols but no rationale/doc nodes), and single points of failure (symbols that are the only bridge between communities). Use to prioritize testing, documentation, and refactoring efforts."
+        description = "Detect structural weaknesses in the codebase: untested code (functions with no test callers), isolated modules (communities with few external connections), documentation gaps (files with many symbols but no rationale/doc nodes), and single points of failure (symbols that are the only bridge between communities). Use to prioritize testing, documentation, and refactoring efforts.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_knowledge_gaps(
         &self,
         Parameters(params): Parameters<GetKnowledgeGapsParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -239,7 +256,7 @@ impl MyceliumsMcp {
 
         use myceliums_storage::RelationshipKind;
 
-        let category_filter = params.category.as_deref();
+        let category_filter = params.category.map(GapCategory::as_str);
         let mut gaps: Vec<KnowledgeGapItem> = Vec::new();
 
         // Pre-build lookup maps
@@ -530,9 +547,15 @@ impl MyceliumsMcp {
                     _ => 3,
                 }
             };
+            // Full tie-break: the inputs come from hash maps, and paging
+            // needs the same order on every call.
             severity_order(&a.severity)
                 .cmp(&severity_order(&b.severity))
                 .then_with(|| a.category.cmp(&b.category))
+                .then_with(|| a.file_path.cmp(&b.file_path))
+                .then_with(|| a.qualified_name.cmp(&b.qualified_name))
+                .then_with(|| a.start_line.cmp(&b.start_line))
+                .then_with(|| a.description.cmp(&b.description))
         });
 
         let summary = KnowledgeGapSummary {
@@ -545,15 +568,18 @@ impl MyceliumsMcp {
                 .count() as u32,
         };
         let total_count = gaps.len() as u32;
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(gaps);
 
         let output = KnowledgeGapsOutput {
-            gaps,
+            gaps: page.items,
             total_count,
             summary,
         };
-        Ok(Json(TextOutput {
-            text: format::format_knowledge_gaps(&output),
-        }))
+        let body = with_notice(
+            format::format_knowledge_gaps(&output),
+            page.notice.as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 }
 

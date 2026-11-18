@@ -2,23 +2,55 @@
 
 use super::prelude::*;
 
+/// Callers/callees listed inline by `symbol_context` before pointing at
+/// `get_callers` / `get_callees` for the rest.
+const CONTEXT_EDGES: usize = 25;
+
 #[tool_router(router = graph_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
     #[tool(
         name = "symbol_context",
-        description = "Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it — reveals dependencies that file reading alone cannot."
+        description = "Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it — reveals dependencies that file reading alone cannot.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn symbol_context(
         &self,
         Parameters(params): Parameters<SymbolContextParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let context = self
-            .service
-            .get_symbol_context(&params.repo_id, &params.symbol_name)
-            .await
-            .map_err(service_error)?;
+    ) -> Result<Json<TextOutput>, ToolError> {
+        let symbols = self.symbols(&params.repo_id).await?;
+        let relationships = self.relationships(&params.repo_id).await?;
+        let symbol = resolve_symbol(&symbols, &params.symbol_name)?;
 
-        let symbol = context.symbol;
+        let labels = crate::repo::CallLabels::new(&symbols);
+        let by_uid: HashMap<&str, &myceliums_storage::CodeSymbol> =
+            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
+        let calls = || {
+            relationships
+                .iter()
+                .filter(|r| r.kind == myceliums_storage::RelationshipKind::Calls)
+        };
+        let callers: Vec<String> = calls()
+            .filter(|r| r.target_uid == symbol.uid)
+            .filter_map(|r| {
+                let caller = by_uid.get(r.source_uid.as_str())?;
+                let label = labels.label(r, &symbol.name);
+                Some(crate::repo::CallLabels::mark(label, &caller.name))
+            })
+            .collect();
+        let callees: Vec<String> = calls()
+            .filter(|r| r.source_uid == symbol.uid)
+            .filter_map(|r| {
+                let callee = by_uid.get(r.target_uid.as_str())?;
+                let label = labels.label(r, &callee.name);
+                Some(crate::repo::CallLabels::mark(label, &callee.name))
+            })
+            .collect();
+
         let output = SymbolContextOutput {
             name: symbol.name.clone(),
             qualified_name: symbol.qualified_name.clone(),
@@ -28,35 +60,44 @@ impl MyceliumsMcp {
             end_line: symbol.end_line,
             signature: symbol.signature.clone(),
             content: symbol.content.clone(),
-            callers: context.callers,
-            callees: context.callees,
+            callers_total: callers.len(),
+            callers: callers.into_iter().take(CONTEXT_EDGES).collect(),
+            callees_total: callees.len(),
+            callees: callees.into_iter().take(CONTEXT_EDGES).collect(),
             metadata: symbol.metadata.clone(),
         };
-        Ok(Json(TextOutput {
-            text: format::format_symbol_context(&output),
-        }))
+        self.graph_text(&params.repo_id, format::format_symbol_context(&output))
+            .await
     }
 
     #[tool(
         name = "get_processes",
-        description = "Get execution flows showing how functions chain together (e.g. request handler → validation → database → response). Use to understand architecture and data flow before refactoring."
+        description = "Get execution flows showing how functions chain together (e.g. request handler → validation → database → response). Use to understand architecture and data flow before refactoring.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_processes(
         &self,
         Parameters(params): Parameters<GetProcessesParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let processes = self.processes(&params.repo_id).await?;
 
-        // Apply filters
+        // Filter first, then page the filtered list.
         let filter = ProcessFilter {
             entry: params.entry,
             filter: params.filter,
-            limit: params.limit,
+            limit: None,
             min_steps: params.min_steps,
         };
-        let filtered = filter.apply(&processes);
+        let page =
+            Page::new(params.limit, params.offset, Budget::LIST).take(filter.apply(&processes));
 
-        let items: Vec<ProcessItem> = filtered
+        let items: Vec<ProcessItem> = page
+            .items
             .into_iter()
             .map(|p| ProcessItem {
                 name: p.name,
@@ -65,22 +106,32 @@ impl MyceliumsMcp {
                 description: p.description,
             })
             .collect();
-        Ok(Json(TextOutput {
-            text: format::format_processes(&items),
-        }))
+        let body = with_notice(format::format_processes(&items), page.notice.as_deref());
+        self.graph_text(&params.repo_id, body).await
     }
 
     #[tool(
         name = "get_communities",
-        description = "List all detected communities with summary stats and top symbols. Use to understand code organization and find related modules."
+        description = "List all detected communities with summary stats and top symbols. Use to understand code organization and find related modules.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_communities(
         &self,
         Parameters(params): Parameters<GetCommunitiesParams>,
-    ) -> Result<Json<CommunitiesOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<CommunitiesOutput>, ToolError> {
         let communities = self.communities(&params.repo_id).await?;
+        let index_status = self.index_status(&params.repo_id).await?;
 
-        let items: Vec<CommunityItem> = communities
+        let total_count = communities.len();
+        let page = Page::new(params.limit, params.offset, Budget::LIST)
+            .take(communities.iter().collect::<Vec<_>>());
+        let items: Vec<CommunityItem> = page
+            .items
             .iter()
             .map(|c| CommunityItem {
                 uid: c.uid.clone(),
@@ -91,17 +142,28 @@ impl MyceliumsMcp {
             })
             .collect();
 
-        Ok(Json(CommunitiesOutput { communities: items }))
+        Ok(Json(CommunitiesOutput {
+            index_status,
+            communities: items,
+            total_count,
+            notice: page.notice,
+        }))
     }
 
     #[tool(
         name = "get_community_detail",
-        description = "Get full details of a community: member symbols, internal relationships, and entry points. Use to understand community structure before refactoring."
+        description = "Get a community's summary, its top member symbols, and its internal/external edge counts. Use to understand community structure before refactoring.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_community_detail(
         &self,
         Parameters(params): Parameters<GetCommunityDetailParams>,
-    ) -> Result<Json<CommunityDetailOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<CommunityDetailOutput>, ToolError> {
         let communities = self.communities(&params.repo_id).await?;
 
         let symbols = self.symbols(&params.repo_id).await?;
@@ -112,9 +174,9 @@ impl MyceliumsMcp {
             .iter()
             .find(|c| c.uid == params.community_id || c.label == params.community_id)
             .ok_or_else(|| {
-                rmcp::ErrorData::internal_error(
-                    format!("Community not found: {}", params.community_id),
-                    None,
+                ToolError::recoverable(
+                    format!("Community `{}` not found.", params.community_id),
+                    "pass a uid or label listed by get_communities",
                 )
             })?;
 
@@ -164,6 +226,7 @@ impl MyceliumsMcp {
         }
 
         Ok(Json(CommunityDetailOutput {
+            index_status: self.index_status(&params.repo_id).await?,
             uid: community.uid.clone(),
             label: community.label.clone(),
             member_count: community.member_count,
@@ -176,52 +239,27 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "get_symbol_definition",
-        description = "Get the complete definition and source code of a symbol. Use to understand what a function/class does before using or modifying it."
+        description = "Get the complete definition and source code of a symbol. Use to understand what a function/class does before using or modifying it.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_symbol_definition(
         &self,
         Parameters(params): Parameters<GetSymbolDefinitionParams>,
-    ) -> Result<Json<SymbolDefinitionOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<SymbolDefinitionOutput>, ToolError> {
         let symbols = self.symbols(&params.repo_id).await?;
-
-        // Try qualified name first (exact), then short name
-        let matches: Vec<_> = symbols
-            .iter()
-            .filter(|s| s.qualified_name == params.symbol_name)
-            .collect();
-
-        let symbol = if matches.len() == 1 {
-            matches[0]
-        } else if matches.is_empty() {
-            let by_name: Vec<_> = symbols
-                .iter()
-                .filter(|s| s.name == params.symbol_name)
-                .collect();
-            match by_name.len() {
-                0 => {
-                    return Err(rmcp::ErrorData::internal_error(
-                        format!("Symbol not found: {}", params.symbol_name),
-                        None,
-                    ))
-                }
-                1 => by_name[0],
-                _ => {
-                    let names: Vec<_> = by_name.iter().map(|s| s.qualified_name.as_str()).collect();
-                    return Err(rmcp::ErrorData::internal_error(
-                        format!(
-                            "Ambiguous symbol '{}'. Matches: {}",
-                            params.symbol_name,
-                            names.join(", ")
-                        ),
-                        None,
-                    ));
-                }
-            }
-        } else {
-            matches[0]
-        };
+        let symbol = resolve_symbol(&symbols, &params.symbol_name)?;
+        let origin = format!(
+            "{}:{}-{}",
+            symbol.file_path, symbol.start_line, symbol.end_line
+        );
 
         Ok(Json(SymbolDefinitionOutput {
+            index_status: self.index_status(&params.repo_id).await?,
             uid: symbol.uid.clone(),
             name: symbol.name.clone(),
             qualified_name: symbol.qualified_name.clone(),
@@ -230,241 +268,132 @@ impl MyceliumsMcp {
             start_line: symbol.start_line,
             end_line: symbol.end_line,
             signature: symbol.signature.clone(),
-            content: symbol.content.clone(),
+            content: untrusted(&origin, &symbol.content),
         }))
     }
 
     #[tool(
         name = "get_callers",
-        description = "Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns."
+        description = "Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns. Each caller carries how its CALLS edge was resolved.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn get_callers(
         &self,
         Parameters(params): Parameters<GetCallersParams>,
-    ) -> Result<Json<CallersOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<CallersOutput>, ToolError> {
         let symbols = self.symbols(&params.repo_id).await?;
-
         let relationships = self.relationships(&params.repo_id).await?;
+        let target_symbol = resolve_symbol(&symbols, &params.symbol_name)?;
+        let max_depth = params.max_depth.unwrap_or(3).clamp(1, 10);
 
-        let matches: Vec<_> = symbols
-            .iter()
-            .filter(|s| s.qualified_name == params.symbol_name)
+        let hits = call_bfs(
+            &symbols,
+            &relationships,
+            target_symbol,
+            max_depth,
+            Toward::Callers,
+        );
+        let total_count = hits.len() as u32;
+        let depth_limited = hits.iter().any(|h| h.depth >= max_depth);
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(hits);
+        let callers = page
+            .items
+            .into_iter()
+            .map(|h| CallerItem {
+                name: h.symbol.name.clone(),
+                qualified_name: h.symbol.qualified_name.clone(),
+                kind: h.symbol.kind.to_string(),
+                file_path: h.symbol.file_path.clone(),
+                start_line: h.symbol.start_line,
+                end_line: h.symbol.end_line,
+                depth: h.depth,
+                resolved: h.resolved.to_string(),
+            })
             .collect();
-        let target_symbol = if matches.len() == 1 {
-            matches[0]
-        } else if matches.is_empty() {
-            let by_name: Vec<_> = symbols
-                .iter()
-                .filter(|s| s.name == params.symbol_name)
-                .collect();
-            match by_name.len() {
-                0 => {
-                    return Err(rmcp::ErrorData::internal_error(
-                        format!("Symbol not found: {}", params.symbol_name),
-                        None,
-                    ))
-                }
-                1 => by_name[0],
-                _ => {
-                    let names: Vec<_> = by_name.iter().map(|s| s.qualified_name.as_str()).collect();
-                    return Err(rmcp::ErrorData::internal_error(
-                        format!(
-                            "Ambiguous symbol '{}'. Matches: {}",
-                            params.symbol_name,
-                            names.join(", ")
-                        ),
-                        None,
-                    ));
-                }
-            }
-        } else {
-            matches[0]
-        };
-
-        use myceliums_storage::RelationshipKind;
-        let max_depth = params.max_depth.unwrap_or(3);
-
-        // Pre-build adjacency: target_uid -> [source_uids] for CALLS edges
-        let mut callers_of: std::collections::HashMap<&str, Vec<&str>> =
-            std::collections::HashMap::new();
-        for rel in &relationships {
-            if rel.kind == RelationshipKind::Calls {
-                callers_of
-                    .entry(rel.target_uid.as_str())
-                    .or_default()
-                    .push(rel.source_uid.as_str());
-            }
-        }
-
-        // Pre-build symbol lookup
-        let sym_by_uid: std::collections::HashMap<&str, &myceliums_storage::CodeSymbol> =
-            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-
-        // BFS traversal
-        let mut callers = Vec::new();
-        let mut visited = std::collections::HashSet::new();
-        let mut queue = std::collections::VecDeque::new();
-
-        queue.push_back((target_symbol.uid.as_str(), 0u32));
-        visited.insert(target_symbol.uid.as_str());
-
-        while let Some((uid, depth)) = queue.pop_front() {
-            if depth > 0 && depth <= max_depth {
-                if let Some(sym) = sym_by_uid.get(uid) {
-                    callers.push(CallerItem {
-                        name: sym.name.clone(),
-                        qualified_name: sym.qualified_name.clone(),
-                        kind: sym.kind.to_string(),
-                        file_path: sym.file_path.clone(),
-                        start_line: sym.start_line,
-                        end_line: sym.end_line,
-                        depth,
-                    });
-                }
-            }
-
-            if depth < max_depth {
-                if let Some(sources) = callers_of.get(uid) {
-                    for &source_uid in sources {
-                        if !visited.contains(source_uid) {
-                            visited.insert(source_uid);
-                            queue.push_back((source_uid, depth + 1));
-                        }
-                    }
-                }
-            }
-        }
-
-        let total_count = callers.len() as u32;
-        let depth_limited = callers.iter().any(|c| c.depth >= max_depth);
 
         Ok(Json(CallersOutput {
+            index_status: self.index_status(&params.repo_id).await?,
             symbol_name: target_symbol.name.clone(),
             callers,
             total_count,
             depth_limited,
+            notice: page.notice,
         }))
     }
 
     #[tool(
         name = "get_callees",
-        description = "Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains."
+        description = "Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains. Each callee carries how its CALLS edge was resolved.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_callees(
         &self,
         Parameters(params): Parameters<GetCalleesParams>,
-    ) -> Result<Json<CalleesOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<CalleesOutput>, ToolError> {
         let symbols = self.symbols(&params.repo_id).await?;
-
         let relationships = self.relationships(&params.repo_id).await?;
+        let source_symbol = resolve_symbol(&symbols, &params.symbol_name)?;
+        let max_depth = params.max_depth.unwrap_or(3).clamp(1, 10);
 
-        let matches: Vec<_> = symbols
-            .iter()
-            .filter(|s| s.qualified_name == params.symbol_name)
+        let hits = call_bfs(
+            &symbols,
+            &relationships,
+            source_symbol,
+            max_depth,
+            Toward::Callees,
+        );
+        let total_count = hits.len() as u32;
+        let depth_limited = hits.iter().any(|h| h.depth >= max_depth);
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(hits);
+        let callees = page
+            .items
+            .into_iter()
+            .map(|h| CalleeItem {
+                name: h.symbol.name.clone(),
+                qualified_name: h.symbol.qualified_name.clone(),
+                kind: h.symbol.kind.to_string(),
+                file_path: h.symbol.file_path.clone(),
+                start_line: h.symbol.start_line,
+                end_line: h.symbol.end_line,
+                depth: h.depth,
+                resolved: h.resolved.to_string(),
+            })
             .collect();
-        let source_symbol = if matches.len() == 1 {
-            matches[0]
-        } else if matches.is_empty() {
-            let by_name: Vec<_> = symbols
-                .iter()
-                .filter(|s| s.name == params.symbol_name)
-                .collect();
-            match by_name.len() {
-                0 => {
-                    return Err(rmcp::ErrorData::internal_error(
-                        format!("Symbol not found: {}", params.symbol_name),
-                        None,
-                    ))
-                }
-                1 => by_name[0],
-                _ => {
-                    let names: Vec<_> = by_name.iter().map(|s| s.qualified_name.as_str()).collect();
-                    return Err(rmcp::ErrorData::internal_error(
-                        format!(
-                            "Ambiguous symbol '{}'. Matches: {}",
-                            params.symbol_name,
-                            names.join(", ")
-                        ),
-                        None,
-                    ));
-                }
-            }
-        } else {
-            matches[0]
-        };
-
-        use myceliums_storage::RelationshipKind;
-        let max_depth = params.max_depth.unwrap_or(3);
-
-        // Pre-build adjacency: source_uid -> [target_uids] for CALLS edges
-        let mut callees_of: std::collections::HashMap<&str, Vec<&str>> =
-            std::collections::HashMap::new();
-        for rel in &relationships {
-            if rel.kind == RelationshipKind::Calls {
-                callees_of
-                    .entry(rel.source_uid.as_str())
-                    .or_default()
-                    .push(rel.target_uid.as_str());
-            }
-        }
-
-        let sym_by_uid: std::collections::HashMap<&str, &myceliums_storage::CodeSymbol> =
-            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-
-        // BFS traversal
-        let mut callees = Vec::new();
-        let mut visited = std::collections::HashSet::new();
-        let mut queue = std::collections::VecDeque::new();
-
-        queue.push_back((source_symbol.uid.as_str(), 0u32));
-        visited.insert(source_symbol.uid.as_str());
-
-        while let Some((uid, depth)) = queue.pop_front() {
-            if depth > 0 && depth <= max_depth {
-                if let Some(sym) = sym_by_uid.get(uid) {
-                    callees.push(CalleeItem {
-                        name: sym.name.clone(),
-                        qualified_name: sym.qualified_name.clone(),
-                        kind: sym.kind.to_string(),
-                        file_path: sym.file_path.clone(),
-                        start_line: sym.start_line,
-                        end_line: sym.end_line,
-                        depth,
-                    });
-                }
-            }
-
-            if depth < max_depth {
-                if let Some(targets) = callees_of.get(uid) {
-                    for &target_uid in targets {
-                        if !visited.contains(target_uid) {
-                            visited.insert(target_uid);
-                            queue.push_back((target_uid, depth + 1));
-                        }
-                    }
-                }
-            }
-        }
-
-        let total_count = callees.len() as u32;
-        let depth_limited = callees.iter().any(|c| c.depth >= max_depth);
 
         Ok(Json(CalleesOutput {
+            index_status: self.index_status(&params.repo_id).await?,
             symbol_name: source_symbol.name.clone(),
             callees,
             total_count,
             depth_limited,
+            notice: page.notice,
         }))
     }
 
     #[tool(
         name = "get_file_symbols",
-        description = "List all symbols defined in a specific file with kinds and signatures. Use for file-level navigation and understanding file contents."
+        description = "List all symbols defined in a specific file with kinds and signatures. Use for file-level navigation and understanding file contents.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_file_symbols(
         &self,
         Parameters(params): Parameters<GetFileSymbolsParams>,
-    ) -> Result<Json<FileSymbolsOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<FileSymbolsOutput>, ToolError> {
         let symbols = self.symbols(&params.repo_id).await?;
 
         let file_symbols: Vec<FileSymbolItem> = symbols
@@ -479,42 +408,71 @@ impl MyceliumsMcp {
                 signature: s.signature.clone(),
             })
             .collect();
+        if file_symbols.is_empty() {
+            let files = self.files(&params.repo_id).await?;
+            if !files.iter().any(|f| f.path == params.file_path) {
+                return Err(ToolError::recoverable(
+                    format!("File `{}` is not in the index.", params.file_path),
+                    "pass the path relative to the repository root (e.g. src/main.rs), or find the file with context_search",
+                ));
+            }
+        }
 
         let total_count = file_symbols.len() as u32;
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 500)).take(file_symbols);
 
         Ok(Json(FileSymbolsOutput {
+            index_status: self.index_status(&params.repo_id).await?,
             file_path: params.file_path,
-            symbols: file_symbols,
+            symbols: page.items,
             total_count,
+            notice: page.notice,
         }))
     }
 
     #[tool(
         name = "find_path",
-        description = "Find the shortest path between two symbols in the knowledge graph using BFS across all relationship types (CALLS, CONTAINED_BY, IMPORTS, etc.). Answers 'how are these two things connected?' directly. Returns the ordered list of symbols and edge types along the path."
+        description = "Find the shortest path between two symbols in the knowledge graph using BFS across all relationship types (CALLS, CONTAINED_BY, IMPORTS, etc.). Answers 'how are these two things connected?' directly. Returns the ordered list of symbols and edge types along the path.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn find_path(
         &self,
         Parameters(params): Parameters<FindPathParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
 
         let relationships = self.relationships(&repo_id).await?;
 
-        // Resolve from_symbol
-        let from_symbol = Self::resolve_symbol(&symbols, &params.from_symbol)?;
-        // Resolve to_symbol
-        let to_symbol = Self::resolve_symbol(&symbols, &params.to_symbol)?;
+        let from_symbol = resolve_symbol(&symbols, &params.from_symbol)?;
+        let to_symbol = resolve_symbol(&symbols, &params.to_symbol)?;
 
-        let max_depth = params.max_depth.unwrap_or(10);
+        let max_depth = params.max_depth.unwrap_or(10).clamp(1, 30);
+
+        let sym_by_uid: HashMap<&str, &myceliums_storage::CodeSymbol> =
+            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
+        let labels = crate::repo::CallLabels::new(&symbols);
 
         // Build bidirectional adjacency list across ALL relationship types
-        // Each entry: neighbor_uid -> edge_type_label
+        // Each entry: neighbor_uid -> edge_type_label (heuristic CALLS edges
+        // carry their resolution).
         let mut adjacency: HashMap<&str, Vec<(&str, String)>> = HashMap::new();
         for rel in &relationships {
-            let edge_label = rel.kind.to_string();
+            let mut edge_label = rel.kind.to_string();
+            if rel.kind == myceliums_storage::RelationshipKind::Calls {
+                if let Some(target) = sym_by_uid.get(rel.target_uid.as_str()) {
+                    let resolved = labels.label(rel, &target.name);
+                    if crate::repo::CallLabels::is_heuristic(resolved) {
+                        edge_label = format!("{edge_label} resolved: {resolved}");
+                    }
+                }
+            }
             adjacency
                 .entry(rel.source_uid.as_str())
                 .or_default()
@@ -524,10 +482,6 @@ impl MyceliumsMcp {
                 .or_default()
                 .push((rel.source_uid.as_str(), format!("{}_REV", edge_label)));
         }
-
-        // BFS from from_symbol to to_symbol
-        let sym_by_uid: HashMap<&str, &myceliums_storage::CodeSymbol> =
-            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
 
         let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
         // parent map: child_uid -> (parent_uid, edge_type)
@@ -612,19 +566,24 @@ impl MyceliumsMcp {
             }
         };
 
-        Ok(Json(TextOutput {
-            text: format::format_path(&output),
-        }))
+        self.graph_text(&repo_id, format::format_path(&output))
+            .await
     }
 
     #[tool(
         name = "get_stats",
-        description = "Get codebase statistics: symbol counts by kind, files, relationships, languages, and communities. Use to understand overall codebase structure."
+        description = "Get codebase statistics: symbol counts by kind, files, relationships, languages, and communities. Use to understand overall codebase structure.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     pub(crate) async fn get_stats(
         &self,
         Parameters(params): Parameters<GetStatsParams>,
-    ) -> Result<Json<StatsOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<StatsOutput>, ToolError> {
         let symbols = self.symbols(&params.repo_id).await?;
 
         let files = self.files(&params.repo_id).await?;
@@ -656,6 +615,7 @@ impl MyceliumsMcp {
         }
 
         Ok(Json(StatsOutput {
+            index_status: self.index_status(&params.repo_id).await?,
             symbol_counts,
             total_symbols: symbols.len() as u32,
             total_files: files.len() as u32,
@@ -669,17 +629,22 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "get_schema",
-        description = "Get property definitions and schema information for entity types or edge types in the ontology. Returns detailed information about what properties are expected for each specified entity type."
+        description = "Get property definitions and schema information for entity types or edge types in the ontology. Returns detailed information about what properties are expected for each specified entity type.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_schema(
         &self,
         Parameters(params): Parameters<GetSchemaParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         // Load the ontology from the config directory
         let ontology_dir = std::path::PathBuf::from("config/ontology");
-        let ontology = Ontology::load_from_directory(&ontology_dir).map_err(|e| {
-            rmcp::ErrorData::internal_error(format!("Failed to load ontology: {}", e), None)
-        })?;
+        let ontology = Ontology::load_from_directory(&ontology_dir)
+            .map_err(|e| ToolError::internal("cannot load the ontology", e))?;
 
         let mut output = String::new();
         let include_edges = params.include_edges.unwrap_or(false);
@@ -752,6 +717,78 @@ impl MyceliumsMcp {
             }
         }
 
-        Ok(Json(TextOutput { text: output }))
+        text(output)
     }
+}
+
+/// Which way [`call_bfs`] walks CALLS edges.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Toward {
+    Callers,
+    Callees,
+}
+
+/// A symbol reached by [`call_bfs`].
+struct CallHit<'a> {
+    symbol: &'a myceliums_storage::CodeSymbol,
+    depth: u32,
+    /// Resolution of the CALLS edge that reached it.
+    resolved: &'static str,
+}
+
+/// Breadth-first walk over CALLS edges from `start`, up to `max_depth` hops,
+/// in discovery order.
+fn call_bfs<'a>(
+    symbols: &'a [myceliums_storage::CodeSymbol],
+    relationships: &'a [myceliums_storage::Relationship],
+    start: &'a myceliums_storage::CodeSymbol,
+    max_depth: u32,
+    toward: Toward,
+) -> Vec<CallHit<'a>> {
+    use myceliums_storage::RelationshipKind;
+    let labels = crate::repo::CallLabels::new(symbols);
+    let sym_by_uid: HashMap<&str, &myceliums_storage::CodeSymbol> =
+        symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
+
+    // Pre-build adjacency: from -> [(next, edge)]
+    let mut next_of: HashMap<&str, Vec<(&str, &myceliums_storage::Relationship)>> = HashMap::new();
+    for rel in relationships {
+        if rel.kind == RelationshipKind::Calls {
+            let (from, next) = match toward {
+                Toward::Callers => (rel.target_uid.as_str(), rel.source_uid.as_str()),
+                Toward::Callees => (rel.source_uid.as_str(), rel.target_uid.as_str()),
+            };
+            next_of.entry(from).or_default().push((next, rel));
+        }
+    }
+
+    let mut hits = Vec::new();
+    let mut visited = std::collections::HashSet::new();
+    let mut queue = std::collections::VecDeque::new();
+    queue.push_back((start.uid.as_str(), 0u32));
+    visited.insert(start.uid.as_str());
+
+    while let Some((uid, depth)) = queue.pop_front() {
+        if depth >= max_depth {
+            continue;
+        }
+        for &(next, rel) in next_of.get(uid).map(Vec::as_slice).unwrap_or(&[]) {
+            if !visited.insert(next) {
+                continue;
+            }
+            queue.push_back((next, depth + 1));
+            if let Some(symbol) = sym_by_uid.get(next) {
+                let target_name = sym_by_uid
+                    .get(rel.target_uid.as_str())
+                    .map(|t| t.name.as_str())
+                    .unwrap_or("");
+                hits.push(CallHit {
+                    symbol,
+                    depth: depth + 1,
+                    resolved: labels.label(rel, target_name),
+                });
+            }
+        }
+    }
+    hits
 }

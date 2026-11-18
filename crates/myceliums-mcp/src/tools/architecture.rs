@@ -6,12 +6,18 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "find_dead_code",
-        description = "Find symbols with no incoming function calls (potential dead code). Exclude common entry points with exclude_patterns. Use before cleanup/refactoring."
+        description = "Find functions and methods with no incoming CALLS edges (potential dead code; calls the resolver missed make this a candidate list, not proof). Exclude known entry points with exclude_patterns. Use before cleanup/refactoring.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn find_dead_code(
         &self,
         Parameters(params): Parameters<FindDeadCodeParams>,
-    ) -> Result<Json<DeadCodeOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<DeadCodeOutput>, ToolError> {
         let symbols = self.symbols(&params.repo_id).await?;
 
         let relationships = self.relationships(&params.repo_id).await?;
@@ -25,7 +31,7 @@ impl MyceliumsMcp {
             .map(|r| r.target_uid.as_str())
             .collect();
 
-        let mut dead_code: Vec<DeadCodeItem> = symbols
+        let dead_code: Vec<DeadCodeItem> = symbols
             .iter()
             .filter(|s| {
                 matches!(
@@ -57,37 +63,53 @@ impl MyceliumsMcp {
             .collect();
 
         let total = dead_code.len() as u32;
-        if let Some(limit) = params.limit {
-            dead_code.truncate(limit);
-        }
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(dead_code);
 
         Ok(Json(DeadCodeOutput {
-            symbols: dead_code,
+            index_status: self.index_status(&params.repo_id).await?,
+            symbols: page.items,
             total_count: total,
+            notice: page.notice,
         }))
     }
 
     #[tool(
         name = "get_god_nodes",
-        description = "Identify the highest-degree symbols (god nodes) in the call graph. Returns the top-N most connected symbols ranked by total incoming + outgoing CALLS edges. High-coupling nodes (degree > threshold) are flagged as architectural bottlenecks."
+        description = "Identify the highest-degree symbols (god nodes) in the call graph. Returns the top-N most connected symbols ranked by total incoming + outgoing CALLS edges. High-coupling nodes (degree > threshold) are flagged as architectural bottlenecks.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_god_nodes(
         &self,
         Parameters(params): Parameters<GetGodNodesParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
 
-        let top_n = params.top_n.unwrap_or(10);
-        let coupling_threshold = params.coupling_threshold.unwrap_or(20);
-        let god_nodes = compute_god_nodes(&symbols, &relationships, top_n, coupling_threshold);
+        let page = Page::new(params.top_n, params.offset, Budget::new(10, 200));
+        let coupling_threshold = params.coupling_threshold.unwrap_or(20).max(1);
+        let god_nodes = page.take_open(compute_god_nodes(
+            &symbols,
+            &relationships,
+            page.fetch(),
+            coupling_threshold,
+        ));
 
-        let high_coupling_count = god_nodes.iter().filter(|n| n.is_high_coupling).count();
+        let high_coupling_count = god_nodes
+            .items
+            .iter()
+            .filter(|n| n.is_high_coupling)
+            .count();
         let total_symbols = symbols.len();
 
         let nodes: Vec<GodNodeItemOutput> = god_nodes
+            .items
             .into_iter()
             .map(|n| GodNodeItemOutput {
                 name: n.name,
@@ -106,33 +128,43 @@ impl MyceliumsMcp {
             total_symbols,
             high_coupling_count,
         };
-        Ok(Json(TextOutput {
-            text: format::format_god_nodes(&output),
-        }))
+        let body = with_notice(
+            format::format_god_nodes(&output),
+            god_nodes.notice.as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "get_surprising_connections",
-        description = "Detect surprising cross-community CALLS edges: connections between symbols in different Leiden communities that rarely interact. Ranked by surprise score (0–1); higher means more isolated/unexpected coupling. Use to find hidden architectural dependencies."
+        description = "Detect surprising cross-community CALLS edges: connections between symbols in different Leiden communities that rarely interact. Ranked by surprise score (0–1); higher means more isolated/unexpected coupling. Use to find hidden architectural dependencies.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_surprising_connections(
         &self,
         Parameters(params): Parameters<GetSurprisingConnectionsParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
 
-        let min_surprise = params.min_surprise_score.unwrap_or(0.1);
-        let limit = params.limit.unwrap_or(50);
+        let min_surprise = params.min_surprise_score.unwrap_or(0.1).clamp(0.0, 1.0);
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 200));
 
-        let connections =
-            compute_surprising_connections(&symbols, &relationships, min_surprise, limit)
-                .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        let connections = page.take_open(
+            compute_surprising_connections(&symbols, &relationships, min_surprise, page.fetch())
+                .map_err(|e| ToolError::internal("surprising-connection analysis failed", e))?,
+        );
 
-        let total_cross_community_edges = connections.len();
+        let total_cross_community_edges = connections.items.len();
         let items: Vec<SurprisingConnectionItemOutput> = connections
+            .items
             .into_iter()
             .map(|c| SurprisingConnectionItemOutput {
                 source_name: c.source_name,
@@ -149,19 +181,27 @@ impl MyceliumsMcp {
             connections: items,
             total_cross_community_edges,
         };
-        Ok(Json(TextOutput {
-            text: format::format_surprising_connections(&output),
-        }))
+        let body = with_notice(
+            format::format_surprising_connections(&output),
+            connections.notice.as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "get_git_context",
-        description = "Get git ownership and history metadata for a symbol. Returns last author, modification date, commit count, and age in days."
+        description = "Get git ownership and history metadata for a symbol. Returns last author, modification date, commit count, and age in days.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_git_context(
         &self,
         Parameters(params): Parameters<GetGitContextParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(Some(&params.repo_id))?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -176,13 +216,16 @@ impl MyceliumsMcp {
             .collect();
 
         if matching_symbols.is_empty() {
-            return Ok(Json(TextOutput {
-                text: format!("No symbol found matching '{}'", params.symbol_name),
-            }));
+            return Err(ToolError::recoverable(
+                format!("No symbol name contains `{}`.", params.symbol_name),
+                "check the spelling, or find the symbol with context_search",
+            ));
         }
 
+        let page =
+            Page::new(params.limit, params.offset, Budget::new(10, 100)).take(matching_symbols);
         let mut output = String::new();
-        for (idx, symbol) in matching_symbols.iter().enumerate() {
+        for (idx, symbol) in page.items.iter().enumerate() {
             if idx > 0 {
                 output.push_str("\n---\n");
             }
@@ -215,29 +258,32 @@ impl MyceliumsMcp {
             }
         }
 
-        Ok(Json(TextOutput { text: output }))
+        self.graph_text(&repo_id, page.with_notice(output)).await
     }
-
-    // ── Cross-repo comparison tools (premium) ────────────────────────────
 
     #[tool(
         name = "get_centrality_report",
-        description = "Compute centrality metrics (degree, betweenness, closeness, eigenvector) for all symbols in the call graph. Returns the top-N symbols ranked by the chosen metric. Betweenness identifies bridge/bottleneck symbols, closeness measures how central a symbol is, eigenvector highlights symbols connected to other important symbols."
+        description = "Compute centrality metrics (degree, betweenness, closeness, eigenvector) for all symbols in the call graph. Returns the top-N symbols ranked by the chosen metric. Betweenness identifies bridge/bottleneck symbols, closeness measures how central a symbol is, eigenvector highlights symbols connected to other important symbols.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_centrality_report(
         &self,
         Parameters(params): Parameters<GetCentralityParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
 
         let centrality = compute_centrality(&relationships)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("centrality computation failed", e))?;
 
-        let metric = params.metric.as_deref().unwrap_or("betweenness");
-        let top_n = params.top_n.unwrap_or(15);
+        let metric = params.metric.unwrap_or_default();
 
         let uid_to_symbol: HashMap<&str, &myceliums_storage::CodeSymbol> =
             symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
@@ -260,24 +306,26 @@ impl MyceliumsMcp {
             })
             .collect();
 
-        // Sort by chosen metric
+        // Sort by chosen metric; ties by name, so pages are stable across
+        // calls (centrality comes out of a hash map).
+        nodes.sort_by(|a, b| a.qualified_name.cmp(&b.qualified_name));
         match metric {
-            "degree" => nodes.sort_by(|a, b| {
+            CentralityMetric::Degree => nodes.sort_by(|a, b| {
                 b.degree
                     .partial_cmp(&a.degree)
                     .unwrap_or(std::cmp::Ordering::Equal)
             }),
-            "closeness" => nodes.sort_by(|a, b| {
+            CentralityMetric::Closeness => nodes.sort_by(|a, b| {
                 b.closeness
                     .partial_cmp(&a.closeness)
                     .unwrap_or(std::cmp::Ordering::Equal)
             }),
-            "eigenvector" => nodes.sort_by(|a, b| {
+            CentralityMetric::Eigenvector => nodes.sort_by(|a, b| {
                 b.eigenvector
                     .partial_cmp(&a.eigenvector)
                     .unwrap_or(std::cmp::Ordering::Equal)
             }),
-            _ => nodes.sort_by(|a, b| {
+            CentralityMetric::Betweenness => nodes.sort_by(|a, b| {
                 b.betweenness
                     .partial_cmp(&a.betweenness)
                     .unwrap_or(std::cmp::Ordering::Equal)
@@ -285,46 +333,53 @@ impl MyceliumsMcp {
         }
 
         let total_nodes = nodes.len();
-        nodes.truncate(top_n);
+        let page = Page::new(params.top_n, params.offset, Budget::new(15, 200)).take(nodes);
 
         let output = CentralityOutput {
-            nodes,
+            nodes: page.items,
             total_nodes,
-            metric: metric.to_string(),
+            metric: metric.as_str().to_string(),
         };
-        Ok(Json(TextOutput {
-            text: format::format_centrality(&output),
-        }))
+        let body = with_notice(format::format_centrality(&output), page.notice.as_deref());
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "get_community_metrics",
-        description = "Compute quality metrics for the Leiden community partitioning: overall modularity score (higher = better separation), per-community cohesion (internal edge density), and inter-community coupling (edge counts between community pairs). Use to assess code architecture quality."
+        description = "Compute quality metrics for the Leiden community partitioning: overall modularity score (higher = better separation), per-community cohesion (internal edge density), and inter-community coupling (edge counts between community pairs). Use to assess code architecture quality.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_community_metrics(
         &self,
         Parameters(params): Parameters<GetCommunityMetricsParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
 
         let metrics = compute_community_metrics(&symbols, &relationships)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+            .map_err(|e| ToolError::internal("community metrics failed", e))?;
 
         let mut cohesion: Vec<CohesionEntry> = metrics
             .cohesion
             .into_iter()
             .map(|(community, density)| CohesionEntry { community, density })
             .collect();
+        // Both tables come out of hash maps: full tie-breaks keep pages stable.
         cohesion.sort_by(|a, b| {
             b.density
                 .partial_cmp(&a.density)
                 .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.community.cmp(&b.community))
         });
 
-        let coupling: Vec<CouplingEntry> = metrics
+        let mut coupling: Vec<CouplingEntry> = metrics
             .coupling
             .into_iter()
             .map(|c| CouplingEntry {
@@ -333,26 +388,45 @@ impl MyceliumsMcp {
                 edge_count: c.edge_count,
             })
             .collect();
+        coupling.sort_by(|a, b| {
+            b.edge_count
+                .cmp(&a.edge_count)
+                .then_with(|| a.community_a.cmp(&b.community_a))
+                .then_with(|| a.community_b.cmp(&b.community_b))
+        });
 
+        let totals = [cohesion.len(), coupling.len()];
+        let page = Page::new(params.limit, params.offset, Budget::LIST);
+        let (cohesion, notice) = page.take_lists(vec![cohesion]);
+        let (coupling, coupling_notice) = page.take_lists(vec![coupling]);
         let output = CommunityMetricsOutput {
             modularity: metrics.modularity,
             community_count: metrics.community_count,
-            cohesion,
-            coupling,
+            cohesion: cohesion.into_iter().flatten().collect(),
+            coupling: coupling.into_iter().flatten().collect(),
+            totals,
         };
-        Ok(Json(TextOutput {
-            text: format::format_community_metrics(&output),
-        }))
+        let body = with_notice(
+            format::format_community_metrics(&output),
+            notice.or(coupling_notice).as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "detect_circular_dependencies",
-        description = "Detect circular dependencies in the codebase using Tarjan's strongly connected components algorithm. Returns groups of symbols that form dependency cycles. Use to find architectural issues like mutual imports or call cycles."
+        description = "Detect circular dependencies in the codebase using Tarjan's strongly connected components algorithm. Returns groups of symbols that form dependency cycles. Use to find architectural issues like mutual imports or call cycles.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn detect_circular_dependencies(
         &self,
         Parameters(params): Parameters<DetectCyclesParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -360,7 +434,7 @@ impl MyceliumsMcp {
 
         let include_calls = params.include_calls.unwrap_or(true);
         let include_imports = params.include_imports.unwrap_or(true);
-        let min_cycle_size = params.min_cycle_size.unwrap_or(2);
+        let min_cycle_size = params.min_cycle_size.unwrap_or(2).max(2);
 
         let cycles = detect_cycles(
             &symbols,
@@ -369,10 +443,19 @@ impl MyceliumsMcp {
             include_imports,
             min_cycle_size,
         )
-        .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
+        .map_err(|e| ToolError::internal("cycle detection failed", e))?;
 
+        let mut cycles = cycles;
+        // Stable pages: ties in size ordered by members.
+        cycles.sort_by(|a, b| {
+            b.size
+                .cmp(&a.size)
+                .then_with(|| a.member_names.cmp(&b.member_names))
+        });
         let total_count = cycles.len();
-        let cycle_items: Vec<CycleItemOutput> = cycles
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(cycles);
+        let cycle_items: Vec<CycleItemOutput> = page
+            .items
             .into_iter()
             .map(|c| CycleItemOutput {
                 members: c.member_names,
@@ -385,19 +468,24 @@ impl MyceliumsMcp {
             cycles: cycle_items,
             total_count,
         };
-        Ok(Json(TextOutput {
-            text: format::format_cycles(&output),
-        }))
+        let body = with_notice(format::format_cycles(&output), page.notice.as_deref());
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "get_dependencies",
-        description = "Compute file-level dependencies: direct imports, transitive closure (all files reachable via import chains), and reverse dependents (files that import this file). Use before refactoring to understand the full impact of moving or deleting a file."
+        description = "Compute file-level dependencies: direct imports, transitive closure (all files reachable via import chains), and reverse dependents (files that import this file). Use before refactoring to understand the full impact of moving or deleting a file.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_dependencies(
         &self,
         Parameters(params): Parameters<GetDependenciesParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -410,25 +498,45 @@ impl MyceliumsMcp {
             params.max_depth,
         );
 
+        let totals = [
+            dep.direct_deps.len(),
+            dep.transitive_deps.len(),
+            dep.dependents.len(),
+        ];
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
+        // The core lists come out of hash sets: sort, so pages are stable.
+        let mut lists = vec![dep.direct_deps, dep.transitive_deps, dep.dependents];
+        for list in &mut lists {
+            list.sort();
+        }
+        let (lists, notice) = page.take_lists(lists);
+        let [direct_deps, transitive_deps, dependents]: [Vec<String>; 3] =
+            lists.try_into().expect("three lists in, three lists out");
         let output = DependenciesOutput {
             file_path: dep.file_path,
-            direct_deps: dep.direct_deps,
-            transitive_deps: dep.transitive_deps,
-            dependents: dep.dependents,
+            direct_deps,
+            transitive_deps,
+            dependents,
+            totals,
         };
-        Ok(Json(TextOutput {
-            text: format::format_dependencies(&output),
-        }))
+        let body = with_notice(format::format_dependencies(&output), notice.as_deref());
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "get_module_coupling",
-        description = "Compute module-level coupling metrics (afferent Ca, efferent Ce, instability I) for all files or directories. Instability ranges from 0 (maximally stable, many dependents) to 1 (maximally unstable, depends on many others). Use to find fragile modules."
+        description = "Compute module-level coupling metrics (afferent Ca, efferent Ce, instability I) for all files or directories. Instability ranges from 0 (maximally stable, many dependents) to 1 (maximally unstable, depends on many others). Use to find fragile modules.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_module_coupling(
         &self,
         Parameters(params): Parameters<GetModuleCouplingParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -436,12 +544,19 @@ impl MyceliumsMcp {
 
         let group_by_dir = params.group_by_directory.unwrap_or(false);
         let mut coupling = compute_module_coupling(&symbols, &relationships, group_by_dir);
+        // Stable pages: ties in instability ordered by path.
+        coupling.sort_by(|a, b| {
+            b.instability
+                .partial_cmp(&a.instability)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.module_path.cmp(&b.module_path))
+        });
 
         let total_count = coupling.len();
-        let limit = params.limit.unwrap_or(30);
-        coupling.truncate(limit);
+        let page = Page::new(params.limit, params.offset, Budget::new(30, 200)).take(coupling);
 
-        let modules: Vec<ModuleCouplingEntry> = coupling
+        let modules: Vec<ModuleCouplingEntry> = page
+            .items
             .into_iter()
             .map(|c| ModuleCouplingEntry {
                 module_path: c.module_path,
@@ -455,64 +570,90 @@ impl MyceliumsMcp {
             modules,
             total_count,
         };
-        Ok(Json(TextOutput {
-            text: format::format_module_coupling(&output),
-        }))
+        let body = with_notice(
+            format::format_module_coupling(&output),
+            page.notice.as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "export_mermaid",
-        description = "Export the knowledge graph as a Mermaid diagram. Supports flowchart (call graph), class (class hierarchy), and graph (community-grouped) views. Returns a Mermaid-syntax string that can be rendered by any Mermaid-compatible tool."
+        description = "Export the knowledge graph as a Mermaid diagram. Supports flowchart (call graph), class (class hierarchy), and graph (community-grouped) views. Returns a Mermaid-syntax string that can be rendered by any Mermaid-compatible tool.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn export_mermaid_tool(
         &self,
         Parameters(params): Parameters<ExportMermaidParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
 
-        let diagram_type = match params.diagram_type.as_deref() {
-            Some("class") => MermaidDiagramType::ClassDiagram,
-            Some("graph") => MermaidDiagramType::Graph,
-            _ => MermaidDiagramType::Flowchart,
+        let diagram_type = match params.diagram_type.unwrap_or_default() {
+            DiagramType::Class => MermaidDiagramType::ClassDiagram,
+            DiagramType::Graph => MermaidDiagramType::Graph,
+            DiagramType::Flowchart => MermaidDiagramType::Flowchart,
         };
 
         let mermaid = export_mermaid(&symbols, &relationships, diagram_type);
 
-        Ok(Json(TextOutput { text: mermaid }))
+        self.graph_text(&repo_id, mermaid).await
     }
 
     #[tool(
         name = "quality_hotspots",
-        description = "Identify refactoring hotspots by combining graph centrality, git churn, and module instability into a composite score. High-scoring symbols are architecturally critical AND frequently changed — prime candidates for refactoring."
+        description = "Identify refactoring hotspots by combining graph centrality, git churn, and module instability into a composite score. High-scoring symbols are architecturally critical AND frequently changed — prime candidates for refactoring.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn quality_hotspots(
         &self,
         Parameters(params): Parameters<QualityHotspotsParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
         let relationships = self.relationships(&repo_id).await?;
 
-        let top_n = params.top_n.unwrap_or(20);
-        let hotspots = compute_hotspot_scores(&symbols, &relationships, top_n);
+        let page = Page::new(params.top_n, params.offset, Budget::LIST);
+        let hotspots = page.take_open(compute_hotspot_scores(
+            &symbols,
+            &relationships,
+            page.fetch(),
+        ));
 
-        Ok(Json(TextOutput {
-            text: format::format_hotspots(&hotspots),
-        }))
+        let body = with_notice(
+            format::format_hotspots(&hotspots.items),
+            hotspots.notice.as_deref(),
+        );
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "architecture_lint",
-        description = "Run architecture quality checks: circular dependencies, god nodes, high fan-out, unstable dependencies. Returns findings with severity levels and affected entities."
+        description = "Run architecture quality checks: circular dependencies, god nodes, high fan-out, unstable dependencies. Returns findings with severity levels and affected entities.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn architecture_lint(
         &self,
         Parameters(params): Parameters<ArchitectureLintParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -521,24 +662,40 @@ impl MyceliumsMcp {
         let rules: Option<Vec<&str>> = params
             .rules
             .as_ref()
-            .map(|r| r.split(',').map(|s| s.trim()).collect());
-        let threshold = params.god_node_threshold.unwrap_or(20);
+            .map(|r| r.iter().map(|rule| rule.as_str()).collect());
+        let threshold = params.god_node_threshold.unwrap_or(20).max(1);
 
-        let report = lint_architecture(&symbols, &relationships, rules.as_deref(), threshold);
+        let mut report = lint_architecture(&symbols, &relationships, rules.as_deref(), threshold);
+        // Stable pages whatever order the checks produced.
+        report.findings.sort_by(|a, b| {
+            (&a.rule_id, &a.message, &a.affected_entities).cmp(&(
+                &b.rule_id,
+                &b.message,
+                &b.affected_entities,
+            ))
+        });
+        let page = Page::new(params.limit, params.offset, Budget::LIST)
+            .take(std::mem::take(&mut report.findings));
+        report.findings = page.items;
 
-        Ok(Json(TextOutput {
-            text: format::format_lint_results(&report),
-        }))
+        let body = with_notice(format::format_lint_results(&report), page.notice.as_deref());
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "architecture_view",
-        description = "Generate a service-level architecture diagram from the knowledge graph. Communities become service nodes, cross-community edges become connections. Returns both structured JSON and a Mermaid diagram string."
+        description = "Generate a service-level architecture diagram from the knowledge graph. Communities become service nodes, cross-community edges become connections. Returns the services, their connections, and a Mermaid diagram.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn architecture_view(
         &self,
         Parameters(params): Parameters<ArchitectureViewParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -547,27 +704,32 @@ impl MyceliumsMcp {
 
         let diagram = generate_architecture_diagram(&symbols, &relationships, &communities);
 
-        Ok(Json(TextOutput {
-            text: format::format_architecture_view(&diagram),
-        }))
+        self.graph_text(&repo_id, format::format_architecture_view(&diagram))
+            .await
     }
 
     #[tool(
         name = "detect_architecture_drift",
-        description = "Detect architectural drift by comparing the current knowledge graph against the last saved snapshot. Returns a drift score (0-100, higher = less drift) and details on structural changes."
+        description = "Detect architectural drift by comparing the current knowledge graph against the last saved snapshot. Returns a drift score (0-100, higher = less drift) and details on structural changes.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn detect_architecture_drift(
         &self,
         Parameters(params): Parameters<DetectDriftParams2>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
+    ) -> Result<Json<TextOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let baseline = load_snapshot(&data_dir(), &repo_id)
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?
+            .map_err(|e| ToolError::internal("cannot read the graph snapshot", e))?
             .ok_or_else(|| {
-                rmcp::ErrorData::internal_error(
-                    "No saved snapshot found. Run analysis first to create a baseline.".to_string(),
-                    None,
+                ToolError::recoverable(
+                    format!("No snapshot saved for {repo_id:?} yet."),
+                    "run analyze to save a baseline snapshot",
                 )
             })?;
 
@@ -577,22 +739,25 @@ impl MyceliumsMcp {
 
         let report = detect_drift(&baseline, &symbols, &relationships, &communities, &[]);
 
-        Ok(Json(TextOutput {
-            text: format::format_drift_report(&report),
-        }))
+        self.graph_text(&repo_id, format::format_drift_report(&report))
+            .await
     }
 
     #[tool(
         name = "get_ownership",
-        description = "Resolve file ownership from CODEOWNERS rules. Parses .github/CODEOWNERS or CODEOWNERS and matches symbols to their owners."
+        description = "Resolve file ownership from CODEOWNERS rules. Parses .github/CODEOWNERS or CODEOWNERS and matches symbols to their owners.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
     )]
     async fn get_ownership(
         &self,
         Parameters(params): Parameters<GetOwnershipParams>,
-    ) -> Result<Json<TextOutput>, rmcp::ErrorData> {
-        let registry = RepoRegistry::load(&registry_path())
-            .map_err(|e| rmcp::ErrorData::internal_error(format!("{}", e), None))?;
-        let repo = registry.require(&params.repo_id).map_err(repo_id_error)?;
+    ) -> Result<Json<TextOutput>, ToolError> {
+        let repo = repo_info(&params.repo_id)?;
 
         let symbols = self.symbols(&params.repo_id).await?;
 
@@ -603,10 +768,23 @@ impl MyceliumsMcp {
             .unwrap_or_default();
 
         let entries = parse_codeowners(&codeowners_content);
-        let report = compute_ownership(&symbols, &entries);
+        let mut report = compute_ownership(&symbols, &entries);
+        let owned_total = report.owned_files.len();
+        let unowned_total = report.unowned_files.len();
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
+        let (owned, owned_notice) = page.take_lists(vec![std::mem::take(&mut report.owned_files)]);
+        let (unowned, unowned_notice) =
+            page.take_lists(vec![std::mem::take(&mut report.unowned_files)]);
+        report.owned_files = owned.into_iter().flatten().collect();
+        report.unowned_files = unowned.into_iter().flatten().collect();
 
-        Ok(Json(TextOutput {
-            text: format::format_ownership(&report),
-        }))
+        let body = with_notice(
+            format!(
+                "{owned_total} owned and {unowned_total} unowned files in total.\n{}",
+                format::format_ownership(&report)
+            ),
+            owned_notice.or(unowned_notice).as_deref(),
+        );
+        self.graph_text(&params.repo_id, body).await
     }
 }
