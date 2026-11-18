@@ -64,6 +64,50 @@ pub struct HybridExplain {
     pub graph_edges: Vec<GraphEdge>,
 }
 
+/// Reciprocal-rank-fusion constant the shipped hybrid search uses.
+///
+/// Measured against alternatives (10–100) on the real-repository development
+/// split in #95; see `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`
+/// for the sweep and why the default stands.
+pub const DEFAULT_RRF_K: f64 = 60.0;
+
+/// Fewest vector candidates the hybrid vector leg fetches, however small the
+/// requested result count — the vector leg asks for
+/// `limit.max(vector_candidates)` so RRF has enough overlap with BM25.
+///
+/// Measured against 50–400 on the real-repository development split in #95.
+pub const DEFAULT_VECTOR_CANDIDATES: usize = 100;
+
+/// Weight of the BM25 leg's reciprocal-rank contribution in the shipped fusion.
+/// The vector leg's weight is fixed at 1, so `1.0` is plain, unweighted RRF.
+pub const DEFAULT_BM25_WEIGHT: f64 = 1.0;
+
+/// The tunable knobs of hybrid search.
+///
+/// [`HybridParams::default`] is what `myc search --hybrid` and the MCP
+/// `hybrid_search` tool use. The other values exist so the retrieval benchmark
+/// can sweep them through the production code path rather than a copy of it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HybridParams {
+    /// RRF constant `k` in `1 / (k + rank)`: larger values flatten the
+    /// difference between high and low ranks.
+    pub rrf_k: f64,
+    /// Minimum number of nearest-vector candidates fetched for fusion.
+    pub vector_candidates: usize,
+    /// Multiplier on the BM25 leg's RRF contribution (vector leg: 1).
+    pub bm25_weight: f64,
+}
+
+impl Default for HybridParams {
+    fn default() -> Self {
+        Self {
+            rrf_k: DEFAULT_RRF_K,
+            vector_candidates: DEFAULT_VECTOR_CANDIDATES,
+            bm25_weight: DEFAULT_BM25_WEIGHT,
+        }
+    }
+}
+
 /// Result from hybrid search combining BM25 and vector rankings.
 #[derive(Debug, Clone)]
 pub struct HybridSearchResult {
@@ -97,6 +141,21 @@ pub fn reciprocal_rank_fusion(
     bm25_results: Vec<(CodeSymbol, f64, Option<SearchExplain>)>,
     vector_results: Vec<(CodeSymbol, f64)>,
     k: f64,
+    limit: usize,
+) -> Vec<HybridSearchResult> {
+    weighted_reciprocal_rank_fusion(bm25_results, vector_results, k, 1.0, limit)
+}
+
+/// [`reciprocal_rank_fusion`] with the BM25 leg's contribution scaled by
+/// `bm25_weight`: score = `bm25_weight / (k + bm25_rank) + 1 / (k + vector_rank)`.
+///
+/// A weight of `1.0` is plain RRF, bit for bit; `0.0` reduces fusion to the
+/// vector ranking (BM25 then only breaks exact ties through list order).
+pub fn weighted_reciprocal_rank_fusion(
+    bm25_results: Vec<(CodeSymbol, f64, Option<SearchExplain>)>,
+    vector_results: Vec<(CodeSymbol, f64)>,
+    k: f64,
+    bm25_weight: f64,
     limit: usize,
 ) -> Vec<HybridSearchResult> {
     // Build uid -> (rank, score, symbol, explain) maps for each result set.
@@ -155,7 +214,7 @@ pub fn reciprocal_rank_fusion(
 
             let mut combined = 0.0;
             if let Some(r) = bm25_rank {
-                combined += 1.0 / (k + r as f64);
+                combined += bm25_weight * (1.0 / (k + r as f64));
             }
             if let Some(r) = vector_rank {
                 combined += 1.0 / (k + r as f64);
@@ -230,7 +289,9 @@ pub fn attach_graph_edges(
 ///    via [`crate::embeddings::embedder_for_index`] so it matches the index
 /// 3. Runs vector search against `vectors`' **persisted** embeddings — the
 ///    corpus is never re-embedded per query
-/// 4. Combines results using Reciprocal Rank Fusion (k=60)
+/// 4. Combines results using Reciprocal Rank Fusion with the shipped
+///    [`HybridParams::default`] (k = 60, at least 100 vector candidates,
+///    unweighted)
 ///
 /// `vectors` is typically a [`myceliums_storage::Store`]; the BM25 leg keeps
 /// using the in-memory `symbols` slice.
@@ -244,7 +305,33 @@ pub async fn hybrid_search(
     query: &str,
     limit: usize,
 ) -> Result<Vec<HybridSearchResult>> {
-    hybrid_search_impl(embedder, symbols, vectors, query, limit, false).await
+    hybrid_search_with(
+        embedder,
+        symbols,
+        vectors,
+        query,
+        limit,
+        &HybridParams::default(),
+    )
+    .await
+}
+
+/// [`hybrid_search`] with explicit fusion parameters.
+///
+/// The product calls [`hybrid_search`]; this exists so the retrieval benchmark
+/// can measure other parameter values through the very same code path.
+///
+/// Requires the `embeddings` feature.
+#[cfg(feature = "embeddings")]
+pub async fn hybrid_search_with(
+    embedder: &Embedder,
+    symbols: &[CodeSymbol],
+    vectors: &impl VectorSearcher,
+    query: &str,
+    limit: usize,
+    params: &HybridParams,
+) -> Result<Vec<HybridSearchResult>> {
+    hybrid_search_impl(embedder, symbols, vectors, query, limit, false, params).await
 }
 
 /// Hybrid search with explain traces showing scoring breakdown and graph paths.
@@ -258,7 +345,16 @@ pub async fn hybrid_search_explain(
     query: &str,
     limit: usize,
 ) -> Result<Vec<HybridSearchResult>> {
-    hybrid_search_impl(embedder, symbols, vectors, query, limit, true).await
+    hybrid_search_impl(
+        embedder,
+        symbols,
+        vectors,
+        query,
+        limit,
+        true,
+        &HybridParams::default(),
+    )
+    .await
 }
 
 #[cfg(feature = "embeddings")]
@@ -269,6 +365,7 @@ async fn hybrid_search_impl(
     query: &str,
     limit: usize,
     explain: bool,
+    params: &HybridParams,
 ) -> Result<Vec<HybridSearchResult>> {
     // BM25 search (with or without explain)
     let bm25_results: Vec<(CodeSymbol, f64, Option<SearchExplain>)> = if explain {
@@ -287,19 +384,20 @@ async fn hybrid_search_impl(
     // persisted vectors. We do NOT re-embed the corpus — that is the whole
     // point of issue #28.
     let query_embedding = embedder.embed_query(query).await?;
-    let vector_results = vector_leg(vectors, &query_embedding, limit).await?;
+    let vector_results =
+        vector_leg(vectors, &query_embedding, limit, params.vector_candidates).await?;
 
-    // Combine with RRF (k=60)
-    Ok(reciprocal_rank_fusion(
+    Ok(weighted_reciprocal_rank_fusion(
         bm25_results,
         vector_results,
-        60.0,
+        params.rrf_k,
+        params.bm25_weight,
         limit,
     ))
 }
 
 /// Vector leg of hybrid search: fetch nearest persisted-vector candidates for a
-/// pre-computed query embedding. Fetches `limit.max(100)` candidates so RRF has
+/// pre-computed query embedding. Fetches `limit.max(candidates)` so RRF has
 /// enough overlap with the BM25 leg. Kept separate from `hybrid_search_impl` so
 /// it can be exercised without loading the real embedding model.
 #[cfg(feature = "embeddings")]
@@ -307,8 +405,9 @@ async fn vector_leg(
     vectors: &impl VectorSearcher,
     query_embedding: &[f32],
     limit: usize,
+    candidates: usize,
 ) -> Result<Vec<(CodeSymbol, f64)>> {
-    let vector_limit = limit.max(100); // fetch more candidates for fusion
+    let vector_limit = limit.max(candidates); // fetch more candidates for fusion
     vectors.nearest(query_embedding, vector_limit).await
 }
 
@@ -463,6 +562,81 @@ mod tests {
             let order: Vec<&str> = results.iter().map(|r| r.symbol.uid.as_str()).collect();
             assert_eq!(order, ["a", "b", "d", "e"]);
         }
+    }
+
+    #[test]
+    fn default_params_are_the_documented_shipped_values() {
+        let params = HybridParams::default();
+        assert_eq!(params.rrf_k, 60.0);
+        assert_eq!(params.vector_candidates, 100);
+        assert_eq!(params.bm25_weight, 1.0);
+    }
+
+    #[test]
+    fn unit_bm25_weight_is_plain_rrf_bit_for_bit() {
+        let bm25 = || {
+            vec![
+                (make_symbol("a", "alpha"), 10.0, None),
+                (make_symbol("b", "beta"), 8.0, None),
+                (make_symbol("c", "gamma"), 5.0, None),
+            ]
+        };
+        let vector = || {
+            vec![
+                (make_symbol("c", "gamma"), 0.95),
+                (make_symbol("d", "delta"), 0.90),
+            ]
+        };
+        let plain = reciprocal_rank_fusion(bm25(), vector(), 37.0, 10);
+        let weighted = weighted_reciprocal_rank_fusion(bm25(), vector(), 37.0, 1.0, 10);
+        let scores = |r: &[HybridSearchResult]| -> Vec<(String, u64)> {
+            r.iter()
+                .map(|x| (x.symbol.uid.clone(), x.combined_score.to_bits()))
+                .collect()
+        };
+        assert_eq!(scores(&plain), scores(&weighted));
+    }
+
+    #[test]
+    fn bm25_weight_scales_only_the_lexical_leg() {
+        // a: BM25 rank 1 only; d: vector rank 1 only. Unweighted they tie, and
+        // list order puts the BM25 hit first. Halving the BM25 weight must put
+        // the vector-only hit ahead and halve exactly the BM25 contribution.
+        let bm25 = vec![(make_symbol("a", "alpha"), 10.0, None)];
+        let vector = vec![(make_symbol("d", "delta"), 0.9)];
+        let results = weighted_reciprocal_rank_fusion(bm25, vector, 60.0, 0.5, 10);
+        assert_eq!(results[0].symbol.uid, "d");
+        assert!((results[0].combined_score - 1.0 / 61.0).abs() < 1e-12);
+        assert!((results[1].combined_score - 0.5 / 61.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn small_k_favours_one_top_rank_over_consistent_agreement() {
+        // x: BM25 rank 1, vector rank 10. y: BM25 rank 4, vector rank 4.
+        // With a large k the two sums are nearly equal and y (consistently
+        // good) wins; a small k lets x's single first place dominate.
+        let bm25 = || {
+            let mut list = vec![(make_symbol("x", "x"), 9.0, None)];
+            list.extend((0..2).map(|i| (make_symbol(&format!("b{i}"), "b"), 5.0, None)));
+            list.push((make_symbol("y", "y"), 4.0, None));
+            list
+        };
+        let vector = || {
+            let mut list: Vec<(CodeSymbol, f64)> = (0..3)
+                .map(|i| (make_symbol(&format!("v{i}"), "v"), 0.9))
+                .collect();
+            list.push((make_symbol("y", "y"), 0.8));
+            list.extend((0..5).map(|i| (make_symbol(&format!("w{i}"), "w"), 0.5)));
+            list.push((make_symbol("x", "x"), 0.4));
+            list
+        };
+        let rank_of = |results: &[HybridSearchResult], uid: &str| {
+            results.iter().position(|r| r.symbol.uid == uid).unwrap()
+        };
+        let large = weighted_reciprocal_rank_fusion(bm25(), vector(), 100.0, 1.0, 20);
+        assert!(rank_of(&large, "y") < rank_of(&large, "x"));
+        let small = weighted_reciprocal_rank_fusion(bm25(), vector(), 1.0, 1.0, 20);
+        assert!(rank_of(&small, "x") < rank_of(&small, "y"));
     }
 
     #[test]
@@ -634,7 +808,7 @@ mod persisted_vector_tests {
         ]);
         let query_embedding = vec![0.0f32; 8];
 
-        let results = vector_leg(&searcher, &query_embedding, 5)
+        let results = vector_leg(&searcher, &query_embedding, 5, DEFAULT_VECTOR_CANDIDATES)
             .await
             .expect("vector leg succeeds");
 
@@ -644,6 +818,26 @@ mod persisted_vector_tests {
         assert_eq!(searcher.last_limit.load(Ordering::SeqCst), 100);
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].0.uid, "a");
+    }
+
+    /// The candidate count is a parameter: the leg asks for
+    /// `limit.max(candidates)`, never fewer than the caller's limit.
+    #[tokio::test]
+    async fn vector_leg_widens_to_the_configured_candidate_count() {
+        let searcher = CountingSearcher::new(vec![(make_symbol("a", "alpha"), 0.9)]);
+        let query_embedding = vec![0.0f32; 8];
+        vector_leg(&searcher, &query_embedding, 5, 400)
+            .await
+            .expect("vector leg succeeds");
+        assert_eq!(searcher.last_limit.load(Ordering::SeqCst), 400);
+        vector_leg(&searcher, &query_embedding, 50, 10)
+            .await
+            .expect("vector leg succeeds");
+        assert_eq!(
+            searcher.last_limit.load(Ordering::SeqCst),
+            50,
+            "a candidate count below the limit must not shrink the result"
+        );
     }
 
     /// Rank provenance (bm25_rank / vector_rank) is preserved when the vector
@@ -657,7 +851,7 @@ mod persisted_vector_tests {
         ]);
         let query_embedding = vec![0.0f32; 8];
 
-        let vector_results = vector_leg(&searcher, &query_embedding, 10)
+        let vector_results = vector_leg(&searcher, &query_embedding, 10, DEFAULT_VECTOR_CANDIDATES)
             .await
             .expect("vector leg succeeds");
 

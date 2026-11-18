@@ -197,10 +197,14 @@ pub use god_nodes::{compute_god_nodes, GodNodeItem};
 pub use graphml_export::export_graphml;
 pub use hotspot_score::{compute_hotspot_scores, HotspotItem};
 pub use hybrid_search::{
-    attach_graph_edges, reciprocal_rank_fusion, GraphEdge, HybridExplain, HybridSearchResult,
+    attach_graph_edges, reciprocal_rank_fusion, weighted_reciprocal_rank_fusion, GraphEdge,
+    HybridExplain, HybridParams, HybridSearchResult, DEFAULT_BM25_WEIGHT, DEFAULT_RRF_K,
+    DEFAULT_VECTOR_CANDIDATES,
 };
 #[cfg(feature = "embeddings")]
-pub use hybrid_search::{hybrid_search, hybrid_search_explain, rerank_results, VectorSearcher};
+pub use hybrid_search::{
+    hybrid_search, hybrid_search_explain, hybrid_search_with, rerank_results, VectorSearcher,
+};
 pub use impact::{detect_impact, run_git_diff, ImpactReport};
 pub use lock::{AnalysisLock, LockOutcome};
 pub use mbox::parse_mbox;
