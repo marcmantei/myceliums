@@ -62,11 +62,9 @@ impl SourceParser {
             }
         }
 
-        let child_count = node.child_count();
-        for i in 0..child_count {
-            if let Some(child) = node.child(i) {
-                Self::walk_for_rationales(child, source, out);
-            }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            Self::walk_for_rationales(child, source, out);
         }
     }
 

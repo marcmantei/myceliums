@@ -22,7 +22,7 @@ Created with `myc init`. All fields are optional. Omitted fields use their defau
 | `include` | list of strings | `[]` (include all) | Glob patterns for files/directories to include. Empty means include everything |
 | `exclude` | list of strings | see below | Glob patterns for files/directories to exclude |
 | `max_file_size_kb` | integer | `512` | Maximum file size in KB to analyze (0 = no limit) |
-| `parse_timeout_secs` | integer | `30` | Parse timeout per file in seconds (0 = no timeout) |
+| `parse_timeout_secs` | integer | `30` | Time budget for tree-sitter to parse one file, in seconds (0 = no limit). A file over budget is skipped with a warning and counted as `parse timeout`. Files whose syntax tree is nested more than 10,000 levels deep are skipped the same way (`too deeply nested`) |
 | `max_line_length_bytes` | integer | `5120` | Maximum line length in bytes (0 = no limit). Lines exceeding this are skipped |
 | `skip_patterns` | list of strings | see below | File name patterns to skip (substring match) |
 | `batch_size` | integer | `500` | Number of items to buffer before flushing a batch to storage |

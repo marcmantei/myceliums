@@ -15,8 +15,11 @@ pub enum FileSkipReason {
     LineTooLong,
     /// File matches a skip pattern (minified, bundled, map files).
     MinifiedOrBundled,
-    /// File parsing timed out.
+    /// Tree-sitter did not finish within `analysis.parse_timeout_secs`.
     ParseTimeout,
+    /// The file's syntax tree is nested deeper than the extractors walk
+    /// (`parser::MAX_TREE_DEPTH`).
+    TooDeeplyNested,
     /// File is not valid UTF-8 (binary file).
     BinaryFile,
 }
@@ -28,6 +31,7 @@ impl std::fmt::Display for FileSkipReason {
             Self::LineTooLong => write!(f, "line too long"),
             Self::MinifiedOrBundled => write!(f, "minified/bundled"),
             Self::ParseTimeout => write!(f, "parse timeout"),
+            Self::TooDeeplyNested => write!(f, "too deeply nested"),
             Self::BinaryFile => write!(f, "binary file (not UTF-8)"),
         }
     }
