@@ -1,0 +1,172 @@
+# Integrating myceliums with coding agents
+
+A code knowledge graph only helps an agent that uses it. The agent pilot
+([#99](../../evals/agent/README.md), 12 November 2026) measured the weakest
+integration, the MCP server attached and nothing else: Claude Code called a
+myceliums tool in **0 of 90** sessions. Claude Code defers MCP tool schemas
+behind tool search, so the agent saw 54 tool names and never loaded one, and
+nothing in its context sent it from grep to the graph.
+
+This guide describes five ways to route an agent to myceliums, from soft to
+hard, and what `myc setup-claude` installs for each.
+
+> **What is measured and what is not.** The only measured result so far is the
+> pilot above (MCP server only: 0 % tool-call rate, +25 % input tokens, no
+> accuracy change on an easy task set). How much each layer below changes
+> tool use, accuracy and cost is being measured in
+> [#125](https://github.com/marcmantei/myceliums/issues/125) (variants A–E on a
+> harder task set). Until those numbers are in, treat the "effect" column as
+> the design intent, not a result. The recommended default will follow the
+> measurements.
+
+## The five layers
+
+| Layer | What | Intended effect | Risk | Status |
+|---|---|---|---|---|
+| 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | cheap, only a hint | ignored under pressure | `myc setup-claude`, `myc setup-codex` |
+| 2. Tool surface | 5–8 task-named core tools, loaded up front instead of deferred | the model sees and understands them | – | planned, [#97](https://github.com/marcmantei/myceliums/issues/97) |
+| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | fires at the moment the agent reaches for grep | blocking grep would be wrong, so it never blocks | `myc setup-claude` |
+| 4. Subagent | A `code-explorer` agent with only the myceliums tools and Read; the main agent delegates structural questions | clean separation, good for teams | one extra hop | `myc setup-claude` |
+| 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | full control | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
+
+Layers 1, 3 and 4 work through the same one-shot CLI commands, which any
+agent with a shell can call:
+
+| Question | Command |
+|---|---|
+| Who calls X? | `myc callers X` (`--depth 3` for transitive callers) |
+| What does X call? | `myc callees X` |
+| What breaks if X or a file changes? | `myc impact X`, `myc impact src/file.rs` |
+| Where/how is something implemented? | `myc context how are sessions refreshed` |
+
+They print compact text (or `--json`), stay within `--budget` estimated
+tokens (default 2000; one token is estimated as four characters), and end
+with the index freshness (`index: abc1234 = HEAD`, or a warning when HEAD has
+moved since `myc analyze`). An ambiguous name lists its candidate definitions
+with file:line and exits with code 2; an unknown name suggests similar ones
+and exits with code 1. They read the index that covers the working directory
+and never fall back to another repository.
+
+## `myc setup-claude`
+
+```bash
+cd your-project
+myc analyze .
+myc setup-claude                  # project scope: files to commit for the team
+myc setup-claude --scope user     # or: every project, for you only
+```
+
+What each layer writes:
+
+| Layer | Project scope (default) | User scope | Opt out |
+|---|---|---|---|
+| MCP server | `.mcp.json` | `claude mcp add -s user` (fallback: `~/.claude.json`) | – |
+| SessionStart hook: refresh the index, print a status line | `.claude/settings.json` | `~/.claude/settings.json` | – |
+| PostToolUse hook: format myceliums tool results | `.claude/settings.json` | `~/.claude/settings.json` | – |
+| 1. Routing block | `CLAUDE.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
+| 3. Grep redirect hook (PreToolUse) | `.claude/settings.json` | `~/.claude/settings.json` | `--no-redirect-hook` |
+| 4. `code-explorer` subagent | `.claude/agents/code-explorer.md` | `~/.claude/agents/code-explorer.md` | `--no-agent` |
+
+- **Re-running** is safe: every file ends up as if installed once, and an
+  opt-out flag removes a layer that an earlier run installed.
+- **Uninstall** with `myc setup-claude --uninstall` (add `--scope user` for
+  the user install). It removes the `myceliums` MCP entry, the hook handlers
+  that run `myc session`, `myc format-hook` or `myc hook-grep`, the routing
+  block and the subagent file, and nothing else. At project scope, files that
+  only held myceliums content are deleted.
+- **Project scope** names `myc` by its name when `myc` is on `PATH`, so the
+  files work on every machine that has it installed. Claude Code asks each
+  user once to approve a project's MCP server; to pre-approve it for yourself,
+  add `"enabledMcpjsonServers": ["myceliums"]` to `.claude/settings.local.json`.
+- Earlier releases' `myc setup-claude` installed at user scope. If both are
+  installed, the hooks run twice; remove one with
+  `myc setup-claude --scope user --uninstall`.
+- `myc setup` (the wizard) installs at user scope.
+
+### 1. Routing block
+
+A block of under 15 lines between `<!-- BEGIN myceliums -->` and
+`<!-- END myceliums -->`. It is loaded on every turn, so it is short: it
+names the commands above, the MCP tools and the subagent as the place for
+structural questions, and grep/rg as the place for string literals, config
+values, log messages and non-code files. The block is versioned (`v1` in its
+first comment line); everything between the markers is replaced on re-run,
+and text outside them is never touched. Put your own rules outside the
+markers.
+
+`myc setup-codex` writes the same block, without the subagent line, into the
+project's `AGENTS.md` (when run inside a git repository; `--no-routing` skips
+it).
+
+### 3. Grep redirect hook
+
+`myc hook-grep` runs before a `Grep` tool call and before a `Bash` call that
+runs `grep`, `rg` or `git grep` (the hook's `if` filter keeps it off other
+Bash calls). When the search pattern looks like an identifier
+(`parse_query`, `parseQuery`, `fn parse_query`, `\.AsString\(`,
+`Item.AsString`) and the project's index defines it as a function, method or
+type, the hook adds one or two sentences to the agent's context, for example:
+
+```text
+`parseAccept` is a Function defined at src/utils/accept.ts:211 in the myceliums index.
+`myc callers parseAccept` lists its 4 direct callers with file:line, `myc callees parseAccept`
+what it calls, `myc impact parseAccept` the files that depend on it.
+```
+
+It is silent for everything else: plain words (`error`), phrases, regexes
+with character classes or quantifiers, searches restricted to config or prose
+files (`*.json`, `*.yaml`, `*.md`, ...), names the index does not define, and
+directories without an index. It never blocks or approves the tool call (it
+sets no permission decision), exits 0 on any failure, and gives up silently
+if the index lookup takes longer than 400 ms. The hook's input and output
+follow the [Claude Code hooks reference](https://code.claude.com/docs/en/hooks).
+
+### 4. `code-explorer` subagent
+
+`.claude/agents/code-explorer.md` defines a subagent whose description asks
+the main agent to delegate structural questions ("who calls", "what breaks",
+"where is X implemented") to it. Its tools are the whole myceliums MCP server
+(`mcp__myceliums__*`), `Read` to confirm results, and `ToolSearch` in case the
+session defers MCP tool schemas. It has no Bash: the subagent format can give
+or withhold a tool, but cannot limit Bash to `myc` commands.
+
+The file carries a marker comment in its frontmatter. Delete that line to make
+the file yours: `myc setup-claude` then neither overwrites nor removes it.
+
+## 2. Core toolset (planned)
+
+The MCP server exposes 54 tools with generic names, which Claude Code defers.
+[#97](https://github.com/marcmantei/myceliums/issues/97) will add a small,
+task-named default toolset. Claude Code can load a server's tools up front
+with `"alwaysLoad": true` in its MCP entry
+([docs](https://code.claude.com/docs/en/mcp)); with today's 54 tools that
+would add every schema to every model call, so `setup-claude` does not set it.
+
+## 5. Custom harness: prefetch a context pack
+
+If you run your own agent loop (for example with the Claude Agent SDK), you
+can skip tool discovery: build a context pack before the model call and put it
+in the prompt.
+
+```bash
+myc context --json --budget 1500 "Why does the login redirect loop?"
+```
+
+The JSON holds `query`, `budget_tokens`, `estimated_tokens`, `truncated`,
+`symbols` (each with `name`, `qualified_name`, `kind`, `file`, `line`,
+`end_line`, `signature`, `reason`, up to five `callers` and `callees` with
+their totals), `files`, `repo` and `freshness`. Symbols the text names
+(`parse_query`, `Item.AsString`) come first, then lexical search hits.
+`--hybrid` adds vector search when the index has embeddings; it loads the
+embedding model, which takes seconds.
+
+[`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) shows the
+whole loop in a short Python script.
+
+## Team mode
+
+For a team, build the index in CI on merge and serve it with
+`myc mcp --http <addr> --allow-remote`, which requires a bearer token
+(`MYC_MCP_TOKEN`); commit the project-scope files from `myc setup-claude` so
+every clone gets the same routing, hooks and subagent. `MYCELIUMS_DATA_DIR`
+points the CLI, the hooks and the MCP server at the same index directory.

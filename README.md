@@ -59,17 +59,18 @@ These are capabilities, not measured outcomes. Measured on 30 code-understanding
 # Install
 cargo install myc
 
-# Set up Claude Code integration (one-time)
-myc setup-claude
-
 # Analyze your project
-myc analyze ./my-project
+cd my-project && myc analyze .
+
+# Set up Claude Code integration for this project (MCP server, hooks,
+# CLAUDE.md routing block, code-explorer subagent; --scope user for all projects)
+myc setup-claude
 
 # Start Claude Code — myceliums is ready
 claude
 ```
 
-That's it. Claude Code can now call the knowledge-graph tools. Whether it does is up to the model: in the [agent benchmark](#does-it-help-an-agent) it never did, and kept to its own search tools.
+Claude Code can now call the knowledge-graph tools. Whether it does is up to the model: in the [agent benchmark](#does-it-help-an-agent), with only the MCP server attached, it never did and kept to its own search tools. `myc setup-claude` therefore also installs routing rules, a grep-redirect hook and a subagent; see [Integrating with agents](#integrating-with-agents).
 
 For the full walkthrough, see the [Getting Started guide](docs/getting-started.md).
 
@@ -85,6 +86,10 @@ myc processes my-project --entry "handlePayment"
 
 # Check impact of your changes
 myc impact
+
+# Who calls a function / what a change to it breaks (compact, for agents)
+myc callers parse_query
+myc impact parse_query
 
 # Launch interactive graph visualization
 myc serve
@@ -246,11 +251,14 @@ On the very first `myc analyze` or semantic/hybrid search, the configured embedd
 | `myc communities <repo>` | Show code communities detected by the Leiden algorithm |
 | `myc processes <repo>` | Show traced execution flows from entry points |
 | `myc impact` | Detect which symbols are affected by the current git diff |
+| `myc impact <symbol\|file>` | What calls or imports a symbol or file, transitively, and in which files |
+| `myc callers <symbol>` / `myc callees <symbol>` | Callers / callees with file:line (`--depth N` for chains, `--json`) |
+| `myc context <task text>` | Token-budgeted context pack for a task (`--json` for agent harnesses) |
 | `myc rename <symbol> <new>` | Preview (or apply with `--apply`) a symbol rename |
 | `myc init` | Create a `.myceliums.toml` config in the current directory |
 | `myc list` | List all analyzed repositories |
 | `myc stats <repo>` | Show symbol, file, relationship, and language breakdown |
-| `myc setup-claude` | Set up Claude Code integration (MCP server + hooks) |
+| `myc setup-claude` | Set up Claude Code integration (MCP server, hooks, routing block, subagent) |
 | `myc status` | Show overview of all indexed repos, disk usage, and orphaned data |
 | `myc clean --orphans` | Remove orphaned data directories not tracked in the registry |
 | `myc clean --all` | Remove ALL myceliums data (with confirmation) |
@@ -273,16 +281,17 @@ Myceliums runs as an MCP server over stdio. AI assistants get direct access to t
 ### Claude Code (recommended)
 
 ```bash
-myc setup-claude
+myc setup-claude                # in the project: files to commit for the team
+myc setup-claude --scope user   # or for all your projects
 ```
 
-This registers the MCP server, configures startup indicators, and sets up tool feedback hooks — all in one command. On every Claude Code session you'll see:
+This registers the MCP server, a SessionStart hook that keeps the index fresh, a result formatter, a CLAUDE.md routing block, a PreToolUse hook that answers a grep for a known symbol with the matching `myc` call, and a `code-explorer` subagent. Opt out per layer with `--no-routing`, `--no-redirect-hook`, `--no-agent`. On every Claude Code session you'll see:
 
 ```
 SessionStart:startup says: [myceliums] my-project ready | 312 files · 1,247 symbols
 ```
 
-To remove: `myc setup-claude --uninstall`
+To remove: `myc setup-claude --uninstall` (add `--scope user` for a user install). Details: [Integrating with agents](#integrating-with-agents).
 
 ### Cursor
 
@@ -304,13 +313,13 @@ Add to `~/.cursor/mcp.json`:
 One-command setup for 12 platforms:
 
 ```bash
-myc setup-claude      # Claude Code (MCP + hooks)
+myc setup-claude      # Claude Code (MCP, hooks, routing, subagent)
 myc setup-vscode      # VS Code / Copilot Chat
 myc setup-windsurf    # Windsurf (Codeium)
 myc setup-zed         # Zed
 myc setup-jetbrains   # JetBrains IDEs
 myc setup-gemini      # Google Gemini CLI
-myc setup-codex       # OpenAI Codex CLI
+myc setup-codex       # OpenAI Codex CLI (+ AGENTS.md routing block)
 myc setup-copilot     # GitHub Copilot CLI
 myc setup-aider       # Aider
 myc setup-kiro        # AWS Kiro IDE
@@ -337,6 +346,30 @@ Any other MCP-compatible editor can use myceliums by pointing to `myc mcp`.
 | `get_processes` | Retrieve traced execution flows with optional filtering |
 | `list_repos` | List analyzed repositories and their `repo_id`s |
 | `delete` | Remove a repository's analysis data |
+
+---
+
+## Integrating with agents
+
+Attaching the MCP server is not enough: in the pilot below the agent called
+myceliums in 0 of 90 sessions, because Claude Code defers MCP tool schemas
+and nothing sent the agent from grep to the graph. Myceliums ships five ways
+to route an agent to it, from soft to hard:
+
+| Layer | What | Installed by |
+|---|---|---|
+| 1. Instructions | Routing block in CLAUDE.md / AGENTS.md: structural questions to myceliums, grep for literals and config | `myc setup-claude`, `myc setup-codex` |
+| 2. Tool surface | Small task-named core toolset, loaded up front | planned ([#97](https://github.com/marcmantei/myceliums/issues/97)) |
+| 3. Hooks | PreToolUse hook: a grep for a known symbol gets the matching `myc callers …` call as context (never blocks) | `myc setup-claude` |
+| 4. Subagent | `code-explorer` with only the myceliums tools and Read | `myc setup-claude` |
+| 5. Custom harness | Prefetch `myc context --json` into the prompt | [example](examples/agent-sdk-prefetch/) |
+
+The one-shot commands `myc callers`, `myc callees`, `myc impact <symbol|file>`
+and `myc context` give any agent with a shell the same answers in compact,
+token-budgeted form. How much each layer changes tool use, accuracy and cost
+is being measured in [#125](https://github.com/marcmantei/myceliums/issues/125);
+no layer has a measured effect yet. Guide:
+[docs/guides/agent-integration.md](docs/guides/agent-integration.md).
 
 ---
 
@@ -619,10 +652,12 @@ If an analysis is interrupted (e.g., timeout, crash, `Ctrl+C`), the data directo
 
 ### Claude Code integration
 
-`myc setup-claude` configures two things:
+`myc setup-claude` (project scope; `--scope user` writes the same into `~/.claude.json` and `~/.claude/`) configures:
 
-1. **MCP server** — Registered in `~/.claude.json`. Claude Code spawns `myc mcp` as a background process for each session. Lightweight and idle when not queried.
-2. **SessionStart hook** — Added to `~/.claude/settings.json`. Runs `myc session . --yes --timeout 300` when a Claude Code session starts, ensuring the knowledge graph is fresh. Aborts after 5 minutes to prevent runaway analyses.
+1. **MCP server** — Registered in `.mcp.json`. Claude Code spawns `myc mcp` as a background process for each session. Lightweight and idle when not queried.
+2. **SessionStart hook** — Added to `.claude/settings.json`. Runs `myc session . --yes --timeout 300` when a Claude Code session starts, ensuring the knowledge graph is fresh. Aborts after 5 minutes to prevent runaway analyses.
+3. **PreToolUse grep hook** — `myc hook-grep` runs before Grep and grep/rg calls; it reads the index, never blocks, and stays silent unless the pattern names a known symbol.
+4. **Routing block and subagent** — Text files only: `CLAUDE.md` and `.claude/agents/code-explorer.md`.
 
 To remove the integration: `myc setup-claude --uninstall`
 
@@ -664,6 +699,7 @@ The workspace has seven crates:
 | Editor setup (all 14 editors) | [docs/editors/overview.md](docs/editors/overview.md) |
 | Call resolution limitations | [docs/guides/call-resolution-limitations.md](docs/guides/call-resolution-limitations.md) |
 | Token savings | [docs/guides/token-savings.md](docs/guides/token-savings.md) |
+| Integrating with agents (routing, hooks, subagent, prefetch) | [docs/guides/agent-integration.md](docs/guides/agent-integration.md) |
 | Agent benchmark (with vs without myceliums) | [evals/agent/README.md](evals/agent/README.md) |
 | Cypher query guide | [docs/guides/cypher-queries.md](docs/guides/cypher-queries.md) |
 | Search modes | [docs/guides/search-modes.md](docs/guides/search-modes.md) |
