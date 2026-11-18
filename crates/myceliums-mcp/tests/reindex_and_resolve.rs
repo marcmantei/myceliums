@@ -2,7 +2,8 @@
 //!
 //! * When the `Index:` line says the index is stale or edited since
 //!   indexing, `analyze` (without `force`) really re-indexes, and the line
-//!   then says up to date — the advice is never a no-op.
+//!   then says up to date — the advice is never a no-op, also for an
+//!   uncommitted deletion that `git status` keeps listing.
 //! * Two real top-level functions with the same name (the parser gives both
 //!   `qualified_name == name`) are reported as ambiguous, and the
 //!   `file_path:qualified_name` handle from the error picks one — for
@@ -71,6 +72,11 @@ async fn analyze_refreshes_what_the_index_line_calls_stale_and_same_names_are_am
         "export function start(): number {\n    return 1;\n}\n",
     )
     .unwrap();
+    std::fs::write(
+        project.join("src/extra.ts"),
+        "export function extra(): number {\n    return 3;\n}\n",
+    )
+    .unwrap();
     git(&project, &["init", "-q"]);
     git(&project, &["add", "."]);
     git(&project, &["commit", "-q", "-m", "init"]);
@@ -113,6 +119,22 @@ async fn analyze_refreshes_what_the_index_line_calls_stale_and_same_names_are_am
     assert!(index_line(&server, &repo_id)
         .await
         .ends_with("= HEAD, up to date."));
+
+    // An uncommitted deletion stays in `git status` until it is committed.
+    // It is a change while the index still holds the file, and no longer one
+    // once analyze has re-indexed without it — the line must clear, not
+    // call the index stale forever.
+    std::fs::remove_file(project.join("src/extra.ts")).unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(3200)).await;
+    let line = index_line(&server, &repo_id).await;
+    assert!(line.contains("1 file changed since indexing"), "{line}");
+    let refreshed = server.analyze_for_test(analyze(&project)).await.unwrap();
+    assert!(refreshed.contains("(fresh)"), "{refreshed}");
+    tokio::time::sleep(std::time::Duration::from_millis(3200)).await;
+    let line = index_line(&server, &repo_id).await;
+    assert!(line.ends_with("= HEAD, up to date."), "{line}");
+    let again = server.analyze_for_test(analyze(&project)).await.unwrap();
+    assert!(again.contains("(cached)"), "{again}");
 
     // ── Same-named top-level functions are ambiguous ─────────────────────
     let project = projects.path().join("twin-project");

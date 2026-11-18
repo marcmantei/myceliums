@@ -51,7 +51,9 @@ impl MyceliumsMcp {
                 // index stale, so "run analyze to refresh" always refreshes.
                 let cached = match cache::check_cache(repo_info, &abs_path, &cache_config) {
                     CacheDecision::UseCached { repo_id, reason } => {
-                        let freshness = crate::index_status::freshness(repo_info, true).await;
+                        let indexed = self.files(&repo_id).await?.shared();
+                        let freshness =
+                            crate::index_status::freshness(repo_info, indexed, true).await;
                         (!freshness.is_stale()).then_some((repo_id, reason))
                     }
                     CacheDecision::ReanalyzeNeeded { .. } => None,

@@ -40,14 +40,17 @@ and a footer explains it.
 
 **Freshness.** Every result read from a repository's graph starts with one
 `Index:` line comparing the analyzed commit with the current `HEAD` and
-counting files changed since indexing (modified, deleted or new untracked
-files newer than the analysis start), e.g. `Index: commit 1a2b3c4 = HEAD, up
+counting files changed since indexing (modified or new untracked files newer
+than the analysis start, and deleted files the index still holds), e.g. `Index: commit 1a2b3c4 = HEAD, up
 to date.` or `Index: commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run analyze
 to refresh.` Structured results carry it as `index_status`. Whenever the line
 calls an index stale or changed, `analyze` without `force` re-indexes instead
 of reusing the cached index, so the advice always works. Git runs read-only
 (`--no-optional-locks`, so it never takes the index lock beside your own git
-commands) with a short timeout and is cached for a few seconds; when
+commands) with a short timeout and is cached for a few seconds (the
+`git diff HEAD` that `detect_impact`, `get_review_context` and
+`get_suggested_questions` run when no `diff` is passed is read-only too, with
+a 30 s timeout); when
 `git status` fails or times out the line says `uncommitted edits unknown`
 rather than `up to date`, and without git it says the freshness is unknown.
 

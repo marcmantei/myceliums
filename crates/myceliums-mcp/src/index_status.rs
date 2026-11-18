@@ -2,12 +2,11 @@
 //! partial-embedding warning of the search tools.
 
 use crate::errors::ToolError;
-use myceliums_storage::{RepoInfo, Store};
+use myceliums_core::git_read::git_read;
+use myceliums_storage::{FileNode, RepoInfo, Store};
 use std::collections::HashMap;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::{mpsc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
 
 /// Load the partial-index warning for a store, if the index is partially
@@ -132,13 +131,17 @@ impl Freshness {
     }
 }
 
-/// How current `info`'s index is. `recheck` bypasses the short-lived git
-/// cache (the `analyze` tool decides with it; result lines may reuse a state
-/// read a moment ago).
+/// How current `info`'s index is, given the files the index holds
+/// (`indexed`). `recheck` bypasses the short-lived git cache (the `analyze`
+/// tool decides with it; result lines may reuse a state read a moment ago).
 ///
 /// Runs git off the async executor; a missing git, a non-git directory, or a
 /// slow git degrades to "unknown", never to an error.
-pub(crate) async fn freshness(info: &RepoInfo, recheck: bool) -> Freshness {
+pub(crate) async fn freshness(
+    info: &RepoInfo,
+    indexed: Arc<Vec<FileNode>>,
+    recheck: bool,
+) -> Freshness {
     let info = info.clone();
     tokio::task::spawn_blocking(move || {
         let repo = Path::new(&info.path);
@@ -149,7 +152,8 @@ pub(crate) async fn freshness(info: &RepoInfo, recheck: bool) -> Freshness {
         } else {
             cached_git_state(repo)
         };
-        assess(&info, git.as_ref())
+        let is_indexed = |rel: &Path| indexed.iter().any(|f| Path::new(&f.path) == rel);
+        assess(&info, git.as_ref(), &is_indexed)
     })
     .await
     .unwrap_or_else(|_| Freshness::NotRecorded {
@@ -158,18 +162,27 @@ pub(crate) async fn freshness(info: &RepoInfo, recheck: bool) -> Freshness {
 }
 
 /// The freshness line for the top of a graph result.
-pub(crate) async fn freshness_line(info: &RepoInfo) -> String {
-    freshness(info, false).await.line()
+pub(crate) async fn freshness_line(info: &RepoInfo, indexed: Arc<Vec<FileNode>>) -> String {
+    freshness(info, indexed, false).await.line()
 }
 
-fn assess(info: &RepoInfo, git: Option<&GitState>) -> Freshness {
+/// `is_indexed` says whether the index holds a file (path relative to the
+/// indexed directory).
+fn assess(
+    info: &RepoInfo,
+    git: Option<&GitState>,
+    is_indexed: &dyn Fn(&Path) -> bool,
+) -> Freshness {
     let built = chrono::DateTime::parse_from_rfc3339(&info.analyzed_at).ok();
     match (info.analyzed_commit.clone(), git) {
         (Some(commit), Some(git)) if git.head == commit => {
             let edited = match (&git.changed, built) {
-                (Some(changed), Some(built)) => {
-                    Some(edited_since(Path::new(&info.path), changed, built.into()))
-                }
+                (Some(changed), Some(built)) => Some(edited_since(
+                    Path::new(&info.path),
+                    changed,
+                    built.into(),
+                    is_indexed,
+                )),
                 // An unreadable timestamp: every change may postdate it.
                 (Some(changed), None) => Some(changed.len()),
                 (None, _) => None,
@@ -197,17 +210,22 @@ fn short(commit: &str) -> &str {
     myceliums_core::text::prefix_chars(commit, 7)
 }
 
-/// How many of the `changed` files were modified after `built`.
-fn edited_since(root: &Path, changed: &[PathBuf], built: SystemTime) -> usize {
+/// How many of the `changed` files the index has not seen: existing files
+/// modified after `built`, and deleted files the index still holds. (A file
+/// deleted before indexing stays in `git status` until it is committed, but
+/// the index no longer has it — that is not a change.)
+fn edited_since(
+    root: &Path,
+    changed: &[PathBuf],
+    built: SystemTime,
+    is_indexed: &dyn Fn(&Path) -> bool,
+) -> usize {
     changed
         .iter()
         .take(MAX_CHANGED_CHECKED)
-        .filter(|rel| {
-            std::fs::metadata(root.join(rel))
-                .and_then(|m| m.modified())
-                .map(|mtime| mtime > built)
-                // A deleted file is an edit the index has not seen.
-                .unwrap_or(true)
+        .filter(|rel| match std::fs::metadata(root.join(rel)) {
+            Ok(meta) => meta.modified().map(|mtime| mtime > built).unwrap_or(true),
+            Err(_) => is_indexed(rel),
         })
         .count()
 }
@@ -238,21 +256,23 @@ fn remember_git_state(repo: &Path, state: Option<GitState>) {
 }
 
 fn read_git_state(repo: &Path) -> Option<GitState> {
-    let head = git(repo, &["rev-parse", "HEAD"], GIT_TIMEOUT)?
+    let head = git_read(repo, &["rev-parse", "HEAD"], GIT_TIMEOUT)
+        .ok()?
         .trim()
         .to_string();
     if head.is_empty() {
         return None;
     }
-    let root = git(repo, &["rev-parse", "--show-toplevel"], GIT_TIMEOUT)?;
+    let root = git_read(repo, &["rev-parse", "--show-toplevel"], GIT_TIMEOUT).ok()?;
     let root = PathBuf::from(root.trim());
     // NUL-separated, paths relative to the repository root, untracked files
     // listed too (a new file is an edit the index has not seen).
-    let changed = git(
+    let changed = git_read(
         repo,
         &["status", "--porcelain=v1", "-z", "--untracked-files=normal"],
         GIT_TIMEOUT,
     )
+    .ok()
     .map(|status| changed_paths(&status, &root, repo));
     Some(GitState { head, changed })
 }
@@ -278,52 +298,6 @@ fn changed_paths(status: &str, root: &Path, repo: &Path) -> Vec<PathBuf> {
         }
     }
     changed
-}
-
-/// `git --no-optional-locks -C <dir> <args>`. `--no-optional-locks` keeps
-/// `git status` from refreshing (and so locking) the index: these reads run
-/// beside the agent's own git commands and may be killed on timeout.
-fn git_command(dir: &Path, args: &[&str]) -> Command {
-    let mut command = Command::new("git");
-    command
-        .arg("--no-optional-locks")
-        .arg("-C")
-        .arg(dir)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null());
-    command
-}
-
-/// Runs a read-only git command with a timeout; `None` on any failure.
-fn git(dir: &Path, args: &[&str], timeout: Duration) -> Option<String> {
-    let mut child = git_command(dir, args).spawn().ok()?;
-    // Drain stdout on a helper thread so a large output cannot fill the pipe
-    // and block git while we wait for it.
-    let mut stdout = child.stdout.take()?;
-    let (tx, rx) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut out = String::new();
-        let ok = stdout.read_to_string(&mut out).is_ok();
-        let _ = tx.send(ok.then_some(out));
-    });
-    match rx.recv_timeout(timeout) {
-        Ok(out) => {
-            let status = child.wait().ok()?;
-            if status.success() {
-                out
-            } else {
-                None
-            }
-        }
-        Err(_) => {
-            // Safe to kill: with --no-optional-locks no lock file is held.
-            let _ = child.kill();
-            let _ = child.wait();
-            None
-        }
-    }
 }
 
 #[cfg(test)]
@@ -352,6 +326,10 @@ mod tests {
     }
 
     const HEAD: &str = "0123456789abcdef";
+
+    fn nothing_indexed(_: &Path) -> bool {
+        false
+    }
     const AT: &str = "2026-01-01T00:00:00Z";
 
     #[test]
@@ -359,6 +337,7 @@ mod tests {
         let current = assess(
             &info(Some(HEAD), AT, "/nowhere"),
             Some(&at_head(Some(vec![]))),
+            &nothing_indexed,
         );
         assert_eq!(current.line(), "Index: commit 0123456 = HEAD, up to date.");
         assert!(!current.is_stale());
@@ -366,6 +345,7 @@ mod tests {
         let moved = assess(
             &info(Some("fedcba9876"), AT, "/nowhere"),
             Some(&at_head(Some(vec![]))),
+            &nothing_indexed,
         );
         assert!(
             moved.line().contains("HEAD is now 0123456 — stale"),
@@ -373,11 +353,15 @@ mod tests {
         );
         assert!(moved.is_stale());
 
-        let not_recorded = assess(&info(None, AT, "/nowhere"), Some(&at_head(Some(vec![]))));
+        let not_recorded = assess(
+            &info(None, AT, "/nowhere"),
+            Some(&at_head(Some(vec![]))),
+            &nothing_indexed,
+        );
         assert!(not_recorded.line().contains("built 2026-01-01 00:00 UTC"));
         assert!(!not_recorded.is_stale());
 
-        let no_git = assess(&info(Some(HEAD), AT, "/nowhere"), None);
+        let no_git = assess(&info(Some(HEAD), AT, "/nowhere"), None, &nothing_indexed);
         assert!(no_git.line().contains("current HEAD unknown"));
 
         for state in [current, moved, not_recorded, no_git] {
@@ -391,7 +375,11 @@ mod tests {
 
     #[test]
     fn a_failed_or_timed_out_status_is_unknown_not_up_to_date() {
-        let unknown = assess(&info(Some(HEAD), AT, "/nowhere"), Some(&at_head(None)));
+        let unknown = assess(
+            &info(Some(HEAD), AT, "/nowhere"),
+            Some(&at_head(None)),
+            &nothing_indexed,
+        );
         assert_eq!(
             unknown,
             Freshness::AtHead {
@@ -405,54 +393,55 @@ mod tests {
         );
         assert!(!unknown.is_stale());
 
-        // A git call that does not answer in time is abandoned as `None`.
-        let dir = env!("CARGO_MANIFEST_DIR");
-        assert_eq!(git(Path::new(dir), &["status"], Duration::ZERO), None);
-        // So is one that fails.
-        assert_eq!(
-            git(
-                Path::new("/definitely/not/a/repo"),
-                &["rev-parse", "HEAD"],
-                GIT_TIMEOUT
-            ),
-            None
-        );
-    }
-
-    #[test]
-    fn git_reads_never_take_the_index_lock() {
-        let command = git_command(Path::new("."), &["status"]);
-        let args: Vec<_> = command.get_args().collect();
-        assert_eq!(
-            args.first().map(|a| a.to_str()),
-            Some(Some("--no-optional-locks"))
-        );
+        // Timeouts and failures of the git calls themselves are covered by
+        // `myceliums_core::git_read`; here: a status that could not be read.
     }
 
     #[test]
     fn files_changed_after_indexing_are_counted() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("a.rs"), "x").unwrap();
-        // `a.rs` exists and is newer than 2001; `gone.rs` was deleted.
-        let git = at_head(Some(vec!["a.rs".into(), "gone.rs".into()]));
+        // `a.rs` exists and is newer than 2001; `gone.rs` and `old.rs` are
+        // deleted, but only `gone.rs` is still in the index.
+        let git = at_head(Some(vec!["a.rs".into(), "gone.rs".into(), "old.rs".into()]));
+        let indexed = |rel: &Path| rel == Path::new("gone.rs");
         let path = dir.path().to_string_lossy();
-        let state = assess(&info(Some(HEAD), "2001-01-01T00:00:00Z", &path), Some(&git));
+        let state = assess(
+            &info(Some(HEAD), "2001-01-01T00:00:00Z", &path),
+            Some(&git),
+            &indexed,
+        );
         assert!(
             state.line().contains("2 files changed since indexing"),
             "{state:?}"
         );
         assert!(state.is_stale());
 
-        let state = assess(&info(Some(HEAD), "2999-01-01T00:00:00Z", &path), Some(&git));
-        // Only the deleted file counts when the index is newer than the edit.
+        // Indexed after the edit: only the deletion the index has not seen.
+        let state = assess(
+            &info(Some(HEAD), "2999-01-01T00:00:00Z", &path),
+            Some(&git),
+            &indexed,
+        );
         assert!(
             state.line().contains("1 file changed since indexing"),
             "{state:?}"
         );
+
+        // Re-indexed after the deletion: nothing left, though git still
+        // lists both deletions until they are committed.
+        let state = assess(
+            &info(Some(HEAD), "2999-01-01T00:00:00Z", &path),
+            Some(&git),
+            &nothing_indexed,
+        );
+        assert!(state.line().ends_with("up to date."), "{state:?}");
+        assert!(!state.is_stale());
     }
 
     /// Runs git in `dir` for test setup; panics on failure.
     fn sh_git(dir: &Path, args: &[&str]) {
+        use std::process::{Command, Stdio};
         let status = Command::new("git")
             .args([
                 "-c",
