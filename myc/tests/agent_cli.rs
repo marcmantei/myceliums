@@ -79,8 +79,7 @@ fn stdout(o: &Output) -> String {
 }
 
 fn json(o: &Output) -> serde_json::Value {
-    serde_json::from_slice(&o.stdout)
-        .unwrap_or_else(|e| panic!("not JSON ({e}): {}", stdout(o)))
+    serde_json::from_slice(&o.stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {}", stdout(o)))
 }
 
 #[tokio::test]
@@ -89,10 +88,20 @@ async fn callers_and_callees_answer_with_locations_and_freshness() {
     let out = myc(data, &fixture(), &["callees", "processRequest"], None);
     assert!(out.status.success(), "{out:?}");
     let text = stdout(&out);
-    assert!(text.starts_with("callees of processRequest (Function) src/index.ts:"), "{text}");
+    assert!(
+        text.starts_with("callees of processRequest (Function) src/index.ts:"),
+        "{text}"
+    );
     assert!(text.contains("parseBody  src/index.ts:"), "{text}");
     assert!(text.contains("validateInput  src/index.ts:"), "{text}");
-    assert!(text.trim_end().lines().last().unwrap().starts_with("index:"), "{text}");
+    assert!(
+        text.trim_end()
+            .lines()
+            .last()
+            .unwrap()
+            .starts_with("index:"),
+        "{text}"
+    );
 
     let out = myc(data, &fixture(), &["callers", "parseBody", "--json"], None);
     assert!(out.status.success(), "{out:?}");
@@ -131,7 +140,12 @@ async fn unknown_symbols_exit_1_and_unindexed_directories_are_refused() {
 #[tokio::test]
 async fn impact_of_a_file_lists_dependents_and_files() {
     let data = data_dir().await;
-    let out = myc(data, &fixture(), &["impact", "src/services/user.ts", "--json"], None);
+    let out = myc(
+        data,
+        &fixture(),
+        &["impact", "src/services/user.ts", "--json"],
+        None,
+    );
     assert!(out.status.success(), "{out:?}");
     let v = json(&out);
     let files: Vec<&str> = v["files"]
@@ -142,7 +156,10 @@ async fn impact_of_a_file_lists_dependents_and_files() {
         .collect();
     assert!(files.contains(&"src/services/user.ts"), "{v}");
     assert!(!v["roots"].as_array().unwrap().is_empty(), "{v}");
-    assert!(v["dependents"].is_array() && v["omitted"].is_number(), "{v}");
+    assert!(
+        v["dependents"].is_array() && v["omitted"].is_number(),
+        "{v}"
+    );
 }
 
 #[tokio::test]
@@ -151,7 +168,17 @@ async fn context_pack_json_names_the_mentioned_symbol_first() {
     let out = myc(
         data,
         &fixture(),
-        &["context", "--json", "--budget", "800", "how", "does", "processRequest", "validate", "input"],
+        &[
+            "context",
+            "--json",
+            "--budget",
+            "800",
+            "how",
+            "does",
+            "processRequest",
+            "validate",
+            "input",
+        ],
         None,
     );
     assert!(out.status.success(), "{out:?}");
@@ -183,11 +210,16 @@ async fn grep_hook_suggests_myc_for_known_symbols_and_is_silent_otherwise() {
     // The hook takes the project from the input's cwd, not its own.
     let run = |stdin: &str| myc(data, tmp.path(), &["hook-grep"], Some(stdin));
 
-    let out = run(&hook_input("Grep", serde_json::json!({"pattern": "processRequest\\("})));
+    let out = run(&hook_input(
+        "Grep",
+        serde_json::json!({"pattern": "processRequest\\("}),
+    ));
     assert!(out.status.success());
     let v = json(&out);
     assert_eq!(v["hookSpecificOutput"]["hookEventName"], "PreToolUse");
-    let hint = v["hookSpecificOutput"]["additionalContext"].as_str().unwrap();
+    let hint = v["hookSpecificOutput"]["additionalContext"]
+        .as_str()
+        .unwrap();
     assert!(hint.contains("`myc callers processRequest`"), "{hint}");
     assert!(hint.contains("src/index.ts:"), "{hint}");
     assert!(v["hookSpecificOutput"].get("permissionDecision").is_none());
@@ -200,8 +232,14 @@ async fn grep_hook_suggests_myc_for_known_symbols_and_is_silent_otherwise() {
 
     for silent in [
         hook_input("Grep", serde_json::json!({"pattern": "Invalid input"})),
-        hook_input("Grep", serde_json::json!({"pattern": "noSuchSymbolAnywhere"})),
-        hook_input("Grep", serde_json::json!({"pattern": "processRequest", "glob": "*.json"})),
+        hook_input(
+            "Grep",
+            serde_json::json!({"pattern": "noSuchSymbolAnywhere"}),
+        ),
+        hook_input(
+            "Grep",
+            serde_json::json!({"pattern": "processRequest", "glob": "*.json"}),
+        ),
         hook_input("Bash", serde_json::json!({"command": "ls -la"})),
         "not json at all".to_string(),
         String::new(),

@@ -244,7 +244,7 @@ pub fn hook_groups(myc: &str, layers: Layers) -> Vec<(&'static str, Value)> {
         let timeout = ("timeout", json!(5));
         groups.push((
             "PreToolUse",
-            json!({"matcher": "Grep", "hooks": [handler(grep.clone(), &[timeout.clone()])]}),
+            json!({"matcher": "Grep", "hooks": [handler(grep.clone(), std::slice::from_ref(&timeout))]}),
         ));
         // `if` (permission-rule syntax) keeps the hook off Bash calls that
         // do not run grep/rg; Claude Code checks every subcommand of a

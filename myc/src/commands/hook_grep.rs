@@ -222,9 +222,10 @@ fn single_identifier(alternative: &str) -> Option<Candidate> {
     }
     let has_lower = short.chars().any(char::is_lowercase);
     let has_upper = short.chars().any(char::is_uppercase);
-    let identifier_shaped = short.contains('_') && has_lower
-        || has_lower && has_upper
-        || short.contains('_') && short.len() > 3 && !has_lower;
+    // snake_case, SCREAMING_SNAKE longer than 3 characters, camelCase or
+    // PascalCase.
+    let identifier_shaped =
+        short.contains('_') && (has_lower || short.len() > 3) || has_lower && has_upper;
     // A plain lowercase word (`error`, `config`) is a text search unless the
     // pattern framed it as code (keyword, call parenthesis, qualifier).
     if !(identifier_shaped || structural && has_lower) {

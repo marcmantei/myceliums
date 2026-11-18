@@ -37,9 +37,10 @@ Options: `--budget` (context size in estimated tokens, default 1500),
 ## Notes
 
 - The pack is built with lexical search plus the symbols the task names
-  (`parseAccept`), which needs no embedding model and takes well under a
-  second on an indexed project. `myc context --hybrid` adds vector search; it
-  loads the embedding model, which takes seconds.
+  (`parseAccept`), which needs no embedding model: on the hono index (10,538
+  symbols) one call took 0.5–0.9 s on a heavily loaded machine.
+  `myc context --hybrid` adds vector search; it loads the embedding model,
+  which takes seconds.
 - `freshness.state` in the JSON says whether the index was built at the
   current HEAD. The example adds a note to the prompt when it is behind.
 - Whether prefetching improves answers, and by how much, is not measured yet;
