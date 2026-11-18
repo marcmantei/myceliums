@@ -44,6 +44,16 @@ ignore = [
     { id = "RUSTSEC-2025-0119", reason = "number_prefix: via indicatif 0.17 (direct and via fastembed/hf-hub); indicatif 0.18 drops it, semver-major" },
     { id = "RUSTSEC-2024-0436", reason = "paste: via datafusion/lance (lancedb 0.26); no upstream release without it" },
     { id = "RUSTSEC-2026-0441", reason = "pin-utils (unmaintained): via async-imap; still a dependency in async-imap 0.12, so upgrading does not remove it" },
+    # chrono / chrono-tz / humantime were declared unmaintained in Nov 2026
+    # with no maintained successor release. chrono and chrono-tz arrive through
+    # arrow/datafusion/lance (lancedb) and chrono is also a direct workspace
+    # dependency; humantime arrives through lance. Removing them needs lancedb to
+    # move off them first; the direct chrono use can migrate (e.g. to jiff) on
+    # its own, tracked in the hardening follow-ups (#102). Unmaintained, not
+    # vulnerable: re-check on every lancedb/arrow bump.
+    { id = "RUSTSEC-2026-0543", reason = "chrono (unmaintained): direct dep and via arrow/datafusion/lance; no maintained release exists" },
+    { id = "RUSTSEC-2026-0555", reason = "chrono-tz (unmaintained): via arrow-array; no maintained release exists" },
+    { id = "RUSTSEC-2026-0542", reason = "humantime (unmaintained): via lance; no maintained release exists" },
     { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml: via serde_yaml 0.9 (deprecated); replacing serde_yaml is a code change, out of scope for #90" },
 ]
 
