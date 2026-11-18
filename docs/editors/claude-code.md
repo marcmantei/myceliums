@@ -154,9 +154,11 @@ This will show any errors directly in your terminal.
 Run it by hand with a pattern the index should know:
 
 ```bash
-echo '{"hook_event_name":"PreToolUse","cwd":"'"$PWD"'","tool_name":"Grep","tool_input":{"pattern":"your_function"}}' | myc hook-grep
+echo '{"hook_event_name":"PreToolUse","cwd":"'"$PWD"'","tool_name":"Grep","tool_input":{"pattern":"your_function"}}' \
+  | MYC_HOOK_DEBUG=1 myc hook-grep
 ```
 
-No output means the pattern is not identifier-shaped, the index does not
-define it as a function, method or type, or no index covers `cwd`
-(`myc list`).
+With `MYC_HOOK_DEBUG=1` the hook prints why it stayed silent on stderr: the
+pattern is not identifier-shaped, the index does not define it as a function,
+method or type, no index covers `cwd` (`myc list`), or the lookup took longer
+than its deadline (400 ms; `MYC_HOOK_DEADLINE_MS` changes it).

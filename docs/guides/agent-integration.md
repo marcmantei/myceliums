@@ -118,7 +118,8 @@ with character classes or quantifiers, searches restricted to config or prose
 files (`*.json`, `*.yaml`, `*.md`, ...), names the index does not define, and
 directories without an index. It never blocks or approves the tool call (it
 sets no permission decision), exits 0 on any failure, and gives up silently
-if the index lookup takes longer than 400 ms. The hook's input and output
+if the index lookup takes longer than 400 ms (`MYC_HOOK_DEADLINE_MS` changes
+the limit; `MYC_HOOK_DEBUG=1` prints why the hook stayed silent on stderr). The hook's input and output
 follow the [Claude Code hooks reference](https://code.claude.com/docs/en/hooks).
 
 ### 4. `code-explorer` subagent

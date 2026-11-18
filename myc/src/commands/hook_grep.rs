@@ -27,11 +27,18 @@ use std::time::Duration;
 
 use myceliums_storage::{RelationshipKind, RepoRegistry, Store, SymbolKind, SymbolLocation};
 
-/// Upper bound for the whole index lookup. The hook answers well inside this
-/// on an indexed repository (see the PR for timings); if the store is slower
-/// (cold disk, huge index) the hook gives up silently instead of delaying the
-/// tool call.
+/// Default upper bound for the whole index lookup. The hook answers well
+/// inside this on an indexed repository; if the store is slower (cold disk,
+/// huge index, debug build) the hook gives up silently instead of delaying
+/// the tool call. `MYC_HOOK_DEADLINE_MS` overrides it.
 const LOOKUP_DEADLINE: Duration = Duration::from_millis(400);
+
+/// Environment variable overriding [`LOOKUP_DEADLINE`], in milliseconds.
+const DEADLINE_ENV: &str = "MYC_HOOK_DEADLINE_MS";
+
+/// Environment variable that makes the hook say on stderr why it stayed
+/// silent. Claude Code does not show a hook's stderr to the model on exit 0.
+const DEBUG_ENV: &str = "MYC_HOOK_DEBUG";
 
 /// At most this many identifier candidates are looked up per tool call.
 const MAX_CANDIDATES: usize = 3;
@@ -706,29 +713,42 @@ async fn lookup(
     Ok(known)
 }
 
-/// Computes the hook's stdout for one stdin payload; `None` means silent.
+/// Computes the hook's stdout for one stdin payload. `Err` means silent and
+/// says why.
 pub async fn respond(
     data_dir: &Path,
     stdin: &str,
     fallback_cwd: Option<PathBuf>,
-) -> Option<String> {
-    let input: serde_json::Value = serde_json::from_str(stdin).ok()?;
+    deadline: Duration,
+) -> Result<String, String> {
+    let input: serde_json::Value =
+        serde_json::from_str(stdin).map_err(|e| format!("input is not JSON: {e}"))?;
     let call = search_call_from_input(&input);
     if call.candidates.is_empty() {
-        return None;
+        return Err("no identifier-shaped search pattern".into());
     }
-    let cwd = call.cwd.or(fallback_cwd)?;
-    let known = tokio::time::timeout(LOOKUP_DEADLINE, lookup(data_dir, &cwd, &call.candidates))
+    let cwd = call
+        .cwd
+        .or(fallback_cwd)
+        .ok_or("no working directory in the input")?;
+    let known = tokio::time::timeout(deadline, lookup(data_dir, &cwd, &call.candidates))
         .await
-        .ok()?
-        .ok()?;
+        .map_err(|_| format!("index lookup took longer than {} ms", deadline.as_millis()))?
+        .map_err(|e| format!("index lookup failed: {e:#}"))?;
     let hints: Vec<String> = known.iter().filter_map(hint_for).take(2).collect();
-    hook_output(&hints).map(|v| v.to_string())
+    hook_output(&hints).map(|v| v.to_string()).ok_or_else(|| {
+        format!(
+            "no indexed function, method or type named {:?} under {}",
+            call.candidates,
+            cwd.display()
+        )
+    })
 }
 
 /// `myc hook-grep`: reads PreToolUse JSON on stdin; prints a hint or nothing.
 /// Always exits 0.
 pub async fn cmd_hook_grep() -> anyhow::Result<()> {
+    let debug = std::env::var_os(DEBUG_ENV).is_some_and(|v| !v.is_empty() && v != "0");
     let mut input = String::new();
     if std::io::stdin()
         .take(MAX_INPUT_BYTES)
@@ -740,8 +760,14 @@ pub async fn cmd_hook_grep() -> anyhow::Result<()> {
     let fallback_cwd = std::env::var_os("CLAUDE_PROJECT_DIR")
         .map(PathBuf::from)
         .or_else(|| std::env::current_dir().ok());
-    if let Some(out) = respond(&crate::data_dir(), &input, fallback_cwd).await {
-        println!("{out}");
+    let deadline = std::env::var(DEADLINE_ENV)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map_or(LOOKUP_DEADLINE, Duration::from_millis);
+    match respond(&crate::data_dir(), &input, fallback_cwd, deadline).await {
+        Ok(out) => println!("{out}"),
+        Err(reason) if debug => eprintln!("myc hook-grep: silent: {reason}"),
+        Err(_) => {}
     }
     Ok(())
 }
@@ -1093,17 +1119,24 @@ mod tests {
     #[tokio::test]
     async fn respond_is_silent_on_malformed_or_irrelevant_input() {
         let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_path_buf();
+        let silent = |stdin: String| {
+            let path = path.clone();
+            async move { respond(&path, &stdin, None, LOOKUP_DEADLINE).await }
+        };
         for stdin in ["", "not json", "[]", "{}", "{\"tool_name\": 5}"] {
-            assert_eq!(respond(dir.path(), stdin, None).await, None, "{stdin:?}");
+            assert!(silent(stdin.to_string()).await.is_err(), "{stdin:?}");
         }
         // A real identifier, but no registry and no index: silent.
         let call = input("Grep", serde_json::json!({"pattern": "parse_query"})).to_string();
-        assert_eq!(respond(dir.path(), &call, None).await, None);
+        let reason = silent(call.clone()).await.unwrap_err();
+        assert!(reason.contains("no indexed function"), "{reason}");
         // Registry present but cwd outside every indexed repo: silent.
         std::fs::write(dir.path().join("repos.json"), "{\"repos\":{}}").unwrap();
-        assert_eq!(respond(dir.path(), &call, None).await, None);
-        // A corrupt registry is not an error either.
+        assert!(silent(call.clone()).await.is_err());
+        // A corrupt registry is not an error either, just a reason.
         std::fs::write(dir.path().join("repos.json"), "{broken").unwrap();
-        assert_eq!(respond(dir.path(), &call, None).await, None);
+        let reason = silent(call).await.unwrap_err();
+        assert!(reason.contains("lookup failed"), "{reason}");
     }
 }

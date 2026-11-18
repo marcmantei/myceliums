@@ -59,6 +59,11 @@ fn myc(data: &Path, cwd: &Path, args: &[&str], stdin: Option<&str>) -> Output {
         .args(args)
         .current_dir(cwd)
         .env("MYCELIUMS_DATA_DIR", data)
+        // Debug builds on shared CI runners can be slower than the hook's
+        // 400 ms production deadline on a cold index; the deadline itself is
+        // unit-tested. MYC_HOOK_DEBUG puts the reason for silence on stderr.
+        .env("MYC_HOOK_DEADLINE_MS", "30000")
+        .env("MYC_HOOK_DEBUG", "1")
         .env_remove("CLAUDE_PROJECT_DIR")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -79,7 +84,13 @@ fn stdout(o: &Output) -> String {
 }
 
 fn json(o: &Output) -> serde_json::Value {
-    serde_json::from_slice(&o.stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {}", stdout(o)))
+    serde_json::from_slice(&o.stdout).unwrap_or_else(|e| {
+        panic!(
+            "not JSON ({e}): {}\nstderr: {}",
+            stdout(o),
+            String::from_utf8_lossy(&o.stderr)
+        )
+    })
 }
 
 #[tokio::test]
