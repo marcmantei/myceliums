@@ -415,6 +415,95 @@ impl Store {
         Ok(symbols)
     }
 
+    /// Symbols whose `name` is exactly `name`, at most `limit` of them, with
+    /// location columns only.
+    ///
+    /// Unlike [`Store::get_symbols`] this filters in LanceDB and reads neither
+    /// symbol bodies nor vectors, so a lookup stays cheap on a large index.
+    /// It exists for latency-bound callers such as the `myc hook-grep`
+    /// PreToolUse hook, which must answer within ~100 ms (#126).
+    pub async fn find_symbols_named(
+        &self,
+        name: &str,
+        limit: usize,
+    ) -> Result<Vec<SymbolLocation>> {
+        let tables = self.db.table_names().execute().await?;
+        if !tables.iter().any(|t| t == "symbols") {
+            return Ok(vec![]);
+        }
+        let table = self.db.open_table("symbols").execute().await?;
+        let stream = table
+            .query()
+            .only_if(format!(
+                "repo_id = '{}' AND name = '{}'",
+                escape_lance_str(&self.repo_id),
+                escape_lance_str(name)
+            ))
+            .select(lancedb::query::Select::columns(&[
+                "uid",
+                "name",
+                "qualified_name",
+                "kind",
+                "file_path",
+                "start_line",
+            ]))
+            .limit(limit)
+            .execute()
+            .await?;
+        let batches: Vec<RecordBatch> = stream.try_collect().await?;
+        let mut out = Vec::new();
+        for batch in &batches {
+            let uids = col_str(batch, "uid");
+            let names = col_str(batch, "name");
+            let qualified_names = col_str(batch, "qualified_name");
+            let kinds = col_str(batch, "kind");
+            let file_paths = col_str(batch, "file_path");
+            let start_lines = col_u32(batch, "start_line");
+            for i in 0..batch.num_rows() {
+                out.push(SymbolLocation {
+                    uid: uids.value(i).to_string(),
+                    name: names.value(i).to_string(),
+                    qualified_name: qualified_names.value(i).to_string(),
+                    kind: kinds.value(i).parse().unwrap_or(SymbolKind::Variable),
+                    file_path: file_paths.value(i).to_string(),
+                    start_line: start_lines.value(i),
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    /// Number of `kind` relationships whose target is one of `target_uids`.
+    ///
+    /// Counted inside LanceDB without materialising the edges; returns 0 when
+    /// `target_uids` is empty or there is no relationships table yet.
+    pub async fn count_incoming(
+        &self,
+        target_uids: &[String],
+        kind: RelationshipKind,
+    ) -> Result<usize> {
+        if target_uids.is_empty() {
+            return Ok(0);
+        }
+        let tables = self.db.table_names().execute().await?;
+        if !tables.iter().any(|t| t == "relationships") {
+            return Ok(0);
+        }
+        let table = self.db.open_table("relationships").execute().await?;
+        let targets = target_uids
+            .iter()
+            .map(|uid| format!("'{}'", escape_lance_str(uid)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let filter = format!(
+            "repo_id = '{}' AND kind = '{}' AND target_uid IN ({})",
+            escape_lance_str(&self.repo_id),
+            escape_lance_str(&kind.to_string()),
+            targets
+        );
+        Ok(table.count_rows(Some(filter)).await?)
+    }
+
     /// Retrieve symbols together with their 384-dim embedding vectors.
     /// Returns `(CodeSymbol, Option<Vec<f32>>)` — the vector is `None` when
     /// the symbol has not been embedded yet (zero-filled row).
@@ -1540,6 +1629,110 @@ mod tests {
             "at the threshold the row-count check must pass, got {at:?}"
         );
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn edge(source: &str, target: &str, kind: RelationshipKind) -> Relationship {
+        Relationship {
+            uid: format!("{source}->{target}:{kind}"),
+            source_uid: source.to_string(),
+            target_uid: target.to_string(),
+            kind,
+            repo_id: "test-repo".to_string(),
+            metadata: String::new(),
+        }
+    }
+
+    /// The hook path looks a name up without loading the table: it must return
+    /// every exact match (and only those), honour the limit, survive quotes in
+    /// the name and answer empty on a store that has no symbols yet.
+    #[tokio::test]
+    async fn find_symbols_named_returns_exact_matches_only() {
+        let dir = test_db_path("find_symbols_named");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+        assert!(store
+            .find_symbols_named("parse", 10)
+            .await
+            .unwrap()
+            .is_empty());
+
+        let mut a = make_symbol("a", None);
+        a.name = "parse".into();
+        a.qualified_name = "x::parse".into();
+        a.file_path = "src/x.rs".into();
+        a.start_line = 7;
+        let mut b = make_symbol("b", None);
+        b.name = "parse".into();
+        b.qualified_name = "y::parse".into();
+        let mut c = make_symbol("c", None);
+        c.name = "parse_all".into();
+        store.store_symbols(&[a, b, c]).await.unwrap();
+
+        let mut hits = store.find_symbols_named("parse", 10).await.unwrap();
+        hits.sort_by(|l, r| l.uid.cmp(&r.uid));
+        assert_eq!(hits.len(), 2, "{hits:?}");
+        assert_eq!(hits[0].qualified_name, "x::parse");
+        assert_eq!(hits[0].file_path, "src/x.rs");
+        assert_eq!(hits[0].start_line, 7);
+        assert_eq!(hits[0].kind, SymbolKind::Function);
+        assert_eq!(store.find_symbols_named("parse", 1).await.unwrap().len(), 1);
+        assert!(store
+            .find_symbols_named("it's", 10)
+            .await
+            .unwrap()
+            .is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn count_incoming_counts_only_edges_of_the_kind_into_the_targets() {
+        let dir = test_db_path("count_incoming");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+        let t = vec!["t".to_string()];
+        assert_eq!(
+            store
+                .count_incoming(&t, RelationshipKind::Calls)
+                .await
+                .unwrap(),
+            0
+        );
+
+        store
+            .store_relationships(&[
+                edge("a", "t", RelationshipKind::Calls),
+                edge("b", "t", RelationshipKind::Calls),
+                edge("c", "t", RelationshipKind::Imports),
+                edge("t", "a", RelationshipKind::Calls),
+                edge("d", "u", RelationshipKind::Calls),
+            ])
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .count_incoming(&t, RelationshipKind::Calls)
+                .await
+                .unwrap(),
+            2
+        );
+        let both = vec!["t".to_string(), "u".to_string()];
+        assert_eq!(
+            store
+                .count_incoming(&both, RelationshipKind::Calls)
+                .await
+                .unwrap(),
+            3
+        );
+        assert_eq!(
+            store
+                .count_incoming(&[], RelationshipKind::Calls)
+                .await
+                .unwrap(),
+            0
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

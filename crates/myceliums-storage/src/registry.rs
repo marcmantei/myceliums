@@ -63,6 +63,26 @@ impl RepoRegistry {
         self.repos.values().find(|r| r.path == path)
     }
 
+    /// The registered repository whose directory contains `path` (or is
+    /// `path`), preferring the deepest one when indexed repositories nest.
+    ///
+    /// Both sides are canonicalized, so symlinked paths and `..` segments
+    /// match. Never falls back to some other repository: `None` means `path`
+    /// lies outside every indexed project.
+    pub fn find_containing(&self, path: &Path) -> Option<&RepoInfo> {
+        let target = std::fs::canonicalize(path).ok()?;
+        self.repos
+            .values()
+            .filter_map(|info| {
+                let root = std::fs::canonicalize(&info.path).ok()?;
+                target
+                    .starts_with(&root)
+                    .then(|| (root.components().count(), info))
+            })
+            .max_by(|(depth_a, a), (depth_b, b)| depth_a.cmp(depth_b).then(b.id.cmp(&a.id)))
+            .map(|(_, info)| info)
+    }
+
     /// Lists all repositories, sorted by name.
     pub fn list(&self) -> Vec<&RepoInfo> {
         let mut repos: Vec<&RepoInfo> = self.repos.values().collect();
@@ -357,5 +377,43 @@ mod tests {
         );
         assert!(registry.registered_db_path(data, "../known-1").is_err());
         assert!(registry.registered_db_path(data, "other").is_err());
+    }
+
+    fn repo_at(id: &str, path: &Path) -> RepoInfo {
+        RepoInfo {
+            id: id.to_string(),
+            name: id.to_string(),
+            path: path.to_string_lossy().into_owned(),
+            analyzed_at: String::new(),
+            symbol_count: 0,
+            file_count: 0,
+            analyzed_commit: None,
+            vector_geometry_version: 0,
+        }
+    }
+
+    #[test]
+    fn find_containing_prefers_the_deepest_repo_and_never_falls_back() {
+        let dir = tempfile::tempdir().unwrap();
+        let outer = dir.path().join("outer");
+        let inner = outer.join("vendor").join("inner");
+        let other = dir.path().join("other");
+        for p in [&inner, &other] {
+            std::fs::create_dir_all(p).unwrap();
+        }
+        let mut registry = RepoRegistry::default();
+        registry.register(repo_at("outer-1", &outer));
+        registry.register(repo_at("inner-1", &inner));
+
+        let id = |p: &Path| registry.find_containing(p).map(|r| r.id.clone());
+        assert_eq!(id(&outer).as_deref(), Some("outer-1"));
+        assert_eq!(id(&outer.join("vendor")).as_deref(), Some("outer-1"));
+        assert_eq!(id(&inner).as_deref(), Some("inner-1"));
+        assert_eq!(
+            id(&inner.join("..").join("inner")).as_deref(),
+            Some("inner-1")
+        );
+        assert_eq!(id(&other), None, "no fallback to an unrelated repo");
+        assert_eq!(id(&dir.path().join("missing")), None);
     }
 }

@@ -122,6 +122,7 @@ pub mod lock;
 pub mod mbox;
 pub mod mentions;
 pub mod mermaid_export;
+pub mod navigation;
 pub mod neo4j_export;
 pub mod notebook;
 pub mod ontology;
