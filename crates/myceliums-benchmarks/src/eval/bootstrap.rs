@@ -124,6 +124,59 @@ pub fn paired_bootstrap_default(treatment: &[f64], control: &[f64]) -> Result<De
     paired_bootstrap(treatment, control, BOOTSTRAP_RESAMPLES, BOOTSTRAP_SEED)
 }
 
+/// Paired bootstrap of a difference of ratios, `Σnum_t/Σden_t −
+/// Σnum_c/Σden_c`, over items both runs are scored on.
+///
+/// For a rate whose denominator differs between the runs — CALLS-edge
+/// precision, where each run extracts its own edges — the items are the
+/// union of what either run produced, each with its numerator and
+/// denominator contribution per run (an edge one run did not extract
+/// contributes `(0, 0)` there). Resampling the items keeps the pairing.
+/// Resamples where either denominator is zero are skipped. With every
+/// denominator 1 this is [`paired_bootstrap`] of the mean.
+pub fn paired_ratio_bootstrap(
+    treatment: &[(f64, f64)],
+    control: &[(f64, f64)],
+) -> Result<DeltaEstimate> {
+    if treatment.len() != control.len() {
+        bail!(
+            "paired bootstrap needs one control item per treatment item ({} vs {})",
+            treatment.len(),
+            control.len()
+        );
+    }
+    let ratio = |items: &mut dyn Iterator<Item = (f64, f64)>| {
+        let (num, den) = items.fold((0.0, 0.0), |(n, d), (a, b)| (n + a, d + b));
+        (den > 0.0).then(|| num / den)
+    };
+    let (Some(t), Some(c)) = (
+        ratio(&mut treatment.iter().copied()),
+        ratio(&mut control.iter().copied()),
+    ) else {
+        bail!("a ratio over zero items has no meaning");
+    };
+    let n = treatment.len();
+    let mut rng = SplitMix64::new(BOOTSTRAP_SEED);
+    let mut differences: Vec<f64> = (0..BOOTSTRAP_RESAMPLES)
+        .filter_map(|_| {
+            let picks: Vec<usize> = (0..n).map(|_| rng.below(n)).collect();
+            let t = ratio(&mut picks.iter().map(|&i| treatment[i]))?;
+            let c = ratio(&mut picks.iter().map(|&i| control[i]))?;
+            Some(t - c)
+        })
+        .collect();
+    if differences.is_empty() {
+        bail!("every resample had an empty denominator");
+    }
+    differences.sort_by(f64::total_cmp);
+    let tail = (1.0 - CONFIDENCE_LEVEL) / 2.0;
+    Ok(DeltaEstimate {
+        delta: t - c,
+        ci_low: percentile(&differences, tail),
+        ci_high: percentile(&differences, 1.0 - tail),
+    })
+}
+
 /// The `q`-quantile of an ascending slice, interpolating linearly between the
 /// two nearest order statistics (Hyndman–Fan type 7, the R and NumPy default).
 fn percentile(sorted: &[f64], q: f64) -> f64 {
@@ -166,6 +219,49 @@ impl SplitMix64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_ratio_bootstrap_with_unit_denominators_is_the_mean_bootstrap() {
+        let control = [1.0, 0.0, 1.0, 1.0, 0.0, 1.0];
+        let treatment = [1.0, 0.0, 0.0, 1.0, 0.0, 0.0];
+        let unit = |v: &[f64]| v.iter().map(|&x| (x, 1.0)).collect::<Vec<_>>();
+        let ratio = paired_ratio_bootstrap(&unit(&treatment), &unit(&control)).unwrap();
+        let mean = paired_bootstrap_default(&treatment, &control).unwrap();
+        assert!((ratio.delta - mean.delta).abs() < 1e-12);
+        assert!((ratio.ci_low - mean.ci_low).abs() < 1e-12);
+        assert!((ratio.ci_high - mean.ci_high).abs() < 1e-12);
+    }
+
+    #[test]
+    fn a_ratio_bootstrap_compares_rates_over_different_denominators() {
+        // Control: 3 of 4 extracted edges right. Treatment: the same 3 plus
+        // 4 wrong ones it alone extracted.
+        let control = [
+            (1.0, 1.0),
+            (1.0, 1.0),
+            (1.0, 1.0),
+            (0.0, 1.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+            (0.0, 0.0),
+        ];
+        let treatment = [
+            (1.0, 1.0),
+            (1.0, 1.0),
+            (1.0, 1.0),
+            (0.0, 1.0),
+            (0.0, 1.0),
+            (0.0, 1.0),
+            (0.0, 1.0),
+            (0.0, 1.0),
+        ];
+        let estimate = paired_ratio_bootstrap(&treatment, &control).unwrap();
+        assert!((estimate.delta - (3.0 / 8.0 - 3.0 / 4.0)).abs() < 1e-12);
+        assert!(estimate.ci_low <= estimate.delta && estimate.delta <= estimate.ci_high);
+        let same = paired_ratio_bootstrap(&control, &control).unwrap();
+        assert_eq!((same.delta, same.ci_low, same.ci_high), (0.0, 0.0, 0.0));
+    }
 
     #[test]
     fn identical_runs_have_a_zero_width_interval_at_zero() {

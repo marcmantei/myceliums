@@ -324,6 +324,11 @@ mode the baseline measured did not run, or when the baseline cannot be read.
 why in the PR description. That is a reviewed decision, which is the point:
 the gate stops *unnoticed* regressions, not deliberate trade-offs.
 
+The graph-accuracy gate (`graph-eval --check-baseline`, same workflow) applies
+the same rule — 95% interval wholly below zero and a drop of at least 0.02 —
+to overall CALLS precision and recall, with a paired bootstrap over gold and
+extracted edges instead of queries; see `graph-gold/README.md`.
+
 ## Fixture coverage
 
 The corpus is the multi-file `sample-*-project` fixtures under `tests/fixtures`,

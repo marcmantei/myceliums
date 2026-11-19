@@ -20,12 +20,14 @@
 //! - [`extract`] — the analyzer run.
 //! - [`score`] — matching and counting.
 //! - [`report`] — report/baseline format and Markdown.
+//! - [`gate`] — the CI gate against the recorded baseline.
 //!
 //! Run it with `cargo run -p myceliums-benchmarks --bin graph-eval`. It is
 //! offline and needs no model weights. See `graph-gold/README.md` for the
 //! labelling rules.
 
 pub mod extract;
+pub mod gate;
 pub mod gold;
 pub mod report;
 pub mod score;
