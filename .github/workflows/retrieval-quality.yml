@@ -60,11 +60,30 @@ jobs:
       # (crates/myceliums-benchmarks/graph-gold/). A gate since #139: it fails
       # when overall CALLS precision or recall drops by at least 0.02 with a
       # paired bootstrap 95% interval wholly below zero (the retrieval gate's
-      # rule), or when a CALLS edge connects two languages. The labels are
+      # rule), or when a CALLS edge connects two languages. It also reports
+      # the held-out real-repository set (never gated). The labels are
       # agent-written and await human review (#94). Runs before the retrieval
       # steps so its tables appear even when those fail; its verdict is
       # enforced by the last step, so a graph failure does not skip the
       # retrieval gate either.
+      # The held-out real-repository CALLS set (graph-gold/held-out/) needs the
+      # pinned checkouts of the real-repo retrieval set: restore the copy the
+      # weekly workflow saves, fetch on a miss. Report only: a failed fetch
+      # just leaves that section out.
+      - name: Restore the pinned real repositories
+        id: repo-key
+        run: |
+          echo "MYC_EVAL_REPOS_DIR=$HOME/.cache/myceliums-eval-repos" >> "$GITHUB_ENV"
+          pins="$(jq -c '.repos' crates/myceliums-benchmarks/real-repos/queries.json | sha256sum | cut -c1-16)"
+          echo "key=real-repos-${pins}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/myceliums-eval-repos
+          key: ${{ steps.repo-key.outputs.key }}
+      - name: Fetch the pinned real repositories
+        continue-on-error: true
+        timeout-minutes: 5
+        run: crates/myceliums-benchmarks/real-repos/fetch.sh
       - name: Graph accuracy (gate)
         id: graph
         continue-on-error: true

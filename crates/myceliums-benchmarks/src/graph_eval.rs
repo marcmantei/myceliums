@@ -21,6 +21,7 @@
 //! - [`score`] — matching and counting.
 //! - [`report`] — report/baseline format and Markdown.
 //! - [`gate`] — the CI gate against the recorded baseline.
+//! - [`held_out`] — the held-out real-repository set, reported, not gated.
 //!
 //! Run it with `cargo run -p myceliums-benchmarks --bin graph-eval`. It is
 //! offline and needs no model weights. See `graph-gold/README.md` for the
@@ -29,6 +30,7 @@
 pub mod extract;
 pub mod gate;
 pub mod gold;
+pub mod held_out;
 pub mod report;
 pub mod score;
 

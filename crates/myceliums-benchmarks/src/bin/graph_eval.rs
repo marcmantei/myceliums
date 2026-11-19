@@ -9,7 +9,9 @@
 //! Prints per-language and per-resolution-label tables (with 95% Wilson
 //! intervals), the comparison with `graph-gold/baseline.json`, and every
 //! false positive and negative; writes the full detail to
-//! `graph-gold/report.json`.
+//! `graph-gold/report.json`. Then scores the held-out real-repository set
+//! (`graph-gold/held-out/`) when the pinned checkouts are present
+//! (`real-repos/fetch.sh`, `$MYC_EVAL_REPOS_DIR`): reported, never gated.
 //!
 //! Without `--check-baseline` the run is a report: the exit status is
 //! non-zero only when the evaluation itself cannot run. With it, the run
@@ -25,6 +27,7 @@ use anyhow::{Context, Result};
 use myceliums_benchmarks::eval::corpus::fixtures_root;
 use myceliums_benchmarks::graph_eval::gate;
 use myceliums_benchmarks::graph_eval::gold::GoldSet;
+use myceliums_benchmarks::graph_eval::held_out::{self, HeldOutSet};
 use myceliums_benchmarks::graph_eval::report::{
     markdown, markdown_comparison, RunReport, REGENERATE_BASELINE,
 };
@@ -114,6 +117,19 @@ async fn main() -> Result<()> {
             text.push_str(&format!("\nNo baseline to compare with: {error:#}\n"));
             failed = options.check_baseline;
         }
+    }
+    // The held-out real-repository set: an outside check, never gated. It
+    // needs the pinned checkouts (`real-repos/fetch.sh`); without them the
+    // section says so.
+    let held_out_set = HeldOutSet::embedded()?;
+    match held_out::repos_dir() {
+        Some(dir) => {
+            let held_out_report = held_out::run(&held_out_set, &dir).await?;
+            text.push_str(&held_out::markdown(&held_out_set, &held_out_report));
+        }
+        None => text.push_str(
+            "\nHeld-out real repositories: no cache directory (set MYC_EVAL_REPOS_DIR).\n",
+        ),
     }
     println!("{text}");
 
