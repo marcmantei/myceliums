@@ -441,6 +441,16 @@ enum Commands {
         /// Default: the `mcp.toolsets` config key, else core.
         #[arg(long, value_name = "LIST")]
         toolsets: Option<String>,
+        /// Log format on stderr: `text` (default) or `json` (one object per line).
+        /// Each tool call logs one INFO line (tool, repo, duration, result size,
+        /// outcome); RUST_LOG overrides the default level.
+        #[arg(long, value_name = "FORMAT", default_value = "text")]
+        log_format: LogFormat,
+        /// Write local tool-call statistics (per-tool calls, errors, p50/p95
+        /// latency, result bytes) as JSON to this file: every 30 s while calls
+        /// come in, and at shutdown. Nothing is sent over the network.
+        #[arg(long, value_name = "PATH")]
+        stats_file: Option<PathBuf>,
     },
     /// Check the health of the Myceliums installation
     Doctor {
@@ -732,14 +742,54 @@ fn registry_path() -> PathBuf {
     data_dir().join("repos.json")
 }
 
-fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_target(false)
-        .with_writer(std::io::stderr)
-        .init();
+/// Log output format of `myc mcp` (`--log-format`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum LogFormat {
+    Text,
+    Json,
+}
 
+/// The default log filter when `RUST_LOG` is unset. The MCP server logs one
+/// INFO line per tool call (and its own lifecycle); everything else, and
+/// every other command, prints errors only. Logs go to stderr: stdout is the
+/// stdio MCP transport.
+fn default_log_filter(command: &Commands) -> &'static str {
+    match command {
+        Commands::Mcp { .. } => "error,myceliums_mcp=info",
+        _ => "error",
+    }
+}
+
+fn init_tracing(command: &Commands) {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(default_log_filter(command)));
+    let json = matches!(
+        command,
+        Commands::Mcp {
+            log_format: LogFormat::Json,
+            ..
+        }
+    );
+    // MCP clients usually write the server's stderr to a log file: colour
+    // codes only on a terminal.
+    let fmt = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_target(false)
+        .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
+        .with_writer(std::io::stderr);
+    if json {
+        fmt.json()
+            .with_current_span(true)
+            .with_span_list(false)
+            .init();
+    } else {
+        fmt.init();
+    }
+}
+
+fn main() -> Result<()> {
     let cli = Cli::parse();
+    init_tracing(&cli.command);
     // The grep hook runs once per tool call and must answer fast: a
     // single-threaded runtime starts without spawning a worker per core.
     let mut runtime = if matches!(cli.command, Commands::HookGrep) {
@@ -889,8 +939,13 @@ async fn run(cli: Cli) -> Result<()> {
             http,
             allow_remote,
             toolsets,
+            log_format: _,
+            stats_file,
         } => {
-            let toolsets = mcp_toolsets(toolsets.as_deref())?;
+            let opts = myceliums_mcp::ServeOptions {
+                toolsets: mcp_toolsets(toolsets.as_deref())?,
+                stats_file,
+            };
             if let Some(addr) = http {
                 myceliums_mcp::run_mcp_http_server(
                     myceliums_mcp::McpHttpOptions {
@@ -898,11 +953,11 @@ async fn run(cli: Cli) -> Result<()> {
                         allow_remote,
                         token: std::env::var(myceliums_mcp::http_security::TOKEN_ENV).ok(),
                     },
-                    toolsets,
+                    opts,
                 )
                 .await
             } else {
-                myceliums_mcp::run_mcp_server(toolsets).await
+                myceliums_mcp::run_mcp_server(opts).await
             }
         }
         Commands::Doctor { download } => cmd_doctor(download).await,

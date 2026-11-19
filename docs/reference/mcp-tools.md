@@ -27,7 +27,7 @@ ones.
 | `knowledge` | `query_knowledge`, `get_rationale`, `get_knowledge_gaps`, `record_decision`, `get_decisions`, `link_decision` |
 | `email` | `search_emails`, `get_conversation`, `get_person_context` |
 | `cross_repo` | `isolate_intent`, `differentiate_intent`, `plan_adaptation` |
-| `admin` | `delete` |
+| `admin` | `delete`, `server_stats` |
 | `deprecated` | the old names listed under [Deprecated aliases](#deprecated-aliases) |
 
 **Loaded up front in Claude Code.** Claude Code defers MCP tools behind tool
@@ -45,7 +45,7 @@ the key: the installer's `mcp.toolsets` says nothing about a teammate's, so
 there the per-tool `_meta` does the work (see
 [Claude Code integration](../editors/claude-code.md#mcp-server) for a
 personal local-scope override). Do not set `"alwaysLoad": true` on the server
-entry together with `--toolsets all`: that loads all 61 tools up front.
+entry together with `--toolsets all`: that loads all 62 tools up front.
 
 The core tools resolve names and walk the graph through
 `myceliums_core::navigation`, like `myc callers`, `myc callees` and
@@ -291,6 +291,29 @@ non-zero failure count means the index is partial and semantic/hybrid search wil
 omit the un-embedded symbols (see [Partial indexes](#partial-indexes)). The MCP
 tool has no strictness knob; use the `myc analyze --strict-embeddings` CLI flag to
 fail CI on a partial index.
+
+**The previous index stays usable.** A full analysis builds the new index in a
+staging directory beside the live one (`data/.build-…`) and swaps it in only
+when it is complete; the graph cache is dropped at the swap. Until then every
+tool answers from the previous index. A failed or cancelled analysis deletes
+the staging directory and leaves the previous index as it was; the error says
+so.
+
+**One analysis per repository.** While a repository is being analyzed — by
+this server or by another process such as `myc analyze` — another `analyze`
+of it returns an `isError` result (`Analysis already running for …`) with a
+`Next:` step; it does not wait.
+
+**Off the request path.** The analysis runs on a blocking thread, so other
+tool calls are answered while it runs.
+
+**Progress.** When the request carries a `progressToken` in `_meta`, the
+server sends `notifications/progress` with `total: 100`, a `progress` that only
+increases, and a message: discovering files, `parsing files: n/m`, resolving
+calls and embedding, `graph written`, detecting communities, tracing execution
+flows, `replacing the previous index`, and `done` at 100. All of them arrive
+before the result. Without a token, none are sent. A cached result (index still
+fresh) sends none either.
 
 ### `list_repos`
 
@@ -783,6 +806,25 @@ deleted.
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | yes | | Repository ID to delete |
 | `confirm` | bool | no | `false` | Must be `true`; deletion is irreversible (re-run `analyze` to rebuild) |
+
+### `server_stats`
+
+Tool-call statistics of this server process since it started, one line per
+tool, busiest first: calls, `isError` results, protocol errors, cancelled
+calls, p50/p95/max latency in ms, result bytes and approximate tokens
+(bytes / 4). The numbers live in memory on this machine only and are never
+sent anywhere; the call that reads them is not yet counted. No parameters.
+Toolset `admin`. The same numbers can be written to a file with
+`myc mcp --stats-file` (see [Tool-call statistics](commands.md#tool-call-statistics)).
+Example (the numbers are illustrative):
+
+```text
+Tool calls since this server started 812 s ago: 41 (local only, never sent anywhere).
+Latency percentiles cover the last 1024 calls of each tool.
+
+tool | toolset | calls | isError | protocol errors | cancelled | p50 ms | p95 ms | max ms | result bytes | ~tokens
+search_code | core | 22 | 1 | 0 | 0 | 38.2 | 120.5 | 131.0 | 61440 | 15360
+```
 
 ### `cypher_query`
 

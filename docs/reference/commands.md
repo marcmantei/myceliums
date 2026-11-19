@@ -562,6 +562,8 @@ Start the MCP (Model Context Protocol) server. By default uses stdio transport. 
 | `--http` | string, optional | stdio | Run as Streamable HTTP server on this address (e.g. `127.0.0.1:9999`). Non-loopback addresses are refused without `--allow-remote`. |
 | `--allow-remote` | flag | off | Allow a non-loopback `--http` address (e.g. `0.0.0.0:9999`). Every request must then send `Authorization: Bearer <token>`. |
 | `--toolsets` | comma-separated list | `mcp.toolsets` config, else `core` | Tool groups to expose: `core` (always on), `graph`, `review`, `architecture`, `knowledge`, `email`, `cross_repo`, `admin`, `deprecated`, or `all`. An unknown name is an error. See [Toolsets](mcp-tools.md#toolsets). |
+| `--log-format` | `text` or `json` | `text` | Format of the log lines on stderr; `json` writes one JSON object per line. See [Logging](#logging). |
+| `--stats-file` | path, optional | off | Write the [tool-call statistics](#tool-call-statistics) as JSON to this file. |
 
 ```bash
 # Stdio transport (used by editor integrations), core toolset
@@ -575,7 +577,62 @@ myc mcp --http 127.0.0.1:9999
 
 # HTTP transport for remote clients (bearer token required)
 MYC_MCP_TOKEN=$(openssl rand -hex 32) myc mcp --http 0.0.0.0:9999 --allow-remote
+
+# JSON logs and a statistics file
+myc mcp --log-format json --stats-file ~/.myceliums/mcp-stats.json
 ```
+
+#### Logging
+
+`myc mcp` logs to **stderr** only; with the stdio transport, stdout carries
+the MCP messages and nothing else. Without `RUST_LOG`, the server logs at
+INFO for its own crate (`myceliums_mcp`) and errors only for everything else;
+`RUST_LOG` replaces that default (for example `RUST_LOG=debug`, or
+`RUST_LOG=error` to silence the per-call lines). Colour codes are written
+only when stderr is a terminal.
+
+Every tool call runs in one `tool_call` span (target `myceliums_mcp::calls`)
+and ends with one line — INFO `tool call finished` for a result, WARN
+`tool call failed` for a JSON-RPC error or a call dropped unanswered:
+
+```text
+2026-11-19T02:09:17.379749Z  INFO tool_call{tool=analyze toolset=core repo=/work/app duration_ms=597.33 result_bytes=170 approx_tokens=43 outcome=ok}: tool call finished
+```
+
+| Field | Meaning |
+|-------|---------|
+| `tool`, `toolset` | The tool called and its [toolset](mcp-tools.md#toolsets) (`-` for an unknown name) |
+| `repo` | The `repo_id` argument, or `path` for `analyze`; absent when the tool uses the working directory's repository |
+| `duration_ms` | Time from receiving the request to its answer |
+| `result_bytes` | Bytes of result text the agent reads (the text blocks; the JSON of `structuredContent` when there are none; the message of a protocol error) |
+| `approx_tokens` | `result_bytes / 4`, rounded up — a rough size, not a tokenizer count |
+| `outcome` | `ok`, `is_error` (an `isError` result), `protocol_error` (`invalid_params`, `internal_error`, unknown tool) or `cancelled` (the request was dropped before it answered) |
+
+With `--log-format json`, each line is a JSON object; the call fields are in
+`span`:
+
+```json
+{"timestamp":"2026-11-19T02:09:19.803141Z","level":"INFO","fields":{"message":"tool call finished"},"span":{"approx_tokens":81,"duration_ms":0.27,"outcome":"ok","result_bytes":321,"tool":"list_repos","toolset":"core","name":"tool_call"}}
+```
+
+#### Tool-call statistics
+
+The server counts its tool calls in memory: per tool the number of calls,
+`isError` results, protocol errors and cancelled calls, p50/p95/max latency,
+and the result bytes with their approximate tokens. Nothing is sent over the
+network — there is no telemetry. Two ways to read the numbers, both opt-in:
+
+- the `server_stats` tool in the `admin` toolset (`myc mcp --toolsets admin`),
+  see [`server_stats`](mcp-tools.md#server_stats);
+- `--stats-file <path>`: the same numbers as JSON, rewritten every 30 seconds
+  while calls come in and once more when the server stops (stdin closed, or
+  Ctrl-C for `--http`). The file is replaced atomically (write to
+  `<path>.tmp`, then rename).
+
+Memory stays bounded: one entry per tool of the catalog (any other name is
+counted under `(unknown tool)`), and the percentiles are computed over the
+last 1024 calls of each tool. The counters start at zero with each server
+process; with `--http` they cover all sessions together.
 
 Access control for the HTTP transport:
 

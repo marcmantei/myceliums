@@ -26,7 +26,7 @@ hard, and what `myc setup-claude` installs for each.
 | Layer | What | Intended effect | Risk | Status |
 |---|---|---|---|---|
 | 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | cheap, only a hint | ignored under pressure | `myc setup-claude`, `myc setup-codex` |
-| 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 50 opt-in by group | the model sees and understands them | each up-front schema costs context in every request | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
+| 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | the model sees and understands them | each up-front schema costs context in every request | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
 | 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | fires at the moment the agent reaches for grep | blocking grep would be wrong, so it never blocks | `myc setup-claude` |
 | 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | clean separation, good for teams | one extra hop | `myc setup-claude` |
 | 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | full control | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
@@ -153,7 +153,7 @@ source, callers and callees), `find_callers`, `find_callees`,
 `trace_flow` (how control gets from A to B), `find_dead_code`, `list_repos`
 and `analyze`. They answer through the same `myceliums_core::navigation`
 functions as `myc callers`, `myc callees` and `myc impact`, so the CLI, the
-grep hook's hints and the MCP tools agree. The other 50 tools are opt-in by
+grep hook's hints and the MCP tools agree. The other 51 tools are opt-in by
 group (`myc mcp --toolsets core,architecture`, or the `mcp.toolsets` config
 key; `all` for everything); see [Toolsets](../reference/mcp-tools.md#toolsets).
 

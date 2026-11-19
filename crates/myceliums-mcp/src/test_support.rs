@@ -29,16 +29,19 @@ impl MyceliumsMcp {
 
     /// The MCP router with every toolset (deprecated aliases included), for
     /// serving this server over an in-process transport in end-to-end tests.
-    pub fn into_router_for_test(self) -> rmcp::handler::server::router::Router<Self> {
+    pub fn into_router_for_test(
+        self,
+    ) -> crate::Observed<rmcp::handler::server::router::Router<Self>> {
         self.into_router_with_toolsets_for_test(&Toolsets::all())
     }
 
-    /// The MCP router exposing `toolsets` only.
+    /// The MCP service exposing `toolsets` only: the router wrapped in the
+    /// per-call tracing and statistics, exactly as `myc mcp` serves it.
     pub fn into_router_with_toolsets_for_test(
         self,
         toolsets: &Toolsets,
-    ) -> rmcp::handler::server::router::Router<Self> {
-        rmcp::handler::server::router::Router::new(self).with_tools(Self::tool_router_for(toolsets))
+    ) -> crate::Observed<rmcp::handler::server::router::Router<Self>> {
+        self.into_service(toolsets)
     }
 
     /// Invoke the `context_search` handler.
@@ -174,9 +177,28 @@ impl MyceliumsMcp {
             .map_err(|e| e.message())
     }
 
-    /// Invoke the `analyze` handler.
+    /// Invoke the `analyze` handler (no progress notifications, never
+    /// cancelled).
     pub async fn analyze_for_test(&self, params: AnalyzeParams) -> Result<String, String> {
-        self.analyze(Parameters(params))
+        self.analyze_observed_for_test(params, None, Default::default())
+            .await
+    }
+
+    /// Invoke the `analyze` handler with an observer that sees every phase
+    /// the analyzer reports, and a cancellation token (cancelled: the run
+    /// stops before the swap).
+    pub async fn analyze_observed_for_test(
+        &self,
+        params: AnalyzeParams,
+        observer: Option<std::sync::Arc<dyn myceliums_core::ProgressReporter>>,
+        ct: tokio_util::sync::CancellationToken,
+    ) -> Result<String, String> {
+        let control = crate::analysis::RunControl {
+            sink: None,
+            observer,
+            ct,
+        };
+        self.analyze_with(params, control)
             .await
             .map_err(|e| e.message())
     }

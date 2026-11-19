@@ -3901,6 +3901,20 @@
   {
     "annotations": {
       "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Tool-call statistics of this MCP server since it started: calls, isError results, protocol errors, p50/p95/max latency and result size (bytes, ~tokens) per tool. Kept in memory on this machine only; nothing is ever sent anywhere.",
+    "inputSchema": {
+      "properties": {},
+      "type": "object"
+    },
+    "name": "server_stats"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": true

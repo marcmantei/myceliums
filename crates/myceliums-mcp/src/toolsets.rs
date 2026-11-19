@@ -37,7 +37,8 @@ pub enum Toolset {
     Email,
     /// Comparing and porting features between repositories.
     CrossRepo,
-    /// Index maintenance beyond `analyze`: deleting an index.
+    /// Index maintenance beyond `analyze` (deleting an index) and this
+    /// server's local call statistics.
     Admin,
     /// Old tool names kept for one release; each names its replacement.
     Deprecated,
@@ -82,7 +83,7 @@ impl Toolset {
             Toolset::Knowledge => "docs/email mentions of code, rationale comments, knowledge gaps, architecture decision records",
             Toolset::Email => "indexed email: search, threads, people",
             Toolset::CrossRepo => "isolate a feature, compare two repositories, plan a port",
-            Toolset::Admin => "delete an index",
+            Toolset::Admin => "delete an index, local tool-call statistics of this server",
             Toolset::Deprecated => "old tool names, kept for one release (each names its replacement)",
         }
     }
@@ -234,6 +235,7 @@ pub(crate) const CATALOG: &[(&str, Toolset)] = &[
     ("plan_adaptation", Toolset::CrossRepo),
     // Admin
     ("delete", Toolset::Admin),
+    ("server_stats", Toolset::Admin),
 ];
 
 /// Deprecated aliases and the tool that replaces each. They stay in the
@@ -266,6 +268,16 @@ pub(crate) fn toolset_of(tool: &str) -> Option<Toolset> {
         .iter()
         .find(|(name, _)| *name == tool)
         .map(|(_, set)| *set)
+}
+
+/// `tool` as the `'static` name the catalog spells it with, or `None` for a
+/// name this server does not know.
+pub(crate) fn static_name(tool: &str) -> Option<&'static str> {
+    CATALOG
+        .iter()
+        .map(|(name, _)| *name)
+        .chain(DEPRECATED.iter().map(|(old, _)| *old))
+        .find(|name| *name == tool)
 }
 
 /// The tool that replaces the deprecated alias `tool`.

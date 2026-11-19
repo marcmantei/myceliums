@@ -46,6 +46,8 @@ The registry is a JSON file that tracks all analyzed repositories. Each entry co
 
 Each repository's analysis data is stored in LanceDB format. This is a columnar storage format optimized for vector search and structured queries. The directory contains multiple `.lance` table directories for symbols, relationships, communities, processes, and other graph entities.
 
+The MCP `analyze` tool builds a new index in `data/.build-<id>/` and, once it is complete, renames the live directory to `data/.old-<id>/`, the new one into place, and deletes the old one. A failed or cancelled analysis deletes its `.build-` directory. A `.build-` or `.old-` directory that survives (the process was killed mid-way) is reported as orphaned and removed by `myc clean --orphans`; never remove one while an analysis is running.
+
 ### Snapshots (`snapshots/<repo-id>/`)
 
 Snapshots capture the state of the knowledge graph at a point in time: symbols and edges keyed by file, qualified name and kind, so two analyses of unchanged code compare equal. Every analysis (MCP `analyze` or `myc analyze`) records one in `snapshots/<repo-id>/`; the newest 10 per repository are kept, and `snapshots/<repo-id>.json` holds the latest. `detect_architecture_drift` compares them (by default the previous analysis with the current graph).
@@ -175,7 +177,9 @@ Myceliums uses lock files to prevent concurrent analysis of the same repository.
 **Stale locks** can occur when a process crashes or is forcefully terminated during analysis. Stale locks are detected and auto-cleaned by:
 
 - `myc doctor` (reports stale locks)
-- `myc analyze` and `myc session` (auto-clean stale locks before starting)
+- `myc analyze`, `myc session` and the MCP `analyze` tool (auto-clean stale locks before starting)
+
+The MCP `analyze` tool takes the same lock, so `myc analyze` and the MCP server never index the same repository at once; a refused MCP call is an `isError` result saying `Analysis already running`.
 
 A lock is considered stale if the process that created it is no longer running.
 

@@ -1,11 +1,15 @@
-//! The MCP server: `ServerHandler` (info + resources) and the stdio and
-//! Streamable HTTP transports.
+//! The MCP server: `ServerHandler` (info + resources), the stdio and
+//! Streamable HTTP transports, and the `--stats-file` writer.
 
+use crate::stats::CallStats;
 use crate::{http_security, McpHttpOptions, MyceliumsMcp, Toolsets};
 use anyhow::Result;
 use rmcp::model::*;
 use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ServerHandler, ServiceExt};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
 
 /// Sent once per session as the server instructions. Every line costs
@@ -136,20 +140,37 @@ impl ServerHandler for MyceliumsMcp {
     }
 }
 
-/// Serve MCP over stdio, exposing `toolsets` (see [`crate::toolsets`]).
-pub async fn run_mcp_server(toolsets: Toolsets) -> Result<()> {
-    info!("Starting Myceliums MCP server (toolsets: {toolsets})");
-    let server = MyceliumsMcp::new();
+/// How `myc mcp` runs a server, beyond the transport.
+#[derive(Debug, Clone, Default)]
+pub struct ServeOptions {
+    /// The tool groups to expose (see [`crate::toolsets`]).
+    pub toolsets: Toolsets,
+    /// Write the local call statistics here as JSON: every
+    /// [`STATS_FILE_INTERVAL`] while calls come in, and at shutdown.
+    pub stats_file: Option<PathBuf>,
+}
 
-    let router = rmcp::handler::server::router::Router::new(server)
-        .with_tools(MyceliumsMcp::tool_router_for(&toolsets));
+/// How often `--stats-file` is rewritten while the server is answering calls.
+pub const STATS_FILE_INTERVAL: Duration = Duration::from_secs(30);
+
+/// Serve MCP over stdio.
+pub async fn run_mcp_server(opts: ServeOptions) -> Result<()> {
+    info!(
+        "Starting Myceliums MCP server (toolsets: {})",
+        opts.toolsets
+    );
+    let server = MyceliumsMcp::new();
+    let stats = StatsFile::start(opts.stats_file, server.stats.clone());
 
     let transport = rmcp::transport::io::stdio();
-    let running = router
+    let running = server
+        .into_service(&opts.toolsets)
         .serve(transport)
         .await
         .map_err(|e| anyhow::anyhow!("MCP serve error: {}", e))?;
-    running.waiting().await?;
+    let served = running.waiting().await;
+    stats.finish().await;
+    served?;
     Ok(())
 }
 
@@ -163,12 +184,15 @@ pub async fn run_mcp_server(toolsets: Toolsets) -> Result<()> {
 /// `opts.allow_remote`, a bearer token for remote use, Host and Origin
 /// validation, and CORS for loopback origins only. A refused configuration
 /// is returned as an error before anything binds.
-pub async fn run_mcp_http_server(opts: McpHttpOptions, toolsets: Toolsets) -> Result<()> {
+pub async fn run_mcp_http_server(http: McpHttpOptions, opts: ServeOptions) -> Result<()> {
     use http_security::HttpSecurity;
 
-    let security = HttpSecurity::plan(&opts)?;
-    let addr = opts.addr.as_str();
-    info!("Starting Myceliums MCP HTTP server on {addr} (toolsets: {toolsets})");
+    let security = HttpSecurity::plan(&http)?;
+    let addr = http.addr.as_str();
+    info!(
+        "Starting Myceliums MCP HTTP server on {addr} (toolsets: {})",
+        opts.toolsets
+    );
     if !security.loopback_only {
         eprintln!(
             "WARNING: MCP HTTP server accepts remote clients on {addr}. Every request needs \
@@ -187,23 +211,35 @@ pub async fn run_mcp_http_server(opts: McpHttpOptions, toolsets: Toolsets) -> Re
         eprintln!("Bearer token required (from {}).", http_security::TOKEN_ENV);
     }
 
-    let app = mcp_http_app(security, toolsets);
+    let stats = Arc::new(CallStats::default());
+    let stats_file = StatsFile::start(opts.stats_file, stats.clone());
+    let app = mcp_http_app(security, opts.toolsets, stats);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     info!("MCP server listening on http://{}/mcp", addr);
     eprintln!("MCP server listening on http://{}/mcp", addr);
-    axum::serve(listener, app).await?;
+    // Ctrl-C stops at once (open SSE streams would hold a graceful shutdown
+    // forever), after the statistics are written.
+    let served = tokio::select! {
+        served = axum::serve(listener, app) => served,
+        _ = tokio::signal::ctrl_c() => Ok(()),
+    };
+    stats_file.finish().await;
+    served?;
 
     Ok(())
 }
 
 /// The complete HTTP app served by [`run_mcp_http_server`]: rmcp's
 /// Streamable HTTP service at `/mcp`, wrapped by the access-control layers.
-fn mcp_http_app(security: http_security::HttpSecurity, toolsets: Toolsets) -> axum::Router {
+fn mcp_http_app(
+    security: http_security::HttpSecurity,
+    toolsets: Toolsets,
+    stats: Arc<CallStats>,
+) -> axum::Router {
     use rmcp::transport::streamable_http_server::{
         session::local::LocalSessionManager, StreamableHttpServerConfig, StreamableHttpService,
     };
-    use std::sync::Arc;
     use tokio_util::sync::CancellationToken;
 
     let ct = CancellationToken::new();
@@ -219,19 +255,15 @@ fn mcp_http_app(security: http_security::HttpSecurity, toolsets: Toolsets) -> ax
         config = config.disable_allowed_hosts();
     }
 
-    // One graph service for all sessions: each session gets its own server
-    // value, but they share the store handles and the cached graphs.
+    // One graph service and one set of call statistics for all sessions:
+    // each session gets its own server value, but they share the store
+    // handles, the cached graphs and the counters.
     let graphs = Arc::new(myceliums_core::GraphService::new(crate::repo::data_dir()));
     let service: StreamableHttpService<
-        rmcp::handler::server::router::Router<MyceliumsMcp>,
+        crate::Observed<rmcp::handler::server::router::Router<MyceliumsMcp>>,
         LocalSessionManager,
     > = StreamableHttpService::new(
-        move || {
-            let server = MyceliumsMcp::with_service(graphs.clone());
-            let router = rmcp::handler::server::router::Router::new(server)
-                .with_tools(MyceliumsMcp::tool_router_for(&toolsets));
-            Ok(router)
-        },
+        move || Ok(MyceliumsMcp::with_shared(graphs.clone(), stats.clone()).into_service(&toolsets)),
         Arc::new(LocalSessionManager::default()),
         config,
     );
@@ -240,6 +272,70 @@ fn mcp_http_app(security: http_security::HttpSecurity, toolsets: Toolsets) -> ax
         axum::Router::new().nest_service("/mcp", service),
         Arc::new(security),
     )
+}
+
+/// The `--stats-file` writer: rewrites the file while calls come in and
+/// once more at shutdown. Without a path it does nothing.
+struct StatsFile {
+    target: Option<(PathBuf, Arc<CallStats>)>,
+    task: Option<tokio::task::JoinHandle<()>>,
+}
+
+impl StatsFile {
+    fn start(path: Option<PathBuf>, stats: Arc<CallStats>) -> Self {
+        let Some(path) = path else {
+            return Self {
+                target: None,
+                task: None,
+            };
+        };
+        info!("Writing tool-call statistics to {}", path.display());
+        let task = tokio::spawn({
+            let (path, stats) = (path.clone(), stats.clone());
+            async move {
+                let mut written = 0;
+                let mut tick = tokio::time::interval(STATS_FILE_INTERVAL);
+                loop {
+                    tick.tick().await;
+                    let calls = stats.total_calls();
+                    if calls != written {
+                        write_stats_file(&path, &stats);
+                        written = calls;
+                    }
+                }
+            }
+        });
+        Self {
+            target: Some((path, stats)),
+            task: Some(task),
+        }
+    }
+
+    async fn finish(self) {
+        if let Some(task) = self.task {
+            task.abort();
+            let _ = task.await;
+        }
+        if let Some((path, stats)) = self.target {
+            write_stats_file(&path, &stats);
+        }
+    }
+}
+
+/// Writes the statistics as JSON, via a temporary file and a rename so a
+/// reader never sees half a file. Failures are logged, never fatal.
+pub(crate) fn write_stats_file(path: &Path, stats: &CallStats) {
+    let write = || -> std::io::Result<()> {
+        let json = serde_json::to_vec_pretty(&stats.snapshot()).map_err(std::io::Error::other)?;
+        let mut tmp = path.as_os_str().to_owned();
+        tmp.push(".tmp");
+        let tmp = PathBuf::from(tmp);
+        std::fs::write(&tmp, json)?;
+        std::fs::rename(&tmp, path)
+    };
+    if let Err(e) = write() {
+        tracing::warn!("cannot write the statistics file {}: {e}", path.display());
+    }
 }
 
 #[cfg(test)]
@@ -263,6 +359,7 @@ mod tests {
                     token_generated: false,
                 },
                 crate::Toolsets::core(),
+                Default::default(),
             )
         }
 

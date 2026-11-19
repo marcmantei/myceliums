@@ -136,6 +136,7 @@ pub mod search;
 pub mod service;
 pub mod service_map;
 pub mod snapshot;
+pub mod staging;
 pub mod surprising_connections;
 pub mod text;
 pub mod timing;
@@ -222,6 +223,7 @@ pub use snapshot::{
     snapshot_dir, snapshot_path, DiffEntry, GraphDiff, GraphSnapshot, SnapshotSummary,
     SNAPSHOTS_KEPT,
 };
+pub use staging::StagedIndex;
 pub use surprising_connections::{compute_surprising_connections, SurprisingConnectionItem};
 pub use timing::{Timer, TimingReport};
 pub use wiki_export::{export_wiki, WikiExportConfig, WikiExportResult};
