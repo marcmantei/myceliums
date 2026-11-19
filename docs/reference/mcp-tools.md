@@ -36,10 +36,20 @@ myceliums tool in 0 of 90 sessions. The core tools therefore carry
 `"_meta": {"anthropic/alwaysLoad": true}` in `tools/list`, which makes Claude
 Code load them into context at session start
 ([docs](https://code.claude.com/docs/en/mcp)); the other groups stay deferred.
-To defer the core tools as well, set `"alwaysLoad": false` in the server's
-entry of your MCP configuration (Claude Code 2.1.287 or later). Do not set
-`"alwaysLoad": true` on the server entry together with `--toolsets all`: that
-loads all 61 tools up front.
+`myc setup-claude` also sets `"alwaysLoad": true` on the server entry when
+`mcp.toolsets` is the default, so Claude Code waits for the server and the
+core tools are present in the first prompt (`--no-always-load` writes `false`,
+which defers the core tools as well; Claude Code 2.1.287 or later). Do not
+set `"alwaysLoad": true` on the server entry together with `--toolsets all`:
+that loads all 61 tools up front.
+
+The core tools resolve names and walk the graph through
+`myceliums_core::navigation`, like `myc callers`, `myc callees` and
+`myc impact`, so the CLI and the MCP tools give the same answer for the same
+name. Beyond core's resolution (qualified name, short name, qualified suffix
+such as `Item.AsString`; functions and types before same-named variables),
+the MCP tools accept `file_path:qualified_name` handles, list those handles
+for an ambiguous name, and suggest similar names for an unknown one.
 
 ## Tool contract
 

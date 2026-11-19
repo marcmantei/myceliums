@@ -5,7 +5,9 @@ A code knowledge graph only helps an agent that uses it. The agent pilot
 integration, the MCP server attached and nothing else: Claude Code called a
 myceliums tool in **0 of 90** sessions. Claude Code defers MCP tool schemas
 behind tool search, so the agent saw 54 tool names and never loaded one, and
-nothing in its context sent it from grep to the graph.
+nothing in its context sent it from grep to the graph. (The pilot ran myc
+0.3.2; since #97 the server's default is a 9-tool core toolset loaded up
+front, layer 2 below.)
 
 This guide describes five ways to route an agent to myceliums, from soft to
 hard, and what `myc setup-claude` installs for each.
@@ -24,7 +26,7 @@ hard, and what `myc setup-claude` installs for each.
 | Layer | What | Intended effect | Risk | Status |
 |---|---|---|---|---|
 | 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | cheap, only a hint | ignored under pressure | `myc setup-claude`, `myc setup-codex` |
-| 2. Tool surface | 5–8 task-named core tools, loaded up front instead of deferred | the model sees and understands them | – | planned, [#97](https://github.com/marcmantei/myceliums/issues/97) |
+| 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 50 opt-in by group | the model sees and understands them | each up-front schema costs context in every request | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
 | 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | fires at the moment the agent reaches for grep | blocking grep would be wrong, so it never blocks | `myc setup-claude` |
 | 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | clean separation, good for teams | one extra hop | `myc setup-claude` |
 | 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | full control | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
@@ -62,7 +64,7 @@ What each layer writes:
 
 | Layer | Project scope (default) | User scope | Opt out |
 |---|---|---|---|
-| MCP server | `.mcp.json` | `claude mcp add -s user` (fallback: `~/.claude.json`) | – |
+| MCP server (2. core tools loaded up front) | `.mcp.json` | `claude mcp add-json -s user` (fallback: `~/.claude.json`) | `--no-always-load` |
 | SessionStart hook: refresh the index, print a status line | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PostToolUse hook: format myceliums tool results | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | 1. Routing block | `CLAUDE.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
@@ -91,7 +93,7 @@ A block of under 15 lines between `<!-- BEGIN myceliums -->` and
 `<!-- END myceliums -->`. It is loaded on every turn, so it is short: it
 names the commands above, the MCP tools and the subagent as the place for
 structural questions, and grep/rg as the place for string literals, config
-values, log messages and non-code files. The block is versioned (`v1` in its
+values, log messages and non-code files. The block is versioned (`v2` in its
 first comment line); everything between the markers is replaced on re-run,
 and text outside them is never touched. Put your own rules outside the
 markers.
@@ -134,21 +136,43 @@ follow the [Claude Code hooks reference](https://code.claude.com/docs/en/hooks).
 the main agent to delegate structural questions ("who calls", "what breaks",
 "where is X implemented") to it. Its tools are the whole myceliums MCP server
 (`mcp__myceliums__*`), `Read` to confirm results, and `ToolSearch` in case the
-session defers MCP tool schemas. Its instructions start with `list_repos`,
-because most myceliums tools take a `repo_id`. It has no Bash: the subagent
+session defers MCP tool schemas (the non-core groups). Its instructions name
+the core tools; they default to the repository of the working directory, and
+`list_repos` lists the others. It has no Bash: the subagent
 format can give or withhold a tool, but cannot limit Bash to `myc` commands.
 
 The file carries a marker comment in its frontmatter. Delete that line to make
 the file yours: `myc setup-claude` then neither overwrites nor removes it.
 
-## 2. Core toolset (planned)
+## 2. Core toolset
 
-The MCP server exposes 54 tools with generic names, which Claude Code defers.
-[#97](https://github.com/marcmantei/myceliums/issues/97) will add a small,
-task-named default toolset. Claude Code can load a server's tools up front
-with `"alwaysLoad": true` in its MCP entry
-([docs](https://code.claude.com/docs/en/mcp)); with today's 54 tools that
-would add every schema to every model call, so `setup-claude` does not set it.
+`myc mcp` exposes nine tools by default, each named after a question agents
+ask: `search_code` (where is X implemented), `explain_symbol` (X with its
+source, callers and callees), `find_callers`, `find_callees`,
+`impact_of_change` (what breaks if this symbol, file or diff changes),
+`trace_flow` (how control gets from A to B), `find_dead_code`, `list_repos`
+and `analyze`. They answer through the same `myceliums_core::navigation`
+functions as `myc callers`, `myc callees` and `myc impact`, so the CLI, the
+grep hook's hints and the MCP tools agree. The other 50 tools are opt-in by
+group (`myc mcp --toolsets core,architecture`, or the `mcp.toolsets` config
+key; `all` for everything); see [Toolsets](../reference/mcp-tools.md#toolsets).
+
+Two settings put the core tools in front of the model instead of behind tool
+search ([Claude Code docs](https://code.claude.com/docs/en/mcp)):
+
+- Each core tool carries `"_meta": {"anthropic/alwaysLoad": true}` in
+  `tools/list`, so it loads up front whatever the client configuration says,
+  unless the server entry sets `"alwaysLoad": false`.
+- `myc setup-claude` sets `"alwaysLoad": true` on the `myceliums` server
+  entry when the server serves the core toolset only (the default). Then
+  Claude Code also waits for the server (at most 5 s) before it builds the
+  first prompt, so the tools are there from the first turn. With extra
+  groups configured it leaves the key out, so they do not all load into
+  every request; `--no-always-load` writes `false` and keeps every
+  myceliums tool deferred.
+
+How much this changes tool use is measured in
+[#125](https://github.com/marcmantei/myceliums/issues/125) (variant C).
 
 ## 5. Custom harness: prefetch a context pack
 

@@ -21,7 +21,7 @@ myc setup-claude --scope user     # user scope: every project, only for you
 
 | Piece | Project scope | User scope | Opt out |
 |---|---|---|---|
-| MCP server `myceliums` | `.mcp.json` | `claude mcp add -s user` (fallback: `~/.claude.json`) | – |
+| MCP server `myceliums`, core tools loaded up front | `.mcp.json` | `claude mcp add-json -s user` (fallback: `~/.claude.json`) | `--no-always-load` keeps the tools deferred |
 | SessionStart hook | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PostToolUse hook | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PreToolUse grep-redirect hook | `.claude/settings.json` | `~/.claude/settings.json` | `--no-redirect-hook` |
@@ -34,15 +34,25 @@ A settings or MCP file that is not valid JSON is reported and left untouched.
 
 ### MCP server
 
-Registers myceliums as an MCP server so Claude Code can call tools like `search_code`, `find_callers`, and `impact_of_change`. These nine core tools mark themselves to load up front (`_meta["anthropic/alwaysLoad"]`), so they are in context from the first turn instead of behind tool search; see [Toolsets](../reference/mcp-tools.md#toolsets).
+Registers myceliums as an MCP server so Claude Code can call tools like `search_code`, `find_callers`, and `impact_of_change`. By default `myc mcp` serves the nine core tools, and the entry carries `"alwaysLoad": true`: Claude Code loads them into context at session start (and waits up to 5 s for the server) instead of deferring them behind tool search; see [Toolsets](../reference/mcp-tools.md#toolsets).
 
 ```json
 {
   "mcpServers": {
-    "myceliums": { "type": "stdio", "command": "myc", "args": ["mcp"] }
+    "myceliums": { "type": "stdio", "command": "myc", "args": ["mcp"], "alwaysLoad": true }
   }
 }
 ```
+
+`alwaysLoad` applies to every tool the server lists, so `setup-claude` writes
+it only when `mcp.toolsets` is the default (core only). When you have added
+groups (`myc configure --set mcp.toolsets=...`), it leaves the key out: the
+core tools still load up front through their own
+`_meta["anthropic/alwaysLoad"]`, and the added groups stay deferred. Re-run
+`myc setup-claude` after changing `mcp.toolsets`. `--no-always-load` writes
+`"alwaysLoad": false`, which keeps every myceliums tool deferred (Claude Code
+2.1.287 or later). At user scope the entry is registered with
+`claude mcp add-json`, which, unlike `claude mcp add`, carries `alwaysLoad`.
 
 At project scope the command is `myc` when `myc` is on `PATH` (so the file
 works on every machine), otherwise the absolute path of the running binary.

@@ -390,6 +390,7 @@ Each editor also has a dedicated setup command. These are equivalent to `myc set
 | `--no-routing` | | Skip (and remove) the CLAUDE.md routing block |
 | `--no-redirect-hook` | | Skip (and remove) the PreToolUse grep-redirect hook |
 | `--no-agent` | | Skip (and remove) the `code-explorer` subagent |
+| `--no-always-load` | | Write `"alwaysLoad": false`: every myceliums tool stays behind Claude Code's tool search. Without it the entry gets `"alwaysLoad": true` when `mcp.toolsets` is the default (core only), and no `alwaysLoad` when it adds groups (the core tools still load up front through their `_meta`) |
 | `--uninstall` | | Remove everything myceliums installed at that scope |
 
 `myc setup-codex` also writes the routing block into the project's `AGENTS.md` when run inside a git repository (`--no-routing` skips it).

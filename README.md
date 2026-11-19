@@ -285,7 +285,7 @@ myc setup-claude                # in the project: files to commit for the team
 myc setup-claude --scope user   # or for all your projects
 ```
 
-This registers the MCP server, a SessionStart hook that keeps the index fresh, a result formatter, a CLAUDE.md routing block, a PreToolUse hook that answers a grep for a known symbol with the matching `myc` call, and a `code-explorer` subagent. Opt out per layer with `--no-routing`, `--no-redirect-hook`, `--no-agent`. On every Claude Code session you'll see:
+This registers the MCP server, a SessionStart hook that keeps the index fresh, a result formatter, a CLAUDE.md routing block, a PreToolUse hook that answers a grep for a known symbol with the matching `myc` call, and a `code-explorer` subagent, and marks the core MCP tools to load up front (`alwaysLoad`). Opt out per layer with `--no-routing`, `--no-redirect-hook`, `--no-agent`, `--no-always-load`. On every Claude Code session you'll see:
 
 ```
 SessionStart:startup says: [myceliums] my-project ready | 312 files · 1,247 symbols
@@ -359,13 +359,13 @@ old tool names (`context_search`, `symbol_context`, `get_callers`,
 Attaching the MCP server is not enough: in the pilot below the agent called
 myceliums in 0 of 90 sessions, because Claude Code defers MCP tool schemas
 and nothing sent the agent from grep to the graph. There are five ways to
-route an agent to myceliums, from soft to hard; four ship with this release,
-the core toolset (layer 2) is planned:
+route an agent to myceliums, from soft to hard; all five ship with this
+release:
 
 | Layer | What | Installed by |
 |---|---|---|
 | 1. Instructions | Routing block in CLAUDE.md / AGENTS.md: structural questions to myceliums, grep for literals and config | `myc setup-claude`, `myc setup-codex` |
-| 2. Tool surface | Small task-named core toolset, loaded up front | planned ([#97](https://github.com/marcmantei/myceliums/issues/97)) |
+| 2. Tool surface | 9 task-named core tools (`search_code`, `find_callers`, `impact_of_change`, ...) by default, loaded up front (`alwaysLoad`); 50 more opt-in by group | `myc mcp` default; `myc setup-claude` sets `alwaysLoad` |
 | 3. Hooks | PreToolUse hook: a grep for a known symbol gets the matching `myc callers …` call as context (never blocks) | `myc setup-claude` |
 | 4. Subagent | `code-explorer` with only the myceliums tools, Read and ToolSearch | `myc setup-claude` |
 | 5. Custom harness | Prefetch `myc context --json` into the prompt | [example](examples/agent-sdk-prefetch/) |
