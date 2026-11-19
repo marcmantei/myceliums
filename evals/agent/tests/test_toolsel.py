@@ -23,6 +23,21 @@ class Intents(unittest.TestCase):
         problems = toolsel.check_intents(intents, [{"name": "get_callers"}])
         self.assertEqual(len(problems), 3)  # unknown tool, duplicate id, empty expected
 
+    def test_intents_name_no_deprecated_alias(self):
+        # #97 renamed these; picking a deprecated alias is not a correct pick.
+        deprecated = {"context_search", "search_documents", "hybrid_search", "semantic_search",
+                      "symbol_context", "get_symbol_definition", "get_callers", "get_callees",
+                      "detect_impact", "get_graph_diff", "snapshot_diff"}
+        for i in config.load_json(config.INTENTS_FILE)["intents"]:
+            self.assertFalse(deprecated & set(i["expected"]), i["id"])
+
+    def test_a_smaller_profile_is_scored_on_the_intents_it_can_answer(self):
+        intents = [{"id": "a", "intent": "x", "expected": ["find_callers", "get_stats"]},
+                   {"id": "b", "intent": "y", "expected": ["get_stats"]}]
+        offered = toolsel.offered_intents(intents, [{"name": "find_callers"}])
+        self.assertEqual([i["id"] for i in offered], ["a"])
+        self.assertEqual(toolsel.mcp_args("core"), ["mcp", "--toolsets", "core"])
+
     def test_digest_ignores_order_of_keys_only(self):
         a = [{"name": "x", "description": "d", "inputSchema": {"a": 1}}]
         b = [{"inputSchema": {"a": 1}, "description": "d", "name": "x"}]

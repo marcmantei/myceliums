@@ -1,8 +1,11 @@
 """Tool-selection eval: does a model pick the right myceliums tool for an intent?
 
-1. ``list_tools`` starts ``myc mcp`` (empty, throw-away data directory) and
-   reads the live ``tools/list``. Every expected tool in ``intents.json`` must
-   exist there; a renamed or removed tool fails the eval loudly.
+1. ``list_tools`` starts ``myc mcp --toolsets <profile>`` (empty, throw-away
+   data directory) and reads the live ``tools/list``. Every expected tool in
+   ``intents.json`` must exist in the ``all`` profile; a renamed or removed
+   tool fails the eval loudly. A smaller profile (e.g. ``core``, the default
+   of ``myc mcp`` since #97) is scored on the intents it can answer: those
+   with at least one expected tool in the profile (``offered_intents``).
 2. ``run`` asks the model once per intent and pass, in a single turn, with the
    myceliums server attached and nothing else: no built-in tools, tool search
    off so every tool definition is in context, and no permission to run any
@@ -36,11 +39,16 @@ PROMPT = (
 )
 
 
-def list_tools(myc: str) -> list[dict]:
+def mcp_args(toolsets: str) -> list[str]:
+    """Arguments of ``myc`` that serve MCP with the ``toolsets`` profile."""
+    return ["mcp", "--toolsets", toolsets]
+
+
+def list_tools(myc: str, toolsets: str = "all") -> list[dict]:
     with tempfile.TemporaryDirectory(prefix="aeval-tools-") as tmp:
         env = {"MYCELIUMS_DATA_DIR": str(Path(tmp) / "data"), "HOME": tmp,
                "PATH": "/usr/bin:/bin", "RUST_LOG": "error"}
-        proc = subprocess.Popen([myc, "mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        proc = subprocess.Popen([myc, *mcp_args(toolsets)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, env=env, cwd=tmp, text=True)
 
         def call(msg: dict) -> dict | None:
@@ -103,8 +111,14 @@ def check_intents(intents: list[dict], tools: list[dict]) -> list[str]:
     return problems
 
 
+def offered_intents(intents: list[dict], tools: list[dict]) -> list[dict]:
+    """The intents a profile can answer: at least one expected tool is offered."""
+    names = {t["name"] for t in tools}
+    return [it for it in intents if any(n in names for n in it.get("expected", []))]
+
+
 def run(label: str, intents: list[dict], passes: int, model: str, myc: str, claude: str,
-        concurrency: int = 3) -> Path:
+        concurrency: int = 3, toolsets: str = "all") -> Path:
     out_dir = config.RUNS_DIR / label
     out_dir.mkdir(parents=True, exist_ok=True)
     results_path = out_dir / "results.jsonl"
@@ -127,7 +141,7 @@ def run(label: str, intents: list[dict], passes: int, model: str, myc: str, clau
             (tmpd / "home").mkdir()
             (tmpd / "cwd").mkdir()
             cfg = {"mcpServers": {config.MCP_SERVER_NAME: {
-                "type": "stdio", "command": myc, "args": ["mcp"],
+                "type": "stdio", "command": myc, "args": mcp_args(toolsets),
                 "env": {"MYCELIUMS_DATA_DIR": str(tmpd / "data"), "HOME": str(tmpd / "home"),
                         "RUST_LOG": "error"}}}}
             (tmpd / "mcp.json").write_text(json.dumps(cfg))

@@ -115,6 +115,12 @@ Each *with* session refreshes the copied index's `analyzed_at`, so a
 cache-aware `analyze` call by the agent is a cache hit rather than a
 re-index.
 
+**Toolset.** The *with* condition runs `myc mcp` with its default toolset.
+The pilot (myc 0.3.2) offered all 55 tools, deferred behind tool search. Since
+#97 the default is the 9 task-named core tools, marked to load up front
+(`_meta["anthropic/alwaysLoad"]`); runs of different versions are therefore
+not comparable without saying so. Measuring that change is #125.
+
 **Not included.** `myc setup-claude` also installs a SessionStart hook that
 re-indexes the project and prints a status line into the session, and a
 PostToolUse hook that formats myceliums results. The *with* condition adds
@@ -137,7 +143,8 @@ python3 evals/agent/agent_eval.py run --label my-run            # 30 tasks x 2 c
 python3 evals/agent/agent_eval.py export --label my-run --myc-commit "$(git rev-parse --short=12 HEAD)"
 python3 evals/agent/agent_eval.py report my-run  # writes results/my-run/REPORT.md
 
-python3 evals/agent/agent_eval.py toolsel-run --label my-toolsel   # 54 intents x 2 passes, haiku
+python3 evals/agent/agent_eval.py toolsel-run --label my-toolsel   # 56 intents x 2 passes, haiku, all tools
+python3 evals/agent/agent_eval.py toolsel-run --label my-core --toolsets core   # 19 intents, core tools
 python3 evals/agent/agent_eval.py toolsel-report my-toolsel
 ```
 
@@ -169,10 +176,15 @@ exactly what the generator produces from the committed results.
 
 ## Tool-selection eval
 
-[`toolsel/intents.json`](toolsel/intents.json) holds 54 natural-language
+[`toolsel/intents.json`](toolsel/intents.json) holds 56 natural-language
 requests, each with the myceliums tools a maintainer would accept as the first
-call (primary first). `toolsel-run` starts `myc mcp` (empty data directory),
-reads the live `tools/list` and fails if any expected tool is missing, then
+call (primary first). Since #97 the expectations use the task-named core tools
+(`search_code`, `find_callers`, `impact_of_change`, ...); a deprecated alias
+is not a correct pick. `toolsel-run --toolsets <profile>` (default `all`;
+`core` is what `myc mcp` serves by default) starts `myc mcp` with that profile
+(empty data directory), reads the live `tools/list`, fails if any expected
+tool is missing from `all`, scores a smaller profile on the intents it can
+answer (19 of 56 for `core`), then
 asks the model once per intent and pass, in a single turn, with only the
 myceliums tools attached as native tool definitions (no built-in tools, tool
 search off). The first tool call is the pick; it is never executed: the
