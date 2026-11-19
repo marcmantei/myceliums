@@ -48,6 +48,21 @@ async fn has_vectors(store: &Store) -> bool {
     }
 }
 
+/// The embedder of an index that holds vectors. An index without any is a
+/// recoverable error: no model is loaded (or downloaded) for an index that
+/// could not use it.
+async fn vector_embedder(store: &Store) -> Result<Arc<Embedder>, ToolError> {
+    if !has_vectors(store).await {
+        return Err(ToolError::recoverable(
+            "This index has no embeddings (built with skip_embeddings, or before embedding metadata was recorded), so it cannot be searched by meaning.",
+            "call search_code with mode=keyword, or re-run analyze without skip_embeddings",
+        ));
+    }
+    myceliums_core::embedder_for_index(store)
+        .await
+        .map_err(embedder_error)
+}
+
 #[tool_router(router = search_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
     #[tool(
@@ -74,17 +89,13 @@ impl MyceliumsMcp {
             SearchMode::Keyword => self.keyword_results(&repo_id, query, page, explain).await?,
             SearchMode::Semantic => {
                 let store = self.store(&repo_id).await?;
-                let embedder = myceliums_core::embedder_for_index(&store)
-                    .await
-                    .map_err(embedder_error)?;
+                let embedder = vector_embedder(&store).await?;
                 self.semantic_results(&store, &embedder, query, page)
                     .await?
             }
             SearchMode::Hybrid => {
                 let store = self.store(&repo_id).await?;
-                let embedder = myceliums_core::embedder_for_index(&store)
-                    .await
-                    .map_err(embedder_error)?;
+                let embedder = vector_embedder(&store).await?;
                 self.hybrid_results(&repo_id, &store, &embedder, query, page, rerank, explain)
                     .await?
             }
@@ -172,9 +183,7 @@ impl MyceliumsMcp {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let store = self.store(&repo_id).await?;
-        let embedder = myceliums_core::embedder_for_index(&store)
-            .await
-            .map_err(embedder_error)?;
+        let embedder = vector_embedder(&store).await?;
         let page = Page::new(params.limit, params.offset, SEARCH);
         let body = self
             .hybrid_results(
@@ -259,9 +268,7 @@ impl MyceliumsMcp {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let store = self.store(&repo_id).await?;
-        let embedder = myceliums_core::embedder_for_index(&store)
-            .await
-            .map_err(embedder_error)?;
+        let embedder = vector_embedder(&store).await?;
         let page = Page::new(params.limit, params.offset, Budget::new(10, SEARCH.max));
         let body = self
             .semantic_results(&store, &embedder, &params.query, page)

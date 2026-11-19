@@ -285,7 +285,7 @@ myc setup-claude                # in the project: files to commit for the team
 myc setup-claude --scope user   # or for all your projects
 ```
 
-This registers the MCP server, a SessionStart hook that keeps the index fresh, a result formatter, a CLAUDE.md routing block, a PreToolUse hook that answers a grep for a known symbol with the matching `myc` call, and a `code-explorer` subagent, and marks the core MCP tools to load up front (`alwaysLoad`). Opt out per layer with `--no-routing`, `--no-redirect-hook`, `--no-agent`, `--no-always-load`. On every Claude Code session you'll see:
+This registers the MCP server, a SessionStart hook that keeps the index fresh, a result formatter, a CLAUDE.md routing block, a PreToolUse hook that answers a grep for a known symbol with the matching `myc` call, and a `code-explorer` subagent; the nine core MCP tools load up front through their own `_meta["anthropic/alwaysLoad"]` (a user-scope install also sets `alwaysLoad` on the entry). Opt out per layer with `--no-routing`, `--no-redirect-hook`, `--no-agent`, `--no-always-load`. On every Claude Code session you'll see:
 
 ```
 SessionStart:startup says: [myceliums] my-project ready | 312 files · 1,247 symbols

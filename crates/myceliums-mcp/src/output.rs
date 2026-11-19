@@ -317,6 +317,9 @@ pub struct SymbolContextOutput {
     /// All callees, including those not listed.
     pub callees_total: usize,
     pub metadata: Option<String>,
+    /// Set when `content` was cut to the source budget: how to get the rest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_notice: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -494,7 +497,8 @@ pub struct CallerItem {
     pub end_line: u32,
     /// Calls between this symbol and the one asked about (1 = direct).
     pub depth: u32,
-    /// For depth > 1: the symbol one step closer to the one asked about.
+    /// For depth > 1: the name of the symbol one step closer to the one
+    /// asked about.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
     /// How the CALLS edge reaching this symbol was resolved:
@@ -525,7 +529,8 @@ pub struct CalleeItem {
     pub end_line: u32,
     /// Calls between this symbol and the one asked about (1 = direct).
     pub depth: u32,
-    /// For depth > 1: the symbol one step closer to the one asked about.
+    /// For depth > 1: the name of the symbol one step closer to the one
+    /// asked about.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
     /// How the CALLS edge reaching this symbol was resolved:

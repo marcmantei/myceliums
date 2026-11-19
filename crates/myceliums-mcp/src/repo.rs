@@ -6,7 +6,7 @@ use myceliums_core::GraphTable;
 use myceliums_storage::{
     CodeSymbol, Community, FileNode, Process, Relationship, RepoInfo, RepoRegistry, Store,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 pub(crate) fn data_dir() -> PathBuf {
@@ -172,45 +172,54 @@ impl<'a> CallLabels<'a> {
 impl MyceliumsMcp {
     /// Turns an optional caller-supplied repo id into a registered one.
     ///
-    /// An explicit id must pass [`RepoRegistry::require`]; without one, the
-    /// repo containing the working directory (or else the most recently
-    /// analyzed repo) is used.
+    /// An explicit id must pass [`RepoRegistry::require`]. Without one, the
+    /// deepest indexed repository containing the working directory is used
+    /// ([`repo_for_dir`]); there is no fallback to another repository.
     pub(crate) fn resolve_repo_id(&self, repo_id: Option<&str>) -> Result<String, ToolError> {
         let registry = registry()?;
         if let Some(id) = repo_id {
             registry.require(id).map_err(repo_id_error)?;
             return Ok(id.to_string());
         }
-
-        // Try to match current working directory to a registered repo
-        if let Ok(cwd) = std::env::current_dir() {
-            if let Ok(abs_cwd) = std::fs::canonicalize(&cwd) {
-                let cwd_str = abs_cwd.to_string_lossy();
-                for repo in registry.list().iter().rev() {
-                    if let Ok(repo_path) = std::fs::canonicalize(&repo.path) {
-                        let repo_str = repo_path.to_string_lossy();
-                        if cwd_str.starts_with(repo_str.as_ref()) {
-                            return Ok(repo.id.clone());
-                        }
-                    }
-                }
-            }
-        }
-
-        // Fallback: the most recently analyzed repo. RFC 3339 timestamps in
-        // the same offset sort chronologically as strings.
-        registry
-            .list()
-            .into_iter()
-            .max_by(|a, b| a.analyzed_at.cmp(&b.analyzed_at))
-            .map(|r| r.id.clone())
-            .ok_or_else(|| {
-                ToolError::recoverable(
-                    "No repository is indexed yet.",
-                    "run analyze with the project path",
-                )
-            })
+        repo_for_dir(&registry, std::env::current_dir().ok().as_deref())
     }
+}
+
+/// How many known repo ids the "no index covers" error lists.
+const KNOWN_SHOWN: usize = 8;
+
+/// The repository whose indexed directory contains `dir`: the deepest one,
+/// matched on whole path components (`/x/proj-two` is not inside
+/// `/x/proj`). Without one the call fails, so an agent in an unindexed
+/// directory never gets answers about another codebase.
+pub(crate) fn repo_for_dir(
+    registry: &RepoRegistry,
+    dir: Option<&Path>,
+) -> Result<String, ToolError> {
+    if let Some(info) = dir.and_then(|d| registry.find_containing(d)) {
+        return Ok(info.id.clone());
+    }
+    let here = dir
+        .map(|d| d.display().to_string())
+        .unwrap_or_else(|| "the working directory".to_string());
+    let known: Vec<String> = registry
+        .list()
+        .iter()
+        .take(KNOWN_SHOWN)
+        .map(|r| r.id.clone())
+        .collect();
+    let next = if known.is_empty() {
+        format!("run analyze with path={here}")
+    } else {
+        format!(
+            "run analyze with path={here} to index it, or pass repo_id (from list_repos: {})",
+            known.join(", ")
+        )
+    };
+    Err(ToolError::recoverable(
+        format!("No index covers {here}, and no repo_id was given."),
+        next,
+    ))
 }
 
 /// Graph reads for the tools, served from the [`myceliums_core::GraphService`]
@@ -342,6 +351,52 @@ mod tests {
         overload.uid = "second".into();
         let symbols = vec![sym("f", "C.f", "a.ts"), overload];
         assert_eq!(resolve_symbol(&symbols, "f").unwrap().uid, "a.ts:C.f");
+    }
+
+    fn info(id: &str, path: &Path) -> RepoInfo {
+        RepoInfo {
+            id: id.into(),
+            name: id.into(),
+            path: path.to_string_lossy().into_owned(),
+            analyzed_at: "2026-01-01T00:00:00+00:00".into(),
+            symbol_count: 1,
+            file_count: 1,
+            analyzed_commit: None,
+            vector_geometry_version: 0,
+        }
+    }
+
+    #[test]
+    fn the_repo_is_the_deepest_one_containing_the_directory_and_never_another() {
+        let root = tempfile::tempdir().unwrap();
+        let proj = root.path().join("proj");
+        let two = root.path().join("proj-two");
+        let nested = proj.join("vendor/lib");
+        for d in [&proj, &two, &nested] {
+            std::fs::create_dir_all(d.join("src")).unwrap();
+        }
+        let mut registry = RepoRegistry::default();
+        registry.register(info("proj", &proj));
+        registry.register(info("nested", &nested));
+        // The most recently analyzed repo is `nested`; it must not leak.
+
+        let at = |d: &Path| repo_for_dir(&registry, Some(d));
+        assert_eq!(at(&proj.join("src")).unwrap(), "proj");
+        assert_eq!(at(&nested.join("src")).unwrap(), "nested", "deepest wins");
+        // A sibling whose name extends the repo's is not inside it.
+        let err = at(&two.join("src")).unwrap_err();
+        let msg = err.message();
+        assert!(matches!(err, ToolError::Recoverable { .. }));
+        assert!(msg.contains("No index covers"), "{msg}");
+        assert!(msg.contains("Next: run analyze with path="), "{msg}");
+        assert!(msg.contains("list_repos: nested, proj"), "{msg}");
+
+        let empty = RepoRegistry::default();
+        let msg = repo_for_dir(&empty, Some(&two)).unwrap_err().message();
+        assert!(
+            msg.ends_with(&format!("Next: run analyze with path={}", two.display())),
+            "{msg}"
+        );
     }
 
     #[test]

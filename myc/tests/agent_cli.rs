@@ -59,6 +59,9 @@ fn myc(data: &Path, cwd: &Path, args: &[&str], stdin: Option<&str>) -> Output {
         .args(args)
         .current_dir(cwd)
         .env("MYCELIUMS_DATA_DIR", data)
+        // Never the developer's home: some code paths still derive paths
+        // from HOME.
+        .env("HOME", data)
         // Debug builds on shared CI runners can be slower than the hook's
         // 400 ms production deadline on a cold index; the deadline itself is
         // unit-tested. MYC_HOOK_DEBUG puts the reason for silence on stderr.
@@ -259,4 +262,151 @@ async fn grep_hook_suggests_myc_for_known_symbols_and_is_silent_otherwise() {
         assert!(out.status.success(), "{silent}: {out:?}");
         assert!(out.stdout.is_empty(), "{silent}: {}", stdout(&out));
     }
+}
+
+/// One `myc mcp` stdio session in `cwd`: `initialize`, then each
+/// `tools/call`; returns each call's `result`.
+fn mcp_calls(
+    data: &Path,
+    cwd: &Path,
+    calls: &[(&str, serde_json::Value)],
+) -> Vec<serde_json::Value> {
+    use std::io::{BufRead as _, BufReader};
+    let mut child = Command::new(env!("CARGO_BIN_EXE_myc"))
+        .arg("mcp")
+        .current_dir(cwd)
+        .env("MYCELIUMS_DATA_DIR", data)
+        .env("HOME", data)
+        .env("RUST_LOG", "error")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("run myc mcp");
+    let mut stdin = child.stdin.take().unwrap();
+    let mut lines = BufReader::new(child.stdout.take().unwrap()).lines();
+    let results = {
+        let mut send = |msg: serde_json::Value| {
+            writeln!(stdin, "{msg}").unwrap();
+            stdin.flush().unwrap();
+            let Some(id) = msg.get("id").cloned() else {
+                return serde_json::Value::Null;
+            };
+            loop {
+                let line = lines.next().expect("myc mcp answers").unwrap();
+                let response: serde_json::Value = serde_json::from_str(&line).unwrap();
+                if response["id"] == id {
+                    return response["result"].clone();
+                }
+            }
+        };
+        send(
+            serde_json::json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+        "protocolVersion": "2025-06-18", "capabilities": {},
+        "clientInfo": {"name": "agent_cli", "version": "1"}}}),
+        );
+        send(serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}));
+        calls
+            .iter()
+            .enumerate()
+            .map(|(i, (tool, args))| {
+                send(
+                    serde_json::json!({"jsonrpc": "2.0", "id": i + 1, "method": "tools/call",
+                "params": {"name": tool, "arguments": args}}),
+                )
+            })
+            .collect()
+    };
+    // Closing stdin ends the session.
+    drop(stdin);
+    let _ = child.kill();
+    let _ = child.wait();
+    results
+}
+
+/// `(qualified_name, file, line, depth, via)` of each listed symbol.
+fn hits(
+    list: &serde_json::Value,
+    file: &str,
+    line: &str,
+) -> Vec<(String, String, u64, u64, String)> {
+    list.as_array()
+        .unwrap_or_else(|| panic!("a list: {list}"))
+        .iter()
+        .map(|h| {
+            (
+                h["qualified_name"].as_str().unwrap().to_string(),
+                h[file].as_str().unwrap().to_string(),
+                h[line].as_u64().unwrap(),
+                h["depth"].as_u64().unwrap(),
+                h["via"].as_str().unwrap_or_default().to_string(),
+            )
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn mcp_tools_answer_like_the_cli() {
+    let data = data_dir().await;
+    let cases = [
+        ("callers", "find_callers", "validateInput", 3),
+        ("callers", "find_callers", "findById", 2),
+        ("callees", "find_callees", "handler", 3),
+        ("callees", "find_callees", "main", 1),
+    ];
+    // No repo_id: the server resolves the repository from its working
+    // directory, as the CLI does.
+    let calls: Vec<(&str, serde_json::Value)> = cases
+        .iter()
+        .map(|(_, tool, symbol, depth)| {
+            (
+                *tool,
+                serde_json::json!({"symbol_name": symbol, "depth": depth, "limit": 200}),
+            )
+        })
+        .collect();
+    let results = mcp_calls(data, &fixture(), &calls);
+    for ((command, tool, symbol, depth), result) in cases.iter().zip(&results) {
+        assert_ne!(result["isError"], true, "{tool} {symbol}: {result}");
+        let mcp = &result["structuredContent"];
+        let key = if *command == "callers" {
+            "callers"
+        } else {
+            "callees"
+        };
+        let depth_arg = depth.to_string();
+        let out = myc(
+            data,
+            &fixture(),
+            &[
+                command, symbol, "--depth", &depth_arg, "--json", "--budget", "100000",
+            ],
+            None,
+        );
+        assert!(out.status.success(), "{out:?}");
+        let cli = json(&out);
+        let cli_hits = hits(&cli["results"], "file", "line");
+        assert!(!cli_hits.is_empty(), "{command} {symbol}: {cli}");
+        assert_eq!(
+            hits(&mcp[key], "file_path", "start_line"),
+            cli_hits,
+            "{tool} {symbol} --depth {depth}"
+        );
+        assert_eq!(mcp["total_count"], cli["total"], "{tool} {symbol}");
+    }
+
+    // Outside every indexed directory there is no answer about another repo.
+    let elsewhere = tempfile::tempdir().unwrap();
+    let results = mcp_calls(
+        data,
+        elsewhere.path(),
+        &[(
+            "find_callers",
+            serde_json::json!({"symbol_name": "findById"}),
+        )],
+    );
+    assert_eq!(results[0]["isError"], true, "{}", results[0]);
+    let text = results[0]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("No index covers"), "{text}");
+    assert!(text.contains("Next: run analyze with path="), "{text}");
 }

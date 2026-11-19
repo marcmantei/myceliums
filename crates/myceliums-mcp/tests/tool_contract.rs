@@ -216,6 +216,24 @@ async fn recoverable_failures_are_is_error_results_with_a_next_step() {
             "not in the index",
         ),
         (
+            // No repo_id, and the test's working directory (the crate) is
+            // not inside the indexed fixture: no answer about another repo.
+            "find_callers",
+            json!({"symbol_name": harness::fixture::FIND_BY_ID}),
+            "No index covers",
+        ),
+        (
+            "find_dead_code",
+            json!({"repo_id": harness::REPO_ID, "path": "src/servicez"}),
+            "matches no indexed file or directory",
+        ),
+        (
+            // The fixture is indexed without embeddings: no model is loaded.
+            "search_code",
+            json!({"repo_id": harness::REPO_ID, "query": "user", "mode": "semantic"}),
+            "has no embeddings",
+        ),
+        (
             // The harness index records no analysis snapshot.
             "detect_architecture_drift",
             json!({"repo_id": harness::REPO_ID}),
@@ -447,6 +465,11 @@ async fn graph_results_state_index_freshness() {
     assert!(
         text.lines().next().unwrap().len() < 160,
         "one short line: {text}"
+    );
+    // It names the repository it describes.
+    assert!(
+        text.starts_with(&format!("Index: {}, ", harness::REPO_ID)),
+        "{text}"
     );
 
     let stats = ok_json(&client, "get_stats", json!({"repo_id": harness::REPO_ID})).await;
@@ -739,7 +762,7 @@ async fn core_tools_answer_the_common_structural_questions() {
         .find(|c| c["name"] == "main")
         .unwrap_or_else(|| panic!("main calls getUser: {deep}"));
     assert_eq!(main["depth"], 2);
-    assert_eq!(main["via"], "UserService.getUser", "{main}");
+    assert_eq!(main["via"], "getUser", "{main}");
 
     // What does main call?
     let callees = ok_json(
@@ -846,81 +869,152 @@ async fn core_tools_answer_the_common_structural_questions() {
         dead_files.iter().all(|f| f.starts_with("src/services/")),
         "{dead}"
     );
+    // An absolute path inside the repository means the same directory.
+    let absolute = harness::fixture_repo_path().join("src/services");
+    let same = ok_json(
+        &client,
+        "find_dead_code",
+        json!({"repo_id": repo, "path": absolute.to_string_lossy()}),
+    )
+    .await;
+    assert_eq!(same["symbols"], dead["symbols"]);
+}
+
+/// What an alias and its replacement must agree on: an error's text, or the
+/// structured content without the freshness line, or the text without the
+/// freshness line and the random ids of untrusted frames.
+fn comparable(result: &CallToolResult) -> Value {
+    if result.is_error == Some(true) {
+        return json!({"error": text_of(result)});
+    }
+    if let Some(mut structured) = result.structured_content.clone() {
+        structured["index_status"] = Value::Null;
+        return structured;
+    }
+    let text = text_of(result);
+    let body = text.split_once("\n\n").map_or(text.as_str(), |(_, b)| b);
+    Value::String(
+        body.lines()
+            .filter(|l| !l.starts_with("<<<UNTRUSTED ") && !l.starts_with(">>>END "))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
 }
 
 #[tokio::test]
 async fn deprecated_aliases_answer_like_their_replacements() {
     let client = connect().await;
     let repo = harness::REPO_ID;
-    let strip_index = |t: String| t.split_once("\n\n").map(|(_, b)| b.to_string()).unwrap();
-    let strip_frames = |t: String| {
-        t.lines()
-            .filter(|l| !l.starts_with("<<<UNTRUSTED ") && !l.starts_with(">>>END "))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-
-    let old = ok_text(
-        &client,
-        "symbol_context",
-        json!({"repo_id": repo, "symbol_name": harness::fixture::GET_USER}),
-    )
-    .await;
-    let new = ok_text(
-        &client,
-        "explain_symbol",
-        json!({"repo_id": repo, "symbol_name": harness::fixture::GET_USER}),
-    )
-    .await;
-    assert_eq!(
-        strip_frames(strip_index(old)),
-        strip_frames(strip_index(new))
-    );
-
-    let old = ok_text(
-        &client,
-        "search_documents",
-        json!({"repo_id": repo, "query": "user"}),
-    )
-    .await;
-    let new = ok_text(
-        &client,
-        "search_code",
-        json!({"repo_id": repo, "query": "user", "mode": "keyword"}),
-    )
-    .await;
-    assert_eq!(
-        strip_frames(strip_index(old)),
-        strip_frames(strip_index(new))
-    );
-
-    let mut old = ok_json(
-        &client,
-        "get_callers",
-        json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID, "max_depth": 2}),
-    )
-    .await;
-    let mut new = ok_json(
-        &client,
-        "find_callers",
-        json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID, "depth": 2}),
-    )
-    .await;
-    old["index_status"] = Value::Null;
-    new["index_status"] = Value::Null;
-    assert_eq!(old, new);
-
-    // The three graph-diff tools are one now.
-    for tool in [
-        "get_graph_diff",
-        "snapshot_diff",
-        "detect_architecture_drift",
-    ] {
-        let result = call(&client, tool, json!({"repo_id": repo})).await.unwrap();
-        assert!(
-            text_of(&result).contains("nothing to compare"),
-            "{tool}: {}",
-            text_of(&result)
+    let diff = "\
+diff --git a/src/services/user.ts b/src/services/user.ts
+--- a/src/services/user.ts
++++ b/src/services/user.ts
+@@ -16,3 +16,4 @@ export class UserService {
+     getUser(id: string): User | null {
++        // touched
+         return this.db.findById('users', id);
+     }
+";
+    let user = harness::fixture::GET_USER;
+    let find = harness::fixture::FIND_BY_ID;
+    // (alias, its arguments, replacement, the equivalent arguments)
+    let pairs = [
+        (
+            "context_search",
+            json!({"repo_id": repo, "query": "user"}),
+            "search_code",
+            json!({"repo_id": repo, "query": "user", "mode": "keyword"}),
+        ),
+        (
+            "search_documents",
+            json!({"repo_id": repo, "query": "user"}),
+            "search_code",
+            json!({"repo_id": repo, "query": "user", "mode": "keyword"}),
+        ),
+        // The fixture has no embeddings: both fail the same way.
+        (
+            "semantic_search",
+            json!({"repo_id": repo, "query": "user"}),
+            "search_code",
+            json!({"repo_id": repo, "query": "user", "mode": "semantic"}),
+        ),
+        (
+            "hybrid_search",
+            json!({"repo_id": repo, "query": "user"}),
+            "search_code",
+            json!({"repo_id": repo, "query": "user", "mode": "hybrid"}),
+        ),
+        (
+            "symbol_context",
+            json!({"repo_id": repo, "symbol_name": user}),
+            "explain_symbol",
+            json!({"repo_id": repo, "symbol_name": user}),
+        ),
+        (
+            "get_callers",
+            json!({"repo_id": repo, "symbol_name": find}),
+            "find_callers",
+            json!({"repo_id": repo, "symbol_name": find, "depth": 3}),
+        ),
+        (
+            "get_callees",
+            json!({"repo_id": repo, "symbol_name": "main"}),
+            "find_callees",
+            json!({"repo_id": repo, "symbol_name": "main", "depth": 3}),
+        ),
+        (
+            "detect_impact",
+            json!({"repo_id": repo, "diff": diff}),
+            "impact_of_change",
+            json!({"repo_id": repo, "diff": diff}),
+        ),
+        (
+            "get_graph_diff",
+            json!({"repo_id": repo}),
+            "detect_architecture_drift",
+            json!({"repo_id": repo}),
+        ),
+        (
+            "snapshot_diff",
+            json!({"repo_id": repo}),
+            "detect_architecture_drift",
+            json!({"repo_id": repo}),
+        ),
+    ];
+    for (old, old_args, new, new_args) in pairs {
+        let old_result = call(&client, old, old_args).await.unwrap();
+        let new_result = call(&client, new, new_args).await.unwrap();
+        assert_eq!(
+            comparable(&old_result),
+            comparable(&new_result),
+            "{old} vs {new}"
         );
     }
+
+    // get_symbol_definition keeps its structured output until removal; its
+    // source is the one explain_symbol shows.
+    let definition = ok_json(
+        &client,
+        "get_symbol_definition",
+        json!({"repo_id": repo, "symbol_name": user}),
+    )
+    .await;
+    let explained = ok_text(
+        &client,
+        "explain_symbol",
+        json!({"repo_id": repo, "symbol_name": user}),
+    )
+    .await;
+    let source = definition["content"].as_str().unwrap();
+    let body: Vec<&str> = source
+        .lines()
+        .filter(|l| !l.starts_with("<<<UNTRUSTED ") && !l.starts_with(">>>END "))
+        .collect();
+    assert!(!body.is_empty());
+    assert!(explained.contains(&body.join("\n")), "{explained}");
+    assert!(explained.contains(&format!(
+        "{}:{}",
+        definition["file_path"].as_str().unwrap(),
+        definition["start_line"]
+    )));
 }

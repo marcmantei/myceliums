@@ -64,7 +64,7 @@ What each layer writes:
 
 | Layer | Project scope (default) | User scope | Opt out |
 |---|---|---|---|
-| MCP server (2. core tools loaded up front) | `.mcp.json` | `claude mcp add-json -s user` (fallback: `~/.claude.json`) | `--no-always-load` |
+| MCP server (2. core tools loaded up front) | `.mcp.json` (core tools through their `_meta`) | `claude mcp add-json -s user` (fallback: `~/.claude.json`), with `alwaysLoad` | `--no-always-load` (user scope) |
 | SessionStart hook: refresh the index, print a status line | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PostToolUse hook: format myceliums tool results | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | 1. Routing block | `CLAUDE.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
@@ -163,13 +163,14 @@ search ([Claude Code docs](https://code.claude.com/docs/en/mcp)):
 - Each core tool carries `"_meta": {"anthropic/alwaysLoad": true}` in
   `tools/list`, so it loads up front whatever the client configuration says,
   unless the server entry sets `"alwaysLoad": false`.
-- `myc setup-claude` sets `"alwaysLoad": true` on the `myceliums` server
-  entry when the server serves the core toolset only (the default). Then
-  Claude Code also waits for the server (at most 5 s) before it builds the
-  first prompt, so the tools are there from the first turn. With extra
-  groups configured it leaves the key out, so they do not all load into
-  every request; `--no-always-load` writes `false` and keeps every
-  myceliums tool deferred.
+- At user scope, `myc setup-claude` sets `"alwaysLoad": true` on the
+  `myceliums` server entry when the server serves the core toolset only (the
+  default). Then Claude Code also waits for the server (at most 5 s) before
+  it builds the first prompt, so the tools are there from the first turn.
+  With extra groups configured it leaves the key out, so they do not all load
+  into every request; `--no-always-load` writes `false` and keeps every
+  myceliums tool deferred. A project's `.mcp.json` never gets the key (see
+  Team mode).
 
 How much this changes tool use is measured in
 [#125](https://github.com/marcmantei/myceliums/issues/125) (variant C).
@@ -205,3 +206,22 @@ index built elsewhere (the CLI, the hooks and `myc mcp` all honour it). A
 central index built in CI can also be served with
 `myc mcp --http <addr> --allow-remote`, which requires a bearer token
 (`MYC_MCP_TOKEN`); that serves the MCP tools only, not the CLI commands.
+
+The committed `.mcp.json` carries no `"alwaysLoad"`: a server-level
+`true` loads every tool the server lists, and each teammate's `myc mcp` lists
+what their own `mcp.toolsets` says (or 55 tools on an older `myc`). The core
+tools load up front anyway, through their own `_meta`. Whoever also wants
+Claude Code to wait for the server before the first prompt adds a personal
+local-scope entry, which replaces the project entry for them (Claude Code
+uses one scope's whole entry, local before project before user, and does not
+merge fields):
+
+```bash
+claude mcp add-json -s local myceliums '{"type":"stdio","command":"myc","args":["mcp"],"alwaysLoad":true}'
+```
+
+A tool call without `repo_id` uses the index that covers the server's working
+directory. Outside every indexed directory it fails with a hint to run
+`analyze` there or to pass a `repo_id`; it never answers from another
+repository's index, and every result's `Index:` line names the repository it
+read.

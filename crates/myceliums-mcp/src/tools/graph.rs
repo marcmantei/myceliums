@@ -9,6 +9,8 @@ use super::prelude::*;
 /// Callers/callees listed inline by `explain_symbol` before pointing at
 /// `find_callers` / `find_callees` for the rest.
 const CONTEXT_EDGES: usize = 25;
+/// Source lines `explain_symbol` shows by default, and at most.
+const SOURCE_LINES: Budget = Budget::new(120, 5000);
 
 #[tool_router(router = graph_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
@@ -27,7 +29,8 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<ExplainSymbolParams>,
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        self.symbol_context_text(&repo_id, &params.symbol_name)
+        let max_lines = Page::new(params.max_source_lines, None, SOURCE_LINES).limit;
+        self.symbol_context_text(&repo_id, &params.symbol_name, max_lines)
             .await
     }
 
@@ -45,7 +48,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<SymbolContextParams>,
     ) -> TextResult {
-        self.symbol_context_text(&params.repo_id, &params.symbol_name)
+        self.symbol_context_text(&params.repo_id, &params.symbol_name, SOURCE_LINES.default)
             .await
     }
 
@@ -806,7 +809,8 @@ impl MyceliumsMcp {
                 start_line: h.symbol.start_line,
                 end_line: h.symbol.end_line,
                 depth: h.depth,
-                via: h.via.map(|v| v.qualified_name.clone()),
+                // The short name, as `myc callers --json` reports it.
+                via: h.via.map(|v| v.name.clone()),
                 resolved: h.resolved.unwrap_or("exact").to_string(),
             })
             .collect();
@@ -820,9 +824,9 @@ impl MyceliumsMcp {
         })
     }
 
-    /// A symbol's source, signature, location, and direct callers and
-    /// callees (the first [`CONTEXT_EDGES`] of each).
-    async fn symbol_context_text(&self, repo_id: &str, name: &str) -> TextResult {
+    /// A symbol's source (at most `max_lines` lines), signature, location,
+    /// and direct callers and callees (the first [`CONTEXT_EDGES`] of each).
+    async fn symbol_context_text(&self, repo_id: &str, name: &str, max_lines: usize) -> TextResult {
         let symbols = self.symbols(repo_id).await?;
         let relationships = self.relationships(repo_id).await?;
         let symbol = navigation::resolve(&symbols, name)?;
@@ -834,6 +838,7 @@ impl MyceliumsMcp {
         };
         let callers = edges(navigation::Direction::Callers);
         let callees = edges(navigation::Direction::Callees);
+        let (content, source_notice) = source_budget(symbol, max_lines);
 
         let output = SymbolContextOutput {
             name: symbol.name.clone(),
@@ -843,14 +848,66 @@ impl MyceliumsMcp {
             start_line: symbol.start_line,
             end_line: symbol.end_line,
             signature: symbol.signature.clone(),
-            content: symbol.content.clone(),
+            content,
             callers_total: callers.len(),
             callers: callers.into_iter().take(CONTEXT_EDGES).collect(),
             callees_total: callees.len(),
             callees: callees.into_iter().take(CONTEXT_EDGES).collect(),
             metadata: symbol.metadata.clone(),
+            source_notice,
         };
         self.graph_text(repo_id, format::format_symbol_context(&output))
             .await
+    }
+}
+
+/// The first `max_lines` lines of `symbol`'s source and, when that cut
+/// anything, a notice naming how to get the rest.
+fn source_budget(
+    symbol: &myceliums_storage::CodeSymbol,
+    max_lines: usize,
+) -> (String, Option<String>) {
+    let total = symbol.content.lines().count();
+    if total <= max_lines {
+        return (symbol.content.clone(), None);
+    }
+    let shown: Vec<&str> = symbol.content.lines().take(max_lines).collect();
+    let first = symbol.start_line;
+    let notice = format!(
+        "Source cut at {max_lines} of {total} lines — call explain_symbol again with max_source_lines={total}, or read {} lines {}-{}.",
+        symbol.file_path,
+        first.saturating_add(max_lines as u32),
+        first.saturating_add(total as u32).saturating_sub(1),
+    );
+    (shown.join("\n"), Some(notice))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_budget;
+
+    #[test]
+    fn long_sources_are_cut_with_a_way_to_get_the_rest() {
+        let symbol = myceliums_storage::CodeSymbol {
+            uid: "u".into(),
+            name: "f".into(),
+            qualified_name: "f".into(),
+            kind: myceliums_storage::SymbolKind::Function,
+            file_path: "src/f.rs".into(),
+            start_line: 10,
+            end_line: 14,
+            signature: String::new(),
+            content: "l10\nl11\nl12\nl13\nl14".into(),
+            repo_id: "r".into(),
+            metadata: None,
+        };
+        let (all, none) = source_budget(&symbol, 5);
+        assert_eq!((all.as_str(), none), (symbol.content.as_str(), None));
+        let (cut, notice) = source_budget(&symbol, 2);
+        assert_eq!(cut, "l10\nl11");
+        assert_eq!(
+            notice.unwrap(),
+            "Source cut at 2 of 5 lines — call explain_symbol again with max_source_lines=5, or read src/f.rs lines 12-14."
+        );
     }
 }

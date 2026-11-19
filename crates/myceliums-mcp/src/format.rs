@@ -232,6 +232,9 @@ pub fn format_symbol_context(s: &SymbolContextOutput) -> String {
         let origin = format!("{}:{}-{}", s.file_path, s.start_line, s.end_line);
         out.push_str(&format!("\n{}\n", untrusted(&origin, &s.content)));
     }
+    if let Some(notice) = &s.source_notice {
+        out.push_str(&format!("\n{notice}\n"));
+    }
 
     out
 }
@@ -638,7 +641,7 @@ pub fn format_dependents(
         } else {
             let via = hit
                 .via
-                .map(|v| format!(", via {}", v.qualified_name))
+                .map(|v| format!(", via {}", v.name))
                 .unwrap_or_default();
             lines.push((
                 INDIRECT,

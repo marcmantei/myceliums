@@ -22,11 +22,14 @@ impl MyceliumsMcp {
         let symbols = self.symbols(&repo_id).await?;
 
         let relationships = self.relationships(&repo_id).await?;
-        let path = params
-            .path
-            .as_deref()
-            .map(|p| p.trim().trim_start_matches("./"))
-            .filter(|p| !p.is_empty());
+        let path = match params.path.as_deref() {
+            Some(raw) => {
+                let files = self.files(&repo_id).await?;
+                let root = repo_info(&repo_id)?.path;
+                path_scope(raw, &root, &files)?
+            }
+            None => PathScope::All,
+        };
 
         use myceliums_storage::RelationshipKind;
 
@@ -46,7 +49,7 @@ impl MyceliumsMcp {
                 )
             })
             .filter(|s| !called_uids.contains(s.uid.as_str()))
-            .filter(|s| path.is_none_or(|p| under_path(&s.file_path, p)))
+            .filter(|s| path.contains(&s.file_path))
             .filter(|s| {
                 // Filter by exclude_patterns if provided
                 if let Some(ref patterns) = params.exclude_patterns {
@@ -785,13 +788,99 @@ impl MyceliumsMcp {
     }
 }
 
-/// Whether `file` is `path` or lies under the directory `path`.
-fn under_path(file: &str, path: &str) -> bool {
-    let dir = path.trim_end_matches('/');
-    file == dir
-        || file
-            .strip_prefix(dir)
-            .is_some_and(|rest| rest.starts_with('/'))
+/// Which files a `path` filter keeps.
+#[derive(Debug, PartialEq, Eq)]
+enum PathScope {
+    /// No filter (or the repository root).
+    All,
+    /// One indexed file.
+    File(String),
+    /// Every file under a directory.
+    Dir(String),
+}
+
+impl PathScope {
+    fn contains(&self, file: &str) -> bool {
+        match self {
+            PathScope::All => true,
+            PathScope::File(f) => file == f,
+            PathScope::Dir(d) => under_dir(file, d),
+        }
+    }
+}
+
+/// Whether `file` lies under the directory `dir` (on a `/` boundary).
+fn under_dir(file: &str, dir: &str) -> bool {
+    file.strip_prefix(dir)
+        .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// Resolves a caller's `path` against the indexed files of the repository at
+/// `root`: absolute paths inside the root become relative, `./` and a
+/// trailing `/` are dropped, `\` becomes `/`; then it must name an indexed
+/// file, a directory holding one, or (like `myc impact <file>`) the unique
+/// indexed file it is a suffix of. Anything else is an error: an empty list
+/// must mean "nothing unused here", never "no such path".
+fn path_scope(
+    raw: &str,
+    root: &str,
+    files: &[myceliums_storage::FileNode],
+) -> Result<PathScope, ToolError> {
+    let mut path = raw.trim().replace('\\', "/");
+    if std::path::Path::new(&path).is_absolute() {
+        let roots = [
+            Some(root.to_string()),
+            std::fs::canonicalize(root)
+                .ok()
+                .map(|p| p.to_string_lossy().into_owned()),
+        ];
+        let canonical = std::fs::canonicalize(&path)
+            .ok()
+            .map(|p| p.to_string_lossy().into_owned());
+        let relative = roots.iter().flatten().find_map(|r| {
+            [Some(path.clone()), canonical.clone()]
+                .into_iter()
+                .flatten()
+                .find_map(|p| {
+                    let rest = p.strip_prefix(r.trim_end_matches('/'))?;
+                    (rest.is_empty() || rest.starts_with('/')).then(|| rest.to_string())
+                })
+        });
+        path = relative.ok_or_else(|| {
+            ToolError::recoverable(
+                format!("Path `{raw}` is outside the repository at {root}."),
+                "pass a path inside the repository, relative to its root (e.g. src/utils/)",
+            )
+        })?;
+    }
+    let path = path
+        .trim_start_matches("./")
+        .trim_start_matches('/')
+        .trim_end_matches('/');
+    if path.is_empty() || path == "." {
+        return Ok(PathScope::All);
+    }
+    if files.iter().any(|f| f.path == path) {
+        return Ok(PathScope::File(path.to_string()));
+    }
+    if files.iter().any(|f| under_dir(&f.path, path)) {
+        return Ok(PathScope::Dir(path.to_string()));
+    }
+    let suffix = format!("/{path}");
+    let by_suffix: std::collections::BTreeSet<&str> = files
+        .iter()
+        .map(|f| f.path.as_str())
+        .filter(|f| f.ends_with(&suffix))
+        .collect();
+    if by_suffix.len() == 1 {
+        return Ok(PathScope::File(
+            by_suffix.into_iter().next().unwrap().to_string(),
+        ));
+    }
+    Err(ToolError::recoverable(
+        format!("Path `{raw}` matches no indexed file or directory."),
+        "pass a path relative to the repository root (e.g. src/utils/ or src/utils/a.ts), or omit path",
+    ))
 }
 
 /// One line of a graph diff, for paging across all change lists.
@@ -818,14 +907,6 @@ fn change_lines(diff: &myceliums_core::snapshot::GraphDiff) -> Vec<String> {
             .map(|e| format!("- edge {}", e.label)),
     );
     lines
-}
-
-/// Whether a diff found no change at all.
-fn unchanged(diff: &myceliums_core::snapshot::GraphDiff) -> bool {
-    diff.added_symbols.is_empty()
-        && diff.removed_symbols.is_empty()
-        && diff.added_edges.is_empty()
-        && diff.removed_edges.is_empty()
 }
 
 impl MyceliumsMcp {
@@ -897,19 +978,12 @@ impl MyceliumsMcp {
                 (load(older)?, format!("snapshot {older}"))
             }
             (None, None) => {
-                // The newest recorded state that is not the current graph:
-                // the analysis that built the current index recorded the
-                // newest snapshot, so the one before it is the baseline.
-                // (The legacy single-file snapshot of older versions is keyed
-                // by uids and cannot be compared; it is not used.)
-                let newest_id = ids.first().ok_or_else(nothing_earlier)?;
-                let newest = load(newest_id)?;
-                if unchanged(&diff_snapshots(&newest, &target)) {
-                    let older = ids.get(1).ok_or_else(nothing_earlier)?;
-                    (load(older)?, format!("snapshot {older}"))
-                } else {
-                    (newest, format!("snapshot {newest_id}"))
-                }
+                // The analysis before the one that built the current index
+                // (core's rule, shared with `myc diff`).
+                let (id, snapshot) = myceliums_core::previous_snapshot(&data, repo_id, &target)
+                    .map_err(|e| ToolError::internal("cannot read the graph snapshots", e))?
+                    .ok_or_else(nothing_earlier)?;
+                (snapshot, format!("snapshot {id}"))
             }
         };
 
@@ -935,14 +1009,55 @@ impl MyceliumsMcp {
 
 #[cfg(test)]
 mod tests {
-    use super::under_path;
+    use super::{path_scope, PathScope};
+
+    fn files(paths: &[&str]) -> Vec<myceliums_storage::FileNode> {
+        paths
+            .iter()
+            .map(|p| myceliums_storage::FileNode {
+                uid: p.to_string(),
+                path: p.to_string(),
+                language: "ts".into(),
+                repo_id: "r".into(),
+                num_symbols: 1,
+            })
+            .collect()
+    }
 
     #[test]
-    fn paths_match_a_file_or_a_directory_prefix() {
-        assert!(under_path("src/utils/a.ts", "src/utils"));
-        assert!(under_path("src/utils/a.ts", "src/utils/"));
-        assert!(under_path("src/utils/a.ts", "src/utils/a.ts"));
-        assert!(!under_path("src/utils2/a.ts", "src/utils"));
-        assert!(!under_path("src/utils/a.ts", "src/util"));
+    fn paths_resolve_to_a_file_or_directory_or_fail() {
+        let f = files(&["src/utils/a.ts", "src/utils2/b.ts", "src/x/main.ts"]);
+        let scope = |p: &str| path_scope(p, "/repo", &f);
+        let dir = PathScope::Dir("src/utils".into());
+        assert_eq!(scope("src/utils").unwrap(), dir);
+        assert_eq!(scope("./src/utils/").unwrap(), dir);
+        assert_eq!(scope("src\\utils").unwrap(), dir);
+        assert_eq!(
+            scope("/repo/src/utils").unwrap(),
+            dir,
+            "absolute → relative"
+        );
+        assert_eq!(scope("/repo").unwrap(), PathScope::All);
+        assert_eq!(scope(".").unwrap(), PathScope::All);
+        assert_eq!(
+            scope("src/utils/a.ts").unwrap(),
+            PathScope::File("src/utils/a.ts".into())
+        );
+        assert_eq!(
+            scope("main.ts").unwrap(),
+            PathScope::File("src/x/main.ts".into()),
+            "a unique suffix names one file"
+        );
+        assert!(!dir.contains("src/utils2/b.ts"), "directory boundary");
+        // A typo or a path elsewhere is an error, not "no dead code".
+        for bad in [
+            "src/util",
+            "src/utils/missing.ts",
+            "/elsewhere/src",
+            "/repo-two/src",
+        ] {
+            let msg = scope(bad).unwrap_err().message();
+            assert!(msg.contains("Next: "), "{bad}: {msg}");
+        }
     }
 }

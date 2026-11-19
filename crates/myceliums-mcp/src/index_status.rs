@@ -163,7 +163,16 @@ pub(crate) async fn freshness(
 
 /// The freshness line for the top of a graph result.
 pub(crate) async fn freshness_line(info: &RepoInfo, indexed: Arc<Vec<FileNode>>) -> String {
-    freshness(info, indexed, false).await.line()
+    named(&info.id, &freshness(info, indexed, false).await.line())
+}
+
+/// `Index: <repo_id>, <rest>`: the line names the repository it describes,
+/// so an answer about the wrong codebase cannot pass unnoticed.
+fn named(repo_id: &str, line: &str) -> String {
+    match line.strip_prefix("Index: ") {
+        Some(rest) => format!("Index: {repo_id}, {rest}"),
+        None => line.to_string(),
+    }
 }
 
 /// `is_indexed` says whether the index holds a file (path relative to the

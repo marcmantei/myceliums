@@ -188,7 +188,7 @@ impl SearchMode {
 pub struct SearchCodeParams {
     /// What to find: a name (parseConfig, Item.AsString) or what the code does (builds the Set-Cookie header)
     pub query: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// auto (default): hybrid when the index has embeddings, else keyword. keyword: names and signatures, no model. semantic: meaning only. hybrid: both, fused
     pub mode: Option<SearchMode>,
@@ -208,15 +208,18 @@ pub struct SearchCodeParams {
 pub struct ExplainSymbolParams {
     /// Symbol: name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
+    /// Most source lines shown; longer bodies are cut with a note (default 120, max 5000)
+    #[schemars(range(min = 1, max = 5000))]
+    pub max_source_lines: Option<usize>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct FindCallsParams {
     /// Symbol: name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Hops to follow: 1 = direct only (default 1, max 10)
     #[schemars(range(min = 1, max = 10))]
@@ -237,7 +240,7 @@ pub struct ImpactOfChangeParams {
     pub file_path: Option<String>,
     /// A unified diff of the change (default when neither symbol_name nor file_path is given: `git diff HEAD` in the repository)
     pub diff: Option<String>,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Hops to follow from the changed code (default 2, max 10)
     #[schemars(range(min = 1, max = 10))]
@@ -256,7 +259,7 @@ pub struct TraceFlowParams {
     pub from_symbol: String,
     /// Where the flow ends: name, qualified name, or file_path:qualified_name
     pub to_symbol: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Longest chain searched, in calls (default 12, max 30)
     #[schemars(range(min = 1, max = 30))]
@@ -309,7 +312,7 @@ pub struct ListReposParams {
 pub struct SearchParams {
     /// Search query string
     pub query: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max results per page (default 20, semantic_search 10; max 100)
     #[schemars(range(min = 1, max = 100))]
@@ -361,7 +364,7 @@ pub struct RenameParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct DetectImpactParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Diff string (optional -- if omitted, runs git diff HEAD in repo path)
     pub diff: Option<String>,
@@ -380,7 +383,7 @@ pub struct DetectImpactParams {
 pub struct HybridSearchParams {
     /// Search query string
     pub query: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max results per page (default 20, max 100)
     #[schemars(range(min = 1, max = 100))]
@@ -398,7 +401,7 @@ pub struct HybridSearchParams {
 pub struct ReviewContextParams {
     /// Diff string (optional — if omitted, runs git diff HEAD in repo path)
     pub diff: Option<String>,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Graph traversal depth for blast radius (default: 1)
     #[schemars(range(min = 1, max = 10))]
@@ -458,7 +461,7 @@ pub struct GetSymbolDefinitionParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct FindDeadCodeParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Only functions in this file, or under this directory (repository-relative, e.g. src/utils/)
     pub path: Option<String>,
@@ -528,7 +531,7 @@ pub struct GetStatsParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetGodNodesParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max nodes per page (default 10, max 200)
     #[schemars(range(min = 1, max = 200))]
@@ -543,7 +546,7 @@ pub struct GetGodNodesParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetSurprisingConnectionsParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Minimum surprise score in [0.0, 1.0] to include in results (default: 0.1)
     #[schemars(range(min = 0.0, max = 1.0))]
@@ -562,7 +565,7 @@ pub struct FindPathParams {
     pub from_symbol: String,
     /// End symbol: name, qualified name, or file_path:qualified_name
     pub to_symbol: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Maximum BFS depth (default: 10)
     #[schemars(range(min = 1, max = 30))]
@@ -571,7 +574,7 @@ pub struct FindPathParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetKnowledgeGapsParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Only this gap category (default: all)
     pub category: Option<GapCategory>,
@@ -585,7 +588,7 @@ pub struct GetKnowledgeGapsParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetRationaleParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Symbol (name, qualified name, or file_path:qualified_name) to get rationale for — provide this OR file_path
     pub symbol_name: Option<String>,
@@ -601,7 +604,7 @@ pub struct GetRationaleParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetSuggestedQuestionsParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Diff string (optional — if omitted, runs git diff HEAD in repo path)
     pub diff: Option<String>,
@@ -615,7 +618,7 @@ pub struct GetSuggestedQuestionsParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetGraphDiffParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max changes per page, across all change lists (default 50, max 500)
     #[schemars(range(min = 1, max = 500))]
@@ -629,7 +632,7 @@ pub struct GetGraphDiffParams {
 pub struct SearchEmailsParams {
     /// Search keyword to match in email subject or body
     pub query: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Filter by person email address (optional)
     pub person: Option<String>,
@@ -647,7 +650,7 @@ pub struct SearchEmailsParams {
 pub struct GetConversationParams {
     /// Conversation symbol UID
     pub conversation_uid: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max emails per page (default 20, max 100)
     #[schemars(range(min = 1, max = 100))]
@@ -661,7 +664,7 @@ pub struct GetConversationParams {
 pub struct GetPersonContextParams {
     /// Person email address or name to search for
     pub person: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max emails per page (default 50, max 200)
     #[schemars(range(min = 1, max = 200))]
@@ -675,7 +678,7 @@ pub struct GetPersonContextParams {
 pub struct QueryKnowledgeParams {
     /// Natural language query or symbol name to search for across all knowledge
     pub query: String,
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Include source citations with line numbers and context (default: true)
     pub include_sources: Option<bool>,
@@ -760,7 +763,7 @@ pub struct PlanAdaptationParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetCentralityParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Centrality metric to sort by (default: betweenness)
     pub metric: Option<CentralityMetric>,
@@ -774,7 +777,7 @@ pub struct GetCentralityParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetCommunityMetricsParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max rows per table (cohesion, coupling) (default 20, max 200)
     #[schemars(range(min = 1, max = 200))]
@@ -786,7 +789,7 @@ pub struct GetCommunityMetricsParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct DetectCyclesParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Include CALLS edges in cycle detection (default: true)
     pub include_calls: Option<bool>,
@@ -805,7 +808,7 @@ pub struct DetectCyclesParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetDependenciesParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// File path to analyze dependencies for
     pub file_path: String,
@@ -822,7 +825,7 @@ pub struct GetDependenciesParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetModuleCouplingParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Group by directory instead of individual files (default: false)
     pub group_by_directory: Option<bool>,
@@ -836,7 +839,7 @@ pub struct GetModuleCouplingParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct QualityHotspotsParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max hotspots per page (default 20, max 200)
     #[schemars(range(min = 1, max = 200))]
@@ -848,7 +851,7 @@ pub struct QualityHotspotsParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct ArchitectureLintParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Rules to check (default: all)
     #[serde(default, deserialize_with = "list_or_comma_string")]
@@ -866,13 +869,13 @@ pub struct ArchitectureLintParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct ArchitectureViewParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct DetectDriftParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Baseline snapshot ID (default: the analysis before the current one; each analyze records a snapshot)
     pub from_snapshot: Option<String>,
@@ -910,7 +913,7 @@ pub struct MapServiceParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetServiceMapParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max mappings per page (default 50, max 500)
     #[schemars(range(min = 1, max = 500))]
@@ -938,7 +941,7 @@ pub struct RecordDecisionParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetDecisionsParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Only decisions with this status (optional)
     pub status: Option<DecisionStatus>,
@@ -962,7 +965,7 @@ pub struct LinkDecisionParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct SnapshotDiffParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Snapshot ID to compare FROM (default: second-to-latest)
     pub from_snapshot: Option<String>,
@@ -978,7 +981,7 @@ pub struct SnapshotDiffParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct GetContractsParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Max unlinked endpoints listed (default 50, max 500)
     #[schemars(range(min = 1, max = 500))]
@@ -990,7 +993,7 @@ pub struct GetContractsParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct ExportMermaidParams {
-    /// Repository ID (default: repo of the working directory, else the most recent)
+    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
     /// Diagram type (default: flowchart)
     pub diagram_type: Option<DiagramType>,

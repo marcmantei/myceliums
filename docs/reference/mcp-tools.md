@@ -36,12 +36,16 @@ myceliums tool in 0 of 90 sessions. The core tools therefore carry
 `"_meta": {"anthropic/alwaysLoad": true}` in `tools/list`, which makes Claude
 Code load them into context at session start
 ([docs](https://code.claude.com/docs/en/mcp)); the other groups stay deferred.
-`myc setup-claude` also sets `"alwaysLoad": true` on the server entry when
-`mcp.toolsets` is the default, so Claude Code waits for the server and the
-core tools are present in the first prompt (`--no-always-load` writes `false`,
-which defers the core tools as well; Claude Code 2.1.287 or later). Do not
-set `"alwaysLoad": true` on the server entry together with `--toolsets all`:
-that loads all 61 tools up front.
+At user scope, `myc setup-claude` also sets `"alwaysLoad": true` on the
+server entry when `mcp.toolsets` is the default, so Claude Code waits for the
+server and the core tools are present in the first prompt
+(`--no-always-load` writes `false`, which defers the core tools as well;
+Claude Code 2.1.287 or later). A project's shared `.mcp.json` never carries
+the key: the installer's `mcp.toolsets` says nothing about a teammate's, so
+there the per-tool `_meta` does the work (see
+[Claude Code integration](../editors/claude-code.md#mcp-server) for a
+personal local-scope override). Do not set `"alwaysLoad": true` on the server
+entry together with `--toolsets all`: that loads all 61 tools up front.
 
 The core tools resolve names and walk the graph through
 `myceliums_core::navigation`, like `myc callers`, `myc callees` and
@@ -49,7 +53,9 @@ The core tools resolve names and walk the graph through
 name. Beyond core's resolution (qualified name, short name, qualified suffix
 such as `Item.AsString`; functions and types before same-named variables),
 the MCP tools accept `file_path:qualified_name` handles, list those handles
-for an ambiguous name, and suggest similar names for an unknown one.
+for an ambiguous name, and suggest similar names for an unknown one. Several
+definitions with the same handle (overloads in one file) are ambiguous too,
+as in the CLI; they are told apart as `file_path:qualified_name:line`.
 
 ## Tool contract
 
@@ -77,8 +83,8 @@ the MCP specification recommends.
 **Symbols.** Every symbol parameter accepts a short name, a qualified name, or
 `file_path:qualified_name`. When a name matches several symbols — two files
 that each define a top-level `parse` share both names — the call fails with
-the candidates in the `file_path:qualified_name` form, and `rename_symbol`
-never guesses either.
+the candidates in the `file_path:qualified_name` form (with `:line` for
+overloads in one file), and `rename_symbol` never guesses either.
 
 **Output budget.** Every list-returning tool takes `limit` and `offset`. Each
 tool has a default page size and a hard maximum (both stated in its input
@@ -99,9 +105,10 @@ and a footer explains it.
 **Freshness.** Every result read from a repository's graph starts with one
 `Index:` line comparing the analyzed commit with the current `HEAD` and
 counting files changed since indexing (modified or new untracked files newer
-than the analysis start, and deleted files the index still holds), e.g. `Index: commit 1a2b3c4 = HEAD, up
-to date.` or `Index: commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run analyze
-to refresh.` Structured results carry it as `index_status`. Whenever the line
+than the analysis start, and deleted files the index still holds). It names
+the repository it describes, e.g. `Index: my-app, commit 1a2b3c4 = HEAD, up
+to date.` or `Index: my-app, commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run
+analyze to refresh.` Structured results carry it as `index_status`. Whenever the line
 calls an index stale or changed, `analyze` without `force` re-indexes instead
 of reusing the cached index, so the advice always works. Git runs read-only
 (`--no-optional-locks`, so it never takes the index lock beside your own git
@@ -146,8 +153,9 @@ project. `delete` additionally requires `confirm: true`.
 ## Core tools
 
 Toolset `core`, on by default. Where `repo_id` is optional it defaults to the
-repository containing the server's working directory, else the most recently
-analyzed one.
+indexed repository containing the server's working directory (see
+[Repository ids](#repository-ids)); outside every indexed directory the call
+is an `isError` result, never an answer about another repository.
 
 ### `search_code`
 
@@ -181,14 +189,17 @@ type/superclasses when known, and its direct callers and callees (the first
 |-----------|------|----------|---------|-------------|
 | `symbol_name` | string | yes | | Name, qualified name, or `file_path:qualified_name` |
 | `repo_id` | string | no | working directory | Repository ID |
+| `max_source_lines` | integer | no | `120` | Most source lines shown (max 5000); a longer body is cut, followed by a line naming `max_source_lines=<total>` and the file lines to read for the rest |
 
 ### `find_callers`
 
 Who calls this function or method? Structured result (`CallersOutput`): the
 callers with name, qualified name, kind, file, line range, `depth`, `via` (for
-depth > 1, the symbol one step closer) and `resolved` (the CALLS edge
-resolution), ordered by depth, then file and line, plus `total_count`,
-`depth_limited`, `index_status` and a paging `notice`.
+depth > 1, the name of the symbol one step closer) and `resolved` (the CALLS
+edge resolution), ordered by depth, then file and line, plus `total_count`,
+`depth_limited`, `index_status` and a paging `notice`. The symbols, depths,
+`via` names and order are those `myc callers --json` prints (pinned by an
+end-to-end test).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -259,7 +270,7 @@ unused too. Structured result (`DeadCodeOutput`).
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `repo_id` | string | no | working directory | Repository ID |
-| `path` | string | no | | Only this file, or files under this directory (repository-relative) |
+| `path` | string | no | | Only this file, or files under this directory: repository-relative or absolute inside the repository, `./` and a trailing `/` allowed; a unique file suffix (`util.go`) names that file. A path that matches no indexed file or directory is an `isError` result, never an empty list |
 | `exclude_patterns` | string | no | | Comma-separated substrings; names containing one are skipped |
 | `limit` / `offset` | integer | no | `20` / `0` | Page (max 200) |
 
@@ -297,8 +308,11 @@ it may not be `.` or `..` and may not contain a path separator or NUL (`/` on
 macOS/Linux; `/`, `\` and `:` on Windows). A malformed id is an
 `invalid_params` error; an unknown one is an `isError` result that lists the
 known ids. Neither returns an empty result. Where `repo_id` is optional, the
-repository containing the server's working directory is used, else the most
-recently analyzed one. `analyze` derives ids from the folder name and replaces any such
+indexed repository containing the server's working directory is used — the
+deepest one, matched on whole path components (`/x/app-two` is not inside
+`/x/app`). Outside every indexed directory the call is an `isError` result
+(`No index covers <dir>` / `Next: run analyze with path=<dir>, or pass
+repo_id`); there is no fallback to another repository. `analyze` derives ids from the folder name and replaces any such
 character with `_`, so derived ids always pass.
 
 ---
@@ -839,9 +853,13 @@ Get all emails involving a specific person (sent by or received by). Returns the
 
 ## Deprecated aliases
 
-Toolset `deprecated` (part of `all`). These names keep working for one
-release; each description starts with `DEPRECATED: use <replacement>`. They
-are removed in the release after the one that introduced the core toolset.
+Toolset `deprecated`, part of `all`. **The default profile (`core`) does not
+expose these names**: a client that calls one gets "tool not found". To keep
+them for this release, add the group — `myc mcp --toolsets core,deprecated`,
+or once for every `myc mcp`: `myc configure --set mcp.toolsets=deprecated`
+(core is always on) — and move to the replacements below. Each description
+starts with `DEPRECATED: use <replacement>`. They are removed in the release
+after the one that introduced the core toolset.
 
 | Old name | Use instead | Notes |
 |---|---|---|

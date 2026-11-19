@@ -5,8 +5,10 @@
 //!
 //! This module adds only what the MCP contract needs on top:
 //!
-//! * [`resolve`] accepts `file_path:qualified_name` handles, turns core's
-//!   ambiguous candidates into a recoverable error that lists those handles,
+//! * [`resolve`] accepts `file_path:qualified_name` handles (and
+//!   `file_path:qualified_name:line` for overloads in one file), turns
+//!   core's ambiguous candidates into a recoverable error that lists those
+//!   handles,
 //!   suggests similar names when nothing matches, and falls back to symbols
 //!   that are not code definitions (documents, emails) which core does not
 //!   resolve;
@@ -57,21 +59,36 @@ pub(crate) fn resolve<'a>(
     }
 }
 
-/// Whether `name` is `symbol`'s [`located_name`].
+/// Whether `name` is `symbol`'s [`located_name`], or that followed by
+/// `:<start line>`.
 fn is_located_name(symbol: &CodeSymbol, name: &str) -> bool {
     name.strip_prefix(symbol.file_path.as_str())
         .and_then(|rest| rest.strip_prefix(':'))
-        .is_some_and(|rest| rest == symbol.qualified_name)
+        .is_some_and(|rest| {
+            rest == symbol.qualified_name
+                || rest == format!("{}:{}", symbol.qualified_name, symbol.start_line)
+        })
 }
 
-/// Several definitions match: one handle stands for them all when they share
-/// it (overloads in one file); otherwise list the handles.
+/// Several definitions match, as `myc callers` reports too: list handles that
+/// tell them apart — `file_path:qualified_name`, or with `:line` when
+/// several share one (overloads in one file). Only candidates that not even
+/// the line tells apart are one definition.
 fn ambiguous<'a>(name: &str, candidates: &[&'a CodeSymbol]) -> Result<&'a CodeSymbol, ToolError> {
+    let distinct = |handles: &mut Vec<String>| {
+        handles.sort();
+        handles.dedup();
+        handles.len()
+    };
     let mut handles: Vec<String> = candidates.iter().map(|s| located_name(s)).collect();
-    handles.sort();
-    handles.dedup();
-    if handles.len() == 1 {
-        return Ok(candidates[0]);
+    if distinct(&mut handles) < candidates.len() {
+        handles = candidates
+            .iter()
+            .map(|s| format!("{}:{}", located_name(s), s.start_line))
+            .collect();
+        if distinct(&mut handles) == 1 {
+            return Ok(candidates[0]);
+        }
     }
     let more = handles.len().saturating_sub(AMBIGUOUS_SHOWN);
     let more = if more > 0 {
@@ -297,6 +314,23 @@ mod tests {
             err.contains("not found") && err.contains("`getUser`"),
             "{err}"
         );
+    }
+
+    #[test]
+    fn overloads_are_ambiguous_like_in_the_cli_and_a_line_handle_picks_one() {
+        let mut first = sym("o1", "f", "C.f", SymbolKind::Method, "src/c.ts");
+        let mut second = sym("o2", "f", "C.f", SymbolKind::Method, "src/c.ts");
+        first.start_line = 3;
+        second.start_line = 9;
+        let s = vec![first, second];
+        assert!(matches!(
+            core_nav::resolve_symbol(&s, "C.f"),
+            Resolution::Ambiguous(_)
+        ));
+        let msg = resolve(&s, "C.f").unwrap_err().message();
+        assert!(msg.contains("ambiguous: 2 matches"), "{msg}");
+        assert!(msg.contains("`src/c.ts:C.f:3`, `src/c.ts:C.f:9`"), "{msg}");
+        assert_eq!(resolve(&s, "src/c.ts:C.f:9").unwrap().uid, "o2");
     }
 
     #[test]

@@ -218,8 +218,9 @@ pub use service::{GraphService, GraphTable, IndexFingerprint, SymbolContext};
 pub use service_map::{load_service_mappings, save_service_mapping, ServiceMapping};
 pub use snapshot::{
     build_snapshot, diff_snapshots, list_snapshots, load_snapshot, load_snapshot_by_id,
-    prune_snapshots, record_snapshot, save_snapshot, save_versioned_snapshot, snapshot_dir,
-    snapshot_path, DiffEntry, GraphDiff, GraphSnapshot, SnapshotSummary, SNAPSHOTS_KEPT,
+    previous_snapshot, prune_snapshots, record_snapshot, save_snapshot, save_versioned_snapshot,
+    snapshot_dir, snapshot_path, DiffEntry, GraphDiff, GraphSnapshot, SnapshotSummary,
+    SNAPSHOTS_KEPT,
 };
 pub use surprising_connections::{compute_surprising_connections, SurprisingConnectionItem};
 pub use timing::{Timer, TimingReport};

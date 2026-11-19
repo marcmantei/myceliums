@@ -131,6 +131,46 @@ pub fn load_snapshot(data_dir: &Path, repo_id: &str) -> anyhow::Result<Option<Gr
     Ok(Some(snap))
 }
 
+impl GraphDiff {
+    /// Whether nothing was added or removed.
+    pub fn is_empty(&self) -> bool {
+        self.added_symbols.is_empty()
+            && self.removed_symbols.is_empty()
+            && self.added_edges.is_empty()
+            && self.removed_edges.is_empty()
+    }
+}
+
+/// The recorded analysis to compare `current` with: the newest versioned
+/// snapshot, unless it records the same graph as `current` — the analysis
+/// that built the current index recorded it — then the one before. Returns
+/// its id and the snapshot, or `None` when no earlier analysis is recorded.
+/// Legacy single-file snapshots are keyed by uids, so they cannot be
+/// compared and are not used. `myc diff` and the MCP drift tool both start
+/// here.
+pub fn previous_snapshot(
+    data_dir: &Path,
+    repo_id: &str,
+    current: &GraphSnapshot,
+) -> anyhow::Result<Option<(String, GraphSnapshot)>> {
+    let load = |id: &str| load_snapshot_by_id(data_dir, repo_id, id);
+    let mut recorded = list_snapshots(data_dir, repo_id)?.into_iter();
+    let Some(newest) = recorded.next() else {
+        return Ok(None);
+    };
+    if let Some(snapshot) = load(&newest.snapshot_id)? {
+        if !diff_snapshots(&snapshot, current).is_empty() {
+            return Ok(Some((newest.snapshot_id, snapshot)));
+        }
+    }
+    for older in recorded {
+        if let Some(snapshot) = load(&older.snapshot_id)? {
+            return Ok(Some((older.snapshot_id, snapshot)));
+        }
+    }
+    Ok(None)
+}
+
 /// Compare the previous snapshot against the current one.
 pub fn diff_snapshots(previous: &GraphSnapshot, current: &GraphSnapshot) -> GraphDiff {
     let prev_sym_uids: BTreeSet<&str> = previous.symbols.keys().map(|s| s.as_str()).collect();
@@ -381,6 +421,47 @@ mod tests {
         assert_eq!(diff.removed_symbols.len(), 1);
         assert_eq!(diff.added_edges.len(), 1);
         assert_eq!(diff.removed_edges.len(), 1);
+    }
+
+    #[test]
+    fn the_previous_analysis_is_the_baseline() {
+        let dir = tempfile::tempdir().unwrap();
+        let snap = |at: &str, names: &[&str]| {
+            let symbols: Vec<CodeSymbol> = names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| symbol(&format!("{at}{i}"), n, "x.rs", i as u32 + 1))
+                .collect();
+            let mut s = build_snapshot("r", &symbols, &[]);
+            s.created_at = at.to_string();
+            s
+        };
+        let current = snap("2026-01-02T00:00:00+00:00", &["a", "b"]);
+        assert!(previous_snapshot(dir.path(), "r", &current)
+            .unwrap()
+            .is_none());
+
+        // Only the analysis that built the current index: nothing earlier.
+        record_snapshot(dir.path(), &current, None).unwrap();
+        assert!(previous_snapshot(dir.path(), "r", &current)
+            .unwrap()
+            .is_none());
+
+        // An earlier analysis exists: it is the baseline.
+        let older = snap("2026-01-01T00:00:00+00:00", &["a"]);
+        record_snapshot(dir.path(), &older, None).unwrap();
+        let (_, base) = previous_snapshot(dir.path(), "r", &current)
+            .unwrap()
+            .unwrap();
+        assert_eq!(base.created_at, older.created_at);
+
+        // The graph changed after the newest analysis (e.g. watch mode): the
+        // newest analysis is the baseline.
+        let edited = snap("2026-01-03T00:00:00+00:00", &["a", "b", "c"]);
+        let (_, base) = previous_snapshot(dir.path(), "r", &edited)
+            .unwrap()
+            .unwrap();
+        assert_eq!(base.created_at, current.created_at);
     }
 
     #[test]

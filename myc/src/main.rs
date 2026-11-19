@@ -660,7 +660,7 @@ enum Commands {
         #[command(subcommand)]
         action: HookAction,
     },
-    /// Compare current graph against a stored snapshot to show drift
+    /// Compare the current graph with the previous analysis to show drift
     Diff {
         /// Repository ID or path
         repo: String,
@@ -4630,25 +4630,22 @@ async fn cmd_diff(repo: &str) -> Result<()> {
     let (repo_id, _repo_info) = resolve_repo(repo)?;
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
 
-    // Load the previous snapshot
-    let previous = myceliums_core::load_snapshot(&data_dir(), &repo_id)?;
-    let previous = match previous {
-        Some(s) => s,
-        None => {
-            println!(
-                "No previous snapshot found for '{}'.\n\
-                 Run `myc analyze <path>` first to create a baseline snapshot.",
-                repo_id
-            );
-            return Ok(());
-        }
-    };
-
     // Build a snapshot from the current graph state
     let store = Store::open(&db_path, &repo_id).await?;
     let symbols = store.get_symbols().await?;
     let relationships = store.get_relationships().await?;
     let current = myceliums_core::build_snapshot(&repo_id, &symbols, &relationships);
+
+    // The previous analysis, as the MCP drift tool picks it.
+    let Some((_, previous)) = myceliums_core::previous_snapshot(&data_dir(), &repo_id, &current)?
+    else {
+        println!(
+            "No earlier analysis of '{}' is recorded, so there is nothing to compare yet.\n\
+             Run `myc analyze <path>` again after the code changes (each analysis records a snapshot).",
+            repo_id
+        );
+        return Ok(());
+    };
 
     // Diff
     let diff = myceliums_core::diff_snapshots(&previous, &current);
@@ -4661,7 +4658,7 @@ async fn cmd_diff(repo: &str) -> Result<()> {
 
     if total_changes == 0 {
         println!(
-            "No changes detected since last snapshot ({}).",
+            "No changes detected since the previous analysis ({}).",
             diff.previous_snapshot_at
         );
         return Ok(());

@@ -63,17 +63,23 @@ impl Layers {
 /// How Claude Code loads the myceliums MCP tools (layer 2, #97): the
 /// server entry's `alwaysLoad` (code.claude.com/docs/en/mcp, "Exempt a
 /// server from deferral").
+///
+/// Only a personal entry (user scope) carries the key. A project's
+/// `.mcp.json` is shared: the installer's `mcp.toolsets` says nothing about
+/// a teammate's (or an older `myc` with 55 tools), so at project scope the
+/// entry is always [`ToolLoading::PerTool`] and the core tools load up front
+/// through their own `_meta`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolLoading {
     /// `"alwaysLoad": true`. The server exposes the core toolset only, so
     /// every tool it lists loads up front, and Claude Code waits for them
     /// (at most 5 s) before the first prompt.
     UpFront,
-    /// No `alwaysLoad`: `mcp.toolsets` adds groups to the core toolset. The
+    /// No `alwaysLoad` (project scope, or `mcp.toolsets` adds groups): the
     /// core tools still load up front through their own
-    /// `_meta["anthropic/alwaysLoad"]`; the added groups stay behind tool
-    /// search instead of all loading into every request.
-    CoreOnly,
+    /// `_meta["anthropic/alwaysLoad"]`; other groups stay behind tool search
+    /// instead of all loading into every request.
+    PerTool,
     /// `"alwaysLoad": false` (`--no-always-load`): every myceliums tool stays
     /// behind tool search, the core tools' `_meta` included (Claude Code
     /// 2.1.287 or later).
@@ -94,7 +100,7 @@ impl ToolLoading {
             .unwrap_or_else(|_| vec!["?".to_string()]);
         match myceliums_mcp::Toolsets::parse_names(names.iter().map(String::as_str)) {
             Ok(toolsets) if toolsets == myceliums_mcp::Toolsets::core() => ToolLoading::UpFront,
-            _ => ToolLoading::CoreOnly,
+            _ => ToolLoading::PerTool,
         }
     }
 
@@ -102,19 +108,27 @@ impl ToolLoading {
     fn always_load(self) -> Option<bool> {
         match self {
             ToolLoading::UpFront => Some(true),
-            ToolLoading::CoreOnly => None,
+            ToolLoading::PerTool => None,
             ToolLoading::Deferred => Some(false),
+        }
+    }
+
+    /// The loading written at `scope`: project files never carry the key.
+    fn at(self, scope: Scope) -> ToolLoading {
+        match scope {
+            Scope::Project => ToolLoading::PerTool,
+            Scope::User => self,
         }
     }
 
     /// For the setup report.
     fn describe(self) -> &'static str {
         match self {
-            ToolLoading::UpFront => "core tools loaded up front",
-            ToolLoading::CoreOnly => {
-                "core tools up front via their _meta, your extra mcp.toolsets deferred"
+            ToolLoading::UpFront => "alwaysLoad: core tools loaded up front",
+            ToolLoading::PerTool => {
+                "core tools up front through their _meta, other groups deferred"
             }
-            ToolLoading::Deferred => "all tools deferred behind tool search (--no-always-load)",
+            ToolLoading::Deferred => "alwaysLoad false: all tools deferred (--no-always-load)",
         }
     }
 }
@@ -195,7 +209,7 @@ tools: mcp__myceliums__*, Read, ToolSearch\n\
 \n\
 You answer questions about the structure of this repository with the myceliums code graph, then confirm with Read.\n\
 \n\
-0. The myceliums tools default to the repository of the working directory; if one says the repo is unknown, `list_repos` shows the indexed ones.\n\
+0. Without `repo_id` the myceliums tools use the index covering the working directory; when none covers it they say so, and `list_repos` lists the indexed repositories to pass as `repo_id`.\n\
 1. Locate: `search_code` for a name or for a description of what the code does; `explain_symbol` shows a symbol's source, callers and callees.\n\
 2. Follow edges: `find_callers` / `find_callees` (`depth` for transitive chains), `impact_of_change` for what a change to a symbol, a file or the uncommitted diff would break, `trace_flow` for how A reaches B, `find_dead_code` for functions nothing calls.\n\
 3. Ambiguous names: the error lists `file:qualified_name` candidates; pick one by file or qualified name, and say which one you used.\n\
@@ -555,8 +569,9 @@ pub fn install(
     let mut report = Report::default();
 
     // 1. MCP server.
-    let entry = mcp_entry(myc_cmd, layers.tool_loading);
-    let loading = layers.tool_loading.describe();
+    let tool_loading = layers.tool_loading.at(targets.scope);
+    let entry = mcp_entry(myc_cmd, tool_loading);
+    let loading = tool_loading.describe();
     let via_cli = registrar == McpRegistrar::ClaudeCli && claude_cli_add(&entry);
     if via_cli {
         report.add(
@@ -833,10 +848,22 @@ pub fn cmd_setup_claude(
             );
         }
     }
-    if layers.tool_loading == ToolLoading::UpFront {
-        println!(
+    match scope {
+        Scope::User if layers.tool_loading == ToolLoading::UpFront => println!(
             "  The core tools load up front (alwaysLoad); re-run after adding toolsets with\n        `myc configure --set mcp.toolsets=...`, so the added groups stay deferred."
-        );
+        ),
+        Scope::Project => println!(
+            "  .mcp.json carries no alwaysLoad (it is shared); the core tools still load up front\n        through their own _meta. For yourself only, a local entry replaces the project one:\n        claude mcp add-json -s local myceliums '{}'",
+            mcp_entry(
+                "myc",
+                if layers.tool_loading == ToolLoading::Deferred {
+                    ToolLoading::Deferred
+                } else {
+                    ToolLoading::UpFront
+                }
+            )
+        ),
+        _ => {}
     }
     println!(
         "  Opt out of a layer with --no-routing, --no-redirect-hook, --no-agent or --no-always-load."
@@ -1030,11 +1057,12 @@ mod tests {
         assert_eq!(first, snapshot(&t), "second install must change nothing");
 
         let mcp = read(&t.mcp_config);
+        // A shared project file never carries alwaysLoad.
         assert_eq!(
             mcp["mcpServers"]["myceliums"],
-            mcp_entry("myc", ToolLoading::UpFront)
+            mcp_entry("myc", ToolLoading::PerTool)
         );
-        assert_eq!(mcp["mcpServers"]["myceliums"]["alwaysLoad"], true);
+        assert!(mcp["mcpServers"]["myceliums"].get("alwaysLoad").is_none());
         assert_eq!(mcp["mcpServers"]["other"]["command"], "x");
 
         let settings = read(&t.settings);
@@ -1232,27 +1260,31 @@ mod tests {
             json!(["mcp"]),
             "no pinned toolset: old myc keeps working"
         );
-        assert!(mcp_entry("myc", ToolLoading::CoreOnly)
+        assert!(mcp_entry("myc", ToolLoading::PerTool)
             .get("alwaysLoad")
             .is_none());
         assert_eq!(mcp_entry("myc", ToolLoading::Deferred)["alwaysLoad"], false);
 
-        // Re-installing with another loading rewrites the entry in place.
-        let dir = tempfile::tempdir().unwrap();
-        let t = Targets::project(dir.path());
         let deferred = Layers {
             tool_loading: ToolLoading::Deferred,
             ..Layers::ALL
         };
-        install(&t, "myc", deferred, McpRegistrar::File).unwrap();
-        assert_eq!(
-            read(&t.mcp_config)["mcpServers"]["myceliums"]["alwaysLoad"],
-            false
-        );
-        install(&t, "myc", Layers::ALL, McpRegistrar::File).unwrap();
-        assert_eq!(
-            read(&t.mcp_config)["mcpServers"]["myceliums"]["alwaysLoad"],
-            true
-        );
+        let entry = |t: &Targets| read(&t.mcp_config)["mcpServers"]["myceliums"].clone();
+
+        // A personal (user-scope) entry carries the key, rewritten in place.
+        let home = tempfile::tempdir().unwrap();
+        let user = Targets::user(home.path());
+        install(&user, "myc", deferred, McpRegistrar::File).unwrap();
+        assert_eq!(entry(&user)["alwaysLoad"], false);
+        install(&user, "myc", Layers::ALL, McpRegistrar::File).unwrap();
+        assert_eq!(entry(&user)["alwaysLoad"], true);
+
+        // The shared project file never does, whatever the installer chose.
+        let dir = tempfile::tempdir().unwrap();
+        let project = Targets::project(dir.path());
+        for layers in [Layers::ALL, deferred] {
+            install(&project, "myc", layers, McpRegistrar::File).unwrap();
+            assert!(entry(&project).get("alwaysLoad").is_none());
+        }
     }
 }
