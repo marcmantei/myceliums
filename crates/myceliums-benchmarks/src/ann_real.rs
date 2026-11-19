@@ -265,8 +265,10 @@ fn read_cache(path: &Path, key: &[u8; 32], dim: usize, queries: usize) -> Result
     let mut vectors: Vec<Vec<f32>> = bytes[CACHE_HEADER..]
         .chunks_exact(row)
         .map(|r| {
-            r.chunks_exact(4)
-                .map(|b| f32::from_le_bytes(b.try_into().unwrap()))
+            r.as_chunks::<4>()
+                .0
+                .iter()
+                .map(|b| f32::from_le_bytes(*b))
                 .collect()
         })
         .collect();
