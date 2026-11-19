@@ -1,4 +1,5 @@
-//! Change analysis: impact, rename plans, review context, graph diffs, snapshots.
+//! Change analysis: impact of a change (symbol, file or diff), rename plans,
+//! review context, review questions; the deprecated graph-diff aliases.
 
 use super::prelude::*;
 
@@ -16,45 +17,78 @@ fn diff_or_git(diff: Option<String>, repo_id: &str) -> Result<String, ToolError>
     })
 }
 
-/// One line of a graph or snapshot diff, for paging across all change lists.
-fn change_lines(diff: &myceliums_core::snapshot::GraphDiff) -> Vec<String> {
-    let mut lines = Vec::new();
-    lines.extend(
-        diff.added_symbols
-            .iter()
-            .map(|e| format!("+ symbol {}", e.label)),
-    );
-    lines.extend(
-        diff.removed_symbols
-            .iter()
-            .map(|e| format!("- symbol {}", e.label)),
-    );
-    lines.extend(
-        diff.added_edges
-            .iter()
-            .map(|e| format!("+ edge {}", e.label)),
-    );
-    lines.extend(
-        diff.removed_edges
-            .iter()
-            .map(|e| format!("- edge {}", e.label)),
-    );
-    lines
-}
-
-/// `+3 -1 symbols, +5 -0 relationships`.
-fn change_summary(diff: &myceliums_core::snapshot::GraphDiff) -> String {
-    format!(
-        "+{} -{} symbols, +{} -{} relationships",
-        diff.added_symbols.len(),
-        diff.removed_symbols.len(),
-        diff.added_edges.len(),
-        diff.removed_edges.len(),
-    )
-}
-
 #[tool_router(router = impact_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
+    #[tool(
+        name = "impact_of_change",
+        description = "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn impact_of_change(
+        &self,
+        Parameters(params): Parameters<ImpactOfChangeParams>,
+    ) -> TextResult {
+        let given = [
+            params.symbol_name.is_some(),
+            params.file_path.is_some(),
+            params.diff.is_some(),
+        ];
+        if given.iter().filter(|g| **g).count() > 1 {
+            return Err(ToolError::invalid(
+                "give at most one of symbol_name, file_path and diff",
+            ));
+        }
+        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let depth = params.depth.unwrap_or(2).clamp(1, 10);
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
+
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
+        let (subject, roots) = match (params.symbol_name, params.file_path) {
+            (Some(name), _) => {
+                let s = navigation::resolve(&symbols, &name)?;
+                let subject = format!(
+                    "{} ({}, {}:{}-{})",
+                    s.qualified_name, s.kind, s.file_path, s.start_line, s.end_line
+                );
+                (subject, vec![s])
+            }
+            (None, Some(path)) => {
+                let path = path.trim().trim_start_matches("./");
+                let roots: Vec<&myceliums_storage::CodeSymbol> =
+                    symbols.iter().filter(|s| s.file_path == path).collect();
+                if roots.is_empty() {
+                    let files = self.files(&repo_id).await?;
+                    if !files.iter().any(|f| f.path == path) {
+                        return Err(ToolError::recoverable(
+                            format!("File `{path}` is not in the index."),
+                            "pass the path relative to the repository root (e.g. src/main.rs), or find the code with search_code",
+                        ));
+                    }
+                }
+                (format!("{path} ({} symbols)", roots.len()), roots)
+            }
+            (None, None) => {
+                let diff_text = diff_or_git(params.diff, &repo_id)?;
+                let body = if diff_text.trim().is_empty() {
+                    "No changes detected (empty diff).".to_string()
+                } else {
+                    let report = detect_impact(&diff_text, &symbols, &relationships, depth);
+                    format::format_impact_report(&report, page)
+                };
+                return self.graph_text(&repo_id, body).await;
+            }
+        };
+        let hits = navigation::dependents(&symbols, &relationships, &roots, depth);
+        let body = format::format_dependents(&subject, &hits, depth, page);
+        self.graph_text(&repo_id, body).await
+    }
+
     #[tool(
         name = "detect_impact",
         description = "Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects.",
@@ -68,21 +102,16 @@ impl MyceliumsMcp {
     pub(crate) async fn detect_impact_tool(
         &self,
         Parameters(params): Parameters<DetectImpactParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let diff_text = diff_or_git(params.diff, &repo_id)?;
-        if diff_text.trim().is_empty() {
-            return self
-                .graph_text(&repo_id, "No changes detected (empty diff).".to_string())
-                .await;
-        }
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
-        let depth = params.depth.unwrap_or(2).clamp(1, 10);
-        let report = detect_impact(&diff_text, &symbols, &relationships, depth);
-        let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
-        let body = format::format_impact_report(&report, page);
-        self.graph_text(&repo_id, body).await
+    ) -> TextResult {
+        self.impact_of_change(Parameters(ImpactOfChangeParams {
+            diff: params.diff,
+            repo_id: params.repo_id,
+            depth: params.depth,
+            limit: params.limit,
+            offset: params.offset,
+            ..Default::default()
+        }))
+        .await
     }
 
     #[tool(
@@ -98,7 +127,7 @@ impl MyceliumsMcp {
     pub(crate) async fn rename_symbol(
         &self,
         Parameters(params): Parameters<RenameParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         require_query("new_name", &params.new_name)?;
         let symbols = self.symbols(&params.repo_id).await?;
         let relationships = self.relationships(&params.repo_id).await?;
@@ -123,7 +152,7 @@ impl MyceliumsMcp {
     async fn get_review_context(
         &self,
         Parameters(params): Parameters<ReviewContextParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let diff_text = diff_or_git(params.diff, &repo_id)?;
 
@@ -290,7 +319,7 @@ impl MyceliumsMcp {
     async fn get_suggested_questions(
         &self,
         Parameters(params): Parameters<GetSuggestedQuestionsParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -327,42 +356,14 @@ impl MyceliumsMcp {
     async fn get_graph_diff(
         &self,
         Parameters(params): Parameters<GetGraphDiffParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-
-        // Load previous snapshot
-        let previous = load_snapshot(&data_dir(), &repo_id)
-            .map_err(|e| ToolError::internal("cannot read the graph snapshot", e))?
-            .ok_or_else(|| {
-                ToolError::recoverable(
-                    format!("No snapshot saved for {repo_id:?} yet."),
-                    "run analyze to save a baseline snapshot",
-                )
-            })?;
-
-        // Build current snapshot from graph
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
-        let current = build_snapshot(&repo_id, &symbols, &relationships);
-
-        let diff = diff_snapshots(&previous, &current);
-        let lines = change_lines(&diff);
-        let body = if lines.is_empty() {
-            format!(
-                "No changes since the last snapshot ({}).",
-                diff.previous_snapshot_at
-            )
-        } else {
-            let page = Page::new(params.limit, params.offset, Budget::new(50, 500)).take(lines);
-            page.with_notice(format!(
-                "Graph diff (snapshot {} -> {}): {}\n\n{}\n",
-                diff.previous_snapshot_at,
-                diff.current_snapshot_at,
-                change_summary(&diff),
-                page.items.join("\n")
-            ))
-        };
-        self.graph_text(&repo_id, body).await
+    ) -> TextResult {
+        self.detect_architecture_drift(Parameters(DetectDriftParams {
+            repo_id: params.repo_id,
+            limit: params.limit,
+            offset: params.offset,
+            ..Default::default()
+        }))
+        .await
     }
 
     #[tool(
@@ -378,65 +379,15 @@ impl MyceliumsMcp {
     async fn snapshot_diff(
         &self,
         Parameters(params): Parameters<SnapshotDiffParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let snapshots = list_snapshots(&data_dir(), &repo_id)
-            .map_err(|e| ToolError::internal("cannot list graph snapshots", e))?;
-
-        let load = |id: &str| -> Result<myceliums_core::snapshot::GraphSnapshot, ToolError> {
-            load_snapshot_by_id(&data_dir(), &repo_id, id)
-                .map_err(|e| ToolError::internal("cannot read the graph snapshot", e))?
-                .ok_or_else(|| {
-                    let known: Vec<&str> = snapshots
-                        .iter()
-                        .take(10)
-                        .map(|s| s.snapshot_id.as_str())
-                        .collect();
-                    ToolError::recoverable(
-                        format!("Snapshot {id:?} not found."),
-                        if known.is_empty() {
-                            "run analyze to save a snapshot".to_string()
-                        } else {
-                            format!("use one of the latest: {}", known.join(", "))
-                        },
-                    )
-                })
-        };
-        let need_two = || {
-            ToolError::recoverable(
-                format!(
-                    "{} snapshot(s) saved for {repo_id:?}; a diff needs two.",
-                    snapshots.len()
-                ),
-                "run analyze again after the code changes to save another snapshot",
-            )
-        };
-        let from_snap = match &params.from_snapshot {
-            Some(id) => load(id)?,
-            None => load(&snapshots.get(1).ok_or_else(need_two)?.snapshot_id)?,
-        };
-        let to_snap = match &params.to_snapshot {
-            Some(id) => load(id)?,
-            None => load(&snapshots.first().ok_or_else(need_two)?.snapshot_id)?,
-        };
-
-        let diff = myceliums_core::diff_snapshots(&from_snap, &to_snap);
-        let header = format!(
-            "Snapshot diff: {} → {}",
-            diff.previous_snapshot_at, diff.current_snapshot_at
-        );
-        let lines = change_lines(&diff);
-        let body = if lines.is_empty() {
-            format!("{header}\n\nNo changes detected.")
-        } else {
-            let page = Page::new(params.limit, params.offset, Budget::new(50, 500)).take(lines);
-            page.with_notice(format!(
-                "{header}: {}\n\n{}\n",
-                change_summary(&diff),
-                page.items.join("\n")
-            ))
-        };
-        self.graph_text(&repo_id, body).await
+    ) -> TextResult {
+        self.detect_architecture_drift(Parameters(DetectDriftParams {
+            repo_id: params.repo_id,
+            from_snapshot: params.from_snapshot,
+            to_snapshot: params.to_snapshot,
+            limit: params.limit,
+            offset: params.offset,
+        }))
+        .await
     }
 }
 

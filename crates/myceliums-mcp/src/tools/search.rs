@@ -1,6 +1,13 @@
-//! Text, semantic, hybrid, and Cypher search over the graph.
+//! Code search (keyword, semantic, hybrid) and Cypher queries over the graph.
+//!
+//! `search_code` is the one search tool: its `mode` picks the ranking. The
+//! older per-mode tools (`context_search`, `semantic_search`,
+//! `hybrid_search`, and `search_documents`, which was `context_search` under
+//! another name) are deprecated aliases over the same implementation.
 
 use super::prelude::*;
+use myceliums_core::Embedder;
+use std::sync::Arc;
 
 /// Most results a search tool returns per page.
 const SEARCH: Budget = Budget::new(20, 100);
@@ -18,15 +25,97 @@ const RERANK_WINDOW: usize = 50;
 fn embedder_error(e: impl std::fmt::Display) -> ToolError {
     ToolError::recoverable(
         format!("Cannot load the embedding model for this index: {e}."),
-        "use context_search (keyword search needs no model), or re-run analyze",
+        "call search_code with mode=keyword (needs no model), or re-run analyze",
     )
+}
+
+/// Whether the index holds embedding vectors, read from the metadata
+/// recorded at index time (no model load, no vector scan). An index built
+/// with `skip_embeddings` has none; so has a legacy index without metadata,
+/// as far as `auto` is concerned (it never loads a model it may not have).
+async fn has_vectors(store: &Store) -> bool {
+    let meta = store
+        .get_index_meta(myceliums_core::IndexEmbeddingMeta::META_KEY)
+        .await
+        .ok()
+        .flatten();
+    if meta.is_none() {
+        return false;
+    }
+    match myceliums_core::EmbeddingStats::load(store).await {
+        Ok(Some(stats)) => stats.symbols_embedded > 0,
+        _ => true,
+    }
 }
 
 #[tool_router(router = search_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
     #[tool(
+        name = "search_code",
+        description = "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn search_code(
+        &self,
+        Parameters(params): Parameters<SearchCodeParams>,
+    ) -> TextResult {
+        require_query("query", &params.query)?;
+        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let page = Page::new(params.limit, params.offset, SEARCH);
+        let explain = params.explain.unwrap_or(false);
+        let rerank = params.rerank.unwrap_or(false);
+        let query = params.query.as_str();
+        let body = match params.mode.unwrap_or_default() {
+            SearchMode::Keyword => self.keyword_results(&repo_id, query, page, explain).await?,
+            SearchMode::Semantic => {
+                let store = self.store(&repo_id).await?;
+                let embedder = myceliums_core::embedder_for_index(&store)
+                    .await
+                    .map_err(embedder_error)?;
+                self.semantic_results(&store, &embedder, query, page)
+                    .await?
+            }
+            SearchMode::Hybrid => {
+                let store = self.store(&repo_id).await?;
+                let embedder = myceliums_core::embedder_for_index(&store)
+                    .await
+                    .map_err(embedder_error)?;
+                self.hybrid_results(&repo_id, &store, &embedder, query, page, rerank, explain)
+                    .await?
+            }
+            SearchMode::Auto => {
+                let store = self.store(&repo_id).await?;
+                let embedder = if has_vectors(&store).await {
+                    myceliums_core::embedder_for_index(&store).await.ok()
+                } else {
+                    None
+                };
+                match embedder {
+                    Some(embedder) => {
+                        self.hybrid_results(
+                            &repo_id, &store, &embedder, query, page, rerank, explain,
+                        )
+                        .await?
+                    }
+                    None => format!(
+                        "Keyword search (this index has no usable embeddings; re-run analyze \
+                         without skip_embeddings for search by meaning).\n\n{}",
+                        self.keyword_results(&repo_id, query, page, explain).await?
+                    ),
+                }
+            }
+        };
+        self.graph_text(&repo_id, body).await
+    }
+
+    #[tool(
         name = "context_search",
-        description = "Search for functions, classes, and symbols in the knowledge graph. Preferred over grep for finding code entities — returns structured results with file locations, types, and relevance scores.",
+        description = "Search for functions, classes, and symbols in the knowledge graph by name and signature (keyword ranking).",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -37,42 +126,24 @@ impl MyceliumsMcp {
     pub(crate) async fn context_search(
         &self,
         Parameters(params): Parameters<SearchParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let explain = params.explain.unwrap_or(false);
-        let results = self
-            .service
-            .search_context(&repo_id, &params.query, explain)
-            .await
-            .map_err(service_error)?;
-
-        let page = Page::new(params.limit, params.offset, SEARCH).take(results);
-        let items: Vec<SearchResultItem> = page
-            .items
-            .into_iter()
-            .map(|r| SearchResultItem {
-                name: r.symbol.name,
-                qualified_name: r.symbol.qualified_name,
-                kind: r.symbol.kind.to_string(),
-                file_path: r.symbol.file_path,
-                start_line: r.symbol.start_line,
-                end_line: r.symbol.end_line,
-                signature: r.symbol.signature,
-                score: r.score,
-                explain: r.explain.and_then(|e| serde_json::to_value(e).ok()),
-            })
-            .collect();
-        let body = with_notice(
-            format::framed_results(&params.query, &items, format::format_search_results),
-            page.notice.as_deref(),
-        );
+        let page = Page::new(params.limit, params.offset, SEARCH);
+        let body = self
+            .keyword_results(
+                &repo_id,
+                &params.query,
+                page,
+                params.explain.unwrap_or(false),
+            )
+            .await?;
         self.graph_text(&repo_id, body).await
     }
 
     #[tool(
         name = "search_documents",
-        description = "Search through all analyzed code content using BM25 text search",
+        description = "Same as context_search (keyword ranking over names and signatures); it never was a separate BM25 document search.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -80,10 +151,7 @@ impl MyceliumsMcp {
             open_world_hint = false
         )
     )]
-    async fn search_documents(
-        &self,
-        Parameters(params): Parameters<SearchParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    async fn search_documents(&self, Parameters(params): Parameters<SearchParams>) -> TextResult {
         self.context_search(Parameters(params)).await
     }
 
@@ -100,84 +168,25 @@ impl MyceliumsMcp {
     pub(crate) async fn hybrid_search(
         &self,
         Parameters(params): Parameters<HybridSearchParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let store = self.store(&repo_id).await?;
-
-        let symbols = self.symbols(&repo_id).await?;
-
         let embedder = myceliums_core::embedder_for_index(&store)
             .await
             .map_err(embedder_error)?;
-
-        let explain = params.explain.unwrap_or(false);
         let page = Page::new(params.limit, params.offset, SEARCH);
-        let rerank = params.rerank.unwrap_or(false);
-        // Ranked top-k: ask for one past the page to learn whether more
-        // exist, within a window that does not depend on the page.
-        let fetch = if rerank {
-            RERANK_WINDOW
-        } else {
-            page.fetch().min(HYBRID_WINDOW)
-        };
-        let mut results = if explain {
-            core_hybrid_search_explain(&embedder, &symbols, store.as_ref(), &params.query, fetch)
-                .await
-                .map_err(|e| ToolError::internal("hybrid search failed", e))?
-        } else {
-            core_hybrid_search(&embedder, &symbols, store.as_ref(), &params.query, fetch)
-                .await
-                .map_err(|e| ToolError::internal("hybrid search failed", e))?
-        };
-
-        // Apply reranking if requested, using the reranker recorded at indexing time
-        if rerank {
-            let reranker_id = embedder.meta().reranker.clone();
-            results = rerank_results(&params.query, results, reranker_id.as_deref())
-                .await
-                .map_err(|e| ToolError::internal("reranking failed", e))?;
-        }
-
-        // Attach graph edges for explain mode
-        if explain {
-            let relationships = self.relationships(&repo_id).await?;
-            let uid_to_name: std::collections::HashMap<&str, &str> = symbols
-                .iter()
-                .map(|s| (s.uid.as_str(), s.name.as_str()))
-                .collect();
-            attach_graph_edges(&mut results, &relationships, &uid_to_name);
-        }
-
-        let page = page.take_open(results);
-        let items: Vec<HybridSearchResultItem> = page
-            .items
-            .into_iter()
-            .map(|r| HybridSearchResultItem {
-                name: r.symbol.name,
-                qualified_name: r.symbol.qualified_name,
-                kind: r.symbol.kind.to_string(),
-                file_path: r.symbol.file_path,
-                start_line: r.symbol.start_line,
-                end_line: r.symbol.end_line,
-                signature: r.symbol.signature,
-                combined_score: r.combined_score,
-                rerank_score: r.rerank_score,
-                bm25_rank: r.bm25_rank,
-                vector_rank: r.vector_rank,
-                bm25_score: r.bm25_score,
-                vector_score: r.vector_score,
-                explain: r.explain.and_then(|e| serde_json::to_value(e).ok()),
-            })
-            .collect();
-        let warning = partial_index_warning(&store).await;
-        let body = format::with_index_warning(
-            warning,
-            with_notice(
-                format::framed_results(&params.query, &items, format::format_hybrid_results),
-                page.notice.as_deref(),
-            ),
-        );
+        let body = self
+            .hybrid_results(
+                &repo_id,
+                &store,
+                &embedder,
+                &params.query,
+                page,
+                params.rerank.unwrap_or(false),
+                params.explain.unwrap_or(false),
+            )
+            .await?;
         self.graph_text(&repo_id, body).await
     }
 
@@ -194,7 +203,7 @@ impl MyceliumsMcp {
     pub(crate) async fn cypher_query(
         &self,
         Parameters(params): Parameters<CypherQueryParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         require_query("query", &params.query)?;
         let symbols = self.symbols(&params.repo_id).await?;
         let files = self.files(&params.repo_id).await?;
@@ -246,18 +255,71 @@ impl MyceliumsMcp {
     pub(crate) async fn semantic_search(
         &self,
         Parameters(params): Parameters<SearchParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let store = self.store(&repo_id).await?;
         let embedder = myceliums_core::embedder_for_index(&store)
             .await
             .map_err(embedder_error)?;
+        let page = Page::new(params.limit, params.offset, Budget::new(10, SEARCH.max));
+        let body = self
+            .semantic_results(&store, &embedder, &params.query, page)
+            .await?;
+        self.graph_text(&repo_id, body).await
+    }
+}
+
+/// The search rankings behind `search_code` and its deprecated aliases. Each
+/// returns one framed page of results, without the freshness line.
+impl MyceliumsMcp {
+    /// Keyword ranking over names, qualified names and signatures.
+    async fn keyword_results(
+        &self,
+        repo_id: &str,
+        query: &str,
+        page: Page,
+        explain: bool,
+    ) -> Result<String, ToolError> {
+        let results = self
+            .service
+            .search_context(repo_id, query, explain)
+            .await
+            .map_err(service_error)?;
+        let page = page.take(results);
+        let items: Vec<SearchResultItem> = page
+            .items
+            .into_iter()
+            .map(|r| SearchResultItem {
+                name: r.symbol.name,
+                qualified_name: r.symbol.qualified_name,
+                kind: r.symbol.kind.to_string(),
+                file_path: r.symbol.file_path,
+                start_line: r.symbol.start_line,
+                end_line: r.symbol.end_line,
+                signature: r.symbol.signature,
+                score: r.score,
+                explain: r.explain.and_then(|e| serde_json::to_value(e).ok()),
+            })
+            .collect();
+        Ok(with_notice(
+            format::framed_results(query, &items, format::format_search_results),
+            page.notice.as_deref(),
+        ))
+    }
+
+    /// Vector similarity only.
+    async fn semantic_results(
+        &self,
+        store: &Arc<Store>,
+        embedder: &Arc<Embedder>,
+        query: &str,
+        page: Page,
+    ) -> Result<String, ToolError> {
         let query_vector = embedder
-            .embed_query(&params.query)
+            .embed_query(query)
             .await
             .map_err(|e| ToolError::internal("cannot embed the query", e))?;
-        let page = Page::new(params.limit, params.offset, Budget::new(10, SEARCH.max));
         let results = store
             .vector_search(&query_vector, page.fetch())
             .await
@@ -278,14 +340,93 @@ impl MyceliumsMcp {
                 explain: None,
             })
             .collect();
-        let warning = partial_index_warning(&store).await;
-        let body = format::with_index_warning(
+        let warning = partial_index_warning(store).await;
+        Ok(format::with_index_warning(
             warning,
             with_notice(
-                format::framed_results(&params.query, &items, format::format_search_results),
+                format::framed_results(query, &items, format::format_search_results),
                 page.notice.as_deref(),
             ),
-        );
-        self.graph_text(&repo_id, body).await
+        ))
+    }
+
+    /// Keyword and vector rankings fused (Reciprocal Rank Fusion), optionally
+    /// reranked by a cross-encoder.
+    #[allow(clippy::too_many_arguments)]
+    async fn hybrid_results(
+        &self,
+        repo_id: &str,
+        store: &Arc<Store>,
+        embedder: &Arc<Embedder>,
+        query: &str,
+        page: Page,
+        rerank: bool,
+        explain: bool,
+    ) -> Result<String, ToolError> {
+        let symbols = self.symbols(repo_id).await?;
+        // Ranked top-k: ask for one past the page to learn whether more
+        // exist, within a window that does not depend on the page.
+        let fetch = if rerank {
+            RERANK_WINDOW
+        } else {
+            page.fetch().min(HYBRID_WINDOW)
+        };
+        let mut results = if explain {
+            core_hybrid_search_explain(embedder, &symbols, store.as_ref(), query, fetch)
+                .await
+                .map_err(|e| ToolError::internal("hybrid search failed", e))?
+        } else {
+            core_hybrid_search(embedder, &symbols, store.as_ref(), query, fetch)
+                .await
+                .map_err(|e| ToolError::internal("hybrid search failed", e))?
+        };
+
+        // Apply reranking if requested, using the reranker recorded at indexing time
+        if rerank {
+            let reranker_id = embedder.meta().reranker.clone();
+            results = rerank_results(query, results, reranker_id.as_deref())
+                .await
+                .map_err(|e| ToolError::internal("reranking failed", e))?;
+        }
+
+        // Attach graph edges for explain mode
+        if explain {
+            let relationships = self.relationships(repo_id).await?;
+            let uid_to_name: std::collections::HashMap<&str, &str> = symbols
+                .iter()
+                .map(|s| (s.uid.as_str(), s.name.as_str()))
+                .collect();
+            attach_graph_edges(&mut results, &relationships, &uid_to_name);
+        }
+
+        let page = page.take_open(results);
+        let items: Vec<HybridSearchResultItem> = page
+            .items
+            .into_iter()
+            .map(|r| HybridSearchResultItem {
+                name: r.symbol.name,
+                qualified_name: r.symbol.qualified_name,
+                kind: r.symbol.kind.to_string(),
+                file_path: r.symbol.file_path,
+                start_line: r.symbol.start_line,
+                end_line: r.symbol.end_line,
+                signature: r.symbol.signature,
+                combined_score: r.combined_score,
+                rerank_score: r.rerank_score,
+                bm25_rank: r.bm25_rank,
+                vector_rank: r.vector_rank,
+                bm25_score: r.bm25_score,
+                vector_score: r.vector_score,
+                explain: r.explain.and_then(|e| serde_json::to_value(e).ok()),
+            })
+            .collect();
+        let warning = partial_index_warning(store).await;
+        Ok(format::with_index_warning(
+            warning,
+            with_notice(
+                format::framed_results(query, &items, format::format_hybrid_results),
+                page.notice.as_deref(),
+            ),
+        ))
     }
 }

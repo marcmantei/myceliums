@@ -9,11 +9,15 @@
 //!   `file_path:qualified_name` handle from the error picks one — for
 //!   `symbol_context` and for `rename_symbol` alike.
 //!
+//! * Each analysis records a snapshot, so `detect_architecture_drift`
+//!   compares the current graph with the analysis before it (#97).
+//!
 //! This binary owns its data directory, so it may analyze; and because
 //! `MYCELIUMS_DATA_DIR` is process-wide, both scenarios run in one test.
 
 use myceliums_mcp::{
-    AnalyzeParams, GetStatsParams, MyceliumsMcp, RenameParams, SymbolContextParams,
+    AnalyzeParams, DetectDriftParams, GetStatsParams, MyceliumsMcp, RenameParams,
+    SymbolContextParams,
 };
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -57,6 +61,15 @@ async fn index_line(server: &MyceliumsMcp, repo_id: &str) -> String {
     stats["index_status"].as_str().unwrap().to_string()
 }
 
+async fn drift(server: &MyceliumsMcp, repo_id: &str) -> Result<String, String> {
+    server
+        .detect_architecture_drift_for_test(DetectDriftParams {
+            repo_id: Some(repo_id.to_string()),
+            ..Default::default()
+        })
+        .await
+}
+
 #[tokio::test]
 async fn analyze_refreshes_what_the_index_line_calls_stale_and_same_names_are_ambiguous() {
     let data = tempfile::tempdir().unwrap();
@@ -87,6 +100,8 @@ async fn analyze_refreshes_what_the_index_line_calls_stale_and_same_names_are_am
     assert!(first.contains("(fresh)"), "{first}");
     let line = index_line(&server, &repo_id).await;
     assert!(line.ends_with("= HEAD, up to date."), "{line}");
+    let none_yet = drift(&server, &repo_id).await.unwrap_err();
+    assert!(none_yet.contains("nothing to compare"), "{none_yet}");
 
     // Nothing changed: the cached index is reused.
     let again = server.analyze_for_test(analyze(&project)).await.unwrap();
@@ -108,6 +123,14 @@ async fn analyze_refreshes_what_the_index_line_calls_stale_and_same_names_are_am
     assert!(refreshed.contains("(fresh)"), "{refreshed}");
     let line = index_line(&server, &repo_id).await;
     assert!(line.ends_with("= HEAD, up to date."), "{line}");
+    // The drift since the first analysis is the new function, nothing else
+    // (symbol uids differ between analyses; snapshot keys do not).
+    let changes = drift(&server, &repo_id).await.unwrap();
+    assert!(
+        changes.contains("+1 -0 symbols")
+            && changes.contains("+ symbol Function  later (src/app.ts)"),
+        "{changes}"
+    );
 
     // A new commit moves HEAD: stale, and analyze re-indexes again.
     git(&project, &["commit", "-q", "-am", "edit"]);

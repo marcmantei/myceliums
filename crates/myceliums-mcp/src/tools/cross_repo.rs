@@ -12,12 +12,7 @@ fn embedder_error(e: impl std::fmt::Display) -> ToolError {
 
 impl MyceliumsMcp {
     /// A result over two repositories: one freshness line for each.
-    async fn two_repo_text(
-        &self,
-        source: &str,
-        target: &str,
-        body: String,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    async fn two_repo_text(&self, source: &str, target: &str, body: String) -> TextResult {
         let source_status = self.index_status(source).await?;
         let target_status = self.index_status(target).await?;
         text(format!(
@@ -41,7 +36,7 @@ impl MyceliumsMcp {
     async fn isolate_intent(
         &self,
         Parameters(params): Parameters<IsolateIntentParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         use myceliums_core::cross_repo::{self, IsolateConfig};
 
         let store = self.store(&params.repo_id).await?;
@@ -95,7 +90,7 @@ impl MyceliumsMcp {
     async fn differentiate_intent(
         &self,
         Parameters(params): Parameters<DifferentiateIntentParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         use myceliums_core::cross_repo::{self, DifferentiateConfig, IsolateConfig};
 
         let registry = registry()?;
@@ -203,7 +198,7 @@ impl MyceliumsMcp {
     async fn plan_adaptation(
         &self,
         Parameters(params): Parameters<PlanAdaptationParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         use myceliums_core::cross_repo::{self, DifferentiateConfig, IsolateConfig};
 
         let registry = registry()?;

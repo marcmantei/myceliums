@@ -6,7 +6,7 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "find_dead_code",
-        description = "Find functions and methods with no incoming CALLS edges (potential dead code; calls the resolver missed make this a candidate list, not proof). Exclude known entry points with exclude_patterns. Use before cleanup/refactoring.",
+        description = "Which functions and methods are never called? Lists those with no incoming CALLS edge, optionally only under a file or directory (path). A candidate list, not proof: entry points, callbacks and calls the resolver missed look unused too; skip known ones with exclude_patterns.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -18,9 +18,15 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<FindDeadCodeParams>,
     ) -> Result<Json<DeadCodeOutput>, ToolError> {
-        let symbols = self.symbols(&params.repo_id).await?;
+        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let symbols = self.symbols(&repo_id).await?;
 
-        let relationships = self.relationships(&params.repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
+        let path = params
+            .path
+            .as_deref()
+            .map(|p| p.trim().trim_start_matches("./"))
+            .filter(|p| !p.is_empty());
 
         use myceliums_storage::RelationshipKind;
 
@@ -40,6 +46,7 @@ impl MyceliumsMcp {
                 )
             })
             .filter(|s| !called_uids.contains(s.uid.as_str()))
+            .filter(|s| path.is_none_or(|p| under_path(&s.file_path, p)))
             .filter(|s| {
                 // Filter by exclude_patterns if provided
                 if let Some(ref patterns) = params.exclude_patterns {
@@ -66,7 +73,7 @@ impl MyceliumsMcp {
         let page = Page::new(params.limit, params.offset, Budget::LIST).take(dead_code);
 
         Ok(Json(DeadCodeOutput {
-            index_status: self.index_status(&params.repo_id).await?,
+            index_status: self.index_status(&repo_id).await?,
             symbols: page.items,
             total_count: total,
             notice: page.notice,
@@ -83,10 +90,7 @@ impl MyceliumsMcp {
             open_world_hint = false
         )
     )]
-    async fn get_god_nodes(
-        &self,
-        Parameters(params): Parameters<GetGodNodesParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    async fn get_god_nodes(&self, Parameters(params): Parameters<GetGodNodesParams>) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -148,7 +152,7 @@ impl MyceliumsMcp {
     async fn get_surprising_connections(
         &self,
         Parameters(params): Parameters<GetSurprisingConnectionsParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -201,7 +205,7 @@ impl MyceliumsMcp {
     async fn get_git_context(
         &self,
         Parameters(params): Parameters<GetGitContextParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(Some(&params.repo_id))?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -218,7 +222,7 @@ impl MyceliumsMcp {
         if matching_symbols.is_empty() {
             return Err(ToolError::recoverable(
                 format!("No symbol name contains `{}`.", params.symbol_name),
-                "check the spelling, or find the symbol with context_search",
+                "check the spelling, or find the symbol with search_code",
             ));
         }
 
@@ -274,7 +278,7 @@ impl MyceliumsMcp {
     async fn get_centrality_report(
         &self,
         Parameters(params): Parameters<GetCentralityParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -357,7 +361,7 @@ impl MyceliumsMcp {
     async fn get_community_metrics(
         &self,
         Parameters(params): Parameters<GetCommunityMetricsParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -426,7 +430,7 @@ impl MyceliumsMcp {
     async fn detect_circular_dependencies(
         &self,
         Parameters(params): Parameters<DetectCyclesParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -485,7 +489,7 @@ impl MyceliumsMcp {
     async fn get_dependencies(
         &self,
         Parameters(params): Parameters<GetDependenciesParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -536,7 +540,7 @@ impl MyceliumsMcp {
     async fn get_module_coupling(
         &self,
         Parameters(params): Parameters<GetModuleCouplingParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -590,7 +594,7 @@ impl MyceliumsMcp {
     async fn export_mermaid_tool(
         &self,
         Parameters(params): Parameters<ExportMermaidParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -620,7 +624,7 @@ impl MyceliumsMcp {
     async fn quality_hotspots(
         &self,
         Parameters(params): Parameters<QualityHotspotsParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -653,7 +657,7 @@ impl MyceliumsMcp {
     async fn architecture_lint(
         &self,
         Parameters(params): Parameters<ArchitectureLintParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -695,7 +699,7 @@ impl MyceliumsMcp {
     async fn architecture_view(
         &self,
         Parameters(params): Parameters<ArchitectureViewParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -710,7 +714,7 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "detect_architecture_drift",
-        description = "Detect architectural drift by comparing the current knowledge graph against the last saved snapshot. Returns a drift score (0-100, higher = less drift) and details on structural changes.",
+        description = "What changed in the code structure since the previous analysis? Compares two recorded states of the graph (default: the analysis before the current one vs the current graph; any two snapshot ids with from_snapshot/to_snapshot) and returns a drift score (100 = unchanged) and the added/removed symbols and relationships.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -718,29 +722,21 @@ impl MyceliumsMcp {
             open_world_hint = false
         )
     )]
-    async fn detect_architecture_drift(
+    pub(crate) async fn detect_architecture_drift(
         &self,
-        Parameters(params): Parameters<DetectDriftParams2>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+        Parameters(params): Parameters<DetectDriftParams>,
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-
-        let baseline = load_snapshot(&data_dir(), &repo_id)
-            .map_err(|e| ToolError::internal("cannot read the graph snapshot", e))?
-            .ok_or_else(|| {
-                ToolError::recoverable(
-                    format!("No snapshot saved for {repo_id:?} yet."),
-                    "run analyze to save a baseline snapshot",
-                )
-            })?;
-
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
-        let communities = self.communities(&repo_id).await?;
-
-        let report = detect_drift(&baseline, &symbols, &relationships, &communities, &[]);
-
-        self.graph_text(&repo_id, format::format_drift_report(&report))
-            .await
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
+        let body = self
+            .drift_text(
+                &repo_id,
+                params.from_snapshot.as_deref(),
+                params.to_snapshot.as_deref(),
+                page,
+            )
+            .await?;
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
@@ -756,7 +752,7 @@ impl MyceliumsMcp {
     async fn get_ownership(
         &self,
         Parameters(params): Parameters<GetOwnershipParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo = repo_info(&params.repo_id)?;
 
         let symbols = self.symbols(&params.repo_id).await?;
@@ -786,5 +782,167 @@ impl MyceliumsMcp {
             owned_notice.or(unowned_notice).as_deref(),
         );
         self.graph_text(&params.repo_id, body).await
+    }
+}
+
+/// Whether `file` is `path` or lies under the directory `path`.
+fn under_path(file: &str, path: &str) -> bool {
+    let dir = path.trim_end_matches('/');
+    file == dir
+        || file
+            .strip_prefix(dir)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// One line of a graph diff, for paging across all change lists.
+fn change_lines(diff: &myceliums_core::snapshot::GraphDiff) -> Vec<String> {
+    let mut lines = Vec::new();
+    lines.extend(
+        diff.added_symbols
+            .iter()
+            .map(|e| format!("+ symbol {}", e.label)),
+    );
+    lines.extend(
+        diff.removed_symbols
+            .iter()
+            .map(|e| format!("- symbol {}", e.label)),
+    );
+    lines.extend(
+        diff.added_edges
+            .iter()
+            .map(|e| format!("+ edge {}", e.label)),
+    );
+    lines.extend(
+        diff.removed_edges
+            .iter()
+            .map(|e| format!("- edge {}", e.label)),
+    );
+    lines
+}
+
+/// Whether a diff found no change at all.
+fn unchanged(diff: &myceliums_core::snapshot::GraphDiff) -> bool {
+    diff.added_symbols.is_empty()
+        && diff.removed_symbols.is_empty()
+        && diff.added_edges.is_empty()
+        && diff.removed_edges.is_empty()
+}
+
+impl MyceliumsMcp {
+    /// Drift between two recorded states of `repo_id`'s graph (see
+    /// `detect_architecture_drift`), one page of changes.
+    async fn drift_text(
+        &self,
+        repo_id: &str,
+        from: Option<&str>,
+        to: Option<&str>,
+        page: Page,
+    ) -> TextResult {
+        use myceliums_core::snapshot::GraphSnapshot;
+        let data = data_dir();
+        // Newest first.
+        let recorded = list_snapshots(&data, repo_id)
+            .map_err(|e| ToolError::internal("cannot list graph snapshots", e))?;
+        let ids: Vec<&str> = recorded.iter().map(|s| s.snapshot_id.as_str()).collect();
+        let load = |id: &str| -> Result<GraphSnapshot, ToolError> {
+            load_snapshot_by_id(&data, repo_id, id)
+                .map_err(|e| ToolError::internal("cannot read the graph snapshot", e))?
+                .ok_or_else(|| {
+                    let known: Vec<&str> = ids.iter().take(10).copied().collect();
+                    ToolError::recoverable(
+                        format!("Snapshot {id:?} not found."),
+                        if known.is_empty() {
+                            "omit from_snapshot/to_snapshot, or run analyze to record one"
+                                .to_string()
+                        } else {
+                            format!("use one of the latest: {}", known.join(", "))
+                        },
+                    )
+                })
+        };
+        let nothing_earlier = || {
+            ToolError::recoverable(
+                format!(
+                    "No earlier analysis of {repo_id:?} is recorded, so there is nothing to compare yet."
+                ),
+                "run analyze again after the code changes (each analysis records a snapshot; \
+                 indexes built before this version have none)",
+            )
+        };
+
+        let (target, target_label) = match to {
+            Some(id) => (load(id)?, format!("snapshot {id}")),
+            None => {
+                let symbols = self.symbols(repo_id).await?;
+                let relationships = self.relationships(repo_id).await?;
+                (
+                    build_snapshot(repo_id, &symbols, &relationships),
+                    "the current graph".to_string(),
+                )
+            }
+        };
+        let (baseline, baseline_label) = match (from, to) {
+            (Some(id), _) => (load(id)?, format!("snapshot {id}")),
+            (None, Some(to_id)) => {
+                let older = ids
+                    .iter()
+                    .position(|id| *id == to_id)
+                    .and_then(|i| ids.get(i + 1))
+                    .ok_or_else(|| {
+                        ToolError::recoverable(
+                            format!("No snapshot is older than {to_id:?}."),
+                            "pass from_snapshot explicitly",
+                        )
+                    })?;
+                (load(older)?, format!("snapshot {older}"))
+            }
+            (None, None) => {
+                // The newest recorded state that is not the current graph:
+                // the analysis that built the current index recorded the
+                // newest snapshot, so the one before it is the baseline.
+                // (The legacy single-file snapshot of older versions is keyed
+                // by uids and cannot be compared; it is not used.)
+                let newest_id = ids.first().ok_or_else(nothing_earlier)?;
+                let newest = load(newest_id)?;
+                if unchanged(&diff_snapshots(&newest, &target)) {
+                    let older = ids.get(1).ok_or_else(nothing_earlier)?;
+                    (load(older)?, format!("snapshot {older}"))
+                } else {
+                    (newest, format!("snapshot {newest_id}"))
+                }
+            }
+        };
+
+        let diff = diff_snapshots(&baseline, &target);
+        let score = myceliums_core::drift_score(&baseline, &target, &diff);
+        let header = format!(
+            "Architecture drift from {baseline_label} ({}) to {target_label}: drift score \
+             {score:.1}/100 (100 = unchanged); +{} -{} symbols, +{} -{} relationships.",
+            baseline.created_at,
+            diff.added_symbols.len(),
+            diff.removed_symbols.len(),
+            diff.added_edges.len(),
+            diff.removed_edges.len(),
+        );
+        let lines = change_lines(&diff);
+        if lines.is_empty() {
+            return Ok(format!("{header}\n\nNo structural changes."));
+        }
+        let page = page.take(lines);
+        Ok(page.with_notice(format!("{header}\n\n{}\n", page.items.join("\n"))))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::under_path;
+
+    #[test]
+    fn paths_match_a_file_or_a_directory_prefix() {
+        assert!(under_path("src/utils/a.ts", "src/utils"));
+        assert!(under_path("src/utils/a.ts", "src/utils/"));
+        assert!(under_path("src/utils/a.ts", "src/utils/a.ts"));
+        assert!(!under_path("src/utils2/a.ts", "src/utils"));
+        assert!(!under_path("src/utils/a.ts", "src/util"));
     }
 }

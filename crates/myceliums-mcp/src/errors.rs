@@ -13,20 +13,18 @@
 //! * **Internal** — a genuine server fault (I/O, storage, serialization).
 //!   JSON-RPC `internal_error`; the agent cannot fix these.
 //!
-//! Every handler returns [`ToolResult`], so the choice is made once per
-//! failure site by picking a constructor — never by string matching later.
+//! Every handler returns `Result<_, ToolError>` (text tools via
+//! `tools::TextResult`; structured tools spell out
+//! `Result<Json<T>, ToolError>`, because rmcp derives the `outputSchema` from
+//! that literal return type and does not see through an alias), so the
+//! choice is made once per failure site by picking a constructor — never by
+//! string matching later.
 
 use myceliums_core::error::MyceliumError;
 use myceliums_storage::RepoIdError;
 use rmcp::handler::server::tool::IntoCallToolResult;
-use rmcp::handler::server::wrapper::Json;
 use rmcp::model::{CallToolResult, Content};
 use std::fmt::Display;
-
-/// A tool result. `#[tool]` handlers spell this out as
-/// `Result<Json<T>, ToolError>`: rmcp derives the tool's `outputSchema` from
-/// that literal return type and does not see through an alias.
-pub(crate) type ToolResult<T> = Result<Json<T>, ToolError>;
 
 /// A failed tool call, already classified (see the module docs).
 #[derive(Debug)]
@@ -63,7 +61,7 @@ impl ToolError {
     pub(crate) fn symbol_not_found(name: &str) -> Self {
         Self::recoverable(
             format!("Symbol `{name}` not found in the index."),
-            "check the spelling, find the symbol with context_search, or re-run analyze if it is new",
+            "check the spelling, find the symbol with search_code, or re-run analyze if it is new",
         )
     }
 

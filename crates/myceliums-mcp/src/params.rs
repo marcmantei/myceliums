@@ -153,6 +153,125 @@ where
         .map(Some)
 }
 
+/// How `search_code` ranks results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(inline)]
+pub enum SearchMode {
+    // Hybrid when the index has embeddings, else keyword. (Plain comments:
+    // doc comments on variants would turn the schema's `enum` into `oneOf`.)
+    #[default]
+    Auto,
+    // Names, qualified names and signatures; needs no embedding model.
+    Keyword,
+    // Vector similarity only.
+    Semantic,
+    // Keyword and vector rankings fused.
+    Hybrid,
+}
+
+impl SearchMode {
+    /// The mode name used in the output.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SearchMode::Auto => "auto",
+            SearchMode::Keyword => "keyword",
+            SearchMode::Semantic => "semantic",
+            SearchMode::Hybrid => "hybrid",
+        }
+    }
+}
+
+// ── Core tool parameters ─────────────────────────────────────────────────
+
+#[derive(Deserialize, schemars::JsonSchema, Default)]
+pub struct SearchCodeParams {
+    /// What to find: a name (parseConfig, Item.AsString) or what the code does (builds the Set-Cookie header)
+    pub query: String,
+    /// Repository ID (default: repo of the working directory, else the most recent)
+    pub repo_id: Option<String>,
+    /// auto (default): hybrid when the index has embeddings, else keyword. keyword: names and signatures, no model. semantic: meaning only. hybrid: both, fused
+    pub mode: Option<SearchMode>,
+    /// Max results per page (default 20, max 100)
+    #[schemars(range(min = 1, max = 100))]
+    pub limit: Option<usize>,
+    /// Results to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
+    pub offset: Option<usize>,
+    /// Rerank the top 50 hybrid results with a cross-encoder: slower, more precise (default: false)
+    pub rerank: Option<bool>,
+    /// Show the scoring breakdown of each result (default: false)
+    pub explain: Option<bool>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema, Default)]
+pub struct ExplainSymbolParams {
+    /// Symbol: name, qualified name, or file_path:qualified_name
+    pub symbol_name: String,
+    /// Repository ID (default: repo of the working directory, else the most recent)
+    pub repo_id: Option<String>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema, Default)]
+pub struct FindCallsParams {
+    /// Symbol: name, qualified name, or file_path:qualified_name
+    pub symbol_name: String,
+    /// Repository ID (default: repo of the working directory, else the most recent)
+    pub repo_id: Option<String>,
+    /// Hops to follow: 1 = direct only (default 1, max 10)
+    #[schemars(range(min = 1, max = 10))]
+    pub depth: Option<u32>,
+    /// Max symbols per page (default 20, max 200)
+    #[schemars(range(min = 1, max = 200))]
+    pub limit: Option<usize>,
+    /// Symbols to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
+    pub offset: Option<usize>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema, Default)]
+pub struct ImpactOfChangeParams {
+    /// The symbol you plan to change (name, qualified name, or file_path:qualified_name). Give at most one of symbol_name, file_path, diff
+    pub symbol_name: Option<String>,
+    /// The file you plan to change (repository-relative): all symbols it defines
+    pub file_path: Option<String>,
+    /// A unified diff of the change (default when neither symbol_name nor file_path is given: `git diff HEAD` in the repository)
+    pub diff: Option<String>,
+    /// Repository ID (default: repo of the working directory, else the most recent)
+    pub repo_id: Option<String>,
+    /// Hops to follow from the changed code (default 2, max 10)
+    #[schemars(range(min = 1, max = 10))]
+    pub depth: Option<u32>,
+    /// Max report lines per page (default 50, max 500)
+    #[schemars(range(min = 1, max = 500))]
+    pub limit: Option<usize>,
+    /// Report lines to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
+    pub offset: Option<usize>,
+}
+
+#[derive(Deserialize, schemars::JsonSchema, Default)]
+pub struct TraceFlowParams {
+    /// Where the flow starts: name, qualified name, or file_path:qualified_name
+    pub from_symbol: String,
+    /// Where the flow ends: name, qualified name, or file_path:qualified_name
+    pub to_symbol: String,
+    /// Repository ID (default: repo of the working directory, else the most recent)
+    pub repo_id: Option<String>,
+    /// Longest chain searched, in calls (default 12, max 30)
+    #[schemars(range(min = 1, max = 30))]
+    pub max_depth: Option<u32>,
+    /// Also list symbols on chains up to this many calls longer than the shortest (default 0, max 5)
+    #[schemars(range(max = 5))]
+    pub extra_calls: Option<u32>,
+    /// Max symbols per page (default 20, max 200)
+    #[schemars(range(min = 1, max = 200))]
+    pub limit: Option<usize>,
+    /// Symbols to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
+    pub offset: Option<usize>,
+}
+
 // ── Tool parameter types ─────────────────────────────────────────────────
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
@@ -339,8 +458,10 @@ pub struct GetSymbolDefinitionParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct FindDeadCodeParams {
-    /// Repository ID
-    pub repo_id: String,
+    /// Repository ID (default: repo of the working directory, else the most recent)
+    pub repo_id: Option<String>,
+    /// Only functions in this file, or under this directory (repository-relative, e.g. src/utils/)
+    pub path: Option<String>,
     /// Comma-separated substrings; symbols whose name contains one are skipped (e.g. known entry points)
     pub exclude_patterns: Option<String>,
     /// Max symbols per page (default 20, max 200)
@@ -750,9 +871,19 @@ pub struct ArchitectureViewParams {
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
-pub struct DetectDriftParams2 {
+pub struct DetectDriftParams {
     /// Repository ID (default: repo of the working directory, else the most recent)
     pub repo_id: Option<String>,
+    /// Baseline snapshot ID (default: the analysis before the current one; each analyze records a snapshot)
+    pub from_snapshot: Option<String>,
+    /// Snapshot ID to compare against the baseline (default: the current graph)
+    pub to_snapshot: Option<String>,
+    /// Max changes per page, across all change lists (default 50, max 500)
+    #[schemars(range(min = 1, max = 500))]
+    pub limit: Option<usize>,
+    /// Changes to skip, for the next page (default 0)
+    #[schemars(range(max = 100000))]
+    pub offset: Option<usize>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]

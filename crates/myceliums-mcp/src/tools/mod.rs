@@ -1,10 +1,18 @@
 //! The MCP tools, one module per tool group.
 //!
 //! Each module holds one `#[tool_router(router = <group>_router)]` impl block;
-//! [`MyceliumsMcp::tool_router`] merges them into the single router the
-//! server exposes. Tool names, descriptions, and schemas come from the
-//! `#[tool]` attributes alone, so where a tool lives does not change
-//! `tools/list` (pinned by `tests/tools_list_snapshot.rs`).
+//! [`MyceliumsMcp::tool_router`] merges them into one router, and
+//! [`MyceliumsMcp::tool_router_for`] keeps the selected toolsets of it (see
+//! [`crate::toolsets`]). Tool names, descriptions, and schemas come from the
+//! `#[tool]` attributes (plus the toolset decoration), so where a tool lives
+//! does not change `tools/list` (pinned by `tests/tools_list_snapshot.rs`).
+//!
+//! Output: a tool whose answer is prose or a report returns
+//! [`TextResult`] — plain text content, no `structuredContent`, no output
+//! schema. A tool whose answer is a record or a list returns
+//! `Result<Json<T>, ToolError>` — typed `structuredContent` with the output
+//! schema derived from `T` (rmcp also sends the same JSON as text content,
+//! as the MCP spec recommends).
 
 mod admin;
 mod architecture;
@@ -16,11 +24,10 @@ mod impact;
 mod knowledge;
 mod search;
 
-use crate::errors::{ToolError, ToolResult};
-use crate::output::TextOutput;
+use crate::errors::ToolError;
+use crate::toolsets::Toolsets;
 use crate::MyceliumsMcp;
 use rmcp::handler::server::tool::ToolRouter;
-use rmcp::handler::server::wrapper::Json;
 
 /// Imports shared by every tool module.
 mod prelude {
@@ -53,10 +60,11 @@ mod prelude {
     pub(crate) use std::path::PathBuf;
     pub(crate) use tracing::info;
 
-    pub(crate) use super::{require_query, text};
-    pub(crate) use crate::errors::{repo_id_error, service_error, ToolError, ToolResult};
+    pub(crate) use super::{require_query, text, TextResult};
+    pub(crate) use crate::errors::{repo_id_error, service_error, ToolError};
     pub(crate) use crate::format::{self, untrusted};
     pub(crate) use crate::index_status::{load_embedding_stats, partial_index_warning};
+    pub(crate) use crate::navigation;
     pub(crate) use crate::output::*;
     pub(crate) use crate::params::*;
     pub(crate) use crate::repo::{data_dir, registry, repo_info, resolve_symbol};
@@ -75,15 +83,18 @@ impl MyceliumsMcp {
     }
 
     /// A text graph result: freshness line, then `body`.
-    pub(crate) async fn graph_text(&self, repo_id: &str, body: String) -> ToolResult<TextOutput> {
+    pub(crate) async fn graph_text(&self, repo_id: &str, body: String) -> TextResult {
         let status = self.index_status(repo_id).await?;
         text(format!("{status}\n\n{body}"))
     }
 }
 
+/// The result of a text tool: plain text content on success.
+pub(crate) type TextResult = Result<String, ToolError>;
+
 /// A plain text result (no graph read, so no freshness line).
-pub(crate) fn text(text: impl Into<String>) -> ToolResult<TextOutput> {
-    Ok(Json(TextOutput { text: text.into() }))
+pub(crate) fn text(text: impl Into<String>) -> TextResult {
+    Ok(text.into())
 }
 
 /// Rejects an empty query string up front: it is bad input, not "no results".
@@ -96,7 +107,13 @@ pub(crate) fn require_query(field: &str, value: &str) -> Result<(), ToolError> {
 }
 
 impl MyceliumsMcp {
-    /// Every tool the server exposes: the union of the per-group routers.
+    /// The tools of the selected toolsets, decorated for agents (see
+    /// [`crate::toolsets::select`]).
+    pub(crate) fn tool_router_for(toolsets: &Toolsets) -> ToolRouter<Self> {
+        crate::toolsets::select(Self::tool_router(), toolsets)
+    }
+
+    /// Every tool, undecorated: the union of the per-group routers.
     pub(crate) fn tool_router() -> ToolRouter<Self> {
         Self::admin_router()
             + Self::search_router()
