@@ -8,11 +8,13 @@
 //!   visible cut of long Cypher cells is unit-tested in `format.rs`: the
 //!   fixture has no value long enough);
 //! * freshness line on graph results; CALLS resolution labels;
-//! * untrusted framing of indexed text; annotations; `delete` confirmation.
+//! * untrusted framing of indexed text; annotations; `delete` confirmation;
+//! * output channels (#97): text tools send plain text only, structured
+//!   tools typed JSON with an output schema; toolsets; the core tools.
 
 mod harness;
 
-use myceliums_mcp::MyceliumsMcp;
+use myceliums_mcp::{MyceliumsMcp, Toolsets};
 use rmcp::model::{CallToolRequestParams, CallToolResult, ErrorCode, Tool};
 use rmcp::service::{RoleClient, RunningService, ServiceError};
 use rmcp::ServiceExt;
@@ -20,13 +22,19 @@ use serde_json::{json, Value};
 
 type Client = RunningService<RoleClient, ()>;
 
-/// Serves a fresh server over an in-process pipe and connects a client.
+/// Serves a fresh server with every toolset over an in-process pipe and
+/// connects a client.
 async fn connect() -> Client {
+    connect_with(Toolsets::all()).await
+}
+
+/// Same, exposing only `toolsets`.
+async fn connect_with(toolsets: Toolsets) -> Client {
     harness::ensure_indexed().await;
     let (server_io, client_io) = tokio::io::duplex(1 << 20);
     tokio::spawn(async move {
         let running = MyceliumsMcp::new()
-            .into_router_for_test()
+            .into_router_with_toolsets_for_test(&toolsets)
             .serve(server_io)
             .await
             .expect("server starts");
@@ -58,16 +66,9 @@ async fn ok_json(client: &Client, tool: &str, args: Value) -> Value {
     result.structured_content.expect("structured content")
 }
 
-/// The text of a result: the `text` field of structured text output, or the
-/// first content block (what an `isError` result carries).
+/// The text of a result: its first content block (the whole answer of a
+/// text tool, the JSON of a structured one, the message of an `isError`).
 fn text_of(result: &CallToolResult) -> String {
-    if let Some(Value::String(text)) = result
-        .structured_content
-        .as_ref()
-        .and_then(|v| v.get("text"))
-    {
-        return text.clone();
-    }
     result
         .content
         .first()
@@ -195,6 +196,50 @@ async fn recoverable_failures_are_is_error_results_with_a_next_step() {
             "not found",
         ),
         (
+            "explain_symbol",
+            json!({"repo_id": harness::REPO_ID, "symbol_name": "definitelyNotASymbol"}),
+            "not found",
+        ),
+        (
+            "find_callers",
+            json!({"repo_id": harness::REPO_ID, "symbol_name": "definitelyNotASymbol"}),
+            "not found",
+        ),
+        (
+            "trace_flow",
+            json!({"repo_id": harness::REPO_ID, "from_symbol": "main", "to_symbol": "nope"}),
+            "not found",
+        ),
+        (
+            "impact_of_change",
+            json!({"repo_id": harness::REPO_ID, "file_path": "no/such/file.ts"}),
+            "not in the index",
+        ),
+        (
+            // No repo_id, and the test's working directory (the crate) is
+            // not inside the indexed fixture: no answer about another repo.
+            "find_callers",
+            json!({"symbol_name": harness::fixture::FIND_BY_ID}),
+            "No index covers",
+        ),
+        (
+            "find_dead_code",
+            json!({"repo_id": harness::REPO_ID, "path": "src/servicez"}),
+            "matches no indexed file or directory",
+        ),
+        (
+            // The fixture is indexed without embeddings: no model is loaded.
+            "search_code",
+            json!({"repo_id": harness::REPO_ID, "query": "user", "mode": "semantic"}),
+            "has no embeddings",
+        ),
+        (
+            // The harness index records no analysis snapshot.
+            "detect_architecture_drift",
+            json!({"repo_id": harness::REPO_ID}),
+            "nothing to compare",
+        ),
+        (
             "cypher_query",
             json!({"repo_id": "no-such-repo", "query": "MATCH (s:CodeSymbol) RETURN s.name"}),
             "unknown repo_id",
@@ -277,6 +322,20 @@ async fn bad_input_is_invalid_params() {
         (
             "get_rationale",
             json!({"repo_id": harness::REPO_ID, "symbol_name": "getUser", "file_path": "a.ts"}),
+        ),
+        (
+            "impact_of_change",
+            json!({"repo_id": harness::REPO_ID, "symbol_name": "getUser", "diff": "x"}),
+        ),
+        // Unknown search mode.
+        (
+            "search_code",
+            json!({"repo_id": harness::REPO_ID, "query": "user", "mode": "fuzzy"}),
+        ),
+        // A chain needs two different ends.
+        (
+            "trace_flow",
+            json!({"repo_id": harness::REPO_ID, "from_symbol": "main", "to_symbol": "main"}),
         ),
     ];
     for (tool, args) in cases {
@@ -364,8 +423,16 @@ diff --git a/src/services/user.ts b/src/services/user.ts
 ";
     assert_pages_partition(
         &client,
-        "detect_impact",
+        "impact_of_change",
         json!({"repo_id": harness::REPO_ID, "diff": diff}),
+        bullet_items,
+    )
+    .await;
+    // Symbol mode pages over dependents and files the same way.
+    assert_pages_partition(
+        &client,
+        "impact_of_change",
+        json!({"repo_id": harness::REPO_ID, "symbol_name": harness::fixture::FIND_BY_ID}),
         bullet_items,
     )
     .await;
@@ -398,6 +465,11 @@ async fn graph_results_state_index_freshness() {
     assert!(
         text.lines().next().unwrap().len() < 160,
         "one short line: {text}"
+    );
+    // It names the repository it describes.
+    assert!(
+        text.starts_with(&format!("Index: {}, ", harness::REPO_ID)),
+        "{text}"
     );
 
     let stats = ok_json(&client, "get_stats", json!({"repo_id": harness::REPO_ID})).await;
@@ -435,7 +507,7 @@ async fn indexed_source_is_framed_as_untrusted() {
     let client = connect().await;
     let text = ok_text(
         &client,
-        "symbol_context",
+        "explain_symbol",
         json!({"repo_id": harness::REPO_ID, "symbol_name": harness::fixture::GET_USER}),
     )
     .await;
@@ -535,9 +607,414 @@ async fn delete_without_confirm_is_refused() {
         assert_eq!(result.is_error, Some(true), "{text}");
         assert!(text.contains("confirm=true"), "{text}");
     }
-    let repos = ok_text(&client, "list_repos", json!({})).await;
+    let repos = ok_json(&client, "list_repos", json!({})).await;
     assert!(
-        repos.contains(&format!("id: {}", harness::REPO_ID)),
+        repos["repos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["id"] == harness::REPO_ID),
         "the index must survive: {repos}"
     );
+}
+
+// ── Output channels (#97) ────────────────────────────────────────────────
+
+#[tokio::test]
+async fn text_tools_send_plain_text_and_structured_tools_typed_json() {
+    let client = connect().await;
+    let tools: Vec<Tool> = client.list_all_tools().await.expect("tools/list");
+    let schema_of = |name: &str| {
+        tools
+            .iter()
+            .find(|t| t.name == name)
+            .unwrap_or_else(|| panic!("{name} listed"))
+            .output_schema
+            .clone()
+    };
+
+    // A text tool: the answer is the text content itself — no JSON
+    // envelope, no structuredContent, no output schema.
+    let result = call(
+        &client,
+        "explain_symbol",
+        json!({"repo_id": harness::REPO_ID, "symbol_name": harness::fixture::GET_USER}),
+    )
+    .await
+    .unwrap();
+    assert!(result.structured_content.is_none());
+    assert_eq!(result.content.len(), 1);
+    let text = text_of(&result);
+    assert!(text.starts_with("Index: "), "{text}");
+    assert!(serde_json::from_str::<Value>(&text).is_err(), "{text}");
+    assert!(schema_of("explain_symbol").is_none());
+    for tool in &tools {
+        let schema = tool.output_schema.as_ref();
+        let wraps_text = schema
+            .and_then(|s| s.get("properties"))
+            .and_then(|p| p.as_object())
+            .is_some_and(|p| p.len() == 1 && p.contains_key("text"));
+        assert!(!wraps_text, "{} still wraps its text in JSON", tool.name);
+    }
+
+    // A structured tool: typed structuredContent, the same JSON as text
+    // content (MCP spec), and an output schema that describes it.
+    let result = call(
+        &client,
+        "find_callers",
+        json!({"repo_id": harness::REPO_ID, "symbol_name": harness::fixture::FIND_BY_ID}),
+    )
+    .await
+    .unwrap();
+    let structured = result.structured_content.clone().expect("structured");
+    let as_text: Value = serde_json::from_str(&text_of(&result)).expect("JSON text");
+    assert_eq!(as_text, structured);
+    let schema = schema_of("find_callers").expect("output schema");
+    let properties = schema["properties"].as_object().unwrap();
+    for key in structured.as_object().unwrap().keys() {
+        assert!(properties.contains_key(key), "{key} not in the schema");
+    }
+    assert!(schema_of("list_repos").is_some());
+}
+
+// ── Toolsets ─────────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn the_default_profile_is_the_core_toolset_loaded_up_front() {
+    let client = connect_with(Toolsets::default()).await;
+    let tools: Vec<Tool> = client.list_all_tools().await.expect("tools/list");
+    let mut names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "analyze",
+            "explain_symbol",
+            "find_callees",
+            "find_callers",
+            "find_dead_code",
+            "impact_of_change",
+            "list_repos",
+            "search_code",
+            "trace_flow",
+        ]
+    );
+    for tool in &tools {
+        let meta = tool.meta.as_ref().expect("core tools carry _meta");
+        assert_eq!(meta.0["anthropic/alwaysLoad"], json!(true), "{}", tool.name);
+    }
+    // The server instructions name only tools this profile has.
+    let info = client.peer_info().expect("server info");
+    let instructions = info.instructions.as_deref().unwrap();
+    for word in instructions.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')) {
+        if word.contains('_') && word.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+            assert!(
+                names.contains(&word),
+                "instructions name {word}, which the core profile lacks"
+            );
+        }
+    }
+    // Tools outside the profile do not exist for this client.
+    let code = protocol_code(
+        call(
+            &client,
+            "get_callers",
+            json!({"repo_id": harness::REPO_ID, "symbol_name": "getUser"}),
+        )
+        .await,
+    );
+    assert_eq!(code, ErrorCode::INVALID_PARAMS);
+}
+
+// ── Core tools ───────────────────────────────────────────────────────────
+
+#[tokio::test]
+async fn core_tools_answer_the_common_structural_questions() {
+    let client = connect_with(Toolsets::default()).await;
+    let repo = harness::REPO_ID;
+
+    // Who calls findById? Direct callers by default, deeper on request.
+    let direct = ok_json(
+        &client,
+        "find_callers",
+        json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID}),
+    )
+    .await;
+    let names = |v: &Value, key: &str| -> Vec<String> {
+        v[key]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["name"].as_str().unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(names(&direct, "callers"), ["getUser"], "{direct}");
+    let deep = ok_json(
+        &client,
+        "find_callers",
+        json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID, "depth": 2}),
+    )
+    .await;
+    let main = deep["callers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "main")
+        .unwrap_or_else(|| panic!("main calls getUser: {deep}"));
+    assert_eq!(main["depth"], 2);
+    assert_eq!(main["via"], "getUser", "{main}");
+
+    // What does main call?
+    let callees = ok_json(
+        &client,
+        "find_callees",
+        json!({"repo_id": repo, "symbol_name": "main"}),
+    )
+    .await;
+    let callee_names = names(&callees, "callees");
+    assert!(
+        callee_names.contains(&"getUser".to_string())
+            && callee_names.contains(&"formatName".to_string()),
+        "{callees}"
+    );
+
+    // How does main reach findById?
+    let flow = ok_text(
+        &client,
+        "trace_flow",
+        json!({"repo_id": repo, "from_symbol": "main", "to_symbol": harness::fixture::FIND_BY_ID}),
+    )
+    .await;
+    assert!(flow.starts_with("Index: "), "{flow}");
+    assert!(flow.contains(": 2 calls."), "{flow}");
+    assert!(
+        flow.contains("-> UserService.getUser (Method) src/services/user.ts:"),
+        "{flow}"
+    );
+    let unreachable = ok_text(
+        &client,
+        "trace_flow",
+        json!({"repo_id": repo, "from_symbol": harness::fixture::FIND_BY_ID, "to_symbol": "main"}),
+    )
+    .await;
+    assert!(unreachable.contains("No call chain"), "{unreachable}");
+
+    // What breaks if findById changes?
+    let impact = ok_text(
+        &client,
+        "impact_of_change",
+        json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID}),
+    )
+    .await;
+    let items = bullet_items(&impact);
+    assert!(
+        items
+            .iter()
+            .any(|i| i.starts_with("Direct dependents") && i.contains("UserService.getUser")),
+        "{impact}"
+    );
+    assert!(
+        items
+            .iter()
+            .any(|i| i.starts_with("Files with dependents") && i.contains("src/index.ts")),
+        "{impact}"
+    );
+    let by_file = ok_text(
+        &client,
+        "impact_of_change",
+        json!({"repo_id": repo, "file_path": "src/db.ts"}),
+    )
+    .await;
+    assert!(
+        by_file.contains("Impact of changing src/db.ts"),
+        "{by_file}"
+    );
+    assert!(by_file.contains("UserService.getUser"), "{by_file}");
+
+    // Search: this index has no embeddings, so auto falls back to keyword.
+    let found = ok_text(
+        &client,
+        "search_code",
+        json!({"repo_id": repo, "query": "formatName"}),
+    )
+    .await;
+    assert!(found.contains("Keyword search"), "{found}");
+    assert!(found.contains("formatName"), "{found}");
+    let keyword = ok_text(
+        &client,
+        "search_code",
+        json!({"repo_id": repo, "query": "formatName", "mode": "keyword"}),
+    )
+    .await;
+    assert!(
+        !keyword.contains("Keyword search (") && keyword.contains("formatName"),
+        "{keyword}"
+    );
+
+    // Unused code under a directory.
+    let dead = ok_json(
+        &client,
+        "find_dead_code",
+        json!({"repo_id": repo, "path": "src/services"}),
+    )
+    .await;
+    let dead_files: Vec<&str> = dead["symbols"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["file_path"].as_str().unwrap())
+        .collect();
+    assert!(!dead_files.is_empty(), "{dead}");
+    assert!(
+        dead_files.iter().all(|f| f.starts_with("src/services/")),
+        "{dead}"
+    );
+    // An absolute path inside the repository means the same directory.
+    let absolute = harness::fixture_repo_path().join("src/services");
+    let same = ok_json(
+        &client,
+        "find_dead_code",
+        json!({"repo_id": repo, "path": absolute.to_string_lossy()}),
+    )
+    .await;
+    assert_eq!(same["symbols"], dead["symbols"]);
+}
+
+/// What an alias and its replacement must agree on: an error's text, or the
+/// structured content without the freshness line, or the text without the
+/// freshness line and the random ids of untrusted frames.
+fn comparable(result: &CallToolResult) -> Value {
+    if result.is_error == Some(true) {
+        return json!({"error": text_of(result)});
+    }
+    if let Some(mut structured) = result.structured_content.clone() {
+        structured["index_status"] = Value::Null;
+        return structured;
+    }
+    let text = text_of(result);
+    let body = text.split_once("\n\n").map_or(text.as_str(), |(_, b)| b);
+    Value::String(
+        body.lines()
+            .filter(|l| !l.starts_with("<<<UNTRUSTED ") && !l.starts_with(">>>END "))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    )
+}
+
+#[tokio::test]
+async fn deprecated_aliases_answer_like_their_replacements() {
+    let client = connect().await;
+    let repo = harness::REPO_ID;
+    let diff = "\
+diff --git a/src/services/user.ts b/src/services/user.ts
+--- a/src/services/user.ts
++++ b/src/services/user.ts
+@@ -16,3 +16,4 @@ export class UserService {
+     getUser(id: string): User | null {
++        // touched
+         return this.db.findById('users', id);
+     }
+";
+    let user = harness::fixture::GET_USER;
+    let find = harness::fixture::FIND_BY_ID;
+    // (alias, its arguments, replacement, the equivalent arguments)
+    let pairs = [
+        (
+            "context_search",
+            json!({"repo_id": repo, "query": "user"}),
+            "search_code",
+            json!({"repo_id": repo, "query": "user", "mode": "keyword"}),
+        ),
+        (
+            "search_documents",
+            json!({"repo_id": repo, "query": "user"}),
+            "search_code",
+            json!({"repo_id": repo, "query": "user", "mode": "keyword"}),
+        ),
+        // The fixture has no embeddings: both fail the same way.
+        (
+            "semantic_search",
+            json!({"repo_id": repo, "query": "user"}),
+            "search_code",
+            json!({"repo_id": repo, "query": "user", "mode": "semantic"}),
+        ),
+        (
+            "hybrid_search",
+            json!({"repo_id": repo, "query": "user"}),
+            "search_code",
+            json!({"repo_id": repo, "query": "user", "mode": "hybrid"}),
+        ),
+        (
+            "symbol_context",
+            json!({"repo_id": repo, "symbol_name": user}),
+            "explain_symbol",
+            json!({"repo_id": repo, "symbol_name": user}),
+        ),
+        (
+            "get_callers",
+            json!({"repo_id": repo, "symbol_name": find}),
+            "find_callers",
+            json!({"repo_id": repo, "symbol_name": find, "depth": 3}),
+        ),
+        (
+            "get_callees",
+            json!({"repo_id": repo, "symbol_name": "main"}),
+            "find_callees",
+            json!({"repo_id": repo, "symbol_name": "main", "depth": 3}),
+        ),
+        (
+            "detect_impact",
+            json!({"repo_id": repo, "diff": diff}),
+            "impact_of_change",
+            json!({"repo_id": repo, "diff": diff}),
+        ),
+        (
+            "get_graph_diff",
+            json!({"repo_id": repo}),
+            "detect_architecture_drift",
+            json!({"repo_id": repo}),
+        ),
+        (
+            "snapshot_diff",
+            json!({"repo_id": repo}),
+            "detect_architecture_drift",
+            json!({"repo_id": repo}),
+        ),
+    ];
+    for (old, old_args, new, new_args) in pairs {
+        let old_result = call(&client, old, old_args).await.unwrap();
+        let new_result = call(&client, new, new_args).await.unwrap();
+        assert_eq!(
+            comparable(&old_result),
+            comparable(&new_result),
+            "{old} vs {new}"
+        );
+    }
+
+    // get_symbol_definition keeps its structured output until removal; its
+    // source is the one explain_symbol shows.
+    let definition = ok_json(
+        &client,
+        "get_symbol_definition",
+        json!({"repo_id": repo, "symbol_name": user}),
+    )
+    .await;
+    let explained = ok_text(
+        &client,
+        "explain_symbol",
+        json!({"repo_id": repo, "symbol_name": user}),
+    )
+    .await;
+    let source = definition["content"].as_str().unwrap();
+    let body: Vec<&str> = source
+        .lines()
+        .filter(|l| !l.starts_with("<<<UNTRUSTED ") && !l.starts_with(">>>END "))
+        .collect();
+    assert!(!body.is_empty());
+    assert!(explained.contains(&body.join("\n")), "{explained}");
+    assert!(explained.contains(&format!(
+        "{}:{}",
+        definition["file_path"].as_str().unwrap(),
+        definition["start_line"]
+    )));
 }

@@ -17,7 +17,7 @@ impl MyceliumsMcp {
     async fn search_emails(
         &self,
         Parameters(params): Parameters<SearchEmailsParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -109,7 +109,7 @@ impl MyceliumsMcp {
     async fn get_conversation(
         &self,
         Parameters(params): Parameters<GetConversationParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -192,7 +192,7 @@ impl MyceliumsMcp {
     async fn get_person_context(
         &self,
         Parameters(params): Parameters<GetPersonContextParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;

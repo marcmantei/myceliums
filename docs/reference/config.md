@@ -272,6 +272,12 @@ Preferences saved by the setup wizard. These are typically set automatically, no
 | `analysis_mode` | string | `"session-start"` | Analysis mode preference: `"session-start"`, `"watch"`, or `"manual"` |
 | `configured_editors` | list of strings | `[]` | List of editor names that were configured during setup |
 
+### `[mcp]`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `toolsets` | list of strings | `["core"]` | Tool groups `myc mcp` exposes when `--toolsets` is not given: `core` (always on), `graph`, `review`, `architecture`, `knowledge`, `email`, `cross_repo`, `admin`, `deprecated`, or `all`. See [Toolsets](mcp-tools.md#toolsets) |
+
 ### Configurable Keys via CLI
 
 The `myc configure --set` command supports these dot-separated keys:
@@ -290,6 +296,7 @@ The `myc configure --set` command supports these dot-separated keys:
 | `llm.mentions_max_content_chars` | integer | Max content length for mentions |
 | `llm.mentions_max_symbols` | integer | Max symbols for mentions |
 | `llm.mentions_min_confidence` | float | 0.0 to 1.0 |
+| `mcp.toolsets` | comma-separated list | Toolsets for `myc mcp` (names are checked; empty resets to `core`) |
 
 ```bash
 # Examples
@@ -300,6 +307,7 @@ myc configure --set llm.model=gpt-4o-mini
 myc configure --set llm.api_key=sk-...
 myc configure --set llm.enable_mentions=true
 myc configure --set analysis.default_exclude="node_modules,dist,build,.git"
+myc configure --set mcp.toolsets=core,architecture
 ```
 
 ### Example: Full Global Configuration
@@ -327,6 +335,9 @@ completed = true
 instructions_enabled = true
 analysis_mode = "session-start"
 configured_editors = ["claude", "vscode", "zed"]
+
+[mcp]
+toolsets = ["core", "architecture"]
 ```
 
 ### Precedence

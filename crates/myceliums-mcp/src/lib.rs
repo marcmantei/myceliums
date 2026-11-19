@@ -11,12 +11,15 @@
 //!   errors); `output::Page` — the shared output budget (limit/offset and
 //!   truncation notices); `index_status` — the freshness line on every graph
 //!   result; `format::untrusted` — framing of indexed text.
-//! * `repo` — repository and symbol resolution.
+//! * `repo` — repository and symbol resolution; `navigation` — the
+//!   caller/callee/dependents/call-chain walks behind the core tools.
+//! * `toolsets` — which tools a server exposes (`core` by default).
 
 mod errors;
 mod format;
 pub mod http_security;
 mod index_status;
+mod navigation;
 mod output;
 mod params;
 mod repo;
@@ -25,11 +28,13 @@ mod server;
 #[cfg(feature = "test-support")]
 mod test_support;
 mod tools;
+mod toolsets;
 
 pub use http_security::McpHttpOptions;
 pub use output::*;
 pub use params::*;
 pub use server::{run_mcp_http_server, run_mcp_server};
+pub use toolsets::{Toolset, Toolsets};
 
 use myceliums_core::GraphService;
 use rmcp::handler::server::tool::ToolRouter;

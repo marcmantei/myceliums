@@ -192,10 +192,16 @@ async fn list_repos_lists_registered_repo() {
         .list_repos_for_test()
         .await
         .expect("list_repos should succeed");
+    let out: serde_json::Value = serde_json::from_str(&out).expect("list_repos is JSON");
     assert!(
-        out.contains(&format!("id: {}", harness::REPO_ID)),
+        out["repos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["id"] == harness::REPO_ID),
         "list_repos should show the registered id, got: {out}"
     );
+    assert_eq!(out["total_count"], 1, "{out}");
 }
 
 #[tokio::test]

@@ -340,32 +340,58 @@ pub enum CallDirection {
     Callees,
 }
 
-/// Breadth-first walk over `kinds` edges from `start_uids`, up to `max_depth`.
+/// A symbol reached by a walk, by reference: what [`GraphHit`] reports, plus
+/// the symbol one step closer to the start and the edge that reached it. The
+/// MCP server needs the edge to say how a CALLS edge was resolved (#96).
+#[derive(Debug, Clone, Copy)]
+pub struct Reached<'a> {
+    /// The symbol reached.
+    pub symbol: &'a CodeSymbol,
+    /// Number of edges from the nearest start symbol (1 = direct).
+    pub depth: u32,
+    /// For depth > 1: the symbol one step closer to the start.
+    pub via: Option<&'a CodeSymbol>,
+    /// The edge through which `symbol` was reached.
+    pub edge: &'a Relationship,
+}
+
+impl Reached<'_> {
+    /// The owned [`GraphHit`] for this hit.
+    pub fn to_hit(&self) -> GraphHit {
+        GraphHit {
+            symbol: SymbolRef::of(self.symbol),
+            depth: self.depth,
+            via: self.via.map(|v| v.name.clone()),
+        }
+    }
+}
+
+/// Breadth-first walk over `kinds` edges from `starts`, up to `max_depth`.
 ///
 /// `backwards` follows edges from target to source (callers, dependents).
 /// Each symbol is reported once, at its shortest distance. Start symbols are
 /// not reported. Hits are ordered by depth, then file and line.
-fn walk(
-    symbols: &[CodeSymbol],
-    relationships: &[Relationship],
-    start_uids: &[&str],
+fn walk<'a>(
+    symbols: &'a [CodeSymbol],
+    relationships: &'a [Relationship],
+    starts: &[&'a CodeSymbol],
     kinds: &[RelationshipKind],
     backwards: bool,
     max_depth: u32,
-) -> Vec<GraphHit> {
+) -> Vec<Reached<'a>> {
     let by_uid: HashMap<&str, &CodeSymbol> = symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-    let mut next: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut next: HashMap<&str, Vec<(&str, &Relationship)>> = HashMap::new();
     for rel in relationships.iter().filter(|r| kinds.contains(&r.kind)) {
         let (from, to) = if backwards {
             (rel.target_uid.as_str(), rel.source_uid.as_str())
         } else {
             (rel.source_uid.as_str(), rel.target_uid.as_str())
         };
-        next.entry(from).or_default().push(to);
+        next.entry(from).or_default().push((to, rel));
     }
 
-    let mut seen: HashSet<&str> = start_uids.iter().copied().collect();
-    let mut queue: VecDeque<(&str, u32)> = start_uids.iter().map(|u| (*u, 0)).collect();
+    let mut seen: HashSet<&str> = starts.iter().map(|s| s.uid.as_str()).collect();
+    let mut queue: VecDeque<(&str, u32)> = starts.iter().map(|s| (s.uid.as_str(), 0)).collect();
     let mut hits = Vec::new();
     while let Some((uid, depth)) = queue.pop_front() {
         if depth >= max_depth {
@@ -374,7 +400,7 @@ fn walk(
         let Some(neighbours) = next.get(uid) else {
             continue;
         };
-        for &n in neighbours {
+        for &(n, edge) in neighbours {
             if !seen.insert(n) {
                 continue;
             }
@@ -383,22 +409,25 @@ fn walk(
             let Some(sym) = by_uid.get(n) else {
                 continue;
             };
-            let via = (depth > 0)
-                .then(|| by_uid.get(uid).map(|s| s.name.clone()))
-                .flatten();
-            hits.push(GraphHit {
-                symbol: SymbolRef::of(sym),
+            let via = if depth > 0 {
+                by_uid.get(uid).copied()
+            } else {
+                None
+            };
+            hits.push(Reached {
+                symbol: sym,
                 depth: depth + 1,
                 via,
+                edge,
             });
             queue.push_back((n, depth + 1));
         }
     }
     hits.sort_by(|a, b| {
-        (a.depth, a.symbol.file.as_str(), a.symbol.line).cmp(&(
+        (a.depth, a.symbol.file_path.as_str(), a.symbol.start_line).cmp(&(
             b.depth,
-            b.symbol.file.as_str(),
-            b.symbol.line,
+            b.symbol.file_path.as_str(),
+            b.symbol.start_line,
         ))
     });
     hits
@@ -412,10 +441,24 @@ pub fn walk_calls(
     direction: CallDirection,
     max_depth: u32,
 ) -> Vec<GraphHit> {
+    walk_calls_reached(symbols, relationships, start, direction, max_depth)
+        .iter()
+        .map(Reached::to_hit)
+        .collect()
+}
+
+/// [`walk_calls`], by reference: each hit with its `via` symbol and edge.
+pub fn walk_calls_reached<'a>(
+    symbols: &'a [CodeSymbol],
+    relationships: &'a [Relationship],
+    start: &'a CodeSymbol,
+    direction: CallDirection,
+    max_depth: u32,
+) -> Vec<Reached<'a>> {
     walk(
         symbols,
         relationships,
-        &[start.uid.as_str()],
+        &[start],
         &[RelationshipKind::Calls],
         direction == CallDirection::Callers,
         max_depth,
@@ -443,15 +486,10 @@ pub fn blast_radius(
     roots: &[&CodeSymbol],
     max_depth: u32,
 ) -> BlastRadius {
-    let root_uids: Vec<&str> = roots.iter().map(|s| s.uid.as_str()).collect();
-    let dependents = walk(
-        symbols,
-        relationships,
-        &root_uids,
-        &[RelationshipKind::Calls, RelationshipKind::Imports],
-        true,
-        max_depth,
-    );
+    let dependents: Vec<GraphHit> = dependents_reached(symbols, relationships, roots, max_depth)
+        .iter()
+        .map(Reached::to_hit)
+        .collect();
     let files: BTreeSet<String> = roots
         .iter()
         .map(|s| s.file_path.clone())
@@ -464,6 +502,167 @@ pub fn blast_radius(
         dependents,
         files: files.into_iter().collect(),
     }
+}
+
+/// The dependents of [`blast_radius`], by reference: symbols that call or
+/// import any of `roots`, transitively, each with its `via` symbol and edge.
+pub fn dependents_reached<'a>(
+    symbols: &'a [CodeSymbol],
+    relationships: &'a [Relationship],
+    roots: &[&'a CodeSymbol],
+    max_depth: u32,
+) -> Vec<Reached<'a>> {
+    walk(
+        symbols,
+        relationships,
+        roots,
+        &[RelationshipKind::Calls, RelationshipKind::Imports],
+        true,
+        max_depth,
+    )
+}
+
+// ── Call chains ──────────────────────────────────────────────────────
+
+/// A symbol between the two ends of [`CallChains`].
+#[derive(Debug, Clone, Copy)]
+pub struct ChainStep<'a> {
+    /// The symbol.
+    pub symbol: &'a CodeSymbol,
+    /// Calls from the start to this symbol, on the shortest way.
+    pub from_start: u32,
+    /// Calls in the shortest chain that passes through this symbol.
+    pub chain_len: u32,
+}
+
+/// How `from` reaches `to` over `Calls` edges.
+#[derive(Debug, Clone)]
+pub struct CallChains<'a> {
+    /// One shortest chain, `from` first and `to` last; every symbol after the
+    /// first comes with the CALLS edge that reached it.
+    pub shortest: Vec<(&'a CodeSymbol, Option<&'a Relationship>)>,
+    /// Every symbol strictly between the ends on a chain of at most
+    /// `shortest + extra` calls, ordered by chain length, then distance from
+    /// the start, then file and line.
+    pub on_chains: Vec<ChainStep<'a>>,
+}
+
+impl CallChains<'_> {
+    /// Calls in the shortest chain.
+    pub fn len(&self) -> u32 {
+        self.shortest.len().saturating_sub(1) as u32
+    }
+
+    /// Whether the chain is empty (never, for a found chain).
+    pub fn is_empty(&self) -> bool {
+        self.shortest.is_empty()
+    }
+}
+
+/// Per symbol uid: calls from the start, and the (previous uid, edge) that
+/// reached it on a shortest way (`None` for the start).
+type Distances<'a> = HashMap<&'a str, (u32, Option<(&'a str, &'a Relationship)>)>;
+
+/// Call chains from `from` to `to`, following `Calls` edges forwards, or
+/// `None` when `to` is not reachable within `max_depth` calls. `extra`
+/// widens [`CallChains::on_chains`] to chains up to that many calls longer
+/// than the shortest (still at most `max_depth`).
+pub fn call_chains<'a>(
+    symbols: &'a [CodeSymbol],
+    relationships: &'a [Relationship],
+    from: &'a CodeSymbol,
+    to: &'a CodeSymbol,
+    max_depth: u32,
+    extra: u32,
+) -> Option<CallChains<'a>> {
+    let by_uid: HashMap<&str, &CodeSymbol> = symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
+    let mut forward: HashMap<&str, Vec<(&str, &Relationship)>> = HashMap::new();
+    let mut backward: HashMap<&str, Vec<&str>> = HashMap::new();
+    for rel in relationships
+        .iter()
+        .filter(|r| r.kind == RelationshipKind::Calls)
+    {
+        let (s, t) = (rel.source_uid.as_str(), rel.target_uid.as_str());
+        if by_uid.contains_key(s) && by_uid.contains_key(t) {
+            forward.entry(s).or_default().push((t, rel));
+            backward.entry(t).or_default().push(s);
+        }
+    }
+
+    let mut from_start: Distances = HashMap::new();
+    from_start.insert(from.uid.as_str(), (0, None));
+    let mut queue = VecDeque::from([(from.uid.as_str(), 0u32)]);
+    while let Some((uid, d)) = queue.pop_front() {
+        if d >= max_depth {
+            continue;
+        }
+        for &(n, rel) in forward.get(uid).map(Vec::as_slice).unwrap_or(&[]) {
+            if let std::collections::hash_map::Entry::Vacant(e) = from_start.entry(n) {
+                e.insert((d + 1, Some((uid, rel))));
+                queue.push_back((n, d + 1));
+            }
+        }
+    }
+    let shortest_len = from_start.get(to.uid.as_str())?.0;
+
+    let mut to_end: HashMap<&str, u32> = HashMap::from([(to.uid.as_str(), 0)]);
+    let mut queue = VecDeque::from([(to.uid.as_str(), 0u32)]);
+    while let Some((uid, d)) = queue.pop_front() {
+        if d >= max_depth {
+            continue;
+        }
+        for &n in backward.get(uid).map(Vec::as_slice).unwrap_or(&[]) {
+            if let std::collections::hash_map::Entry::Vacant(e) = to_end.entry(n) {
+                e.insert(d + 1);
+                queue.push_back((n, d + 1));
+            }
+        }
+    }
+
+    let mut shortest = Vec::new();
+    let mut cursor = to.uid.as_str();
+    while let Some((_, step)) = from_start.get(cursor) {
+        shortest.push((by_uid[cursor], step.map(|(_, rel)| rel)));
+        match step {
+            Some((prev, _)) => cursor = prev,
+            None => break,
+        }
+    }
+    shortest.reverse();
+
+    let limit = shortest_len.saturating_add(extra).min(max_depth);
+    let mut on_chains: Vec<ChainStep> = from_start
+        .iter()
+        .filter(|(uid, _)| **uid != from.uid && **uid != to.uid)
+        .filter_map(|(uid, (d, _))| {
+            let chain_len = d + to_end.get(uid)?;
+            (chain_len <= limit).then(|| ChainStep {
+                symbol: by_uid[uid],
+                from_start: *d,
+                chain_len,
+            })
+        })
+        .collect();
+    on_chains.sort_by(|a, b| {
+        (
+            a.chain_len,
+            a.from_start,
+            a.symbol.file_path.as_str(),
+            a.symbol.start_line,
+            a.symbol.qualified_name.as_str(),
+        )
+            .cmp(&(
+                b.chain_len,
+                b.from_start,
+                b.symbol.file_path.as_str(),
+                b.symbol.start_line,
+                b.symbol.qualified_name.as_str(),
+            ))
+    });
+    Some(CallChains {
+        shortest,
+        on_chains,
+    })
 }
 
 /// Code definitions in the indexed file `path`.
@@ -1001,6 +1200,91 @@ mod tests {
             rel("handler", "tok", RelationshipKind::Imports),
         ];
         (symbols, rels)
+    }
+
+    #[test]
+    fn reached_hits_carry_via_and_edge_and_match_graph_hits() {
+        let (s, r) = fixture();
+        let tok = s.iter().find(|x| x.uid == "tok").unwrap();
+        let reached = walk_calls_reached(&s, &r, tok, CallDirection::Callers, 3);
+        let names: Vec<(&str, u32)> = reached
+            .iter()
+            .map(|h| (h.symbol.name.as_str(), h.depth))
+            .collect();
+        assert_eq!(
+            names,
+            [("parse_query", 1), ("handler", 2), ("run", 2), ("main", 3)]
+        );
+        let run = reached.iter().find(|h| h.symbol.uid == "run").unwrap();
+        assert_eq!(run.via.unwrap().uid, "pq");
+        assert_eq!(run.edge.uid, "run->pq");
+        let hits: Vec<GraphHit> = reached.iter().map(Reached::to_hit).collect();
+        assert_eq!(hits, walk_calls(&s, &r, tok, CallDirection::Callers, 3));
+
+        let deps = dependents_reached(&s, &r, &[tok], 1);
+        let handler = deps.iter().find(|h| h.symbol.uid == "handler").unwrap();
+        assert_eq!(handler.edge.kind, RelationshipKind::Imports);
+    }
+
+    #[test]
+    fn call_chains_name_the_shortest_chain_and_everything_on_one() {
+        use SymbolKind::Function;
+        // main -> a -> c -> target, main -> b -> target, b -> d (dead end),
+        // main -> e -> f -> g -> target.
+        let symbols: Vec<CodeSymbol> = ["main", "a", "b", "c", "d", "e", "f", "g", "target"]
+            .iter()
+            .enumerate()
+            .map(|(i, n)| sym(n, n, n, Function, "src/x.rs", i as u32 + 1))
+            .collect();
+        let rels: Vec<Relationship> = [
+            ("main", "a"),
+            ("a", "c"),
+            ("c", "target"),
+            ("main", "b"),
+            ("b", "target"),
+            ("b", "d"),
+            ("main", "e"),
+            ("e", "f"),
+            ("f", "g"),
+            ("g", "target"),
+        ]
+        .iter()
+        .map(|(f, t)| calls(f, t))
+        .collect();
+        let (main, target) = (&symbols[0], &symbols[8]);
+        let on = |c: &CallChains| -> Vec<(String, u32)> {
+            c.on_chains
+                .iter()
+                .map(|s| (s.symbol.name.clone(), s.chain_len))
+                .collect()
+        };
+
+        let chains = call_chains(&symbols, &rels, main, target, 10, 0).unwrap();
+        assert_eq!(chains.len(), 2);
+        let shortest: Vec<&str> = chains
+            .shortest
+            .iter()
+            .map(|(s, _)| s.name.as_str())
+            .collect();
+        assert_eq!(shortest, ["main", "b", "target"]);
+        assert!(chains.shortest[0].1.is_none());
+        assert_eq!(chains.shortest[2].1.unwrap().uid, "b->target");
+        assert_eq!(on(&chains), [("b".to_string(), 2)], "d is a dead end");
+
+        let wider = call_chains(&symbols, &rels, main, target, 10, 2).unwrap();
+        let expected: Vec<(String, u32)> =
+            [("b", 2), ("a", 3), ("c", 3), ("e", 4), ("f", 4), ("g", 4)]
+                .iter()
+                .map(|(n, l)| (n.to_string(), *l))
+                .collect();
+        assert_eq!(on(&wider), expected);
+        let capped = call_chains(&symbols, &rels, main, target, 3, 5).unwrap();
+        assert!(capped.on_chains.iter().all(|c| c.chain_len <= 3));
+        assert!(call_chains(&symbols, &rels, main, target, 1, 0).is_none());
+        assert!(
+            call_chains(&symbols, &rels, target, main, 10, 0).is_none(),
+            "chains follow calls forwards"
+        );
     }
 
     #[test]

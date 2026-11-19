@@ -317,6 +317,9 @@ pub struct SymbolContextOutput {
     /// All callees, including those not listed.
     pub callees_total: usize,
     pub metadata: Option<String>,
+    /// Set when `content` was cut to the source budget: how to get the rest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_notice: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -347,9 +350,31 @@ pub struct HybridSearchResultItem {
     pub explain: Option<serde_json::Value>,
 }
 
+/// `list_repos`: the analyzed repositories.
 #[derive(Serialize, schemars::JsonSchema)]
-pub struct TextOutput {
-    pub text: String,
+pub struct ReposOutput {
+    /// One page of repositories, most recently analyzed first.
+    pub repos: Vec<RepoItem>,
+    pub total_count: usize,
+    /// Set when the list was cut (how to fetch the next page) or is empty.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
+}
+
+#[derive(Serialize, schemars::JsonSchema)]
+pub struct RepoItem {
+    /// Pass this as `repo_id` to the other tools.
+    pub id: String,
+    pub name: String,
+    /// Absolute path of the project.
+    pub path: String,
+    /// When the index was built (RFC 3339).
+    pub analyzed_at: String,
+    /// Git commit the index was built from, if the project is a git checkout.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub analyzed_commit: Option<String>,
+    pub symbols: u32,
+    pub files: u32,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -470,7 +495,12 @@ pub struct CallerItem {
     pub file_path: String,
     pub start_line: u32,
     pub end_line: u32,
+    /// Calls between this symbol and the one asked about (1 = direct).
     pub depth: u32,
+    /// For depth > 1: the name of the symbol one step closer to the one
+    /// asked about.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via: Option<String>,
     /// How the CALLS edge reaching this symbol was resolved:
     /// exact | import | name-match | ambiguous.
     pub resolved: String,
@@ -497,7 +527,12 @@ pub struct CalleeItem {
     pub file_path: String,
     pub start_line: u32,
     pub end_line: u32,
+    /// Calls between this symbol and the one asked about (1 = direct).
     pub depth: u32,
+    /// For depth > 1: the name of the symbol one step closer to the one
+    /// asked about.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub via: Option<String>,
     /// How the CALLS edge reaching this symbol was resolved:
     /// exact | import | name-match | ambiguous.
     pub resolved: String,

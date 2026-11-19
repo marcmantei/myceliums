@@ -318,7 +318,7 @@ myc rename processPayment handlePayment --apply
 
 ### `myc diff`
 
-Compare current graph against a stored snapshot to show drift. Shows added/removed symbols and relationships since the last snapshot.
+Compare the current graph with the previous analysis to show drift: added and removed symbols and relationships. Every `myc analyze` records a snapshot (the newest 10 are kept); the baseline is the analysis before the one that built the current index, chosen the same way as by the MCP `detect_architecture_drift` tool. With only one analysis recorded it says so.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
@@ -390,6 +390,7 @@ Each editor also has a dedicated setup command. These are equivalent to `myc set
 | `--no-routing` | | Skip (and remove) the CLAUDE.md routing block |
 | `--no-redirect-hook` | | Skip (and remove) the PreToolUse grep-redirect hook |
 | `--no-agent` | | Skip (and remove) the `code-explorer` subagent |
+| `--no-always-load` | | User scope: write `"alwaysLoad": false`, so every myceliums tool stays behind Claude Code's tool search. Without it the user entry gets `"alwaysLoad": true` when `mcp.toolsets` is the default (core only), and no `alwaysLoad` when it adds groups (the core tools still load up front through their `_meta`). Project scope never writes the key into the shared `.mcp.json`; see [Claude Code](../editors/claude-code.md#mcp-server) for a personal local-scope override |
 | `--uninstall` | | Remove everything myceliums installed at that scope |
 
 `myc setup-codex` also writes the routing block into the project's `AGENTS.md` when run inside a git repository (`--no-routing` skips it).
@@ -560,10 +561,14 @@ Start the MCP (Model Context Protocol) server. By default uses stdio transport. 
 |------|------|---------|-------------|
 | `--http` | string, optional | stdio | Run as Streamable HTTP server on this address (e.g. `127.0.0.1:9999`). Non-loopback addresses are refused without `--allow-remote`. |
 | `--allow-remote` | flag | off | Allow a non-loopback `--http` address (e.g. `0.0.0.0:9999`). Every request must then send `Authorization: Bearer <token>`. |
+| `--toolsets` | comma-separated list | `mcp.toolsets` config, else `core` | Tool groups to expose: `core` (always on), `graph`, `review`, `architecture`, `knowledge`, `email`, `cross_repo`, `admin`, `deprecated`, or `all`. An unknown name is an error. See [Toolsets](mcp-tools.md#toolsets). |
 
 ```bash
-# Stdio transport (used by editor integrations)
+# Stdio transport (used by editor integrations), core toolset
 myc mcp
+
+# Core plus the architecture and review tools
+myc mcp --toolsets core,architecture,review
 
 # HTTP transport, loopback only
 myc mcp --http 127.0.0.1:9999

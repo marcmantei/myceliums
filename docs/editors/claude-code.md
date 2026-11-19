@@ -21,7 +21,7 @@ myc setup-claude --scope user     # user scope: every project, only for you
 
 | Piece | Project scope | User scope | Opt out |
 |---|---|---|---|
-| MCP server `myceliums` | `.mcp.json` | `claude mcp add -s user` (fallback: `~/.claude.json`) | – |
+| MCP server `myceliums`, core tools loaded up front | `.mcp.json` (no `alwaysLoad`; the tools' `_meta`) | `claude mcp add-json -s user` (fallback: `~/.claude.json`), with `alwaysLoad` | `--no-always-load` (user scope) keeps the tools deferred |
 | SessionStart hook | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PostToolUse hook | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PreToolUse grep-redirect hook | `.claude/settings.json` | `~/.claude/settings.json` | `--no-redirect-hook` |
@@ -34,6 +34,10 @@ A settings or MCP file that is not valid JSON is reported and left untouched.
 
 ### MCP server
 
+Registers myceliums as an MCP server so Claude Code can call tools like `search_code`, `find_callers`, and `impact_of_change`. By default `myc mcp` serves the nine core tools, and each carries `"_meta": {"anthropic/alwaysLoad": true}` in `tools/list`: Claude Code loads them into context at session start instead of deferring them behind tool search, while opt-in groups stay deferred; see [Toolsets](../reference/mcp-tools.md#toolsets).
+
+**Project scope** (`.mcp.json`, shared with the team) writes no `alwaysLoad`:
+
 ```json
 {
   "mcpServers": {
@@ -41,6 +45,30 @@ A settings or MCP file that is not valid JSON is reported and left untouched.
   }
 }
 ```
+
+A server-level `"alwaysLoad": true` loads every tool the server lists, and
+what a teammate's `myc mcp` lists depends on their `mcp.toolsets` (or on an
+older `myc` with 55 tools), so the shared file leaves loading to the tools'
+own `_meta`. The difference: the server-level key also makes Claude Code wait
+for the server (at most 5 s) before the first prompt. To get that for
+yourself only, add a local-scope entry in the project directory:
+
+```bash
+claude mcp add-json -s local myceliums '{"type":"stdio","command":"myc","args":["mcp"],"alwaysLoad":true}'
+```
+
+Claude Code uses the whole entry of the highest-precedence scope — local,
+then project, then user — and does not merge fields across scopes, so the
+local entry replaces the project one for you (keep its `command` and `args`
+in step with `.mcp.json`). `"alwaysLoad": false` in a local entry keeps every
+myceliums tool deferred (Claude Code 2.1.287 or later).
+
+**User scope** (`--scope user`, the wizard) is personal, so `setup-claude`
+writes the key there: `"alwaysLoad": true` when `mcp.toolsets` is the default
+(core only), no key when you have added groups (they stay deferred; the core
+tools still load through their `_meta`), and `false` with `--no-always-load`.
+Re-run it after changing `mcp.toolsets`. The entry is registered with
+`claude mcp add-json`, which, unlike `claude mcp add`, carries `alwaysLoad`.
 
 At project scope the command is `myc` when `myc` is on `PATH` (so the file
 works on every machine), otherwise the absolute path of the running binary.

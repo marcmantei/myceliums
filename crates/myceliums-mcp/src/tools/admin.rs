@@ -17,7 +17,7 @@ impl MyceliumsMcp {
     pub(crate) async fn analyze(
         &self,
         Parameters(params): Parameters<AnalyzeParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let path = PathBuf::from(&params.path);
         let abs_path = std::fs::canonicalize(&path).map_err(|e| {
             ToolError::invalid(format!(
@@ -162,7 +162,7 @@ impl MyceliumsMcp {
             analyzed_at: started_at,
             symbol_count: result.symbol_count as u32,
             file_count: result.file_count as u32,
-            analyzed_commit,
+            analyzed_commit: analyzed_commit.clone(),
             vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
         });
         registry
@@ -171,9 +171,14 @@ impl MyceliumsMcp {
         // Reads from here on see the new index, not a graph cached mid-run.
         self.service.invalidate(&repo_id);
 
-        // Save lightweight snapshot for future diff comparisons
+        // Record this analysis for detect_architecture_drift. Best effort: a
+        // failed write costs the drift history, not the index.
         let snapshot = build_snapshot(&repo_id, &symbols, &relationships);
-        let _ = save_snapshot(&data_dir(), &snapshot); // best-effort
+        if let Err(e) =
+            myceliums_core::record_snapshot(&data_dir(), &snapshot, analyzed_commit.as_deref())
+        {
+            tracing::warn!("cannot record the graph snapshot: {e}");
+        }
 
         let embedding_stats = result.embedding_stats();
         let output = AnalyzeOutput {
@@ -193,7 +198,7 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "list_repos",
-        description = "List the analyzed repositories (id, name, path, last analysis, size). Use it to find the repo_id the other tools expect.",
+        description = "List the analyzed repositories (id, name, path, when and from which commit they were indexed, size). Tools default to the repository of the working directory; pass another one's id as repo_id.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -204,10 +209,35 @@ impl MyceliumsMcp {
     pub(crate) async fn list_repos(
         &self,
         Parameters(params): Parameters<ListReposParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> Result<Json<ReposOutput>, ToolError> {
         let registry = registry()?;
-        let page = Page::new(params.limit, params.offset, Budget::LIST).take(registry.list());
-        text(page.with_notice(format::format_repo_list(&page.items)))
+        let mut repos = registry.list();
+        // Most recently analyzed first (RFC 3339 in one offset sorts as text).
+        repos.sort_by(|a, b| b.analyzed_at.cmp(&a.analyzed_at).then(a.id.cmp(&b.id)));
+        let total_count = repos.len();
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(repos);
+        let notice = if total_count == 0 {
+            Some("No repositories analyzed yet: run analyze with the project path.".to_string())
+        } else {
+            page.notice
+        };
+        Ok(Json(ReposOutput {
+            repos: page
+                .items
+                .into_iter()
+                .map(|r| RepoItem {
+                    id: r.id.clone(),
+                    name: r.name.clone(),
+                    path: r.path.clone(),
+                    analyzed_at: r.analyzed_at.clone(),
+                    analyzed_commit: r.analyzed_commit.clone(),
+                    symbols: r.symbol_count,
+                    files: r.file_count,
+                })
+                .collect(),
+            total_count,
+            notice,
+        }))
     }
 
     #[tool(
@@ -220,10 +250,7 @@ impl MyceliumsMcp {
             open_world_hint = false
         )
     )]
-    pub(crate) async fn delete(
-        &self,
-        Parameters(params): Parameters<DeleteParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    pub(crate) async fn delete(&self, Parameters(params): Parameters<DeleteParams>) -> TextResult {
         let mut registry = registry()?;
 
         let db_path = registry

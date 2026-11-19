@@ -128,13 +128,14 @@ myc analyze . --skip-embeddings
 
 ## MCP Integration
 
-When using myceliums through MCP (e.g., in Claude Code or Cursor), the same search modes are available as tools:
+When using myceliums through MCP (e.g., in Claude Code or Cursor), the same search modes are available through one tool, `search_code`, and its `mode` parameter:
 
-- `context_search` performs hybrid search by default
-- `semantic_search` performs semantic search
-- `hybrid_search` performs hybrid search with optional reranking
+- `mode=auto` (the default) runs hybrid search when the index has embeddings, and keyword search otherwise (the result says so)
+- `mode=keyword` ranks by names, qualified names and signatures and needs no model
+- `mode=semantic` performs semantic search
+- `mode=hybrid` performs hybrid search, with optional reranking (`rerank=true`)
 
-The AI agent selects the appropriate tool based on the query. If embeddings are not available, it falls back to BM25 automatically.
+The older `context_search`, `semantic_search`, `hybrid_search` and `search_documents` tools remain as deprecated aliases with `--toolsets all` for one release.
 
 ## How Symbols Are Embedded (and Truncated)
 

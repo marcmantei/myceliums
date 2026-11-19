@@ -21,8 +21,32 @@ pub struct GlobalConfig {
     pub llm: LlmConfig,
     #[serde(default)]
     pub setup: SetupConfig,
+    #[serde(default)]
+    pub mcp: McpConfig,
     #[serde(skip)]
     path: PathBuf,
+}
+
+/// MCP server preferences.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpConfig {
+    /// Tool groups `myc mcp` exposes when `--toolsets` is not given:
+    /// `core` (always on), `graph`, `review`, `architecture`, `knowledge`,
+    /// `email`, `cross_repo`, `admin`, `deprecated`, or `all`.
+    #[serde(default = "default_mcp_toolsets")]
+    pub toolsets: Vec<String>,
+}
+
+fn default_mcp_toolsets() -> Vec<String> {
+    vec!["core".to_string()]
+}
+
+impl Default for McpConfig {
+    fn default() -> Self {
+        Self {
+            toolsets: default_mcp_toolsets(),
+        }
+    }
 }
 
 /// Setup wizard preferences, saved after interactive or automated setup.
@@ -180,6 +204,7 @@ impl Default for GlobalConfig {
             analysis: AnalysisConfig::default(),
             llm: LlmConfig::default(),
             setup: SetupConfig::default(),
+            mcp: McpConfig::default(),
             path: PathBuf::new(),
         }
     }
@@ -224,7 +249,8 @@ impl GlobalConfig {
     /// Set a configuration value using dot-separated key notation.
     /// Supported keys:
     ///   defaults.max_results, defaults.log_level,
-    ///   analysis.max_file_size_kb, analysis.default_exclude
+    ///   analysis.max_file_size_kb, analysis.default_exclude,
+    ///   llm.*, mcp.toolsets (comma-separated; names are checked by the caller)
     pub fn set(&mut self, key: &str, value: &str) -> Result<()> {
         match key {
             "defaults.max_results" => {
@@ -303,12 +329,25 @@ impl GlobalConfig {
                 }
                 self.llm.mentions_min_confidence = conf;
             }
+            "mcp.toolsets" => {
+                let names: Vec<String> = value
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                self.mcp.toolsets = if names.is_empty() {
+                    default_mcp_toolsets()
+                } else {
+                    names
+                };
+            }
             _ => {
                 anyhow::bail!(
                     "Unknown config key '{}'. Valid keys: defaults.max_results, \
                      defaults.log_level, analysis.max_file_size_kb, analysis.default_exclude, \
                      llm.provider, llm.model, llm.base_url, llm.api_key, llm.enable_mentions, \
-                     llm.mentions_max_content_chars, llm.mentions_max_symbols, llm.mentions_min_confidence",
+                     llm.mentions_max_content_chars, llm.mentions_max_symbols, llm.mentions_min_confidence, \
+                     mcp.toolsets",
                     key
                 );
             }
@@ -324,5 +363,30 @@ impl GlobalConfig {
 
     pub fn display(&self) -> String {
         toml::to_string_pretty(self).unwrap_or_else(|_| format!("{:?}", self))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mcp_toolsets_default_to_core_and_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = GlobalConfig::load(dir.path()).unwrap();
+        assert_eq!(config.mcp.toolsets, vec!["core"]);
+
+        config.set("mcp.toolsets", " core, architecture ,").unwrap();
+        config.save().unwrap();
+        let loaded = GlobalConfig::load(dir.path()).unwrap();
+        assert_eq!(loaded.mcp.toolsets, vec!["core", "architecture"]);
+
+        // A config written before the key existed still loads.
+        std::fs::write(GlobalConfig::config_path(dir.path()), "[defaults]\n").unwrap();
+        let old = GlobalConfig::load(dir.path()).unwrap();
+        assert_eq!(old.mcp.toolsets, vec!["core"]);
+
+        config.set("mcp.toolsets", "").unwrap();
+        assert_eq!(config.mcp.toolsets, vec!["core"]);
     }
 }

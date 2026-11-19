@@ -2,6 +2,61 @@
 
 Complete reference for all tools available via the Myceliums MCP server (`myc mcp`). These tools are exposed to AI coding assistants through the Model Context Protocol.
 
+## Toolsets
+
+By default the server exposes only the **core** toolset: nine tools named after
+the questions agents ask about code. Everything else is opt-in, by group:
+
+```bash
+myc mcp                                    # core only (default)
+myc mcp --toolsets core,architecture       # core plus the architecture tools
+myc mcp --toolsets all                     # every tool, deprecated aliases included
+myc configure --set mcp.toolsets=graph,review   # default for `myc mcp` without --toolsets
+```
+
+`core` is always on; `--toolsets` adds groups to it and overrides the
+`mcp.toolsets` config key. An unknown name is an error that lists the valid
+ones.
+
+| Toolset | Tools |
+|---|---|
+| `core` | `search_code`, `explain_symbol`, `find_callers`, `find_callees`, `impact_of_change`, `trace_flow`, `find_dead_code`, `list_repos`, `analyze` |
+| `graph` | `get_file_symbols`, `find_path`, `cypher_query`, `get_processes`, `get_communities`, `get_community_detail`, `get_stats`, `get_schema` |
+| `review` | `get_review_context`, `get_suggested_questions`, `rename_symbol` |
+| `architecture` | `get_god_nodes`, `get_centrality_report`, `get_community_metrics`, `detect_circular_dependencies`, `get_dependencies`, `get_module_coupling`, `get_surprising_connections`, `quality_hotspots`, `architecture_lint`, `architecture_view`, `export_mermaid`, `detect_architecture_drift`, `get_ownership`, `get_git_context`, `get_contracts`, `map_service`, `get_service_map` |
+| `knowledge` | `query_knowledge`, `get_rationale`, `get_knowledge_gaps`, `record_decision`, `get_decisions`, `link_decision` |
+| `email` | `search_emails`, `get_conversation`, `get_person_context` |
+| `cross_repo` | `isolate_intent`, `differentiate_intent`, `plan_adaptation` |
+| `admin` | `delete` |
+| `deprecated` | the old names listed under [Deprecated aliases](#deprecated-aliases) |
+
+**Loaded up front in Claude Code.** Claude Code defers MCP tools behind tool
+search by default, and the agent-level pilot (#99) saw agents call a
+myceliums tool in 0 of 90 sessions. The core tools therefore carry
+`"_meta": {"anthropic/alwaysLoad": true}` in `tools/list`, which makes Claude
+Code load them into context at session start
+([docs](https://code.claude.com/docs/en/mcp)); the other groups stay deferred.
+At user scope, `myc setup-claude` also sets `"alwaysLoad": true` on the
+server entry when `mcp.toolsets` is the default, so Claude Code waits for the
+server and the core tools are present in the first prompt
+(`--no-always-load` writes `false`, which defers the core tools as well;
+Claude Code 2.1.287 or later). A project's shared `.mcp.json` never carries
+the key: the installer's `mcp.toolsets` says nothing about a teammate's, so
+there the per-tool `_meta` does the work (see
+[Claude Code integration](../editors/claude-code.md#mcp-server) for a
+personal local-scope override). Do not set `"alwaysLoad": true` on the server
+entry together with `--toolsets all`: that loads all 61 tools up front.
+
+The core tools resolve names and walk the graph through
+`myceliums_core::navigation`, like `myc callers`, `myc callees` and
+`myc impact`, so the CLI and the MCP tools give the same answer for the same
+name. Beyond core's resolution (qualified name, short name, qualified suffix
+such as `Item.AsString`; functions and types before same-named variables),
+the MCP tools accept `file_path:qualified_name` handles, list those handles
+for an ambiguous name, and suggest similar names for an unknown one. Several
+definitions with the same handle (overloads in one file) are ambiguous too,
+as in the CLI; they are told apart as `file_path:qualified_name:line`.
+
 ## Tool contract
 
 These rules hold for every tool; the per-tool sections below list only what is specific.
@@ -16,11 +71,20 @@ Cypher query, a value outside an enum, a missing or empty required argument,
 mutually exclusive options — are JSON-RPC `invalid_params` errors. Only genuine
 server faults (I/O, storage) are `internal_error`.
 
+**Output.** A tool whose answer is a report or prose returns it as plain text
+content — no JSON envelope, no `structuredContent`, no output schema. A tool
+whose answer is a record or a list (`find_callers`, `find_callees`,
+`find_dead_code`, `list_repos`, `get_stats`, `get_file_symbols`,
+`get_communities`, `get_community_detail`, and the deprecated `get_callers`,
+`get_callees`, `get_symbol_definition`) returns typed `structuredContent`
+with an `outputSchema` describing it, plus the same JSON as text content, as
+the MCP specification recommends.
+
 **Symbols.** Every symbol parameter accepts a short name, a qualified name, or
 `file_path:qualified_name`. When a name matches several symbols — two files
 that each define a top-level `parse` share both names — the call fails with
-the candidates in the `file_path:qualified_name` form, and `rename_symbol`
-never guesses either.
+the candidates in the `file_path:qualified_name` form (with `:line` for
+overloads in one file), and `rename_symbol` never guesses either.
 
 **Output budget.** Every list-returning tool takes `limit` and `offset`. Each
 tool has a default page size and a hard maximum (both stated in its input
@@ -30,9 +94,9 @@ overlap or skip. When a list is cut, the result says so —
 `Showing 1-20 of 312 — call again with offset=20 for more.` (structured
 results carry the same text in a `notice` field) — so a cut is never silent.
 Top-N rankings that cannot know their total say `more exist` instead.
-`hybrid_search` pages within its top 100 results (with `rerank`, within the
-top 50, which are reranked whatever the page). `detect_impact` pages one list
-of changed symbols, affected symbols and files. `cypher_query` pages its rows
+`search_code` in hybrid mode pages within its top 100 results (with `rerank`,
+within the top 50, which are reranked whatever the page). `impact_of_change`
+pages one list of changed symbols (or dependents), affected symbols and files. `cypher_query` pages its rows
 the same way (default 50, max 500), and `GROUP BY` results keep a fixed
 order; in
 multi-column rows a value longer than 60 characters is cut with a visible `…`
@@ -41,14 +105,15 @@ and a footer explains it.
 **Freshness.** Every result read from a repository's graph starts with one
 `Index:` line comparing the analyzed commit with the current `HEAD` and
 counting files changed since indexing (modified or new untracked files newer
-than the analysis start, and deleted files the index still holds), e.g. `Index: commit 1a2b3c4 = HEAD, up
-to date.` or `Index: commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run analyze
-to refresh.` Structured results carry it as `index_status`. Whenever the line
+than the analysis start, and deleted files the index still holds). It names
+the repository it describes, e.g. `Index: my-app, commit 1a2b3c4 = HEAD, up
+to date.` or `Index: my-app, commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run
+analyze to refresh.` Structured results carry it as `index_status`. Whenever the line
 calls an index stale or changed, `analyze` without `force` re-indexes instead
 of reusing the cached index, so the advice always works. Git runs read-only
 (`--no-optional-locks`, so it never takes the index lock beside your own git
 commands) with a short timeout and is cached for a few seconds (the
-`git diff HEAD` that `detect_impact`, `get_review_context` and
+`git diff HEAD` that `impact_of_change`, `get_review_context` and
 `get_suggested_questions` run when no `diff` is passed is read-only too, with
 a 30 s timeout); when
 `git status` fails or times out the line says `uncommitted edits unknown`
@@ -58,9 +123,9 @@ rather than `up to date`, and without git it says the freshness is unknown.
 how its target was picked: `exact` (a qualified name only one symbol has),
 `import` (through the module graph), `name-match` (a bare name only one symbol
 has) or `ambiguous` (several symbols share the name; one was picked).
-`get_callers`/`get_callees` return it as `resolved`; `symbol_context`,
-`find_path` and `get_review_context` mark the heuristic ones as
-`(resolved: name-match)` / `(resolved: ambiguous)`. Indexes built before this
+`find_callers`/`find_callees` return it as `resolved`; `explain_symbol`,
+`trace_flow`, `impact_of_change`, `find_path` and `get_review_context` mark the
+heuristic ones as `(resolved: name-match)` / `(resolved: ambiguous)`. Indexes built before this
 label existed get it derived at query time (`ambiguous` if the name is shared,
 else `name-match`); re-run `analyze` to record the exact labels.
 
@@ -85,37 +150,195 @@ local index and project). All tools are read-only except `analyze`, `delete`
 `link_decision`; they write only to the Myceliums data directory, never to the
 project. `delete` additionally requires `confirm: true`.
 
+## Core tools
+
+Toolset `core`, on by default. Where `repo_id` is optional it defaults to the
+indexed repository containing the server's working directory (see
+[Repository ids](#repository-ids)); outside every indexed directory the call
+is an `isError` result, never an answer about another repository.
+
+### `search_code`
+
+Find where something is implemented: functions, methods, classes and types by
+name (`parseConfig`, `Item.AsString`) or by what the code does ("builds the
+Set-Cookie header"). Text result: one framed table of matches with kind, file
+and line range.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `query` | string | yes | | A name or a description of what the code does |
+| `repo_id` | string | no | working directory | Repository ID |
+| `mode` | enum | no | `auto` | `auto`: hybrid when the index has embeddings, else keyword (the result says so). `keyword`: names, qualified names and signatures, no model. `semantic`: vector similarity only. `hybrid`: keyword and vector rankings fused |
+| `limit` / `offset` | integer | no | `20` / `0` | Page (max 100) |
+| `rerank` | bool | no | `false` | Rerank the top 50 hybrid results with a cross-encoder |
+| `explain` | bool | no | `false` | Show the scoring breakdown of each result |
+
+`auto` decides from the embedding metadata recorded at index time and never
+loads a model for an index built with `skip_embeddings`. An explicit
+`semantic` or `hybrid` on such an index is an `isError` result that suggests
+`mode=keyword`. Scores: see [Search modes and scores](#search-modes-and-scores).
+
+### `explain_symbol`
+
+A function, method or class with what you need before changing it: source
+(framed as untrusted), signature, file and line range, decorators/return
+type/superclasses when known, and its direct callers and callees (the first
+25 of each; the rest via `find_callers`/`find_callees`). Text result.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `symbol_name` | string | yes | | Name, qualified name, or `file_path:qualified_name` |
+| `repo_id` | string | no | working directory | Repository ID |
+| `max_source_lines` | integer | no | `120` | Most source lines shown (max 5000); a longer body is cut, followed by a line naming `max_source_lines=<total>` and the file lines to read for the rest |
+
+### `find_callers`
+
+Who calls this function or method? Structured result (`CallersOutput`): the
+callers with name, qualified name, kind, file, line range, `depth`, `via` (for
+depth > 1, the name of the symbol one step closer) and `resolved` (the CALLS
+edge resolution), ordered by depth, then file and line, plus `total_count`,
+`depth_limited`, `index_status` and a paging `notice`. The symbols, depths,
+`via` names and order are those `myc callers --json` prints (pinned by an
+end-to-end test).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `symbol_name` | string | yes | | Name, qualified name, or `file_path:qualified_name` |
+| `repo_id` | string | no | working directory | Repository ID |
+| `depth` | integer | no | `1` | Hops to follow; 1 = direct callers only (max 10) |
+| `limit` / `offset` | integer | no | `20` / `0` | Page (max 200) |
+
+### `find_callees`
+
+What does this function or method call? Same parameters and shape as
+`find_callers` (`CalleesOutput`, list `callees`), following CALLS edges
+forwards.
+
+### `impact_of_change`
+
+What could break if I change this? Give at most one of `symbol_name`,
+`file_path` and `diff` (more is `invalid_params`). Text result.
+
+* **Symbol or file:** every symbol that calls or imports it (for a file: any
+  symbol the file defines), transitively up to `depth`, in sections *Direct
+  dependents* (these must change too if a signature changes), *Indirect
+  dependents* (with depth and `via`) and *Files with dependents* (nearest
+  depth). IMPORTS edges are marked `[imports]`, name-matched CALLS edges
+  `(resolved: …)`.
+* **Diff (default):** the impact report of the uncommitted diff (`git diff
+  HEAD` in the repository) or of the `diff` passed: changed symbols, symbols
+  affected through calls and imports in both directions, files, and a risk
+  score.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `symbol_name` | string | no | | The symbol you plan to change |
+| `file_path` | string | no | | The file you plan to change (repository-relative) |
+| `diff` | string | no | `git diff HEAD` | A unified diff |
+| `repo_id` | string | no | working directory | Repository ID |
+| `depth` | integer | no | `2` | Hops to follow (max 10) |
+| `limit` / `offset` | integer | no | `50` / `0` | Page over report lines (max 500) |
+
+### `trace_flow`
+
+How does control get from one function to another? Follows CALLS edges from
+`from_symbol` towards `to_symbol`. Text result: the shortest call chain (each
+step with kind, file and line; name-matched edges marked), then every symbol
+strictly between the two ends that lies on a chain of the shortest length —
+or up to `extra_calls` longer — with the chain length and its distance from
+the start. When `to_symbol` is not reachable within `max_depth` calls the
+result says so and suggests what to try (swap the ends, a larger
+`max_depth`, `find_callers`). The same symbol at both ends is
+`invalid_params`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `from_symbol` | string | yes | | Where the flow starts |
+| `to_symbol` | string | yes | | Where the flow ends |
+| `repo_id` | string | no | working directory | Repository ID |
+| `max_depth` | integer | no | `12` | Longest chain searched, in calls (max 30) |
+| `extra_calls` | integer | no | `0` | Also list symbols on chains up to this many calls longer than the shortest (max 5) |
+| `limit` / `offset` | integer | no | `20` / `0` | Page over the listed symbols (max 200) |
+
+### `find_dead_code`
+
+Which functions and methods are never called? Lists the functions and methods
+with no incoming CALLS edge. A candidate list, not proof: entry points,
+callbacks, trait/interface implementations and calls the resolver missed look
+unused too. Structured result (`DeadCodeOutput`).
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `repo_id` | string | no | working directory | Repository ID |
+| `path` | string | no | | Only this file, or files under this directory: repository-relative or absolute inside the repository, `./` and a trailing `/` allowed; a unique file suffix (`util.go`) names that file. A path that matches no indexed file or directory is an `isError` result, never an empty list |
+| `exclude_patterns` | string | no | | Comma-separated substrings; names containing one are skipped |
+| `limit` / `offset` | integer | no | `20` / `0` | Page (max 200) |
+
+### `analyze`
+
+Analyze a codebase and build its knowledge graph. Parses source files in 20+ languages plus Markdown, PDF and email, extracts symbols, resolves call relationships, detects communities, and traces execution flows. Uses cached analysis if fresh enough (set `force=true` to bypass cache). Writes only to the Myceliums data directory. A path that does not exist is `invalid_params`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `path` | string | yes | | Path to the project directory |
+| `force` | bool | no | `false` | Force full re-analysis |
+| `max_age_minutes` | integer | no | `60` | Maximum cache age in minutes |
+| `skip_embeddings` | bool | no | `false` | Skip embedding generation for faster analysis |
+
+The response includes embedding accounting — `symbols_embedded` of `symbols_total`
+symbols, plus an explicit failure line when any symbol could not be embedded. A
+non-zero failure count means the index is partial and semantic/hybrid search will
+omit the un-embedded symbols (see [Partial indexes](#partial-indexes)). The MCP
+tool has no strictness knob; use the `myc analyze --strict-embeddings` CLI flag to
+fail CI on a partial index.
+
+### `list_repos`
+
+List the analyzed repositories, most recently analyzed first. Structured
+result (`ReposOutput`): `repos` with `id`, `name`, `path`, `analyzed_at`,
+`analyzed_commit` (when the project is a git checkout), `symbols` and
+`files`; `total_count`; and a `notice` when the list was cut or is empty.
+Read-only; takes only `limit`/`offset`.
+
+### Repository ids
+
+Every `repo_id` parameter is checked before anything touches the disk. The id
+must be registered (shown by `list_repos`) and must name a single directory:
+it may not be `.` or `..` and may not contain a path separator or NUL (`/` on
+macOS/Linux; `/`, `\` and `:` on Windows). A malformed id is an
+`invalid_params` error; an unknown one is an `isError` result that lists the
+known ids. Neither returns an empty result. Where `repo_id` is optional, the
+indexed repository containing the server's working directory is used — the
+deepest one, matched on whole path components (`/x/app-two` is not inside
+`/x/app`). Outside every indexed directory the call is an `isError` result
+(`No index covers <dir>` / `Next: run analyze with path=<dir>, or pass
+repo_id`); there is no fallback to another repository. `analyze` derives ids from the folder name and replaces any such
+character with `_`, so derived ids always pass.
+
+---
+
 ## Search
 
-Tools for finding code entities, symbols, and content across the knowledge graph.
+How `search_code` ranks, and the opt-in email and knowledge search tools.
 
-### `context_search`
+### Search modes and scores
 
-Search for functions, classes, and symbols in the knowledge graph. Preferred over grep for finding code entities. Returns structured results with file locations, types, and relevance scores.
+`search_code` ranks with one of four modes:
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `query` | string | yes | | Search query string |
-| `repo_id` | string | no | most recent | Repository ID |
-| `limit` | integer | no | `20` | Maximum results to return |
-| `explain` | bool | no | `false` | Show scoring breakdown and graph paths for each result |
+* `keyword` — names, qualified names and signatures; needs no embedding
+  model, works on every index.
+* `semantic` — vector similarity only (below).
+* `hybrid` — keyword and vector rankings fused (below).
+* `auto` (default) — `hybrid` when the index has embeddings, else `keyword`
+  with a first line saying so.
 
-### `semantic_search`
-
-Search for symbols using semantic similarity (vector embeddings). Returns symbols most similar in meaning to the query. Requires embeddings to have been generated during analysis.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `query` | string | yes | | Search query (natural language) |
-| `repo_id` | string | no | most recent | Repository ID |
-| `limit` | integer | no | `10` | Maximum results to return |
-| `explain` | bool | no | `false` | Show scoring breakdown |
+#### `semantic`
 
 **Score semantics.** Results are ranked by **cosine similarity** in the range
 `[-1, 1]` (higher = more similar). Embeddings are L2-normalized at both write and
 query time, so this is the identical geometry used by the vector leg of
-`hybrid_search` — the same query over the same index yields the same top-k
-ordering in both tools.
+hybrid mode — the same query over the same index yields the same top-k
+ordering in both modes.
 
 **Exact search.** Since #117 every vector search is exact: a brute-force
 scan over all embedded symbols, at every repository size, with no approximate
@@ -129,22 +352,12 @@ returned only about 4 of the true 10 nearest neighbours; searches now bypass
 such an index, and the next `myc analyze` deletes it.
 [Measurements](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs).
 
-> **Partial-index warning.** `semantic_search` can only return symbols that were
+> **Partial-index warning.** Semantic mode can only return symbols that were
 > embedded. If some symbols failed to embed during analysis, the response is
 > prefixed with a warning (`⚠ index partially embedded: N of M symbols …`) so
 > callers know results may be incomplete. See [Partial indexes](#partial-indexes).
 
-### `hybrid_search`
-
-Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality. Combines text matching and semantic similarity.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `query` | string | yes | | Search query string |
-| `repo_id` | string | no | most recent | Repository ID |
-| `limit` | integer | no | `20` | Maximum results to return |
-| `rerank` | bool | no | `false` | Apply cross-encoder reranking to results |
-| `explain` | bool | no | `false` | Show scoring breakdown and graph paths |
+#### `hybrid`
 
 **Score semantics.** Each result reports up to three scores on **distinct,
 non-interchangeable scales**:
@@ -152,7 +365,7 @@ non-interchangeable scales**:
 - `combined_score` (a.k.a. *fusion* score) — the Reciprocal Rank Fusion score,
   a rank-based quantity on the order of `1/k`. Present for every result.
 - `vector_score` — **cosine similarity** in `[-1, 1]`, the same geometry
-  `semantic_search` exposes. The vector leg of hybrid search ranks by this.
+  semantic mode exposes. The vector leg of hybrid search ranks by this.
 - `bm25_score` — the raw BM25 lexical relevance score (unbounded, higher = more
   relevant).
 
@@ -164,13 +377,13 @@ Results are ordered by `rerank_score` when it is present. Unlike the other
 scores it has no fixed range — it is the raw cross-encoder relevance logit, so
 compare values only within a single result set, never across queries.
 
-> **Partial-index warning.** Like `semantic_search`, the vector half of
-> `hybrid_search` only sees embedded symbols. A partial index prepends a warning
+> **Partial-index warning.** Like semantic mode, the vector half of
+> hybrid mode only sees embedded symbols. A partial index prepends a warning
 > to the response. See [Partial indexes](#partial-indexes).
 
 #### Partial indexes
 
-Both `semantic_search` and `hybrid_search` read embedding accounting recorded at
+Semantic and hybrid mode read embedding accounting recorded at
 index time (no per-query vector scan). When `symbols_embedded < symbols_total` —
 because embedding generation or storage failed for some symbols — the search
 response is prefixed with:
@@ -182,17 +395,6 @@ response is prefixed with:
 The `analyze` tool response surfaces the same accounting (embedded/total symbols
 and an explicit failure line). To make partial indexes a hard failure in CI, run
 `myc analyze --strict-embeddings` (see [commands reference](commands.md#embedding-accounting)).
-
-### `search_documents`
-
-Search through all analyzed code content using BM25 text search. Functionally equivalent to `context_search`.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `query` | string | yes | | Search query string |
-| `repo_id` | string | no | most recent | Repository ID |
-| `limit` | integer | no | `20` | Maximum results to return |
-| `explain` | bool | no | `false` | Show scoring breakdown |
 
 ### `search_emails`
 
@@ -222,44 +424,6 @@ Query cross-domain knowledge: find emails and documents that mention code symbol
 ## Symbol Navigation
 
 Tools for exploring individual symbols, their relationships, and source code.
-
-### `symbol_context`
-
-Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it. Reveals dependencies that file reading alone cannot.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `symbol_name` | string | yes | | Name or qualified name of the symbol |
-| `repo_id` | string | yes | | Repository ID |
-
-### `get_symbol_definition`
-
-Get the complete definition and source code of a symbol. Use to understand what a function or class does before using or modifying it.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `symbol_name` | string | yes | | Symbol name or qualified name |
-| `repo_id` | string | yes | | Repository ID |
-
-### `get_callers`
-
-Find all functions that call a given symbol, with optional depth limit. Uses BFS traversal for transitive callers. Use to understand impact of changes or find usage patterns.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `symbol_name` | string | yes | | Symbol name or qualified name |
-| `repo_id` | string | yes | | Repository ID |
-| `max_depth` | integer | no | `3` | Maximum transitive depth |
-
-### `get_callees`
-
-Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `symbol_name` | string | yes | | Symbol name or qualified name |
-| `repo_id` | string | yes | | Repository ID |
-| `max_depth` | integer | no | `3` | Maximum transitive depth |
 
 ### `get_file_symbols`
 
@@ -373,16 +537,6 @@ Detect surprising cross-community CALLS edges: connections between symbols in di
 | `min_surprise_score` | float | no | `0.1` | Minimum surprise score to include |
 | `limit` | integer | no | `50` | Maximum connections to return |
 
-### `find_dead_code`
-
-Find symbols with no incoming function calls (potential dead code). Exclude common entry points with `exclude_patterns`. Use before cleanup/refactoring.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `repo_id` | string | yes | | Repository ID |
-| `exclude_patterns` | string | no | | Comma-separated patterns for known entry points to exclude |
-| `limit` | integer | no | all | Limit number of results |
-
 ### `get_knowledge_gaps`
 
 Detect structural weaknesses in the codebase: untested code (functions with no test callers), isolated modules (communities with few external connections), documentation gaps (files with many symbols but no rationale/doc nodes), and single points of failure (symbols that are the only bridge between communities). Use to prioritize testing, documentation, and refactoring efforts.
@@ -456,16 +610,6 @@ Identify refactoring hotspots by combining graph centrality, git churn, and modu
 
 Tools for reviewing code changes and understanding their impact.
 
-### `detect_impact`
-
-Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `repo_id` | string | no | most recent | Repository ID |
-| `diff` | string | no | runs `git diff HEAD` | Diff string |
-| `depth` | integer | no | `2` | Graph traversal depth |
-
 ### `get_review_context`
 
 Get a compact structural summary of code changes for efficient review. Analyzes a diff to identify changed symbols, their callers and callees, and affected communities. Returns signatures instead of full source to minimize token usage.
@@ -513,29 +657,27 @@ Generate a service-level architecture diagram from the knowledge graph. Communit
 
 ### `detect_architecture_drift`
 
-Detect architectural drift by comparing the current knowledge graph against the last saved snapshot. Returns a drift score (0 to 100, higher = less drift) and details on structural changes.
+What changed in the code structure since the previous analysis? Every
+`analyze` (MCP tool or CLI) records a snapshot of the graph; the newest 10 per
+repository are kept. This tool compares two recorded states — by default the
+analysis before the current one against the current graph, or any two
+snapshot ids — and returns a drift score (`100` = unchanged, falling with the
+share of symbols and edges added or removed) and the paged list of added and
+removed symbols and relationships. Snapshots key symbols by file, qualified
+name and kind, so re-analyzing unchanged code compares equal. With no earlier
+analysis recorded (an index built before this version has none) the result is
+an `isError` that says to run `analyze` again after the code changes. It
+replaces `get_graph_diff` and `snapshot_diff`, which could not work: the only
+snapshot was overwritten by the analysis that built the current index, it was
+keyed by symbol uids that every analysis generates anew, and nothing recorded
+the versioned snapshots `snapshot_diff` compared.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `repo_id` | string | no | most recent | Repository ID |
-
-### `get_graph_diff`
-
-Compare the current knowledge graph against the last stored snapshot to detect architectural drift. Shows new/removed symbols and relationships since the last analysis that saved a snapshot.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `repo_id` | string | no | most recent | Repository ID |
-
-### `snapshot_diff`
-
-Compare two graph snapshots to see architectural changes over time. Shows added/removed symbols and relationships. Defaults to comparing the two most recent snapshots.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `repo_id` | string | no | most recent | Repository ID |
-| `from_snapshot` | string | no | second-to-latest | Snapshot ID to compare FROM |
-| `to_snapshot` | string | no | latest | Snapshot ID to compare TO |
+| `repo_id` | string | no | working directory | Repository ID |
+| `from_snapshot` | string | no | previous analysis | Baseline snapshot ID |
+| `to_snapshot` | string | no | current graph | Snapshot ID to compare against the baseline (without `from_snapshot`: the next older snapshot is the baseline) |
+| `limit` / `offset` | integer | no | `50` / `0` | Page over changes (max 500) |
 
 ### `export_mermaid`
 
@@ -631,42 +773,6 @@ Link an Architecture Decision Record to a code symbol. Creates a traceability co
 
 ## Advanced
 
-### `analyze`
-
-Analyze a codebase and build its knowledge graph. Parses source files in 20+ languages plus Markdown, PDF and email, extracts symbols, resolves call relationships, detects communities, and traces execution flows. Uses cached analysis if fresh enough (set `force=true` to bypass cache). Writes only to the Myceliums data directory. A path that does not exist is `invalid_params`.
-
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `path` | string | yes | | Path to the project directory |
-| `force` | bool | no | `false` | Force full re-analysis |
-| `max_age_minutes` | integer | no | `60` | Maximum cache age in minutes |
-| `skip_embeddings` | bool | no | `false` | Skip embedding generation for faster analysis |
-
-The response includes embedding accounting — `symbols_embedded` of `symbols_total`
-symbols, plus an explicit failure line when any symbol could not be embedded. A
-non-zero failure count means the index is partial and semantic/hybrid search will
-omit the un-embedded symbols (see [Partial indexes](#partial-indexes)). The MCP
-tool has no strictness knob; use the `myc analyze --strict-embeddings` CLI flag to
-fail CI on a partial index.
-
-### `list_repos`
-
-List the analyzed repositories: id, name, path, time of the last analysis, and
-symbol/file counts. Read-only; takes only `limit`/`offset`. Use it to find the
-`repo_id` the other tools expect.
-
-### Repository ids
-
-Every `repo_id` parameter is checked before anything touches the disk. The id
-must be registered (shown by `list_repos`) and must name a single directory:
-it may not be `.` or `..` and may not contain a path separator or NUL (`/` on
-macOS/Linux; `/`, `\` and `:` on Windows). A malformed id is an
-`invalid_params` error; an unknown one is an `isError` result that lists the
-known ids. Neither returns an empty result. Where `repo_id` is optional, the
-repository containing the server's working directory is used, else the most
-recently analyzed one. `analyze` derives ids from the folder name and replaces any such
-character with `_`, so derived ids always pass.
-
 ### `delete`
 
 Permanently delete a repository's index (not the project files). Without
@@ -742,3 +848,29 @@ Get all emails involving a specific person (sent by or received by). Returns the
 | `person` | string | yes | | Person email address or name |
 | `repo_id` | string | no | most recent | Repository ID |
 | `limit` | integer | no | `50` | Maximum results to return |
+
+---
+
+## Deprecated aliases
+
+Toolset `deprecated`, part of `all`. **The default profile (`core`) does not
+expose these names**: a client that calls one gets "tool not found". To keep
+them for this release, add the group — `myc mcp --toolsets core,deprecated`,
+or once for every `myc mcp`: `myc configure --set mcp.toolsets=deprecated`
+(core is always on) — and move to the replacements below. Each description
+starts with `DEPRECATED: use <replacement>`. They are removed in the release
+after the one that introduced the core toolset.
+
+| Old name | Use instead | Notes |
+|---|---|---|
+| `context_search` | `search_code` with `mode=keyword` | Same ranking |
+| `search_documents` | `search_code` with `mode=keyword` | It was `context_search` under another name; it never was a BM25 document search |
+| `semantic_search` | `search_code` with `mode=semantic` | Default page size stays 10 |
+| `hybrid_search` | `search_code` with `mode=hybrid` (or `auto`) | |
+| `symbol_context` | `explain_symbol` | Same output; `repo_id` is now optional |
+| `get_symbol_definition` | `explain_symbol` | Old structured output kept until removal |
+| `get_callers` | `find_callers` | Same output; `max_depth` (default 3) became `depth` (default 1) |
+| `get_callees` | `find_callees` | As above |
+| `detect_impact` | `impact_of_change` | Diff mode of the new tool |
+| `get_graph_diff` | `detect_architecture_drift` | Now compares with the previous analysis |
+| `snapshot_diff` | `detect_architecture_drift` | Same `from_snapshot`/`to_snapshot` parameters |

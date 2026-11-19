@@ -82,7 +82,7 @@ myc communities
 
 ## Using with Your Editor
 
-After running `myc setup`, the MCP tools are available inside your editor's AI assistant. You do not need to do anything extra. The assistant can call tools like `context_search`, `symbol_context`, `detect_impact`, and `cypher_query` to answer questions about your codebase directly in the chat.
+After running `myc setup`, the MCP tools are available inside your editor's AI assistant. You do not need to do anything extra. The assistant can call tools like `search_code`, `find_callers`, `impact_of_change`, and `explain_symbol` to answer questions about your codebase directly in the chat. These core tools are on by default; more groups are opt-in with `myc mcp --toolsets` (see [Toolsets](reference/mcp-tools.md#toolsets)).
 
 ## Next Steps
 

@@ -1,13 +1,39 @@
-//! Graph navigation: symbols, callers/callees, paths, communities, processes, stats, schema.
+//! Graph navigation: symbol context, callers/callees, call chains, paths,
+//! communities, processes, stats, schema.
+//!
+//! The caller/callee walks go through [`navigation`], so the core tools and
+//! their deprecated aliases answer alike.
 
 use super::prelude::*;
 
-/// Callers/callees listed inline by `symbol_context` before pointing at
-/// `get_callers` / `get_callees` for the rest.
+/// Callers/callees listed inline by `explain_symbol` before pointing at
+/// `find_callers` / `find_callees` for the rest.
 const CONTEXT_EDGES: usize = 25;
+/// Source lines `explain_symbol` shows by default, and at most.
+const SOURCE_LINES: Budget = Budget::new(120, 5000);
 
 #[tool_router(router = graph_router, vis = "pub(crate)")]
 impl MyceliumsMcp {
+    #[tool(
+        name = "explain_symbol",
+        description = "Show a function, method or class with everything needed to understand it before changing it: its source, signature, file and line range, and who calls it and what it calls (with how each call edge was resolved).",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn explain_symbol(
+        &self,
+        Parameters(params): Parameters<ExplainSymbolParams>,
+    ) -> TextResult {
+        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let max_lines = Page::new(params.max_source_lines, None, SOURCE_LINES).limit;
+        self.symbol_context_text(&repo_id, &params.symbol_name, max_lines)
+            .await
+    }
+
     #[tool(
         name = "symbol_context",
         description = "Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it — reveals dependencies that file reading alone cannot.",
@@ -21,53 +47,97 @@ impl MyceliumsMcp {
     pub(crate) async fn symbol_context(
         &self,
         Parameters(params): Parameters<SymbolContextParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
-        let symbols = self.symbols(&params.repo_id).await?;
-        let relationships = self.relationships(&params.repo_id).await?;
-        let symbol = resolve_symbol(&symbols, &params.symbol_name)?;
-
-        let labels = crate::repo::CallLabels::new(&symbols);
-        let by_uid: HashMap<&str, &myceliums_storage::CodeSymbol> =
-            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-        let calls = || {
-            relationships
-                .iter()
-                .filter(|r| r.kind == myceliums_storage::RelationshipKind::Calls)
-        };
-        let callers: Vec<String> = calls()
-            .filter(|r| r.target_uid == symbol.uid)
-            .filter_map(|r| {
-                let caller = by_uid.get(r.source_uid.as_str())?;
-                let label = labels.label(r, &symbol.name);
-                Some(crate::repo::CallLabels::mark(label, &caller.name))
-            })
-            .collect();
-        let callees: Vec<String> = calls()
-            .filter(|r| r.source_uid == symbol.uid)
-            .filter_map(|r| {
-                let callee = by_uid.get(r.target_uid.as_str())?;
-                let label = labels.label(r, &callee.name);
-                Some(crate::repo::CallLabels::mark(label, &callee.name))
-            })
-            .collect();
-
-        let output = SymbolContextOutput {
-            name: symbol.name.clone(),
-            qualified_name: symbol.qualified_name.clone(),
-            kind: symbol.kind.to_string(),
-            file_path: symbol.file_path.clone(),
-            start_line: symbol.start_line,
-            end_line: symbol.end_line,
-            signature: symbol.signature.clone(),
-            content: symbol.content.clone(),
-            callers_total: callers.len(),
-            callers: callers.into_iter().take(CONTEXT_EDGES).collect(),
-            callees_total: callees.len(),
-            callees: callees.into_iter().take(CONTEXT_EDGES).collect(),
-            metadata: symbol.metadata.clone(),
-        };
-        self.graph_text(&params.repo_id, format::format_symbol_context(&output))
+    ) -> TextResult {
+        self.symbol_context_text(&params.repo_id, &params.symbol_name, SOURCE_LINES.default)
             .await
+    }
+
+    #[tool(
+        name = "find_callers",
+        description = "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn find_callers(
+        &self,
+        Parameters(params): Parameters<FindCallsParams>,
+    ) -> Result<Json<CallersOutput>, ToolError> {
+        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let list = self
+            .call_list(
+                &repo_id,
+                &params.symbol_name,
+                navigation::Direction::Callers,
+                params.depth.unwrap_or(1),
+                params.limit,
+                params.offset,
+            )
+            .await?;
+        Ok(Json(list.into_callers()))
+    }
+
+    #[tool(
+        name = "find_callees",
+        description = "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous).",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn find_callees(
+        &self,
+        Parameters(params): Parameters<FindCallsParams>,
+    ) -> Result<Json<CalleesOutput>, ToolError> {
+        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let list = self
+            .call_list(
+                &repo_id,
+                &params.symbol_name,
+                navigation::Direction::Callees,
+                params.depth.unwrap_or(1),
+                params.limit,
+                params.offset,
+            )
+            .await?;
+        Ok(Json(list.into_callees()))
+    }
+
+    #[tool(
+        name = "trace_flow",
+        description = "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn trace_flow(
+        &self,
+        Parameters(params): Parameters<TraceFlowParams>,
+    ) -> TextResult {
+        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let symbols = self.symbols(&repo_id).await?;
+        let relationships = self.relationships(&repo_id).await?;
+        let from = navigation::resolve(&symbols, &params.from_symbol)?;
+        let to = navigation::resolve(&symbols, &params.to_symbol)?;
+        if from.uid == to.uid {
+            return Err(ToolError::invalid(
+                "from_symbol and to_symbol name the same symbol",
+            ));
+        }
+        let max_depth = params.max_depth.unwrap_or(12).clamp(1, 30);
+        let extra = params.extra_calls.unwrap_or(0).min(5);
+        let page = Page::new(params.limit, params.offset, Budget::LIST);
+        let chains = navigation::call_chains(&symbols, &relationships, from, to, max_depth, extra);
+        let body = format::format_call_chains(from, to, chains.as_ref(), max_depth, page);
+        self.graph_text(&repo_id, body).await
     }
 
     #[tool(
@@ -83,7 +153,7 @@ impl MyceliumsMcp {
     async fn get_processes(
         &self,
         Parameters(params): Parameters<GetProcessesParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let processes = self.processes(&params.repo_id).await?;
 
         // Filter first, then page the filtered list.
@@ -286,44 +356,17 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCallersParams>,
     ) -> Result<Json<CallersOutput>, ToolError> {
-        let symbols = self.symbols(&params.repo_id).await?;
-        let relationships = self.relationships(&params.repo_id).await?;
-        let target_symbol = resolve_symbol(&symbols, &params.symbol_name)?;
-        let max_depth = params.max_depth.unwrap_or(3).clamp(1, 10);
-
-        let hits = call_bfs(
-            &symbols,
-            &relationships,
-            target_symbol,
-            max_depth,
-            Toward::Callers,
-        );
-        let total_count = hits.len() as u32;
-        let depth_limited = hits.iter().any(|h| h.depth >= max_depth);
-        let page = Page::new(params.limit, params.offset, Budget::LIST).take(hits);
-        let callers = page
-            .items
-            .into_iter()
-            .map(|h| CallerItem {
-                name: h.symbol.name.clone(),
-                qualified_name: h.symbol.qualified_name.clone(),
-                kind: h.symbol.kind.to_string(),
-                file_path: h.symbol.file_path.clone(),
-                start_line: h.symbol.start_line,
-                end_line: h.symbol.end_line,
-                depth: h.depth,
-                resolved: h.resolved.to_string(),
-            })
-            .collect();
-
-        Ok(Json(CallersOutput {
-            index_status: self.index_status(&params.repo_id).await?,
-            symbol_name: target_symbol.name.clone(),
-            callers,
-            total_count,
-            depth_limited,
-            notice: page.notice,
-        }))
+        let list = self
+            .call_list(
+                &params.repo_id,
+                &params.symbol_name,
+                navigation::Direction::Callers,
+                params.max_depth.unwrap_or(3),
+                params.limit,
+                params.offset,
+            )
+            .await?;
+        Ok(Json(list.into_callers()))
     }
 
     #[tool(
@@ -340,44 +383,17 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCalleesParams>,
     ) -> Result<Json<CalleesOutput>, ToolError> {
-        let symbols = self.symbols(&params.repo_id).await?;
-        let relationships = self.relationships(&params.repo_id).await?;
-        let source_symbol = resolve_symbol(&symbols, &params.symbol_name)?;
-        let max_depth = params.max_depth.unwrap_or(3).clamp(1, 10);
-
-        let hits = call_bfs(
-            &symbols,
-            &relationships,
-            source_symbol,
-            max_depth,
-            Toward::Callees,
-        );
-        let total_count = hits.len() as u32;
-        let depth_limited = hits.iter().any(|h| h.depth >= max_depth);
-        let page = Page::new(params.limit, params.offset, Budget::LIST).take(hits);
-        let callees = page
-            .items
-            .into_iter()
-            .map(|h| CalleeItem {
-                name: h.symbol.name.clone(),
-                qualified_name: h.symbol.qualified_name.clone(),
-                kind: h.symbol.kind.to_string(),
-                file_path: h.symbol.file_path.clone(),
-                start_line: h.symbol.start_line,
-                end_line: h.symbol.end_line,
-                depth: h.depth,
-                resolved: h.resolved.to_string(),
-            })
-            .collect();
-
-        Ok(Json(CalleesOutput {
-            index_status: self.index_status(&params.repo_id).await?,
-            symbol_name: source_symbol.name.clone(),
-            callees,
-            total_count,
-            depth_limited,
-            notice: page.notice,
-        }))
+        let list = self
+            .call_list(
+                &params.repo_id,
+                &params.symbol_name,
+                navigation::Direction::Callees,
+                params.max_depth.unwrap_or(3),
+                params.limit,
+                params.offset,
+            )
+            .await?;
+        Ok(Json(list.into_callees()))
     }
 
     #[tool(
@@ -413,7 +429,7 @@ impl MyceliumsMcp {
             if !files.iter().any(|f| f.path == params.file_path) {
                 return Err(ToolError::recoverable(
                     format!("File `{}` is not in the index.", params.file_path),
-                    "pass the path relative to the repository root (e.g. src/main.rs), or find the file with context_search",
+                    "pass the path relative to the repository root (e.g. src/main.rs), or find the file with search_code",
                 ));
             }
         }
@@ -440,10 +456,7 @@ impl MyceliumsMcp {
             open_world_hint = false
         )
     )]
-    async fn find_path(
-        &self,
-        Parameters(params): Parameters<FindPathParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    async fn find_path(&self, Parameters(params): Parameters<FindPathParams>) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -637,10 +650,7 @@ impl MyceliumsMcp {
             open_world_hint = false
         )
     )]
-    async fn get_schema(
-        &self,
-        Parameters(params): Parameters<GetSchemaParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    async fn get_schema(&self, Parameters(params): Parameters<GetSchemaParams>) -> TextResult {
         // Load the ontology from the config directory
         let ontology_dir = std::path::PathBuf::from("config/ontology");
         let ontology = Ontology::load_from_directory(&ontology_dir)
@@ -721,74 +731,183 @@ impl MyceliumsMcp {
     }
 }
 
-/// Which way [`call_bfs`] walks CALLS edges.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Toward {
-    Callers,
-    Callees,
+/// One page of callers or callees, before it becomes the tool's output type.
+pub(crate) struct CallList {
+    index_status: String,
+    symbol_name: String,
+    items: Vec<CallerItem>,
+    total_count: u32,
+    depth_limited: bool,
+    notice: Option<String>,
 }
 
-/// A symbol reached by [`call_bfs`].
-struct CallHit<'a> {
-    symbol: &'a myceliums_storage::CodeSymbol,
-    depth: u32,
-    /// Resolution of the CALLS edge that reached it.
-    resolved: &'static str,
-}
-
-/// Breadth-first walk over CALLS edges from `start`, up to `max_depth` hops,
-/// in discovery order.
-fn call_bfs<'a>(
-    symbols: &'a [myceliums_storage::CodeSymbol],
-    relationships: &'a [myceliums_storage::Relationship],
-    start: &'a myceliums_storage::CodeSymbol,
-    max_depth: u32,
-    toward: Toward,
-) -> Vec<CallHit<'a>> {
-    use myceliums_storage::RelationshipKind;
-    let labels = crate::repo::CallLabels::new(symbols);
-    let sym_by_uid: HashMap<&str, &myceliums_storage::CodeSymbol> =
-        symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-
-    // Pre-build adjacency: from -> [(next, edge)]
-    let mut next_of: HashMap<&str, Vec<(&str, &myceliums_storage::Relationship)>> = HashMap::new();
-    for rel in relationships {
-        if rel.kind == RelationshipKind::Calls {
-            let (from, next) = match toward {
-                Toward::Callers => (rel.target_uid.as_str(), rel.source_uid.as_str()),
-                Toward::Callees => (rel.source_uid.as_str(), rel.target_uid.as_str()),
-            };
-            next_of.entry(from).or_default().push((next, rel));
+impl CallList {
+    fn into_callers(self) -> CallersOutput {
+        CallersOutput {
+            index_status: self.index_status,
+            symbol_name: self.symbol_name,
+            callers: self.items,
+            total_count: self.total_count,
+            depth_limited: self.depth_limited,
+            notice: self.notice,
         }
     }
 
-    let mut hits = Vec::new();
-    let mut visited = std::collections::HashSet::new();
-    let mut queue = std::collections::VecDeque::new();
-    queue.push_back((start.uid.as_str(), 0u32));
-    visited.insert(start.uid.as_str());
-
-    while let Some((uid, depth)) = queue.pop_front() {
-        if depth >= max_depth {
-            continue;
-        }
-        for &(next, rel) in next_of.get(uid).map(Vec::as_slice).unwrap_or(&[]) {
-            if !visited.insert(next) {
-                continue;
-            }
-            queue.push_back((next, depth + 1));
-            if let Some(symbol) = sym_by_uid.get(next) {
-                let target_name = sym_by_uid
-                    .get(rel.target_uid.as_str())
-                    .map(|t| t.name.as_str())
-                    .unwrap_or("");
-                hits.push(CallHit {
-                    symbol,
-                    depth: depth + 1,
-                    resolved: labels.label(rel, target_name),
-                });
-            }
+    fn into_callees(self) -> CalleesOutput {
+        CalleesOutput {
+            index_status: self.index_status,
+            symbol_name: self.symbol_name,
+            callees: self
+                .items
+                .into_iter()
+                .map(|c| CalleeItem {
+                    name: c.name,
+                    qualified_name: c.qualified_name,
+                    kind: c.kind,
+                    file_path: c.file_path,
+                    start_line: c.start_line,
+                    end_line: c.end_line,
+                    depth: c.depth,
+                    via: c.via,
+                    resolved: c.resolved,
+                })
+                .collect(),
+            total_count: self.total_count,
+            depth_limited: self.depth_limited,
+            notice: self.notice,
         }
     }
-    hits
+}
+
+impl MyceliumsMcp {
+    /// Callers or callees of `name`, `depth` hops deep, one page of them.
+    pub(crate) async fn call_list(
+        &self,
+        repo_id: &str,
+        name: &str,
+        direction: navigation::Direction,
+        depth: u32,
+        limit: Option<usize>,
+        offset: Option<usize>,
+    ) -> Result<CallList, ToolError> {
+        let symbols = self.symbols(repo_id).await?;
+        let relationships = self.relationships(repo_id).await?;
+        let start = navigation::resolve(&symbols, name)?;
+        let max_depth = depth.clamp(1, 10);
+        let hits = navigation::walk_calls(&symbols, &relationships, start, direction, max_depth);
+        let total_count = hits.len() as u32;
+        let depth_limited = hits.iter().any(|h| h.depth >= max_depth);
+        let page = Page::new(limit, offset, Budget::LIST).take(hits);
+        let items = page
+            .items
+            .iter()
+            .map(|h| CallerItem {
+                name: h.symbol.name.clone(),
+                qualified_name: h.symbol.qualified_name.clone(),
+                kind: h.symbol.kind.to_string(),
+                file_path: h.symbol.file_path.clone(),
+                start_line: h.symbol.start_line,
+                end_line: h.symbol.end_line,
+                depth: h.depth,
+                // The short name, as `myc callers --json` reports it.
+                via: h.via.map(|v| v.name.clone()),
+                resolved: h.resolved.unwrap_or("exact").to_string(),
+            })
+            .collect();
+        Ok(CallList {
+            index_status: self.index_status(repo_id).await?,
+            symbol_name: start.name.clone(),
+            items,
+            total_count,
+            depth_limited,
+            notice: page.notice,
+        })
+    }
+
+    /// A symbol's source (at most `max_lines` lines), signature, location,
+    /// and direct callers and callees (the first [`CONTEXT_EDGES`] of each).
+    async fn symbol_context_text(&self, repo_id: &str, name: &str, max_lines: usize) -> TextResult {
+        let symbols = self.symbols(repo_id).await?;
+        let relationships = self.relationships(repo_id).await?;
+        let symbol = navigation::resolve(&symbols, name)?;
+        let edges = |direction| -> Vec<String> {
+            navigation::walk_calls(&symbols, &relationships, symbol, direction, 1)
+                .iter()
+                .map(navigation::Hit::marked_name)
+                .collect()
+        };
+        let callers = edges(navigation::Direction::Callers);
+        let callees = edges(navigation::Direction::Callees);
+        let (content, source_notice) = source_budget(symbol, max_lines);
+
+        let output = SymbolContextOutput {
+            name: symbol.name.clone(),
+            qualified_name: symbol.qualified_name.clone(),
+            kind: symbol.kind.to_string(),
+            file_path: symbol.file_path.clone(),
+            start_line: symbol.start_line,
+            end_line: symbol.end_line,
+            signature: symbol.signature.clone(),
+            content,
+            callers_total: callers.len(),
+            callers: callers.into_iter().take(CONTEXT_EDGES).collect(),
+            callees_total: callees.len(),
+            callees: callees.into_iter().take(CONTEXT_EDGES).collect(),
+            metadata: symbol.metadata.clone(),
+            source_notice,
+        };
+        self.graph_text(repo_id, format::format_symbol_context(&output))
+            .await
+    }
+}
+
+/// The first `max_lines` lines of `symbol`'s source and, when that cut
+/// anything, a notice naming how to get the rest.
+fn source_budget(
+    symbol: &myceliums_storage::CodeSymbol,
+    max_lines: usize,
+) -> (String, Option<String>) {
+    let total = symbol.content.lines().count();
+    if total <= max_lines {
+        return (symbol.content.clone(), None);
+    }
+    let shown: Vec<&str> = symbol.content.lines().take(max_lines).collect();
+    let first = symbol.start_line;
+    let notice = format!(
+        "Source cut at {max_lines} of {total} lines — call explain_symbol again with max_source_lines={total}, or read {} lines {}-{}.",
+        symbol.file_path,
+        first.saturating_add(max_lines as u32),
+        first.saturating_add(total as u32).saturating_sub(1),
+    );
+    (shown.join("\n"), Some(notice))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::source_budget;
+
+    #[test]
+    fn long_sources_are_cut_with_a_way_to_get_the_rest() {
+        let symbol = myceliums_storage::CodeSymbol {
+            uid: "u".into(),
+            name: "f".into(),
+            qualified_name: "f".into(),
+            kind: myceliums_storage::SymbolKind::Function,
+            file_path: "src/f.rs".into(),
+            start_line: 10,
+            end_line: 14,
+            signature: String::new(),
+            content: "l10\nl11\nl12\nl13\nl14".into(),
+            repo_id: "r".into(),
+            metadata: None,
+        };
+        let (all, none) = source_budget(&symbol, 5);
+        assert_eq!((all.as_str(), none), (symbol.content.as_str(), None));
+        let (cut, notice) = source_budget(&symbol, 2);
+        assert_eq!(cut, "l10\nl11");
+        assert_eq!(
+            notice.unwrap(),
+            "Source cut at 2 of 5 lines — call explain_symbol again with max_source_lines=5, or read src/f.rs lines 12-14."
+        );
+    }
 }

@@ -1,7 +1,7 @@
 //! Test-facing wrappers (feature `test-support`).
 
 use crate::params::*;
-use crate::MyceliumsMcp;
+use crate::{MyceliumsMcp, Toolsets};
 use rmcp::handler::server::wrapper::Parameters;
 
 /// Public, test-facing wrappers around the private `#[tool]` handlers.
@@ -12,31 +12,39 @@ use rmcp::handler::server::wrapper::Parameters;
 /// up a full stdio transport. These thin delegates expose that surface behind
 /// the `test-support` feature so the shipped API stays narrow.
 ///
-/// Each wrapper returns the rendered `text` payload on success, or the
+/// Each wrapper returns the text content on success (structured tools: their
+/// JSON), or the
 /// agent-visible error text on failure (an `isError` result's text or a
 /// protocol error's message) — the two things an integration test asserts
 /// on. The exact wire shape of each tool call is covered end to end by
 /// `tests/tool_contract.rs`.
 impl MyceliumsMcp {
-    /// The tool definitions the server advertises on `tools/list` — names,
-    /// descriptions, and input/output schemas, sorted by name. Built from the
-    /// same router [`run_mcp_server`] serves, so a snapshot of this list pins
-    /// the agent-visible tool surface.
-    pub fn tool_list_for_test() -> Vec<rmcp::model::Tool> {
-        Self::tool_router().list_all()
+    /// The tool definitions the server advertises on `tools/list` for
+    /// `toolsets` — names, descriptions, input/output schemas and `_meta`,
+    /// sorted by name. Built from the same router [`run_mcp_server`] serves,
+    /// so a snapshot of this list pins the agent-visible tool surface.
+    pub fn tool_list_for_test(toolsets: &Toolsets) -> Vec<rmcp::model::Tool> {
+        Self::tool_router_for(toolsets).list_all()
     }
 
-    /// The full MCP router (tools included), for serving this server over an
-    /// in-process transport in end-to-end tests.
+    /// The MCP router with every toolset (deprecated aliases included), for
+    /// serving this server over an in-process transport in end-to-end tests.
     pub fn into_router_for_test(self) -> rmcp::handler::server::router::Router<Self> {
-        rmcp::handler::server::router::Router::new(self).with_tools(Self::tool_router())
+        self.into_router_with_toolsets_for_test(&Toolsets::all())
+    }
+
+    /// The MCP router exposing `toolsets` only.
+    pub fn into_router_with_toolsets_for_test(
+        self,
+        toolsets: &Toolsets,
+    ) -> rmcp::handler::server::router::Router<Self> {
+        rmcp::handler::server::router::Router::new(self).with_tools(Self::tool_router_for(toolsets))
     }
 
     /// Invoke the `context_search` handler.
     pub async fn context_search_for_test(&self, params: SearchParams) -> Result<String, String> {
         self.context_search(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -47,7 +55,6 @@ impl MyceliumsMcp {
     ) -> Result<String, String> {
         self.hybrid_search(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -58,7 +65,6 @@ impl MyceliumsMcp {
     ) -> Result<String, String> {
         self.detect_impact_tool(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -66,7 +72,6 @@ impl MyceliumsMcp {
     pub async fn rename_symbol_for_test(&self, params: RenameParams) -> Result<String, String> {
         self.rename_symbol(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -74,7 +79,6 @@ impl MyceliumsMcp {
     pub async fn semantic_search_for_test(&self, params: SearchParams) -> Result<String, String> {
         self.semantic_search(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -82,7 +86,6 @@ impl MyceliumsMcp {
     pub async fn delete_for_test(&self, params: DeleteParams) -> Result<String, String> {
         self.delete(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -90,7 +93,6 @@ impl MyceliumsMcp {
     pub async fn map_service_for_test(&self, params: MapServiceParams) -> Result<String, String> {
         self.map_service(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -101,7 +103,6 @@ impl MyceliumsMcp {
     ) -> Result<String, String> {
         self.record_decision(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -112,7 +113,16 @@ impl MyceliumsMcp {
     ) -> Result<String, String> {
         self.link_decision(Parameters(params))
             .await
-            .map(|json| json.0.text)
+            .map_err(|e| e.message())
+    }
+
+    /// Invoke the `detect_architecture_drift` handler.
+    pub async fn detect_architecture_drift_for_test(
+        &self,
+        params: DetectDriftParams,
+    ) -> Result<String, String> {
+        self.detect_architecture_drift(Parameters(params))
+            .await
             .map_err(|e| e.message())
     }
 
@@ -123,11 +133,11 @@ impl MyceliumsMcp {
             .map_err(|e| e.message.to_string())
     }
 
-    /// Invoke the `list_repos` handler.
+    /// Invoke the `list_repos` handler (rendered as JSON).
     pub async fn list_repos_for_test(&self) -> Result<String, String> {
         self.list_repos(Parameters(Default::default()))
             .await
-            .map(|json| json.0.text)
+            .map(|json| serde_json::to_string(&json.0).expect("serialize"))
             .map_err(|e| e.message())
     }
 
@@ -138,7 +148,6 @@ impl MyceliumsMcp {
     ) -> Result<String, String> {
         self.symbol_context(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -146,7 +155,6 @@ impl MyceliumsMcp {
     pub async fn cypher_query_for_test(&self, params: CypherQueryParams) -> Result<String, String> {
         self.cypher_query(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 
@@ -170,7 +178,6 @@ impl MyceliumsMcp {
     pub async fn analyze_for_test(&self, params: AnalyzeParams) -> Result<String, String> {
         self.analyze(Parameters(params))
             .await
-            .map(|json| json.0.text)
             .map_err(|e| e.message())
     }
 

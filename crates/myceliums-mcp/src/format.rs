@@ -8,8 +8,7 @@ use crate::{
     SymbolContextOutput, SymbolDefinitionOutput,
 };
 use myceliums_core::{
-    ArchDecisionRecord, ArchDiagram, ContractsReport, DriftReport, HotspotItem, LintReport,
-    OwnershipReport,
+    ArchDecisionRecord, ArchDiagram, ContractsReport, HotspotItem, LintReport, OwnershipReport,
 };
 
 pub fn format_analyze(o: &AnalyzeOutput) -> String {
@@ -191,13 +190,13 @@ pub fn format_symbol_context(s: &SymbolContextOutput) -> String {
         "Callers",
         &s.callers,
         s.callers_total,
-        "get_callers",
+        "find_callers",
     ));
     out.push_str(&edge_list(
         "Callees",
         &s.callees,
         s.callees_total,
-        "get_callees",
+        "find_callees",
     ));
 
     // Show metadata (decorators, return type, superclasses, visibility)
@@ -233,11 +232,14 @@ pub fn format_symbol_context(s: &SymbolContextOutput) -> String {
         let origin = format!("{}:{}-{}", s.file_path, s.start_line, s.end_line);
         out.push_str(&format!("\n{}\n", untrusted(&origin, &s.content)));
     }
+    if let Some(notice) = &s.source_notice {
+        out.push_str(&format!("\n{notice}\n"));
+    }
 
     out
 }
 
-/// `Callers (3): a, b, c` — or, when cut, `Callers (25 of 80; all: get_callers): …`.
+/// `Callers (3): a, b, c` — or, when cut, `Callers (25 of 80; all: find_callers): …`.
 fn edge_list(label: &str, shown: &[String], total: usize, tool: &str) -> String {
     if total == 0 {
         return format!("{label}: none\n");
@@ -516,6 +518,173 @@ pub fn untrusted(origin: &str, text: &str) -> String {
     )
 }
 
+// --- core tools: call chains and dependents ---
+
+/// `qualified_name (Kind) file:line`.
+fn symbol_line(s: &myceliums_storage::CodeSymbol) -> String {
+    format!(
+        "{} ({}) {}:{}",
+        s.qualified_name, s.kind, s.file_path, s.start_line
+    )
+}
+
+/// ` (resolved: name-match)` for a CALLS edge that was matched by name only.
+fn heuristic_mark(resolved: Option<&str>) -> String {
+    match resolved {
+        Some(label) if crate::repo::CallLabels::is_heuristic(label) => {
+            format!(" (resolved: {label})")
+        }
+        _ => String::new(),
+    }
+}
+
+/// Renders `trace_flow`: the shortest call chain from `from` to `to`, then
+/// one page of every symbol on a chain within the widened length.
+pub fn format_call_chains(
+    from: &myceliums_storage::CodeSymbol,
+    to: &myceliums_storage::CodeSymbol,
+    chains: Option<&crate::navigation::CallChains>,
+    max_depth: u32,
+    page: Page,
+) -> String {
+    let Some(chains) = chains else {
+        return format!(
+            "No call chain from {} to {} within {max_depth} calls (CALLS edges, followed from \
+             from_symbol towards to_symbol).\n\nCalls the resolver cannot see (callbacks, \
+             dynamic dispatch, reflection) break chains: try the symbols swapped, a larger \
+             max_depth, or find_callers of {}.",
+            symbol_line(from),
+            symbol_line(to),
+            to.name
+        );
+    };
+    let mut out = format!(
+        "Shortest call chain from {} to {}: {} calls.\n\n",
+        from.qualified_name,
+        to.qualified_name,
+        chains.len()
+    );
+    for (i, (symbol, resolved)) in chains.shortest.iter().enumerate() {
+        let arrow = if i == 0 { "   " } else { "-> " };
+        let mark = heuristic_mark(*resolved);
+        out.push_str(&format!("  {arrow}{}{mark}\n", symbol_line(symbol)));
+    }
+
+    let longest = chains
+        .on_chains
+        .iter()
+        .map(|c| c.chain_len)
+        .max()
+        .unwrap_or(chains.len());
+    let span = if longest > chains.len() {
+        format!("{}-{longest}", chains.len())
+    } else {
+        chains.len().to_string()
+    };
+    let total = chains.on_chains.len();
+    let lines = page.take(
+        chains
+            .on_chains
+            .iter()
+            .map(|c| {
+                format!(
+                    "{} [chain of {}, call {} from the start]",
+                    symbol_line(c.symbol),
+                    c.chain_len,
+                    c.from_start
+                )
+            })
+            .collect::<Vec<_>>(),
+    );
+    out.push_str(&format!(
+        "\nEvery symbol between them on a chain of {span} calls ({total}):\n"
+    ));
+    for line in &lines.items {
+        out.push_str(&format!("  * {line}\n"));
+    }
+    lines.with_notice(out)
+}
+
+/// Renders the symbol/file mode of `impact_of_change`: one page over direct
+/// dependents, indirect dependents, then the files that hold them.
+pub fn format_dependents(
+    subject: &str,
+    hits: &[crate::navigation::Hit],
+    depth: u32,
+    page: Page,
+) -> String {
+    const DIRECT: &str =
+        "Direct dependents (call or import it; update them if its signature changes):";
+    const INDIRECT: &str = "Indirect dependents (depth 2+):";
+    const FILES: &str = "Files with dependents (nearest depth):";
+
+    let mut nearest: std::collections::BTreeMap<&str, u32> = std::collections::BTreeMap::new();
+    for hit in hits {
+        let d = nearest
+            .entry(hit.symbol.file_path.as_str())
+            .or_insert(hit.depth);
+        *d = (*d).min(hit.depth);
+    }
+    let mut files: Vec<(&str, u32)> = nearest.into_iter().collect();
+    files.sort_by_key(|(path, d)| (*d, *path));
+
+    let mut lines: Vec<(&str, String)> = Vec::new();
+    for hit in hits {
+        let kind = if hit.edge.kind == myceliums_storage::RelationshipKind::Imports {
+            " [imports]"
+        } else {
+            ""
+        };
+        let mark = heuristic_mark(hit.resolved);
+        if hit.depth == 1 {
+            lines.push((DIRECT, format!("{}{kind}{mark}", symbol_line(hit.symbol))));
+        } else {
+            let via = hit
+                .via
+                .map(|v| format!(", via {}", v.name))
+                .unwrap_or_default();
+            lines.push((
+                INDIRECT,
+                format!(
+                    "{} [depth {}{via}]{kind}{mark}",
+                    symbol_line(hit.symbol),
+                    hit.depth
+                ),
+            ));
+        }
+    }
+    lines.extend(
+        files
+            .iter()
+            .map(|(path, d)| (FILES, format!("{path} (depth {d})"))),
+    );
+
+    let direct = hits.iter().filter(|h| h.depth == 1).count();
+    let mut out = format!(
+        "Impact of changing {subject}: {} dependents ({direct} direct) in {} files, \
+         following incoming CALLS and IMPORTS edges up to depth {depth}.\n",
+        hits.len(),
+        files.len(),
+    );
+    if hits.is_empty() {
+        out.push_str(
+            "\nNothing in the index calls or imports it. Calls the resolver cannot see \
+             (callbacks, dynamic dispatch, reflection) are not counted.\n",
+        );
+        return out;
+    }
+    let lines = page.take(lines);
+    let mut section = "";
+    for (heading, line) in &lines.items {
+        if *heading != section {
+            section = heading;
+            out.push_str(&format!("\n{heading}\n"));
+        }
+        out.push_str(&format!("  * {line}\n"));
+    }
+    lines.with_notice(out)
+}
+
 // --- review context ---
 
 pub struct ReviewSymbolEntry {
@@ -657,22 +826,6 @@ fn shown_of(shown: usize, total: usize) -> String {
     } else {
         total.to_string()
     }
-}
-
-/// Renders the `list_repos` tool output: one block per registered repo.
-pub fn format_repo_list(repos: &[&myceliums_storage::RepoInfo]) -> String {
-    if repos.is_empty() {
-        return "No repositories analyzed yet. Run the `analyze` tool on a project path first."
-            .to_string();
-    }
-    let mut out = format!("{} repositories (use `id` as repo_id):\n\n", repos.len());
-    for r in repos {
-        out.push_str(&format!(
-            "- id: {}\n  name: {}\n  path: {}\n  analyzed_at: {}\n  symbols: {}, files: {}\n",
-            r.id, r.name, r.path, r.analyzed_at, r.symbol_count, r.file_count
-        ));
-    }
-    out
 }
 
 // --- helpers ---
@@ -834,7 +987,7 @@ fn cell_str(v: Option<&serde_json::Value>) -> String {
     }
 }
 
-// --- New tool formatters (used when tools switch to TextOutput) ---
+// --- Text renderings of structured outputs (kept for the CLI and tests) ---
 
 #[allow(dead_code)]
 pub fn format_communities(output: &CommunitiesOutput) -> String {
@@ -1777,43 +1930,6 @@ pub fn format_architecture_view(diagram: &ArchDiagram) -> String {
     out
 }
 
-pub fn format_drift_report(report: &DriftReport) -> String {
-    let mut out = format!("{}\n\n", report.summary);
-
-    if !report.community_changes.is_empty() {
-        out.push_str("Community changes:\n");
-        for change in &report.community_changes {
-            match change.change_type.as_str() {
-                "added" => out.push_str(&format!(
-                    "  + {} (new, {} members)\n",
-                    change.label,
-                    change.new_count.unwrap_or(0)
-                )),
-                "removed" => out.push_str(&format!(
-                    "  - {} (removed, was {} members)\n",
-                    change.label,
-                    change.old_count.unwrap_or(0)
-                )),
-                "grown" => out.push_str(&format!(
-                    "  ↑ {} ({} → {} members)\n",
-                    change.label,
-                    change.old_count.unwrap_or(0),
-                    change.new_count.unwrap_or(0)
-                )),
-                "shrunk" => out.push_str(&format!(
-                    "  ↓ {} ({} → {} members)\n",
-                    change.label,
-                    change.old_count.unwrap_or(0),
-                    change.new_count.unwrap_or(0)
-                )),
-                _ => out.push_str(&format!("  = {} (stable)\n", change.label)),
-            }
-        }
-    }
-
-    out
-}
-
 pub fn format_ownership(report: &OwnershipReport) -> String {
     if report.owned_files.is_empty() && report.unowned_files.is_empty() {
         return "No files found.".to_string();
@@ -2001,36 +2117,18 @@ mod tests {
     #[test]
     fn symbol_context_lists_say_when_they_are_cut() {
         assert_eq!(
-            edge_list("Callers", &[], 0, "get_callers"),
+            edge_list("Callers", &[], 0, "find_callers"),
             "Callers: none\n"
         );
         let shown = vec!["a".to_string(), "b (resolved: ambiguous)".to_string()];
         assert_eq!(
-            edge_list("Callers", &shown, 2, "get_callers"),
+            edge_list("Callers", &shown, 2, "find_callers"),
             "Callers (2): a, b (resolved: ambiguous)\n"
         );
         assert_eq!(
-            edge_list("Callers", &shown, 9, "get_callers"),
-            "Callers (2 of 9; all: get_callers): a, b (resolved: ambiguous)\n"
+            edge_list("Callers", &shown, 9, "find_callers"),
+            "Callers (2 of 9; all: find_callers): a, b (resolved: ambiguous)\n"
         );
-    }
-
-    #[test]
-    fn repo_list_shows_ids_or_explains_how_to_get_one() {
-        assert!(format_repo_list(&[]).contains("analyze"));
-        let info = myceliums_storage::RepoInfo {
-            id: "proj-1a2b".into(),
-            name: "proj".into(),
-            path: "/src/proj".into(),
-            analyzed_at: "2026-01-01T00:00:00Z".into(),
-            symbol_count: 3,
-            file_count: 1,
-            analyzed_commit: None,
-            vector_geometry_version: 0,
-        };
-        let out = format_repo_list(&[&info]);
-        assert!(out.contains("id: proj-1a2b"), "{out}");
-        assert!(out.contains("path: /src/proj"), "{out}");
     }
 
     #[test]

@@ -147,11 +147,20 @@ def cmd_report(args) -> int:
     return 0
 
 
-def cmd_toolsel_list(args) -> int:
-    tools = toolsel.list_tools(args.myc)
+def _profile_intents(myc: str, toolsets: str) -> tuple[list[dict], list[dict], list[str]]:
+    """The profile's tools, the intents it is scored on, and intent problems
+    (checked against the full tool list, so renames fail loudly in any profile)."""
     intents = config.load_json(config.INTENTS_FILE)["intents"]
-    problems = toolsel.check_intents(intents, tools)
-    print(f"{len(tools)} tools, sha256 {toolsel.tools_digest(tools)[:16]}; {len(intents)} intents")
+    every = toolsel.list_tools(myc, "all")
+    problems = toolsel.check_intents(intents, every)
+    tools = every if toolsets == "all" else toolsel.list_tools(myc, toolsets)
+    return tools, toolsel.offered_intents(intents, tools), problems
+
+
+def cmd_toolsel_list(args) -> int:
+    tools, intents, problems = _profile_intents(args.myc, args.toolsets)
+    print(f"{len(tools)} tools ({args.toolsets}), sha256 {toolsel.tools_digest(tools)[:16]}; "
+          f"{len(intents)} intents offered")
     for p in problems:
         print("PROBLEM:", p)
     if args.out:
@@ -160,9 +169,7 @@ def cmd_toolsel_list(args) -> int:
 
 
 def cmd_toolsel_run(args) -> int:
-    tools = toolsel.list_tools(args.myc)
-    intents = config.load_json(config.INTENTS_FILE)["intents"]
-    problems = toolsel.check_intents(intents, tools)
+    tools, intents, problems = _profile_intents(args.myc, args.toolsets)
     if problems:
         print("\n".join(problems))
         return 1
@@ -174,12 +181,14 @@ def cmd_toolsel_run(args) -> int:
         "myc_version": config.tool_version([args.myc, "--version"]),
         "claude_version": config.tool_version([claude, "--version"]),
         "n_tools": len(tools), "tools_sha256": toolsel.tools_digest(tools),
-        "tool_names": [t["name"] for t in tools],
+        "tool_names": [t["name"] for t in tools], "toolsets": args.toolsets,
+        "intent_ids": [it["id"] for it in intents],
     }
     meta_path = run_dir / "toolsel_meta.json"
     if not meta_path.exists():
         meta_path.write_text(json.dumps(meta, indent=2) + "\n")
-    toolsel.run(args.label, intents, args.passes, args.model, args.myc, claude, args.concurrency)
+    toolsel.run(args.label, intents, args.passes, args.model, args.myc, claude, args.concurrency,
+                args.toolsets)
     return 0
 
 
@@ -188,7 +197,10 @@ def cmd_toolsel_report(args) -> int:
     out_dir = config.RESULTS_DIR / args.label
     if run_dir.exists() and not args.check:
         meta = config.load_json(run_dir / "toolsel_meta.json")
-        meta["intents"] = config.load_json(config.INTENTS_FILE)["intents"]
+        intents = config.load_json(config.INTENTS_FILE)["intents"]
+        if "intent_ids" in meta:  # a run on a smaller profile scores only its intents
+            intents = [it for it in intents if it["id"] in set(meta["intent_ids"])]
+        meta["intents"] = intents
         rows = toolsel.rescore(args.label, meta["intents"])
         meta["model"] = next((r["model"] for r in rows if r.get("model")), None)
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -262,8 +274,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--check", action="store_true")
     s.set_defaults(fn=cmd_report)
 
+    toolsets_help = ("myc mcp toolset profile to offer (default all; `core` is myc's own default "
+                     "and is scored on the intents it can answer)")
     s = sub.add_parser("toolsel-list")
     s.add_argument("--myc", default=_default_myc())
+    s.add_argument("--toolsets", default="all", help=toolsets_help)
     s.add_argument("--out")
     s.set_defaults(fn=cmd_toolsel_list)
 
@@ -274,6 +289,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--concurrency", type=int, default=3)
     s.add_argument("--claude")
     s.add_argument("--myc", default=_default_myc())
+    s.add_argument("--toolsets", default="all", help=toolsets_help)
     s.set_defaults(fn=cmd_toolsel_run)
 
     s = sub.add_parser("toolsel-report")

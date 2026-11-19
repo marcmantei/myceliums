@@ -436,6 +436,11 @@ enum Commands {
         /// generated and printed at startup.
         #[arg(long, requires = "http")]
         allow_remote: bool,
+        /// Tool groups to expose, comma-separated: core (always on), graph, review,
+        /// architecture, knowledge, email, cross_repo, admin, deprecated, or all.
+        /// Default: the `mcp.toolsets` config key, else core.
+        #[arg(long, value_name = "LIST")]
+        toolsets: Option<String>,
     },
     /// Check the health of the Myceliums installation
     Doctor {
@@ -479,6 +484,10 @@ enum Commands {
         /// Do not install the code-explorer subagent (removes an existing one)
         #[arg(long)]
         no_agent: bool,
+        /// Keep every myceliums tool behind tool search ("alwaysLoad": false)
+        /// instead of loading the core tools up front
+        #[arg(long)]
+        no_always_load: bool,
         /// Remove everything myceliums installed at this scope
         #[arg(long)]
         uninstall: bool,
@@ -651,7 +660,7 @@ enum Commands {
         #[command(subcommand)]
         action: HookAction,
     },
-    /// Compare current graph against a stored snapshot to show drift
+    /// Compare the current graph with the previous analysis to show drift
     Diff {
         /// Repository ID or path
         repo: String,
@@ -876,16 +885,24 @@ async fn run(cli: Cli) -> Result<()> {
             cache,
             yes,
         } => cmd_clean(repo, orphans, all, cache, yes).await,
-        Commands::Mcp { http, allow_remote } => {
+        Commands::Mcp {
+            http,
+            allow_remote,
+            toolsets,
+        } => {
+            let toolsets = mcp_toolsets(toolsets.as_deref())?;
             if let Some(addr) = http {
-                myceliums_mcp::run_mcp_http_server(myceliums_mcp::McpHttpOptions {
-                    addr,
-                    allow_remote,
-                    token: std::env::var(myceliums_mcp::http_security::TOKEN_ENV).ok(),
-                })
+                myceliums_mcp::run_mcp_http_server(
+                    myceliums_mcp::McpHttpOptions {
+                        addr,
+                        allow_remote,
+                        token: std::env::var(myceliums_mcp::http_security::TOKEN_ENV).ok(),
+                    },
+                    toolsets,
+                )
                 .await
             } else {
-                myceliums_mcp::run_mcp_server().await
+                myceliums_mcp::run_mcp_server(toolsets).await
             }
         }
         Commands::Doctor { download } => cmd_doctor(download).await,
@@ -898,12 +915,14 @@ async fn run(cli: Cli) -> Result<()> {
             no_routing,
             no_redirect_hook,
             no_agent,
+            no_always_load,
             uninstall,
         } => {
             let layers = commands::setup_claude::Layers {
                 routing: !no_routing,
                 redirect_hook: !no_redirect_hook,
                 agent: !no_agent,
+                tool_loading: commands::setup_claude::ToolLoading::for_config(no_always_load),
             };
             commands::setup_claude::cmd_setup_claude(scope, project.as_deref(), layers, uninstall)
         }
@@ -1368,14 +1387,16 @@ async fn cmd_analyze(
     println!("  Communities:   {}", community_count);
     println!("  Processes:     {}", process_count);
 
-    // Save a lightweight snapshot for future diff comparisons
-    let snapshot = myceliums_core::build_snapshot(&repo_id, &symbols, &relationships);
-    if let Err(e) = myceliums_core::save_snapshot(&data_dir(), &snapshot) {
-        eprintln!("Warning: failed to save snapshot: {}", e);
-    }
-
     // Get current git commit for cache tracking
     let analyzed_commit = cache::get_head_commit(&abs_path).ok();
+
+    // Record this analysis for drift comparisons (detect_architecture_drift).
+    let snapshot = myceliums_core::build_snapshot(&repo_id, &symbols, &relationships);
+    if let Err(e) =
+        myceliums_core::record_snapshot(&data_dir(), &snapshot, analyzed_commit.as_deref())
+    {
+        eprintln!("Warning: failed to save snapshot: {}", e);
+    }
 
     // Update registry
     let mut registry = RepoRegistry::load(&registry_path())?;
@@ -3374,6 +3395,27 @@ async fn cmd_doctor(download: bool) -> Result<()> {
     Ok(())
 }
 
+/// The toolsets `myc mcp` exposes: `--toolsets`, else the `mcp.toolsets`
+/// config key, else core. An unreadable config falls back to core (with a
+/// warning on stderr, which is not the protocol channel); an unknown toolset
+/// name is an error.
+fn mcp_toolsets(flag: Option<&str>) -> Result<myceliums_mcp::Toolsets> {
+    let names: Vec<String> = match flag {
+        Some(list) => list.split(',').map(str::to_string).collect(),
+        None => {
+            match GlobalConfig::load(&data_dir()) {
+                Ok(config) => config.mcp.toolsets,
+                Err(e) => {
+                    eprintln!("warning: cannot read the myceliums config ({e:#}); serving the core toolset");
+                    Vec::new()
+                }
+            }
+        }
+    };
+    myceliums_mcp::Toolsets::parse_names(names.iter().map(String::as_str))
+        .map_err(|e| anyhow::anyhow!("--toolsets / mcp.toolsets: {e}"))
+}
+
 async fn cmd_configure(set: Option<&str>, reset: bool) -> Result<()> {
     let data = data_dir();
     let mut config = GlobalConfig::load(&data)?;
@@ -3391,6 +3433,11 @@ async fn cmd_configure(set: Option<&str>, reset: bool) -> Result<()> {
         let (key, value) = kv
             .split_once('=')
             .ok_or_else(|| anyhow::anyhow!("Invalid format. Use: --set key=value"))?;
+        if key.trim() == "mcp.toolsets" {
+            value
+                .parse::<myceliums_mcp::Toolsets>()
+                .map_err(|e| anyhow::anyhow!("mcp.toolsets: {e}"))?;
+        }
         config.set(key.trim(), value.trim())?;
         config.save()?;
         println!("Set {} = {}", key.trim(), value.trim());
@@ -3462,7 +3509,7 @@ fn hook_system_message(msg: &str) {
 }
 
 const INSTRUCTION_SUFFIX: &str =
-    " | For code exploration, prefer myceliums MCP tools (context_search, symbol_context, hybrid_search) over grep \u{2014} they return structured results with exact locations in a single call.";
+    " | For code exploration, prefer myceliums MCP tools (search_code, find_callers, impact_of_change, explain_symbol) over grep \u{2014} they return exact locations in a single call.";
 
 /// Output a hook systemMessage, optionally appending AI usage instructions.
 fn hook_system_message_with_instructions(msg: &str) {
@@ -3769,16 +3816,8 @@ async fn cmd_format_hook() -> Result<()> {
         .strip_prefix("mcp__myceliums__")
         .unwrap_or(tool_name);
 
-    let result_text = tool_response
-        .as_array()
-        .and_then(|arr| arr.first())
-        .and_then(|block| block["text"].as_str())
-        .unwrap_or("");
-
-    let result: serde_json::Value =
-        serde_json::from_str(result_text).unwrap_or(serde_json::Value::Null);
-
-    let msg = format_hook_message(short_name, tool_input, &result);
+    let result_text = hook_response_text(tool_response);
+    let msg = format_hook_message(short_name, tool_input, &result_text);
     if !msg.is_empty() {
         hook_post_tool_message(&msg);
     }
@@ -3786,22 +3825,71 @@ async fn cmd_format_hook() -> Result<()> {
     Ok(())
 }
 
+/// The text of an MCP tool response as the hook receives it: the first text
+/// block. Text tools send plain text (#97); servers before 0.4 wrapped it as
+/// `{"text": "..."}` JSON, which is still unwrapped.
+fn hook_response_text(tool_response: &serde_json::Value) -> String {
+    let block = match tool_response {
+        serde_json::Value::String(s) => s.as_str(),
+        other => other
+            .as_array()
+            .and_then(|arr| arr.first())
+            .and_then(|block| block["text"].as_str())
+            .unwrap_or(""),
+    };
+    match serde_json::from_str::<serde_json::Value>(block) {
+        Ok(v) if v["text"].is_string() => v["text"].as_str().unwrap_or_default().to_string(),
+        _ => block.to_string(),
+    }
+}
+
 fn format_hook_message(
     short_name: &str,
     tool_input: &serde_json::Value,
-    result: &serde_json::Value,
+    result_text: &str,
 ) -> String {
     fn truncate(s: &str, max: usize) -> String {
         myceliums_core::text::snippet(s, max)
     }
 
-    // All tools now return { "text": "..." } with formatted output.
-    // Extract the first line as a concise summary for the hook.
-    let result_text = result["text"].as_str().unwrap_or("");
-    let first_line = result_text.lines().next().unwrap_or("");
+    // The first line that says something: past the `Index:` freshness line,
+    // the keyword-fallback note of search_code, and untrusted-block markers.
+    let first_line = result_text
+        .lines()
+        .map(str::trim)
+        .find(|l| {
+            !l.is_empty()
+                && !l.starts_with("Index:")
+                && !l.starts_with("Keyword search (")
+                && !l.starts_with("<<<UNTRUSTED ")
+                && !l.starts_with(">>>END ")
+        })
+        .unwrap_or("");
+    // Structured tools (find_callers, ...) send JSON.
+    let json: serde_json::Value =
+        serde_json::from_str(result_text).unwrap_or(serde_json::Value::Null);
 
     match short_name {
-        "context_search" | "search_documents" | "semantic_search" => {
+        "find_callers" | "find_callees" | "get_callers" | "get_callees" => {
+            let what = if short_name.ends_with("callers") {
+                "callers"
+            } else {
+                "callees"
+            };
+            let name = tool_input["symbol_name"].as_str().unwrap_or("?");
+            match json["total_count"].as_u64() {
+                Some(n) => format!("[myceliums] {n} {what} of {}", truncate(name, 40)),
+                None => format!("[myceliums] {what} of {}", truncate(name, 40)),
+            }
+        }
+        "trace_flow" => {
+            if first_line.starts_with("Shortest") || first_line.starts_with("No call chain") {
+                format!("[myceliums] {}", truncate(first_line, 100))
+            } else {
+                "[myceliums] Call chain traced".to_string()
+            }
+        }
+        "search_code" | "context_search" | "search_documents" | "semantic_search" => {
             let query = tool_input["query"].as_str().unwrap_or("?");
             // First line is like "Found 15 results for "query":"
             if first_line.starts_with("Found") || first_line.starts_with("No results") {
@@ -3818,7 +3906,7 @@ fn format_hook_message(
                 format!("[myceliums] Hybrid search: \"{}\"", truncate(query, 40))
             }
         }
-        "symbol_context" => {
+        "explain_symbol" | "symbol_context" => {
             // First line is like "Symbol: AppInner (Function)"
             if first_line.starts_with("Symbol:") {
                 format!("[myceliums] {}", first_line)
@@ -3835,7 +3923,7 @@ fn format_hook_message(
                 "[myceliums] Analysis complete".to_string()
             }
         }
-        "detect_impact" => {
+        "impact_of_change" | "detect_impact" => {
             if first_line.starts_with("Impact") {
                 format!("[myceliums] {}", first_line.trim_end_matches(':'))
             } else {
@@ -4542,25 +4630,22 @@ async fn cmd_diff(repo: &str) -> Result<()> {
     let (repo_id, _repo_info) = resolve_repo(repo)?;
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
 
-    // Load the previous snapshot
-    let previous = myceliums_core::load_snapshot(&data_dir(), &repo_id)?;
-    let previous = match previous {
-        Some(s) => s,
-        None => {
-            println!(
-                "No previous snapshot found for '{}'.\n\
-                 Run `myc analyze <path>` first to create a baseline snapshot.",
-                repo_id
-            );
-            return Ok(());
-        }
-    };
-
     // Build a snapshot from the current graph state
     let store = Store::open(&db_path, &repo_id).await?;
     let symbols = store.get_symbols().await?;
     let relationships = store.get_relationships().await?;
     let current = myceliums_core::build_snapshot(&repo_id, &symbols, &relationships);
+
+    // The previous analysis, as the MCP drift tool picks it.
+    let Some((_, previous)) = myceliums_core::previous_snapshot(&data_dir(), &repo_id, &current)?
+    else {
+        println!(
+            "No earlier analysis of '{}' is recorded, so there is nothing to compare yet.\n\
+             Run `myc analyze <path>` again after the code changes (each analysis records a snapshot).",
+            repo_id
+        );
+        return Ok(());
+    };
 
     // Diff
     let diff = myceliums_core::diff_snapshots(&previous, &current);
@@ -4573,7 +4658,7 @@ async fn cmd_diff(repo: &str) -> Result<()> {
 
     if total_changes == 0 {
         println!(
-            "No changes detected since last snapshot ({}).",
+            "No changes detected since the previous analysis ({}).",
             diff.previous_snapshot_at
         );
         return Ok(());
@@ -4944,9 +5029,37 @@ mod tests {
     #[test]
     fn hook_message_truncation_is_char_safe() {
         let input = serde_json::json!({ "query": "ä".repeat(100) });
-        let result = serde_json::json!({ "text": "😀".repeat(500) });
+        let result = "😀".repeat(500);
         // Must not panic on multi-byte content.
         let _ = format_hook_message("context_search", &input, &result);
+    }
+
+    #[test]
+    fn hook_reads_plain_text_and_skips_the_index_line() {
+        let response = serde_json::json!([{
+            "type": "text",
+            "text": "Index: commit 1a2b3c4 = HEAD, up to date.\n\n<<<UNTRUSTED ab12 search results\nFound 3 results for \"parse\":\n>>>END ab12"
+        }]);
+        let text = hook_response_text(&response);
+        let input = serde_json::json!({ "query": "parse" });
+        assert_eq!(
+            format_hook_message("search_code", &input, &text),
+            "[myceliums] Found 3 results for \"parse\":"
+        );
+        // Servers before 0.4 wrapped the text in JSON.
+        let legacy =
+            serde_json::json!([{"type": "text", "text": "{\"text\":\"Symbol: f (Function)\"}"}]);
+        assert_eq!(
+            format_hook_message("symbol_context", &input, &hook_response_text(&legacy)),
+            "[myceliums] Symbol: f (Function)"
+        );
+        let callers =
+            serde_json::json!([{"type": "text", "text": "{\"total_count\":4,\"callers\":[]}"}]);
+        let input = serde_json::json!({ "symbol_name": "parse" });
+        assert_eq!(
+            format_hook_message("find_callers", &input, &hook_response_text(&callers)),
+            "[myceliums] 4 callers of parse"
+        );
     }
 
     fn registry_with(ids: &[(&str, &str)]) -> RepoRegistry {

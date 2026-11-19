@@ -17,7 +17,7 @@ pub const BEGIN: &str = "<!-- BEGIN myceliums -->";
 /// Last line of the managed block.
 pub const END: &str = "<!-- END myceliums -->";
 /// Version of the block's wording; bump it when the text changes.
-pub const ROUTING_VERSION: u32 = 1;
+pub const ROUTING_VERSION: u32 = 2;
 
 /// Which agent the block is written for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,11 +41,11 @@ pub fn routing_block(flavor: Flavor) -> String {
         ),
         Flavor::Claude { subagent: false } => (
             "myc setup-claude",
-            "The myceliums MCP tools (`get_callers`, `get_callees`, `context_search`) answer the same questions.",
+            "The myceliums MCP tools (`find_callers`, `find_callees`, `impact_of_change`, `search_code`) answer the same questions.",
         ),
         Flavor::Agents => (
             "myc setup-codex",
-            "The myceliums MCP tools (`get_callers`, `get_callees`, `context_search`) answer the same questions.",
+            "The myceliums MCP tools (`find_callers`, `find_callees`, `impact_of_change`, `search_code`) answer the same questions.",
         ),
     };
     format!(

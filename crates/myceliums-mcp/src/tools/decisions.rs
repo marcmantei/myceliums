@@ -17,7 +17,7 @@ impl MyceliumsMcp {
     pub(crate) async fn map_service(
         &self,
         Parameters(params): Parameters<MapServiceParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         self.resolve_repo_id(Some(&params.repo_id))?;
         save_service_mapping(
             &data_dir(),
@@ -46,7 +46,7 @@ impl MyceliumsMcp {
     async fn get_service_map(
         &self,
         Parameters(params): Parameters<GetServiceMapParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let mapping = load_service_mappings(&data_dir(), &repo_id)
             .map_err(|e| ToolError::internal("cannot read service mappings", e))?;
@@ -81,7 +81,7 @@ impl MyceliumsMcp {
     pub(crate) async fn record_decision(
         &self,
         Parameters(params): Parameters<RecordDecisionParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let status = adr_status(params.status.unwrap_or_default());
 
         let now = chrono::Utc::now().to_rfc3339();
@@ -118,7 +118,7 @@ impl MyceliumsMcp {
     async fn get_decisions(
         &self,
         Parameters(params): Parameters<GetDecisionsParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let decisions = load_decisions(&data_dir(), &repo_id)
             .map_err(|e| ToolError::internal("cannot read decisions", e))?;
@@ -152,7 +152,7 @@ impl MyceliumsMcp {
     pub(crate) async fn link_decision(
         &self,
         Parameters(params): Parameters<LinkDecisionParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         self.resolve_repo_id(Some(&params.repo_id))?;
         let decisions = load_decisions(&data_dir(), &params.repo_id)
             .map_err(|e| ToolError::internal("cannot read decisions", e))?;
@@ -184,7 +184,7 @@ impl MyceliumsMcp {
     async fn get_contracts(
         &self,
         Parameters(params): Parameters<GetContractsParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
         let repo = repo_info(&repo_id)?;
 

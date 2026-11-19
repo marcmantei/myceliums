@@ -1,5 +1,5 @@
 use super::EditorSetup;
-use crate::commands::setup_claude::{self, Layers, McpRegistrar, Targets};
+use crate::commands::setup_claude::{self, Layers, McpRegistrar, Targets, ToolLoading};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
@@ -40,7 +40,10 @@ impl EditorSetup for ClaudeEditor {
         let report = setup_claude::install(
             &Targets::user(&self.home),
             myc_path,
-            Layers::ALL,
+            Layers {
+                tool_loading: ToolLoading::for_config(false),
+                ..Layers::ALL
+            },
             McpRegistrar::ClaudeCli,
         )?;
         for (layer, outcome) in &report.lines {

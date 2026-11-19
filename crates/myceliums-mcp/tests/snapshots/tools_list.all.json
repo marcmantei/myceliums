@@ -1,5 +1,8 @@
 [
   {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
@@ -44,20 +47,7 @@
       "title": "AnalyzeParams",
       "type": "object"
     },
-    "name": "analyze",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "analyze"
   },
   {
     "annotations": {
@@ -100,7 +90,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -127,20 +117,7 @@
       "title": "ArchitectureLintParams",
       "type": "object"
     },
-    "name": "architecture_lint",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "architecture_lint"
   },
   {
     "annotations": {
@@ -154,7 +131,7 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -164,20 +141,7 @@
       "title": "ArchitectureViewParams",
       "type": "object"
     },
-    "name": "architecture_view",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "architecture_view"
   },
   {
     "annotations": {
@@ -186,7 +150,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Search for functions, classes, and symbols in the knowledge graph. Preferred over grep for finding code entities — returns structured results with file locations, types, and relevance scores.",
+    "description": "DEPRECATED: use `search_code` instead (this alias is removed in the next release). Search for functions, classes, and symbols in the knowledge graph by name and signature (keyword ranking).",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -222,7 +186,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -235,20 +199,7 @@
       "title": "SearchParams",
       "type": "object"
     },
-    "name": "context_search",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "context_search"
   },
   {
     "annotations": {
@@ -297,20 +248,7 @@
       "title": "CypherQueryParams",
       "type": "object"
     },
-    "name": "cypher_query",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "cypher_query"
   },
   {
     "annotations": {
@@ -339,20 +277,7 @@
       "title": "DeleteParams",
       "type": "object"
     },
-    "name": "delete",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "delete"
   },
   {
     "annotations": {
@@ -361,35 +286,56 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Detect architectural drift by comparing the current knowledge graph against the last saved snapshot. Returns a drift score (0-100, higher = less drift) and details on structural changes.",
+    "description": "What changed in the code structure since the previous analysis? Compares two recorded states of the graph (default: the analysis before the current one vs the current graph; any two snapshot ids with from_snapshot/to_snapshot) and returns a drift score (100 = unchanged) and the added/removed symbols and relationships.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "from_snapshot": {
+          "description": "Baseline snapshot ID (default: the analysis before the current one; each analyze records a snapshot)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Max changes per page, across all change lists (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Changes to skip, for the next page (default 0)",
+          "format": "uint",
+          "maximum": 100000,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_snapshot": {
+          "description": "Snapshot ID to compare against the baseline (default: the current graph)",
           "type": [
             "string",
             "null"
           ]
         }
       },
-      "title": "DetectDriftParams2",
+      "title": "DetectDriftParams",
       "type": "object"
     },
-    "name": "detect_architecture_drift",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "detect_architecture_drift"
   },
   {
     "annotations": {
@@ -446,7 +392,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -456,20 +402,7 @@
       "title": "DetectCyclesParams",
       "type": "object"
     },
-    "name": "detect_circular_dependencies",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "detect_circular_dependencies"
   },
   {
     "annotations": {
@@ -478,7 +411,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects.",
+    "description": "DEPRECATED: use `impact_of_change` instead (this alias is removed in the next release). Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -520,7 +453,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -530,20 +463,7 @@
       "title": "DetectImpactParams",
       "type": "object"
     },
-    "name": "detect_impact",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "detect_impact"
   },
   {
     "annotations": {
@@ -597,20 +517,51 @@
       "title": "DifferentiateIntentParams",
       "type": "object"
     },
-    "name": "differentiate_intent",
-    "outputSchema": {
+    "name": "differentiate_intent"
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Show a function, method or class with everything needed to understand it before changing it: its source, signature, file and line range, and who calls it and what it calls (with how each call edge was resolved).",
+    "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "text": {
+        "max_source_lines": {
+          "description": "Most source lines shown; longer bodies are cut with a note (default 120, max 5000)",
+          "format": "uint",
+          "maximum": 5000,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_name": {
+          "description": "Symbol: name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
       "required": [
-        "text"
+        "symbol_name"
       ],
-      "title": "TextOutput",
+      "title": "ExplainSymbolParams",
       "type": "object"
-    }
+    },
+    "name": "explain_symbol"
   },
   {
     "annotations": {
@@ -637,7 +588,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -647,29 +598,343 @@
       "title": "ExportMermaidParams",
       "type": "object"
     },
-    "name": "export_mermaid",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "export_mermaid"
   },
   {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Find functions and methods with no incoming CALLS edges (potential dead code; calls the resolver missed make this a candidate list, not proof). Exclude known entry points with exclude_patterns. Use before cleanup/refactoring.",
+    "description": "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous).",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "depth": {
+          "description": "Hops to follow: 1 = direct only (default 1, max 10)",
+          "format": "uint32",
+          "maximum": 10,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Max symbols per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Symbols to skip, for the next page (default 0)",
+          "format": "uint",
+          "maximum": 100000,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_name": {
+          "description": "Symbol: name, qualified name, or file_path:qualified_name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol_name"
+      ],
+      "title": "FindCallsParams",
+      "type": "object"
+    },
+    "name": "find_callees",
+    "outputSchema": {
+      "$defs": {
+        "CalleeItem": {
+          "properties": {
+            "depth": {
+              "description": "Calls between this symbol and the one asked about (1 = direct).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "end_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "file_path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "qualified_name": {
+              "type": "string"
+            },
+            "resolved": {
+              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
+              "type": "string"
+            },
+            "start_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "via": {
+              "description": "For depth > 1: the name of the symbol one step closer to the one\nasked about.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "qualified_name",
+            "kind",
+            "file_path",
+            "start_line",
+            "end_line",
+            "depth",
+            "resolved"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "callees": {
+          "items": {
+            "$ref": "#/$defs/CalleeItem"
+          },
+          "type": "array"
+        },
+        "depth_limited": {
+          "type": "boolean"
+        },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
+        },
+        "notice": {
+          "description": "Set when results were cut: how to fetch the next page.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_name": {
+          "type": "string"
+        },
+        "total_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index_status",
+        "symbol_name",
+        "callees",
+        "total_count",
+        "depth_limited"
+      ],
+      "title": "CalleesOutput",
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones.",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "depth": {
+          "description": "Hops to follow: 1 = direct only (default 1, max 10)",
+          "format": "uint32",
+          "maximum": 10,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Max symbols per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Symbols to skip, for the next page (default 0)",
+          "format": "uint",
+          "maximum": 100000,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_name": {
+          "description": "Symbol: name, qualified name, or file_path:qualified_name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol_name"
+      ],
+      "title": "FindCallsParams",
+      "type": "object"
+    },
+    "name": "find_callers",
+    "outputSchema": {
+      "$defs": {
+        "CallerItem": {
+          "properties": {
+            "depth": {
+              "description": "Calls between this symbol and the one asked about (1 = direct).",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "end_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "file_path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "qualified_name": {
+              "type": "string"
+            },
+            "resolved": {
+              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
+              "type": "string"
+            },
+            "start_line": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "via": {
+              "description": "For depth > 1: the name of the symbol one step closer to the one\nasked about.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "qualified_name",
+            "kind",
+            "file_path",
+            "start_line",
+            "end_line",
+            "depth",
+            "resolved"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "callers": {
+          "items": {
+            "$ref": "#/$defs/CallerItem"
+          },
+          "type": "array"
+        },
+        "depth_limited": {
+          "type": "boolean"
+        },
+        "index_status": {
+          "description": "Index freshness: analyzed commit vs current HEAD.",
+          "type": "string"
+        },
+        "notice": {
+          "description": "Set when results were cut: how to fetch the next page.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_name": {
+          "type": "string"
+        },
+        "total_count": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index_status",
+        "symbol_name",
+        "callers",
+        "total_count",
+        "depth_limited"
+      ],
+      "title": "CallersOutput",
+      "type": "object"
+    }
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Which functions and methods are never called? Lists those with no incoming CALLS edge, optionally only under a file or directory (path). A candidate list, not proof: entry points, callbacks and calls the resolver missed look unused too; skip known ones with exclude_patterns.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -700,14 +965,21 @@
             "null"
           ]
         },
+        "path": {
+          "description": "Only functions in this file, or under this directory (repository-relative, e.g. src/utils/)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "repo_id": {
-          "description": "Repository ID",
-          "type": "string"
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "required": [
-        "repo_id"
-      ],
       "title": "FindDeadCodeParams",
       "type": "object"
     },
@@ -814,7 +1086,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -832,20 +1104,7 @@
       "title": "FindPathParams",
       "type": "object"
     },
-    "name": "find_path",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "find_path"
   },
   {
     "annotations": {
@@ -854,7 +1113,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains. Each callee carries how its CALLS edge was resolved.",
+    "description": "DEPRECATED: use `find_callees` instead (this alias is removed in the next release). Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains. Each callee carries how its CALLS edge was resolved.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -910,6 +1169,7 @@
         "CalleeItem": {
           "properties": {
             "depth": {
+              "description": "Calls between this symbol and the one asked about (1 = direct).",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
@@ -939,6 +1199,13 @@
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
+            },
+            "via": {
+              "description": "For depth > 1: the name of the symbol one step closer to the one\nasked about.",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
@@ -1003,7 +1270,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns. Each caller carries how its CALLS edge was resolved.",
+    "description": "DEPRECATED: use `find_callers` instead (this alias is removed in the next release). Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns. Each caller carries how its CALLS edge was resolved.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -1059,6 +1326,7 @@
         "CallerItem": {
           "properties": {
             "depth": {
+              "description": "Calls between this symbol and the one asked about (1 = direct).",
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
@@ -1088,6 +1356,13 @@
               "format": "uint32",
               "minimum": 0,
               "type": "integer"
+            },
+            "via": {
+              "description": "For depth > 1: the name of the symbol one step closer to the one\nasked about.",
+              "type": [
+                "string",
+                "null"
+              ]
             }
           },
           "required": [
@@ -1181,7 +1456,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -1201,20 +1476,7 @@
       "title": "GetCentralityParams",
       "type": "object"
     },
-    "name": "get_centrality_report",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_centrality_report"
   },
   {
     "annotations": {
@@ -1482,7 +1744,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -1492,20 +1754,7 @@
       "title": "GetCommunityMetricsParams",
       "type": "object"
     },
-    "name": "get_community_metrics",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_community_metrics"
   },
   {
     "annotations": {
@@ -1539,7 +1788,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -1549,20 +1798,7 @@
       "title": "GetContractsParams",
       "type": "object"
     },
-    "name": "get_contracts",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_contracts"
   },
   {
     "annotations": {
@@ -1600,7 +1836,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -1613,20 +1849,7 @@
       "title": "GetConversationParams",
       "type": "object"
     },
-    "name": "get_conversation",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_conversation"
   },
   {
     "annotations": {
@@ -1660,7 +1883,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -1684,20 +1907,7 @@
       "title": "GetDecisionsParams",
       "type": "object"
     },
-    "name": "get_decisions",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_decisions"
   },
   {
     "annotations": {
@@ -1744,7 +1954,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -1757,20 +1967,7 @@
       "title": "GetDependenciesParams",
       "type": "object"
     },
-    "name": "get_dependencies",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_dependencies"
   },
   {
     "annotations": {
@@ -1943,20 +2140,7 @@
       "title": "GetGitContextParams",
       "type": "object"
     },
-    "name": "get_git_context",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_git_context"
   },
   {
     "annotations": {
@@ -1989,7 +2173,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2009,20 +2193,7 @@
       "title": "GetGodNodesParams",
       "type": "object"
     },
-    "name": "get_god_nodes",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_god_nodes"
   },
   {
     "annotations": {
@@ -2031,7 +2202,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Compare the current knowledge graph against the last stored snapshot to detect architectural drift. Shows new/removed symbols and relationships since the last analysis that saved a snapshot.",
+    "description": "DEPRECATED: use `detect_architecture_drift` instead (this alias is removed in the next release). Compare the current knowledge graph against the last stored snapshot to detect architectural drift. Shows new/removed symbols and relationships since the last analysis that saved a snapshot.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2056,7 +2227,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2066,20 +2237,7 @@
       "title": "GetGraphDiffParams",
       "type": "object"
     },
-    "name": "get_graph_diff",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_graph_diff"
   },
   {
     "annotations": {
@@ -2127,7 +2285,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2137,20 +2295,7 @@
       "title": "GetKnowledgeGapsParams",
       "type": "object"
     },
-    "name": "get_knowledge_gaps",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_knowledge_gaps"
   },
   {
     "annotations": {
@@ -2191,7 +2336,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2201,20 +2346,7 @@
       "title": "GetModuleCouplingParams",
       "type": "object"
     },
-    "name": "get_module_coupling",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_module_coupling"
   },
   {
     "annotations": {
@@ -2258,20 +2390,7 @@
       "title": "GetOwnershipParams",
       "type": "object"
     },
-    "name": "get_ownership",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_ownership"
   },
   {
     "annotations": {
@@ -2309,7 +2428,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2322,20 +2441,7 @@
       "title": "GetPersonContextParams",
       "type": "object"
     },
-    "name": "get_person_context",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_person_context"
   },
   {
     "annotations": {
@@ -2402,20 +2508,7 @@
       "title": "GetProcessesParams",
       "type": "object"
     },
-    "name": "get_processes",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_processes"
   },
   {
     "annotations": {
@@ -2456,7 +2549,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2473,20 +2566,7 @@
       "title": "GetRationaleParams",
       "type": "object"
     },
-    "name": "get_rationale",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_rationale"
   },
   {
     "annotations": {
@@ -2534,7 +2614,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2544,20 +2624,7 @@
       "title": "ReviewContextParams",
       "type": "object"
     },
-    "name": "get_review_context",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_review_context"
   },
   {
     "annotations": {
@@ -2588,20 +2655,7 @@
       "title": "GetSchemaParams",
       "type": "object"
     },
-    "name": "get_schema",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_schema"
   },
   {
     "annotations": {
@@ -2635,7 +2689,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2645,20 +2699,7 @@
       "title": "GetServiceMapParams",
       "type": "object"
     },
-    "name": "get_service_map",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_service_map"
   },
   {
     "annotations": {
@@ -2794,7 +2835,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2804,20 +2845,7 @@
       "title": "GetSuggestedQuestionsParams",
       "type": "object"
     },
-    "name": "get_suggested_questions",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_suggested_questions"
   },
   {
     "annotations": {
@@ -2861,7 +2889,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -2871,20 +2899,7 @@
       "title": "GetSurprisingConnectionsParams",
       "type": "object"
     },
-    "name": "get_surprising_connections",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "get_surprising_connections"
   },
   {
     "annotations": {
@@ -2893,7 +2908,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Get the complete definition and source code of a symbol. Use to understand what a function/class does before using or modifying it.",
+    "description": "DEPRECATED: use `explain_symbol` instead (this alias is removed in the next release). Get the complete definition and source code of a symbol. Use to understand what a function/class does before using or modifying it.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -2977,7 +2992,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality",
+    "description": "DEPRECATED: use `search_code` instead (this alias is removed in the next release). Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3013,7 +3028,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -3033,20 +3048,85 @@
       "title": "HybridSearchParams",
       "type": "object"
     },
-    "name": "hybrid_search",
-    "outputSchema": {
+    "name": "hybrid_search"
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass.",
+    "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "text": {
-          "type": "string"
+        "depth": {
+          "description": "Hops to follow from the changed code (default 2, max 10)",
+          "format": "uint32",
+          "maximum": 10,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "diff": {
+          "description": "A unified diff of the change (default when neither symbol_name nor file_path is given: `git diff HEAD` in the repository)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_path": {
+          "description": "The file you plan to change (repository-relative): all symbols it defines",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Max report lines per page (default 50, max 500)",
+          "format": "uint",
+          "maximum": 500,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Report lines to skip, for the next page (default 0)",
+          "format": "uint",
+          "maximum": 100000,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_name": {
+          "description": "The symbol you plan to change (name, qualified name, or file_path:qualified_name). Give at most one of symbol_name, file_path, diff",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
+      "title": "ImpactOfChangeParams",
       "type": "object"
-    }
+    },
+    "name": "impact_of_change"
   },
   {
     "annotations": {
@@ -3095,20 +3175,7 @@
       "title": "IsolateIntentParams",
       "type": "object"
     },
-    "name": "isolate_intent",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "isolate_intent"
   },
   {
     "annotations": {
@@ -3142,29 +3209,19 @@
       "title": "LinkDecisionParams",
       "type": "object"
     },
-    "name": "link_decision",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "link_decision"
   },
   {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
     "annotations": {
       "destructiveHint": false,
       "idempotentHint": true,
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "List the analyzed repositories (id, name, path, last analysis, size). Use it to find the repo_id the other tools expect.",
+    "description": "List the analyzed repositories (id, name, path, when and from which commit they were indexed, size). Tools default to the repository of the working directory; pass another one's id as repo_id.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3194,16 +3251,81 @@
     },
     "name": "list_repos",
     "outputSchema": {
+      "$defs": {
+        "RepoItem": {
+          "properties": {
+            "analyzed_at": {
+              "description": "When the index was built (RFC 3339).",
+              "type": "string"
+            },
+            "analyzed_commit": {
+              "description": "Git commit the index was built from, if the project is a git checkout.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "files": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "id": {
+              "description": "Pass this as `repo_id` to the other tools.",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "path": {
+              "description": "Absolute path of the project.",
+              "type": "string"
+            },
+            "symbols": {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "path",
+            "analyzed_at",
+            "symbols",
+            "files"
+          ],
+          "type": "object"
+        }
+      },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "`list_repos`: the analyzed repositories.",
       "properties": {
-        "text": {
-          "type": "string"
+        "notice": {
+          "description": "Set when the list was cut (how to fetch the next page) or is empty.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repos": {
+          "description": "One page of repositories, most recently analyzed first.",
+          "items": {
+            "$ref": "#/$defs/RepoItem"
+          },
+          "type": "array"
+        },
+        "total_count": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
-        "text"
+        "repos",
+        "total_count"
       ],
-      "title": "TextOutput",
+      "title": "ReposOutput",
       "type": "object"
     }
   },
@@ -3239,20 +3361,7 @@
       "title": "MapServiceParams",
       "type": "object"
     },
-    "name": "map_service",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "map_service"
   },
   {
     "annotations": {
@@ -3308,20 +3417,7 @@
       "title": "PlanAdaptationParams",
       "type": "object"
     },
-    "name": "plan_adaptation",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "plan_adaptation"
   },
   {
     "annotations": {
@@ -3345,7 +3441,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -3365,20 +3461,7 @@
       "title": "QualityHotspotsParams",
       "type": "object"
     },
-    "name": "quality_hotspots",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "quality_hotspots"
   },
   {
     "annotations": {
@@ -3423,7 +3506,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -3436,20 +3519,7 @@
       "title": "QueryKnowledgeParams",
       "type": "object"
     },
-    "name": "query_knowledge",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "query_knowledge"
   },
   {
     "annotations": {
@@ -3509,20 +3579,7 @@
       "title": "RecordDecisionParams",
       "type": "object"
     },
-    "name": "record_decision",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "record_decision"
   },
   {
     "annotations": {
@@ -3576,20 +3633,89 @@
       "title": "RenameParams",
       "type": "object"
     },
-    "name": "rename_symbol",
-    "outputSchema": {
+    "name": "rename_symbol"
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings.",
+    "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "text": {
+        "explain": {
+          "description": "Show the scoring breakdown of each result (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "limit": {
+          "description": "Max results per page (default 20, max 100)",
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mode": {
+          "description": "auto (default): hybrid when the index has embeddings, else keyword. keyword: names and signatures, no model. semantic: meaning only. hybrid: both, fused",
+          "enum": [
+            "auto",
+            "keyword",
+            "semantic",
+            "hybrid",
+            null
+          ],
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Results to skip, for the next page (default 0)",
+          "format": "uint",
+          "maximum": 100000,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "query": {
+          "description": "What to find: a name (parseConfig, Item.AsString) or what the code does (builds the Set-Cookie header)",
           "type": "string"
+        },
+        "repo_id": {
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rerank": {
+          "description": "Rerank the top 50 hybrid results with a cross-encoder: slower, more precise (default: false)",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "required": [
-        "text"
+        "query"
       ],
-      "title": "TextOutput",
+      "title": "SearchCodeParams",
       "type": "object"
-    }
+    },
+    "name": "search_code"
   },
   {
     "annotations": {
@@ -3598,7 +3724,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Search through all analyzed code content using BM25 text search",
+    "description": "DEPRECATED: use `search_code` instead (this alias is removed in the next release). Same as context_search (keyword ranking over names and signatures); it never was a separate BM25 document search.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3634,7 +3760,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -3647,20 +3773,7 @@
       "title": "SearchParams",
       "type": "object"
     },
-    "name": "search_documents",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "search_documents"
   },
   {
     "annotations": {
@@ -3712,7 +3825,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -3725,20 +3838,7 @@
       "title": "SearchEmailsParams",
       "type": "object"
     },
-    "name": "search_emails",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "search_emails"
   },
   {
     "annotations": {
@@ -3747,7 +3847,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Search for symbols using semantic similarity (vector embeddings). Returns symbols most similar in meaning to the query.",
+    "description": "DEPRECATED: use `search_code` instead (this alias is removed in the next release). Search for symbols using semantic similarity (vector embeddings). Returns symbols most similar in meaning to the query.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3783,7 +3883,7 @@
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -3796,20 +3896,7 @@
       "title": "SearchParams",
       "type": "object"
     },
-    "name": "semantic_search",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "semantic_search"
   },
   {
     "annotations": {
@@ -3818,7 +3905,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Compare two graph snapshots to see architectural changes over time. Shows added/removed symbols and relationships. Defaults to comparing the two most recent snapshots.",
+    "description": "DEPRECATED: use `detect_architecture_drift` instead (this alias is removed in the next release). Compare two graph snapshots to see architectural changes over time. Shows added/removed symbols and relationships. Defaults to comparing the two most recent snapshots.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3850,7 +3937,7 @@
           ]
         },
         "repo_id": {
-          "description": "Repository ID (default: repo of the working directory, else the most recent)",
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
           "type": [
             "string",
             "null"
@@ -3867,20 +3954,7 @@
       "title": "SnapshotDiffParams",
       "type": "object"
     },
-    "name": "snapshot_diff",
-    "outputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "text": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "TextOutput",
-      "type": "object"
-    }
+    "name": "snapshot_diff"
   },
   {
     "annotations": {
@@ -3889,7 +3963,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it — reveals dependencies that file reading alone cannot.",
+    "description": "DEPRECATED: use `explain_symbol` instead (this alias is removed in the next release). Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it — reveals dependencies that file reading alone cannot.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3909,19 +3983,85 @@
       "title": "SymbolContextParams",
       "type": "object"
     },
-    "name": "symbol_context",
-    "outputSchema": {
+    "name": "symbol_context"
+  },
+  {
+    "_meta": {
+      "anthropic/alwaysLoad": true
+    },
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true
+    },
+    "description": "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line.",
+    "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
-        "text": {
+        "extra_calls": {
+          "description": "Also list symbols on chains up to this many calls longer than the shortest (default 0, max 5)",
+          "format": "uint32",
+          "maximum": 5,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "from_symbol": {
+          "description": "Where the flow starts: name, qualified name, or file_path:qualified_name",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Max symbols per page (default 20, max 200)",
+          "format": "uint",
+          "maximum": 200,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "max_depth": {
+          "description": "Longest chain searched, in calls (default 12, max 30)",
+          "format": "uint32",
+          "maximum": 30,
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Symbols to skip, for the next page (default 0)",
+          "format": "uint",
+          "maximum": 100000,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "repo_id": {
+          "description": "Repository ID (default: the indexed repository containing the working directory)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "to_symbol": {
+          "description": "Where the flow ends: name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
       "required": [
-        "text"
+        "from_symbol",
+        "to_symbol"
       ],
-      "title": "TextOutput",
+      "title": "TraceFlowParams",
       "type": "object"
-    }
+    },
+    "name": "trace_flow"
   }
 ]

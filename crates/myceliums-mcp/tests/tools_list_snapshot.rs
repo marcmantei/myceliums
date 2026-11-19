@@ -1,23 +1,26 @@
-//! Golden snapshot of the `tools/list` surface.
+//! Golden snapshots of the `tools/list` surface.
 //!
 //! Agents see the server only through the tool list: each tool's name,
-//! description, and input/output JSON schema. This test serializes that list
-//! (sorted by tool name, object keys sorted recursively) and compares it with
-//! the committed golden file `tests/snapshots/tools_list.json`, so any change
-//! to the agent-visible surface — intended or not — shows up as a diff.
+//! description, input/output JSON schema and `_meta`. This test serializes
+//! that list (sorted by tool name, object keys sorted recursively) for the
+//! default profile (`core`) and for `all`, and compares each with its
+//! committed golden file `tests/snapshots/tools_list.<profile>.json`, so any
+//! change to the agent-visible surface — intended or not — shows up as a
+//! diff.
 //!
-//! To accept an intended change, regenerate the golden file and commit it:
+//! To accept an intended change, regenerate the golden files and commit them:
 //!
 //! ```text
 //! UPDATE_SNAPSHOTS=1 cargo test -p myceliums-mcp --test tools_list_snapshot
 //! ```
 
-use myceliums_mcp::MyceliumsMcp;
+use myceliums_mcp::{MyceliumsMcp, Toolsets};
 use serde_json::Value;
 use std::path::PathBuf;
 
-fn golden_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots/tools_list.json")
+fn golden_path(profile: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join(format!("tests/snapshots/tools_list.{profile}.json"))
 }
 
 /// Rebuilds every JSON object with its keys in sorted order, so the snapshot
@@ -38,8 +41,8 @@ fn sort_keys(value: Value) -> Value {
     }
 }
 
-fn render_tool_list() -> String {
-    let mut tools = MyceliumsMcp::tool_list_for_test();
+fn render_tool_list(toolsets: &Toolsets) -> String {
+    let mut tools = MyceliumsMcp::tool_list_for_test(toolsets);
     tools.sort_by(|a, b| a.name.cmp(&b.name));
     let value = serde_json::to_value(&tools).expect("tools serialize");
     let mut rendered = serde_json::to_string_pretty(&sort_keys(value)).expect("render");
@@ -48,9 +51,18 @@ fn render_tool_list() -> String {
 }
 
 #[test]
-fn tools_list_matches_golden_snapshot() {
-    let actual = render_tool_list();
-    let path = golden_path();
+fn default_profile_matches_golden_snapshot() {
+    check(&Toolsets::default(), "core");
+}
+
+#[test]
+fn all_profile_matches_golden_snapshot() {
+    check(&Toolsets::all(), "all");
+}
+
+fn check(toolsets: &Toolsets, profile: &str) {
+    let actual = render_tool_list(toolsets);
+    let path = golden_path(profile);
 
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
         std::fs::create_dir_all(path.parent().unwrap()).expect("create snapshot dir");

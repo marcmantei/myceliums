@@ -17,7 +17,7 @@ impl MyceliumsMcp {
     async fn query_knowledge(
         &self,
         Parameters(params): Parameters<QueryKnowledgeParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -143,7 +143,7 @@ impl MyceliumsMcp {
     async fn get_rationale(
         &self,
         Parameters(params): Parameters<GetRationaleParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
@@ -247,7 +247,7 @@ impl MyceliumsMcp {
     async fn get_knowledge_gaps(
         &self,
         Parameters(params): Parameters<GetKnowledgeGapsParams>,
-    ) -> Result<Json<TextOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
         let symbols = self.symbols(&repo_id).await?;
