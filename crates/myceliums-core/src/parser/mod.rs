@@ -418,6 +418,21 @@ pub enum BindingValue {
     Unknown,
 }
 
+/// What the call resolver needs to know about a definition beyond its
+/// symbol (#139): its declared return type and base types. Kept apart from
+/// [`SymbolMetadata`], which is indexed for search, for languages whose
+/// extractors do not record these there (Go, Java).
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeclaredTypes {
+    /// The definition's name and first line, as in its [`ParsedSymbol`].
+    pub name: String,
+    pub line: u32,
+    /// Declared return type, as written (`(*Config, error)`, `Config`).
+    pub return_type: Option<String>,
+    /// Base classes, implemented interfaces, embedded structs.
+    pub bases: Vec<String>,
+}
+
 /// The whole file, as a [`TypeBinding::scope`].
 pub const FILE_SCOPE: (u32, u32) = (0, u32::MAX);
 
@@ -484,6 +499,8 @@ pub struct ParseResult {
     /// Parameters, locals and fields with what they are bound to (Python,
     /// TypeScript/JavaScript, Go, Rust and Java).
     pub bindings: Vec<TypeBinding>,
+    /// Return and base types of definitions (Go, Java).
+    pub declared: Vec<DeclaredTypes>,
 }
 
 impl SourceParser {
@@ -627,6 +644,7 @@ impl SourceParser {
                 rationales,
                 aliases: vec![],
                 bindings: vec![],
+                declared: vec![],
             }
         })
     }
@@ -647,6 +665,7 @@ impl SourceParser {
         let mut imports = Vec::new();
         let mut aliases = Vec::new();
         let mut bindings = Vec::new();
+        let mut declared = Vec::new();
 
         match self.lang {
             SourceLanguage::TypeScript
@@ -672,6 +691,7 @@ impl SourceParser {
                 self.extract_go_calls(root, source_bytes, &mut calls, None);
                 self.extract_go_imports(root, source_bytes, &mut imports);
                 self.extract_go_bindings(root, source_bytes, &mut bindings, None);
+                self.extract_go_declared_types(root, source_bytes, &mut declared);
             }
             SourceLanguage::Rust => {
                 self.extract_rust_symbols(root, source_bytes, &mut symbols, None);
@@ -684,6 +704,7 @@ impl SourceParser {
                 self.extract_java_calls(root, source_bytes, &mut calls, None);
                 self.extract_java_imports(root, source_bytes, &mut imports);
                 self.extract_java_bindings(root, source_bytes, &mut bindings, None, None);
+                self.extract_java_declared_types(root, source_bytes, &mut declared);
             }
             SourceLanguage::CSharp => {
                 self.extract_csharp_symbols(root, source_bytes, &mut symbols, None);
@@ -781,6 +802,7 @@ impl SourceParser {
             rationales,
             aliases,
             bindings,
+            declared,
         }
     }
 }

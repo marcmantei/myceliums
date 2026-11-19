@@ -648,6 +648,7 @@ impl Analyzer {
                 &file_result.parse_result.imports,
                 &file_result.parse_result.aliases,
                 &file_result.parse_result.bindings,
+                &file_result.parse_result.declared,
             );
             all_imports.extend(file_result.parse_result.imports);
 
@@ -727,6 +728,7 @@ impl Analyzer {
                 &result.imports,
                 &result.aliases,
                 &result.bindings,
+                &result.declared,
             );
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
@@ -1493,6 +1495,7 @@ impl Analyzer {
                     &result.imports,
                     &result.aliases,
                     &result.bindings,
+                    &result.declared,
                 );
                 if !result.rationales.is_empty() {
                     all_rationales.push((rel_path, result.rationales));
@@ -1669,6 +1672,7 @@ impl Analyzer {
                 &result.imports,
                 &result.aliases,
                 &result.bindings,
+                &result.declared,
             );
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));

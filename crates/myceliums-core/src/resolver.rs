@@ -38,7 +38,9 @@ use std::collections::HashMap;
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, SymbolKind, SymbolMetadata};
 use uuid::Uuid;
 
-use crate::parser::{CallForm, CallReference, ExpressionStep, ImportInfo, TypeBinding};
+use crate::parser::{
+    CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, TypeBinding,
+};
 use imports::Bound;
 use types::Ty;
 
@@ -219,6 +221,9 @@ struct FileContext {
     aliases: Vec<(String, String)>,
     /// Parameters, locals and fields with their types or initialisers.
     bindings: Vec<TypeBinding>,
+    /// Return and base types of the file's definitions, where the symbol
+    /// metadata does not carry them.
+    declared: Vec<DeclaredTypes>,
 }
 
 /// Where a call is made (or a declaration is evaluated).
@@ -298,20 +303,23 @@ impl CallResolver {
     }
 
     /// Pass 1: register what a parsed file declares beyond its symbols: its
-    /// imports, the aliases SSA analysis found (`handler = authenticate`)
-    /// and its typed bindings. Register every parsed file, also one without
-    /// symbols: imports are resolved to files.
+    /// imports, the aliases SSA analysis found (`handler = authenticate`),
+    /// its typed bindings and its definitions' return and base types.
+    /// Register every parsed file, also one without symbols: imports are
+    /// resolved to files.
     pub fn register_file(
         &mut self,
         path: &str,
         imports: &[ImportInfo],
         aliases: &[(String, String)],
         bindings: &[TypeBinding],
+        declared: &[DeclaredTypes],
     ) {
         let context = self.files.entry(path.to_string()).or_default();
         context.imports.extend(imports.iter().cloned());
         context.aliases.extend(aliases.iter().cloned());
         context.bindings.extend(bindings.iter().cloned());
+        context.declared.extend(declared.iter().cloned());
         self.prepared = false;
     }
 
@@ -338,6 +346,23 @@ impl CallResolver {
                 self.defs[id].enclosing_fn = enclosing;
                 if is_fn {
                     open.push(span);
+                }
+            }
+        }
+        for (file, context) in &self.files {
+            let Some(ids) = self.by_file.get(file) else {
+                continue;
+            };
+            for declared in &context.declared {
+                let def = ids.iter().copied().find(|&id| {
+                    self.defs[id].name == declared.name && self.defs[id].start == declared.line
+                });
+                if let Some(id) = def {
+                    let def = &mut self.defs[id];
+                    if def.return_type.is_none() {
+                        def.return_type = declared.return_type.clone();
+                    }
+                    def.bases.extend(declared.bases.iter().cloned());
                 }
             }
         }
@@ -662,7 +687,7 @@ impl CallResolver {
         self.named(name)
             .filter(|&id| {
                 let def = &self.defs[id];
-                def.is_top_level() && accept(def) && files.iter().any(|f| *f == def.file)
+                def.is_top_level() && accept(def) && files.contains(&def.file)
             })
             .collect()
     }
@@ -967,7 +992,7 @@ mod tests {
                 value: crate::parser::BindingValue::Unknown,
             })
             .collect();
-        resolver.register_file(file, &[], &[], &bindings);
+        resolver.register_file(file, &[], &[], &bindings, &[]);
     }
 
     fn resolver(symbols: &[CodeSymbol]) -> CallResolver {
@@ -1013,7 +1038,7 @@ mod tests {
         ]);
         let inside = call("b.py", 12, "parse", "decode", CallForm::Bare);
         assert_eq!(
-            edges(&mut resolver, &[inside.clone()]),
+            edges(&mut resolver, std::slice::from_ref(&inside)),
             [edge("b.py::parse", "b.py::decode", "name-match")]
         );
         // Outside every definition, or without a file, a call has no caller.
@@ -1088,6 +1113,7 @@ mod tests {
             &[import("validate", "shop.validation", Some("validate"))],
             &[],
             &[],
+            &[],
         );
         let calls = [
             call("shop/auth.py", 2, "parse", "decode", CallForm::Bare),
@@ -1127,8 +1153,9 @@ mod tests {
             ],
             &[],
             &[],
+            &[],
         );
-        resolver.register_file("shop/__init__.py", &[], &[], &[]);
+        resolver.register_file("shop/__init__.py", &[], &[], &[], &[]);
         let calls = [
             call("shop/service.py", 2, "login", "parse_token", CallForm::Bare),
             member(
@@ -1169,6 +1196,7 @@ mod tests {
             ],
             &[],
             &[],
+            &[],
         );
         let calls = [
             call("src/app/main.ts", 2, "main", "format", CallForm::Bare),
@@ -1206,6 +1234,7 @@ mod tests {
                 import("validation", "example.com/shop/validation", None),
                 import("strings", "strings", None),
             ],
+            &[],
             &[],
             &[],
         );
@@ -1255,6 +1284,7 @@ mod tests {
             ],
             &[],
             &[],
+            &[],
         );
         let calls = [
             call("src/service.rs", 2, "run", "parse_token", CallForm::Bare),
@@ -1286,6 +1316,7 @@ mod tests {
         resolver.register_file(
             "shop/Main.java",
             &[import("parse", "shop.auth.Auth.parse", Some("static"))],
+            &[],
             &[],
             &[],
         );
@@ -1388,6 +1419,7 @@ mod tests {
             &[],
             &[("handler".to_string(), "authenticate".to_string())],
             &[],
+            &[],
         );
         let calls = [call("app.py", 3, "main", "handler", CallForm::Bare)];
         assert_eq!(
@@ -1434,6 +1466,7 @@ mod tests {
         resolver.register_file(
             "src/main.rs",
             &[import("Repo", "crate::a::Repo", None)],
+            &[],
             &[],
             &[],
         );
@@ -1525,6 +1558,7 @@ mod tests {
                 (2, 4),
                 BindingValue::Type("Repository".to_string()),
             )],
+            &[],
         );
         resolver.register_file(
             "shop/service.py",
@@ -1539,6 +1573,7 @@ mod tests {
                 binding("rows", (1, 9), BindingValue::Type("list[str]".to_string())),
                 binding("thing", (1, 9), BindingValue::Unknown),
             ],
+            &[],
         );
         resolver
     }
@@ -1659,6 +1694,7 @@ mod tests {
                 binding("handler", (4, 6), BindingValue::Unknown),
                 binding("cls", (8, 9), BindingValue::Expr(vec![ident("Config")])),
             ],
+            &[],
         );
         let calls = [
             call("cli.py", 5, "dispatch", "handler", CallForm::Bare),
@@ -1702,6 +1738,7 @@ mod tests {
                     ExpressionStep::Call,
                 ]),
             )],
+            &[],
         );
         let calls = [member(
             "src/service.ts",
@@ -1743,6 +1780,7 @@ mod tests {
                 ),
                 binding("s", (6, 9), BindingValue::Type("*UserService".to_string())),
             ],
+            &[],
         );
         let receiver = vec![ident("s"), ExpressionStep::Field("validator".to_string())];
         let calls = [member(
@@ -1836,6 +1874,61 @@ mod tests {
                     "exact"
                 ),
             ]
+        );
+    }
+
+    /// Go: `cfg, err := config.Load(text)` with `func Load(...) (*Config,
+    /// error)` declared beside the symbol, not in its metadata.
+    #[test]
+    fn declared_return_types_reach_the_resolver() {
+        let mut resolver = resolver(&[
+            function("config/config.go", "Load", (1, 3)),
+            class("config/config.go", "Config", (5, 7)),
+            method("config/config.go", "Config.Get", (9, 10)),
+            method("store/store.go", "Repo.Get", (1, 2)),
+            function("service/service.go", "Settings", (1, 9)),
+        ]);
+        resolver.register_file(
+            "config/config.go",
+            &[],
+            &[],
+            &[],
+            &[DeclaredTypes {
+                name: "Load".to_string(),
+                line: 1,
+                return_type: Some("(*Config, error)".to_string()),
+                bases: Vec::new(),
+            }],
+        );
+        resolver.register_file(
+            "service/service.go",
+            &[import("config", "example.com/shop/config", None)],
+            &[],
+            &[binding(
+                "cfg",
+                (2, 9),
+                BindingValue::Expr(vec![
+                    ident("config"),
+                    ExpressionStep::Field("Load".to_string()),
+                    ExpressionStep::Call,
+                ]),
+            )],
+            &[],
+        );
+        let calls = [member(
+            "service/service.go",
+            3,
+            "Settings",
+            vec![ident("cfg")],
+            "Get",
+        )];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "service/service.go::Settings",
+                "config/config.go::Config.Get",
+                "exact"
+            )]
         );
     }
 

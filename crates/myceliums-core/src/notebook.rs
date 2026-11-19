@@ -139,6 +139,7 @@ pub fn parse_notebook(source: &str, parse_timeout: Option<Duration>) -> Result<P
     let mut all_imports = Vec::new();
     let mut all_rationales = Vec::new();
     let mut all_bindings = Vec::new();
+    let mut all_declared = Vec::new();
 
     // Track a running line offset so symbols have unique, monotonically
     // increasing line numbers across cells.
@@ -219,6 +220,10 @@ pub fn parse_notebook(source: &str, parse_timeout: Option<Duration>) -> Result<P
                     binding.scope.1 = binding.scope.1.saturating_add(line_offset);
                     all_bindings.push(binding);
                 }
+                for mut declared in result.declared {
+                    declared.line += line_offset;
+                    all_declared.push(declared);
+                }
                 all_imports.extend(result.imports);
             }
             "markdown" => {
@@ -250,6 +255,7 @@ pub fn parse_notebook(source: &str, parse_timeout: Option<Duration>) -> Result<P
         rationales: all_rationales,
         aliases: vec![],
         bindings: all_bindings,
+        declared: all_declared,
     })
 }
 

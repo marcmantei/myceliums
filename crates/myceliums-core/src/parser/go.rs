@@ -1,10 +1,10 @@
 //! Go extraction.
 
 use super::{
-    BindingValue, CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser,
-    TypeBinding, FILE_SCOPE,
+    BindingValue, CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, ParsedSymbol,
+    SourceParser, TypeBinding, FILE_SCOPE,
 };
-use myceliums_storage::{SymbolKind, SymbolMetadata};
+use myceliums_storage::SymbolKind;
 use tree_sitter::Node;
 
 impl SourceParser {
@@ -30,7 +30,7 @@ impl SourceParser {
                         signature: self.extract_go_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: self.go_function_metadata(node, source),
+                        metadata: None,
                     });
                 }
             }
@@ -60,7 +60,7 @@ impl SourceParser {
                         signature: self.extract_go_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name,
-                        metadata: self.go_function_metadata(node, source),
+                        metadata: None,
                     });
                 }
             }
@@ -77,11 +77,6 @@ impl SourceParser {
                                 Some("interface_type") => SymbolKind::Interface,
                                 _ => SymbolKind::TypeAlias,
                             };
-                            // Embedded fields: their methods are promoted.
-                            let embedded = type_node
-                                .filter(|t| t.kind() == "struct_type")
-                                .map(|t| self.go_embedded_types(t, source))
-                                .unwrap_or_default();
                             symbols.push(ParsedSymbol {
                                 name: name.clone(),
                                 kind: sym_kind,
@@ -90,10 +85,7 @@ impl SourceParser {
                                 signature: self.extract_go_signature(child, source),
                                 content: self.node_text(child, source).to_string(),
                                 parent_name: parent.map(|s| s.to_string()),
-                                metadata: (!embedded.is_empty()).then(|| SymbolMetadata {
-                                    superclasses: embedded,
-                                    ..SymbolMetadata::default()
-                                }),
+                                metadata: None,
                             });
                             // An interface's method set.
                             if let Some(interface) =
@@ -115,7 +107,7 @@ impl SourceParser {
                                         signature: self.node_text(elem, source).trim().to_string(),
                                         content: self.node_text(elem, source).to_string(),
                                         parent_name: Some(name.clone()),
-                                        metadata: self.go_function_metadata(elem, source),
+                                        metadata: None,
                                     });
                                 }
                             }
@@ -188,14 +180,53 @@ impl SourceParser {
         }
     }
 
-    /// The declared result of a Go function or method (`*Config`,
-    /// `(*Config, error)`), if any.
-    fn go_function_metadata(&self, node: Node, source: &[u8]) -> Option<SymbolMetadata> {
-        let result = node.child_by_field_name("result")?;
-        Some(SymbolMetadata {
-            return_type: Some(self.node_text(result, source).trim().to_string()),
-            ..SymbolMetadata::default()
-        })
+    /// Return types of functions, methods and interface methods, and the
+    /// types structs embed (their methods are promoted), for the call
+    /// resolver (#139).
+    pub(super) fn extract_go_declared_types(
+        &self,
+        node: Node,
+        source: &[u8],
+        out: &mut Vec<DeclaredTypes>,
+    ) {
+        let line = |n: Node| n.start_position().row as u32 + 1;
+        match node.kind() {
+            "function_declaration" | "method_declaration" | "method_elem" => {
+                let name = node.child_by_field_name("name");
+                let result = node.child_by_field_name("result");
+                if let (Some(name), Some(result)) = (name, result) {
+                    out.push(DeclaredTypes {
+                        name: self.node_text(name, source).to_string(),
+                        line: line(node),
+                        return_type: Some(self.node_text(result, source).trim().to_string()),
+                        bases: Vec::new(),
+                    });
+                }
+            }
+            "type_spec" => {
+                let struct_type = node
+                    .child_by_field_name("type")
+                    .filter(|t| t.kind() == "struct_type");
+                if let (Some(name), Some(struct_type)) =
+                    (node.child_by_field_name("name"), struct_type)
+                {
+                    let embedded = self.go_embedded_types(struct_type, source);
+                    if !embedded.is_empty() {
+                        out.push(DeclaredTypes {
+                            name: self.node_text(name, source).to_string(),
+                            line: line(node),
+                            return_type: None,
+                            bases: embedded,
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            self.extract_go_declared_types(child, source, out);
+        }
     }
 
     /// The types a struct embeds (`struct { *Report; ... }`).
@@ -815,7 +846,7 @@ import "fmt"
 #[cfg(test)]
 mod resolution_facts {
     use crate::parser::{BindingValue, CallForm, ExpressionStep, SourceLanguage, SourceParser};
-    use myceliums_storage::{SymbolKind, SymbolMetadata};
+    use myceliums_storage::SymbolKind;
 
     const SOURCE: &str = r#"
 package report
@@ -846,12 +877,12 @@ func Load(text string) (*Config, error) {
             .unwrap()
     }
 
-    fn metadata(result: &crate::parser::ParseResult, name: &str) -> SymbolMetadata {
+    fn declared(result: &crate::parser::ParseResult, name: &str) -> crate::parser::DeclaredTypes {
         result
-            .symbols
+            .declared
             .iter()
-            .find(|s| s.name == name)
-            .and_then(|s| s.metadata.clone())
+            .find(|d| d.name == name)
+            .cloned()
             .unwrap_or_default()
     }
 
@@ -865,11 +896,13 @@ func Load(text string) (*Config, error) {
         );
         let add = result.symbols.iter().find(|s| s.name == "Add").unwrap();
         assert_eq!(add.parent_name.as_deref(), Some("Repo"), "generic receiver");
-        assert_eq!(metadata(&result, "OrderReport").superclasses, ["Report"]);
+        assert_eq!(declared(&result, "OrderReport").bases, ["Report"]);
         assert_eq!(
-            metadata(&result, "Load").return_type.as_deref(),
+            declared(&result, "Load").return_type.as_deref(),
             Some("(*Config, error)")
         );
+        // Search does not see them: symbol metadata is unchanged.
+        assert!(result.symbols.iter().all(|s| s.metadata.is_none()));
     }
 
     #[test]

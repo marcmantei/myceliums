@@ -1,10 +1,10 @@
 //! JVM-family extraction: Java, Kotlin and Scala.
 
 use super::{
-    BindingValue, CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser,
-    TypeBinding, FILE_SCOPE,
+    BindingValue, CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, ParsedSymbol,
+    SourceParser, TypeBinding, FILE_SCOPE,
 };
-use myceliums_storage::{SymbolKind, SymbolMetadata};
+use myceliums_storage::SymbolKind;
 use tree_sitter::Node;
 
 impl SourceParser {
@@ -30,7 +30,7 @@ impl SourceParser {
                         signature: self.extract_java_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: self.java_supertypes(node, source),
+                        metadata: None,
                     });
                     // Recurse into class body with class name as parent
                     if let Some(body) = node.child_by_field_name("body") {
@@ -50,7 +50,7 @@ impl SourceParser {
                         signature: self.extract_java_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: self.java_supertypes(node, source),
+                        metadata: None,
                     });
                     // Recurse into interface body with interface name as parent
                     if let Some(body) = node.child_by_field_name("body") {
@@ -125,10 +125,7 @@ impl SourceParser {
                         signature: self.extract_java_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: node.child_by_field_name("type").map(|ty| SymbolMetadata {
-                            return_type: Some(self.node_text(ty, source).to_string()),
-                            ..SymbolMetadata::default()
-                        }),
+                        metadata: None,
                     });
                 }
             }
@@ -213,9 +210,51 @@ impl SourceParser {
         }
     }
 
+    /// Return types of methods and supertypes of classes and interfaces,
+    /// for the call resolver (#139).
+    pub(super) fn extract_java_declared_types(
+        &self,
+        node: Node,
+        source: &[u8],
+        out: &mut Vec<DeclaredTypes>,
+    ) {
+        let name = node
+            .child_by_field_name("name")
+            .map(|n| self.node_text(n, source).to_string());
+        let line = node.start_position().row as u32 + 1;
+        match (node.kind(), name) {
+            ("method_declaration", Some(name)) => {
+                if let Some(ty) = node.child_by_field_name("type") {
+                    out.push(DeclaredTypes {
+                        name,
+                        line,
+                        return_type: Some(self.node_text(ty, source).to_string()),
+                        bases: Vec::new(),
+                    });
+                }
+            }
+            ("class_declaration" | "interface_declaration", Some(name)) => {
+                let bases = self.java_supertypes(node, source);
+                if !bases.is_empty() {
+                    out.push(DeclaredTypes {
+                        name,
+                        line,
+                        return_type: None,
+                        bases,
+                    });
+                }
+            }
+            _ => {}
+        }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            self.extract_java_declared_types(child, source, out);
+        }
+    }
+
     /// `extends` and `implements` of a Java class, `extends` of an
     /// interface.
-    fn java_supertypes(&self, node: Node, source: &[u8]) -> Option<SymbolMetadata> {
+    fn java_supertypes(&self, node: Node, source: &[u8]) -> Vec<String> {
         let mut supertypes = Vec::new();
         let cursor = &mut node.walk();
         for child in node.children(cursor) {
@@ -240,10 +279,7 @@ impl SourceParser {
                 }
             }
         }
-        (!supertypes.is_empty()).then(|| SymbolMetadata {
-            superclasses: supertypes,
-            ..SymbolMetadata::default()
-        })
+        supertypes
     }
 
     fn extract_java_signature(&self, node: Node, source: &[u8]) -> String {
@@ -1672,16 +1708,18 @@ public class OrderReport extends Report implements Sink {
     #[test]
     fn symbols_carry_supertypes_and_return_types() {
         let result = parse();
-        let meta = |name: &str| {
+        let declared = |name: &str| {
             result
-                .symbols
+                .declared
                 .iter()
-                .find(|s| s.name == name)
-                .and_then(|s| s.metadata.clone())
+                .find(|d| d.name == name)
+                .cloned()
                 .unwrap_or_default()
         };
-        assert_eq!(meta("OrderReport").superclasses, ["Report", "Sink"]);
-        assert_eq!(meta("settings").return_type.as_deref(), Some("Config"));
+        assert_eq!(declared("OrderReport").bases, ["Report", "Sink"]);
+        assert_eq!(declared("settings").return_type.as_deref(), Some("Config"));
+        // Search does not see them: symbol metadata is unchanged.
+        assert!(result.symbols.iter().all(|s| s.metadata.is_none()));
     }
 
     #[test]
