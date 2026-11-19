@@ -469,8 +469,8 @@ impl ModelIndex {
     /// Each piece comes from the function the product calls —
     /// [`myceliums_core::search_symbols`], [`Embedder::embed_query`] and
     /// [`Store::vector_search`] with `limit.max(candidates)` results — so
-    /// fusing them with [`myceliums_core::weighted_reciprocal_rank_fusion`]
-    /// reproduces [`hybrid_search_with`]. The parameter sweep checks that on
+    /// fusing them with [`myceliums_core::reciprocal_rank_fusion`] reproduces
+    /// [`hybrid_search_with`]. The parameter sweep checks that on
     /// every query at the shipped defaults rather than taking it on trust.
     pub async fn fusion_inputs(
         &self,
@@ -524,16 +524,12 @@ impl FusionInputs {
             .iter()
             .map(|hit| (hit.symbol.clone(), hit.score, None))
             .collect();
-        Ok(myceliums_core::weighted_reciprocal_rank_fusion(
-            bm25,
-            vector,
-            params.rrf_k,
-            params.bm25_weight,
-            limit,
+        Ok(
+            myceliums_core::reciprocal_rank_fusion(bm25, vector, params.rrf_k, limit)
+                .into_iter()
+                .map(|result| result.symbol)
+                .collect(),
         )
-        .into_iter()
-        .map(|result| result.symbol)
-        .collect())
     }
 }
 

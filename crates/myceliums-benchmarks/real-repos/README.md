@@ -20,8 +20,9 @@ confirming them. Method, results and their interpretation:
 | [honojs/hono](https://github.com/honojs/hono) | TypeScript | `v4.13.18` `f6fbaf0299` | 42 | 10 420 |
 
 Each repository has 9 `exact-name`, 10 `paraphrase`, 14 `behavioural` and 9
-`conceptual` queries. hono is above the 5 000-symbol threshold, so its vector
-search runs on the IVF-PQ index rather than a flat scan.
+`conceptual` queries. Each repository is indexed on its own, as `myc analyze`
+indexes one repository; vector search is exact at every size (#117), so hono's
+10k symbols are scanned exactly like the others'.
 
 ## Files
 

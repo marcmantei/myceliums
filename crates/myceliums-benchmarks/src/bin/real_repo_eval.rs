@@ -9,8 +9,7 @@
 //!
 //! For every repository pinned in `real-repos/queries.json` it verifies the
 //! checkout, parses it the way `myc analyze` reads it, indexes it with the
-//! shipped embedding model (the ANN index included, where the repository is
-//! large enough), and then:
+//! shipped embedding model, and then:
 //!
 //! 1. scores lexical, semantic, hybrid and hybrid+rerank on every query, with
 //!    the per-split, per-repository and mode-vs-mode breakdowns;
@@ -49,7 +48,6 @@ use myceliums_benchmarks::eval::sweep::{
     decide, deltas, grid, select, sweep, Config, Decision, SweepInput, PRIMARY_METRIC,
     REPORTED_METRICS,
 };
-use myceliums_storage::store::ANN_INDEX_THRESHOLD;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Write as _;
@@ -168,8 +166,6 @@ struct RepoReport {
     queries: usize,
     symbols: usize,
     skipped_files: usize,
-    /// Whether the vector search ran on the IVF-PQ index rather than a flat scan.
-    ann_index: bool,
 }
 
 #[derive(Serialize)]
@@ -262,15 +258,10 @@ async fn main() -> Result<()> {
             );
         }
         println!(
-            "  {:<10} {:>6} symbols  {:>3} skipped files  {}",
+            "  {:<10} {:>6} symbols  {:>3} skipped files",
             pin.name,
             corpus.len(),
-            corpus.skipped().len(),
-            if corpus.len() >= ANN_INDEX_THRESHOLD {
-                "IVF-PQ index"
-            } else {
-                "flat vector scan"
-            }
+            corpus.skipped().len()
         );
         corpora.push(corpus);
     }
@@ -424,7 +415,6 @@ async fn main() -> Result<()> {
                 queries: set.queries_in(None, Some(&pin.name)).len(),
                 symbols: corpus.len(),
                 skipped_files: corpus.skipped().len(),
-                ann_index: !indices.is_empty() && corpus.len() >= ANN_INDEX_THRESHOLD,
             })
             .collect(),
         models: (!indices.is_empty()).then(|| setup.provenance()),
@@ -620,18 +610,17 @@ fn render_markdown(report: &Report) -> String {
         &report.dataset_digest[..12],
         report.review.note
     );
-    out.push_str("| Repository | Language | Commit | Queries | Symbols | Vector search |\n");
-    out.push_str("| --- | --- | --- | ---: | ---: | --- |\n");
+    out.push_str("| Repository | Language | Commit | Queries | Symbols |\n");
+    out.push_str("| --- | --- | --- | ---: | ---: |\n");
     for repo in &report.repos {
         out.push_str(&format!(
-            "| {} ({}) | {} | `{}` | {} | {} | {} |\n",
+            "| {} ({}) | {} | `{}` | {} | {} |\n",
             repo.name,
             repo.tag,
             repo.language,
             &repo.commit[..10],
             repo.queries,
-            repo.symbols,
-            if repo.ann_index { "IVF-PQ" } else { "flat" }
+            repo.symbols
         ));
     }
 

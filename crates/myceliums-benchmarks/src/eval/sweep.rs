@@ -15,16 +15,16 @@
 //!    dev result is reported as what it is: the best of many tries on the
 //!    queries it was chosen on.
 //!
-//! Step 1 scores 60 configurations per query, so it does not call
-//! `hybrid_search_with` 60 times: [`super::models::ModelIndex::fusion_inputs`]
+//! Step 1 scores 20 configurations per query, so it does not call
+//! `hybrid_search_with` 20 times: [`super::models::ModelIndex::fusion_inputs`]
 //! computes the BM25 ranking, the query embedding and the vector candidates
 //! once, and each configuration fuses them with the production
-//! [`myceliums_core::weighted_reciprocal_rank_fusion`]. The binary checks on
+//! [`myceliums_core::reciprocal_rank_fusion`]. The binary checks on
 //! every dev query that this reproduces the production hybrid ranking at the
 //! shipped defaults exactly; the decision-bearing step 3 does not rely on it.
 
 use anyhow::Result;
-use myceliums_core::{HybridParams, DEFAULT_BM25_WEIGHT, DEFAULT_RRF_K, DEFAULT_VECTOR_CANDIDATES};
+use myceliums_core::{HybridParams, DEFAULT_RRF_K, DEFAULT_VECTOR_CANDIDATES};
 use serde::{Deserialize, Serialize};
 
 use super::bootstrap::{paired_bootstrap_default, DeltaEstimate};
@@ -41,11 +41,6 @@ pub const RRF_K_GRID: [f64; 5] = [10.0, 20.0, 40.0, 60.0, 100.0];
 
 /// Minimum vector-candidate counts swept.
 pub const VECTOR_CANDIDATE_GRID: [usize; 4] = [50, 100, 200, 400];
-
-/// BM25-leg weights swept (vector leg: 1). Below 1 only: the fixture golden
-/// set and the open question in the methodology are about BM25 pulling good
-/// vector results down, not up.
-pub const BM25_WEIGHT_GRID: [f64; 3] = [0.25, 0.5, 1.0];
 
 /// The metric a configuration is chosen on and confirmed with. nDCG@10 credits
 /// every labelled answer by position, which suits the multi-answer conceptual
@@ -67,8 +62,6 @@ pub struct Config {
     pub rrf_k: f64,
     /// Minimum vector candidates.
     pub vector_candidates: usize,
-    /// BM25-leg weight.
-    pub bm25_weight: f64,
 }
 
 impl Config {
@@ -77,7 +70,6 @@ impl Config {
         Self {
             rrf_k: DEFAULT_RRF_K,
             vector_candidates: DEFAULT_VECTOR_CANDIDATES,
-            bm25_weight: DEFAULT_BM25_WEIGHT,
         }
     }
 
@@ -86,7 +78,6 @@ impl Config {
         HybridParams {
             rrf_k: self.rrf_k,
             vector_candidates: self.vector_candidates,
-            bm25_weight: self.bm25_weight,
         }
     }
 
@@ -95,27 +86,21 @@ impl Config {
         *self == Self::shipped()
     }
 
-    /// `k=60 cand=100 w=1` — for tables.
+    /// `k=60 cand=100` — for tables.
     pub fn label(&self) -> String {
-        format!(
-            "k={} cand={} w={}",
-            self.rrf_k, self.vector_candidates, self.bm25_weight
-        )
+        format!("k={} cand={}", self.rrf_k, self.vector_candidates)
     }
 }
 
 /// Every configuration swept, in a fixed order. Contains the shipped default.
 pub fn grid() -> Vec<Config> {
     let mut configs = Vec::new();
-    for &bm25_weight in &BM25_WEIGHT_GRID {
-        for &vector_candidates in &VECTOR_CANDIDATE_GRID {
-            for &rrf_k in &RRF_K_GRID {
-                configs.push(Config {
-                    rrf_k,
-                    vector_candidates,
-                    bm25_weight,
-                });
-            }
+    for &vector_candidates in &VECTOR_CANDIDATE_GRID {
+        for &rrf_k in &RRF_K_GRID {
+            configs.push(Config {
+                rrf_k,
+                vector_candidates,
+            });
         }
     }
     configs
@@ -285,7 +270,7 @@ mod tests {
     #[test]
     fn the_grid_spans_the_requested_values_and_includes_the_default() {
         let configs = grid();
-        assert_eq!(configs.len(), 5 * 4 * 3);
+        assert_eq!(configs.len(), 5 * 4);
         assert!(configs.iter().any(Config::is_shipped));
         for k in [10.0, 20.0, 40.0, 60.0, 100.0] {
             assert!(configs.iter().any(|c| c.rrf_k == k));

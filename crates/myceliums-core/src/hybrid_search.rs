@@ -78,11 +78,6 @@ pub const DEFAULT_RRF_K: f64 = 60.0;
 /// Swept from 50 to 400 alongside [`DEFAULT_RRF_K`] (#95).
 pub const DEFAULT_VECTOR_CANDIDATES: usize = 100;
 
-/// Weight of the BM25 leg's reciprocal-rank contribution in the shipped fusion.
-/// The vector leg's weight is fixed at 1, so `1.0` is plain, unweighted RRF.
-/// Swept over 0.25, 0.5 and 1 alongside [`DEFAULT_RRF_K`] (#95).
-pub const DEFAULT_BM25_WEIGHT: f64 = 1.0;
-
 /// The tunable knobs of hybrid search.
 ///
 /// [`HybridParams::default`] is what `myc search --hybrid` and the MCP
@@ -95,8 +90,6 @@ pub struct HybridParams {
     pub rrf_k: f64,
     /// Minimum number of nearest-vector candidates fetched for fusion.
     pub vector_candidates: usize,
-    /// Multiplier on the BM25 leg's RRF contribution (vector leg: 1).
-    pub bm25_weight: f64,
 }
 
 impl Default for HybridParams {
@@ -104,7 +97,6 @@ impl Default for HybridParams {
         Self {
             rrf_k: DEFAULT_RRF_K,
             vector_candidates: DEFAULT_VECTOR_CANDIDATES,
-            bm25_weight: DEFAULT_BM25_WEIGHT,
         }
     }
 }
@@ -142,21 +134,6 @@ pub fn reciprocal_rank_fusion(
     bm25_results: Vec<(CodeSymbol, f64, Option<SearchExplain>)>,
     vector_results: Vec<(CodeSymbol, f64)>,
     k: f64,
-    limit: usize,
-) -> Vec<HybridSearchResult> {
-    weighted_reciprocal_rank_fusion(bm25_results, vector_results, k, 1.0, limit)
-}
-
-/// [`reciprocal_rank_fusion`] with the BM25 leg's contribution scaled by
-/// `bm25_weight`: score = `bm25_weight / (k + bm25_rank) + 1 / (k + vector_rank)`.
-///
-/// A weight of `1.0` is plain RRF, bit for bit; `0.0` reduces fusion to the
-/// vector ranking (BM25 then only breaks exact ties through list order).
-pub fn weighted_reciprocal_rank_fusion(
-    bm25_results: Vec<(CodeSymbol, f64, Option<SearchExplain>)>,
-    vector_results: Vec<(CodeSymbol, f64)>,
-    k: f64,
-    bm25_weight: f64,
     limit: usize,
 ) -> Vec<HybridSearchResult> {
     // Build uid -> (rank, score, symbol, explain) maps for each result set.
@@ -215,7 +192,7 @@ pub fn weighted_reciprocal_rank_fusion(
 
             let mut combined = 0.0;
             if let Some(r) = bm25_rank {
-                combined += bm25_weight * (1.0 / (k + r as f64));
+                combined += 1.0 / (k + r as f64);
             }
             if let Some(r) = vector_rank {
                 combined += 1.0 / (k + r as f64);
@@ -291,8 +268,7 @@ pub fn attach_graph_edges(
 /// 3. Runs vector search against `vectors`' **persisted** embeddings — the
 ///    corpus is never re-embedded per query
 /// 4. Combines results using Reciprocal Rank Fusion with the shipped
-///    [`HybridParams::default`] (k = 60, at least 100 vector candidates,
-///    unweighted)
+///    [`HybridParams::default`] (k = 60, at least 100 vector candidates)
 ///
 /// `vectors` is typically a [`myceliums_storage::Store`]; the BM25 leg keeps
 /// using the in-memory `symbols` slice.
@@ -388,11 +364,10 @@ async fn hybrid_search_impl(
     let vector_results =
         vector_leg(vectors, &query_embedding, limit, params.vector_candidates).await?;
 
-    Ok(weighted_reciprocal_rank_fusion(
+    Ok(reciprocal_rank_fusion(
         bm25_results,
         vector_results,
         params.rrf_k,
-        params.bm25_weight,
         limit,
     ))
 }
@@ -570,45 +545,6 @@ mod tests {
         let params = HybridParams::default();
         assert_eq!(params.rrf_k, 60.0);
         assert_eq!(params.vector_candidates, 100);
-        assert_eq!(params.bm25_weight, 1.0);
-    }
-
-    #[test]
-    fn unit_bm25_weight_is_plain_rrf_bit_for_bit() {
-        let bm25 = || {
-            vec![
-                (make_symbol("a", "alpha"), 10.0, None),
-                (make_symbol("b", "beta"), 8.0, None),
-                (make_symbol("c", "gamma"), 5.0, None),
-            ]
-        };
-        let vector = || {
-            vec![
-                (make_symbol("c", "gamma"), 0.95),
-                (make_symbol("d", "delta"), 0.90),
-            ]
-        };
-        let plain = reciprocal_rank_fusion(bm25(), vector(), 37.0, 10);
-        let weighted = weighted_reciprocal_rank_fusion(bm25(), vector(), 37.0, 1.0, 10);
-        let scores = |r: &[HybridSearchResult]| -> Vec<(String, u64)> {
-            r.iter()
-                .map(|x| (x.symbol.uid.clone(), x.combined_score.to_bits()))
-                .collect()
-        };
-        assert_eq!(scores(&plain), scores(&weighted));
-    }
-
-    #[test]
-    fn bm25_weight_scales_only_the_lexical_leg() {
-        // a: BM25 rank 1 only; d: vector rank 1 only. Unweighted they tie, and
-        // list order puts the BM25 hit first. Halving the BM25 weight must put
-        // the vector-only hit ahead and halve exactly the BM25 contribution.
-        let bm25 = vec![(make_symbol("a", "alpha"), 10.0, None)];
-        let vector = vec![(make_symbol("d", "delta"), 0.9)];
-        let results = weighted_reciprocal_rank_fusion(bm25, vector, 60.0, 0.5, 10);
-        assert_eq!(results[0].symbol.uid, "d");
-        assert!((results[0].combined_score - 1.0 / 61.0).abs() < 1e-12);
-        assert!((results[1].combined_score - 0.5 / 61.0).abs() < 1e-12);
     }
 
     #[test]
@@ -634,9 +570,9 @@ mod tests {
         let rank_of = |results: &[HybridSearchResult], uid: &str| {
             results.iter().position(|r| r.symbol.uid == uid).unwrap()
         };
-        let large = weighted_reciprocal_rank_fusion(bm25(), vector(), 100.0, 1.0, 20);
+        let large = reciprocal_rank_fusion(bm25(), vector(), 100.0, 20);
         assert!(rank_of(&large, "y") < rank_of(&large, "x"));
-        let small = weighted_reciprocal_rank_fusion(bm25(), vector(), 1.0, 1.0, 20);
+        let small = reciprocal_rank_fusion(bm25(), vector(), 1.0, 20);
         assert!(rank_of(&small, "x") < rank_of(&small, "y"));
     }
 
