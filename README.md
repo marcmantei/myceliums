@@ -130,6 +130,8 @@ myc serve
 
 </details>
 
+**Call resolution (CALLS edges).** For **Python, TypeScript/JavaScript (with Vue and Svelte script blocks), Go, Rust and Java**, a call is resolved the way the language binds it: bare calls through the caller's scopes and imports, method calls through the receiver's declared type, and only an untyped receiver by method name (measured on the hand-labelled fixtures: precision 1.00, recall 0.996; on 52 call sites sampled from four real repositories: 0.95 and 0.95). **Every other language is still matched by name** — nearest scope first (file, imports, directory), with the caller found by position and never across language families — and its accuracy is not measured. Details and limits: [call-resolution-limitations](docs/guides/call-resolution-limitations.md).
+
 **Content files** (built-in line parser, no tree-sitter):
 
 <details>

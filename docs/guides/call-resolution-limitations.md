@@ -16,17 +16,20 @@ The parsers report each call with its line, the callee's name, how the call name
    - a class or module name → `Config.load()`, `Validator::new()`, `config.parse()`;
    - a constructor or literal → `new Config(...).get()`, `User(...).save()`, `&model.User{...}`, `"x".join(...)`;
    - a parameter, variable or field with a declared type (`repo: Repository`, `Repository<User> repo`, `repo *store.Repo[*User]`, a struct field), or initialised from one of the above (`user = User(...)`);
+   - a module-level value with a declared type, also imported (`from .globals import current_app` where `current_app: Flask = ...`);
    - a call's declared return type (`load(text): Config`, `-> Self`, `func Load(...) (*Config, error)`).
 
-   On a typed receiver the call goes to that class's method, or the nearest base class's (Go: embedded struct's); on a module, to its top-level function; on a library type (a string, a `Map`, `strings`, `std::`), nowhere. Only a receiver whose type is not known falls back to the method name: any *method* of that name in the language family, never a free function.
+   On a typed receiver the call goes to that class's method, or the nearest base class's (Go: embedded struct's); on a module, to its top-level function; on a library type (a string, a `Map`, `strings`, `std::`), nowhere. Once a receiver is typed, a member its class does not declare — here or in a project base class — comes from a library base class (gin's `c.Writer.Header()`: `Header` is `http.ResponseWriter`'s), so the rest of the chain is a library value and is never matched by name. Only a receiver whose type is not known — an untyped parameter, a field assigned from one, the result of a function without a declared return type — falls back to the method name: any *method* of that name in the language family, never a free function.
 3. **Constructor call `new X()`** (and Python's `X()`) → the class `X` in scope. **`super(...)`** → the base class's constructor.
 4. **Languages whose extractor does not record call forms or bindings** (C, C++, C#, Ruby, Kotlin, Swift, PHP, Lua, Zig, PowerShell, Elixir, Scala, Objective-C, Dart): by name, any callable kind, nearest scope first — the caller's file, its imports, its directory, the whole language family.
 
-**Imports** are resolved to project files per language: Python modules and packages (absolute from a source root, or relative), relative TypeScript paths (and `@/`, `~/` aliases), Go import paths to the package directory, Rust `use` paths to module files, Java classes and static imports. Re-exports one import deep are followed (`from .sessions import Session` in a package's `__init__.py`; a TypeScript barrel that imports and re-exports). A specifier that names no project file is a library: a call through it gets no edge.
+**Imports** are resolved to project files per language: Python modules and packages (absolute from a source root, or relative; `import a.b` binds `a`), relative TypeScript paths (and `@/`, `~/` aliases), Go import paths to the package directory, Rust `use` paths to module files, Java classes and static imports. An import binds what the file declares under the name: a symbol, a module-level value, a submodule, or a re-export — followed up to three deep, also through `from m import *`, TypeScript `export { x } from './m'`, `export * from` and barrels that import and re-export. A specifier that names no project file is a library: a call through it gets no edge. A name a project file exports without a declaration the resolver can see is *unknown*, not a library: method calls on it fall back to the method name.
 
 **Several candidates.** Where more than one symbol qualifies — a method name shared by two classes on an untyped receiver, two build-tag variants of a Go function — the call is linked to each candidate, labelled `ambiguous`, up to `MAX_AMBIGUOUS_TARGETS` (2). With three or more candidates the name says too little and the call gets no edge. Java overloads are first narrowed by argument count.
 
 Every CALLS edge records how its target was found in its metadata (`line:<n>;resolved:<label>`); the MCP tools that list callers and callees show it.
+
+**Calls that get no edge are counted.** Each analysis records how many call sites were linked and why the others were not — more than two candidates, a library target, a call through a variable, nothing in scope, outside any function. `myc analyze` and the MCP `analyze` tool print the counts (on Django 5.1.4: 60,222 call sites linked; 97,279 not: 9,586 with more than two candidates, 64,171 into libraries, 2,006 through variables, 21,269 with nothing in scope, 247 outside any function). Unlinked call sites whose name a project function, method or class of the same language has are also counted per name: `find_callers` reports them for the symbol (`unlinked_call_sites`: "N call site(s) named `m` got no CALLS edge ... not counted above"), and `impact_of_change` adds the same note for the changed symbols. Those are calls the symbol *may* receive that no edge shows. Incremental re-indexing (`analyze_files`) keeps the last full run's record.
 
 ## Language families
 
@@ -95,20 +98,32 @@ Step 1 alone raised the cross-language count: once callers were attributed to th
 
 ### Real repositories
 
-The gold fixtures cannot show how the rules generalise, so the resolver was also run on four real repositories (the checkouts the #95 evaluation uses), before and after #139. There is no gold set for them; the checks below are samples judged by reading the code (by an agent, not reviewed).
+The gold fixtures cannot show how the rules generalise. Two checks on real code:
 
-| repository | language | CALLS edges before | after | after: exact / import / name-match / ambiguous |
+**The held-out set** (`crates/myceliums-benchmarks/graph-gold/held-out/`): 52 call sites drawn at random — by a seeded regex sampler, not from myceliums — from flask, requests, gin and hono at the pinned commits of the real-repository retrieval set (#95), 13 per repository, each traced to its target by reading the code; 22 of them call a project symbol, 30 a built-in, a library method or a value. The resolver was spot-checked against these four repositories during #139 (the bullets below), but the sites were drawn afterwards and scored without being looked at first. `graph-eval` reports the set next to the fixture gate whenever the checkouts are present (`real-repos/fetch.sh`); it is never gated. Scored per (caller, callee name) pair:
+
+| | recall (pairs with a project target found) | precision (edges from those callers to symbols of that name) |
+|---|---:|---:|
+| before #139 (`origin/main`) | 10 / 22 = 0.45 (0.27–0.65) | 10 / 21 = 0.48 (0.28–0.68) |
+| after | **21 / 22 = 0.95 (0.78–0.99)** | **21 / 22 = 0.95 (0.78–0.99)** |
+
+The miss: Hono's `Context.redirect` calls `this.newResponse(...)`, and both are class fields holding arrow functions, which the TypeScript extractor does not extract as methods. The wrong edge: flask's `app.send_static_file(...)` on an untyped `app` fixture is linked to both `Flask.send_static_file` and `Blueprint.send_static_file` (`ambiguous`). These labels are an agent's, not yet reviewed; 22 positive pairs give wide intervals.
+
+**Whole-repository changes** (CALLS edges, each repository analyzed on its own):
+
+| repository | language | edges before | after | after: exact / import / name-match / ambiguous |
 |---|---|---:|---:|---|
-| flask | Python | 1,609 | 1,282 | 337 / 360 / 411 / 133 |
-| requests | Python | 1,175 | 901 | 289 / 504 / 89 / 14 |
-| gin | Go | 3,120 | 2,278 | 1,134 / 11 / 1,047 / 86 |
-| hono | TypeScript | 1,333 | 1,193 | 135 / 354 / 442 / 60 |
+| flask | Python | 1,609 | 1,311 | 378 / 401 / 399 / 133 |
+| requests | Python | 1,175 | 906 | 291 / 511 / 88 / 16 |
+| gin | Go | 3,120 | 2,253 | 1,151 / 11 / 1,041 / 50 |
+| hono | TypeScript | 1,333 | 1,217 | 149 / 557 / 447 / 64 |
+| django 5.1.4 | Python | 65,808 | 44,612 | 19,562 / 18,502 / 4,750 / 1,798 |
 
-(Label counts are over distinct caller–callee name pairs.) Before #139, 41% of these edges were `ambiguous` and none were `import`.
+Before #139, 41% of the edges in the first four were `ambiguous` and none `import`. Spot checks made during development (an agent reading the code): a uniform sample of 40 new edges had 38 correct, both wrong ones `ambiguous` fan-outs on untyped receivers; of 53 sampled dropped `name-match` edges, 35 were wrong before (the wrong caller, a call line outside the caller, a library method linked to a project one), 7 went through a parameter, loop variable or dynamically imported name, 1 moved to the interface method it statically binds to, and 10 were real misses, 9 of which were fixed (package re-exports, an absolute import matched to a test fixture's module of the same name, functions nested in methods, Go named slice types). An independent review of #144 (72 hand-traced pairs) found further general gaps, fixed in the same PR: module-level values and names a project module exports without a visible declaration were treated as libraries (flask's `current_app`), TypeScript `export … from` re-exports were not followed, `import a.b` bound `b`, and a chain on a typed receiver fell back to name matching after a library member (gin's `c.Writer.Header().Set()`).
 
-- **A uniform sample of 40 edges after #139** (10 per repository): 38 correct. Both wrong edges are `ambiguous` fan-outs on untyped receivers (`fp.read()` linked to a test helper's `read`; Hono's `c.text()` linked to `HonoRequest.text` beside the correct `Context.text`). Precision 0.95 (0.83–0.99) — a rough figure, from 40 edges.
-- **Edges that disappeared**: most were `ambiguous` (2,585 of 3,816). Of 53 sampled dropped `name-match` edges, 35 were wrong before (the wrong caller, a call line outside the caller, a library method linked to a project one), 7 were calls through a parameter, loop variable or dynamically imported name (pytest fixtures, `await import()` destructuring), which have no static target, 1 now points to the interface method it statically binds to, and 10 were real misses. Nine of those were fixed in #139 (package re-exports, an absolute import matched to a test fixture's module of the same name, functions nested in methods, Go named slice types) and are back; one remains: a Go package-level variable holding a closure (`var engine = sync.OnceValue(...)`; `engine()` calls no function symbol).
-- The fallback for receivers of unknown type is the weak spot: `ep.load()` on an entry point linked to the only project method named `load` (`JSONProvider.load`) is labelled `name-match` and wrong. Untyped code — most Python and JavaScript — relies on this fallback for its method calls.
+The fallback for receivers of unknown type stays the weak spot: `ep.load()` on an entry point linked to the only project method named `load` is labelled `name-match` and wrong. Untyped code — most Python and JavaScript — relies on this fallback for its method calls.
+
+**Cost.** Analyzing Django 5.1.4 (2,788 files, 41,842 symbols, ~157,000 call sites; debug build, embeddings off, two runs each): 59.5–60.4 s wall and 1,112–1,188 MiB peak RSS before, 63.1 s and 1,085–1,151 MiB after.
 
 ## What is modelled, and what is not
 
@@ -116,14 +131,14 @@ No type inference: a receiver's type is known only when a declaration in view sa
 
 | language | modelled | not modelled |
 |---|---|---|
-| Python | call forms; `import`/`from … import` (absolute, relative, `*`); parameter annotations, assignments, `self.x = …` fields, `cls` in classmethods; return annotations; base classes | untyped parameters (most real code: method calls fall back to the name); return types without annotations; `super()` beyond the first base; decorators that replace functions; `__getattr__`, monkeypatching |
-| TypeScript / JavaScript | call forms, `new`, `super(...)`; named, default and namespace imports, `require`; parameter, variable and field annotations, constructor parameter properties, `this.x = …`; declared return types; `extends`/`implements`; interface and abstract methods | inferred types (`const x = f()` where `f` declares no return type); `export … from` re-exports; types of destructured values; calls inside top-level arrow functions passed as arguments have no named caller |
+| Python | call forms; `import`/`from … import` (absolute, relative, `*`, re-exports); parameter annotations, assignments, module-level annotated values, `self.x = …` fields, `cls` in classmethods; return annotations; base classes | untyped parameters (most real code: method calls fall back to the name); return types without annotations; `super()` beyond the first base; decorators that replace functions; `__getattr__`, monkeypatching |
+| TypeScript / JavaScript | call forms, `new`, `super(...)`; named, default and namespace imports, `require`, `export … from` re-exports; parameter, variable and field annotations, constructor parameter properties, `this.x = …`; declared return types; `extends`/`implements`; interface and abstract methods | inferred types (`const x = f()` where `f` declares no return type); types of destructured values; class fields holding arrow functions are not methods (no symbol, no caller); calls inside top-level arrow functions passed as arguments (`describe`/`it` callbacks) have no named caller |
 | Go | call forms; import paths to package directories, aliases, dot imports; receivers, parameters, `:=`/`var` declarations, composite literals, struct fields; result types; embedding; interface method sets | interface dispatch links the interface method, not implementations; type parameters; method values; variables holding closures; build tags (variants become an `ambiguous` pair) |
-| Rust | call forms, paths (`Type::f`, `module::f`, `Self::f`); `use` paths, `mod`; parameters, `let` bindings, struct fields; return types (`-> Self`); calls written in macro arguments (bare calls and `self.m()`) | trait dispatch on generic `T: Trait` and trait objects beyond the trait's declaration; methods reached through `Deref` (`Box`, `Rc`); other calls inside macros; trait impls for library types |
+| Rust | call forms, paths (`Type::f`, `module::f`, `Self::f`); `use` paths, `mod`; parameters, `let` bindings, statics and consts, struct fields; return types (`-> Self`); calls written in macro arguments (bare calls and `self.m()`) | trait dispatch on generic `T: Trait` and trait objects beyond the trait's declaration; methods reached through `Deref` (`Box`, `Rc`); other calls inside macros; trait impls for library types |
 | Java | call forms, `new`, `super(...)`; class, static and wildcard imports, same-package classes; parameters, locals, `var`, fields, record components; return types; `extends`/`implements`; implicit `this`; overloads by argument count | overloads with the same count (needs argument types); generics; members inherited from library classes; static wildcard imports; anonymous classes |
 | other languages | caller by position, language family, scope preference (file, imports, directory, family) | call forms, receivers and bindings: a call on an object may link to any function or method of that name; their accuracy is not measured |
 
-For every language: dynamic dispatch is linked to the statically bound declaration (`self.render_row()` in a base class goes to the base class's `render_row`, not to overrides); calls through function values, callbacks, reflection and dynamic imports have no static target and no edge.
+For every language: dynamic dispatch is linked to the statically bound declaration (`self.render_row()` in a base class goes to the base class's `render_row`, not to overrides; `sink.write()` on a `Sink` interface goes to `Sink.write`, not to `ConsoleSink.write`). So **an implementation of an interface, trait or abstract method gets no callers from calls made through the interface**: `find_callers` and `impact_of_change` on `ConsoleSink.write` miss them — look at the interface method's callers too. Calls through function values, callbacks, reflection and dynamic imports have no static target and no edge.
 
 ## Interpreting results: confidence guidelines
 
@@ -140,7 +155,7 @@ For every language: dynamic dispatch is linked to the statically bound declarati
 
 ### Missing edges
 
-A missing edge is now the more likely error, especially in untyped code: a method call on a value of unknown type whose name three or more classes share gets no edge; a call through a variable, parameter or callback never does. "No callers" does not mean "unused".
+A missing edge is now the more likely error, especially in untyped code: a method call on a value of unknown type whose name three or more classes share gets no edge; a call through a variable, parameter or callback never does; an interface or abstract method's implementations get no callers from calls through the interface. "No callers" does not mean "unused": `find_callers` says how many call sites of the name were left unlinked (`unlinked_call_sites`), and `impact_of_change` adds the same note.
 
 ## Recommended practices
 

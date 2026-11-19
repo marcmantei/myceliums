@@ -37,6 +37,24 @@ Per-language and per-label numbers are reported, not gated: 43–59 edges per
 language are too few. An intended drop is accepted by re-recording the
 baseline in the same PR and saying why.
 
+## Held-out real-repository set
+
+`held-out/real-repos.json` is the outside check on the fixtures, which the
+resolver's rules were developed against (#139): 52 call sites drawn at random
+from flask, requests, gin and hono at the pinned commits of the real-repository
+retrieval set (`../real-repos/`), 13 per repository, each traced to its target
+by reading the code. `held-out/sample_sites.py` draws them (a seeded regex over
+`git ls-files`, no myceliums); the set's `rules` say which drawn sites were
+skipped and how a target is labelled. 22 pairs call a project symbol; 30 call a
+built-in, a library method or a value, so any edge from them is wrong.
+
+`graph-eval` scores the set whenever the checkouts are present
+(`../real-repos/fetch.sh`, `$MYC_EVAL_REPOS_DIR`), per (caller, callee name)
+pair — recall over the pairs with a project target, precision over the edges
+from those callers to symbols of that name — and prints it after the gate.
+**It is never gated**: the pairs are few, and an agent labelled them (not yet
+reviewed). Numbers: `docs/guides/call-resolution-limitations.md`.
+
 ## Review status
 
 **Labelled by an agent, not yet reviewed by a human.** Every file says

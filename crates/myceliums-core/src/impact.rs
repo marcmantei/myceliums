@@ -78,6 +78,15 @@ pub struct AffectedSymbol {
 ///   untyped code, changes to methods with **common names** (`get`, `load`,
 ///   `render`) may list false positives. Calls never cross language families.
 ///
+/// - Dispatch is linked to the statically bound declaration: a call through
+///   an interface, trait or abstract method reaches that declaration, not
+///   its implementations, so an implementation lists no callers through the
+///   interface — check the interface method's dependents too.
+///
+/// - Calls the resolver could not link (more than two candidate symbols,
+///   nothing in scope) are counted per name at analysis time
+///   (`CallResolutionStats`); the MCP tools report them next to the result.
+///
 /// **Very large blast radius (400+ symbols):** check the labels of the edges
 /// that fan out.
 ///
