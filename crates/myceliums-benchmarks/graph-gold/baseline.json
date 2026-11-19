@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
   "regenerate_with": "cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline",
-  "timestamp": "2026-11-19T05:23:43Z",
-  "commit_sha": "2c9336a99d285b525660c2ae499bb3224ff07a95",
+  "timestamp": "2026-11-19T05:34:30Z",
+  "commit_sha": "a0f0bf75e14adfacb1258f415215b7b9889f9a52",
   "dataset_digest": "76d698e8ff6a23c1150016ff25e12ad49077587d17f08f52ff3e87af9a6b5bd1",
   "labelled_by": "agent",
   "reviewed_by": null,
