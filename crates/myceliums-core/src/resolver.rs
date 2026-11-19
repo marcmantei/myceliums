@@ -53,6 +53,40 @@ impl CallResolution {
     }
 }
 
+/// The language family of a source file, by extension: a call is only ever
+/// resolved to a symbol of its own family (#139).
+///
+/// | family | extensions |
+/// |---|---|
+/// | `js` | `ts`, `tsx`, `mts`, `cts`, `js`, `jsx`, `mjs`, `cjs`, `vue`, `svelte` |
+/// | `c` | `c`, `h`, `cpp`, `cc`, `cxx`, `hpp`, `hh`, `hxx`, `m`, `mm` |
+/// | `jvm` | `java`, `kt`, `kts`, `scala` |
+/// | `python` | `py`, `pyi`, `ipynb` |
+/// | `csharp` | `cs` |
+/// | `elixir` | `ex`, `exs` |
+/// | `powershell` | `ps1` |
+///
+/// Every other extension is a family of its own (`rs`, `go`, `rb`, `swift`,
+/// `php`, `lua`, `zig`, `dart`, ...). The groups are languages that call each
+/// other directly, with no binding layer: TypeScript and JavaScript (and the
+/// script blocks of Vue and Svelte files), C, C++ and Objective-C through
+/// shared headers, Java, Kotlin and Scala on the JVM. Calls across any other
+/// boundary (FFI, generated bindings, HTTP) are not resolved.
+pub fn language_family(path: &str) -> Option<&str> {
+    let file = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    let (_, ext) = file.rsplit_once('.')?;
+    Some(match ext {
+        "ts" | "tsx" | "mts" | "cts" | "js" | "jsx" | "mjs" | "cjs" | "vue" | "svelte" => "js",
+        "c" | "h" | "cpp" | "cc" | "cxx" | "hpp" | "hh" | "hxx" | "m" | "mm" => "c",
+        "java" | "kt" | "kts" | "scala" => "jvm",
+        "py" | "pyi" | "ipynb" => "python",
+        "cs" => "csharp",
+        "ex" | "exs" => "elixir",
+        "ps1" => "powershell",
+        other => other,
+    })
+}
+
 /// Whether a looked-up name was written qualified (`a.b`, `a::b`).
 fn is_qualified(name: &str) -> bool {
     name.contains('.') || name.contains("::")
@@ -99,13 +133,12 @@ fn is_qualified(name: &str) -> bool {
 pub struct CallResolver {
     /// Shared string interning pool.
     pool: StringPool,
-    /// Map from symbol name -> symbol UID
-    name_to_uid: HashMap<StrId, StrId>,
-    /// Map from qualified name -> symbol UID
-    qualified_to_uid: HashMap<StrId, StrId>,
-    /// Names (short or qualified) that more than one symbol defines: a
-    /// match on one of them is a guess.
-    ambiguous: std::collections::HashSet<StrId>,
+    /// Map from symbol name -> symbol UIDs, with each symbol's language family
+    name_to_uid: HashMap<StrId, Vec<(StrId, String)>>,
+    /// Map from qualified name -> symbol UIDs, with each symbol's language family
+    qualified_to_uid: HashMap<StrId, Vec<(StrId, String)>>,
+    /// Language family of every registered symbol.
+    family_of_uid: HashMap<String, String>,
     /// Map from local import name -> original name
     import_aliases: HashMap<StrId, StrId>,
     /// Map from local variable alias -> target symbol name (SSA-derived)
@@ -137,7 +170,7 @@ impl CallResolver {
             pool: StringPool::new(),
             name_to_uid: HashMap::new(),
             qualified_to_uid: HashMap::new(),
-            ambiguous: std::collections::HashSet::new(),
+            family_of_uid: HashMap::new(),
             import_aliases: HashMap::new(),
             aliases: HashMap::new(),
             module_graph: None,
@@ -164,17 +197,21 @@ impl CallResolver {
                 start: symbol.start_line,
                 end: symbol.end_line,
             });
+        let family = language_family(&symbol.file_path)
+            .unwrap_or_default()
+            .to_string();
+        self.family_of_uid
+            .insert(symbol.uid.clone(), family.clone());
         let name_id = self.pool.intern(&symbol.name);
         let qualified_id = self.pool.intern(&symbol.qualified_name);
         let uid_id = self.pool.intern(&symbol.uid);
-        if let Some(previous) = self.name_to_uid.insert(name_id, uid_id) {
-            if previous != uid_id {
-                self.ambiguous.insert(name_id);
-            }
-        }
-        if let Some(previous) = self.qualified_to_uid.insert(qualified_id, uid_id) {
-            if previous != uid_id {
-                self.ambiguous.insert(qualified_id);
+        for (key, map) in [
+            (name_id, &mut self.name_to_uid),
+            (qualified_id, &mut self.qualified_to_uid),
+        ] {
+            let entries = map.entry(key).or_default();
+            if !entries.iter().any(|(uid, _)| *uid == uid_id) {
+                entries.push((uid_id, family.clone()));
             }
         }
     }
@@ -314,17 +351,30 @@ impl CallResolver {
     }
 
     fn resolve_name(&self, name: &str, file: Option<&str>) -> Option<(&str, CallResolution)> {
+        let family = file.and_then(language_family)?;
         // Intern readonly — if the string isn't in the pool, it can't match.
         if let Some(name_id) = self.pool.intern_readonly(name) {
-            let resolution = |unique: CallResolution| {
-                if self.ambiguous.contains(&name_id) {
+            // The candidates of the caller's language family; the last one
+            // registered wins.
+            let pick = |map: &HashMap<StrId, Vec<(StrId, String)>>| {
+                let candidates: Vec<StrId> = map
+                    .get(&name_id)?
+                    .iter()
+                    .filter(|(_, f)| f == family)
+                    .map(|(uid, _)| *uid)
+                    .collect();
+                let last = *candidates.last()?;
+                Some((last, candidates.len() > 1))
+            };
+            let resolution = |unique: CallResolution, ambiguous: bool| {
+                if ambiguous {
                     CallResolution::Ambiguous
                 } else {
                     unique
                 }
             };
             // First try qualified and simple name maps
-            if let Some(&uid_id) = self.qualified_to_uid.get(&name_id) {
+            if let Some((uid_id, ambiguous)) = pick(&self.qualified_to_uid) {
                 // A bare name that happens to equal a qualified name (a
                 // top-level definition) is still only a name match.
                 let unique = if is_qualified(name) {
@@ -332,17 +382,22 @@ impl CallResolver {
                 } else {
                     CallResolution::NameMatch
                 };
-                return Some((self.pool.get(uid_id), resolution(unique)));
+                return Some((self.pool.get(uid_id), resolution(unique, ambiguous)));
             }
-            if let Some(&uid_id) = self.name_to_uid.get(&name_id) {
-                return Some((self.pool.get(uid_id), resolution(CallResolution::NameMatch)));
+            if let Some((uid_id, ambiguous)) = pick(&self.name_to_uid) {
+                return Some((
+                    self.pool.get(uid_id),
+                    resolution(CallResolution::NameMatch, ambiguous),
+                ));
             }
         }
 
         // Fall back to the module graph for cross-file resolution
         if let (Some(graph), Some(file_path)) = (&self.module_graph, file) {
             if let Some(uid) = graph.resolve_import(file_path, name) {
-                return Some((uid, CallResolution::Import));
+                if self.family_of_uid.get(uid).map(String::as_str) == Some(family) {
+                    return Some((uid, CallResolution::Import));
+                }
             }
         }
 
@@ -531,6 +586,43 @@ mod tests {
         call.line = 12;
         call.file = None;
         assert!(resolver.resolve_calls(&[call], "repo").is_empty());
+    }
+
+    /// A TypeScript `.map()` never resolves to a Rust `map`, however unique
+    /// the name; a `.vue` file and a `.ts` file are one family (#139).
+    #[test]
+    fn calls_resolve_only_within_the_callers_language_family() {
+        let mut resolver = CallResolver::new();
+        let in_file = |name: &str, uid: &str, file: &str| CodeSymbol {
+            file_path: file.to_string(),
+            ..sym(name, name, uid)
+        };
+        resolver.register_symbol(&in_file("render", "uid-render", "src/view.tsx"));
+        resolver.register_symbol(&in_file("map", "uid-rust-map", "src/utils.rs"));
+        resolver.register_symbol(&in_file("format", "uid-format", "src/format.ts"));
+
+        let mut to_map = call("render", "map");
+        to_map.file = Some("src/view.tsx".to_string());
+        assert!(resolver.resolve_calls(&[to_map], "repo").is_empty());
+
+        let mut to_format = call("render", "format");
+        to_format.file = Some("src/view.tsx".to_string());
+        let rels = resolver.resolve_calls(&[to_format], "repo");
+        assert_eq!(rels.len(), 1);
+        assert_eq!(rels[0].target_uid, "uid-format");
+    }
+
+    #[test]
+    fn language_families_group_languages_that_call_each_other_directly() {
+        let family = |path| language_family(path).unwrap();
+        assert_eq!(family("a/App.vue"), family("b/lib.ts"));
+        assert_eq!(family("x.js"), family("y.tsx"));
+        assert_eq!(family("main.c"), family("lib.hpp"));
+        assert_eq!(family("View.m"), family("lib.h"));
+        assert_eq!(family("Main.java"), family("Util.kt"));
+        assert_ne!(family("main.rs"), family("main.go"));
+        assert_ne!(family("main.py"), family("main.ts"));
+        assert_eq!(language_family("Makefile"), None);
     }
 
     #[test]
