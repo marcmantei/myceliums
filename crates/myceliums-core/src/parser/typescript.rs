@@ -35,7 +35,9 @@ impl SourceParser {
                     });
                 }
             }
-            "method_definition" => {
+            // An abstract method's declaration is a method too: calls bind
+            // to it statically.
+            "method_definition" | "abstract_method_signature" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let name = self.node_text(name_node, source).to_string();
                     symbols.push(ParsedSymbol {
@@ -50,7 +52,7 @@ impl SourceParser {
                     });
                 }
             }
-            "class_declaration" => {
+            "class_declaration" | "abstract_class_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let name = self.node_text(name_node, source).to_string();
                     symbols.push(ParsedSymbol {
@@ -833,10 +835,13 @@ impl SourceParser {
         }
 
         // Return type annotation
-        if node.kind() == "function_declaration"
-            || node.kind() == "method_definition"
-            || node.kind() == "arrow_function"
-        {
+        if matches!(
+            node.kind(),
+            "function_declaration"
+                | "method_definition"
+                | "abstract_method_signature"
+                | "arrow_function"
+        ) {
             if let Some(rt) = node.child_by_field_name("return_type") {
                 let text = self.node_text(rt, source).trim().to_string();
                 let cleaned = text.strip_prefix(':').map(|s| s.trim()).unwrap_or(&text);
@@ -847,7 +852,10 @@ impl SourceParser {
         }
 
         // Extends / implements for class_declaration
-        if node.kind() == "class_declaration" {
+        if matches!(
+            node.kind(),
+            "class_declaration" | "abstract_class_declaration"
+        ) {
             let cursor = &mut node.walk();
             for child in node.children(cursor) {
                 if child.kind() == "class_heritage" {
@@ -1223,6 +1231,20 @@ export class UserService extends Base {
             .unwrap()
             .parse(SOURCE)
             .unwrap()
+    }
+
+    #[test]
+    fn abstract_classes_and_their_abstract_methods_are_symbols() {
+        let result = SourceParser::new(SourceLanguage::TypeScript)
+            .unwrap()
+            .parse(
+                "export abstract class Processor {\n  protected abstract headers(e: E): Headers;\n  run(e: E) { return this.headers(e); }\n}\n",
+            )
+            .unwrap();
+        let find = |name: &str| result.symbols.iter().find(|s| s.name == name).unwrap();
+        assert_eq!(find("Processor").kind, SymbolKind::Class);
+        assert_eq!(find("headers").parent_name.as_deref(), Some("Processor"));
+        assert_eq!(find("run").parent_name.as_deref(), Some("Processor"));
     }
 
     #[test]

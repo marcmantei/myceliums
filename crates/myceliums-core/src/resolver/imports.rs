@@ -141,9 +141,24 @@ impl PathIndex {
     }
 }
 
-/// Of several paths, the ones sharing the most leading directories with
-/// `importer`: the copy of a module in the importer's own source tree.
-fn closest(importer: &str, paths: Vec<String>) -> Vec<String> {
+/// Of several paths found under the module path `key`, the ones an
+/// absolute import means: the fewest directories in front of `key` (the
+/// module at a source root, `src/flask/__init__.py`, not a test fixture's
+/// `tests/apps/inner/flask.py`), then the most leading directories shared
+/// with `importer` (the copy in the importer's own tree).
+fn closest(importer: &str, key: &str, paths: Vec<String>) -> Vec<String> {
+    let depth = |path: &str| {
+        let stem = stem(path);
+        let matched = if stem.ends_with(key) {
+            stem
+        } else {
+            parent_dir(stem)
+        };
+        matched[..matched.len().saturating_sub(key.len())]
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .count()
+    };
     let shared = |path: &str| {
         parent_dir(importer)
             .split('/')
@@ -151,8 +166,12 @@ fn closest(importer: &str, paths: Vec<String>) -> Vec<String> {
             .take_while(|(a, b)| a == b)
             .count()
     };
-    let best = paths.iter().map(|p| shared(p)).max().unwrap_or(0);
-    paths.into_iter().filter(|p| shared(p) == best).collect()
+    let rank = |path: &str| (depth(path), std::cmp::Reverse(shared(path)));
+    let best = paths.iter().map(|p| rank(p)).min();
+    paths
+        .into_iter()
+        .filter(|p| Some(rank(p)) == best)
+        .collect()
 }
 
 /// `dir` joined with a relative path, with `.` and `..` folded.
@@ -189,6 +208,35 @@ impl CallResolver {
             "jvm" => self.bind_jvm(importer, import),
             _ => self.bind_by_path(importer, family, import),
         }
+    }
+
+    /// `module.name`: a top-level definition of the module, what the
+    /// module re-exports under that name (`from .sessions import Session`
+    /// in a package's `__init__.py`), or a submodule (`package.utils`).
+    pub(super) fn module_member(
+        &self,
+        files: &[String],
+        family: &str,
+        name: &str,
+    ) -> Option<Bound> {
+        if let Some(bound) = self.defined_or_reexported(files, family, name, 0) {
+            return Some(bound);
+        }
+        let submodules: Vec<String> = files
+            .iter()
+            .filter(|f| {
+                let file_name = stem(f).rsplit('/').next().unwrap_or_default();
+                matches!(file_name, "__init__" | "mod" | "index")
+            })
+            .flat_map(|package| {
+                let key = format!("{}/{name}", parent_dir(package));
+                self.index
+                    .modules(&key, family)
+                    .into_iter()
+                    .filter(move |f| stem(f) == key || parent_dir(stem(f)) == key)
+            })
+            .collect();
+        (!submodules.is_empty()).then_some(Bound::Module(submodules))
     }
 
     /// Top-level definitions named `name` in `files`, or what the files'
@@ -267,7 +315,7 @@ impl CallResolver {
                 .filter(|f| stem(f) == key || parent_dir(stem(f)) == key)
                 .collect()
         } else {
-            closest(importer, self.index.modules(&path, "python"))
+            closest(importer, &path, self.index.modules(&path, "python"))
         };
         (!files.is_empty()).then_some(files)
     }
@@ -316,7 +364,7 @@ impl CallResolver {
             .into_iter()
             .filter(|f| !relative || stem(f) == key || parent_dir(stem(f)) == key)
             .collect();
-        let files = closest(importer, files);
+        let files = closest(importer, &key, files);
         (!files.is_empty()).then_some(files)
     }
 
@@ -334,7 +382,7 @@ impl CallResolver {
                 break;
             }
             let key = segments[segments.len() - k..].join("/");
-            let dirs = closest(importer, self.index.dirs(&key, "go"));
+            let dirs = closest(importer, &key, self.index.dirs(&key, "go"));
             if let Some(dir) = dirs.first() {
                 return Some(self.index.files_in(dir, "go"));
             }
@@ -357,7 +405,7 @@ impl CallResolver {
         }
         for k in (1..=segments.len()).rev() {
             let key = segments[..k].join("/");
-            let files = closest(importer, self.index.modules(&key, "rs"));
+            let files = closest(importer, &key, self.index.modules(&key, "rs"));
             if files.is_empty() {
                 continue;
             }
@@ -397,10 +445,8 @@ impl CallResolver {
             Some("static") => {
                 let (class_path, member) = source.rsplit_once('.')?;
                 let class = class_path.rsplit('.').next()?;
-                let files = closest(
-                    importer,
-                    self.index.modules(&class_path.replace('.', "/"), "jvm"),
-                );
+                let key = class_path.replace('.', "/");
+                let files = closest(importer, &key, self.index.modules(&key, "jvm"));
                 let defs: Vec<DefId> = self
                     .named(member)
                     .filter(|&id| {
@@ -419,7 +465,7 @@ impl CallResolver {
             // `import a.b.*`
             _ if import.local_name == "*" => {
                 let package = source.trim_end_matches(".*").replace('.', "/");
-                let dirs = closest(importer, self.index.dirs(&package, "jvm"));
+                let dirs = closest(importer, &package, self.index.dirs(&package, "jvm"));
                 Some(match dirs.first() {
                     Some(dir) => Bound::Module(self.index.files_in(dir, "jvm")),
                     None => Bound::External,
@@ -430,7 +476,7 @@ impl CallResolver {
                 let class = source.rsplit('.').next()?;
                 let mut path = source.replace('.', "/");
                 loop {
-                    let files = closest(importer, self.index.modules(&path, "jvm"));
+                    let files = closest(importer, &path, self.index.modules(&path, "jvm"));
                     if !files.is_empty() {
                         let defs: Vec<DefId> = self
                             .named(class)
@@ -464,7 +510,7 @@ impl CallResolver {
         } else {
             specifier.replace("::", "/").replace('.', "/")
         };
-        let files = closest(importer, self.index.modules(stem(&key), family));
+        let files = closest(importer, stem(&key), self.index.modules(stem(&key), family));
         if files.is_empty() {
             return None;
         }
@@ -495,11 +541,22 @@ mod tests {
     }
 
     #[test]
-    fn closest_prefers_the_importers_tree() {
+    fn closest_prefers_a_source_root_then_the_importers_tree() {
         let paths = vec![
             "tests/shop/models.py".to_string(),
             "src/shop/models.py".to_string(),
         ];
-        assert_eq!(closest("src/shop/cli.py", paths), ["src/shop/models.py"]);
+        assert_eq!(
+            closest("src/shop/cli.py", "shop/models", paths),
+            ["src/shop/models.py"]
+        );
+        let flask = vec![
+            "tests/apps/inner/flask.py".to_string(),
+            "src/flask/__init__.py".to_string(),
+        ];
+        assert_eq!(
+            closest("tests/test_json.py", "flask", flask),
+            ["src/flask/__init__.py"]
+        );
     }
 }

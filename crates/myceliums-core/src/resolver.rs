@@ -179,11 +179,14 @@ impl Def {
         matches!(self.kind, SymbolKind::Function | SymbolKind::Method)
     }
 
+    /// A type that can have methods. In Go any named type can
+    /// (`type methodTrees []methodTree`); the extractor calls those type
+    /// aliases.
     fn is_class_like(&self) -> bool {
         matches!(
             self.kind,
             SymbolKind::Class | SymbolKind::Interface | SymbolKind::Enum
-        )
+        ) || (self.kind == SymbolKind::TypeAlias && self.family == "go")
     }
 
     /// Something a call can land on: a function, a method, or a class
@@ -610,9 +613,11 @@ impl CallResolver {
             .named(name)
             .filter(|&id| {
                 let def = &self.defs[id];
+                // A function nested in a method may carry the class as its
+                // container; nested, it is local all the same.
                 def.file == site.file
                     && accept(def)
-                    && def.container.is_none()
+                    && (def.container.is_none() || def.enclosing_fn.is_some())
                     && def
                         .enclosing_fn
                         .is_none_or(|(start, end)| start <= site.line && site.line <= end)
@@ -738,10 +743,15 @@ impl CallResolver {
             Ty::Instance(class) | Ty::Class(class) => {
                 pick(self.methods_on(class, name, 0), CallResolution::Exact)
             }
-            Ty::Module(files) => pick(
-                self.top_level_in(&files, name, Def::is_callable),
-                CallResolution::Import,
-            ),
+            Ty::Module(files) => match self.module_member(&files, site.family, name) {
+                Some(Bound::Defs(defs)) => pick(
+                    defs.into_iter()
+                        .filter(|&id| self.defs[id].is_callable())
+                        .collect(),
+                    CallResolution::Import,
+                ),
+                _ => Vec::new(),
+            },
             Ty::Function(_) | Ty::External => Vec::new(),
             Ty::Unknown => self.methods_named(site, name),
         }

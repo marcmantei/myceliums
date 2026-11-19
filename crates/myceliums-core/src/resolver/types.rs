@@ -62,10 +62,12 @@ impl CallResolver {
                 Some(class) => Ty::Instance(class),
                 None => Ty::Unknown,
             },
+            // A class with no project base class inherits from a library
+            // class (or the language's root object).
             ExpressionStep::Super => match self.enclosing_class(site) {
                 Some(class) => match self.bases(class, depth).first() {
                     Some(&base) => Ty::Instance(base),
-                    None => Ty::Unknown,
+                    None => Ty::External,
                 },
                 None => Ty::Unknown,
             },
@@ -95,10 +97,15 @@ impl CallResolver {
                     }
                 }
                 (Ty::Module(files), ExpressionStep::Field(name)) => {
-                    match self.top_level_in(&files, name, |_| true).as_slice() {
-                        [def] if self.defs[*def].is_class_like() => Ty::Class(*def),
-                        [def] if self.defs[*def].is_function_like() => Ty::Function(*def),
-                        _ => Ty::Unknown,
+                    match self.module_member(&files, site.family, name) {
+                        Some(Bound::Defs(defs)) => match defs.as_slice() {
+                            [def] if self.defs[*def].is_class_like() => Ty::Class(*def),
+                            [def] if self.defs[*def].is_function_like() => Ty::Function(*def),
+                            _ => Ty::Unknown,
+                        },
+                        Some(Bound::Module(files)) => Ty::Module(files),
+                        Some(Bound::External) => Ty::External,
+                        None => Ty::Unknown,
                     }
                 }
                 (Ty::Class(class), ExpressionStep::Call) => Ty::Instance(class),
