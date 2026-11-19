@@ -18,17 +18,27 @@
 //! on macOS), the live path never disappears. Elsewhere — or when the file
 //! system refuses the exchange — it is two renames (live →
 //! `.staging/old-…`, staging → live, the first undone if the second fails),
-//! so for an instant the live path does not exist. A journal
-//! `.staging/swap-…` names the live directory; it is kept as long as an
-//! `old-` directory exists, so the previous index can always be put back.
+//! so for an instant the live path does not exist.
+//!
+//! **The journal.** Before the swap, `.staging/swap-…` records the live
+//! directory's name; once the new index is in place (and the renames are
+//! flushed), a second line `committed` is added, and only then is the
+//! previous index deleted. Journal, renames and marker are each made durable
+//! (file and directory `fsync`) before the next step relies on them, so the
+//! order holds across a power loss. The journal is kept as long as an
+//! `old-` directory exists.
 //!
 //! **Recovery.** A process killed mid-build (no `Drop`) leaves its `build-`
-//! directory behind; one killed between the two renames, or whose undo
-//! failed, leaves the only copy of the index in `old-`. [`recover_leftovers`]
+//! directory behind; one killed during the swap, or whose undo failed,
+//! leaves the only copy of the previous index in `old-`. [`recover_leftovers`]
 //! — run when a staging directory is created, when the MCP server starts and
 //! when the CLI starts — handles the leftovers of rebuilds that no longer
-//! run: it renames an `old-` directory back when its live directory is
-//! missing, and deletes the rest. Rebuilds still running are never touched.
+//! run. If the journal says `committed`, `old-` is garbage and deleted.
+//! Otherwise `old-` is the last index known to be complete: whatever is at
+//! the live path (nothing, an empty directory a reader recreated, or an
+//! unconfirmed new index) is moved to `.staging/displaced-…` and `old-` is
+//! renamed back. Everything else is deleted. Rebuilds still running are
+//! never touched.
 
 use anyhow::{Context, Result};
 use std::collections::HashSet;
@@ -103,12 +113,37 @@ pub struct StagedIndex {
 struct SwapOps<'a> {
     rename: &'a dyn Fn(&Path, &Path) -> std::io::Result<()>,
     exchange: &'a dyn Fn(&Path, &Path) -> std::io::Result<()>,
+    /// Writes the journal durably.
+    write: &'a dyn Fn(&Path, &[u8]) -> std::io::Result<()>,
 }
 
 const REAL_OPS: SwapOps<'static> = SwapOps {
     rename: &|from, to| std::fs::rename(from, to),
     exchange: &exchange,
+    write: &write_durable,
 };
+
+/// Writes `bytes` to `path` and flushes the file and its directory entry to
+/// disk before returning.
+fn write_durable(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut file = std::fs::File::create(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    sync_dir(path.parent().unwrap_or(Path::new(".")))
+}
+
+/// Flushes a directory's entries (renames, creations) to disk.
+#[cfg(unix)]
+fn sync_dir(dir: &Path) -> std::io::Result<()> {
+    std::fs::File::open(dir)?.sync_all()
+}
+
+/// Directory entries cannot be flushed this way here; a no-op.
+#[cfg(not(unix))]
+fn sync_dir(_dir: &Path) -> std::io::Result<()> {
+    Ok(())
+}
 
 impl StagedIndex {
     /// Creates an empty staging directory for the index at `live` (usually
@@ -173,52 +208,78 @@ impl StagedIndex {
     fn commit_with(mut self, ops: &SwapOps<'_>) -> Result<()> {
         let journal = self.entry(SWAP_PREFIX);
         let old = self.entry(OLD_PREFIX);
+        let data_root = self.live.parent().expect("checked in create").to_path_buf();
         let live_name = self.live.file_name().expect("checked in create");
-        std::fs::write(&journal, live_name.as_encoded_bytes())
+        // 1. The journal is on disk before anything moves.
+        (ops.write)(&journal, live_name.as_encoded_bytes())
             .context("cannot write the swap journal")?;
-        let result = self.swap(&old, ops);
-        if result.is_ok() {
-            self.committed = true;
-            // The new index is live: mark it before touching `old-`.
-            let mut marked = live_name.as_encoded_bytes().to_vec();
-            marked.extend_from_slice(format!("\n{COMMITTED}\n").as_bytes());
-            match std::fs::write(&journal, marked) {
-                Ok(()) => {
-                    if old.exists() {
-                        remove_best_effort(&old, "previous index");
-                    }
-                }
-                // Unmarked, recovery would bring the previous index back:
-                // valid, just older. Keep it rather than risk a gap.
-                Err(e) => tracing::warn!("cannot mark the swap journal as committed: {e}"),
+        // 2. The swap, flushed. `previous` is where the previous index now
+        //    sits (`old-…`, or the staging path after an exchange).
+        let previous = match self.swap(&old, ops) {
+            Ok(previous) => previous,
+            Err(e) => {
+                self.forget_journal_unless_old_remains(&journal, &old);
+                return Err(e);
             }
+        };
+        self.committed = true;
+        let flushed = sync_dir(&data_root).and_then(|()| sync_dir(&journal_dir(&journal)));
+        // 3. The marker, durable, before the previous index may go.
+        let marked = flushed.and_then(|()| {
+            let mut text = live_name.as_encoded_bytes().to_vec();
+            text.extend_from_slice(format!("\n{COMMITTED}\n").as_bytes());
+            (ops.write)(&journal, &text)
+        });
+        if let Err(e) = marked {
+            // Unmarked, recovery puts the previous index back: older, but
+            // complete, and it matches the registry, which the caller only
+            // updates after a successful commit.
+            return Err(anyhow::Error::from(e).context(
+                "the new index is in place but its swap could not be recorded as committed; \
+                 the previous index is kept and restored by the next recovery",
+            ));
         }
+        // 4. Only now the previous index goes.
+        if let Some(previous) = previous {
+            remove_best_effort(&previous, "previous index");
+        }
+        self.forget_journal_unless_old_remains(&journal, &old);
+        Ok(())
+    }
+
+    /// Deletes the journal unless an `old-` directory still needs it.
+    fn forget_journal_unless_old_remains(&self, journal: &Path, old: &Path) {
         if old.exists() {
-            // The previous index is still aside: keep the journal, so
-            // recovery knows where it belongs.
             tracing::warn!(
                 "{} is kept with its journal {} for recovery",
                 old.display(),
                 journal.display()
             );
-        } else if let Err(e) = std::fs::remove_file(&journal) {
-            tracing::warn!("cannot delete the swap journal {}: {e}", journal.display());
+        } else if journal.exists() {
+            if let Err(e) = std::fs::remove_file(journal) {
+                tracing::warn!("cannot delete the swap journal {}: {e}", journal.display());
+            }
         }
-        result
     }
 
-    fn swap(&self, old: &Path, ops: &SwapOps<'_>) -> Result<()> {
+    /// Moves the staged index to the live path. Returns where the previous
+    /// index now sits, if there was one.
+    fn swap(&self, old: &Path, ops: &SwapOps<'_>) -> Result<Option<PathBuf>> {
         if !self.live.exists() {
-            return (ops.rename)(&self.staging, &self.live).with_context(|| {
+            (ops.rename)(&self.staging, &self.live).with_context(|| {
                 format!("cannot move the new index into {}", self.live.display())
-            });
+            })?;
+            return Ok(None);
         }
         // One system call: the live path never disappears. The staging path
-        // then holds the previous index; delete it.
+        // then holds the previous index; move it to `old-`, where recovery
+        // looks for it.
         match (ops.exchange)(&self.staging, &self.live) {
             Ok(()) => {
-                remove_best_effort(&self.staging, "previous index");
-                return Ok(());
+                return Ok(Some(match (ops.rename)(&self.staging, old) {
+                    Ok(()) => old.to_path_buf(),
+                    Err(_) => self.staging.clone(),
+                }))
             }
             Err(e) => tracing::debug!("atomic exchange unavailable ({e}); swapping by renames"),
         }
@@ -241,9 +302,12 @@ impl StagedIndex {
                 format!("cannot move the new index into {}", self.live.display())
             });
         }
-        // `old` goes once the journal says committed (in `commit_with`).
-        Ok(())
+        Ok(Some(old.to_path_buf()))
     }
+}
+
+fn journal_dir(journal: &Path) -> PathBuf {
+    journal.parent().unwrap_or(Path::new(".")).to_path_buf()
 }
 
 impl Drop for StagedIndex {
@@ -378,6 +442,15 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
                     // Whatever is at the live path now — nothing, an empty
                     // directory a reader recreated, or an unconfirmed new
                     // index — is moved aside, and `old-` goes back.
+                    // A stale `displaced-` from an earlier attempt must not
+                    // block this one: take the first free name.
+                    let displaced = (0..)
+                        .map(|n| match n {
+                            0 => displaced.clone(),
+                            n => root.join(format!("{DISPLACED_PREFIX}{suffix}-{n}")),
+                        })
+                        .find(|p| !p.exists())
+                        .expect("an unused name exists");
                     if live.exists() {
                         if let Err(e) = std::fs::rename(live, &displaced) {
                             tracing::error!(
@@ -396,11 +469,18 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
                         );
                         continue;
                     }
+                    if let Err(e) = sync_dir(data_root).and_then(|()| sync_dir(&root)) {
+                        tracing::warn!("cannot flush the restored index to disk: {e}");
+                    }
                     tracing::warn!(
                         "restored the index {} from an interrupted rebuild",
                         live.display()
                     );
                     done.push(Recovered::Restored(live.clone()));
+                    if displaced.exists() {
+                        remove_best_effort(&displaced, "replaced directory");
+                        done.push(Recovered::Removed(displaced));
+                    }
                 }
                 None => {
                     // Without a usable journal nobody knows whose index this
@@ -516,6 +596,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &no_exchange,
+            write: &write_durable,
         };
         staged.commit_with(&ops).unwrap();
         assert_eq!(read(&live.join("symbols.lance")), "new");
@@ -536,6 +617,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &no_exchange,
+            write: &write_durable,
         };
         let err = staged.commit_with(&ops).unwrap_err();
         assert!(format!("{err:#}").contains("injected"), "{err:#}");
@@ -559,6 +641,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &no_exchange,
+            write: &write_durable,
         };
         staged.commit_with(&ops).unwrap_err();
         assert!(!live.exists(), "the live index is gone");
@@ -592,6 +675,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &no_exchange,
+            write: &write_durable,
         };
         staged.commit_with(&ops).unwrap_err();
         assert!(!live.exists());
@@ -604,6 +688,66 @@ mod tests {
         assert_eq!(read(&live.join("symbols.lance")), "old", "restored");
         drop(next);
         assert!(entries(&root.join(STAGING_DIR)).is_empty());
+    }
+
+    #[test]
+    fn a_failed_commit_marker_keeps_the_previous_index_for_recovery() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let live = root.join("repo");
+        write(&live.join("symbols.lance"), "old");
+        let staged = StagedIndex::create(&live).unwrap();
+        write(&staged.path().join("symbols.lance"), "new");
+        let rename = refusing(&[]);
+        let fail_marker = |path: &Path, bytes: &[u8]| {
+            if String::from_utf8_lossy(bytes).contains(COMMITTED) {
+                Err(std::io::Error::other("disk full"))
+            } else {
+                write_durable(path, bytes)
+            }
+        };
+        let ops = SwapOps {
+            rename: &rename,
+            exchange: &exchange,
+            write: &fail_marker,
+        };
+        let err = staged.commit_with(&ops).unwrap_err();
+        assert!(format!("{err:#}").contains("disk full"), "{err:#}");
+        assert_eq!(read(&live.join("symbols.lance")), "new", "swapped");
+        let left = entries(&root.join(STAGING_DIR));
+        assert!(
+            left.iter().any(|n| n.starts_with(OLD_PREFIX)),
+            "old kept: {left:?}"
+        );
+        assert!(left.iter().any(|n| n.starts_with(SWAP_PREFIX)), "{left:?}");
+
+        // Unmarked: recovery brings the previous index back.
+        let next = StagedIndex::create(&live).unwrap();
+        assert_eq!(read(&live.join("symbols.lance")), "old");
+        drop(next);
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
+    }
+
+    #[test]
+    fn an_unmarked_swap_is_undone_even_when_the_new_index_is_live() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let st = root.join(STAGING_DIR);
+        // Killed after both renames, before the marker: the full new index
+        // is live, the previous one in old-.
+        write(&root.join("repo/symbols.lance"), "new");
+        write(&st.join(format!("swap-{DEAD}-1-0")), "repo");
+        write(&st.join(format!("old-{DEAD}-1-0/symbols.lance")), "old");
+        // A stale displaced- from an earlier, interrupted recovery.
+        write(&st.join(format!("displaced-{DEAD}-1-0/x")), "stale");
+
+        let done = recover_leftovers_where(&root, &|_| false);
+        assert!(
+            done.contains(&Recovered::Restored(root.join("repo"))),
+            "{done:?}"
+        );
+        assert_eq!(read(&root.join("repo/symbols.lance")), "old");
+        assert!(entries(&st).is_empty(), "{:?}", entries(&st));
     }
 
     #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
