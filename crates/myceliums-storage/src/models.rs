@@ -119,6 +119,24 @@ pub struct CodeSymbol {
     pub metadata: Option<String>,
 }
 
+/// Where a symbol is defined: the columns needed to point at it, without its
+/// signature, body or vector. Returned by `Store::find_symbols_named`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SymbolLocation {
+    /// Stable unique identifier for the symbol.
+    pub uid: String,
+    /// Short (unqualified) name.
+    pub name: String,
+    /// Fully qualified name including its container path.
+    pub qualified_name: String,
+    /// The kind of symbol.
+    pub kind: SymbolKind,
+    /// Path of the file the symbol was extracted from.
+    pub file_path: String,
+    /// 1-based line where the symbol starts.
+    pub start_line: u32,
+}
+
 /// A source or content file that was indexed.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileNode {

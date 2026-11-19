@@ -6,20 +6,20 @@ Myceliums runs as an [MCP](https://modelcontextprotocol.io/) server over stdio. 
 
 Running a setup command registers myceliums as an MCP server in the editor's configuration file. This tells the editor to spawn `myc mcp` as a background process when a session starts. The process is lightweight and stays idle until the AI assistant calls a tool.
 
-Claude Code is a special case: in addition to the MCP server, it also installs **SessionStart** and **PostToolUse** hooks. See [Claude Code Integration](claude-code.md) for details.
+Claude Code is a special case: `myc setup-claude` installs into the project by default (`.mcp.json`, `.claude/`, `CLAUDE.md`; `--scope user` for `~/.claude`), and besides the MCP server it adds hooks, a CLAUDE.md routing block and a `code-explorer` subagent. See [Claude Code Integration](claude-code.md) and the [agent integration guide](../guides/agent-integration.md).
 
 ## Supported editors
 
 | Editor | Setup command | Config path | Notes |
 |--------|--------------|-------------|-------|
-| Claude Code | `myc setup-claude` | `~/.claude.json` + `~/.claude/settings.json` | MCP server + hooks (SessionStart, PostToolUse) |
+| Claude Code | `myc setup-claude` | project: `.mcp.json`, `.claude/`, `CLAUDE.md`; `--scope user`: `~/.claude.json`, `~/.claude/` | MCP server, hooks (SessionStart, PostToolUse, PreToolUse grep redirect), routing block, subagent |
 | Cursor | `myc setup-cursor` | `~/.cursor/mcp.json` | Restart Cursor after setup |
 | VS Code | `myc setup-vscode` | Platform-specific `settings.json` | Works with Copilot Chat and other MCP extensions |
 | Windsurf | `myc setup-windsurf` | `~/.windsurf.json` | |
 | Zed | `myc setup-zed` | `~/.config/zed/settings.json` | Uses `context_servers` key instead of `mcpServers` |
 | JetBrains IDEs | `myc setup-jetbrains` | Platform-specific JetBrains config dir | IntelliJ, PyCharm, WebStorm, GoLand, RubyMine, CLion, DataGrip, Rider |
 | Gemini CLI | `myc setup-gemini` | `~/.gemini/settings.json` | |
-| Codex CLI | `myc setup-codex` | `~/.codex/config.json` | |
+| Codex CLI | `myc setup-codex` | `~/.codex/config.json` | Also writes the routing block into the project's `AGENTS.md` (`--no-routing` skips it) |
 | Copilot CLI | `myc setup-copilot` | `~/.github-copilot/config.json` | |
 | Aider | `myc setup-aider` | `~/.aider/mcp.json` | |
 | Kiro | `myc setup-kiro` | `~/.kiro/mcp.json` | |
@@ -57,7 +57,7 @@ myc setup-cursor --uninstall
 myc setup-jetbrains --uninstall
 ```
 
-This removes the `myceliums` entry from the editor's MCP server config. For Claude Code, it also removes the hooks from `~/.claude/settings.json`.
+This removes the `myceliums` entry from the editor's MCP server config. For Claude Code it removes every piece `myc setup-claude` installed at that scope (add `--scope user` for a user install); for Codex also the AGENTS.md routing block.
 
 ## Generic MCP config
 

@@ -15,15 +15,84 @@ pub mod zed;
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
-/// Write content the user asked us to persist (an editor config, a settings file),
-/// surfacing any failure with the offending path.
+/// Write content the user asked us to persist (an editor config, a settings file,
+/// CLAUDE.md), surfacing any failure with the offending path.
 ///
 /// This is the single choke point for user-facing writes in the setup/uninstall
 /// flows. Callers must serialize their content into a `String` *before* calling
 /// this — never pass `unwrap_or_default()` output, or a serialization failure
 /// would silently truncate the user's config to an empty file.
+///
+/// The write is atomic: the content goes to a temporary file in the same
+/// directory, which then replaces the target by rename, so a crash or a full
+/// disk never leaves a truncated file (and Claude Code never reads a
+/// half-written `~/.claude.json`). A symlink is followed and its target
+/// replaced, so a `CLAUDE.md -> AGENTS.md` link survives; an existing file's
+/// permissions are kept.
 pub fn write_user_file(path: &Path, content: &str) -> Result<()> {
-    std::fs::write(path, content).with_context(|| format!("Failed to write {}", path.display()))
+    let target = resolve_symlinks(path);
+    write_atomically(&target, content)
+        .with_context(|| format!("Failed to write {}", path.display()))
+}
+
+/// Follows symlinks from `path` to the file they finally name (which may not
+/// exist yet). Relative links resolve against the link's directory.
+fn resolve_symlinks(path: &Path) -> PathBuf {
+    let mut current = path.to_path_buf();
+    // A bound instead of cycle detection: the OS gives up at 40 hops too.
+    for _ in 0..40 {
+        let is_link = std::fs::symlink_metadata(&current)
+            .map(|m| m.file_type().is_symlink())
+            .unwrap_or(false);
+        if !is_link {
+            break;
+        }
+        match std::fs::read_link(&current) {
+            Ok(link) if link.is_absolute() => current = link,
+            Ok(link) => {
+                current = current
+                    .parent()
+                    .map_or_else(|| link.clone(), |dir| dir.join(&link));
+            }
+            Err(_) => break,
+        }
+    }
+    current
+}
+
+fn write_atomically(target: &Path, content: &str) -> std::io::Result<()> {
+    use std::io::Write as _;
+    let dir = match target.parent() {
+        Some(d) if !d.as_os_str().is_empty() => d.to_path_buf(),
+        _ => PathBuf::from("."),
+    };
+    let name = target
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "file".to_string());
+    let permissions = std::fs::metadata(target).ok().map(|m| m.permissions());
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.subsec_nanos());
+    let tmp = dir.join(format!(".{name}.myc-{}-{nanos}.tmp", std::process::id()));
+    let result = (|| {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp)?;
+        file.write_all(content.as_bytes())?;
+        file.sync_all()?;
+        drop(file);
+        if let Some(permissions) = permissions {
+            std::fs::set_permissions(&tmp, permissions)?;
+        }
+        std::fs::rename(&tmp, target)
+    })();
+    if result.is_err() {
+        // best-effort: the temp file is ours; the error below is what counts.
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 /// Trait for editor setup implementations
@@ -105,6 +174,58 @@ mod tests {
         write_user_file(&path, "{\"ok\":true}").unwrap();
 
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"ok\":true}");
+    }
+
+    #[test]
+    fn write_user_file_replaces_content_and_leaves_no_temp_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, "a much longer original content").unwrap();
+        write_user_file(&path, "short").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "short");
+        let names: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["settings.json"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_user_file_follows_symlinks_and_keeps_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let agents = dir.path().join("AGENTS.md");
+        let claude = dir.path().join("CLAUDE.md");
+        std::fs::write(&agents, "rules\n").unwrap();
+        std::fs::set_permissions(&agents, std::fs::Permissions::from_mode(0o600)).unwrap();
+        // A relative link, as `ln -s AGENTS.md CLAUDE.md` makes it.
+        std::os::unix::fs::symlink("AGENTS.md", &claude).unwrap();
+
+        write_user_file(&claude, "rules\nmore\n").unwrap();
+        assert!(
+            std::fs::symlink_metadata(&claude)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "the link must survive"
+        );
+        assert_eq!(std::fs::read_to_string(&agents).unwrap(), "rules\nmore\n");
+        let mode = std::fs::metadata(&agents).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+
+        // A dangling link gets its target created, not replaced by a file.
+        let dangling = dir.path().join("dangling.md");
+        std::os::unix::fs::symlink("created-by-write.md", &dangling).unwrap();
+        write_user_file(&dangling, "x").unwrap();
+        assert!(std::fs::symlink_metadata(&dangling)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("created-by-write.md")).unwrap(),
+            "x"
+        );
     }
 
     #[test]

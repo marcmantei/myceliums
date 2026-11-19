@@ -205,13 +205,16 @@ myc processes my-project --entry handleRequest --min-steps 3
 
 ### `myc impact`
 
-Detect impact of current changes via git diff. Traces changed symbols through the call graph to find indirectly affected code.
+Without a target: detect the impact of current changes via git diff, tracing changed symbols through the call graph to find indirectly affected code. With a target (symbol or file): list every symbol that calls or imports it, transitively up to `--depth`, and the files they are in.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `-r, --repo` | string, optional | most recent | Repository ID or path |
+| `<target>` | positional, optional | | Symbol (`parse_query`, `Item.AsString`) or file (`src/query.rs`). Conflicts with `--diff` |
+| `-r, --repo` | string, optional | most recent; with a target: the index covering the cwd | Repository ID or path |
 | `-d, --depth` | integer | `2` | Graph traversal depth |
 | `--diff` | string, optional | runs `git diff HEAD` | Diff string or path to a `.diff`/`.patch` file |
+| `--json` | bool | `false` | Output as JSON |
+| `--budget` | integer (tokens) | `2000` | With a target: budget for the text output in estimated tokens; `--json` returns the same items |
 
 ```bash
 # Impact of uncommitted changes
@@ -222,7 +225,50 @@ myc impact --depth 4
 
 # Impact from a patch file
 myc impact --diff changes.patch
+
+# What depends on a symbol / on a file
+myc impact parse_query
+myc impact src/query.rs --json
 ```
+
+### `myc callers` / `myc callees`
+
+Compact, one-shot answers for agents and hooks: the callers (or callees) of a symbol with file:line, ending with the index freshness (`index: abc1234 = HEAD`). An ambiguous name lists its candidate definitions with file:line (exit code 2); an unknown name suggests similar ones (exit code 1). Without `--repo`, the index covering the working directory is used, never another repository.
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `<symbol>` | positional, required | | Name, qualified name or qualified suffix (`Item.AsString`, `auth::login`) |
+| `-d, --depth` | integer | `1` | Follow calls transitively up to this many hops; each line then shows its depth and the symbol it was reached through |
+| `-r, --repo` | string, optional | index covering the cwd | Repository ID or path |
+| `--json` | bool | `false` | Output as JSON (`symbol`, `total`, `omitted`, `results`, `freshness`) |
+| `--budget` | integer (tokens) | `2000` | Budget for the text output in estimated tokens (1 token ≈ 4 characters); `--json` returns the same items, so its JSON is larger |
+
+```bash
+myc callers parse_query
+myc callers Item.AsString --depth 3
+myc callees handle_request --json
+```
+
+### `myc context`
+
+A token-budgeted context pack for a task: symbols the text names, then lexical search hits, each with its signature and direct callers and callees, plus the files involved. `--json` is the prefetch API for custom agent harnesses (see [agent integration](../guides/agent-integration.md)).
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `<query>...` | positional, required | | The task or question as free text (quotes optional) |
+| `-r, --repo` | string, optional | index covering the cwd | Repository ID or path |
+| `--hybrid` | bool | `false` | Rank with BM25 + vector search (needs embeddings; loads the model, which takes seconds) |
+| `--json` | bool | `false` | Output as JSON |
+| `--budget` | integer (tokens) | `2000` | Upper bound for the pack's text rendering in estimated tokens (`--json` holds the same entries); the most relevant entry is always kept |
+
+```bash
+myc context how are sessions refreshed
+myc context --json --budget 1500 -- "Why does the login redirect twice?"
+```
+
+### `myc hook-grep`
+
+Claude Code PreToolUse hook installed by `myc setup-claude`. Reads the hook JSON from stdin; when a Grep call or a grep/rg/git grep command searches for a function, method or type the index defines, prints `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "..."}}` naming the matching `myc` command. Prints nothing otherwise. Never blocks, always exits 0.
 
 ### `myc path`
 
@@ -335,7 +381,18 @@ myc setup --uninstall
 
 ### Editor-specific setup commands
 
-Each editor also has a dedicated setup command. These are equivalent to `myc setup --editor <name>`.
+Each editor also has a dedicated setup command. These are equivalent to `myc setup --editor <name>`, except `myc setup-claude`, which installs into the project by default:
+
+| `myc setup-claude` flag | Default | Description |
+|------|---------|-------------|
+| `--scope project\|user` | `project` | `project`: `.mcp.json`, `.claude/settings.json`, `CLAUDE.md`, `.claude/agents/` in the repository; `user`: `~/.claude.json`, `~/.claude/` (what `myc setup --editor claude` does) |
+| `--project <dir>` | git top level of the cwd | Project root for `--scope project` |
+| `--no-routing` | | Skip (and remove) the CLAUDE.md routing block |
+| `--no-redirect-hook` | | Skip (and remove) the PreToolUse grep-redirect hook |
+| `--no-agent` | | Skip (and remove) the `code-explorer` subagent |
+| `--uninstall` | | Remove everything myceliums installed at that scope |
+
+`myc setup-codex` also writes the routing block into the project's `AGENTS.md` when run inside a git repository (`--no-routing` skips it).
 
 | Command | Editor |
 |---------|--------|
