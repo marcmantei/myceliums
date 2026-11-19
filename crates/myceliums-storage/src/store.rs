@@ -209,6 +209,16 @@ impl Store {
         })
     }
 
+    /// [`Store::open`] for reading an index that must already exist: fails
+    /// instead of letting LanceDB create an empty database directory where
+    /// the index is missing (for example while a rebuild swaps it in).
+    pub async fn open_existing(db_path: &Path, repo_id: &str) -> Result<Self> {
+        if !db_path.is_dir() {
+            anyhow::bail!("no index at {}", db_path.display());
+        }
+        Self::open(db_path, repo_id).await
+    }
+
     /// Replace the ANN index policy. Production code never calls this; it
     /// exists so the recall benchmarks can measure alternative settings
     /// through the same write and search paths that ship.

@@ -679,7 +679,8 @@ async fn lookup(
         return Ok(vec![]);
     };
     RepoRegistry::validate_registered_repo_id(&info.id)?;
-    let store = Store::open(&RepoRegistry::repo_db_path(data_dir, &info.id), &info.id).await?;
+    let store =
+        Store::open_existing(&RepoRegistry::repo_db_path(data_dir, &info.id), &info.id).await?;
     let mut known = Vec::new();
     for candidate in candidates {
         let found = store

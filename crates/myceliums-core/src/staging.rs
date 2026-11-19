@@ -42,6 +42,15 @@ pub const STAGING_DIR: &str = ".staging";
 const BUILD_PREFIX: &str = "build-";
 const OLD_PREFIX: &str = "old-";
 const SWAP_PREFIX: &str = "swap-";
+/// Where recovery moves a live directory it replaces with the `old-` index
+/// of an unfinished swap.
+const DISPLACED_PREFIX: &str = "displaced-";
+
+/// The second journal line, written once the new index is in place: from
+/// then on the `old-` directory is garbage. Without it, recovery puts the
+/// `old-` index back, whatever the live path holds (a reader may have
+/// recreated it empty).
+const COMMITTED: &str = "committed";
 
 /// Distinguishes staging directories created by one process.
 static NEXT_STAGING: AtomicU64 = AtomicU64::new(0);
@@ -58,7 +67,7 @@ pub fn is_internal_entry(name: &str) -> bool {
 
 /// The `<pid>-…` suffix of a `build-`, `old-` or `swap-` entry.
 fn leftover_suffix(name: &str) -> Option<&str> {
-    let suffix = [BUILD_PREFIX, OLD_PREFIX, SWAP_PREFIX]
+    let suffix = [BUILD_PREFIX, OLD_PREFIX, SWAP_PREFIX, DISPLACED_PREFIX]
         .iter()
         .find_map(|p| name.strip_prefix(p))?;
     suffix_pid(suffix).map(|_| suffix)
@@ -170,6 +179,19 @@ impl StagedIndex {
         let result = self.swap(&old, ops);
         if result.is_ok() {
             self.committed = true;
+            // The new index is live: mark it before touching `old-`.
+            let mut marked = live_name.as_encoded_bytes().to_vec();
+            marked.extend_from_slice(format!("\n{COMMITTED}\n").as_bytes());
+            match std::fs::write(&journal, marked) {
+                Ok(()) => {
+                    if old.exists() {
+                        remove_best_effort(&old, "previous index");
+                    }
+                }
+                // Unmarked, recovery would bring the previous index back:
+                // valid, just older. Keep it rather than risk a gap.
+                Err(e) => tracing::warn!("cannot mark the swap journal as committed: {e}"),
+            }
         }
         if old.exists() {
             // The previous index is still aside: keep the journal, so
@@ -219,7 +241,7 @@ impl StagedIndex {
                 format!("cannot move the new index into {}", self.live.display())
             });
         }
-        remove_best_effort(old, "previous index");
+        // `old` goes once the journal says committed (in `commit_with`).
         Ok(())
     }
 }
@@ -326,10 +348,16 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
         let build = root.join(format!("{BUILD_PREFIX}{suffix}"));
         let old = root.join(format!("{OLD_PREFIX}{suffix}"));
         let journal = root.join(format!("{SWAP_PREFIX}{suffix}"));
-        // The journal names one directory directly below `data/`.
-        let live = std::fs::read(&journal)
+        let displaced = root.join(format!("{DISPLACED_PREFIX}{suffix}"));
+        // The journal names one directory directly below `data/`, then
+        // possibly says the swap committed.
+        let text = std::fs::read(&journal)
             .ok()
-            .and_then(|name| String::from_utf8(name).ok())
+            .and_then(|t| String::from_utf8(t).ok())
+            .unwrap_or_default();
+        let mut lines = text.lines();
+        let live = lines
+            .next()
             .filter(|name| {
                 let mut parts = Path::new(name).components();
                 matches!(parts.next(), Some(Component::Normal(_)))
@@ -337,18 +365,30 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
                     && !is_internal_entry(name)
             })
             .map(|name| data_root.join(name));
+        let committed = lines.any(|l| l == COMMITTED);
 
         if old.exists() {
             match &live {
-                Some(live) if !live.exists() => match std::fs::rename(&old, live) {
-                    Ok(()) => {
-                        tracing::warn!(
-                            "restored the index {} from an interrupted rebuild",
-                            live.display()
-                        );
-                        done.push(Recovered::Restored(live.clone()));
+                Some(_) if committed => {
+                    remove_best_effort(&old, "previous index");
+                    done.push(Recovered::Removed(old.clone()));
+                }
+                Some(live) => {
+                    // Unfinished swap: `old-` is the last complete index.
+                    // Whatever is at the live path now — nothing, an empty
+                    // directory a reader recreated, or an unconfirmed new
+                    // index — is moved aside, and `old-` goes back.
+                    if live.exists() {
+                        if let Err(e) = std::fs::rename(live, &displaced) {
+                            tracing::error!(
+                                "cannot move {} aside to restore {}: {e}",
+                                live.display(),
+                                old.display()
+                            );
+                            continue;
+                        }
                     }
-                    Err(e) => {
+                    if let Err(e) = std::fs::rename(&old, live) {
                         tracing::error!(
                             "cannot restore the index {} from {}: {e}",
                             live.display(),
@@ -356,10 +396,11 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
                         );
                         continue;
                     }
-                },
-                Some(_) => {
-                    remove_best_effort(&old, "previous index");
-                    done.push(Recovered::Removed(old.clone()));
+                    tracing::warn!(
+                        "restored the index {} from an interrupted rebuild",
+                        live.display()
+                    );
+                    done.push(Recovered::Restored(live.clone()));
                 }
                 None => {
                     // Without a usable journal nobody knows whose index this
@@ -374,6 +415,10 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
         if build.exists() {
             remove_best_effort(&build, "unfinished index");
             done.push(Recovered::Removed(build));
+        }
+        if displaced.exists() && !old.exists() {
+            remove_best_effort(&displaced, "replaced directory");
+            done.push(Recovered::Removed(displaced));
         }
         // The journal goes once its old index is dealt with.
         if journal.exists() && !old.exists() && std::fs::remove_file(&journal).is_ok() {
@@ -529,6 +574,38 @@ mod tests {
         assert!(entries(&root.join(STAGING_DIR)).is_empty());
     }
 
+    /// After a failed swap the live path is missing; any read that opens the
+    /// store (LanceDB connect) may recreate it empty. Recovery must still
+    /// bring the previous index back, not delete it as superseded.
+    #[tokio::test]
+    async fn a_live_dir_recreated_by_a_reader_after_a_failed_swap_loses_nothing() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let live = root.join("repo");
+        write(&live.join("symbols.lance"), "old");
+        let staged = StagedIndex::create(&live).unwrap();
+        write(&staged.path().join("symbols.lance"), "new");
+        let staging = staged.path().to_path_buf();
+        let old = staged.entry(OLD_PREFIX);
+        let refuse = [staging.as_path(), old.as_path()];
+        let rename = refusing(&refuse);
+        let ops = SwapOps {
+            rename: &rename,
+            exchange: &no_exchange,
+        };
+        staged.commit_with(&ops).unwrap_err();
+        assert!(!live.exists());
+
+        // A reader opens the store, then writes nothing.
+        drop(myceliums_storage::Store::open(&live, "repo").await.unwrap());
+        std::fs::create_dir_all(&live).unwrap();
+
+        let next = StagedIndex::create(&live).unwrap();
+        assert_eq!(read(&live.join("symbols.lance")), "old", "restored");
+        drop(next);
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
+    }
+
     #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
     #[test]
     fn the_platform_exchange_swaps_two_directories_in_one_call() {
@@ -563,10 +640,16 @@ mod tests {
         write(&st.join(format!("swap-{DEAD}-2-0")), "repo-a");
         write(&st.join(format!("old-{DEAD}-2-0/symbols.lance")), "a-old");
         write(&st.join(format!("build-{DEAD}-2-0/symbols.lance")), "a-new");
-        // Killed after the swap, before cleanup: live is the new index.
+        // Killed after the committed swap, before cleanup: live is the
+        // new index.
         write(&root.join("repo-b/symbols.lance"), "b-new");
-        write(&st.join(format!("swap-{DEAD}-3-0")), "repo-b");
+        write(&st.join(format!("swap-{DEAD}-3-0")), "repo-b\ncommitted\n");
         write(&st.join(format!("old-{DEAD}-3-0/symbols.lance")), "b-old");
+        // Killed between the renames, and a reader has since recreated an
+        // empty live directory: the old index comes back.
+        std::fs::create_dir_all(root.join("repo-c")).unwrap();
+        write(&st.join(format!("swap-{DEAD}-6-0")), "repo-c");
+        write(&st.join(format!("old-{DEAD}-6-0/symbols.lance")), "c-old");
         // A running process's build: untouched.
         let busy = format!("build-{}-4-0", std::process::id());
         ACTIVE
@@ -584,6 +667,8 @@ mod tests {
         );
         assert_eq!(read(&root.join("repo-a/symbols.lance")), "a-old");
         assert_eq!(read(&root.join("repo-b/symbols.lance")), "b-new");
+        assert!(done.contains(&Recovered::Restored(root.join("repo-c"))));
+        assert_eq!(read(&root.join("repo-c/symbols.lance")), "c-old");
         assert_eq!(entries(&st), vec![busy.clone(), format!("old-{DEAD}-5-0")]);
         assert!(recover_leftovers(&root).is_empty(), "idempotent");
         ACTIVE.lock().unwrap().remove(&busy["build-".len()..]);
