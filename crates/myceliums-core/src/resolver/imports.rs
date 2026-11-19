@@ -147,6 +147,7 @@ impl PathIndex {
 /// `tests/apps/inner/flask.py`), then the most leading directories shared
 /// with `importer` (the copy in the importer's own tree).
 fn closest(importer: &str, key: &str, paths: Vec<String>) -> Vec<String> {
+    let segments = |s: &str| s.split('/').filter(|x| !x.is_empty()).count();
     let depth = |path: &str| {
         let stem = stem(path);
         let matched = if stem.ends_with(key) {
@@ -154,10 +155,7 @@ fn closest(importer: &str, key: &str, paths: Vec<String>) -> Vec<String> {
         } else {
             parent_dir(stem)
         };
-        matched[..matched.len().saturating_sub(key.len())]
-            .split('/')
-            .filter(|s| !s.is_empty())
-            .count()
+        segments(matched).saturating_sub(segments(key))
     };
     let shared = |path: &str| {
         parent_dir(importer)
