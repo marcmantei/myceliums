@@ -78,6 +78,7 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
+        graph.verify()?;
 
         self.graph_text(&graph, format::format_intent_slice(&slice))
             .await
@@ -134,6 +135,7 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("source isolation failed", e))?;
+        src_graph.verify()?;
 
         // Isolate intent in target repo
         let tgt_graph = self.graph(&params.target_repo_id).await?;
@@ -162,6 +164,7 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("target isolation failed", e))?;
+        tgt_graph.verify()?;
 
         // Get vectors for differentiation
         let src_vectors = src_store
@@ -244,6 +247,7 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
+        src_graph.verify()?;
 
         let tgt_graph = self.graph(&params.target_repo_id).await?;
         let tgt_store = tgt_graph.store();
@@ -271,6 +275,7 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
+        tgt_graph.verify()?;
 
         // Differentiate
         let src_vectors = src_store

@@ -80,8 +80,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<SearchCodeParams>,
     ) -> TextResult {
         require_query("query", &params.query)?;
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let graph = self.graph(&repo_id).await?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
         let page = Page::new(params.limit, params.offset, SEARCH);
         let explain = params.explain.unwrap_or(false);
         let rerank = params.rerank.unwrap_or(false);
@@ -91,7 +90,7 @@ impl MyceliumsMcp {
             SearchMode::Semantic => {
                 let store = graph.store();
                 let embedder = vector_embedder(&store).await?;
-                self.semantic_results(&store, &embedder, query, page)
+                self.semantic_results(&graph, &embedder, query, page)
                     .await?
             }
             SearchMode::Hybrid => {
@@ -137,8 +136,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<SearchParams>,
     ) -> TextResult {
         require_query("query", &params.query)?;
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let graph = self.graph(&repo_id).await?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
         let page = Page::new(params.limit, params.offset, SEARCH);
         let body = self
             .keyword_results(&graph, &params.query, page, params.explain.unwrap_or(false))
@@ -175,8 +173,7 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<HybridSearchParams>,
     ) -> TextResult {
         require_query("query", &params.query)?;
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let graph = self.graph(&repo_id).await?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
         let embedder = vector_embedder(&graph.store()).await?;
         let page = Page::new(params.limit, params.offset, SEARCH);
         let body = self
@@ -260,13 +257,12 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<SearchParams>,
     ) -> TextResult {
         require_query("query", &params.query)?;
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let graph = self.graph(&repo_id).await?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
         let store = graph.store();
         let embedder = vector_embedder(&store).await?;
         let page = Page::new(params.limit, params.offset, Budget::new(10, SEARCH.max));
         let body = self
-            .semantic_results(&store, &embedder, &params.query, page)
+            .semantic_results(&graph, &embedder, &params.query, page)
             .await?;
         self.graph_text(&graph, body).await
     }
@@ -314,7 +310,7 @@ impl MyceliumsMcp {
     /// Vector similarity only.
     async fn semantic_results(
         &self,
-        store: &Arc<Store>,
+        graph: &Graph<'_>,
         embedder: &Arc<Embedder>,
         query: &str,
         page: Page,
@@ -323,10 +319,12 @@ impl MyceliumsMcp {
             .embed_query(query)
             .await
             .map_err(|e| ToolError::internal("cannot embed the query", e))?;
+        let store = &graph.store();
         let results = store
             .vector_search(&query_vector, page.fetch())
             .await
             .map_err(|e| ToolError::internal("vector search failed", e))?;
+        graph.verify()?;
         let page = page.take_open(results);
         let items: Vec<SearchResultItem> = page
             .items
@@ -383,6 +381,8 @@ impl MyceliumsMcp {
                 .await
                 .map_err(|e| ToolError::internal("hybrid search failed", e))?
         };
+        // The vector half read the store directly.
+        graph.verify()?;
 
         // Apply reranking if requested, using the reranker recorded at indexing time
         if rerank {

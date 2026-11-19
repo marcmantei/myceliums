@@ -139,6 +139,8 @@ struct RepoCache {
     slots: HashMap<String, RepoSlot>,
     /// Logical clock for least-recently-used ordering.
     clock: u64,
+    /// Repositories already reported as larger than the size bound alone.
+    oversized: std::collections::HashSet<String>,
 }
 
 /// The cached state of one repository.
@@ -195,7 +197,18 @@ impl RepoCache {
                     tracing::debug!(repo_id = %id, "graph cache: evicting least recently used repository");
                     self.slots.remove(&id);
                 }
-                None => return,
+                None => {
+                    if over_bytes && self.oversized.insert(keep.to_string()) {
+                        tracing::warn!(
+                            repo_id = %keep,
+                            cached_mb = self.bytes() / (1024 * 1024),
+                            max_mb = limits.max_bytes.unwrap_or_default() / (1024 * 1024),
+                            "graph cache: one repository alone exceeds mcp.graph_cache_max_mb; \
+                             it stays cached while in use"
+                        );
+                    }
+                    return;
+                }
             }
         }
     }
@@ -390,6 +403,11 @@ impl TableStamp {
         if let Ok(entries) = std::fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let file = entry.file_name().to_string_lossy().into_owned();
+                // Only manifests: not the temporary files of a commit in
+                // progress.
+                if !file.ends_with(".manifest") {
+                    continue;
+                }
                 if let Some(version) = manifest_version(&file) {
                     if newest.as_ref().is_none_or(|(v, _)| version > *v) {
                         newest = Some((version, entry.path()));
@@ -481,10 +499,25 @@ enum LoadError {
     Failed(MyceliumError),
 }
 
-/// How often a snapshot that has not handed out a table yet follows the
-/// index to a newer generation before giving up with
+/// How often one table read of a snapshot that has not handed out a table
+/// yet follows the index to a newer generation before giving up with
 /// [`MyceliumError::IndexChanged`].
 const MAX_REPINS: usize = 3;
+
+/// The generation a [`RepoGraph`] serves.
+struct Generation {
+    graph: Arc<CachedGraph>,
+    /// Whether a table (or a checked store read) has been handed out from
+    /// `graph`. Once set, the snapshot never moves to another generation.
+    pinned: bool,
+}
+
+/// What a table read does after its load attempt.
+enum Settled<T> {
+    Done(Result<GraphTable<T>>),
+    /// Read again, from the snapshot's (possibly newer) generation.
+    Retry,
+}
 
 /// A consistent view of one repository's graph for the duration of a call.
 ///
@@ -496,10 +529,19 @@ const MAX_REPINS: usize = 3;
 /// * A table already cached for that generation is served from memory, even
 ///   if the index has been replaced since.
 /// * A table read from disk is kept only if the index did not change during
-///   the read. If it did and the snapshot has not handed out a table yet, the
-///   snapshot moves to the new generation and reads again; otherwise the
-///   read fails with [`MyceliumError::IndexChanged`] instead of mixing two
-///   generations in one answer.
+///   the read (a read that fails because a swap removed its files counts as
+///   such a change). If it did and the snapshot has not handed out a table
+///   yet, the snapshot moves to the new generation and reads again;
+///   otherwise the read fails with [`MyceliumError::IndexChanged`] instead of
+///   mixing two generations in one answer.
+///
+/// The snapshot may be shared by concurrent reads (it is `Sync`): moving to
+/// a newer generation and handing out a table are decided under one lock, so
+/// a table is only handed out if it belongs to the generation every other
+/// handed-out table belongs to.
+///
+/// Reads through [`RepoGraph::store`] (vector search) bypass the graph
+/// tables; call [`RepoGraph::verify`] after them.
 ///
 /// Take one snapshot per call and read every table through it.
 pub struct RepoGraph<'a> {
@@ -508,9 +550,11 @@ pub struct RepoGraph<'a> {
     info: RepoInfo,
     db_path: PathBuf,
     store: Arc<Store>,
-    graph: Mutex<Arc<CachedGraph>>,
-    /// Whether a table has been handed out, pinning the generation.
-    pinned: AtomicBool,
+    state: Mutex<Generation>,
+    /// Test hook: the first table read to reach it waits there between its
+    /// load and its hand-out decision.
+    #[cfg(test)]
+    pause: Mutex<Option<Arc<tests::Pause>>>,
 }
 
 impl RepoGraph<'_> {
@@ -526,9 +570,26 @@ impl RepoGraph<'_> {
     }
 
     /// The repository's shared store handle, for reads the graph cache does
-    /// not cover (vector search, embeddings, index metadata).
+    /// not cover (vector search, embeddings, index metadata). Call
+    /// [`RepoGraph::verify`] after such a read.
     pub fn store(&self) -> Arc<Store> {
         Arc::clone(&self.store)
+    }
+
+    /// Checks that the index on disk is still the generation this snapshot
+    /// serves, and pins the snapshot to it.
+    ///
+    /// Call after reading through [`RepoGraph::store`]: if the check passes,
+    /// those results and every table this snapshot hands out come from one
+    /// generation. Errors with [`MyceliumError::IndexChanged`] otherwise.
+    pub fn verify(&self) -> Result<()> {
+        let mut state = lock(&self.state);
+        if self.service.read_fingerprint(&self.db_path) == state.graph.fingerprint {
+            state.pinned = true;
+            Ok(())
+        } else {
+            Err(MyceliumError::IndexChanged(self.repo_id.clone()))
+        }
     }
 
     /// All symbols of the repository.
@@ -567,10 +628,6 @@ impl RepoGraph<'_> {
             .await
     }
 
-    fn current(&self) -> Arc<CachedGraph> {
-        Arc::clone(&lock(&self.graph))
-    }
-
     /// Serves one table from the snapshot's generation, reading it on first
     /// use (see [`RepoGraph`] for the consistency rules).
     async fn table<T, F, Fut>(
@@ -585,47 +642,85 @@ impl RepoGraph<'_> {
     {
         let mut repins = 0;
         loop {
-            let graph = self.current();
+            let graph = Arc::clone(&lock(&self.state).graph);
             let loaded = AtomicBool::new(false);
             let result = cell(&graph)
                 .get_or_try_init(|| async {
-                    let rows = read(Arc::clone(&self.store))
-                        .await
-                        .map_err(|e| LoadError::Failed(MyceliumError::Storage(e.to_string())))?;
+                    let read = read(Arc::clone(&self.store)).await;
                     // The snapshot's fingerprint was read before this load
                     // started; unchanged now means no commit landed in
                     // between, so the rows belong to that generation.
                     let now = self.service.read_fingerprint(&self.db_path);
                     if now != graph.fingerprint {
+                        // Also when the read failed: a read straddling a
+                        // swap fails on files that are gone.
                         return Err(LoadError::Stale(now));
                     }
+                    let rows =
+                        read.map_err(|e| LoadError::Failed(MyceliumError::Storage(e.to_string())))?;
                     graph.bytes.fetch_add(table_bytes(&rows), Ordering::Relaxed);
                     self.service.table_loads.fetch_add(1, Ordering::Relaxed);
                     loaded.store(true, Ordering::Relaxed);
                     Ok(GraphTable(Arc::new(rows)))
                 })
                 .await;
-            match result {
-                Ok(table) => {
-                    let table = table.clone();
-                    self.pinned.store(true, Ordering::Relaxed);
-                    if loaded.load(Ordering::Relaxed) {
+            #[cfg(test)]
+            self.test_pause().await;
+            match self.settle(&graph, result, &mut repins) {
+                Settled::Done(result) => {
+                    if result.is_ok() && loaded.load(Ordering::Relaxed) {
                         self.service.loaded(&self.repo_id);
                     }
-                    return Ok(table);
+                    return result;
                 }
-                Err(LoadError::Stale(now))
-                    if !self.pinned.load(Ordering::Relaxed) && repins < MAX_REPINS =>
-                {
-                    repins += 1;
-                    let fresh = self.service.pin(&self.repo_id, now);
-                    *lock(&self.graph) = fresh;
-                }
-                Err(LoadError::Stale(_)) => {
-                    return Err(MyceliumError::IndexChanged(self.repo_id.clone()))
-                }
-                Err(LoadError::Failed(e)) => return Err(e),
+                Settled::Retry => {}
             }
+        }
+    }
+
+    /// Decides, under the snapshot's lock, what a load attempt from `graph`
+    /// yields: a table only if `graph` is still the snapshot's generation
+    /// (which pins it), a move to a newer generation only while nothing is
+    /// pinned.
+    fn settle<T>(
+        &self,
+        graph: &Arc<CachedGraph>,
+        result: std::result::Result<&GraphTable<T>, LoadError>,
+        repins: &mut usize,
+    ) -> Settled<T> {
+        let mut state = lock(&self.state);
+        if !Arc::ptr_eq(&state.graph, graph) {
+            // A concurrent read of this snapshot moved it to a newer
+            // generation meanwhile; this attempt's result belongs to the old
+            // one. Read again from the current one.
+            return match result {
+                Err(LoadError::Failed(e)) => Settled::Done(Err(e)),
+                _ => Settled::Retry,
+            };
+        }
+        match result {
+            Ok(table) => {
+                state.pinned = true;
+                Settled::Done(Ok(table.clone()))
+            }
+            Err(LoadError::Stale(now)) if !state.pinned && *repins < MAX_REPINS => {
+                *repins += 1;
+                state.graph = self.service.pin(&self.repo_id, now);
+                Settled::Retry
+            }
+            Err(LoadError::Stale(_)) => {
+                Settled::Done(Err(MyceliumError::IndexChanged(self.repo_id.clone())))
+            }
+            Err(LoadError::Failed(e)) => Settled::Done(Err(e)),
+        }
+    }
+
+    #[cfg(test)]
+    async fn test_pause(&self) {
+        let pause = lock(&self.pause).take();
+        if let Some(pause) = pause {
+            pause.reached.notify_one();
+            pause.release.notified().await;
         }
     }
 }
@@ -738,7 +833,11 @@ impl GraphService {
     /// [`GraphService::db_path`] together with the repository's registry
     /// entry.
     fn registered(&self, repo_id: &str) -> Result<(PathBuf, RepoInfo)> {
-        let registry = self.load_registry()?;
+        self.registered_in(&self.load_registry()?, repo_id)
+    }
+
+    /// [`GraphService::registered`] against an already loaded registry.
+    fn registered_in(&self, registry: &RepoRegistry, repo_id: &str) -> Result<(PathBuf, RepoInfo)> {
         lock(&self.cache)
             .slots
             .retain(|id, _| registry.get(id).is_some());
@@ -803,7 +902,15 @@ impl GraphService {
     /// changed since the repository's tables were cached, they are dropped
     /// and read again on demand.
     pub async fn graph(&self, repo_id: &str) -> Result<RepoGraph<'_>> {
-        let (db_path, info) = self.registered(repo_id)?;
+        let registry = self.load_registry()?;
+        self.graph_in(&registry, repo_id).await
+    }
+
+    /// [`GraphService::graph`] against a registry the caller has just loaded
+    /// (for example to resolve `repo_id`), so a call parses `repos.json`
+    /// once.
+    pub async fn graph_in(&self, registry: &RepoRegistry, repo_id: &str) -> Result<RepoGraph<'_>> {
+        let (db_path, info) = self.registered_in(registry, repo_id)?;
         let store = self.open_store_at(repo_id, &db_path).await?;
         let fingerprint = self.read_fingerprint(&db_path);
         let graph = self.pin(repo_id, fingerprint);
@@ -813,8 +920,12 @@ impl GraphService {
             info,
             db_path,
             store,
-            graph: Mutex::new(graph),
-            pinned: AtomicBool::new(false),
+            state: Mutex::new(Generation {
+                graph,
+                pinned: false,
+            }),
+            #[cfg(test)]
+            pause: Mutex::new(None),
         })
     }
 
@@ -999,6 +1110,13 @@ impl GraphService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// See `RepoGraph::pause`.
+    #[derive(Default)]
+    pub(super) struct Pause {
+        pub(super) reached: tokio::sync::Notify,
+        pub(super) release: tokio::sync::Notify,
+    }
 
     fn service_with_empty_registry() -> (GraphService, tempfile::TempDir) {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1535,8 +1653,10 @@ mod tests {
                                 consistent += 1;
                             }
                             // The index changed between two reads, or a read
-                            // straddled the swap: an error, not mixed data.
-                            Err(_) => failed += 1,
+                            // straddled the swap: a retryable error, not
+                            // mixed data and not a server fault.
+                            Err(MyceliumError::IndexChanged(_)) => failed += 1,
+                            Err(e) => panic!("only IndexChanged may fail a read: {e:?}"),
                         }
                     }
                     (consistent, failed)
@@ -1562,6 +1682,74 @@ mod tests {
         // Afterwards the service serves the last generation.
         let graph = svc.graph("r").await.unwrap();
         assert!(graph.symbols().await.unwrap()[0].name.starts_with("g8"));
+    }
+
+    /// Two reads of one snapshot run concurrently. The first has its
+    /// (cached) symbols of generation 0 in hand when a rebuild lands and the
+    /// second read moves the snapshot to generation 1 and hands out its
+    /// relationships. The first must not then hand out generation-0 symbols.
+    #[tokio::test]
+    async fn concurrent_reads_of_one_snapshot_never_mix_generations() {
+        let (svc, dir) = service_with_symbols(&["g0a", "g0b"]).await;
+        // Generation 0's symbols are cached; nothing else is.
+        symbols(&svc, "r").await.unwrap();
+        let graph = svc.graph("r").await.unwrap();
+        let pause = Arc::new(Pause::default());
+        *lock(&graph.pause) = Some(Arc::clone(&pause));
+        rebuild(dir.path(), "r", &["g1a", "g1b", "g1c"]).await;
+
+        let (symbols, relationships) = tokio::join!(graph.symbols(), async {
+            // `symbols` holds generation 0's table and waits at the pause.
+            pause.reached.notified().await;
+            let relationships = graph.relationships().await;
+            pause.release.notify_one();
+            relationships
+        });
+        let (symbols, relationships) = (symbols.unwrap(), relationships.unwrap());
+        let names: Vec<&str> = symbols.iter().map(|s| s.name.as_str()).collect();
+        assert_eq!(
+            names.join(","),
+            relationships[0].metadata,
+            "mixed generations"
+        );
+        assert_eq!(names, ["g1a", "g1b", "g1c"]);
+    }
+
+    /// A read that fails because a swap removed its files is a change of
+    /// generation (retryable), not a server fault; a failure while the index
+    /// is unchanged stays a storage error.
+    #[tokio::test]
+    async fn a_read_failing_across_a_swap_is_index_changed() {
+        let (svc, dir) = service_with_symbols(&["alpha", "beta"]).await;
+        let failing = |_: Arc<Store>| async { anyhow::bail!("file not found") };
+
+        let graph = svc.graph("r").await.unwrap();
+        let err = graph
+            .table::<Relationship, _, _>(|g| &g.relationships, failing)
+            .await
+            .expect_err("the read fails");
+        assert!(matches!(err, MyceliumError::Storage(_)), "{err:?}");
+
+        graph.symbols().await.unwrap();
+        rebuild(dir.path(), "r", &["gamma", "delta"]).await;
+        let err = graph
+            .table::<Relationship, _, _>(|g| &g.relationships, failing)
+            .await
+            .expect_err("the read fails");
+        assert!(matches!(err, MyceliumError::IndexChanged(_)), "{err:?}");
+    }
+
+    #[tokio::test]
+    async fn verify_detects_a_rebuild_after_a_store_read() {
+        let (svc, dir) = service_with_symbols(&["alpha", "beta"]).await;
+        let graph = svc.graph("r").await.unwrap();
+        graph.verify().unwrap();
+        rebuild(dir.path(), "r", &["gamma", "delta"]).await;
+        let err = graph.verify().expect_err("the index changed");
+        assert!(matches!(err, MyceliumError::IndexChanged(_)), "{err:?}");
+        // Pinned by the first verify: tables stay in that generation.
+        let err = graph.symbols().await.expect_err("pinned");
+        assert!(matches!(err, MyceliumError::IndexChanged(_)), "{err:?}");
     }
 
     #[tokio::test]

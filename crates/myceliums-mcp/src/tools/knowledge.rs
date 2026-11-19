@@ -18,9 +18,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<QueryKnowledgeParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
 
         let relationships = graph.relationships().await?;
@@ -145,9 +144,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetRationaleParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
 
         let relationships = graph.relationships().await?;
@@ -250,9 +248,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetKnowledgeGapsParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
         let communities = graph.communities().await?;

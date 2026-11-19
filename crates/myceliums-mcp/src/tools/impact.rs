@@ -43,11 +43,11 @@ impl MyceliumsMcp {
                 "give at most one of symbol_name, file_path and diff",
             ));
         }
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
         let depth = params.depth.unwrap_or(2).clamp(1, 10);
         let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
         let (subject, roots) = match (params.symbol_name, params.file_path) {
@@ -160,10 +160,10 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<ReviewContextParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
         let diff_text = diff_or_git(params.diff, &repo_id)?;
 
-        let graph = self.graph(&repo_id).await?;
         if diff_text.trim().is_empty() {
             return self
                 .graph_text(&graph, "No changes detected (empty diff).".to_string())
@@ -328,9 +328,9 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetSuggestedQuestionsParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
 
         let relationships = graph.relationships().await?;

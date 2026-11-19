@@ -18,8 +18,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<FindDeadCodeParams>,
     ) -> Result<Json<DeadCodeOutput>, ToolError> {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let graph = self.graph(&repo_id).await?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
         let symbols = graph.symbols().await?;
 
         let relationships = graph.relationships().await?;
@@ -95,9 +95,8 @@ impl MyceliumsMcp {
         )
     )]
     async fn get_god_nodes(&self, Parameters(params): Parameters<GetGodNodesParams>) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -158,9 +157,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetSurprisingConnectionsParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -212,9 +210,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetGitContextParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(Some(&params.repo_id))?;
+        let graph = self.graph_for(Some(&params.repo_id)).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
 
         let symbol_lower = params.symbol_name.to_lowercase();
@@ -286,9 +283,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCentralityParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -370,9 +366,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCommunityMetricsParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -440,9 +435,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<DetectCyclesParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -500,9 +494,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetDependenciesParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -552,9 +545,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetModuleCouplingParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -607,9 +599,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<ExportMermaidParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -638,9 +629,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<QualityHotspotsParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -672,9 +662,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<ArchitectureLintParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
 
@@ -715,9 +704,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<ArchitectureViewParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let graph = self.graph(&repo_id).await?;
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
         let communities = graph.communities().await?;
@@ -742,8 +730,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<DetectDriftParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let graph = self.graph(&repo_id).await?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
         let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
         let body = self
             .drift_text(

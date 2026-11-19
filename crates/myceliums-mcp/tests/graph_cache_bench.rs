@@ -154,6 +154,18 @@ async fn cold_vs_warm_read_latency() {
         graph.communities().await.unwrap();
         graph.processes().await.unwrap();
     });
+
+    // The fingerprint alone (one per call).
+    let db = myceliums_storage::RepoRegistry::repo_db_path(data.path(), id);
+    let start = Instant::now();
+    for _ in 0..SERVICE_CALLS {
+        std::hint::black_box(myceliums_core::IndexFingerprint::read(&db));
+    }
+    println!(
+        "{:<26} {:>7.2?}/read",
+        "IndexFingerprint::read",
+        start.elapsed() / SERVICE_CALLS
+    );
 }
 
 const SERVICE_CALLS: u32 = 2000;

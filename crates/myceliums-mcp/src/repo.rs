@@ -191,13 +191,17 @@ impl MyceliumsMcp {
     /// deepest indexed repository containing the working directory is used
     /// ([`repo_for_dir`]); there is no fallback to another repository.
     pub(crate) fn resolve_repo_id(&self, repo_id: Option<&str>) -> Result<String, ToolError> {
-        let registry = registry()?;
-        if let Some(id) = repo_id {
-            registry.require(id).map_err(repo_id_error)?;
-            return Ok(id.to_string());
-        }
-        repo_for_dir(&registry, std::env::current_dir().ok().as_deref())
+        resolve_in(&registry()?, repo_id)
     }
+}
+
+/// [`MyceliumsMcp::resolve_repo_id`] against a loaded registry.
+fn resolve_in(registry: &RepoRegistry, repo_id: Option<&str>) -> Result<String, ToolError> {
+    if let Some(id) = repo_id {
+        registry.require(id).map_err(repo_id_error)?;
+        return Ok(id.to_string());
+    }
+    repo_for_dir(registry, std::env::current_dir().ok().as_deref())
 }
 
 /// How many known repo ids the "no index covers" error lists.
@@ -247,6 +251,18 @@ impl MyceliumsMcp {
     /// One call's view of `repo_id`'s graph: the registry and the index
     /// fingerprint are checked once, and every table read through it belongs
     /// to the same index generation. Take one per call per repository.
+    /// [`MyceliumsMcp::resolve_repo_id`] and [`MyceliumsMcp::graph`] in one,
+    /// parsing the registry once.
+    pub(crate) async fn graph_for(&self, repo_id: Option<&str>) -> Result<Graph<'_>, ToolError> {
+        let registry = registry()?;
+        let id = resolve_in(&registry, repo_id)?;
+        self.service
+            .graph_in(&registry, &id)
+            .await
+            .map(Graph)
+            .map_err(service_error)
+    }
+
     pub(crate) async fn graph(&self, repo_id: &str) -> Result<Graph<'_>, ToolError> {
         self.service
             .graph(repo_id)
@@ -264,6 +280,17 @@ impl Graph<'_> {
     /// not cover.
     pub(crate) fn store(&self) -> Arc<Store> {
         self.0.store()
+    }
+
+    /// Checks, after a read through [`Graph::store`] (vector search), that
+    /// the index is still the generation this call's tables come from.
+    pub(crate) fn verify(&self) -> Result<(), ToolError> {
+        self.0.verify().map_err(service_error)
+    }
+
+    /// The repository this call reads.
+    pub(crate) fn repo_id(&self) -> &str {
+        self.0.repo_id()
     }
 
     /// The repository's registry entry, as of this call.
