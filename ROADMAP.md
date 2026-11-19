@@ -37,9 +37,10 @@ These are explicitly out of scope; pursuing them would dilute the tool's focus.
 - **Being a general-purpose graph database.** Cypher support is a deliberately
   small, **read-only** subset for querying code graphs — not a competitor to
   Neo4j. Mutating queries (`CREATE`, `DELETE`, `SET`, ...) are rejected by design.
-- **Precise, compiler-grade call resolution.** Caller/callee edges are
-  heuristic, name-based approximations. Full type-aware resolution per language
-  is not a goal; see
+- **Precise, compiler-grade call resolution.** Caller/callee edges follow each
+  language's scoping, imports and declared types, without type inference; a
+  receiver whose type the code does not declare is matched by method name.
+  Full type-aware resolution per language is not a goal; see
   [call-resolution-limitations](docs/guides/call-resolution-limitations.md).
 - **Runtime or dynamic analysis.** Myceliums models code as written (static
   structure). Profiling, tracing, and other runtime behaviour are out of scope.

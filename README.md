@@ -31,7 +31,7 @@ Repository ID: my-project-a1b2c3
 
 | Text search alone | With Myceliums |
 |---|---|
-| Finds the lines where a name appears | Also knows the symbol each line belongs to and what calls what (heuristic, name-based resolution) |
+| Finds the lines where a name appears | Also knows the symbol each line belongs to and what calls what (scopes, imports and declared types; no type inference) |
 | Reads whole files for context | Returns a symbol's signature, callers and callees |
 | No notion of the code's structure | Community detection groups related code |
 | Impact analysis by hand | `myc impact` traces the blast radius of a diff (with confidence flags) |

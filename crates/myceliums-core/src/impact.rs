@@ -67,18 +67,19 @@ pub struct AffectedSymbol {
 ///
 /// ## Note on Confidence
 ///
-/// Impact analysis relies on call graph resolution, which uses a **name-based heuristic**.
+/// Impact analysis follows CALLS edges, which the resolver links by each
+/// language's scoping, imports and declared types, without type inference.
 /// This means:
 ///
-/// - For changes to functions with **unique names** (e.g., `initializeAuthSystem`):
-///   The affected symbol list is typically accurate.
+/// - Edges labelled `exact` or `import` are almost always right.
 ///
-/// - For changes to functions with **common names** (e.g., `parse`, `handle`, `validate`):
-///   The affected list may include false positives. Cross-language relationships are
-///   particularly prone to false positives and should be verified manually.
+/// - A method call on a value whose type nothing declares is linked by the
+///   method's name (`name-match`, or `ambiguous` to two candidates); in
+///   untyped code, changes to methods with **common names** (`get`, `load`,
+///   `render`) may list false positives. Calls never cross language families.
 ///
-/// **Very large blast radius (400+ symbols):** Often indicates cascading false positives.
-/// Spot-check results when analyzing common-name function edits.
+/// **Very large blast radius (400+ symbols):** check the labels of the edges
+/// that fan out.
 ///
 /// See `docs/guides/call-resolution-limitations.md` for mitigation strategies.
 #[derive(Debug, Clone, Serialize)]

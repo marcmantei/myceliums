@@ -1,164 +1,158 @@
-# Call Resolution: Understanding Limitations and Confidence
+# Call Resolution: How It Works, How Far to Trust It
 
-## How Call Resolution Works
+Myceliums builds a call graph from what the code declares: every call site is linked to the function, method or class it calls, by the language's own scoping rules and the types the code spells out. It does no type inference. This guide says what the resolver does, what each edge's resolution label means, how accurate it measured, and where it is blind.
 
-Myceliums builds a call graph by parsing function definitions and tracking function calls. The resolver matches call sites to their target functions using a **name-based heuristic approach**.
+## How call resolution works
 
-### The Approach: Name-Based Matching
+The parsers report each call with its line, the callee's name, how the call names it (a bare `f()`, a call on a receiver `x.f()` / `X::f()` / `pkg.F()`, a constructor `new X()`, `super(...)`) and the receiver's expression. For Python, TypeScript/JavaScript, Go, Rust and Java they also report every import, and every parameter, local variable and field with its declared type or the expression that initialised it.
 
-The call resolver uses this strategy, in order of precedence:
+**The caller** is found by position: the innermost function or method in the call's file whose lines contain the call site. Calls inside closures, lambdas and nested blocks belong to the enclosing named function. A call outside every function (module-level code) has no caller and no edge.
 
-1. **Expression chain resolution**: For calls like `foo.bar()`, take the receiver identifier and look for `foo.bar` (qualified name)
-2. **Import aliases**: If `bar` was imported as a local alias, resolve via the import mapping
-3. **SSA-derived aliases**: If static single assignment analysis tracked `handler = authenticate`, resolve via that alias
-4. **Bare name lookup**: Fall back to matching the bare function name globally
-5. **Module graph**: Only when no symbol of that name exists, follow the file's imports
+**The callee** is looked up only among symbols of the caller's [language family](#language-families), nearest scope first:
 
-The **caller** of an edge is resolved the same way: by the name of the function the call appears in, not by its position in the file.
+1. **Bare call `f()`.** A parameter or local named `f` shadows everything: the call goes through a function value and gets no edge (unless the name holds a class, as `cls` does in a Python classmethod). Then, in Java, the methods of the enclosing classes and their base classes; then the caller's own file; then what the file imports; then (Go) the other files of the package. In these five languages nothing else is in scope, so a name found nowhere there — a built-in like `print` or `len`, a library function — gets no edge. A bare call never reaches a method in Python, TypeScript, Go or Rust.
+2. **Call on a receiver `x.f()`.** The receiver's type is worked out from declarations in view, without inference:
+   - `self`, `this`, `super`, Rust's `Self` → the enclosing class (its base class);
+   - a class or module name → `Config.load()`, `Validator::new()`, `config.parse()`;
+   - a constructor or literal → `new Config(...).get()`, `User(...).save()`, `&model.User{...}`, `"x".join(...)`;
+   - a parameter, variable or field with a declared type (`repo: Repository`, `Repository<User> repo`, `repo *store.Repo[*User]`, a struct field), or initialised from one of the above (`user = User(...)`);
+   - a call's declared return type (`load(text): Config`, `-> Self`, `func Load(...) (*Config, error)`).
 
-Every CALLS edge records how its target was picked (since #96): `resolved:exact` (a qualified name exactly one symbol has), `resolved:import` (through the module graph), `resolved:name-match` (a bare name exactly one symbol has) or `resolved:ambiguous` (several symbols share the name; one was picked). The MCP tools that list callers and callees show it; it is also in the edge's `metadata`.
+   On a typed receiver the call goes to that class's method, or the nearest base class's (Go: embedded struct's); on a module, to its top-level function; on a library type (a string, a `Map`, `strings`, `std::`), nowhere. Only a receiver whose type is not known falls back to the method name: any *method* of that name in the language family, never a free function.
+3. **Constructor call `new X()`** (and Python's `X()`) → the class `X` in scope. **`super(...)`** → the base class's constructor.
+4. **Languages whose extractor does not record call forms or bindings** (C, C++, C#, Ruby, Kotlin, Swift, PHP, Lua, Zig, PowerShell, Elixir, Scala, Objective-C, Dart): by name, any callable kind, nearest scope first — the caller's file, its imports, its directory, the whole language family.
 
-### The Limitation: Last-Writer-Wins on Common Names
+**Imports** are resolved to project files per language: Python modules and packages (absolute from a source root, or relative), relative TypeScript paths (and `@/`, `~/` aliases), Go import paths to the package directory, Rust `use` paths to module files, Java classes and static imports. Re-exports one import deep are followed (`from .sessions import Session` in a package's `__init__.py`; a TypeScript barrel that imports and re-exports). A specifier that names no project file is a library: a call through it gets no edge.
 
-Because Myceliums uses a global `name -> uid` map, **same-named symbols merge into a single entry**. This causes false positives on common names:
+**Several candidates.** Where more than one symbol qualifies — a method name shared by two classes on an untyped receiver, two build-tag variants of a Go function — the call is linked to each candidate, labelled `ambiguous`, up to `MAX_AMBIGUOUS_TARGETS` (2). With three or more candidates the name says too little and the call gets no edge. Java overloads are first narrowed by argument count.
 
-**Example:**
+Every CALLS edge records how its target was found in its metadata (`line:<n>;resolved:<label>`); the MCP tools that list callers and callees show it.
 
-```rust
-// File: src/auth.rs
-fn parse(input: &str) -> Result<Token> { /* ... */ }
+## Language families
 
-// File: src/config.rs
-fn parse(json: &str) -> Result<Config> { /* ... */ }
+A call is never resolved to a symbol of another family. A family is a group of languages that call each other directly, with no binding layer:
 
-// File: main.rs
-let token = parse(user_input);  // Which parse() is this?
-```
+| family | extensions |
+|---|---|
+| `js` | `ts`, `tsx`, `mts`, `cts`, `js`, `jsx`, `mjs`, `cjs`, `vue`, `svelte` |
+| `c` | `c`, `h`, `cpp`, `cc`, `cxx`, `hpp`, `hh`, `hxx`, `m`, `mm` |
+| `jvm` | `java`, `kt`, `kts`, `scala` |
+| `python` | `py`, `pyi`, `ipynb` |
+| `csharp` | `cs` |
+| `elixir` | `ex`, `exs` |
+| `powershell` | `ps1` |
 
-Both `parse` functions collide in the global map. The resolver cannot distinguish whether `main.rs` is calling `auth::parse` or `config::parse`, so it picks one: the last one registered. Files are walked in name order, so that is the one in the alphabetically last file. This produces a false edge in the call graph, labelled `ambiguous`.
+Every other extension is a family of its own (`rs`, `go`, `rb`, `swift`, `php`, `lua`, `zig`, `dart`, ...). Calls across any other boundary — FFI, generated bindings, HTTP — are not resolved. (`myceliums_core::language_family` is the table.)
 
-The same collision applies to callers: a call inside `config::parse` can be recorded as a call from `auth::parse`.
+## Resolution labels
 
-**Real-world impact:**
+| label | meaning | gold set (all languages) |
+|---|---|---:|
+| `exact` | Determined by the call's syntax and the declarations in view: a method on a typed receiver (`self`/`this`/`super`, `Self`, a class, a variable, field or parameter whose type is declared or constructed in view, a declared return type), a class's static member, a constructor call, an unqualified call to the enclosing class's method (Java). | 161 / 161, precision 1.00 (0.98–1.00) |
+| `import` | Bound by an import: an imported name, or a member of an imported module or package. | 47 / 47, 1.00 (0.92–1.00) |
+| `name-match` | Found by name in the nearest scope where exactly one symbol qualifies: the caller's file, its package (Go) — or, for a call on a receiver of unknown type, the only method of that name in the language family; for languages without call forms, any scope up to the family. | 40 / 40, 1.00 (0.91–1.00) |
+| `ambiguous` | Two symbols qualify; the call is linked to both. | none produced (see below) |
 
-- A developer edited a `.tsx` file containing a `.map()` call
-- Myceliums reported **407 indirectly affected Rust symbols** via `myc impact`
-- The false positive occurred because a Rust `map` constant collided with the `.map()` method
-- Cross-language matches were equally uncertain
+Intervals are 95% Wilson intervals. On the gold set every `ambiguous` case was resolved by receiver typing; the evidence for the label and for the cap of 2 comes from the same fixtures resolved *without* receiver typing (the step-3 row below): there, two-candidate edges were right 33 of 64 times (0.52) and edges among three or more candidates 21 of 104 times (0.20). That is why three or more candidates get no edge. Treat an `ambiguous` edge as "one of these two".
 
-## Measured Accuracy
+## Measured accuracy
 
-Issue #94 added a gold set: small fixture projects in Python, TypeScript, Go, Rust and Java (`tests/fixtures/graph-accuracy/`) with every symbol and every static call labelled by hand, each edge with a one-line rationale, and every label cross-checked against the language's own toolchain (the interpreter, the TypeScript compiler API, `go/types`, rustc's MIR, `javap`). `cargo run -p myceliums-benchmarks --bin graph-eval` scores the production analyzer against it; the labelling rules are in `crates/myceliums-benchmarks/graph-gold/README.md`.
+### The gold set
 
-**Read these numbers with three caveats.**
+Issue #94 added a gold set: small fixture projects in Python, TypeScript, Go, Rust and Java (`tests/fixtures/graph-accuracy/`) with every symbol and every static call labelled by hand, each edge with a one-line rationale, and every label cross-checked against the language's own toolchain. `cargo run -p myceliums-benchmarks --bin graph-eval` scores the production analyzer against it; the labelling rules are in `crates/myceliums-benchmarks/graph-gold/README.md`.
 
+**Read these numbers with four caveats.**
+
+- **The resolver rules were written while reading these fixtures** (#139). They implement general language rules — scoping, imports, declared types — not fixture-specific cases, but a gold set the rules were developed against measures the rules' coverage of its own constructs, not accuracy on unseen code. See [real repositories](#real-repositories) for an outside check.
 - The labels were written by an agent and **have not been reviewed by a human yet**.
-- The fixtures are a **stress test, not a sample**: they deliberately reuse names (`parse`, `get`, `add`, `save`, `render`, `validate`, `map`) across modules, classes and methods. A typical repository has fewer collisions, so expect better numbers there; these show where resolution breaks, not how often it breaks on average.
-- The sets are small (43–59 edges per language, 249 in all). A difference of a few points between languages is noise. Where a share is quoted below, the 95% interval (Wilson) is given.
+- The fixtures are a **stress test**: they deliberately reuse names (`parse`, `get`, `add`, `save`, `render`, `validate`, `map`) across modules, classes and languages, and declare most types.
+- The sets are small (43–59 edges per language, 249 in all). The intervals below say how little a perfect score on 45 edges proves.
 
-Recorded baseline (macOS, `crates/myceliums-benchmarks/graph-gold/baseline.json`), each fixture analyzed as its own repository:
+Recorded baseline (`crates/myceliums-benchmarks/graph-gold/baseline.json`), each fixture analyzed as its own repository (`isolated`); with all five fixtures in one index (`polyglot`) every number is identical:
 
-| language | symbol precision | symbol recall | gold edges | extracted | correct | call precision | call recall | call F1 |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Go | 1.00 | 0.98 | 45 | 49 | 30 | 0.61 | 0.67 | 0.64 |
-| Java | 1.00 | 1.00 | 59 | 58 | 36 | 0.62 | 0.61 | 0.62 |
-| Python | 1.00 | 1.00 | 43 | 44 | 27 | 0.61 | 0.63 | 0.62 |
-| Rust | 1.00 | 1.00 | 52 | 53 | 24 | 0.45 | 0.46 | 0.46 |
-| TypeScript | 0.99 | 0.99 | 50 | 41 | 22 | 0.54 | 0.44 | 0.48 |
-| **all** | **1.00** | **0.99** | **249** | **245** | **139** | **0.57** (0.50–0.63) | **0.56** (0.50–0.62) | **0.56** |
+| language | gold edges | extracted | correct | call precision | call recall |
+|---|---:|---:|---:|---:|---:|
+| Go | 45 | 45 | 45 | 1.00 (0.92–1.00) | 1.00 (0.92–1.00) |
+| Java | 59 | 59 | 59 | 1.00 (0.94–1.00) | 1.00 (0.94–1.00) |
+| Python | 43 | 42 | 42 | 1.00 (0.92–1.00) | 0.98 (0.88–1.00) |
+| Rust | 52 | 52 | 52 | 1.00 (0.93–1.00) | 1.00 (0.93–1.00) |
+| TypeScript | 50 | 50 | 50 | 1.00 (0.93–1.00) | 1.00 (0.93–1.00) |
+| **all** | **249** | **248** | **248** | **1.00 (0.98–1.00)** | **0.996 (0.98–1.00)** |
 
-By resolution label, all languages together:
+Symbols: 337 of 337 gold symbols are found (Go and TypeScript interface methods are now extracted); the one extra symbol is a local arrow function in TypeScript (`index.ts::handler`), which the gold set leaves out of scope. The one missed edge is `cfg = config.Config.load(text); cfg.get(...)` in Python: `load` is a classmethod returning `cls(...)` with no return annotation, so `cfg`'s type is not declared anywhere.
 
-| label | edges | correct | precision | share of all gold edges found with it |
-|---|---:|---:|---:|---:|
-| `exact` | 2 | 2 | 1.00 (0.34–1.00) | 0.01 |
-| `import` | 0 | – | – | 0.00 |
-| `name-match` | 134 | 97 | 0.72 (0.64–0.79) | 0.39 |
-| `ambiguous` | 109 | 40 | 0.37 (0.28–0.46) | 0.16 |
+How each step of #139 moved the numbers (all languages):
 
-### What the numbers say
+| step | isolated P | isolated R | polyglot P | polyglot R | cross-language false edges | wrong-caller false edges |
+|---|---:|---:|---:|---:|---:|---:|
+| before (#94 baseline) | 0.57 | 0.56 | 0.34 | 0.20 | 45 | 43 |
+| 1. caller by position | 0.69 | 0.72 | 0.26 | 0.27 | 160 | 0 |
+| 2. + language families | 0.69 | 0.72 | 0.69 | 0.69 | 0 | 0 |
+| 3. + scopes, imports, call forms (cap 1 / 2 / 3) | 0.95 / 0.84 / 0.66 | 0.72 / 0.86 / 0.94 | same as isolated | | 0 | 0 |
+| 4. + receiver typing (cap 2) | 1.00 | 0.996 | 1.00 | 0.996 | 0 | 0 |
 
-**Symbols are reliable.** 335 of 337 gold symbols are found; the misses are interface method declarations in Go and TypeScript (`Sink.Write`, `Sink.write`), and the one extra symbol is a local arrow function in TypeScript. Symbol extraction is not where the graph goes wrong.
+Step 1 alone raised the cross-language count: once callers were attributed to their real language, more calls reached for other languages' symbols. "Cap" is `MAX_AMBIGUOUS_TARGETS`; after step 4, caps 1 and 2 give the same result and cap 3 adds 1 correct and 11 wrong edges (precision 0.96, recall 1.00).
 
-**Roughly every other CALLS edge is wrong or missing.** Precision and recall both sit near 0.56 on these fixtures.
+### Real repositories
 
-**Does `exact` deserve its name?** On this evidence, yes when it appears, but it almost never appears: 2 of 245 extracted edges, both correct, both Python method calls on a freshly built object whose expression starts with the class name (`Config({...}).get(...)`, `OrderReport([]).summary()`). Two edges do not establish a precision; the interval runs from 0.34 to 1.00. The label needs the first identifier of the call expression to be the name of the class that defines the method, so `cfg.get()` on a `Config` variable is never `exact`.
+The gold fixtures cannot show how the rules generalise, so the resolver was also run on four real repositories (the checkouts the #95 evaluation uses), before and after #139. There is no gold set for them; the checks below are samples judged by reading the code (by an agent, not reviewed).
 
-**`import` was never assigned.** The module graph is consulted only when no symbol anywhere has the called name. In code where names repeat, that never happens: an imported, aliased or module-qualified call is resolved by bare name first, and labelled `name-match` or `ambiguous`.
+| repository | language | CALLS edges before | after | after: exact / import / name-match / ambiguous |
+|---|---|---:|---:|---|
+| flask | Python | 1,609 | 1,282 | 337 / 360 / 411 / 133 |
+| requests | Python | 1,175 | 901 | 289 / 504 / 89 / 14 |
+| gin | Go | 3,120 | 2,278 | 1,134 / 11 / 1,047 / 86 |
+| hono | TypeScript | 1,333 | 1,193 | 135 / 354 / 442 / 60 |
 
-**`name-match` is right about three times in four** (0.72). A unique name is good evidence for the *callee*, but a quarter of these edges are still wrong, mostly for two reasons: the call was attributed to the wrong *caller* (a function elsewhere with the caller's name), or a library method shares the name of a project function (`items.map(...)` linked to the project's own `map()`, `rows.find(...)` linked to `Repository.find` as a recursive call).
+(Label counts are over distinct caller–callee name pairs.) Before #139, 41% of these edges were `ambiguous` and none were `import`.
 
-**`ambiguous` is wrong more often than right** (0.37). Treat it as a hint that *some* function of that name is called, not which one.
+- **A uniform sample of 40 edges after #139** (10 per repository): 38 correct. Both wrong edges are `ambiguous` fan-outs on untyped receivers (`fp.read()` linked to a test helper's `read`; Hono's `c.text()` linked to `HonoRequest.text` beside the correct `Context.text`). Precision 0.95 (0.83–0.99) — a rough figure, from 40 edges.
+- **Edges that disappeared**: most were `ambiguous` (2,585 of 3,816). Of 53 sampled dropped `name-match` edges, 35 were wrong before (the wrong caller, a call line outside the caller, a library method linked to a project one), 7 were calls through a parameter, loop variable or dynamically imported name (pytest fixtures, `await import()` destructuring), which have no static target, 1 now points to the interface method it statically binds to, and 10 were real misses. Nine of those were fixed in #139 (package re-exports, an absolute import matched to a test fixture's module of the same name, functions nested in methods, Go named slice types) and are back; one remains: a Go package-level variable holding a closure (`var engine = sync.OnceValue(...)`; `engine()` calls no function symbol).
+- The fallback for receivers of unknown type is the weak spot: `ep.load()` on an entry point linked to the only project method named `load` (`JSONProvider.load`) is labelled `name-match` and wrong. Untyped code — most Python and JavaScript — relies on this fallback for its method calls.
 
-**The caller is as much a problem as the callee.** At least 43 of the 106 wrong edges (41%) are recorded at a call site outside the caller's body: the call was made by another function of the same name (two `__init__`s, two `get`s, two `new`s) and attributed to whichever one the name lookup returned. This is a lower bound; edge metadata keeps the call line but not its file.
+## What is modelled, and what is not
 
-**What gets missed**, by the tags the gold set puts on each edge (found / labelled):
+No type inference: a receiver's type is known only when a declaration in view says it. What each language's extractor provides, and the main blind spots:
 
-| situation | found |
-|---|---:|
-| callee name unique in the fixture (no `same-name` tag) | 106 / 147 (0.72) |
-| callee shares its name with another fixture symbol | 33 / 102 (0.32) |
-| receiver's declared type decides the target (`repo.add()` on a `Repository`) | 34 / 64 |
-| call on `self`/`this` | 6 / 25 |
-| instantiation / constructor | 28 / 51 |
-| inherited method, `super(...)`, Java overloads | 1 / 4, 0 / 3, 0 / 3 |
-| recursion, interface dispatch | 5 / 5, 4 / 4 (small counts; for interface dispatch the gold accepts every implementation, so a hit only means the name lookup landed on *some* implementation) |
+| language | modelled | not modelled |
+|---|---|---|
+| Python | call forms; `import`/`from … import` (absolute, relative, `*`); parameter annotations, assignments, `self.x = …` fields, `cls` in classmethods; return annotations; base classes | untyped parameters (most real code: method calls fall back to the name); return types without annotations; `super()` beyond the first base; decorators that replace functions; `__getattr__`, monkeypatching |
+| TypeScript / JavaScript | call forms, `new`, `super(...)`; named, default and namespace imports, `require`; parameter, variable and field annotations, constructor parameter properties, `this.x = …`; declared return types; `extends`/`implements`; interface and abstract methods | inferred types (`const x = f()` where `f` declares no return type); `export … from` re-exports; types of destructured values; calls inside top-level arrow functions passed as arguments have no named caller |
+| Go | call forms; import paths to package directories, aliases, dot imports; receivers, parameters, `:=`/`var` declarations, composite literals, struct fields; result types; embedding; interface method sets | interface dispatch links the interface method, not implementations; type parameters; method values; variables holding closures; build tags (variants become an `ambiguous` pair) |
+| Rust | call forms, paths (`Type::f`, `module::f`, `Self::f`); `use` paths, `mod`; parameters, `let` bindings, struct fields; return types (`-> Self`); calls written in macro arguments (bare calls and `self.m()`) | trait dispatch on generic `T: Trait` and trait objects beyond the trait's declaration; methods reached through `Deref` (`Box`, `Rc`); other calls inside macros; trait impls for library types |
+| Java | call forms, `new`, `super(...)`; class, static and wildcard imports, same-package classes; parameters, locals, `var`, fields, record components; return types; `extends`/`implements`; implicit `this`; overloads by argument count | overloads with the same count (needs argument types); generics; members inherited from library classes; static wildcard imports; anonymous classes |
+| other languages | caller by position, language family, scope preference (file, imports, directory, family) | call forms, receivers and bindings: a call on an object may link to any function or method of that name; their accuracy is not measured |
 
-Both calls written inside a Rust macro (`println!("{}", run(&argv))`) were missed: to the parser, the arguments of a macro are an unparsed token tree.
+For every language: dynamic dispatch is linked to the statically bound declaration (`self.render_row()` in a base class goes to the base class's `render_row`, not to overrides); calls through function values, callbacks, reflection and dynamic imports have no static target and no edge.
 
-**Several languages in one index make it much worse.** With all five fixtures indexed as one repository, call precision drops to 0.34 and recall to 0.20. 45 of the 97 wrong edges connect two languages. For example, the call to `config.New` in Go's `run` became an edge from Rust's `run` to Go's `config.New`: the caller was resolved by name to the other language's `run`. Nothing in the resolver prevents a call from one language resolving to a symbol in another. The fixtures share one vocabulary on purpose, so this is a worst case, but a real polyglot monorepo is exposed to the same mechanism.
+## Interpreting results: confidence guidelines
 
-**Ties are broken by file name.** Which of several same-named symbols wins depends on the order the analyzer walks the files. Until #94 that was the filesystem's order, so two machines could produce different `ambiguous` edges for the same code; now files are walked in name order. Switching from macOS directory order to name order moved overall precision and recall by less than 0.01 in the isolated setup but changed the polyglot numbers substantially (Java's polyglot recall went from 0.17 to 0), which shows how much of an ambiguous resolution is luck.
+### Higher confidence
 
-## Interpreting Results: Confidence Guidelines
+- `exact` and `import` edges.
+- `name-match` edges between functions in the same file or package.
 
-When using `myc impact` or querying the call graph, apply these heuristics:
+### Verify
 
-### Higher Confidence
+- `ambiguous` edges: one of the two targets is usually wrong.
+- `name-match` edges for a method call on an untyped value (`x.load()` where nothing declares `x`): the method may belong to a library type.
+- Callers and callees in languages without call forms (see the table above).
 
-- Edges labelled `exact` (rare: the call expression starts with the defining class's name)
-- Edges labelled `name-match` whose caller and callee both have names that are unique across the repository (e.g., `initializeAuthenticationSystem`)
-- Recursion (5 of 5 found; 95% interval 0.57-1.00, so treat as encouraging, not proven)
+### Missing edges
 
-### Low Confidence (Verify Manually)
+A missing edge is now the more likely error, especially in untyped code: a method call on a value of unknown type whose name three or more classes share gets no edge; a call through a variable, parameter or callback never does. "No callers" does not mean "unused".
 
-- Calls through an interface or trait object: the edge points to whichever implementation the name lookup picked (often labelled `ambiguous`); myceliums does not model dispatch, and the Go/TS interface method declaration itself is not extracted
-- Edges labelled `ambiguous`: on the gold set, fewer than half are correct
-- Calls to or from functions with **common names** (`parse`, `handle`, `process`, `validate`, `get`, `add`, `map`, `filter`, `transform`): both the callee and the caller may be the wrong function of that name
-- Method calls on an object (`repo.add(x)`): the receiver's type is not used, so any method of that name qualifies
-- Calls across language boundaries (e.g., TypeScript → Rust in a monorepo): the resolver does not check languages
-- Impact analysis that reports a **very large blast radius** (400+ affected symbols): this is often a cascade of false positives
+## Recommended practices
 
-### Missing Edges
+1. **Check the resolution label.** `exact` and `import` are almost always right; `ambiguous` needs a look at the code.
+2. **Type annotations pay off.** In Python and TypeScript, an annotated parameter or return type turns a name guess into an `exact` edge.
+3. **Verify impact analysis on edits to methods with common names** in untyped code: the fallback links by name.
+4. **Trust the call graph for exploration, verify for decisions**: for "is it safe to refactor this?", combine it with your IDE's references and the tests.
 
-A missing edge is as likely as a wrong one. Calls on `self`/`this`, constructor calls, `super(...)`, inherited methods, Java overloads and calls inside Rust macros are often not linked. "No callers" does not mean "unused".
+## Future work
 
-## Cross-Language Matches
-
-The resolver does not consider language. A CALLS edge from a TypeScript function to a Rust function is created the same way as any other, and labelled `name-match` or `ambiguous` like any other. Such an edge is almost always false. Symbol nodes carry a `file_path` but no language, so compare the extensions of the caller's and the callee's files (`s.file_path`, `t.file_path` in a Cypher query) to spot one, and treat a cross-language entry in `myc impact` output as noise unless the code really crosses that boundary (FFI, generated bindings).
-
-## Recommended Practices
-
-1. **Check the resolution label.** `exact` and a `name-match` between uniquely named functions are usually right; `ambiguous` needs a look at the code.
-
-2. **Verify impact analysis on common-name edits**: If `myc impact` reports hundreds of affected symbols after editing a function named `handle` or `process`, spot-check the results manually. The report likely contains false positives.
-
-3. **Use unique naming**: Encourage team conventions that avoid highly generic names. `validateUserEmail` is better than `validate`.
-
-4. **Trust the call graph for exploration, verify for decisions**: The call graph is excellent for code navigation and understanding architecture, but for critical decisions ("is it safe to refactor this?"), combine it with your IDE's refactoring tools and test coverage analysis.
-
-5. **Use BM25 search for high-confidence lookups**: Text search by function name is more reliable than call graph traversal for common names.
-
-6. **Index one repository per language where you can**: the polyglot measurement above shows how much a shared index costs.
-
-## Future Work: Precision Track
-
-These limitations are acknowledged; the gold set (`graph-eval`) measures any change against them:
-
-- **Resolve callers by position**: the enclosing function is known from the parse tree; resolving it by name causes a large share of the wrong edges
-- **Per-file/scope keying**: Same-named symbols within different scopes become separate entries
-- **Type inference**: Build receiver types to resolve method calls exactly (e.g., `foo.bar()` becomes `TypeOfFoo.bar`)
-- **Language-aware resolution**: never resolve a call to a symbol in another language
-- **LSP enrichment**: Optional language-server integration for precise resolution
-
-For now, treat Myceliums as a **high-fidelity heuristic tool**: excellent for understanding code structure and identifying likely relationships, but not a replacement for static analysis tools (like `rust-analyzer`) or full-program analysis.
+- Implementations for interface and trait dispatch (today the declaration is the target).
+- Return types without annotations: a function whose body returns a constructor call (`return cls(...)`) could type its result.
+- Call forms and bindings for C/C++, C#, Kotlin, Swift and the other extractors.
+- A human review of the gold labels, and a gold set drawn from a real repository rather than written fixtures.
+- Optional LSP enrichment for compiler-grade resolution.
