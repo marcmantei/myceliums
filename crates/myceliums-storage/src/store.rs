@@ -15,19 +15,120 @@ use tracing::info;
 use crate::models::*;
 use crate::schema;
 
-/// Row-count threshold above which an IVF-PQ ANN index is built for the
-/// `symbols` vector column. Below this, a flat (brute-force) scan is faster and
-/// avoids IVF-PQ recall loss on tiny corpora. See issue #29.
-///
-/// LanceDB's IVF-PQ index trades exactness for speed, so it only pays off once
-/// the corpus is large enough that a flat scan hurts; 5_000 keeps small and
-/// medium repos on the exact flat scan. Partition count adapts to the row count
-/// via [`ivf_partitions`].
-pub const ANN_INDEX_THRESHOLD: usize = 5_000;
+/// Row-count threshold above which an ANN index is built for the `symbols`
+/// vector column. Below it every vector search is an exact flat scan.
+/// The production value of [`AnnSettings::threshold`]; see
+/// [`AnnSettings::PRODUCTION`] for how it was chosen (issues #29, #117).
+pub const ANN_INDEX_THRESHOLD: usize = AnnSettings::PRODUCTION.threshold;
 
-/// Number of PQ sub-vectors. Must divide [`schema::DEFAULT_EMBEDDING_DIM`] (384 / 16 = 24
-/// dimensions per sub-vector).
-const IVF_PQ_SUB_VECTORS: u32 = 16;
+/// Which LanceDB vector index [`Store::create_ann_index`] builds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnnIndexKind {
+    /// IVF partitions over product-quantised codes: `sub_vectors` one-byte
+    /// codes per vector. Must divide the embedding dimension.
+    IvfPq {
+        /// PQ sub-vectors per vector.
+        sub_vectors: u32,
+    },
+    /// IVF partitions over the raw, unquantised vectors.
+    IvfFlat,
+    /// IVF partitions, each searched through an HNSW graph over 8-bit
+    /// scalar-quantised vectors.
+    IvfHnswSq,
+}
+
+impl AnnIndexKind {
+    /// Stable name for logs and reports.
+    pub fn label(&self) -> String {
+        match self {
+            AnnIndexKind::IvfPq { sub_vectors } => format!("IVF_PQ/{sub_vectors}"),
+            AnnIndexKind::IvfFlat => "IVF_FLAT".to_string(),
+            AnnIndexKind::IvfHnswSq => "IVF_HNSW_SQ".to_string(),
+        }
+    }
+}
+
+/// How many IVF partitions a search through the index probes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Probes {
+    /// A fixed number of partitions, whatever the table size.
+    Fixed(usize),
+    /// A percentage of the partitions the index was built with
+    /// ([`ivf_partitions`] of the table's row count), rounded up. Partitions
+    /// grow as `√n`, so a fixed count probes an ever smaller share of the
+    /// table; a share keeps recall from decaying as a repository grows.
+    Percent(u32),
+}
+
+impl Probes {
+    /// Partitions to probe in a table of `rows` rows.
+    pub fn for_rows(&self, rows: usize) -> usize {
+        match *self {
+            Probes::Fixed(n) => n.max(1),
+            Probes::Percent(p) => {
+                let partitions = ivf_partitions(rows) as usize;
+                (partitions * p as usize).div_ceil(100).clamp(1, partitions)
+            }
+        }
+    }
+}
+
+/// Query-time parameters for a vector search that goes through the ANN index.
+///
+/// `None` leaves LanceDB's default. LanceDB ignores all three when the column
+/// has no index, so the flat scan below the threshold stays exact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AnnQuery {
+    /// IVF partitions probed per query (LanceDB default: 20).
+    pub nprobes: Option<Probes>,
+    /// Re-rank `limit × refine_factor` index candidates by their exact
+    /// distance. Without it, PQ results are ordered — and scored — by
+    /// quantised distances.
+    pub refine_factor: Option<u32>,
+    /// HNSW candidate list size (LanceDB default: 1.5 × limit).
+    pub ef: Option<usize>,
+}
+
+/// When an ANN index is built, which one, and how it is queried.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnnSettings {
+    /// Rows at or above which an index is built.
+    pub threshold: usize,
+    /// The index built over the vector column.
+    pub index: AnnIndexKind,
+    /// How a search through that index is run.
+    pub query: AnnQuery,
+}
+
+impl AnnSettings {
+    /// What `myc analyze` builds and every vector search uses (issue #117).
+    ///
+    /// Up to 100,000 rows a vector search is an exact flat scan: on 384-d
+    /// vectors it measured 2.3 ms (p50) at 5,000 rows, 5.2 ms at 20,000,
+    /// 9.6 ms at 50,000 and 14.5 ms at 100,000 — fast enough that no index is
+    /// worth its recall loss. The IVF-PQ index this replaces (16 sub-vectors,
+    /// LanceDB default probes) returned 0.42 of the true top 10 on real
+    /// embeddings at 5,000 rows and 0.40 at 20,000.
+    ///
+    /// From 100,000 rows: IVF_FLAT with `√n` partitions (capped at 256),
+    /// probing 75% of them. Measured recall@10 against exact search: 0.988
+    /// and 0.987 on real embeddings (Django, multilingual-e5-small) at 5,000
+    /// and 20,000 rows, 1.0 on clustered synthetic vectors at 100,000 rows,
+    /// where a query took 6.7 ms (p50) against 15 ms for the flat scan.
+    /// IVF_FLAT keeps the raw vectors, so scores stay exact cosine. Probing a
+    /// share instead of LanceDB's fixed 20 partitions is what keeps recall
+    /// from decaying as partitions grow with `√n`. Full trade-off table:
+    /// `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.
+    pub const PRODUCTION: AnnSettings = AnnSettings {
+        threshold: 100_000,
+        index: AnnIndexKind::IvfFlat,
+        query: AnnQuery {
+            nprobes: Some(Probes::Percent(75)),
+            refine_factor: None,
+            ef: None,
+        },
+    };
+}
 
 /// What [`Store::create_ann_index`] actually did.
 ///
@@ -37,7 +138,7 @@ const IVF_PQ_SUB_VECTORS: u32 = 16;
 /// between an accelerated search and a flat scan (issue #29).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnnIndexBuild {
-    /// The IVF-PQ index was built over the vector column.
+    /// An ANN index was built over the vector column.
     Built {
         /// Number of IVF partitions the index was built with.
         partitions: u32,
@@ -91,6 +192,9 @@ pub struct Store {
     /// Defaults to the legacy 384; set from the resolved embedding model
     /// before indexing. Atomic so it can be set through a shared reference.
     embedding_dim: std::sync::atomic::AtomicI32,
+    /// ANN index policy; [`AnnSettings::PRODUCTION`] unless a benchmark
+    /// overrides it with [`Store::with_ann_settings`].
+    ann: AnnSettings,
 }
 
 impl Store {
@@ -104,7 +208,21 @@ impl Store {
             db,
             repo_id: repo_id.to_string(),
             embedding_dim: std::sync::atomic::AtomicI32::new(schema::DEFAULT_EMBEDDING_DIM),
+            ann: AnnSettings::PRODUCTION,
         })
+    }
+
+    /// Replace the ANN index policy. Production code never calls this; it
+    /// exists so the recall benchmarks can measure alternative settings
+    /// through the same write and search paths that ship.
+    pub fn with_ann_settings(mut self, settings: AnnSettings) -> Self {
+        self.ann = settings;
+        self
+    }
+
+    /// The ANN index policy this store builds and searches with.
+    pub fn ann_settings(&self) -> AnnSettings {
+        self.ann
     }
 
     /// Returns the identifier of the repository this store is bound to.
@@ -972,7 +1090,7 @@ impl Store {
         // Activate the ANN index once the corpus is large enough to benefit
         // (issue #29). Below the threshold this is a no-op and searches keep
         // using the exact flat scan.
-        match self.create_ann_index(count, ANN_INDEX_THRESHOLD).await {
+        match self.create_ann_index(count, self.ann.threshold).await {
             Ok(outcome) => info!("ANN index after bulk insert: {:?}", outcome),
             // A failed index build must not fail the write: searches still work
             // via flat scan. Surface it so the degradation is observable.
@@ -982,14 +1100,21 @@ impl Store {
         Ok(count)
     }
 
-    /// Create an IVF-PQ ANN index on the vector column for faster similarity
-    /// search. Only builds when `num_symbols >= threshold`; below that the flat
-    /// scan is both faster and exact (issue #29).
+    /// Create the ANN index described by this store's [`AnnSettings`] on the
+    /// vector column. Only builds when `num_symbols >= threshold`; below that
+    /// the flat scan is exact and fast enough (issues #29, #117).
     ///
     /// The vector column stores L2-normalized embeddings, so LanceDB's default
     /// L2 metric on the index reproduces cosine ordering. Re-analysis calls this
     /// again with the fresh row count; `replace(true)` rebuilds the index in
-    /// place so a stale index never shadows new vectors.
+    /// place, so an index built with older settings is replaced by one built
+    /// with the current settings on the next full analysis.
+    ///
+    /// Below the threshold, an index left over from an earlier build is dropped
+    /// if the whole table is now below the threshold too — for example a repo
+    /// indexed under a lower threshold. `num_symbols` alone does not decide
+    /// that: an incremental re-index passes only the few rows it re-embedded,
+    /// and must not drop a large repository's index.
     ///
     /// Returns which of the three outcomes occurred — see [`AnnIndexBuild`].
     pub async fn create_ann_index(
@@ -1002,6 +1127,7 @@ impl Store {
                 "Skipping ANN index: {} symbols < {} threshold",
                 num_symbols, threshold
             );
+            self.drop_ann_index_below(threshold).await?;
             return Ok(AnnIndexBuild::SkippedBelowThreshold {
                 num_symbols,
                 threshold,
@@ -1016,23 +1142,34 @@ impl Store {
         let table = self.db.open_table("symbols").execute().await?;
 
         let num_partitions = ivf_partitions(num_symbols);
+        let kind = self.ann.index;
         info!(
-            "Creating IVF-PQ ANN index on vector column ({} symbols, {} partitions)...",
-            num_symbols, num_partitions
+            "Creating {} ANN index on vector column ({} symbols, {} partitions)...",
+            kind.label(),
+            num_symbols,
+            num_partitions
         );
 
-        use lancedb::index::vector::IvfPqIndexBuilder;
+        use lancedb::index::vector::{
+            IvfFlatIndexBuilder, IvfHnswSqIndexBuilder, IvfPqIndexBuilder,
+        };
         use lancedb::index::Index;
 
+        let index = match kind {
+            AnnIndexKind::IvfPq { sub_vectors } => Index::IvfPq(
+                IvfPqIndexBuilder::default()
+                    .num_partitions(num_partitions)
+                    .num_sub_vectors(sub_vectors),
+            ),
+            AnnIndexKind::IvfFlat => {
+                Index::IvfFlat(IvfFlatIndexBuilder::default().num_partitions(num_partitions))
+            }
+            AnnIndexKind::IvfHnswSq => {
+                Index::IvfHnswSq(IvfHnswSqIndexBuilder::default().num_partitions(num_partitions))
+            }
+        };
         table
-            .create_index(
-                &["vector"],
-                Index::IvfPq(
-                    IvfPqIndexBuilder::default()
-                        .num_partitions(num_partitions)
-                        .num_sub_vectors(IVF_PQ_SUB_VECTORS),
-                ),
-            )
+            .create_index(&["vector"], index)
             .replace(true)
             .execute()
             .await?;
@@ -1041,6 +1178,31 @@ impl Store {
         Ok(AnnIndexBuild::Built {
             partitions: num_partitions,
         })
+    }
+
+    /// Drop every index on the vector column when the `symbols` table holds
+    /// fewer than `threshold` rows. See [`Store::create_ann_index`].
+    async fn drop_ann_index_below(&self, threshold: usize) -> Result<()> {
+        let tables = self.db.table_names().execute().await?;
+        if !tables.contains(&"symbols".to_string()) {
+            return Ok(());
+        }
+        let table = self.db.open_table("symbols").execute().await?;
+        let vector_indices: Vec<String> = table
+            .list_indices()
+            .await?
+            .into_iter()
+            .filter(|index| index.columns.iter().any(|c| c == "vector"))
+            .map(|index| index.name)
+            .collect();
+        if vector_indices.is_empty() || table.count_rows(None).await? >= threshold {
+            return Ok(());
+        }
+        for name in vector_indices {
+            info!("Dropping ANN index {name}: the table is below the {threshold}-row threshold");
+            table.drop_index(&name).await?;
+        }
+        Ok(())
     }
 
     /// Perform vector similarity search using LanceDB.
@@ -1056,13 +1218,31 @@ impl Store {
 
         let table = self.db.open_table("symbols").execute().await?;
         let escaped_repo_id = escape_lance_str(&self.repo_id);
-        let stream = table
+        let mut stream = table
             .vector_search(query_vector)?
             .column("vector")
             .only_if(format!("repo_id = '{}'", escaped_repo_id))
-            .limit(limit)
-            .execute()
-            .await?;
+            .limit(limit);
+        // Index-only knobs: LanceDB ignores them on a flat scan.
+        let AnnQuery {
+            nprobes,
+            refine_factor,
+            ef,
+        } = self.ann.query;
+        if let Some(nprobes) = nprobes {
+            let rows = match nprobes {
+                Probes::Fixed(_) => 0,
+                Probes::Percent(_) => table.count_rows(None).await?,
+            };
+            stream = stream.nprobes(nprobes.for_rows(rows));
+        }
+        if let Some(refine_factor) = refine_factor {
+            stream = stream.refine_factor(refine_factor);
+        }
+        if let Some(ef) = ef {
+            stream = stream.ef(ef);
+        }
+        let stream = stream.execute().await?;
 
         let batches: Vec<RecordBatch> = stream.try_collect().await?;
         let mut results = Vec::new();
@@ -1382,7 +1562,41 @@ mod tests {
     /// PQ requires the embedding dimension to divide evenly into sub-vectors.
     #[test]
     fn pq_sub_vectors_divide_embedding_dim() {
-        assert_eq!(schema::DEFAULT_EMBEDDING_DIM as u32 % IVF_PQ_SUB_VECTORS, 0);
+        if let AnnIndexKind::IvfPq { sub_vectors } = AnnSettings::PRODUCTION.index {
+            assert_eq!(schema::DEFAULT_EMBEDDING_DIM as u32 % sub_vectors, 0);
+        }
+    }
+
+    /// Issue #117: probing a share of the partitions keeps coverage constant
+    /// as `ivf_partitions` grows, rounds up, and never exceeds the partition
+    /// count or drops to zero.
+    #[test]
+    fn percentage_probes_scale_with_the_partition_count() {
+        assert_eq!(Probes::Percent(75).for_rows(10_000), 75); // of 100
+        assert_eq!(Probes::Percent(75).for_rows(40_000), 150); // of 200
+        assert_eq!(Probes::Percent(75).for_rows(4_900), 53); // ⌈52.5⌉ of 70
+        assert_eq!(Probes::Percent(100).for_rows(1_000_000), 256);
+        assert_eq!(Probes::Percent(0).for_rows(10_000), 1);
+        assert_eq!(Probes::Percent(500).for_rows(10_000), 100);
+        assert_eq!(Probes::Fixed(20).for_rows(1_000_000), 20);
+        assert_eq!(Probes::Fixed(0).for_rows(10), 1);
+    }
+
+    /// The production policy chosen in #117: no quantised index without a
+    /// way to recover recall, and probes that scale with the table.
+    #[test]
+    fn the_production_setting_probes_a_share_of_the_partitions() {
+        let production = AnnSettings::PRODUCTION;
+        assert!(matches!(
+            production.query.nprobes,
+            Some(Probes::Percent(p)) if (50..=100).contains(&p)
+        ));
+        if let AnnIndexKind::IvfPq { .. } = production.index {
+            assert!(
+                production.query.refine_factor.is_some(),
+                "an IVF_PQ index without refine ranks on quantised distances"
+            );
+        }
     }
 
     /// `docs/reference/mcp-tools.md` states the ANN threshold as a concrete
@@ -1393,9 +1607,9 @@ mod tests {
     fn documented_ann_threshold_matches_constant() {
         const DOCS: &str = include_str!("../../../docs/reference/mcp-tools.md");
         // The docs render the threshold for humans, with a thousands separator.
-        let documented = "5,000";
+        let documented = "100,000";
         assert_eq!(
-            ANN_INDEX_THRESHOLD, 5_000,
+            ANN_INDEX_THRESHOLD, 100_000,
             "ANN_INDEX_THRESHOLD changed — update the figure in \
              docs/reference/mcp-tools.md and here"
         );
@@ -1515,12 +1729,12 @@ mod tests {
     }
 
     /// Issue #29: above the threshold `create_ann_index` must actually build the
-    /// IVF-PQ index, and search must remain correct (top-1 still the nearest
-    /// vector) once the ANN index is in play.
+    /// production ANN index, and search must remain correct (top-1 still the
+    /// nearest vector) once the ANN index is in play.
     ///
     /// The corpus is 300 rows with an explicit threshold of 100 rather than the
-    /// production `ANN_INDEX_THRESHOLD` of 5_000: building a real IVF-PQ index
-    /// over 5_000 × 384-dim vectors runs k-means training and would make this a
+    /// production `ANN_INDEX_THRESHOLD`: building a real index over 100,000 ×
+    /// 384-dim vectors runs k-means training and would make this a
     /// minutes-long test. The threshold is a *parameter* precisely so the
     /// build path can be exercised cheaply — and the assertions below confirm
     /// the index really was created, so the ANN path is genuinely covered rather
@@ -1563,7 +1777,7 @@ mod tests {
             AnnIndexBuild::Built {
                 partitions: ivf_partitions(n)
             },
-            "expected a real IVF-PQ build, got {outcome:?}"
+            "expected a real ANN index build, got {outcome:?}"
         );
 
         // Corroborate against LanceDB itself: the vector column now carries an
@@ -1600,7 +1814,7 @@ mod tests {
 
     /// The production threshold decides which repos get an ANN index at all, so
     /// pin the policy it encodes: typical repos stay on the exact flat scan and
-    /// only genuinely large corpora pay for IVF-PQ. Asserting the *decision*
+    /// only genuinely large corpora pay for an ANN index. Asserting the *decision*
     /// keeps this cheap — building a real index at this scale would dominate the
     /// suite's runtime, and
     /// `test_ann_index_created_above_threshold_and_search_correct` already
@@ -1739,6 +1953,67 @@ mod tests {
                 .unwrap(),
             0
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Issue #117: an index built under an older, lower threshold must not
+    /// outlive a raise of the threshold — the next full analysis, which passes
+    /// the whole table, drops it so the repo is back on the exact flat scan.
+    /// An incremental re-index passes only a few rows; that must not drop the
+    /// index of a table that is still above the threshold.
+    #[tokio::test]
+    async fn a_stale_index_is_dropped_only_when_the_table_is_below_the_threshold() {
+        let dir = test_db_path("ann_stale_index");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+        let dim = schema::DEFAULT_EMBEDDING_DIM as usize;
+        let n = 300usize;
+        let symbols: Vec<CodeSymbol> = (0..n)
+            .map(|i| make_symbol(&format!("s{i}"), None))
+            .collect();
+        store.store_symbols(&symbols).await.unwrap();
+        let embeddings: Vec<(String, Vec<f32>)> = (0..n)
+            .map(|i| {
+                let mut v = vec![0.01f32; dim];
+                v[i % dim] += 1.0;
+                (format!("s{i}"), unit(v))
+            })
+            .collect();
+        store.store_embeddings(embeddings).await.unwrap();
+        assert!(store.create_ann_index(n, 100).await.unwrap().was_built());
+
+        let vector_indices = || async {
+            let table = store.db.open_table("symbols").execute().await.unwrap();
+            table
+                .list_indices()
+                .await
+                .unwrap()
+                .into_iter()
+                .filter(|i| i.columns.iter().any(|c| c == "vector"))
+                .count()
+        };
+        assert_eq!(vector_indices().await, 1);
+
+        // Incremental re-index of three rows; the table (300) is still above
+        // the threshold (100), so the index stays.
+        let kept = store.create_ann_index(3, 100).await.unwrap();
+        assert!(!kept.was_built());
+        assert_eq!(
+            vector_indices().await,
+            1,
+            "an incremental run dropped the index"
+        );
+
+        // The threshold was raised above the table size: the index goes.
+        let dropped = store.create_ann_index(n, 1_000).await.unwrap();
+        assert!(!dropped.was_built());
+        assert_eq!(vector_indices().await, 0, "a stale index survived");
+
+        // Search still works on the flat scan.
+        let results = store.vector_search(&unit(vec![1.0; dim]), 5).await.unwrap();
+        assert_eq!(results.len(), 5);
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
