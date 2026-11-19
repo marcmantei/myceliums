@@ -275,6 +275,12 @@ pub struct AnalyzeOutput {
     pub symbols_total: usize,
     /// Number of symbols whose embedding failed (0 = fully embedded / skipped).
     pub embedding_failures: usize,
+    /// Call sites linked by a CALLS edge, and why the others were not: more
+    /// candidates than the resolver links, a library target, a call through
+    /// a variable, nothing in scope, outside any function. Absent for an
+    /// index analyzed before these were recorded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub calls: Option<String>,
     /// Whether this result came from cache (true) or a fresh analysis (false)
     pub cached: bool,
 }
@@ -482,6 +488,11 @@ pub struct CallersOutput {
     pub callers: Vec<CallerItem>,
     pub total_count: u32,
     pub depth_limited: bool,
+    /// Call sites with this symbol's name that got no CALLS edge (more
+    /// candidates than the resolver links, or nothing in scope): callers
+    /// that may exist but are not counted above.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unlinked_call_sites: Option<String>,
     /// Set when results were cut: how to fetch the next page.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notice: Option<String>,

@@ -85,13 +85,31 @@ impl MyceliumsMcp {
                     "No changes detected (empty diff).".to_string()
                 } else {
                     let report = detect_impact(&diff_text, &symbols, &relationships, depth);
-                    format::format_impact_report(&report, page)
+                    let stats = crate::index_status::call_resolution(&graph.store()).await;
+                    let note = crate::index_status::unlinked_impact_note(
+                        stats.as_ref(),
+                        report
+                            .directly_changed
+                            .iter()
+                            .map(|s| (s.name.as_str(), s.file_path.as_str())),
+                    );
+                    with_note(format::format_impact_report(&report, page), note)
                 };
                 return self.graph_text(&graph, body).await;
             }
         };
         let hits = navigation::dependents(&symbols, &relationships, &roots, depth);
-        let body = format::format_dependents(&subject, &hits, depth, page);
+        let stats = crate::index_status::call_resolution(&graph.store()).await;
+        let note = crate::index_status::unlinked_impact_note(
+            stats.as_ref(),
+            roots
+                .iter()
+                .map(|s| (s.name.as_str(), s.file_path.as_str())),
+        );
+        let body = with_note(
+            format::format_dependents(&subject, &hits, depth, page),
+            note,
+        );
         self.graph_text(&graph, body).await
     }
 
@@ -564,6 +582,14 @@ fn generate_suggested_questions(
     questions.truncate(limit);
 
     SuggestedQuestionsOutput { questions }
+}
+
+/// `body`, then `note` on a line of its own.
+fn with_note(body: String, note: Option<String>) -> String {
+    match note {
+        Some(note) => format!("{}\n\n{note}\n", body.trim_end()),
+        None => body,
+    }
 }
 
 #[cfg(test)]

@@ -744,6 +744,8 @@ pub(crate) struct CallList {
     total_count: u32,
     depth_limited: bool,
     notice: Option<String>,
+    /// Callers only: call sites of the name that got no edge.
+    unlinked: Option<String>,
 }
 
 impl CallList {
@@ -755,6 +757,7 @@ impl CallList {
             total_count: self.total_count,
             depth_limited: self.depth_limited,
             notice: self.notice,
+            unlinked_call_sites: self.unlinked,
         }
     }
 
@@ -799,6 +802,13 @@ impl MyceliumsMcp {
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
         let start = navigation::resolve(&symbols, name)?;
+        let unlinked = match direction {
+            navigation::Direction::Callers => {
+                let stats = crate::index_status::call_resolution(&graph.store()).await;
+                crate::index_status::unlinked_note(stats.as_ref(), start)
+            }
+            navigation::Direction::Callees => None,
+        };
         let max_depth = depth.clamp(1, 10);
         let hits = navigation::walk_calls(&symbols, &relationships, start, direction, max_depth);
         let total_count = hits.len() as u32;
@@ -827,6 +837,7 @@ impl MyceliumsMcp {
             total_count,
             depth_limited,
             notice: page.notice,
+            unlinked,
         })
     }
 

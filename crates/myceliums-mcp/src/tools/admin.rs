@@ -186,6 +186,9 @@ impl MyceliumsMcp {
                     let communities = graph.communities().await?;
                     let processes = graph.processes().await?;
                     let embedding_stats = load_embedding_stats(&store, symbols.len()).await?;
+                    let calls = crate::index_status::call_resolution(&store)
+                        .await
+                        .map(|stats| stats.summary());
                     let output = AnalyzeOutput {
                         repo_id,
                         symbols: symbols.len(),
@@ -196,6 +199,7 @@ impl MyceliumsMcp {
                         symbols_embedded: embedding_stats.symbols_embedded,
                         symbols_total: embedding_stats.symbols_total,
                         embedding_failures: embedding_stats.embedding_failures,
+                        calls,
                         cached: true,
                     };
                     return text(format::format_analyze(&output));

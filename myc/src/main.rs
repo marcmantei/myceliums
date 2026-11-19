@@ -1408,6 +1408,8 @@ async fn cmd_analyze(
     println!("  Symbols:       {}", result.symbol_count);
     println!("  Files:         {}", result.file_count);
     println!("  Relationships: {}", result.relationship_count);
+    // How many call sites got an edge, and why the others did not (#139).
+    println!("  Calls:         {}", result.call_resolution.summary());
     if skip_embeddings {
         println!("  Embeddings:    {} (skipped)", result.embedding_count);
     } else {
