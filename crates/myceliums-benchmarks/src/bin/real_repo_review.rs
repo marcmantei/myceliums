@@ -117,8 +117,7 @@ fn main() -> Result<()> {
         match answer.as_str() {
             "y" => {
                 set.record_review(&query.id, &reviewer)?;
-                std::fs::write(&path, set.to_json()?)
-                    .with_context(|| format!("writing {}", path.display()))?;
+                save(&path, &set)?;
                 accepted += 1;
             }
             "n" => {
@@ -149,6 +148,15 @@ fn main() -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Write the dataset atomically: to a temporary file next to it, then renamed
+/// over it, so an interrupted save never leaves a truncated dataset behind.
+fn save(path: &std::path::Path, set: &RealRepoSet) -> Result<()> {
+    let temporary = path.with_extension("json.tmp");
+    std::fs::write(&temporary, set.to_json()?)
+        .with_context(|| format!("writing {}", temporary.display()))?;
+    std::fs::rename(&temporary, path).with_context(|| format!("replacing {}", path.display()))
 }
 
 /// `(file, qualified name)` → the line ranges of every symbol with that pair.

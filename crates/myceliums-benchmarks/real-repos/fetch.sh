@@ -9,9 +9,10 @@
 #   MYC_EVAL_REPOS_DIR=/some/dir .../fetch.sh                 # explicit cache dir
 #
 # Default cache dir: ${XDG_CACHE_HOME:-$HOME/.cache}/myceliums-eval-repos.
-# Re-running is cheap: a checkout already at its pinned commit is left alone.
-# A checkout at any other commit is refused rather than silently reused, so a
-# score can never be measured against code the labels were not written for.
+# Re-running is cheap: a clean checkout already at its pinned commit is left
+# alone. A checkout at any other commit, or with edited tracked files, is
+# refused rather than silently reused, so a score can never be measured against
+# code the labels were not written for.
 #
 # Needs git and jq.
 
@@ -33,6 +34,12 @@ while IFS=$'\t' read -r name url commit; do
   if [ -d "${dir}/.git" ]; then
     head="$(git -C "$dir" rev-parse HEAD 2>/dev/null || true)"
     if [ "$head" = "$commit" ]; then
+      # The pinned commit with edited files is not the pinned code.
+      if [ -n "$(git -C "$dir" status --porcelain --untracked-files=no)" ]; then
+        echo "${name}: ${dir} is at ${commit} but has local modifications." >&2
+        echo "Restore them (git -C ${dir} checkout -- .) and re-run." >&2
+        exit 1
+      fi
       echo "${name}: already at ${commit}"
       continue
     fi

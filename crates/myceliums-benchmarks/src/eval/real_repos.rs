@@ -116,7 +116,9 @@ impl RealQuery {
         }
     }
 
-    /// True once a reviewer is recorded.
+    /// True once a reviewer is recorded. [`RealRepoSet::validate`] guarantees
+    /// that a recorded reviewer is neither an agent nor the labeller, so this
+    /// means "a person other than the labeller checked these labels".
     pub fn is_reviewed(&self) -> bool {
         self.reviewed_by.is_some()
     }
@@ -241,8 +243,8 @@ impl RealRepoSet {
                     bail!("query '{id}' has an empty {field}");
                 }
             }
-            if matches!(&query.reviewed_by, Some(reviewer) if reviewer.trim().is_empty()) {
-                bail!("query '{id}' has an empty reviewed_by — use null for unreviewed");
+            if let Some(problem) = review_problem(query) {
+                bail!("query '{id}': {problem}");
             }
             if query.relevant.is_empty() {
                 bail!("query '{id}' has no relevant symbols labelled");
@@ -338,9 +340,42 @@ impl RealRepoSet {
             .iter_mut()
             .find(|q| q.id == id)
             .with_context(|| format!("no query '{id}'"))?;
-        query.reviewed_by = Some(reviewer);
+        let previous = query.reviewed_by.replace(reviewer);
+        if let Some(problem) = review_problem(query) {
+            query.reviewed_by = previous;
+            bail!("query '{id}': {problem}");
+        }
         Ok(())
     }
+}
+
+/// True when `identity` names an agent: `agent:<name>`, in any letter case.
+fn is_agent(identity: &str) -> bool {
+    identity.trim().to_ascii_lowercase().starts_with("agent:")
+}
+
+/// Why a query's `reviewed_by` does not count as a review, if it does not.
+///
+/// `null` is fine (unreviewed). A recorded reviewer must be non-empty, must not
+/// be an agent, and must not be the labeller: an agent, or anyone, confirming
+/// their own labels is no review at all. Checked on every load, so a hand edit
+/// cannot make the evaluator report agent-drafted labels as human-reviewed.
+fn review_problem(query: &RealQuery) -> Option<String> {
+    let reviewer = query.reviewed_by.as_deref()?.trim();
+    if reviewer.is_empty() {
+        return Some("reviewed_by is empty — use null for unreviewed".to_string());
+    }
+    if is_agent(reviewer) {
+        return Some(format!(
+            "reviewed_by '{reviewer}' is an agent; only a human review counts"
+        ));
+    }
+    if reviewer.eq_ignore_ascii_case(query.labelled_by.trim()) {
+        return Some(format!(
+            "reviewed_by '{reviewer}' is the labeller; labels need a second person"
+        ));
+    }
+    None
 }
 
 /// Normalise a reviewer handle to `human:<handle>`, refusing agents.
@@ -349,7 +384,7 @@ pub fn reviewer_identity(reviewer: &str) -> Result<String> {
     if reviewer.is_empty() {
         bail!("a review needs a reviewer");
     }
-    if reviewer.starts_with("agent:") {
+    if is_agent(reviewer) {
         bail!("'{reviewer}' is an agent; only a human review marks labels as reviewed");
     }
     Ok(if reviewer.contains(':') {
@@ -418,6 +453,21 @@ pub fn verify_checkout(dir: &Path, pin: &RepoPin) -> Result<PathBuf> {
             "{} is at '{head}', not the pinned {} — {fetch_hint} into an empty directory",
             root.display(),
             pin.commit
+        );
+    }
+    // The right commit with edited files is not the pinned code either.
+    let status = std::process::Command::new("git")
+        .args(["status", "--porcelain", "--untracked-files=no"])
+        .current_dir(&root)
+        .output()
+        .with_context(|| format!("running git in {}", root.display()))?;
+    let changes = String::from_utf8_lossy(&status.stdout).trim().to_string();
+    if !status.status.success() || !changes.is_empty() {
+        bail!(
+            "{} has local modifications to tracked files — restore them \
+             (git -C {} checkout -- .) or re-fetch:\n{changes}",
+            root.display(),
+            root.display()
         );
     }
     Ok(root)
@@ -604,6 +654,21 @@ mod tests {
                 Box::new(|s| s.queries[0].reviewed_by = Some(String::new())),
             ),
             (
+                "agent reviewer",
+                Box::new(|s| s.queries[0].reviewed_by = Some("agent:claude".into())),
+            ),
+            (
+                "agent reviewer in another case",
+                Box::new(|s| s.queries[0].reviewed_by = Some(" Agent:Other".into())),
+            ),
+            (
+                "the labeller reviewing their own labels",
+                Box::new(|s| {
+                    s.queries[0].labelled_by = "human:ana".into();
+                    s.queries[0].reviewed_by = Some("HUMAN:ana".into());
+                }),
+            ),
+            (
                 "no labeller",
                 Box::new(|s| s.queries[0].labelled_by = String::new()),
             ),
@@ -640,12 +705,25 @@ mod tests {
         assert!(set
             .record_review("demo-paraphrase-thing", "agent:claude")
             .is_err());
+        assert!(set
+            .record_review("demo-paraphrase-thing", "AGENT:claude")
+            .is_err());
+        assert!(reviewer_identity("Agent:x").is_err());
         assert!(set.record_review("demo-paraphrase-thing", " ").is_err());
         assert!(set.record_review("no-such-query", "marc").is_err());
         assert_eq!(set.reviewed(), 0);
         set.record_review("demo-paraphrase-thing", "marc").unwrap();
         assert_eq!(set.queries[0].reviewed_by.as_deref(), Some("human:marc"));
         set.validate().unwrap();
+
+        // Labels drafted by a person cannot be reviewed by that person.
+        let mut own = minimal();
+        own.queries[0].labelled_by = "human:ana".into();
+        assert!(own.record_review("demo-paraphrase-thing", "ana").is_err());
+        assert_eq!(
+            own.queries[0].reviewed_by, None,
+            "a refused review leaves no trace"
+        );
     }
 
     #[test]
@@ -688,5 +766,22 @@ mod tests {
         ]);
         let wrong = verify_checkout(dir.path(), &pin).unwrap_err().to_string();
         assert!(wrong.contains("not the pinned"), "{wrong}");
+
+        // At the pinned commit, but with a tracked file edited: refused too.
+        let head = String::from_utf8(git(&["rev-parse", "HEAD"]).stdout).unwrap();
+        let pinned = RepoPin {
+            commit: head.trim().to_string(),
+            ..pin
+        };
+        if pinned.commit.len() != 40 {
+            return; // the commit above failed (no git identity); nothing to pin
+        }
+        std::fs::write(root.join("untracked"), "y").unwrap();
+        verify_checkout(dir.path(), &pinned).expect("untracked files are not modifications");
+        std::fs::write(root.join("f"), "edited").unwrap();
+        let edited = verify_checkout(dir.path(), &pinned)
+            .unwrap_err()
+            .to_string();
+        assert!(edited.contains("local modifications"), "{edited}");
     }
 }
