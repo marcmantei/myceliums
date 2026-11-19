@@ -2617,7 +2617,14 @@ mod tests {
     fn repo_id_from_path_always_passes_validation() {
         use myceliums_storage::RepoRegistry;
         let long = "ü".repeat(200);
-        for name in ["plain", "Plan 2024:25", "a\\b", "größe 🦀", long.as_str()] {
+        for name in [
+            "plain",
+            "Plan 2024:25",
+            "a\\b",
+            "größe 🦀",
+            ".build-123",
+            long.as_str(),
+        ] {
             let id = repo_id_from_path(&std::path::Path::new("/projects").join(name));
             assert_eq!(
                 RepoRegistry::validate_repo_id(&id),

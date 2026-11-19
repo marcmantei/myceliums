@@ -2,47 +2,61 @@
 //!
 //! A full re-analysis used to clear the live index first and then rebuild it
 //! in place, so a failed or aborted run left a half-written (or empty) index
-//! behind. A [`StagedIndex`] is a fresh, empty database directory beside the
-//! live one (`data/.build-<pid>-…`, same file system, so the swap is a
-//! rename). The caller builds the complete index there and calls
+//! behind. A [`StagedIndex`] is a fresh, empty database directory in
+//! `data/.staging/` (same file system as the live `data/<repo-id>/`, so the
+//! swap is a rename). The caller builds the complete index there and calls
 //! [`StagedIndex::commit`]; dropping it without a commit deletes the staging
 //! directory and leaves the live index untouched.
+//!
+//! Everything a rebuild creates lives in `data/.staging/` (and its lock in
+//! `data/.locks/`). Repository ids never start with `.` (see
+//! `RepoRegistry::validate_repo_id`), so no repository can be mistaken for a
+//! rebuild's leftovers, whatever its folder is called.
 //!
 //! **The swap.** Where the platform can exchange two directories in one
 //! system call (`renameat2(RENAME_EXCHANGE)` on Linux, `renamex_np(RENAME_SWAP)`
 //! on macOS), the live path never disappears. Elsewhere — or when the file
-//! system refuses the exchange — it is two renames (live → `data/.old-…`,
-//! staging → live, the first undone if the second fails), so for an instant
-//! the live path does not exist. Before the swap a journal
-//! `data/.swap-<pid>-…` records which directory is being replaced.
+//! system refuses the exchange — it is two renames (live →
+//! `.staging/old-…`, staging → live, the first undone if the second fails),
+//! so for an instant the live path does not exist. A journal
+//! `.staging/swap-…` names the live directory; it is kept as long as an
+//! `old-` directory exists, so the previous index can always be put back.
 //!
-//! **Recovery.** A process killed mid-build (no `Drop`) leaves its
-//! `.build-` directory behind, and one killed between the two renames leaves
-//! the only copy of the index in `.old-`. [`recover_leftovers`] — run when a
-//! staging directory is created, when the MCP server starts and when the CLI
-//! starts — finds the leftovers of processes that no longer run: it renames
-//! an `.old-` directory back when its live directory is missing, and deletes
-//! the rest. Leftovers of running processes are never touched.
+//! **Recovery.** A process killed mid-build (no `Drop`) leaves its `build-`
+//! directory behind; one killed between the two renames, or whose undo
+//! failed, leaves the only copy of the index in `old-`. [`recover_leftovers`]
+//! — run when a staging directory is created, when the MCP server starts and
+//! when the CLI starts — handles the leftovers of rebuilds that no longer
+//! run: it renames an `old-` directory back when its live directory is
+//! missing, and deletes the rest. Rebuilds still running are never touched.
 
 use anyhow::{Context, Result};
+use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{LazyLock, Mutex};
+
+/// The directory below `data/` that holds every rebuild's entries.
+pub const STAGING_DIR: &str = ".staging";
+
+const BUILD_PREFIX: &str = "build-";
+const OLD_PREFIX: &str = "old-";
+const SWAP_PREFIX: &str = "swap-";
 
 /// Distinguishes staging directories created by one process.
 static NEXT_STAGING: AtomicU64 = AtomicU64::new(0);
 
-const BUILD_PREFIX: &str = ".build-";
-const OLD_PREFIX: &str = ".old-";
-const SWAP_PREFIX: &str = ".swap-";
+/// Suffixes of the rebuilds this process is running: its own other entries
+/// are leftovers of failed rebuilds, recoverable like a dead process's.
+static ACTIVE: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(Default::default);
 
-/// Whether `name` (an entry of `data/`) is one of the staging, old or
-/// journal entries of a rebuild, or the lock directory — not a repository
-/// index.
+/// Whether `name` (an entry of `data/`) belongs to Myceliums itself — the
+/// rebuild directory or the lock directory — rather than to a repository.
 pub fn is_internal_entry(name: &str) -> bool {
-    name == crate::lock::LOCKS_DIR || leftover_suffix(name).is_some()
+    name == STAGING_DIR || name == crate::lock::LOCKS_DIR
 }
 
-/// The `<pid>-…` suffix of a staging, old or journal entry.
+/// The `<pid>-…` suffix of a `build-`, `old-` or `swap-` entry.
 fn leftover_suffix(name: &str) -> Option<&str> {
     let suffix = [BUILD_PREFIX, OLD_PREFIX, SWAP_PREFIX]
         .iter()
@@ -55,6 +69,18 @@ fn suffix_pid(suffix: &str) -> Option<u32> {
     suffix.split('-').next()?.parse().ok()
 }
 
+/// Whether the rebuild with this suffix is still running.
+fn is_running(suffix: &str) -> bool {
+    match suffix_pid(suffix) {
+        Some(pid) if pid == std::process::id() => ACTIVE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains(suffix),
+        Some(pid) => crate::lock::is_process_alive(pid),
+        None => true,
+    }
+}
+
 /// A staging directory for a new index of one repository.
 #[derive(Debug)]
 pub struct StagedIndex {
@@ -64,31 +90,45 @@ pub struct StagedIndex {
     committed: bool,
 }
 
+/// The file-system operations of a swap (tests inject failures).
+struct SwapOps<'a> {
+    rename: &'a dyn Fn(&Path, &Path) -> std::io::Result<()>,
+    exchange: &'a dyn Fn(&Path, &Path) -> std::io::Result<()>,
+}
+
+const REAL_OPS: SwapOps<'static> = SwapOps {
+    rename: &|from, to| std::fs::rename(from, to),
+    exchange: &exchange,
+};
+
 impl StagedIndex {
     /// Creates an empty staging directory for the index at `live` (usually
     /// [`myceliums_storage::RepoRegistry::repo_db_path`]). The live directory
-    /// need not exist. Leftovers of dead processes beside it are recovered
-    /// first (see [`recover_leftovers`]).
+    /// need not exist. Leftovers of rebuilds that no longer run are
+    /// recovered first (see [`recover_leftovers`]).
     pub fn create(live: &Path) -> Result<Self> {
-        let parent = live
+        let data_root = live
             .parent()
             .context("the index directory has no parent directory")?;
         live.file_name()
             .context("the index directory has no name")?;
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("cannot create {}", parent.display()))?;
-        recover_leftovers(parent);
-        // Ids, not the repo id: a repo id can be up to 255 bytes, and a prefix
-        // or suffix on it could exceed the file-name limit.
+        let root = data_root.join(STAGING_DIR);
+        std::fs::create_dir_all(&root)
+            .with_context(|| format!("cannot create {}", root.display()))?;
+        recover_leftovers(data_root);
         let suffix = format!(
             "{}-{}-{}",
             std::process::id(),
             chrono::Utc::now().timestamp_millis(),
             NEXT_STAGING.fetch_add(1, Ordering::Relaxed)
         );
-        let staging = parent.join(format!("{BUILD_PREFIX}{suffix}"));
+        let staging = root.join(format!("{BUILD_PREFIX}{suffix}"));
         std::fs::create_dir(&staging)
             .with_context(|| format!("cannot create {}", staging.display()))?;
+        ACTIVE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(suffix.clone());
         Ok(Self {
             staging,
             live: live.to_path_buf(),
@@ -102,74 +142,86 @@ impl StagedIndex {
         &self.staging
     }
 
+    fn entry(&self, prefix: &str) -> PathBuf {
+        self.staging
+            .parent()
+            .expect("staging dirs live in .staging")
+            .join(format!("{prefix}{}", self.suffix))
+    }
+
     /// Replaces the live index with the staged one. Every handle on either
     /// directory (open stores) should be closed first: renaming a directory
     /// with open files fails on Windows.
     ///
-    /// On error the live index is unchanged and the staging directory is
-    /// deleted.
-    pub fn commit(mut self) -> Result<()> {
-        let parent = self.live.parent().expect("checked in create").to_path_buf();
-        let journal = parent.join(format!("{SWAP_PREFIX}{}", self.suffix));
+    /// On error the staging directory is deleted and the live index is
+    /// unchanged — or, if even undoing a half-done swap failed, the previous
+    /// index waits in `.staging/old-…` with its journal and is put back by
+    /// the next [`recover_leftovers`].
+    pub fn commit(self) -> Result<()> {
+        self.commit_with(&REAL_OPS)
+    }
+
+    fn commit_with(mut self, ops: &SwapOps<'_>) -> Result<()> {
+        let journal = self.entry(SWAP_PREFIX);
+        let old = self.entry(OLD_PREFIX);
         let live_name = self.live.file_name().expect("checked in create");
         std::fs::write(&journal, live_name.as_encoded_bytes())
             .context("cannot write the swap journal")?;
-        let result = self.swap(&parent);
+        let result = self.swap(&old, ops);
         if result.is_ok() {
             self.committed = true;
         }
-        if let Err(e) = std::fs::remove_file(&journal) {
+        if old.exists() {
+            // The previous index is still aside: keep the journal, so
+            // recovery knows where it belongs.
+            tracing::warn!(
+                "{} is kept with its journal {} for recovery",
+                old.display(),
+                journal.display()
+            );
+        } else if let Err(e) = std::fs::remove_file(&journal) {
             tracing::warn!("cannot delete the swap journal {}: {e}", journal.display());
         }
         result
     }
 
-    fn swap(&self, parent: &Path) -> Result<()> {
-        let rename = |from: &Path, to: &Path| std::fs::rename(from, to);
+    fn swap(&self, old: &Path, ops: &SwapOps<'_>) -> Result<()> {
         if !self.live.exists() {
-            return rename(&self.staging, &self.live).with_context(|| {
+            return (ops.rename)(&self.staging, &self.live).with_context(|| {
                 format!("cannot move the new index into {}", self.live.display())
             });
         }
         // One system call: the live path never disappears. The staging path
         // then holds the previous index; delete it.
-        match exchange(&self.staging, &self.live) {
+        match (ops.exchange)(&self.staging, &self.live) {
             Ok(()) => {
                 remove_best_effort(&self.staging, "previous index");
                 return Ok(());
             }
             Err(e) => tracing::debug!("atomic exchange unavailable ({e}); swapping by renames"),
         }
-        let old = parent.join(format!("{OLD_PREFIX}{}", self.suffix));
-        swap_by_renames(&self.staging, &self.live, &old, &rename)?;
-        remove_best_effort(&old, "previous index");
+        (ops.rename)(&self.live, old).with_context(|| {
+            format!(
+                "cannot move the previous index {} aside",
+                self.live.display()
+            )
+        })?;
+        if let Err(e) = (ops.rename)(&self.staging, &self.live) {
+            if let Err(undo) = (ops.rename)(old, &self.live) {
+                tracing::error!(
+                    "cannot restore the previous index {} from {}: {undo}; \
+                     the next analysis, server start or myc command restores it",
+                    self.live.display(),
+                    old.display()
+                );
+            }
+            return Err(e).with_context(|| {
+                format!("cannot move the new index into {}", self.live.display())
+            });
+        }
+        remove_best_effort(old, "previous index");
         Ok(())
     }
-}
-
-/// The fallback swap: `live` → `old`, then `staging` → `live`; if the second
-/// rename fails, the first is undone. `rename` is injected by tests.
-fn swap_by_renames(
-    staging: &Path,
-    live: &Path,
-    old: &Path,
-    rename: &dyn Fn(&Path, &Path) -> std::io::Result<()>,
-) -> Result<()> {
-    rename(live, old)
-        .with_context(|| format!("cannot move the previous index {} aside", live.display()))?;
-    if let Err(e) = rename(staging, live) {
-        if let Err(undo) = rename(old, live) {
-            tracing::error!(
-                "cannot restore the previous index {} from {}: {undo}; \
-                 the next analysis or server start restores it",
-                live.display(),
-                old.display()
-            );
-        }
-        return Err(e)
-            .with_context(|| format!("cannot move the new index into {}", live.display()));
-    }
-    Ok(())
 }
 
 impl Drop for StagedIndex {
@@ -177,6 +229,10 @@ impl Drop for StagedIndex {
         if !self.committed && self.staging.exists() {
             remove_best_effort(&self.staging, "unfinished index");
         }
+        ACTIVE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&self.suffix);
     }
 }
 
@@ -240,44 +296,45 @@ pub enum Recovered {
     Removed(PathBuf),
 }
 
-/// Recovers the leftovers of rebuilds whose process no longer runs, in
-/// `data_root` (the `data/` directory of a data home): an `.old-` directory
-/// whose live directory is missing is renamed back, every other leftover is
-/// deleted. Entries of running processes — this one included — are left
+/// Recovers the leftovers of rebuilds that no longer run, below `data_root`
+/// (the `data/` directory of a data home): an `old-` index whose live
+/// directory is missing is renamed back, every other leftover is deleted.
+/// Rebuilds still running — in any process, this one included — are left
 /// alone. Never fails: problems are logged.
 pub fn recover_leftovers(data_root: &Path) -> Vec<Recovered> {
-    recover_leftovers_where(data_root, &|pid| {
-        pid == std::process::id() || crate::lock::is_process_alive(pid)
-    })
+    recover_leftovers_where(data_root, &is_running)
 }
 
-fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(u32) -> bool) -> Vec<Recovered> {
-    let Ok(entries) = std::fs::read_dir(data_root) else {
+fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> Vec<Recovered> {
+    let root = data_root.join(STAGING_DIR);
+    let Ok(entries) = std::fs::read_dir(&root) else {
         return Vec::new();
     };
-    // Group by suffix: the journal names the live directory of its swap.
     let mut suffixes: Vec<String> = entries
         .filter_map(|e| e.ok())
         .filter_map(|e| {
             let name = e.file_name().into_string().ok()?;
             leftover_suffix(&name).map(str::to_string)
         })
-        .filter(|s| suffix_pid(s).is_some_and(|pid| !running(pid)))
+        .filter(|s| !running(s))
         .collect();
     suffixes.sort();
     suffixes.dedup();
 
     let mut done = Vec::new();
     for suffix in suffixes {
-        let build = data_root.join(format!("{BUILD_PREFIX}{suffix}"));
-        let old = data_root.join(format!("{OLD_PREFIX}{suffix}"));
-        let journal = data_root.join(format!("{SWAP_PREFIX}{suffix}"));
+        let build = root.join(format!("{BUILD_PREFIX}{suffix}"));
+        let old = root.join(format!("{OLD_PREFIX}{suffix}"));
+        let journal = root.join(format!("{SWAP_PREFIX}{suffix}"));
+        // The journal names one directory directly below `data/`.
         let live = std::fs::read(&journal)
             .ok()
             .and_then(|name| String::from_utf8(name).ok())
             .filter(|name| {
                 let mut parts = Path::new(name).components();
-                matches!(parts.next(), Some(Component::Normal(_))) && parts.next().is_none()
+                matches!(parts.next(), Some(Component::Normal(_)))
+                    && parts.next().is_none()
+                    && !is_internal_entry(name)
             })
             .map(|name| data_root.join(name));
 
@@ -305,10 +362,10 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(u32) -> bool) -> V
                     done.push(Recovered::Removed(old.clone()));
                 }
                 None => {
-                    // Without its journal nobody knows whose index this is:
-                    // keep it rather than guess.
+                    // Without a usable journal nobody knows whose index this
+                    // is: keep it rather than guess.
                     tracing::warn!(
-                        "{} has no swap journal; leaving it for manual inspection",
+                        "{} has no usable swap journal; leaving it for manual inspection",
                         old.display()
                     );
                 }
@@ -351,24 +408,42 @@ mod tests {
     /// A PID that does not run.
     const DEAD: u32 = 99_999_999;
 
+    /// Rename that fails for `from == refuse` (or for every `from` in it).
+    fn refusing<'a>(refuse: &'a [&'a Path]) -> impl Fn(&Path, &Path) -> std::io::Result<()> + 'a {
+        move |from, to| {
+            if refuse.contains(&from) {
+                Err(std::io::Error::other("injected"))
+            } else {
+                std::fs::rename(from, to)
+            }
+        }
+    }
+
+    fn no_exchange(_: &Path, _: &Path) -> std::io::Result<()> {
+        Err(std::io::ErrorKind::Unsupported.into())
+    }
+
     #[test]
     fn dropping_without_commit_keeps_the_live_index_and_removes_the_staging_dir() {
         let data = tempfile::tempdir().unwrap();
-        let live = data.path().join("data").join("repo");
+        let root = data.path().join("data");
+        let live = root.join("repo");
         write(&live.join("symbols.lance"), "old");
 
         let staged = StagedIndex::create(&live).unwrap();
+        assert!(staged.path().starts_with(root.join(STAGING_DIR)));
         write(&staged.path().join("symbols.lance"), "half-written");
         drop(staged);
 
         assert_eq!(read(&live.join("symbols.lance")), "old");
-        assert_eq!(entries(&data.path().join("data")), vec!["repo"]);
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
     }
 
     #[test]
     fn commit_swaps_in_the_new_index() {
         let data = tempfile::tempdir().unwrap();
-        let live = data.path().join("data").join("repo");
+        let root = data.path().join("data");
+        let live = root.join("repo");
         write(&live.join("symbols.lance"), "old");
         write(&live.join("stale-table.lance"), "old");
 
@@ -378,36 +453,80 @@ mod tests {
 
         assert_eq!(read(&live.join("symbols.lance")), "new");
         assert!(!live.join("stale-table.lance").exists());
-        assert_eq!(
-            entries(&data.path().join("data")),
-            vec!["repo"],
+        assert!(
+            entries(&root.join(STAGING_DIR)).is_empty(),
             "no staging, old or journal entry is left behind"
         );
     }
 
     #[test]
-    fn the_two_rename_fallback_swaps_or_undoes_a_failed_second_rename() {
+    fn the_two_rename_fallback_swaps() {
         let data = tempfile::tempdir().unwrap();
         let root = data.path().join("data");
-        let (live, staging, old) = (root.join("repo"), root.join("stage"), root.join("old"));
+        let live = root.join("repo");
         write(&live.join("symbols.lance"), "old");
-        write(&staging.join("symbols.lance"), "new");
-
-        let refuse_staging = |from: &Path, to: &Path| {
-            if from == staging {
-                Err(std::io::Error::other("injected"))
-            } else {
-                std::fs::rename(from, to)
-            }
+        let staged = StagedIndex::create(&live).unwrap();
+        write(&staged.path().join("symbols.lance"), "new");
+        let rename = refusing(&[]);
+        let ops = SwapOps {
+            rename: &rename,
+            exchange: &no_exchange,
         };
-        let err = swap_by_renames(&staging, &live, &old, &refuse_staging).unwrap_err();
+        staged.commit_with(&ops).unwrap();
+        assert_eq!(read(&live.join("symbols.lance")), "new");
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
+    }
+
+    #[test]
+    fn a_failed_second_rename_is_undone() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let live = root.join("repo");
+        write(&live.join("symbols.lance"), "old");
+        let staged = StagedIndex::create(&live).unwrap();
+        write(&staged.path().join("symbols.lance"), "new");
+        let staging = staged.path().to_path_buf();
+        let refuse = [staging.as_path()];
+        let rename = refusing(&refuse);
+        let ops = SwapOps {
+            rename: &rename,
+            exchange: &no_exchange,
+        };
+        let err = staged.commit_with(&ops).unwrap_err();
         assert!(format!("{err:#}").contains("injected"), "{err:#}");
         assert_eq!(read(&live.join("symbols.lance")), "old", "undone");
-        assert!(!old.exists());
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
+    }
 
-        swap_by_renames(&staging, &live, &old, &|a, b| std::fs::rename(a, b)).unwrap();
-        assert_eq!(read(&live.join("symbols.lance")), "new");
-        assert_eq!(read(&old.join("symbols.lance")), "old");
+    #[test]
+    fn a_failed_undo_keeps_the_journal_and_recovery_restores_the_index() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let live = root.join("repo");
+        write(&live.join("symbols.lance"), "old");
+        let staged = StagedIndex::create(&live).unwrap();
+        write(&staged.path().join("symbols.lance"), "new");
+        let staging = staged.path().to_path_buf();
+        let old = staged.entry(OLD_PREFIX);
+        // The move into place and the undo both fail.
+        let refuse = [staging.as_path(), old.as_path()];
+        let rename = refusing(&refuse);
+        let ops = SwapOps {
+            rename: &rename,
+            exchange: &no_exchange,
+        };
+        staged.commit_with(&ops).unwrap_err();
+        assert!(!live.exists(), "the live index is gone");
+        let left = entries(&root.join(STAGING_DIR));
+        assert!(left.iter().any(|n| n.starts_with(OLD_PREFIX)), "{left:?}");
+        assert!(left.iter().any(|n| n.starts_with(SWAP_PREFIX)), "{left:?}");
+
+        // This process's rebuild has ended: the next recovery (here the
+        // next rebuild's) puts the index back.
+        let next = StagedIndex::create(&live).unwrap();
+        assert_eq!(read(&live.join("symbols.lance")), "old", "restored");
+        drop(next);
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
     }
 
     #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
@@ -436,37 +555,27 @@ mod tests {
     fn leftovers_of_dead_processes_are_recovered() {
         let data = tempfile::tempdir().unwrap();
         let root = data.path().join("data");
+        let st = root.join(STAGING_DIR);
 
         // Killed mid-build: only the staging directory.
-        write(
-            &root.join(format!(".build-{DEAD}-1-0/symbols.lance")),
-            "half",
-        );
+        write(&st.join(format!("build-{DEAD}-1-0/symbols.lance")), "half");
         // Killed between the renames: live gone, journal + old + build.
-        write(&root.join(format!(".swap-{DEAD}-2-0")), "repo-a");
-        write(
-            &root.join(format!(".old-{DEAD}-2-0/symbols.lance")),
-            "a-old",
-        );
-        write(
-            &root.join(format!(".build-{DEAD}-2-0/symbols.lance")),
-            "a-new",
-        );
+        write(&st.join(format!("swap-{DEAD}-2-0")), "repo-a");
+        write(&st.join(format!("old-{DEAD}-2-0/symbols.lance")), "a-old");
+        write(&st.join(format!("build-{DEAD}-2-0/symbols.lance")), "a-new");
         // Killed after the swap, before cleanup: live is the new index.
         write(&root.join("repo-b/symbols.lance"), "b-new");
-        write(&root.join(format!(".swap-{DEAD}-3-0")), "repo-b");
-        write(
-            &root.join(format!(".old-{DEAD}-3-0/symbols.lance")),
-            "b-old",
-        );
+        write(&st.join(format!("swap-{DEAD}-3-0")), "repo-b");
+        write(&st.join(format!("old-{DEAD}-3-0/symbols.lance")), "b-old");
         // A running process's build: untouched.
-        let me = std::process::id();
-        write(&root.join(format!(".build-{me}-4-0/symbols.lance")), "busy");
+        let busy = format!("build-{}-4-0", std::process::id());
+        ACTIVE
+            .lock()
+            .unwrap()
+            .insert(busy["build-".len()..].to_string());
+        write(&st.join(format!("{busy}/symbols.lance")), "busy");
         // No journal: whose index is this? Kept.
-        write(
-            &root.join(format!(".old-{DEAD}-5-0/symbols.lance")),
-            "orphan",
-        );
+        write(&st.join(format!("old-{DEAD}-5-0/symbols.lance")), "orphan");
 
         let done = recover_leftovers(&root);
         assert!(
@@ -475,37 +584,55 @@ mod tests {
         );
         assert_eq!(read(&root.join("repo-a/symbols.lance")), "a-old");
         assert_eq!(read(&root.join("repo-b/symbols.lance")), "b-new");
-        assert_eq!(
-            entries(&root),
-            vec![
-                format!(".build-{me}-4-0"),
-                format!(".old-{DEAD}-5-0"),
-                "repo-a".to_string(),
-                "repo-b".to_string(),
-            ]
-        );
+        assert_eq!(entries(&st), vec![busy.clone(), format!("old-{DEAD}-5-0")]);
         assert!(recover_leftovers(&root).is_empty(), "idempotent");
+        ACTIVE.lock().unwrap().remove(&busy["build-".len()..]);
+    }
+
+    /// A project folder named like a rebuild entry is an ordinary
+    /// repository: its index lives directly in `data/` under a sanitized id,
+    /// never in `.staging/`, and recovery leaves it alone.
+    #[test]
+    fn a_repository_named_like_a_leftover_is_never_touched() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let id = crate::analyzer::repo_id_from_path(Path::new("/projects/.build-123"));
+        assert!(id.starts_with("_build-123-"), "{id}");
+        myceliums_storage::RepoRegistry::validate_repo_id(&id).unwrap();
+        // Even a legacy index registered as `.build-123-…` stays put.
+        for name in [id.as_str(), ".build-123-1a2b3c4d", ".old-123-1-0"] {
+            write(&root.join(name).join("symbols.lance"), "live");
+        }
+        write(&root.join(STAGING_DIR).join("build-123-9-0/x"), "dead");
+        recover_leftovers_where(&root, &|_| false);
+        for name in [id.as_str(), ".build-123-1a2b3c4d", ".old-123-1-0"] {
+            assert_eq!(read(&root.join(name).join("symbols.lance")), "live");
+        }
+        assert!(!root.join(STAGING_DIR).join("build-123-9-0").exists());
     }
 
     #[test]
     fn internal_entries_are_recognised() {
         assert!(is_internal_entry(".locks"));
-        assert!(is_internal_entry(".build-123-456-0"));
-        assert!(is_internal_entry(".old-123-456-0"));
-        assert!(is_internal_entry(".swap-123-456-0"));
-        assert!(!is_internal_entry(".build-notapid"));
+        assert!(is_internal_entry(".staging"));
+        assert!(!is_internal_entry(".build-123-456-0"));
         assert!(!is_internal_entry("my-repo-1a2b3c4d"));
-        assert!(!is_internal_entry(".hidden-project-1a2b3c4d"));
+        assert!(!is_internal_entry(".dotfiles-1a2b3c4d"));
     }
 
     #[test]
     fn a_journal_cannot_point_outside_the_data_directory() {
         let data = tempfile::tempdir().unwrap();
         let root = data.path().join("data");
-        write(&root.join(format!(".swap-{DEAD}-1-0")), "../escape");
-        write(&root.join(format!(".old-{DEAD}-1-0/symbols.lance")), "x");
+        let st = root.join(STAGING_DIR);
+        write(&st.join(format!("swap-{DEAD}-1-0")), "../escape");
+        write(&st.join(format!("old-{DEAD}-1-0/symbols.lance")), "x");
+        write(&st.join(format!("swap-{DEAD}-2-0")), ".locks");
+        write(&st.join(format!("old-{DEAD}-2-0/symbols.lance")), "y");
         recover_leftovers_where(&root, &|_| false);
         assert!(!data.path().join("escape").exists());
-        assert!(root.join(format!(".old-{DEAD}-1-0")).exists());
+        assert!(!root.join(".locks").exists());
+        assert!(st.join(format!("old-{DEAD}-1-0")).exists());
+        assert!(st.join(format!("old-{DEAD}-2-0")).exists());
     }
 }

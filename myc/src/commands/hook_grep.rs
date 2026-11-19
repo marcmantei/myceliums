@@ -678,7 +678,7 @@ async fn lookup(
     let Some(info) = registry.find_containing(cwd) else {
         return Ok(vec![]);
     };
-    RepoRegistry::validate_repo_id(&info.id)?;
+    RepoRegistry::validate_registered_repo_id(&info.id)?;
     let store = Store::open(&RepoRegistry::repo_db_path(data_dir, &info.id), &info.id).await?;
     let mut known = Vec::new();
     for candidate in candidates {

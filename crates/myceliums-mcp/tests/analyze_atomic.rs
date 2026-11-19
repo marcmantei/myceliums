@@ -115,12 +115,12 @@ async fn assert_previous_index(server: &MyceliumsMcp, repo_id: &str) {
     assert!(callers.contains("processRequest"), "{callers}");
 }
 
-/// Entries of `data/` other than repository indexes.
+/// What rebuilds left in `data/.staging/`.
 fn leftovers() -> Vec<String> {
-    std::fs::read_dir(data_dir().join("data"))
-        .unwrap()
+    std::fs::read_dir(data_dir().join("data").join(".staging"))
+        .into_iter()
+        .flatten()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|n| n.starts_with('.') && n != ".locks")
         .collect()
 }
 
@@ -291,7 +291,10 @@ async fn cancelling_stops_the_analyzer_early_and_recovers_dead_leftovers() {
     add_probe(&project);
 
     // A rebuild killed earlier (no Drop) by a process that no longer runs.
-    let dead_build = data_dir().join("data").join(".build-99999999-1-0");
+    let dead_build = data_dir()
+        .join("data")
+        .join(".staging")
+        .join("build-99999999-1-0");
     std::fs::create_dir_all(dead_build.join("symbols.lance")).unwrap();
 
     let ct = CancellationToken::new();
@@ -315,4 +318,31 @@ async fn cancelling_stops_the_analyzer_early_and_recovers_dead_leftovers() {
         "a dead process's staging dir is removed"
     );
     assert!(leftovers().is_empty(), "{:?}", leftovers());
+}
+
+/// A project folder named like a rebuild's leftover (`.build-123`, as if
+/// PID 123 had left it) is an ordinary repository: its id is sanitized, and
+/// later rebuilds — which recover dead leftovers — never touch its index.
+#[tokio::test]
+async fn a_project_named_like_a_leftover_survives_other_rebuilds() {
+    let _turn = serial().await;
+    let server = new_server();
+    let (_dir, _project, repo_id) = analyzed_project(&server, ".build-123").await;
+    assert!(repo_id.starts_with("_build-123-"), "{repo_id}");
+    // (The analyzer skips hidden folders, so this index holds no symbols;
+    // what matters is that its directory stays exactly as it is.)
+    let index = data_dir().join("data").join(&repo_id);
+    assert!(index.is_dir());
+    std::fs::write(index.join("sentinel"), "live").unwrap();
+
+    // Other rebuilds run the leftover recovery.
+    let (_other_dir, other, _) = analyzed_project(&server, "neighbour-project").await;
+    server.analyze_for_test(params(&other)).await.unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(index.join("sentinel")).unwrap(),
+        "live",
+        "the index is untouched"
+    );
+    finds(&server, &repo_id, "anything").await;
 }

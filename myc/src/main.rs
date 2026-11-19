@@ -1058,7 +1058,7 @@ fn lookup_repo_id(registry: &RepoRegistry, repo: &str) -> Result<String> {
         Ok(info) => Ok(info.id.clone()),
         Err(err) => match registry.find_by_path(repo) {
             Some(info) => {
-                RepoRegistry::validate_repo_id(&info.id)?;
+                RepoRegistry::validate_registered_repo_id(&info.id)?;
                 Ok(info.id.clone())
             }
             None => Err(anyhow::anyhow!(
@@ -1675,6 +1675,17 @@ async fn cmd_delete(repo: &str) -> Result<()> {
     let mut registry = RepoRegistry::load(&registry_path())?;
 
     let repo_id = lookup_repo_id(&registry, repo)?;
+
+    // Not while an analysis of it runs (CLI or MCP server): its swap or
+    // in-place rebuild would bring the index back.
+    use myceliums_core::lock::{AnalysisLock, LockOutcome};
+    let _lock = match AnalysisLock::acquire(&data_dir(), &repo_id)? {
+        LockOutcome::Acquired(lock) => lock,
+        LockOutcome::AlreadyRunning { pid } => anyhow::bail!(
+            "cannot delete {repo_id}: an analysis of it is running (PID {pid}); \
+             wait until it finishes, then delete again"
+        ),
+    };
 
     let info = registry.remove(&repo_id).unwrap();
     registry.save()?;

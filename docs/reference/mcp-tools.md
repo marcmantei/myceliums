@@ -293,7 +293,7 @@ tool has no strictness knob; use the `myc analyze --strict-embeddings` CLI flag 
 fail CI on a partial index.
 
 **The previous index stays usable.** A full analysis builds the new index in a
-staging directory beside the live one (`data/.build-…`) and swaps it in only
+staging directory beside the live one (`data/.staging/build-…`) and swaps it in only
 when it is complete — in one system call on Linux and macOS — and the graph
 cache is dropped at the swap. Until then every tool answers from the previous
 index. A failed or cancelled analysis deletes the staging directory and leaves
