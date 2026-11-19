@@ -20,9 +20,10 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
 
-        let relationships = self.relationships(&repo_id).await?;
+        let relationships = graph.relationships().await?;
 
         require_query("query", &params.query)?;
         let page = Page::new(params.limit, params.offset, Budget::new(20, 100));
@@ -42,7 +43,7 @@ impl MyceliumsMcp {
                 results: vec![],
             };
             return self
-                .graph_text(&repo_id, format::format_knowledge_query(&output))
+                .graph_text(&graph, format::format_knowledge_query(&output))
                 .await;
         }
 
@@ -127,7 +128,7 @@ impl MyceliumsMcp {
             format::format_knowledge_query(&output),
             page.notice.as_deref(),
         );
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -146,9 +147,10 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
 
-        let relationships = self.relationships(&repo_id).await?;
+        let relationships = graph.relationships().await?;
 
         use myceliums_storage::RelationshipKind;
 
@@ -231,7 +233,7 @@ impl MyceliumsMcp {
             total_count,
         };
         let body = with_notice(format::format_rationale(&output), page.notice.as_deref());
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -250,9 +252,10 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
-        let communities = self.communities(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
+        let communities = graph.communities().await?;
 
         use myceliums_storage::RelationshipKind;
 
@@ -579,7 +582,7 @@ impl MyceliumsMcp {
             format::format_knowledge_gaps(&output),
             page.notice.as_deref(),
         );
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 }
 

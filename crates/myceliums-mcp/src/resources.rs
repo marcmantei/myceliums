@@ -53,11 +53,12 @@ impl MyceliumsMcp {
 
         match sub_path {
             "schema" => {
-                let symbols = self.symbols(repo_id).await?;
-                let files = self.files(repo_id).await?;
-                let relationships = self.relationships(repo_id).await?;
-                let communities = self.communities(repo_id).await?;
-                let processes = self.processes(repo_id).await?;
+                let graph = self.graph(repo_id).await?;
+                let symbols = graph.symbols().await?;
+                let files = graph.files().await?;
+                let relationships = graph.relationships().await?;
+                let communities = graph.communities().await?;
+                let processes = graph.processes().await?;
                 let mut kind_counts: HashMap<String, usize> = HashMap::new();
                 for s in &symbols {
                     *kind_counts.entry(s.kind.to_string()).or_default() += 1;
@@ -74,7 +75,8 @@ impl MyceliumsMcp {
                 serde_json::to_string_pretty(&result).map_err(|e| mcp_err(format!("{}", e)))
             }
             "map" => {
-                let communities = self.communities(repo_id).await?;
+                let graph = self.graph(repo_id).await?;
+                let communities = graph.communities().await?;
                 let result: Vec<serde_json::Value> = communities.iter().map(|c| {
                     serde_json::json!({"uid": c.uid, "label": c.label, "member_count": c.member_count, "top_symbols": c.top_symbols, "summary": c.summary})
                 }).collect();
@@ -84,7 +86,8 @@ impl MyceliumsMcp {
                 let sub_parts: Vec<&str> = rest.splitn(2, '/').collect();
                 match sub_parts.as_slice() {
                     ["community", community_id] => {
-                        let communities = self.communities(repo_id).await?;
+                        let graph = self.graph(repo_id).await?;
+                        let communities = graph.communities().await?;
                         let community = communities
                             .iter()
                             .find(|c| c.uid == *community_id)
@@ -95,7 +98,8 @@ impl MyceliumsMcp {
                         serde_json::to_string_pretty(&result).map_err(|e| mcp_err(format!("{}", e)))
                     }
                     ["process", process_id] => {
-                        let processes = self.processes(repo_id).await?;
+                        let graph = self.graph(repo_id).await?;
+                        let processes = graph.processes().await?;
                         let process = processes
                             .iter()
                             .find(|p| p.uid == *process_id)

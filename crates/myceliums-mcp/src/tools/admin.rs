@@ -169,21 +169,22 @@ impl MyceliumsMcp {
                 // index stale, so "run analyze to refresh" always refreshes.
                 let cached = match cache::check_cache(repo_info, &abs_path, &cache_config) {
                     CacheDecision::UseCached { repo_id, reason } => {
-                        let indexed = self.files(&repo_id).await?.shared();
+                        let graph = self.graph(&repo_id).await?;
+                        let indexed = graph.files().await?.shared();
                         let freshness =
                             crate::index_status::freshness(repo_info, indexed, true).await;
-                        (!freshness.is_stale()).then_some((repo_id, reason))
+                        (!freshness.is_stale()).then_some((repo_id, reason, graph))
                     }
                     CacheDecision::ReanalyzeNeeded { .. } => None,
                 };
-                if let Some((repo_id, reason)) = cached {
+                if let Some((repo_id, reason, graph)) = cached {
                     info!("Using cached analysis: {}", reason);
-                    let store = self.store(&repo_id).await?;
-                    let symbols = self.symbols(&repo_id).await?;
-                    let files = self.files(&repo_id).await?;
-                    let relationships = self.relationships(&repo_id).await?;
-                    let communities = self.communities(&repo_id).await?;
-                    let processes = self.processes(&repo_id).await?;
+                    let store = graph.store();
+                    let symbols = graph.symbols().await?;
+                    let files = graph.files().await?;
+                    let relationships = graph.relationships().await?;
+                    let communities = graph.communities().await?;
+                    let processes = graph.processes().await?;
                     let embedding_stats = load_embedding_stats(&store, symbols.len()).await?;
                     let output = AnalyzeOutput {
                         repo_id,

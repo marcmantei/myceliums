@@ -71,7 +71,7 @@ impl Default for MyceliumsMcp {
 
 impl MyceliumsMcp {
     pub fn new() -> Self {
-        Self::with_service(Arc::new(GraphService::new(repo::data_dir())))
+        Self::with_service(Arc::new(repo::graph_service()))
     }
 
     /// A server that reads through an existing (shared) [`GraphService`].

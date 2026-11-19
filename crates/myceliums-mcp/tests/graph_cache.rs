@@ -1,5 +1,6 @@
 //! The MCP read tools serve the graph from `GraphService`'s per-repo cache,
-//! and `analyze` / `delete` invalidate that cache (#93).
+//! and `analyze` / `delete` invalidate that cache (#93). Each call takes one
+//! snapshot of the graph, however many tables it reads (#129).
 //!
 //! This binary owns its data directory and its project copy: it re-analyzes
 //! and deletes, so it must not share the read-only index of `harness`
@@ -7,7 +8,8 @@
 //! the whole scenario runs as one sequential test.
 
 use myceliums_mcp::{
-    AnalyzeParams, CypherQueryParams, DeleteParams, GetCallersParams, MyceliumsMcp, SearchParams,
+    AnalyzeParams, CypherQueryParams, DeleteParams, GetCallersParams, GetStatsParams, MyceliumsMcp,
+    SearchParams,
 };
 use std::path::Path;
 
@@ -87,6 +89,21 @@ async fn reads_are_cached_and_analyze_or_delete_invalidates_the_cache() {
         loads_after_warmup,
         "repeated reads must be served from the cache"
     );
+
+    // ── One snapshot per call ───────────────────────────────────────
+    // get_stats reads all five tables, yet checks the registry and the
+    // index fingerprint once per call — not once per table.
+    let stats = || GetStatsParams {
+        repo_id: repo_id.clone(),
+    };
+    server.get_stats_for_test(stats()).await.unwrap();
+    let loads = server.graph_table_loads_for_test();
+    let fingerprints = server.graph_fingerprint_reads_for_test();
+    for _ in 0..5 {
+        server.get_stats_for_test(stats()).await.unwrap();
+    }
+    assert_eq!(server.graph_fingerprint_reads_for_test(), fingerprints + 5);
+    assert_eq!(server.graph_table_loads_for_test(), loads, "no reloads");
 
     let before = server
         .context_search_for_test(search(&repo_id, "zebraCacheProbe"))

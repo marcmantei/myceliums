@@ -2,12 +2,27 @@
 
 use crate::errors::{repo_id_error, service_error, ToolError};
 use crate::MyceliumsMcp;
-use myceliums_core::GraphTable;
+use myceliums_core::{GlobalConfig, GraphCacheLimits, GraphService, GraphTable, RepoGraph};
 use myceliums_storage::{
     CodeSymbol, Community, FileNode, Process, Relationship, RepoInfo, RepoRegistry, Store,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+/// The process's graph service over [`data_dir`], its cache bounded by the
+/// `[mcp]` `graph_cache_*` keys of `config.toml` (defaults when the file is
+/// missing or unreadable).
+pub(crate) fn graph_service() -> GraphService {
+    let dir = data_dir();
+    let limits = match GlobalConfig::load(&dir) {
+        Ok(config) => GraphCacheLimits::from_config(&config),
+        Err(e) => {
+            tracing::warn!("cannot read config.toml, using the default graph cache limits: {e:#}");
+            GraphCacheLimits::default()
+        }
+    };
+    GraphService::with_limits(dir, limits)
+}
 
 pub(crate) fn data_dir() -> PathBuf {
     // `MYCELIUMS_DATA_DIR` overrides the data home so the server can be pointed
@@ -224,49 +239,56 @@ pub(crate) fn repo_for_dir(
 
 /// Graph reads for the tools, served from the [`myceliums_core::GraphService`]
 /// cache: each table is read from disk once per repository and reused until
-/// `analyze`/`delete` (or an on-disk change) invalidates it. Every read
+/// `analyze`/`delete` (or an on-disk change) invalidates it. Every call
 /// validates `repo_id` first — malformed ids are `invalid_params`, unknown
-/// ones a recoverable error.
+/// ones a recoverable error — and then reads all its tables, the store
+/// handle and the registry entry through one [`Graph`].
 impl MyceliumsMcp {
-    /// The shared store handle, for reads the graph cache does not cover
-    /// (vector search, embeddings, index metadata).
-    pub(crate) async fn store(&self, repo_id: &str) -> Result<Arc<Store>, ToolError> {
+    /// One call's view of `repo_id`'s graph: the registry and the index
+    /// fingerprint are checked once, and every table read through it belongs
+    /// to the same index generation. Take one per call per repository.
+    pub(crate) async fn graph(&self, repo_id: &str) -> Result<Graph<'_>, ToolError> {
         self.service
-            .open_store(repo_id)
+            .graph(repo_id)
             .await
+            .map(Graph)
             .map_err(service_error)
     }
+}
 
-    pub(crate) async fn symbols(&self, repo_id: &str) -> Result<GraphTable<CodeSymbol>, ToolError> {
-        self.service.symbols(repo_id).await.map_err(service_error)
+/// [`RepoGraph`] with errors mapped onto the tool contract.
+pub(crate) struct Graph<'a>(RepoGraph<'a>);
+
+impl Graph<'_> {
+    /// The repository's shared store handle, for reads the graph cache does
+    /// not cover.
+    pub(crate) fn store(&self) -> Arc<Store> {
+        self.0.store()
     }
 
-    pub(crate) async fn relationships(
-        &self,
-        repo_id: &str,
-    ) -> Result<GraphTable<Relationship>, ToolError> {
-        self.service
-            .relationships(repo_id)
-            .await
-            .map_err(service_error)
+    /// The repository's registry entry, as of this call.
+    pub(crate) fn info(&self) -> &RepoInfo {
+        self.0.info()
     }
 
-    pub(crate) async fn files(&self, repo_id: &str) -> Result<GraphTable<FileNode>, ToolError> {
-        self.service.files(repo_id).await.map_err(service_error)
+    pub(crate) async fn symbols(&self) -> Result<GraphTable<CodeSymbol>, ToolError> {
+        self.0.symbols().await.map_err(service_error)
     }
 
-    pub(crate) async fn communities(
-        &self,
-        repo_id: &str,
-    ) -> Result<GraphTable<Community>, ToolError> {
-        self.service
-            .communities(repo_id)
-            .await
-            .map_err(service_error)
+    pub(crate) async fn relationships(&self) -> Result<GraphTable<Relationship>, ToolError> {
+        self.0.relationships().await.map_err(service_error)
     }
 
-    pub(crate) async fn processes(&self, repo_id: &str) -> Result<GraphTable<Process>, ToolError> {
-        self.service.processes(repo_id).await.map_err(service_error)
+    pub(crate) async fn files(&self) -> Result<GraphTable<FileNode>, ToolError> {
+        self.0.files().await.map_err(service_error)
+    }
+
+    pub(crate) async fn communities(&self) -> Result<GraphTable<Community>, ToolError> {
+        self.0.communities().await.map_err(service_error)
+    }
+
+    pub(crate) async fn processes(&self) -> Result<GraphTable<Process>, ToolError> {
+        self.0.processes().await.map_err(service_error)
     }
 }
 

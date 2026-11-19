@@ -209,6 +209,13 @@ impl MyceliumsMcp {
         self.service.table_loads()
     }
 
+    /// How many index fingerprints the server has read so far (see
+    /// `GraphService::fingerprint_reads`): one per graph snapshot, plus one
+    /// per table read from disk.
+    pub fn graph_fingerprint_reads_for_test(&self) -> usize {
+        self.service.fingerprint_reads()
+    }
+
     /// Whether the server currently holds a cached graph for `repo_id`.
     pub fn graph_is_cached_for_test(&self, repo_id: &str) -> bool {
         self.service.is_cached(repo_id)

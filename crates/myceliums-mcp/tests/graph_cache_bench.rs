@@ -1,7 +1,10 @@
-//! Manual latency check for the cached read path (#93). Ignored by default.
+//! Manual latency check for the cached read path (#93, #129). Ignored by
+//! default.
 //!
 //! Indexes a project (embeddings off) into a throwaway data directory, then
-//! times one cold and several warm calls of a few graph read tools:
+//! times one cold and several warm calls of a few graph read tools, and the
+//! service-level cost of reading all five tables per call — one snapshot per
+//! table (the pre-#129 access pattern) versus one snapshot per call:
 //!
 //! ```text
 //! MYC_BENCH_PROJECT=/path/to/project \
@@ -14,7 +17,7 @@ use myceliums_mcp::{AnalyzeParams, GetCallersParams, GetStatsParams, MyceliumsMc
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-const WARM_CALLS: u32 = 20;
+const WARM_CALLS: u32 = 200;
 
 fn median(mut samples: Vec<Duration>) -> Duration {
     samples.sort();
@@ -55,16 +58,19 @@ async fn cold_vs_warm_read_latency() {
             let _ = $call;
             let cold = start.elapsed();
             let mut warm = Vec::new();
+            let all = Instant::now();
             for _ in 0..WARM_CALLS {
                 let start = Instant::now();
                 let _ = $call;
                 warm.push(start.elapsed());
             }
+            let per_sec = f64::from(WARM_CALLS) / all.elapsed().as_secs_f64();
             println!(
-                "{:<16} cold {:>9.2?}  warm median {:>9.2?}  (table loads: {})",
+                "{:<16} cold {:>9.2?}  warm median {:>9.2?}  warm {:>8.0} calls/s  (table loads: {})",
                 $label,
                 cold,
                 median(warm),
+                per_sec,
                 $server.graph_table_loads_for_test()
             );
         }};
@@ -98,4 +104,56 @@ async fn cold_vs_warm_read_latency() {
         })
         .await
     );
+
+    // Service level: five warm table reads per call.
+    let service = myceliums_core::GraphService::new(data.path());
+    let id = repo_id.as_str();
+    macro_rules! service_bench {
+        ($label:expr, $body:expr) => {{
+            $body; // warm the cache
+            let (reads, loads) = (service.fingerprint_reads(), service.table_loads());
+            let start = Instant::now();
+            for _ in 0..SERVICE_CALLS {
+                $body;
+            }
+            let elapsed = start.elapsed();
+            println!(
+                "{:<26} {:>8.0} calls/s  {:>7.2?}/call  fingerprint reads/call {}  table loads {}",
+                $label,
+                f64::from(SERVICE_CALLS) / elapsed.as_secs_f64(),
+                elapsed / SERVICE_CALLS,
+                (service.fingerprint_reads() - reads) / SERVICE_CALLS as usize,
+                service.table_loads() - loads,
+            );
+        }};
+    }
+    service_bench!("5 tables, snapshot each", {
+        service.graph(id).await.unwrap().symbols().await.unwrap();
+        service.graph(id).await.unwrap().files().await.unwrap();
+        service
+            .graph(id)
+            .await
+            .unwrap()
+            .relationships()
+            .await
+            .unwrap();
+        service
+            .graph(id)
+            .await
+            .unwrap()
+            .communities()
+            .await
+            .unwrap();
+        service.graph(id).await.unwrap().processes().await.unwrap();
+    });
+    service_bench!("5 tables, one snapshot", {
+        let graph = service.graph(id).await.unwrap();
+        graph.symbols().await.unwrap();
+        graph.files().await.unwrap();
+        graph.relationships().await.unwrap();
+        graph.communities().await.unwrap();
+        graph.processes().await.unwrap();
+    });
 }
+
+const SERVICE_CALLS: u32 = 2000;

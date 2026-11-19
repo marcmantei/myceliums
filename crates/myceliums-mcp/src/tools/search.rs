@@ -81,26 +81,26 @@ impl MyceliumsMcp {
     ) -> TextResult {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph(&repo_id).await?;
         let page = Page::new(params.limit, params.offset, SEARCH);
         let explain = params.explain.unwrap_or(false);
         let rerank = params.rerank.unwrap_or(false);
         let query = params.query.as_str();
         let body = match params.mode.unwrap_or_default() {
-            SearchMode::Keyword => self.keyword_results(&repo_id, query, page, explain).await?,
+            SearchMode::Keyword => self.keyword_results(&graph, query, page, explain).await?,
             SearchMode::Semantic => {
-                let store = self.store(&repo_id).await?;
+                let store = graph.store();
                 let embedder = vector_embedder(&store).await?;
                 self.semantic_results(&store, &embedder, query, page)
                     .await?
             }
             SearchMode::Hybrid => {
-                let store = self.store(&repo_id).await?;
-                let embedder = vector_embedder(&store).await?;
-                self.hybrid_results(&repo_id, &store, &embedder, query, page, rerank, explain)
+                let embedder = vector_embedder(&graph.store()).await?;
+                self.hybrid_results(&graph, &embedder, query, page, rerank, explain)
                     .await?
             }
             SearchMode::Auto => {
-                let store = self.store(&repo_id).await?;
+                let store = graph.store();
                 let embedder = if has_vectors(&store).await {
                     myceliums_core::embedder_for_index(&store).await.ok()
                 } else {
@@ -108,20 +108,18 @@ impl MyceliumsMcp {
                 };
                 match embedder {
                     Some(embedder) => {
-                        self.hybrid_results(
-                            &repo_id, &store, &embedder, query, page, rerank, explain,
-                        )
-                        .await?
+                        self.hybrid_results(&graph, &embedder, query, page, rerank, explain)
+                            .await?
                     }
                     None => format!(
                         "Keyword search (this index has no usable embeddings; re-run analyze \
                          without skip_embeddings for search by meaning).\n\n{}",
-                        self.keyword_results(&repo_id, query, page, explain).await?
+                        self.keyword_results(&graph, query, page, explain).await?
                     ),
                 }
             }
         };
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -140,16 +138,12 @@ impl MyceliumsMcp {
     ) -> TextResult {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph(&repo_id).await?;
         let page = Page::new(params.limit, params.offset, SEARCH);
         let body = self
-            .keyword_results(
-                &repo_id,
-                &params.query,
-                page,
-                params.explain.unwrap_or(false),
-            )
+            .keyword_results(&graph, &params.query, page, params.explain.unwrap_or(false))
             .await?;
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -182,13 +176,12 @@ impl MyceliumsMcp {
     ) -> TextResult {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let store = self.store(&repo_id).await?;
-        let embedder = vector_embedder(&store).await?;
+        let graph = self.graph(&repo_id).await?;
+        let embedder = vector_embedder(&graph.store()).await?;
         let page = Page::new(params.limit, params.offset, SEARCH);
         let body = self
             .hybrid_results(
-                &repo_id,
-                &store,
+                &graph,
                 &embedder,
                 &params.query,
                 page,
@@ -196,7 +189,7 @@ impl MyceliumsMcp {
                 params.explain.unwrap_or(false),
             )
             .await?;
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -214,9 +207,10 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<CypherQueryParams>,
     ) -> TextResult {
         require_query("query", &params.query)?;
-        let symbols = self.symbols(&params.repo_id).await?;
-        let files = self.files(&params.repo_id).await?;
-        let relationships = self.relationships(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let files = graph.files().await?;
+        let relationships = graph.relationships().await?;
 
         let executor = myceliums_cypher::CypherExecutor::from_shared(
             symbols.shared(),
@@ -248,7 +242,7 @@ impl MyceliumsMcp {
                 .map(|n| format!("{n} Or narrow the query with WHERE/LIMIT."))
                 .as_deref(),
         );
-        self.graph_text(&params.repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -267,13 +261,14 @@ impl MyceliumsMcp {
     ) -> TextResult {
         require_query("query", &params.query)?;
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let store = self.store(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let store = graph.store();
         let embedder = vector_embedder(&store).await?;
         let page = Page::new(params.limit, params.offset, Budget::new(10, SEARCH.max));
         let body = self
             .semantic_results(&store, &embedder, &params.query, page)
             .await?;
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 }
 
@@ -283,16 +278,17 @@ impl MyceliumsMcp {
     /// Keyword ranking over names, qualified names and signatures.
     async fn keyword_results(
         &self,
-        repo_id: &str,
+        graph: &Graph<'_>,
         query: &str,
         page: Page,
         explain: bool,
     ) -> Result<String, ToolError> {
-        let results = self
-            .service
-            .search_context(repo_id, query, explain)
-            .await
-            .map_err(service_error)?;
+        let symbols = graph.symbols().await?;
+        let results = if explain {
+            myceliums_core::search_symbols_explain(&symbols, query)
+        } else {
+            search_symbols(&symbols, query)
+        };
         let page = page.take(results);
         let items: Vec<SearchResultItem> = page
             .items
@@ -362,15 +358,15 @@ impl MyceliumsMcp {
     #[allow(clippy::too_many_arguments)]
     async fn hybrid_results(
         &self,
-        repo_id: &str,
-        store: &Arc<Store>,
+        graph: &Graph<'_>,
         embedder: &Arc<Embedder>,
         query: &str,
         page: Page,
         rerank: bool,
         explain: bool,
     ) -> Result<String, ToolError> {
-        let symbols = self.symbols(repo_id).await?;
+        let store = &graph.store();
+        let symbols = graph.symbols().await?;
         // Ranked top-k: ask for one past the page to learn whether more
         // exist, within a window that does not depend on the page.
         let fetch = if rerank {
@@ -398,7 +394,7 @@ impl MyceliumsMcp {
 
         // Attach graph edges for explain mode
         if explain {
-            let relationships = self.relationships(repo_id).await?;
+            let relationships = graph.relationships().await?;
             let uid_to_name: std::collections::HashMap<&str, &str> = symbols
                 .iter()
                 .map(|s| (s.uid.as_str(), s.name.as_str()))

@@ -19,12 +19,13 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<FindDeadCodeParams>,
     ) -> Result<Json<DeadCodeOutput>, ToolError> {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let symbols = self.symbols(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
 
-        let relationships = self.relationships(&repo_id).await?;
+        let relationships = graph.relationships().await?;
         let path = match params.path.as_deref() {
             Some(raw) => {
-                let files = self.files(&repo_id).await?;
+                let files = graph.files().await?;
                 let root = repo_info(&repo_id)?.path;
                 path_scope(raw, &root, &files)?
             }
@@ -76,7 +77,7 @@ impl MyceliumsMcp {
         let page = Page::new(params.limit, params.offset, Budget::LIST).take(dead_code);
 
         Ok(Json(DeadCodeOutput {
-            index_status: self.index_status(&repo_id).await?,
+            index_status: self.index_status(&graph).await?,
             symbols: page.items,
             total_count: total,
             notice: page.notice,
@@ -96,8 +97,9 @@ impl MyceliumsMcp {
     async fn get_god_nodes(&self, Parameters(params): Parameters<GetGodNodesParams>) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let page = Page::new(params.top_n, params.offset, Budget::new(10, 200));
         let coupling_threshold = params.coupling_threshold.unwrap_or(20).max(1);
@@ -139,7 +141,7 @@ impl MyceliumsMcp {
             format::format_god_nodes(&output),
             god_nodes.notice.as_deref(),
         );
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -158,8 +160,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let min_surprise = params.min_surprise_score.unwrap_or(0.1).clamp(0.0, 1.0);
         let page = Page::new(params.limit, params.offset, Budget::new(50, 200));
@@ -192,7 +195,7 @@ impl MyceliumsMcp {
             format::format_surprising_connections(&output),
             connections.notice.as_deref(),
         );
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -211,7 +214,8 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(Some(&params.repo_id))?;
 
-        let symbols = self.symbols(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
 
         let symbol_lower = params.symbol_name.to_lowercase();
         let matching_symbols: Vec<&myceliums_storage::CodeSymbol> = symbols
@@ -265,7 +269,7 @@ impl MyceliumsMcp {
             }
         }
 
-        self.graph_text(&repo_id, page.with_notice(output)).await
+        self.graph_text(&graph, page.with_notice(output)).await
     }
 
     #[tool(
@@ -284,8 +288,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let centrality = compute_centrality(&relationships)
             .map_err(|e| ToolError::internal("centrality computation failed", e))?;
@@ -348,7 +353,7 @@ impl MyceliumsMcp {
             metric: metric.as_str().to_string(),
         };
         let body = with_notice(format::format_centrality(&output), page.notice.as_deref());
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -367,8 +372,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let metrics = compute_community_metrics(&symbols, &relationships)
             .map_err(|e| ToolError::internal("community metrics failed", e))?;
@@ -417,7 +423,7 @@ impl MyceliumsMcp {
             format::format_community_metrics(&output),
             notice.or(coupling_notice).as_deref(),
         );
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -436,8 +442,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let include_calls = params.include_calls.unwrap_or(true);
         let include_imports = params.include_imports.unwrap_or(true);
@@ -476,7 +483,7 @@ impl MyceliumsMcp {
             total_count,
         };
         let body = with_notice(format::format_cycles(&output), page.notice.as_deref());
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -495,8 +502,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let dep = compute_file_dependencies(
             &symbols,
@@ -527,7 +535,7 @@ impl MyceliumsMcp {
             totals,
         };
         let body = with_notice(format::format_dependencies(&output), notice.as_deref());
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -546,8 +554,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let group_by_dir = params.group_by_directory.unwrap_or(false);
         let mut coupling = compute_module_coupling(&symbols, &relationships, group_by_dir);
@@ -581,7 +590,7 @@ impl MyceliumsMcp {
             format::format_module_coupling(&output),
             page.notice.as_deref(),
         );
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -600,8 +609,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let diagram_type = match params.diagram_type.unwrap_or_default() {
             DiagramType::Class => MermaidDiagramType::ClassDiagram,
@@ -611,7 +621,7 @@ impl MyceliumsMcp {
 
         let mermaid = export_mermaid(&symbols, &relationships, diagram_type);
 
-        self.graph_text(&repo_id, mermaid).await
+        self.graph_text(&graph, mermaid).await
     }
 
     #[tool(
@@ -630,8 +640,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let page = Page::new(params.top_n, params.offset, Budget::LIST);
         let hotspots = page.take_open(compute_hotspot_scores(
@@ -644,7 +655,7 @@ impl MyceliumsMcp {
             format::format_hotspots(&hotspots.items),
             hotspots.notice.as_deref(),
         );
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -663,8 +674,9 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         let rules: Option<Vec<&str>> = params
             .rules
@@ -686,7 +698,7 @@ impl MyceliumsMcp {
         report.findings = page.items;
 
         let body = with_notice(format::format_lint_results(&report), page.notice.as_deref());
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -705,13 +717,14 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
-        let communities = self.communities(&repo_id).await?;
+        let graph = self.graph(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
+        let communities = graph.communities().await?;
 
         let diagram = generate_architecture_diagram(&symbols, &relationships, &communities);
 
-        self.graph_text(&repo_id, format::format_architecture_view(&diagram))
+        self.graph_text(&graph, format::format_architecture_view(&diagram))
             .await
     }
 
@@ -730,16 +743,17 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<DetectDriftParams>,
     ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph(&repo_id).await?;
         let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
         let body = self
             .drift_text(
-                &repo_id,
+                &graph,
                 params.from_snapshot.as_deref(),
                 params.to_snapshot.as_deref(),
                 page,
             )
             .await?;
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -758,7 +772,8 @@ impl MyceliumsMcp {
     ) -> TextResult {
         let repo = repo_info(&params.repo_id)?;
 
-        let symbols = self.symbols(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let symbols = graph.symbols().await?;
 
         let repo_path = std::path::Path::new(&repo.path);
         let codeowners_content = ["CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS"]
@@ -784,7 +799,7 @@ impl MyceliumsMcp {
             ),
             owned_notice.or(unowned_notice).as_deref(),
         );
-        self.graph_text(&params.repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 }
 
@@ -914,12 +929,13 @@ impl MyceliumsMcp {
     /// `detect_architecture_drift`), one page of changes.
     async fn drift_text(
         &self,
-        repo_id: &str,
+        graph: &Graph<'_>,
         from: Option<&str>,
         to: Option<&str>,
         page: Page,
     ) -> TextResult {
         use myceliums_core::snapshot::GraphSnapshot;
+        let repo_id = graph.info().id.as_str();
         let data = data_dir();
         // Newest first.
         let recorded = list_snapshots(&data, repo_id)
@@ -954,8 +970,8 @@ impl MyceliumsMcp {
         let (target, target_label) = match to {
             Some(id) => (load(id)?, format!("snapshot {id}")),
             None => {
-                let symbols = self.symbols(repo_id).await?;
-                let relationships = self.relationships(repo_id).await?;
+                let symbols = graph.symbols().await?;
+                let relationships = graph.relationships().await?;
                 (
                     build_snapshot(repo_id, &symbols, &relationships),
                     "the current graph".to_string(),
