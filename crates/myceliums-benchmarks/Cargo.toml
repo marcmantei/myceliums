@@ -62,6 +62,10 @@ path = "src/bin/graph_eval.rs"
 name = "ann-recall"
 path = "src/bin/ann_recall.rs"
 
+[[bin]]
+name = "exact-vs-ann"
+path = "src/bin/exact_vs_ann.rs"
+
 [[bench]]
 name = "indexing"
 harness = false
