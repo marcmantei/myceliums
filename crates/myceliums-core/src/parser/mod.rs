@@ -202,9 +202,35 @@ impl SourceLanguage {
     }
 }
 
-/// Default wall-clock budget for one tree-sitter parse, matching the
-/// `analysis.parse_timeout_secs` default. See [`SourceParser::set_timeout`].
+/// Default cap on the wall-clock budget for one tree-sitter parse, matching
+/// the `analysis.parse_timeout_secs` default. See [`parse_budget`].
 pub const DEFAULT_PARSE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Fixed part of the per-file parse budget (see [`parse_budget`]): what a
+/// file of a few bytes gets. Parsing a small file takes well under a
+/// millisecond even unoptimized; the rest is headroom for a loaded machine.
+pub const PARSE_BUDGET_BASE: Duration = Duration::from_millis(500);
+
+/// Per-KiB part of the per-file parse budget (see [`parse_budget`]). Real
+/// code parses at 0.15-1.2 ms/KiB in an unoptimized build (measured on
+/// Python, Go, TypeScript, C and Rust files of 60-170 KiB), several times
+/// faster optimized, so this leaves a margin of over 15x.
+pub const PARSE_BUDGET_PER_KIB: Duration = Duration::from_millis(20);
+
+/// Wall-clock budget for parsing a source of `source_len` bytes:
+/// [`PARSE_BUDGET_BASE`] plus [`PARSE_BUDGET_PER_KIB`] per started KiB,
+/// capped at `cap` (`analysis.parse_timeout_secs`).
+///
+/// The budget grows with the file because parse time does: a tiny file gets a
+/// tiny budget, so tree-sitter's error recovery cannot stall the indexer for
+/// the full cap on 100 bytes of garbage (#127), while a large real file still
+/// gets the time it needs.
+pub fn parse_budget(source_len: usize, cap: Duration) -> Duration {
+    let kib = u32::try_from(source_len.div_ceil(1024)).unwrap_or(u32::MAX);
+    PARSE_BUDGET_BASE
+        .saturating_add(PARSE_BUDGET_PER_KIB.saturating_mul(kib))
+        .min(cap)
+}
 
 /// Deepest syntax tree the extractors walk. They recurse once per tree level,
 /// so a deeper tree is refused with [`ParseAbort::TooDeep`] rather than given a
@@ -220,9 +246,14 @@ pub const MAX_TREE_DEPTH: usize = 10_000;
 /// keeps the inline case under ~1 MiB.
 const INLINE_TREE_DEPTH: usize = 64;
 
-/// Stack reserved per tree level for deeper trees: about three times the
-/// worst per-level cost measured in an unoptimized build. The reservation is
-/// virtual memory; only the pages the walk touches are committed.
+/// Stack reserved per tree level for deeper trees. The reservation is virtual
+/// memory; only the pages the walk touches are committed, but it is reserved
+/// per extracting worker: about three times the worst per-level cost measured
+/// in an unoptimized build (~11 KiB). The same size is used in release builds:
+/// optimized frame sizes were not measured and no CI job exercises the
+/// release path, so a smaller release value would be an untested bet whose
+/// failure mode (stack overflow) aborts the whole indexer. At
+/// [`MAX_TREE_DEPTH`] this reserves ~315 MiB of address space per worker.
 const STACK_BYTES_PER_LEVEL: usize = 32 * 1024;
 
 /// Why [`SourceParser`] gave up on a file without extracting anything.
@@ -406,11 +437,13 @@ impl SourceParser {
         })
     }
 
-    /// Set the wall-clock budget for each tree-sitter parse (`None`: no
-    /// limit). A parse that runs over fails with [`ParseAbort::Timeout`].
+    /// Set the cap on the wall-clock budget of each tree-sitter parse
+    /// (`None`: no limit; default [`DEFAULT_PARSE_TIMEOUT`]). Each parse gets
+    /// [`parse_budget`] for its source size, at most `timeout`; a parse that
+    /// runs over fails with [`ParseAbort::Timeout`].
     ///
-    /// Tree-sitter's error recovery has had inputs that never finish (#127,
-    /// fixed upstream in tree-sitter 0.26); this bounds the next one.
+    /// Tree-sitter's error recovery never finishes on some inputs of a dozen
+    /// bytes (#127); this bounds them.
     pub fn set_timeout(&mut self, timeout: Option<Duration>) {
         self.timeout = timeout;
     }
@@ -427,12 +460,13 @@ impl SourceParser {
 
     /// Parse `source` into a tree, within the time budget.
     fn parse_tree(&mut self, source: &str) -> Result<Tree> {
-        let Some(budget) = self.timeout else {
+        let Some(cap) = self.timeout else {
             return self
                 .parser
                 .parse(source, None)
                 .context("Failed to parse source");
         };
+        let budget = parse_budget(source.len(), cap);
         let bytes = source.as_bytes();
         let start = Instant::now();
         let mut timed_out = false;

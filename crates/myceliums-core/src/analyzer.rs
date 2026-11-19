@@ -654,7 +654,7 @@ impl Analyzer {
                     continue;
                 }
             };
-            let result = match notebook::parse_notebook(source) {
+            let result = match notebook::parse_notebook(source, parse_timeout) {
                 Ok(r) => r,
                 Err(e) => {
                     warn!(
@@ -1211,6 +1211,7 @@ impl Analyzer {
             embedding_failures,
             mentions_count,
             timing: Some(timing),
+            skip_reasons,
         };
 
         info!(
@@ -1303,6 +1304,13 @@ impl Analyzer {
         let mut email_rels: Vec<Relationship> = Vec::new();
         let mut resolver = CallResolver::new();
         let mut skipped_count: usize = 0;
+        let mut skip_reasons: HashMap<FileSkipReason, usize> = HashMap::new();
+        let parse_cap = parse_timeout(
+            self.config
+                .as_ref()
+                .map(|c| &c.analysis)
+                .unwrap_or(&crate::config::AnalysisSection::default()),
+        );
 
         // Filter to only files we know how to parse
         let source_files: Vec<(PathBuf, SourceLanguage)> = changed_paths
@@ -1325,6 +1333,7 @@ impl Analyzer {
                 embedding_failures: 0,
                 mentions_count: 0,
                 timing: None,
+                skip_reasons: HashMap::new(),
             });
         }
 
@@ -1411,7 +1420,7 @@ impl Analyzer {
                         continue;
                     }
                 };
-                let result = match notebook::parse_notebook(source) {
+                let result = match notebook::parse_notebook(source, parse_cap) {
                     Ok(r) => r,
                     Err(e) => {
                         warn!(
@@ -1571,18 +1580,16 @@ impl Analyzer {
                         continue;
                     }
                 };
-                ts_parser.set_timeout(parse_timeout(
-                    self.config
-                        .as_ref()
-                        .map(|c| &c.analysis)
-                        .unwrap_or(&crate::config::AnalysisSection::default()),
-                ));
+                ts_parser.set_timeout(parse_cap);
 
                 match ts_parser.parse(&source) {
                     Ok(r) => r,
                     Err(e) => {
                         warn!("Skipping {} — parse error: {}", rel_path_display, e);
                         skipped_count += 1;
+                        if let Some(reason) = budget_skip_reason(&e) {
+                            *skip_reasons.entry(reason).or_insert(0) += 1;
+                        }
                         continue;
                     }
                 }
@@ -1624,6 +1631,9 @@ impl Analyzer {
                 "Skipped {} file(s) during incremental analysis",
                 skipped_count
             );
+        }
+        for (reason, count) in &skip_reasons {
+            info!("  Skipped {} {}", count, reason);
         }
 
         // Build rationale symbols and RATIONALE_FOR relationships
@@ -1806,6 +1816,7 @@ impl Analyzer {
             embedding_failures,
             mentions_count,
             timing: None,
+            skip_reasons,
         };
 
         info!(
@@ -2298,10 +2309,9 @@ impl Analyzer {
     }
 }
 
-/// Result of parsing a single file, used to transfer data from the parallel
-/// rayon phase back to the sequential accumulation phase.
-/// The per-file tree-sitter budget configured by `analysis.parse_timeout_secs`
-/// (0 disables it).
+/// The cap on the per-file tree-sitter budget configured by
+/// `analysis.parse_timeout_secs` (0 disables it). Each file's budget grows
+/// with its size up to this cap: see [`parser::parse_budget`].
 fn parse_timeout(config: &crate::config::AnalysisSection) -> Option<std::time::Duration> {
     (config.parse_timeout_secs > 0)
         .then(|| std::time::Duration::from_secs(config.parse_timeout_secs))
@@ -2316,6 +2326,8 @@ fn budget_skip_reason(err: &anyhow::Error) -> Option<FileSkipReason> {
     }
 }
 
+/// Result of parsing a single file, used to transfer data from the parallel
+/// rayon phase back to the sequential accumulation phase.
 struct FileParseResult {
     rel_path: String,
     language: SourceLanguage,
@@ -2389,6 +2401,10 @@ pub struct AnalysisResult {
     pub mentions_count: usize,
     /// Timing information for each phase of the analysis.
     pub timing: Option<crate::timing::TimingReport>,
+    /// Files left out of the index for a known reason (size, line length,
+    /// parse time budget, nesting depth, ...), counted per reason. Files that
+    /// failed for other reasons (unreadable, parser errors) are not included.
+    pub skip_reasons: HashMap<FileSkipReason, usize>,
 }
 
 impl AnalysisResult {
@@ -2616,6 +2632,9 @@ mod tests {
         // quadratic on it (~150 s for these 127 KB in a release build).
         let garbage = "<\u{3}improttempublic class A extend: B4 lp#emiments C { @Override \u{FFFD}ublic voi; m() { hel\u{FFFD}elf) ->helpe&s\u{FFFD}elf) ->helper() } ";
         fs::write(root.join("slow.scala"), garbage.repeat(1024)).unwrap();
+        // 12 bytes tree-sitter 0.26's Objective-C error recovery never
+        // finishes: cut off by the size-aware budget (~0.5 s), not the cap.
+        fs::write(root.join("stall.m"), "i<p#m C{@i>)").unwrap();
 
         let mut config = ProjectConfig::default();
         config.analysis.parse_timeout_secs = 1;
@@ -2629,8 +2648,47 @@ mod tests {
         let start = std::time::Instant::now();
         let result = analyzer.analyze().await.unwrap();
         assert_eq!(result.file_count, 1, "only good.py is indexed");
+        assert_eq!(
+            result.skip_reasons,
+            HashMap::from([
+                (FileSkipReason::TooDeeplyNested, 1),
+                (FileSkipReason::ParseTimeout, 2),
+            ])
+        );
         assert!(
             start.elapsed() < std::time::Duration::from_secs(60),
+            "took {:?}",
+            start.elapsed()
+        );
+    }
+
+    /// #127: the incremental path applies the same parse budget and records
+    /// why a file was left out.
+    #[tokio::test]
+    async fn incremental_files_over_a_parse_budget_are_skipped_with_a_reason() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        let good = root.join("good.py");
+        fs::write(&good, "def ok():\n    return 1\n").unwrap();
+        let stall = root.join("stall.m");
+        fs::write(&stall, "i<p#m C{@i>)").unwrap();
+
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer =
+            Analyzer::with_config(store, root, ProjectConfig::default()).set_skip_embeddings(true);
+
+        let start = std::time::Instant::now();
+        let result = analyzer.analyze_files(&[good, stall]).await.unwrap();
+        assert_eq!(result.file_count, 1, "only good.py is indexed");
+        assert_eq!(
+            result.skip_reasons,
+            HashMap::from([(FileSkipReason::ParseTimeout, 1)])
+        );
+        // The 12-byte file gets ~0.5 s, not the 30 s cap.
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
             "took {:?}",
             start.elapsed()
         );
@@ -2652,6 +2710,7 @@ mod tests {
             embedding_failures: 4,
             mentions_count: 0,
             timing: None,
+            skip_reasons: HashMap::new(),
         };
 
         assert!(result.has_embedding_failures());
@@ -2679,6 +2738,7 @@ mod tests {
             embedding_failures: 0,
             mentions_count: 0,
             timing: None,
+            skip_reasons: HashMap::new(),
         };
 
         assert!(!result.has_embedding_failures());

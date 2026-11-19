@@ -2,10 +2,20 @@
 //! selects the language; the rest is the file content, decoded lossily as the
 //! analyzer does. Any panic is a bug: extraction runs on arbitrary
 //! repositories and must never take the indexer down.
+//!
+//! Each parse runs under the analyzer's default time budget: `parse_budget`
+//! of the input size, capped at `DEFAULT_PARSE_TIMEOUT`. For libFuzzer's
+//! `-max_len=4096` that is under 0.6 s per parse, so CI's `-timeout=10`
+//! cannot fire on an input the product already bounds. Tree-sitter's error
+//! recovery still has inputs that never finish (#127); they end in
+//! `ParseAbort::Timeout`, and a libFuzzer timeout points at our own code
+//! (the extractors) instead.
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use myceliums_core::parser::{to_code_symbols, ParseResult, SourceLanguage, SourceParser};
+use myceliums_core::parser::{
+    to_code_symbols, ParseResult, SourceLanguage, SourceParser, DEFAULT_PARSE_TIMEOUT,
+};
 
 const LANGUAGES: &[SourceLanguage] = &[
     SourceLanguage::TypeScript,
@@ -48,10 +58,12 @@ fuzz_target!(|data: &[u8]| {
     let source = String::from_utf8_lossy(rest);
 
     let mut parser = SourceParser::new(lang).expect("tree-sitter language");
+    parser.set_timeout(Some(DEFAULT_PARSE_TIMEOUT));
     if let Ok(result) = parser.parse(&source) {
         check(&result);
     }
     let mut parser = SourceParser::new(lang).expect("tree-sitter language");
+    parser.set_timeout(Some(DEFAULT_PARSE_TIMEOUT));
     if let Ok(result) = parser.parse_with_dsl(&source) {
         check(&result);
     }

@@ -122,7 +122,9 @@ pub struct AnalysisSection {
     /// Maximum file size in KB to analyze (0 = no limit).
     #[serde(default = "AnalysisSection::default_max_file_size_kb")]
     pub max_file_size_kb: u64,
-    /// Parse timeout per file in seconds (0 = no timeout).
+    /// Cap on the per-file tree-sitter parse budget in seconds (0 = no
+    /// timeout). The budget itself grows with the file's size up to this cap;
+    /// see [`crate::parser::parse_budget`].
     #[serde(default = "AnalysisSection::default_parse_timeout_secs")]
     pub parse_timeout_secs: u64,
     /// Maximum line length in bytes (0 = no limit).

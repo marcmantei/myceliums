@@ -3,9 +3,11 @@
 //! The extractors run on arbitrary repository files, so neither a file's
 //! content nor its nesting may stall or crash the indexer:
 //!
-//! - tree-sitter 0.25's error recovery never finished on the fuzz input from
-//!   #127 (fixed upstream in 0.26); parsing is now also bounded by a time
-//!   budget ([`SourceParser::set_timeout`]);
+//! - tree-sitter's error recovery never finishes on some short inputs: 0.25 on
+//!   the first fuzz input from #127 (fixed upstream in 0.26), 0.26.13 still on
+//!   later ones (Objective-C, 12 bytes minimized). Each parse is bounded by a
+//!   time budget that grows with the file's size ([`parse_budget`]), capped by
+//!   [`SourceParser::set_timeout`];
 //! - the extractors recurse once per tree level, so deep trees (garbage such
 //!   as a long run of `(`) overflowed a 2 MiB thread stack; they now run on a
 //!   stack sized to the tree, and trees deeper than [`MAX_TREE_DEPTH`] are
@@ -13,7 +15,10 @@
 
 use std::time::{Duration, Instant};
 
-use myceliums_core::parser::{ParseAbort, SourceLanguage, SourceParser, MAX_TREE_DEPTH};
+use myceliums_core::parser::{
+    parse_budget, ParseAbort, SourceLanguage, SourceParser, DEFAULT_PARSE_TIMEOUT, MAX_TREE_DEPTH,
+    PARSE_BUDGET_BASE, PARSE_BUDGET_PER_KIB,
+};
 
 /// The `extract_symbols` fuzz input from #127: the first byte selects
 /// Objective-C, the rest is the file (invalid UTF-8 included).
@@ -22,6 +27,25 @@ const ISSUE_127_INPUT: &[u8] = b"o<\x03improttempublic class A extend: B4 lp#emi
 /// The same stall reduced to 13 bytes of plain ASCII: invalid UTF-8 was not
 /// needed to trigger it.
 const ISSUE_127_MINIMIZED: &str = "<\x03p#s C{@v>e ";
+
+/// Later `extract_symbols` fuzz inputs from #127 (CI Fuzz on PRs #132 and
+/// #133, after the upgrade to tree-sitter 0.26.13), each with its first byte
+/// (the language selector: Objective-C) and its 12-byte minimized form.
+/// Tree-sitter never finishes any of them: the parse stops advancing through
+/// the input (>60 s unoptimized for the full inputs, >30 s for the minimized
+/// ones).
+const ISSUE_127_STALLS: &[(&str, &[u8])] = &[
+    (
+        "PR #132 input",
+        b"oi<\x03mrpottempublic class A extend: B4 lpimprottempublic class A extend: B4 lp#emiments C { @Override \x88ubli->helper() } ",
+    ),
+    ("PR #132 minimized", b"oi<p#m C{@i>)"),
+    (
+        "PR #133 input",
+        b"or<mtupoitempublic clas\xf3 A extend: B4 lp#emiments C { @Ove { lf) ->helper() } ",
+    ),
+    ("PR #133 minimized", b"or<p#s C{@{f)"),
+];
 
 /// Every language that goes through `SourceParser` (tree-sitter).
 const TREE_SITTER_LANGUAGES: &[SourceLanguage] = &[
@@ -80,6 +104,70 @@ fn issue_127_input_parses_quickly() {
 fn issue_127_minimized_input_parses_quickly() {
     let elapsed = time_both_paths(SourceLanguage::ObjectiveC, ISSUE_127_MINIMIZED);
     assert!(elapsed < Duration::from_secs(1), "took {elapsed:?}");
+}
+
+/// The budget is a small base plus a per-KiB allowance, never above the cap.
+#[test]
+fn parse_budget_grows_with_size_up_to_the_cap() {
+    let cap = DEFAULT_PARSE_TIMEOUT;
+    assert_eq!(parse_budget(0, cap), PARSE_BUDGET_BASE);
+    assert_eq!(
+        parse_budget(1, cap),
+        PARSE_BUDGET_BASE + PARSE_BUDGET_PER_KIB
+    );
+    assert_eq!(
+        parse_budget(1024, cap),
+        PARSE_BUDGET_BASE + PARSE_BUDGET_PER_KIB
+    );
+    assert_eq!(
+        parse_budget(100 * 1024, cap),
+        PARSE_BUDGET_BASE + PARSE_BUDGET_PER_KIB * 100
+    );
+    assert_eq!(parse_budget(64 << 20, cap), cap);
+    assert_eq!(parse_budget(usize::MAX, cap), cap);
+    assert_eq!(
+        parse_budget(10, Duration::from_millis(100)),
+        Duration::from_millis(100)
+    );
+    assert_eq!(parse_budget(10, Duration::ZERO), Duration::ZERO);
+    // A fuzz input (libFuzzer -max_len=4096) gets well under a second.
+    assert!(parse_budget(4096, cap) < Duration::from_millis(600));
+}
+
+/// Regression (#127, second round): inputs on which tree-sitter 0.26.13 never
+/// finishes are cut off by the size-aware budget (~0.5 s for these sizes),
+/// not by the 30 s cap, so a tiny file cannot stall `analyze` and the fuzz
+/// target stays far below libFuzzer's 10 s timeout. Also checks that
+/// tree-sitter's progress callback fires often enough for the cancellation
+/// to land close to the budget.
+#[test]
+fn issue_127_stalls_end_at_the_size_aware_budget() {
+    for &(name, input) in ISSUE_127_STALLS {
+        let source = String::from_utf8_lossy(&input[1..]).into_owned();
+        let budget = parse_budget(source.len(), DEFAULT_PARSE_TIMEOUT);
+        for dsl in [false, true] {
+            let mut parser = SourceParser::new(SourceLanguage::ObjectiveC).unwrap();
+            let start = Instant::now();
+            let result = if dsl {
+                parser.parse_with_dsl(&source)
+            } else {
+                parser.parse(&source)
+            };
+            let elapsed = start.elapsed();
+            // Should tree-sitter ever finish these, a fast success is fine too.
+            if let Err(err) = result {
+                assert_eq!(
+                    err.downcast_ref::<ParseAbort>(),
+                    Some(&ParseAbort::Timeout(budget)),
+                    "{name} (dsl: {dsl}): {err:#}"
+                );
+            }
+            assert!(
+                elapsed < budget + Duration::from_millis(750),
+                "{name} (dsl: {dsl}): took {elapsed:?}, budget {budget:?}"
+            );
+        }
+    }
 }
 
 #[test]
