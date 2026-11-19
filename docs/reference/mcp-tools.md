@@ -117,14 +117,20 @@ query time, so this is the identical geometry used by the vector leg of
 `hybrid_search` — the same query over the same index yields the same top-k
 ordering in both tools.
 
-**Index selection.** Repositories with **5,000 or more embedded symbols** get an
-IVF-PQ approximate-nearest-neighbour (ANN) index, built automatically after
-analysis; smaller repositories use an exact brute-force scan. Below the
-threshold an exact scan is both faster and perfectly accurate, and IVF-PQ
-quantization would cost recall for nothing. The exposed score is cosine
-similarity either way, so the index type is not observable in the score — but
-above the threshold results are *approximate*: a low-ranked result may
-occasionally be missed in exchange for a substantially faster query.
+**Index selection.** Repositories with fewer than **100,000 embedded symbols**
+are searched with an exact brute-force scan: on 384-dimensional vectors it took
+about 2 ms per query at 5,000 symbols and 15 ms at 100,000 (median, one
+Apple-silicon machine), so an index would cost recall for little speed.
+From 100,000 symbols an IVF_FLAT approximate-nearest-neighbour (ANN) index is
+built automatically after analysis and every query probes 75% of its
+partitions. Measured against exact search it returns about 99 of every 100 true
+top-10 neighbours (recall@10 0.987–0.988 on real embeddings of Django at 5,000
+and 20,000 symbols). The index keeps the raw vectors, so scores are exact
+cosine either way; what the index can change is which rows make the top k.
+[Measurements and trade-offs](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs).
+The index settings are applied whenever a full `myc analyze` writes the
+embeddings, so an index built by an older release is rebuilt — or dropped, if
+the repository is now below the threshold — on the next full analysis.
 
 > **Partial-index warning.** `semantic_search` can only return symbols that were
 > embedded. If some symbols failed to embed during analysis, the response is

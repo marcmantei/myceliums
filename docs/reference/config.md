@@ -28,7 +28,7 @@ Created with `myc init`. All fields are optional. Omitted fields use their defau
 | `batch_size` | integer | `500` | Number of items to buffer before flushing a batch to storage |
 | `channel_buffer_size` | integer | `8` | Capacity of the async channel between producers and the batch writer |
 | `use_dsl` | bool | `false` | Use DSL-driven parsing for supported languages (Python, Go). When false, uses hand-coded extractors |
-| `ann_threshold` | integer | `10000` | Minimum number of symbols before creating an ANN index for vector search |
+| `ann_threshold` | integer | `10000` | Not read at present: the ANN index is built at the built-in threshold documented in [mcp-tools.md](mcp-tools.md#semantic_search) whatever this says. Kept so existing config files still parse |
 | `embedding_batch_size` | integer | `256` | Number of symbols to embed in a single batch. Smaller values reduce peak memory for large repositories |
 
 **Default `exclude` patterns:**
