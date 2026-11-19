@@ -341,6 +341,20 @@ impl SourceParser {
         };
         let text = |n: Node| self.node_text(n, source).to_string();
         match node.kind() {
+            // `static REGISTRY: Registry = ...;`, `const LIMIT: usize = 3;`
+            "static_item" | "const_item" => {
+                if let (Some(name), Some(ty)) = (
+                    node.child_by_field_name("name"),
+                    node.child_by_field_name("type"),
+                ) {
+                    out.push(TypeBinding {
+                        name: text(name),
+                        owner: None,
+                        scope: local_scope(node),
+                        value: BindingValue::Type(text(ty)),
+                    });
+                }
+            }
             "struct_item" => {
                 let name = node.child_by_field_name("name").map(text);
                 let body = node.child_by_field_name("body");
@@ -1321,5 +1335,21 @@ impl Config {
         );
         assert_eq!(find("handler", None), BindingValue::Unknown);
         assert_eq!(find("q", None), BindingValue::Type("&str".into()));
+    }
+
+    #[test]
+    fn statics_and_consts_are_typed_bindings() {
+        let result = SourceParser::new(SourceLanguage::Rust)
+            .unwrap()
+            .parse("static REGISTRY: Registry = Registry::new();\nconst LIMIT: usize = 3;\n")
+            .unwrap();
+        let registry = result
+            .bindings
+            .iter()
+            .find(|b| b.name == "REGISTRY")
+            .unwrap();
+        assert_eq!(registry.value, BindingValue::Type("Registry".into()));
+        assert_eq!(registry.scope, crate::parser::FILE_SCOPE);
+        assert!(result.bindings.iter().any(|b| b.name == "LIMIT"));
     }
 }

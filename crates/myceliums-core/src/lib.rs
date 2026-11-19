@@ -150,7 +150,7 @@ pub mod wiki_export;
 
 pub(crate) mod content;
 pub(crate) mod resolver;
-pub use resolver::CallResolution;
+pub use resolver::{language_family, CallResolution, CallResolutionStats, MAX_AMBIGUOUS_TARGETS};
 #[allow(dead_code)]
 pub(crate) mod ssa;
 

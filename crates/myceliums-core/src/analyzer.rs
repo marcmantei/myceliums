@@ -942,7 +942,17 @@ impl Analyzer {
         self.check_cancelled()?;
         let graph_construction_timer = Timer::start();
         let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
-        info!("Resolved {} call relationships", call_rels.len());
+        let call_resolution = resolver.stats().clone();
+        info!(
+            "Resolved {} call relationships ({})",
+            call_rels.len(),
+            call_resolution.summary()
+        );
+        // Kept in the index: the caller tools say how many call sites of a
+        // name got no edge. A failed write costs that note, not the index.
+        if let Err(e) = call_resolution.record(&self.store).await {
+            warn!("cannot record the call resolution statistics: {e}");
+        }
 
         // Build CONTAINED_BY relationships (symbol -> file)
         let mut contained_by_rels: Vec<Relationship> = Vec::new();
@@ -1247,6 +1257,7 @@ impl Analyzer {
             mentions_count,
             timing: Some(timing),
             skip_reasons,
+            call_resolution,
         };
 
         info!(
@@ -1369,6 +1380,7 @@ impl Analyzer {
                 mentions_count: 0,
                 timing: None,
                 skip_reasons: HashMap::new(),
+                call_resolution: Default::default(),
             });
         }
 
@@ -1704,8 +1716,10 @@ impl Analyzer {
         all_symbols.extend(conversation_syms);
         email_rels.extend(conversation_rels);
 
-        // Resolve calls
+        // Resolve calls. The statistics cover only the changed files, so
+        // they are reported but not recorded over the full run's.
         let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
+        let call_resolution = resolver.stats().clone();
 
         // Build CONTAINED_BY relationships
         let mut contained_by_rels: Vec<Relationship> = Vec::new();
@@ -1871,6 +1885,7 @@ impl Analyzer {
             mentions_count,
             timing: None,
             skip_reasons,
+            call_resolution,
         };
 
         info!(
@@ -2460,6 +2475,9 @@ pub struct AnalysisResult {
     /// parse time budget, nesting depth, ...), counted per reason. Files that
     /// failed for other reasons (unreadable, parser errors) are not included.
     pub skip_reasons: HashMap<FileSkipReason, usize>,
+    /// How many call sites got a CALLS edge, and why the others did not.
+    /// For an incremental run, only the changed files' calls.
+    pub call_resolution: crate::resolver::CallResolutionStats,
 }
 
 impl AnalysisResult {
@@ -2773,6 +2791,7 @@ mod tests {
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),
+            call_resolution: Default::default(),
         };
 
         assert!(result.has_embedding_failures());
@@ -2801,6 +2820,7 @@ mod tests {
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),
+            call_resolution: Default::default(),
         };
 
         assert!(!result.has_embedding_failures());

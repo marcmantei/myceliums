@@ -621,6 +621,63 @@ impl SourceParser {
         source: &[u8],
         imports: &mut Vec<ImportInfo>,
     ) {
+        // A re-export is an import of what it exports: `export { a, b as c }
+        // from './m'`, `export * from './m'`, `export * as ns from './m'`.
+        if node.kind() == "export_statement" {
+            if let Some(source_node) = node.child_by_field_name("source") {
+                let module = self
+                    .node_text(source_node, source)
+                    .trim_matches(['\'', '"'])
+                    .to_string();
+                let mut named = false;
+                let cursor = &mut node.walk();
+                for child in node.children(cursor) {
+                    match child.kind() {
+                        "export_clause" => {
+                            named = true;
+                            let specs = &mut child.walk();
+                            for spec in child.children(specs) {
+                                if spec.kind() != "export_specifier" {
+                                    continue;
+                                }
+                                let Some(name) = spec.child_by_field_name("name") else {
+                                    continue;
+                                };
+                                let original = self.node_text(name, source).to_string();
+                                let local = spec
+                                    .child_by_field_name("alias")
+                                    .map(|a| self.node_text(a, source).to_string())
+                                    .unwrap_or_else(|| original.clone());
+                                imports.push(ImportInfo {
+                                    local_name: local,
+                                    source_module: module.clone(),
+                                    original_name: Some(original),
+                                });
+                            }
+                        }
+                        "namespace_export" => {
+                            named = true;
+                            if let Some(name) = self.find_child_by_kind(child, "identifier") {
+                                imports.push(ImportInfo {
+                                    local_name: self.node_text(name, source).to_string(),
+                                    source_module: module.clone(),
+                                    original_name: Some("*".to_string()),
+                                });
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                if !named {
+                    imports.push(ImportInfo {
+                        local_name: "*".to_string(),
+                        source_module: module,
+                        original_name: None,
+                    });
+                }
+            }
+        }
+
         if node.kind() == "import_statement" {
             let source_node = node.child_by_field_name("source");
             let module = source_node
@@ -1311,5 +1368,35 @@ export class UserService extends Base {
             ])
         );
         assert_eq!(find("handler", None), BindingValue::Unknown);
+    }
+
+    #[test]
+    fn re_exports_are_imports_of_what_they_export() {
+        let result = SourceParser::new(SourceLanguage::TypeScript)
+            .unwrap()
+            .parse(
+                "export { jwt, sign as signToken } from './jwt'\nexport * from './util'\nexport * as codec from './codec'\nexport class Local {}\n",
+            )
+            .unwrap();
+        let imports: Vec<(&str, &str, Option<&str>)> = result
+            .imports
+            .iter()
+            .map(|i| {
+                (
+                    i.local_name.as_str(),
+                    i.source_module.as_str(),
+                    i.original_name.as_deref(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            imports,
+            [
+                ("jwt", "./jwt", Some("jwt")),
+                ("signToken", "./jwt", Some("sign")),
+                ("*", "./util", None),
+                ("codec", "./codec", Some("*")),
+            ]
+        );
     }
 }

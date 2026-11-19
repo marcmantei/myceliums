@@ -449,8 +449,9 @@ impl SourceParser {
                 let cursor = &mut node.walk();
                 for child in node.children(cursor) {
                     if child.kind() == "dotted_name" {
+                        // `import a.b.c` binds `a` (and loads `a.b.c`).
                         let name = self.node_text(child, source).to_string();
-                        let local = name.split('.').next_back().unwrap_or(&name).to_string();
+                        let local = name.split('.').next().unwrap_or(&name).to_string();
                         imports.push(ImportInfo {
                             local_name: local,
                             source_module: name,
@@ -908,5 +909,22 @@ class UserService(Base):
         // A local is visible from its line to the end of its function.
         let user = find("user", None);
         assert_eq!(user.scope, (11, 15));
+    }
+
+    #[test]
+    fn a_dotted_import_binds_its_first_name() {
+        let result = SourceParser::new(SourceLanguage::Python)
+            .unwrap()
+            .parse("import requests.adapters\nimport os.path as p\n")
+            .unwrap();
+        let imports: Vec<(&str, &str)> = result
+            .imports
+            .iter()
+            .map(|i| (i.local_name.as_str(), i.source_module.as_str()))
+            .collect();
+        assert_eq!(
+            imports,
+            [("requests", "requests.adapters"), ("p", "os.path")]
+        );
     }
 }

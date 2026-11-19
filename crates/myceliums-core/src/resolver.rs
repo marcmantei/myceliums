@@ -33,9 +33,12 @@
 mod imports;
 mod types;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
-use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, SymbolKind, SymbolMetadata};
+use myceliums_storage::{
+    CodeSymbol, Relationship, RelationshipKind, Store, SymbolKind, SymbolMetadata,
+};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::parser::{
@@ -98,6 +101,124 @@ impl CallResolution {
 /// qualify for gets an edge to each, labelled `ambiguous`, up to this many;
 /// beyond it the name says too little and the call gets no edge.
 pub const MAX_AMBIGUOUS_TARGETS: usize = 2;
+
+/// Why a call got no edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Unlinked {
+    /// More than [`MAX_AMBIGUOUS_TARGETS`] symbols qualify.
+    TooManyCandidates,
+    /// The target is outside the project: a library value or import, a
+    /// literal, a member a typed receiver's class does not declare.
+    Library,
+    /// A call through a parameter, local variable or imported value.
+    ThroughVariable,
+    /// Nothing in scope has the name: a built-in, a global, a name the
+    /// resolver cannot see.
+    Unresolved,
+}
+
+/// The targets of a call, or why it has none.
+type Targets = Result<Vec<(DefId, CallResolution)>, Unlinked>;
+
+/// What became of the calls one analysis resolved: how many got an edge,
+/// and why the others did not (#139). Persisted in the index (`index_meta`,
+/// key [`CallResolutionStats::META_KEY`]) so the caller tools can say how
+/// many call sites of a name were left unlinked.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallResolutionStats {
+    /// Call sites linked to at least one symbol.
+    pub linked: usize,
+    /// Call sites more than [`MAX_AMBIGUOUS_TARGETS`] symbols qualify for.
+    pub too_many_candidates: usize,
+    /// Call sites whose target is outside the project.
+    pub library: usize,
+    /// Call sites through a parameter, variable or callback.
+    pub through_variable: usize,
+    /// Call sites of a name nothing in scope has.
+    pub unresolved: usize,
+    /// Call sites outside every function (module-level code).
+    pub no_caller: usize,
+    /// Unlinked call sites (too many candidates, or nothing in scope) whose
+    /// name a project function, method or class of the same language family
+    /// has, per family and name: calls those symbols may receive that no
+    /// edge shows.
+    #[serde(default)]
+    pub unlinked_by_name: BTreeMap<String, BTreeMap<String, usize>>,
+}
+
+impl CallResolutionStats {
+    /// Key under which the record is stored in the `index_meta` table.
+    pub const META_KEY: &'static str = "call_resolution";
+
+    /// Call sites that got no edge, for any reason.
+    pub fn unlinked(&self) -> usize {
+        self.too_many_candidates
+            + self.library
+            + self.through_variable
+            + self.unresolved
+            + self.no_caller
+    }
+
+    /// Unlinked call sites named `name` in `family` (see
+    /// [`language_family`]) that may be calls of a project symbol of that
+    /// name.
+    pub fn unlinked_named(&self, family: &str, name: &str) -> usize {
+        self.unlinked_by_name
+            .get(family)
+            .and_then(|names| names.get(name))
+            .copied()
+            .unwrap_or(0)
+    }
+
+    /// One line for `analyze` output.
+    pub fn summary(&self) -> String {
+        format!(
+            "{} call sites linked; {} not: {} with more than {MAX_AMBIGUOUS_TARGETS} candidates, \
+             {} into libraries, {} through variables, {} with nothing in scope, {} outside any function",
+            self.linked,
+            self.unlinked(),
+            self.too_many_candidates,
+            self.library,
+            self.through_variable,
+            self.unresolved,
+            self.no_caller
+        )
+    }
+
+    fn count(&mut self, reason: Unlinked, family: &str, name: &str, has_namesake: bool) {
+        match reason {
+            Unlinked::TooManyCandidates => self.too_many_candidates += 1,
+            Unlinked::Library => self.library += 1,
+            Unlinked::ThroughVariable => self.through_variable += 1,
+            Unlinked::Unresolved => self.unresolved += 1,
+        }
+        if has_namesake && matches!(reason, Unlinked::TooManyCandidates | Unlinked::Unresolved) {
+            *self
+                .unlinked_by_name
+                .entry(family.to_string())
+                .or_default()
+                .entry(name.to_string())
+                .or_default() += 1;
+        }
+    }
+
+    /// Persist the record inside the index.
+    pub async fn record(&self, store: &Store) -> anyhow::Result<()> {
+        store
+            .set_index_meta(Self::META_KEY, &serde_json::to_string(self)?)
+            .await?;
+        Ok(())
+    }
+
+    /// Read the record from an index; `None` for an index analyzed before
+    /// it existed.
+    pub async fn load(store: &Store) -> anyhow::Result<Option<Self>> {
+        match store.get_index_meta(Self::META_KEY).await? {
+            Some(json) => Ok(Some(serde_json::from_str(&json)?)),
+            None => Ok(None),
+        }
+    }
+}
 
 /// The language family of a source file, by extension: a call is only ever
 /// resolved to a symbol of its own family (#139).
@@ -250,6 +371,7 @@ pub struct CallResolver {
     files: HashMap<String, FileContext>,
     index: imports::PathIndex,
     prepared: bool,
+    stats: CallResolutionStats,
 }
 
 impl CallResolver {
@@ -378,13 +500,27 @@ impl CallResolver {
     /// `line:<n>;resolved:<label>`.
     pub fn resolve_calls(&mut self, calls: &[CallReference], repo_id: &str) -> Vec<Relationship> {
         self.prepare();
+        let mut stats = CallResolutionStats::default();
         let mut edges: Vec<(DefId, DefId, CallResolution, u32)> = Vec::new();
         let mut seen: HashMap<(DefId, DefId), usize> = HashMap::new();
         for call in calls {
             let Some((site, caller)) = self.site(call) else {
+                stats.no_caller += 1;
                 continue;
             };
-            for (target, resolution) in self.targets(&site, call) {
+            let targets = match self.targets(&site, call) {
+                Ok(targets) => targets,
+                Err(reason) => {
+                    let namesake = self.named(&call.callee_name).any(|id| {
+                        let def = &self.defs[id];
+                        def.family == site.family && def.is_callable()
+                    });
+                    stats.count(reason, site.family, &call.callee_name, namesake);
+                    continue;
+                }
+            };
+            stats.linked += 1;
+            for (target, resolution) in targets {
                 match seen.get(&(caller, target)) {
                     Some(&i) => {
                         if resolution > edges[i].2 {
@@ -399,6 +535,7 @@ impl CallResolver {
                 }
             }
         }
+        self.stats = stats;
         edges
             .into_iter()
             .map(|(source, target, resolution, line)| Relationship {
@@ -410,6 +547,12 @@ impl CallResolver {
                 metadata: format!("line:{line};resolved:{}", resolution.label()),
             })
             .collect()
+    }
+
+    /// What became of the calls the last [`resolve_calls`](Self::resolve_calls)
+    /// resolved.
+    pub fn stats(&self) -> &CallResolutionStats {
+        &self.stats
     }
 
     /// Where `call` is made: its file, family and caller. `None` for a call
@@ -453,8 +596,9 @@ impl CallResolver {
             })
     }
 
-    /// The symbols `call` may call, with how each was found.
-    fn targets(&self, site: &Site, call: &CallReference) -> Vec<(DefId, CallResolution)> {
+    /// The symbols `call` may call, with how each was found, or why it
+    /// gets no edge.
+    fn targets(&self, site: &Site, call: &CallReference) -> Targets {
         let name = call.callee_name.as_str();
         let targets = match call.form {
             CallForm::Bare => self.resolve_bare(site, name),
@@ -474,19 +618,23 @@ impl CallResolver {
                     None => self.type_ty(site, name, 0),
                 };
                 match class {
-                    Ty::Class(class) | Ty::Instance(class) => vec![(class, CallResolution::Exact)],
-                    _ => Vec::new(),
+                    Ty::Class(class) | Ty::Instance(class) => {
+                        Ok(vec![(class, CallResolution::Exact)])
+                    }
+                    Ty::External => Err(Unlinked::Library),
+                    _ => Err(Unlinked::Unresolved),
                 }
             }
             CallForm::SuperConstructor => self.super_constructor(site),
             CallForm::Unknown => self.resolve_by_name(site, call),
-        };
+        }?;
         let targets = self.by_arity(targets, call.arg_count);
-        if targets.len() > MAX_AMBIGUOUS_TARGETS {
+        match targets.len() {
+            0 => Err(Unlinked::Unresolved),
             // The name says too little: no edge.
-            return Vec::new();
+            n if n > MAX_AMBIGUOUS_TARGETS => Err(Unlinked::TooManyCandidates),
+            _ => Ok(targets),
         }
-        targets
     }
 
     /// Of several overloads (Java), the one taking `arg_count` arguments.
@@ -512,29 +660,29 @@ impl CallResolver {
     }
 
     /// `super(...)`: the base class's constructor, else the base class.
-    fn super_constructor(&self, site: &Site) -> Vec<(DefId, CallResolution)> {
+    fn super_constructor(&self, site: &Site) -> Targets {
         let Some(class) = self.enclosing_class(site) else {
-            return Vec::new();
+            return Err(Unlinked::Unresolved);
         };
         let Some(&base) = self.bases(class, 0).first() else {
-            return Vec::new();
+            return Err(Unlinked::Library);
         };
         let base_name = self.defs[base].name.clone();
         let constructor = ["constructor", "__init__", base_name.as_str()]
             .iter()
             .map(|name| self.members_of(base, name))
             .find(|found| !found.is_empty());
-        match constructor {
+        Ok(match constructor {
             Some(constructors) => pick(constructors, CallResolution::Exact),
             None => vec![(base, CallResolution::Exact)],
-        }
+        })
     }
 
     // --- bare calls -------------------------------------------------------
 
     /// `f()`: nearest scope first; nothing outside the scopes the language
     /// has.
-    fn resolve_bare(&self, site: &Site, name: &str) -> Vec<(DefId, CallResolution)> {
+    fn resolve_bare(&self, site: &Site, name: &str) -> Targets {
         let name = self.unalias(site, name);
         // A parameter or local of that name shadows everything: a call
         // through a function value, unless it holds a class (`cls()`).
@@ -545,36 +693,44 @@ impl CallResolver {
             .is_some_and(|(_, _, binding)| binding.scope.1 != u32::MAX);
         if local {
             return match self.eval(site, &[ExpressionStep::Ident(name.to_string())], 0) {
-                Ty::Class(class) => vec![(class, CallResolution::Exact)],
-                _ => Vec::new(),
+                Ty::Class(class) => Ok(vec![(class, CallResolution::Exact)]),
+                _ => Err(Unlinked::ThroughVariable),
             };
         }
         if implicit_this(site.family) {
             let members = self.enclosing_members(site, name);
             if !members.is_empty() {
-                return pick(members, CallResolution::Exact);
+                return Ok(pick(members, CallResolution::Exact));
             }
         }
         let local = self.in_file(site, name, Def::is_callable);
         if !local.is_empty() {
-            return pick(local, CallResolution::NameMatch);
+            return Ok(pick(local, CallResolution::NameMatch));
         }
         if let Some(bound) = self.imported(site, name) {
             return match bound {
-                Bound::Defs(defs) => pick(
-                    defs.into_iter()
+                Bound::Defs(defs) => {
+                    let callable: Vec<DefId> = defs
+                        .into_iter()
                         .filter(|&id| self.defs[id].is_callable())
-                        .collect(),
-                    CallResolution::Import,
-                ),
-                Bound::Module(_) | Bound::External => Vec::new(),
+                        .collect();
+                    if callable.is_empty() {
+                        // An imported constant or variable, called.
+                        Err(Unlinked::ThroughVariable)
+                    } else {
+                        Ok(pick(callable, CallResolution::Import))
+                    }
+                }
+                Bound::Value(..) => Err(Unlinked::ThroughVariable),
+                Bound::Module(_) | Bound::Unknown => Err(Unlinked::Unresolved),
+                Bound::External => Err(Unlinked::Library),
             };
         }
         if package_scope(site.family) {
             let package = self.in_package(site, name, |d| d.is_callable() && d.container.is_none());
-            return pick(package, CallResolution::NameMatch);
+            return Ok(pick(package, CallResolution::NameMatch));
         }
-        Vec::new()
+        Err(Unlinked::Unresolved)
     }
 
     /// The target of an SSA alias in the call's file (`handler =
@@ -744,7 +900,7 @@ impl CallResolver {
             Some(Bound::Module(files)) => {
                 return self.top_level_in(&files, name, Def::is_class_like)
             }
-            Some(Bound::External) => return Vec::new(),
+            Some(Bound::Value(..) | Bound::Unknown | Bound::External) => return Vec::new(),
             None => {}
         }
         if package_scope(site.family) {
@@ -758,33 +914,33 @@ impl CallResolver {
     /// `receiver.name()`: on a typed receiver the class's method (or a base
     /// class's), on a module its top-level function, on a library value
     /// nothing; on a receiver of unknown type any method of that name.
-    fn resolve_member(
-        &self,
-        site: &Site,
-        receiver: &[ExpressionStep],
-        name: &str,
-    ) -> Vec<(DefId, CallResolution)> {
+    fn resolve_member(&self, site: &Site, receiver: &[ExpressionStep], name: &str) -> Targets {
         match self.eval(site, receiver, 0) {
-            Ty::Instance(class) | Ty::Class(class) => {
-                pick(self.methods_on(class, name, 0), CallResolution::Exact)
-            }
+            // A member the class does not declare comes from a library base
+            // class (or is dynamic).
+            Ty::Instance(class) | Ty::Class(class) => match self.methods_on(class, name, 0) {
+                methods if methods.is_empty() => Err(Unlinked::Library),
+                methods => Ok(pick(methods, CallResolution::Exact)),
+            },
             Ty::Module(files) => match self.module_member(&files, site.family, name) {
-                Some(Bound::Defs(defs)) => pick(
+                Some(Bound::Defs(defs)) => Ok(pick(
                     defs.into_iter()
                         .filter(|&id| self.defs[id].is_callable())
                         .collect(),
                     CallResolution::Import,
-                ),
-                _ => Vec::new(),
+                )),
+                Some(Bound::Value(..)) => Err(Unlinked::ThroughVariable),
+                Some(Bound::External) => Err(Unlinked::Library),
+                _ => Err(Unlinked::Unresolved),
             },
-            Ty::Function(_) | Ty::External => Vec::new(),
+            Ty::Function(_) | Ty::External => Err(Unlinked::Library),
             Ty::Unknown => self.methods_named(site, name),
         }
     }
 
     /// Any method named `name` in the caller's language family: the call is
     /// on a receiver whose type is not known.
-    fn methods_named(&self, site: &Site, name: &str) -> Vec<(DefId, CallResolution)> {
+    fn methods_named(&self, site: &Site, name: &str) -> Targets {
         let methods = self
             .named(name)
             .filter(|&id| {
@@ -792,14 +948,14 @@ impl CallResolver {
                 def.family == site.family && def.kind == SymbolKind::Method
             })
             .collect();
-        pick(methods, CallResolution::NameMatch)
+        Ok(pick(methods, CallResolution::NameMatch))
     }
 
     // --- languages without call forms -----------------------------------
 
     /// A call from an extractor that does not record call forms: by name,
     /// nearest scope first, any callable kind.
-    fn resolve_by_name(&self, site: &Site, call: &CallReference) -> Vec<(DefId, CallResolution)> {
+    fn resolve_by_name(&self, site: &Site, call: &CallReference) -> Targets {
         let name = self.unalias(site, &call.callee_name);
         // `Receiver.method` where exactly one symbol has that qualified name.
         if let Some(receiver) = call.chain.as_deref().and_then(|chain| {
@@ -820,12 +976,12 @@ impl CallResolver {
                 })
                 .collect();
             if qualified.len() == 1 {
-                return pick(qualified, CallResolution::Exact);
+                return Ok(pick(qualified, CallResolution::Exact));
             }
         }
         let local = self.in_file(site, name, Def::is_callable);
         if !local.is_empty() {
-            return pick(local, CallResolution::NameMatch);
+            return Ok(pick(local, CallResolution::NameMatch));
         }
         if let Some(Bound::Defs(defs)) = self.imported(site, name) {
             let defs: Vec<DefId> = defs
@@ -833,12 +989,12 @@ impl CallResolver {
                 .filter(|&id| self.defs[id].is_callable())
                 .collect();
             if !defs.is_empty() {
-                return pick(defs, CallResolution::Import);
+                return Ok(pick(defs, CallResolution::Import));
             }
         }
         let package = self.in_package(site, name, Def::is_callable);
         if !package.is_empty() {
-            return pick(package, CallResolution::NameMatch);
+            return Ok(pick(package, CallResolution::NameMatch));
         }
         let family = self
             .named(name)
@@ -847,7 +1003,7 @@ impl CallResolver {
                 def.family == site.family && def.is_callable()
             })
             .collect();
-        pick(family, CallResolution::NameMatch)
+        Ok(pick(family, CallResolution::NameMatch))
     }
 }
 
@@ -888,7 +1044,7 @@ fn receiver_steps<'a>(chain: &'a [ExpressionStep], name: &str) -> Option<&'a [Ex
 }
 
 /// One candidate: an edge with the given label. Several: an `ambiguous`
-/// edge to each ([`CallResolver::targets`] drops them beyond
+/// edge to each (`CallResolver::targets` drops them beyond
 /// [`MAX_AMBIGUOUS_TARGETS`]).
 fn pick(mut candidates: Vec<DefId>, unique: CallResolution) -> Vec<(DefId, CallResolution)> {
     candidates.sort_unstable();
@@ -1930,6 +2086,323 @@ mod tests {
                 "exact"
             )]
         );
+    }
+
+    // --- review regressions (#144) ---------------------------------------
+
+    /// `from .globals import current_app` where `globals.py` declares
+    /// `current_app: Flask = LocalProxy(...)`: a project value with a declared
+    /// type, not a library.
+    #[test]
+    fn an_imported_module_level_value_is_typed_by_its_declaration() {
+        let mut resolver = resolver(&[
+            class("src/flask/app.py", "Flask", (1, 9)),
+            method("src/flask/app.py", "Flask.make_response", (2, 3)),
+            method("src/flask/wrappers.py", "Response.make_response", (1, 2)),
+            function("src/flask/helpers.py", "make_response", (5, 9)),
+        ]);
+        resolver.register_file(
+            "src/flask/globals.py",
+            &[import("Flask", ".app", Some("Flask"))],
+            &[],
+            &[binding(
+                "current_app",
+                crate::parser::FILE_SCOPE,
+                BindingValue::Type("Flask".to_string()),
+            )],
+            &[],
+        );
+        resolver.register_file(
+            "src/flask/helpers.py",
+            &[import("current_app", ".globals", Some("current_app"))],
+            &[],
+            &[],
+            &[],
+        );
+        let calls = [member(
+            "src/flask/helpers.py",
+            6,
+            "make_response",
+            vec![ident("current_app")],
+            "make_response",
+        )];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "src/flask/helpers.py::make_response",
+                "src/flask/app.py::Flask.make_response",
+                "exact"
+            )]
+        );
+    }
+
+    /// A name a project module exports without a visible declaration is
+    /// unknown, not a library: a method call on it still falls back to the
+    /// method name.
+    #[test]
+    fn an_unknown_project_name_is_not_a_library() {
+        let mut resolver = resolver(&[
+            method("src/shop/models.py", "Order.total", (1, 2)),
+            function("src/shop/cli.py", "main", (1, 9)),
+        ]);
+        resolver.register_file("src/shop/registry.py", &[], &[], &[], &[]);
+        resolver.register_file(
+            "src/shop/cli.py",
+            &[import("orders", "shop.registry", Some("orders"))],
+            &[],
+            &[],
+            &[],
+        );
+        let calls = [member(
+            "src/shop/cli.py",
+            2,
+            "main",
+            vec![ident("orders")],
+            "total",
+        )];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "src/shop/cli.py::main",
+                "src/shop/models.py::Order.total",
+                "name-match"
+            )]
+        );
+    }
+
+    /// `import requests.adapters` binds `requests`; `requests.adapters.
+    /// HTTPAdapter()` walks the package to its submodule.
+    #[test]
+    fn a_dotted_import_binds_its_first_name_and_reaches_submodules() {
+        let mut resolver = resolver(&[
+            class("src/requests/adapters.py", "HTTPAdapter", (1, 9)),
+            function("tests/test_adapters.py", "test_it", (1, 9)),
+        ]);
+        resolver.register_file("src/requests/__init__.py", &[], &[], &[], &[]);
+        resolver.register_file(
+            "tests/test_adapters.py",
+            &[import("requests", "requests.adapters", None)],
+            &[],
+            &[],
+            &[],
+        );
+        let receiver = vec![
+            ident("requests"),
+            ExpressionStep::Field("adapters".to_string()),
+        ];
+        let calls = [CallReference {
+            chain: Some(vec![
+                ident("requests"),
+                ExpressionStep::Field("adapters".to_string()),
+                ExpressionStep::Field("HTTPAdapter".to_string()),
+                ExpressionStep::Call,
+            ]),
+            ..member(
+                "tests/test_adapters.py",
+                2,
+                "test_it",
+                receiver,
+                "HTTPAdapter",
+            )
+        }];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "tests/test_adapters.py::test_it",
+                "src/requests/adapters.py::HTTPAdapter",
+                "import"
+            )]
+        );
+    }
+
+    /// A TypeScript barrel: `export { jwt } from './jwt'` and `export * from
+    /// './util'` in `index.ts`, imported with `from '.'`.
+    #[test]
+    fn typescript_barrels_are_followed() {
+        let mut resolver = resolver(&[
+            function("src/mw/jwt/jwt.ts", "jwt", (1, 3)),
+            function("src/mw/jwt/util.ts", "decode", (1, 3)),
+            function("src/mw/jwt/handler.ts", "handle", (1, 9)),
+        ]);
+        resolver.register_file(
+            "src/mw/jwt/index.ts",
+            &[
+                import("jwt", "./jwt", Some("jwt")),
+                import("*", "./util", None),
+            ],
+            &[],
+            &[],
+            &[],
+        );
+        resolver.register_file(
+            "src/mw/jwt/handler.ts",
+            &[
+                import("jwt", ".", Some("jwt")),
+                import("decode", ".", Some("decode")),
+            ],
+            &[],
+            &[],
+            &[],
+        );
+        let calls = [
+            call("src/mw/jwt/handler.ts", 2, "handle", "jwt", CallForm::Bare),
+            call(
+                "src/mw/jwt/handler.ts",
+                3,
+                "handle",
+                "decode",
+                CallForm::Bare,
+            ),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(
+                    "src/mw/jwt/handler.ts::handle",
+                    "src/mw/jwt/jwt.ts::jwt",
+                    "import"
+                ),
+                edge(
+                    "src/mw/jwt/handler.ts::handle",
+                    "src/mw/jwt/util.ts::decode",
+                    "import"
+                ),
+            ]
+        );
+    }
+
+    /// Gin's `c.Writer.Header().Set(...)`: `Writer` is a project interface
+    /// that does not declare `Header` (it comes from `http.ResponseWriter`),
+    /// so the chain is a library value from there on and `Set` is not
+    /// matched to the project's `Context.Set`.
+    #[test]
+    fn no_name_match_after_a_typed_step() {
+        let mut resolver = resolver(&[
+            class("context.go", "Context", (1, 5)),
+            method("context.go", "Context.Set", (7, 8)),
+            method("context.go", "Context.Render", (10, 19)),
+            symbol(
+                "response_writer.go",
+                "ResponseWriter",
+                SymbolKind::Interface,
+                (1, 5),
+            ),
+            method("response_writer.go", "ResponseWriter.Status", (2, 2)),
+        ]);
+        resolver.register_file(
+            "context.go",
+            &[],
+            &[],
+            &[
+                field(
+                    "Context",
+                    "Writer",
+                    BindingValue::Type("ResponseWriter".to_string()),
+                ),
+                binding("c", (10, 19), BindingValue::Type("*Context".to_string())),
+            ],
+            &[],
+        );
+        let chain = vec![
+            ident("c"),
+            ExpressionStep::Field("Writer".to_string()),
+            ExpressionStep::Field("Header".to_string()),
+            ExpressionStep::Call,
+        ];
+        let calls = [member("context.go", 12, "Render", chain, "Set")];
+        assert!(edges(&mut resolver, &calls).is_empty());
+        assert_eq!(resolver.stats().library, 1);
+    }
+
+    /// A field assigned from an untyped parameter is declared but untyped:
+    /// method calls on it still fall back to the method name.
+    #[test]
+    fn a_declared_untyped_field_still_falls_back_to_the_name() {
+        let mut resolver = resolver(&[
+            class("svc.py", "Service", (1, 9)),
+            method("svc.py", "Service.__init__", (2, 3)),
+            method("svc.py", "Service.run", (4, 6)),
+            method("repo.py", "Repository.fetch", (1, 2)),
+        ]);
+        resolver.register_file(
+            "svc.py",
+            &[],
+            &[],
+            &[
+                binding("repo", (2, 3), BindingValue::Unknown),
+                TypeBinding {
+                    owner: Some("Service".to_string()),
+                    ..binding("repo", (2, 3), BindingValue::Expr(vec![ident("repo")]))
+                },
+            ],
+            &[],
+        );
+        let receiver = vec![
+            ExpressionStep::This,
+            ExpressionStep::Field("repo".to_string()),
+        ];
+        let calls = [member("svc.py", 5, "run", receiver, "fetch")];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "svc.py::Service.run",
+                "repo.py::Repository.fetch",
+                "name-match"
+            )]
+        );
+    }
+
+    /// Every call is accounted for: linked, or why not, and unlinked calls
+    /// of a project symbol's name are counted per name.
+    #[test]
+    fn unlinked_calls_are_counted_by_reason_and_name() {
+        let mut symbols = vec![
+            function("app.py", "main", (1, 20)),
+            function("app.py", "helper", (30, 31)),
+        ];
+        for i in 0..3 {
+            symbols.push(method(&format!("m{i}.py"), "C.get", (1, 2)));
+        }
+        let mut resolver = resolver(&symbols);
+        resolver.register_file(
+            "app.py",
+            &[import("json", "json", None)],
+            &[],
+            &[
+                binding("x", (1, 20), BindingValue::Unknown),
+                binding("callback", (1, 20), BindingValue::Unknown),
+            ],
+            &[],
+        );
+        let calls = [
+            call("app.py", 2, "main", "helper", CallForm::Bare),
+            member("app.py", 3, "main", vec![ident("x")], "get"),
+            member("app.py", 4, "main", vec![ident("json")], "loads"),
+            call("app.py", 5, "main", "callback", CallForm::Bare),
+            call("app.py", 6, "main", "print", CallForm::Bare),
+            call("app.py", 25, "?", "helper", CallForm::Bare),
+        ];
+        resolver.resolve_calls(&calls, "repo");
+        let stats = resolver.stats();
+        assert_eq!(
+            (
+                stats.linked,
+                stats.too_many_candidates,
+                stats.library,
+                stats.through_variable,
+                stats.unresolved,
+                stats.no_caller
+            ),
+            (1, 1, 1, 1, 1, 1)
+        );
+        assert_eq!(stats.unlinked(), 5);
+        assert_eq!(stats.unlinked_named("python", "get"), 1);
+        assert_eq!(
+            stats.unlinked_named("python", "print"),
+            0,
+            "no project symbol is named print"
+        );
+        assert!(stats.summary().starts_with("1 call sites linked; 5 not"));
     }
 
     #[test]

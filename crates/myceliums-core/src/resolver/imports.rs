@@ -13,7 +13,12 @@
 //! | Java | `shop.store.Repository`, `static shop.auth.Auth.parse` | the class's file; a static import's member |
 //!
 //! A specifier that matches no project file is a library: the name is bound,
-//! to something outside the project ([`Bound::External`]). For other
+//! to something outside the project ([`Bound::External`]). A specifier that
+//! does name a project file binds what that file declares under the name: a
+//! symbol, a module-level value (`current_app: Flask = ...`), a re-export
+//! (`from .sessions import Session`, `export { jwt } from './jwt'`,
+//! `export * from './x'`), a submodule — or, when the file declares nothing
+//! the resolver can see, [`Bound::Unknown`], never a library. For other
 //! languages the specifier is tried as a path; when that fails the import
 //! is ignored and the resolver keeps searching by name.
 
@@ -28,6 +33,12 @@ pub(super) enum Bound {
     Defs(Vec<DefId>),
     /// A module, package or namespace: its files.
     Module(Vec<String>),
+    /// A module-level value of a project file (`current_app: Flask =
+    /// LocalProxy(...)`): the file and the index of its binding.
+    Value(String, usize),
+    /// A name a project file exports but declares nothing visible for (an
+    /// assignment from a call, a re-export the resolver cannot follow).
+    Unknown,
     /// Something outside the project: a library or the standard library.
     External,
 }
@@ -130,7 +141,7 @@ impl PathIndex {
             .collect()
     }
 
-    fn files_in(&self, dir: &str, family: &str) -> Vec<String> {
+    pub(super) fn files_in(&self, dir: &str, family: &str) -> Vec<String> {
         self.dir_files
             .get(dir)
             .into_iter()
@@ -237,8 +248,22 @@ impl CallResolver {
         (!submodules.is_empty()).then_some(Bound::Module(submodules))
     }
 
-    /// Top-level definitions named `name` in `files`, or what the files'
-    /// own imports of `name` bind (a re-export).
+    /// The module-level binding named `name` in `file` (a value declared or
+    /// assigned at the top level), as its index.
+    pub(super) fn module_value(&self, file: &str, name: &str) -> Option<usize> {
+        let context = self.files.get(file)?;
+        context
+            .bindings
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, b)| b.owner.is_none() && b.name == name && b.scope.1 == u32::MAX)
+            .map(|(index, _)| index)
+    }
+
+    /// Top-level definitions named `name` in `files`, a module-level value of
+    /// that name, or what the files' own imports of `name` bind (a
+    /// re-export, also through `from m import *` / `export * from`).
     fn defined_or_reexported(
         &self,
         files: &[String],
@@ -250,10 +275,16 @@ impl CallResolver {
         if !defs.is_empty() {
             return Some(Bound::Defs(defs));
         }
+        if let Some((file, index)) = files
+            .iter()
+            .find_map(|f| self.module_value(f, name).map(|i| (f, i)))
+        {
+            return Some(Bound::Value(file.clone(), index));
+        }
         if depth >= MAX_REEXPORT_DEPTH {
             return None;
         }
-        files.iter().find_map(|file| {
+        let reexported = files.iter().find_map(|file| {
             let import = self
                 .files
                 .get(file)?
@@ -264,6 +295,22 @@ impl CallResolver {
                 Bound::External => None,
                 bound => Some(bound),
             }
+        });
+        if reexported.is_some() {
+            return reexported;
+        }
+        files.iter().find_map(|file| {
+            self.files
+                .get(file)?
+                .imports
+                .iter()
+                .filter(|i| is_wildcard(family, i))
+                .find_map(|import| match self.bind(file, family, import, depth + 1)? {
+                    Bound::Module(inner) => {
+                        self.defined_or_reexported(&inner, family, name, depth + 1)
+                    }
+                    _ => None,
+                })
         })
     }
 
@@ -286,14 +333,25 @@ impl CallResolver {
                 };
                 match self.python_module(importer, &submodule) {
                     Some(files) => Bound::Module(files),
+                    // The module is the project's but does not declare the
+                    // name visibly: unknown, not a library.
+                    None if self.python_module(importer, module).is_some() => Bound::Unknown,
                     None => Bound::External,
                 }
             }
-            // `import m`, `import m as local`
-            None => match self.python_module(importer, module) {
-                Some(files) => Bound::Module(files),
-                None => Bound::External,
-            },
+            // `import m`, `import m as local`; `import a.b` binds `a`.
+            None => {
+                let top = module.split('.').next().unwrap_or(module);
+                let bound = if import.local_name == top {
+                    top
+                } else {
+                    module
+                };
+                match self.python_module(importer, bound) {
+                    Some(files) => Bound::Module(files),
+                    None => Bound::External,
+                }
+            }
         }
     }
 
@@ -330,7 +388,7 @@ impl CallResolver {
             // `import { name as local } from "./m"`
             Some(name) => self
                 .defined_or_reexported(&files, "js", name, depth)
-                .unwrap_or(Bound::External),
+                .unwrap_or(Bound::Unknown),
             // `import Default from "./m"`, `const m = require("./m")`: the
             // default export, often named like the local; else the module.
             None => match self.top_level_in(&files, &import.local_name, |_| true) {
@@ -411,7 +469,7 @@ impl CallResolver {
                 [] => Bound::Module(files),
                 [item] => self
                     .defined_or_reexported(&files, "rs", item, depth)
-                    .unwrap_or(Bound::External),
+                    .unwrap_or(Bound::Unknown),
                 // `Type::assoc_fn`
                 [ty, item] => {
                     let defs: Vec<DefId> = self
@@ -422,12 +480,12 @@ impl CallResolver {
                         })
                         .collect();
                     if defs.is_empty() {
-                        Bound::External
+                        Bound::Unknown
                     } else {
                         Bound::Defs(defs)
                     }
                 }
-                _ => Bound::External,
+                _ => Bound::Unknown,
             };
         }
         Bound::External
@@ -454,10 +512,10 @@ impl CallResolver {
                                 == Some(class)
                     })
                     .collect();
-                Some(if defs.is_empty() {
-                    Bound::External
-                } else {
-                    Bound::Defs(defs)
+                Some(match (defs.is_empty(), files.is_empty()) {
+                    (false, _) => Bound::Defs(defs),
+                    (true, true) => Bound::External,
+                    (true, false) => Bound::Unknown,
                 })
             }
             // `import a.b.*`
@@ -483,7 +541,7 @@ impl CallResolver {
                             })
                             .collect();
                         return Some(if defs.is_empty() {
-                            Bound::External
+                            Bound::Unknown
                         } else {
                             Bound::Defs(defs)
                         });

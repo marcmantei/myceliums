@@ -14,11 +14,16 @@
 //!   `func Load(...) (*Config, error)`).
 //!
 //! Members are looked up in the class and its base classes (Go: embedded
-//! structs). Anything else is [`Ty::Unknown`], and the resolver falls back to
-//! matching the method name.
+//! structs). Once a receiver is typed, a member its class does not declare
+//! (as a method or a field, here or in a project base class) comes from a
+//! library base class or is dynamic: [`Ty::External`], never a match by
+//! name. A declared field whose value has no visible type stays
+//! [`Ty::Unknown`], as does the result of a project function without a
+//! declared return type; only then does the resolver fall back to matching
+//! the method name.
 
 use super::imports::Bound;
-use super::{implicit_this, package_scope, parent_dir, CallResolver, Def, DefId, Site};
+use super::{implicit_this, package_scope, CallResolver, Def, DefId, Site};
 use crate::parser::{BindingValue, ExpressionStep, TypeBinding};
 use myceliums_storage::SymbolKind;
 
@@ -83,39 +88,85 @@ impl CallResolver {
                 (Ty::Instance(class), ExpressionStep::Field(name)) => {
                     match self.field_ty(class, name, depth + 1) {
                         Some(ty) => ty,
-                        None => match self.methods_on(class, name, depth + 1).as_slice() {
-                            [method] => Ty::Function(*method),
-                            _ => Ty::Unknown,
-                        },
+                        None => self.method_value(&self.methods_on(class, name, depth + 1)),
                     }
                 }
                 (Ty::Class(class), ExpressionStep::Field(name)) => {
                     match self.members_of(class, name).as_slice() {
                         [member] if self.defs[*member].is_class_like() => Ty::Class(*member),
-                        [member] => Ty::Function(*member),
-                        _ => self.field_ty(class, name, depth + 1).unwrap_or(Ty::Unknown),
+                        [] => self.field_ty(class, name, depth + 1).unwrap_or_else(|| {
+                            self.method_value(&self.methods_on(class, name, depth + 1))
+                        }),
+                        members => self.method_value(members),
                     }
                 }
                 (Ty::Module(files), ExpressionStep::Field(name)) => {
                     match self.module_member(&files, site.family, name) {
-                        Some(Bound::Defs(defs)) => match defs.as_slice() {
-                            [def] if self.defs[*def].is_class_like() => Ty::Class(*def),
-                            [def] if self.defs[*def].is_function_like() => Ty::Function(*def),
-                            _ => Ty::Unknown,
-                        },
-                        Some(Bound::Module(files)) => Ty::Module(files),
-                        Some(Bound::External) => Ty::External,
-                        None => Ty::Unknown,
+                        Some(bound) => self.bound_ty(bound, depth + 1),
+                        // The project module declares no such name.
+                        None => Ty::External,
                     }
                 }
                 (Ty::Class(class), ExpressionStep::Call) => Ty::Instance(class),
                 (Ty::Function(function), ExpressionStep::Call) => {
                     self.return_ty(function, depth + 1)
                 }
-                _ => Ty::Unknown,
+                // Calling an instance, indexing a typed value, a member of a
+                // function: whatever it is, it is not a project type.
+                _ => Ty::External,
             };
         }
         ty
+    }
+
+    /// A method used as a value (about to be called): the method, or for
+    /// several overloads one whose return type they all share. None at all:
+    /// the member comes from a library base class.
+    fn method_value(&self, methods: &[DefId]) -> Ty {
+        match methods {
+            [] => Ty::External,
+            [first, rest @ ..] => {
+                let returns = |id: &DefId| self.defs[*id].return_type.as_deref();
+                if rest.iter().all(|m| returns(m) == returns(first)) {
+                    Ty::Function(*first)
+                } else {
+                    Ty::External
+                }
+            }
+        }
+    }
+
+    /// What an import or module member binds, as a type.
+    fn bound_ty(&self, bound: Bound, depth: u32) -> Ty {
+        match bound {
+            Bound::Defs(defs) => match defs.as_slice() {
+                [def] => self.def_ty(*def, depth),
+                _ => Ty::Unknown,
+            },
+            Bound::Module(files) => Ty::Module(files),
+            Bound::Value(file, index) => match self.files.get(&file) {
+                Some(context) => self.binding_ty(&file, index, &context.bindings[index], depth),
+                None => Ty::Unknown,
+            },
+            Bound::Unknown => Ty::Unknown,
+            Bound::External => Ty::External,
+        }
+    }
+
+    /// A definition used as a value: a class, a function, or a module-level
+    /// variable or constant with the type its declaration gives.
+    fn def_ty(&self, def: DefId, depth: u32) -> Ty {
+        let d = &self.defs[def];
+        if d.is_class_like() {
+            return Ty::Class(def);
+        }
+        if d.is_function_like() {
+            return Ty::Function(def);
+        }
+        match self.module_value(&d.file, &d.name) {
+            Some(index) => self.bound_ty(Bound::Value(d.file.clone(), index), depth),
+            None => Ty::Unknown,
+        }
     }
 
     /// What a name is at `site`: a binding (which shadows everything else),
@@ -149,17 +200,8 @@ impl CallResolver {
             [] => {}
             _ => return Ty::Unknown,
         }
-        match self.imported(site, name) {
-            Some(Bound::Defs(defs)) => {
-                return match defs.as_slice() {
-                    [def] if self.defs[*def].is_class_like() => Ty::Class(*def),
-                    [def] if self.defs[*def].is_function_like() => Ty::Function(*def),
-                    _ => Ty::Unknown,
-                }
-            }
-            Some(Bound::Module(files)) => return Ty::Module(files),
-            Some(Bound::External) => return Ty::External,
-            None => {}
+        if let Some(bound) = self.imported(site, name) {
+            return self.bound_ty(bound, depth);
         }
         let mut functions = self.in_file(site, name, Def::is_function_like);
         if functions.is_empty() && package_scope(site.family) {
@@ -173,14 +215,17 @@ impl CallResolver {
             _ => return Ty::Unknown,
         }
         // A module-level variable or constant (a Rust `static`, a Go package
-        // variable in another file): known, but not its type.
+        // variable in another file): the type its declaration gives, if any.
         let is_value = |d: &Def| matches!(d.kind, SymbolKind::Variable | SymbolKind::Constant);
-        let value_in_scope = !self.in_file(site, name, is_value).is_empty()
-            || (package_scope(site.family) && !self.in_package(site, name, is_value).is_empty());
-        if value_in_scope || !self.binds_names(site.family) {
-            Ty::Unknown
-        } else {
-            Ty::External
+        let mut values = self.in_file(site, name, is_value);
+        if values.is_empty() && package_scope(site.family) {
+            values = self.in_package(site, name, is_value);
+        }
+        match values.as_slice() {
+            [value] => self.def_ty(*value, depth),
+            [_, ..] => Ty::Unknown,
+            [] if self.binds_names(site.family) => Ty::External,
+            [] => Ty::Unknown,
         }
     }
 
@@ -230,19 +275,26 @@ impl CallResolver {
         }
     }
 
-    /// The type of field `name` of `class` or of one of its bases; `None`
-    /// when no such field is declared or assigned.
+    /// The type of field `name` of `class` or of one of its bases;
+    /// `Some(Unknown)` when it is declared or assigned without a visible
+    /// type, `None` when no project class in the hierarchy has it.
+    ///
+    /// Fields live in the class's file or, for Go and Rust, another file of
+    /// its directory; those are taken from the path index in sorted order,
+    /// so the lookup is deterministic and does not scan every file.
     fn field_ty(&self, class: DefId, name: &str, depth: u32) -> Option<Ty> {
         if depth > MAX_DEPTH {
             return None;
         }
         let def = &self.defs[class];
+        let siblings = self.index.files_in(def.dir(), &def.family);
         let files = std::iter::once(def.file.as_str()).chain(
-            self.files
-                .keys()
+            siblings
+                .iter()
                 .map(String::as_str)
-                .filter(|f| *f != def.file && parent_dir(f) == def.dir()),
+                .filter(|f| *f != def.file),
         );
+        let mut untyped = false;
         for file in files {
             let Some(context) = self.files.get(file) else {
                 continue;
@@ -257,7 +309,7 @@ impl CallResolver {
                 // A field assigned from an unknown value may still be
                 // declared with a type elsewhere: keep looking.
                 match self.binding_ty(file, index, binding, depth + 1) {
-                    Ty::Unknown => continue,
+                    Ty::Unknown => untyped = true,
                     ty => return Some(ty),
                 }
             }
@@ -265,6 +317,7 @@ impl CallResolver {
         self.bases(class, depth)
             .into_iter()
             .find_map(|base| self.field_ty(base, name, depth + 1))
+            .or(untyped.then_some(Ty::Unknown))
     }
 
     /// What calling `function` returns, from its declared return type.
@@ -320,8 +373,10 @@ impl CallResolver {
                         [def] if self.defs[*def].is_class_like() => Ty::Class(*def),
                         _ => Ty::Unknown,
                     },
-                    _ if self.binds_names(site.family) => Ty::External,
-                    _ => Ty::Unknown,
+                    Some(Bound::External) => Ty::External,
+                    Some(_) => Ty::Unknown,
+                    None if self.binds_names(site.family) => Ty::External,
+                    None => Ty::Unknown,
                 },
                 _ => Ty::Unknown,
             }
