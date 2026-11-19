@@ -1,29 +1,66 @@
+//! Call resolution: which symbol does each call site call?
+//!
+//! The parsers report every call with its caller's name, its line, the
+//! callee's name, how the call site names it ([`CallForm`]) and, for a call
+//! on a receiver, the receiver's expression chain. [`CallResolver`] turns
+//! them into CALLS edges.
+//!
+//! - **The caller** is found by position: the innermost definition in the
+//!   call's file whose lines contain the call site. Never by name.
+//! - **The callee** is looked up the way the language binds names, nearest
+//!   scope first, and only among symbols of the caller's language family
+//!   ([`language_family`]):
+//!   1. a bare call (`f()`): the enclosing class's members where an
+//!      unqualified call reaches them (Java), the caller's own file, the
+//!      file's imports, the package (Go: the directory). In a language whose
+//!      extractor records call forms nothing else is in scope, so a name
+//!      found nowhere there (a built-in, a library function) gets no edge.
+//!   2. a call on a receiver (`x.f()`): through the module an import binds
+//!      (`config.parse()`), else any *method* of that name — never a free
+//!      function — and nothing for a receiver that is a literal or a
+//!      library module.
+//!   3. a constructor call (`new X()`): the class `X` in scope.
+//!   4. a call from a language whose extractor does not record call forms:
+//!      by name, same file first, then imports, the directory and the whole
+//!      language family.
+//!
+//!   Where several symbols remain, the call is linked to each of them,
+//!   labelled `ambiguous`, as long as there are at most
+//!   [`MAX_AMBIGUOUS_TARGETS`]; beyond that it gets no edge.
+//!
+//! Every edge records how its target was found ([`CallResolution`]).
+
+mod imports;
+
 use std::collections::HashMap;
 
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, SymbolKind};
 use uuid::Uuid;
 
-use crate::module_graph::ModuleGraph;
-use crate::parser::{CallReference, ExpressionStep, ImportInfo};
-use crate::string_pool::{StrId, StringPool};
+use crate::parser::{CallForm, CallReference, ExpressionStep, ImportInfo};
+use imports::Bound;
 
-/// How the name-based resolver picked the target of a CALLS edge.
+/// How the resolver picked the target of a CALLS edge.
 ///
 /// Recorded at extraction time in the edge's metadata (`resolved:<label>`)
 /// so consumers can tell a certain edge from a guess. Edges written before
 /// this existed carry no label; [`CallResolution::from_metadata`] returns
 /// `None` for them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum CallResolution {
-    /// Matched a qualified name (`Receiver.method`, `mod::f`) that exactly
-    /// one symbol has.
-    Exact,
-    /// Resolved through the module graph (an import binding).
-    Import,
-    /// Matched a bare name that exactly one symbol has.
-    NameMatch,
-    /// Several symbols share the matched name; one of them was picked.
+    /// Several symbols qualify; the call is linked to each of them.
     Ambiguous,
+    /// Found by name in the nearest scope that has it (the caller's file,
+    /// its package, or the whole language family), where exactly one
+    /// symbol qualifies.
+    NameMatch,
+    /// Bound by an import: an imported name, or a member of an imported
+    /// module.
+    Import,
+    /// Determined by the call's syntax and the declarations in view: a
+    /// constructor call, a method of the enclosing class, a qualified name
+    /// exactly one symbol has.
+    Exact,
 }
 
 impl CallResolution {
@@ -52,6 +89,11 @@ impl CallResolution {
         }
     }
 }
+
+/// Most symbols an ambiguous call is linked to. A call that several symbols
+/// qualify for gets an edge to each, labelled `ambiguous`, up to this many;
+/// beyond it the name says too little and the call gets no edge.
+pub const MAX_AMBIGUOUS_TARGETS: usize = 3;
 
 /// The language family of a source file, by extension: a call is only ever
 /// resolved to a symbol of its own family (#139).
@@ -87,321 +129,639 @@ pub fn language_family(path: &str) -> Option<&str> {
     })
 }
 
-/// Whether a looked-up name was written qualified (`a.b`, `a::b`).
-fn is_qualified(name: &str) -> bool {
-    name.contains('.') || name.contains("::")
+/// Families where an unqualified call inside a class reaches the class's
+/// own methods (Java's implicit `this`).
+fn implicit_this(family: &str) -> bool {
+    family == "jvm"
 }
 
-/// Resolves call references to actual symbol UIDs using name-based heuristics.
-/// Two-pass: first collects all definitions, then resolves calls.
-///
-/// ## Heuristic Nature and Limitations
-///
-/// Call resolution uses a global `name -> uid` map (last-writer-wins), which means
-/// same-named symbols from different scopes/files will collide. This is a **heuristic
-/// approach** that is fast and covers most cases, but produces false positives on
-/// common names:
-///
-/// **Example false positive:**
-/// ```text
-/// // File: auth.rs
-/// fn parse(input: &str) -> Token { }
-///
-/// // File: config.rs  
-/// fn parse(json: &str) -> Config { }
-///
-/// // File: main.rs
-/// let token = parse(user_input);  // Which parse()?
-/// ```
-///
-/// The resolver cannot distinguish between `auth::parse` and `config::parse` — it picks
-/// one arbitrarily. This produces incorrect edges in the call graph, especially for common
-/// names like `parse`, `handle`, `validate`, `map`, etc.
-///
-/// ## Mitigation Strategies
-///
-/// 1. Expression chains provide context: `obj.method()` is more reliable than `method()`
-/// 2. Import aliases and SSA-derived aliases improve accuracy within a file
-/// 3. Unique function names avoid collisions (e.g., prefer `validateUserEmail` over `validate`)
-/// 4. Cross-language calls are de-ranked (less likely to be real)
-///
-/// For 100% precise resolution, see future precision track: per-file scoping, type
-/// inference, confidence scores, and optional LSP enrichment.
-///
-/// Internally uses a [`StringPool`] to intern all names and UIDs,
-/// replacing per-entry `String` allocations with compact [`StrId`] handles.
-pub struct CallResolver {
-    /// Shared string interning pool.
-    pool: StringPool,
-    /// Map from symbol name -> symbol UIDs, with each symbol's language family
-    name_to_uid: HashMap<StrId, Vec<(StrId, String)>>,
-    /// Map from qualified name -> symbol UIDs, with each symbol's language family
-    qualified_to_uid: HashMap<StrId, Vec<(StrId, String)>>,
-    /// Language family of every registered symbol.
-    family_of_uid: HashMap<String, String>,
-    /// Map from local import name -> original name
-    import_aliases: HashMap<StrId, StrId>,
-    /// Map from local variable alias -> target symbol name (SSA-derived)
-    aliases: HashMap<StrId, StrId>,
-    /// Optional module graph for cross-file import resolution.
-    module_graph: Option<ModuleGraph>,
-    /// Every registered definition, per file: where callers are looked up.
-    defs_by_file: HashMap<String, Vec<Def>>,
+/// Families where every file of a directory shares one namespace (a Go
+/// package; a Java package for class names).
+fn package_scope(family: &str) -> bool {
+    matches!(family, "go" | "jvm")
 }
 
-/// Where a registered symbol is defined.
+type DefId = usize;
+
+/// A registered symbol.
 struct Def {
     uid: String,
     name: String,
     kind: SymbolKind,
+    file: String,
+    family: String,
     start: u32,
     end: u32,
+    /// The container's qualified name (`UserService` for
+    /// `UserService.register`); `None` at the top level of a file.
+    container: Option<String>,
+    /// For a definition nested in a function or method body (a local
+    /// function, a closure the extractor kept): that function's lines. It
+    /// is visible only there.
+    enclosing_fn: Option<(u32, u32)>,
 }
 
-impl Default for CallResolver {
-    fn default() -> Self {
-        Self::new()
+impl Def {
+    fn contains(&self, line: u32) -> bool {
+        self.start <= line && line <= self.end
     }
+
+    fn is_function_like(&self) -> bool {
+        matches!(self.kind, SymbolKind::Function | SymbolKind::Method)
+    }
+
+    fn is_class_like(&self) -> bool {
+        matches!(
+            self.kind,
+            SymbolKind::Class | SymbolKind::Interface | SymbolKind::Enum
+        )
+    }
+
+    /// Something a call can land on: a function, a method, or a class
+    /// (instantiation).
+    fn is_callable(&self) -> bool {
+        self.is_function_like() || self.kind == SymbolKind::Class
+    }
+
+    /// Defined at the top level of its file (not in a class, not in a
+    /// function body).
+    fn is_top_level(&self) -> bool {
+        self.container.is_none() && self.enclosing_fn.is_none()
+    }
+
+    fn dir(&self) -> &str {
+        parent_dir(&self.file)
+    }
+}
+
+/// The directory part of a path (`""` for a file at the root).
+fn parent_dir(path: &str) -> &str {
+    path.rsplit_once('/').map_or("", |(dir, _)| dir)
+}
+
+/// What a parsed file declares beyond its symbols.
+#[derive(Default)]
+struct FileContext {
+    imports: Vec<ImportInfo>,
+    /// `handler = authenticate`: local name → aliased name.
+    aliases: Vec<(String, String)>,
+}
+
+/// The call being resolved and where it is made.
+struct Site<'a> {
+    file: &'a str,
+    family: &'a str,
+    line: u32,
+    caller: DefId,
+    context: Option<&'a FileContext>,
+}
+
+/// What a call's receiver is.
+enum Receiver {
+    /// A module or package: the call is to one of its top-level symbols.
+    Module(Vec<String>),
+    /// Something outside the project (a literal, a library module): no edge.
+    External,
+    /// Not known: any method of the called name qualifies.
+    Unknown,
+}
+
+/// Resolves call references to symbol UIDs. Two passes: register every
+/// symbol ([`register_symbol`](Self::register_symbol)) and every file's
+/// imports ([`register_file`](Self::register_file)), then
+/// [`resolve_calls`](Self::resolve_calls).
+#[derive(Default)]
+pub struct CallResolver {
+    defs: Vec<Def>,
+    by_name: HashMap<String, Vec<DefId>>,
+    by_file: HashMap<String, Vec<DefId>>,
+    files: HashMap<String, FileContext>,
+    index: imports::PathIndex,
+    prepared: bool,
 }
 
 impl CallResolver {
     pub fn new() -> Self {
-        Self {
-            pool: StringPool::new(),
-            name_to_uid: HashMap::new(),
-            qualified_to_uid: HashMap::new(),
-            family_of_uid: HashMap::new(),
-            import_aliases: HashMap::new(),
-            aliases: HashMap::new(),
-            module_graph: None,
-            defs_by_file: HashMap::new(),
-        }
+        Self::default()
     }
 
-    /// Attach a module graph for cross-file import resolution.
-    pub fn set_module_graph(&mut self, graph: ModuleGraph) {
-        self.module_graph = Some(graph);
-    }
-
-    /// Pass 1: Register a symbol definition: by name for callee lookup, and
-    /// by file and line span so a call's caller is the symbol whose body
-    /// contains the call site.
+    /// Pass 1: register a symbol definition.
     pub fn register_symbol(&mut self, symbol: &CodeSymbol) {
-        self.defs_by_file
+        let id = self.defs.len();
+        let container = symbol
+            .qualified_name
+            .strip_suffix(symbol.name.as_str())
+            .and_then(|prefix| prefix.strip_suffix('.'))
+            .filter(|prefix| !prefix.is_empty())
+            .map(str::to_string);
+        self.defs.push(Def {
+            uid: symbol.uid.clone(),
+            name: symbol.name.clone(),
+            kind: symbol.kind.clone(),
+            file: symbol.file_path.clone(),
+            family: language_family(&symbol.file_path)
+                .unwrap_or_default()
+                .to_string(),
+            start: symbol.start_line,
+            end: symbol.end_line,
+            container,
+            enclosing_fn: None,
+        });
+        self.by_name
+            .entry(symbol.name.clone())
+            .or_default()
+            .push(id);
+        self.by_file
             .entry(symbol.file_path.clone())
             .or_default()
-            .push(Def {
-                uid: symbol.uid.clone(),
-                name: symbol.name.clone(),
-                kind: symbol.kind.clone(),
-                start: symbol.start_line,
-                end: symbol.end_line,
-            });
-        let family = language_family(&symbol.file_path)
-            .unwrap_or_default()
-            .to_string();
-        self.family_of_uid
-            .insert(symbol.uid.clone(), family.clone());
-        let name_id = self.pool.intern(&symbol.name);
-        let qualified_id = self.pool.intern(&symbol.qualified_name);
-        let uid_id = self.pool.intern(&symbol.uid);
-        for (key, map) in [
-            (name_id, &mut self.name_to_uid),
-            (qualified_id, &mut self.qualified_to_uid),
-        ] {
-            let entries = map.entry(key).or_default();
-            if !entries.iter().any(|(uid, _)| *uid == uid_id) {
-                entries.push((uid_id, family.clone()));
-            }
-        }
+            .push(id);
+        self.prepared = false;
     }
 
-    /// Register import aliases for resolution
-    pub fn register_imports(&mut self, imports: &[ImportInfo]) {
-        for import in imports {
-            if let Some(ref original) = import.original_name {
-                if import.local_name != *original {
-                    let local_id = self.pool.intern(&import.local_name);
-                    let original_id = self.pool.intern(original);
-                    self.import_aliases.insert(local_id, original_id);
+    /// Pass 1: register what a parsed file declares beyond its symbols: its
+    /// imports and the aliases SSA analysis found (`handler =
+    /// authenticate`). Register every parsed file, also one without symbols:
+    /// imports are resolved to files.
+    pub fn register_file(
+        &mut self,
+        path: &str,
+        imports: &[ImportInfo],
+        aliases: &[(String, String)],
+    ) {
+        let context = self.files.entry(path.to_string()).or_default();
+        context.imports.extend(imports.iter().cloned());
+        context.aliases.extend(aliases.iter().cloned());
+        self.prepared = false;
+    }
+
+    /// Mark definitions nested in function bodies and index file paths.
+    fn prepare(&mut self) {
+        if self.prepared {
+            return;
+        }
+        for ids in self.by_file.values_mut() {
+            // Outer definitions first: by start line, the longer span first.
+            ids.sort_by_key(|&id| (self.defs[id].start, std::cmp::Reverse(self.defs[id].end)));
+            let mut open: Vec<(u32, u32)> = Vec::new();
+            for &id in ids.iter() {
+                let def = &self.defs[id];
+                while open.last().is_some_and(|&(_, end)| end < def.start) {
+                    open.pop();
+                }
+                let enclosing = open
+                    .last()
+                    .copied()
+                    .filter(|&(start, end)| (start, end) != (def.start, def.end));
+                let is_fn = def.is_function_like();
+                let span = (def.start, def.end);
+                self.defs[id].enclosing_fn = enclosing;
+                if is_fn {
+                    open.push(span);
                 }
             }
         }
+        let paths = self.by_file.keys().chain(self.files.keys());
+        self.index = imports::PathIndex::new(paths);
+        self.prepared = true;
     }
 
-    /// Register a variable alias discovered by SSA analysis.
+    /// Pass 2: resolve call references to CALLS relationships.
     ///
-    /// When code contains `handler = authenticate`, this maps
-    /// `"handler"` → `"authenticate"` so that `handler()` resolves
-    /// to the `authenticate` symbol.
-    pub fn register_alias(&mut self, local_name: &str, target_name: &str) {
-        let local_id = self.pool.intern(local_name);
-        let target_id = self.pool.intern(target_name);
-        self.aliases.insert(local_id, target_id);
-    }
-
-    /// Pass 2: Resolve call references to relationships.
-    ///
-    /// When a [`CallReference`] carries an expression chain, the resolver
-    /// attempts to build a qualified name from the chain's receiver type
-    /// (e.g. `Foo.bar`) and looks that up before falling back to the bare
-    /// callee name. SSA aliases are also consulted as a final fallback.
-    ///
-    /// ## Confidence Notes
-    ///
-    /// This is a **heuristic approach** with varying confidence levels:
-    ///
-    /// - **High confidence**: Expression chains (`obj.method()`), unique names, same-file calls
-    /// - **Low confidence**: Bare-name calls to functions with common names (`parse`, `handle`, `validate`, `map`)
-    ///
-    /// See the struct-level documentation for details on false positives and mitigation.
-    /// Each edge records how its target was picked ([`CallResolution`]) in
-    /// its metadata: `line:<n>;resolved:<label>`.
-    pub fn resolve_calls(&self, calls: &[CallReference], repo_id: &str) -> Vec<Relationship> {
-        let mut relationships = Vec::new();
-
+    /// One edge per caller/callee pair; it carries the line of the call that
+    /// found it with the strongest [`CallResolution`], in its metadata:
+    /// `line:<n>;resolved:<label>`.
+    pub fn resolve_calls(&mut self, calls: &[CallReference], repo_id: &str) -> Vec<Relationship> {
+        self.prepare();
+        let mut edges: Vec<(DefId, DefId, CallResolution, u32)> = Vec::new();
+        let mut seen: HashMap<(DefId, DefId), usize> = HashMap::new();
         for call in calls {
-            let caller_uid = self.caller_of(call);
-
-            // Try chain-based qualified resolution first, then import/SSA aliases.
-            let callee_uid = self.resolve_with_chain(call).or_else(|| {
-                let callee_id = self.pool.intern_readonly(&call.callee_name);
-                let resolved_name = callee_id
-                    .and_then(|id| self.import_aliases.get(&id))
-                    .or_else(|| callee_id.and_then(|id| self.aliases.get(&id)));
-
-                if let Some(&target_id) = resolved_name {
-                    let target_str = self.pool.get(target_id);
-                    self.resolve_name(target_str, call.file.as_deref())
-                } else {
-                    self.resolve_name(&call.callee_name, call.file.as_deref())
+            let Some(site) = self.site(call) else {
+                continue;
+            };
+            for (target, resolution) in self.targets(&site, call) {
+                match seen.get(&(site.caller, target)) {
+                    Some(&i) => {
+                        if resolution > edges[i].2 {
+                            edges[i].2 = resolution;
+                            edges[i].3 = call.line;
+                        }
+                    }
+                    None => {
+                        seen.insert((site.caller, target), edges.len());
+                        edges.push((site.caller, target, resolution, call.line));
+                    }
                 }
-            });
-
-            if let (Some(source), Some((target, resolution))) = (caller_uid, callee_uid) {
-                relationships.push(Relationship {
-                    uid: Uuid::new_v4().to_string(),
-                    source_uid: source.to_string(),
-                    target_uid: target.to_string(),
-                    kind: RelationshipKind::Calls,
-                    repo_id: repo_id.to_string(),
-                    metadata: format!("line:{};resolved:{}", call.line, resolution.label()),
-                });
             }
         }
+        edges
+            .into_iter()
+            .map(|(source, target, resolution, line)| Relationship {
+                uid: Uuid::new_v4().to_string(),
+                source_uid: self.defs[source].uid.clone(),
+                target_uid: self.defs[target].uid.clone(),
+                kind: RelationshipKind::Calls,
+                repo_id: repo_id.to_string(),
+                metadata: format!("line:{line};resolved:{}", resolution.label()),
+            })
+            .collect()
+    }
 
-        // Deduplicate: same source+target only once
-        let mut seen = std::collections::HashSet::new();
-        relationships.retain(|r| {
-            let key = format!("{}:{}", r.source_uid, r.target_uid);
-            seen.insert(key)
-        });
-
-        relationships
+    /// Where `call` is made: its file, family and caller. `None` for a call
+    /// without a file or outside every definition.
+    fn site<'a>(&'a self, call: &'a CallReference) -> Option<Site<'a>> {
+        let file = call.file.as_deref()?;
+        let family = language_family(file)?;
+        let caller = self.caller_of(file, call)?;
+        Some(Site {
+            file,
+            family,
+            line: call.line,
+            caller,
+            context: self.files.get(file),
+        })
     }
 
     /// The symbol a call is made from: the innermost definition in the call's
     /// file whose lines contain the call site, preferring one with the name
     /// the extractor gave as the caller (a closure or local function inside
     /// it may be extracted as a symbol of its own). Never a lookup by name
-    /// alone: a call without a file, or outside every definition, has no
-    /// caller.
-    fn caller_of(&self, call: &CallReference) -> Option<&str> {
-        let defs = self.defs_by_file.get(call.file.as_deref()?)?;
+    /// alone.
+    fn caller_of(&self, file: &str, call: &CallReference) -> Option<DefId> {
+        let ids = self.by_file.get(file)?;
         let containing = || {
-            defs.iter()
-                .filter(|d| d.start <= call.line && call.line <= d.end)
+            ids.iter()
+                .copied()
+                .filter(|&id| self.defs[id].contains(call.line))
         };
-        let innermost = |d: &&Def| (d.end - d.start, d.start);
+        let innermost =
+            |&id: &DefId| (self.defs[id].end - self.defs[id].start, self.defs[id].start);
         containing()
-            .filter(|d| d.name == call.caller_name)
+            .filter(|&id| self.defs[id].name == call.caller_name)
             .min_by_key(innermost)
             .or_else(|| {
                 containing()
-                    .filter(|d| matches!(d.kind, SymbolKind::Function | SymbolKind::Method))
+                    .filter(|&id| self.defs[id].is_function_like())
                     .min_by_key(innermost)
             })
-            .map(|d| d.uid.as_str())
     }
 
-    /// Attempt to resolve a call using its expression chain.
-    ///
-    /// Extracts the receiver identifier and builds a qualified name like
-    /// `Receiver.method` for lookup.
-    fn resolve_with_chain(&self, call: &CallReference) -> Option<(&str, CallResolution)> {
-        let chain = call.chain.as_ref()?;
-
-        // Extract the receiver name from the chain (first Ident).
-        let receiver = chain.iter().find_map(|step| match step {
-            ExpressionStep::Ident(name) => Some(name.as_str()),
-            _ => None,
-        })?;
-
-        // Resolve alias if present.
-        let receiver = self
-            .pool
-            .intern_readonly(receiver)
-            .and_then(|id| self.import_aliases.get(&id))
-            .map(|&id| self.pool.get(id))
-            .unwrap_or(receiver);
-
-        // Try qualified name: `Receiver.method`
-        let qualified = format!("{}.{}", receiver, call.callee_name);
-        self.resolve_name(&qualified, call.file.as_deref())
-    }
-
-    fn resolve_name(&self, name: &str, file: Option<&str>) -> Option<(&str, CallResolution)> {
-        let family = file.and_then(language_family)?;
-        // Intern readonly — if the string isn't in the pool, it can't match.
-        if let Some(name_id) = self.pool.intern_readonly(name) {
-            // The candidates of the caller's language family; the last one
-            // registered wins.
-            let pick = |map: &HashMap<StrId, Vec<(StrId, String)>>| {
-                let candidates: Vec<StrId> = map
-                    .get(&name_id)?
-                    .iter()
-                    .filter(|(_, f)| f == family)
-                    .map(|(uid, _)| *uid)
-                    .collect();
-                let last = *candidates.last()?;
-                Some((last, candidates.len() > 1))
-            };
-            let resolution = |unique: CallResolution, ambiguous: bool| {
-                if ambiguous {
-                    CallResolution::Ambiguous
-                } else {
-                    unique
-                }
-            };
-            // First try qualified and simple name maps
-            if let Some((uid_id, ambiguous)) = pick(&self.qualified_to_uid) {
-                // A bare name that happens to equal a qualified name (a
-                // top-level definition) is still only a name match.
-                let unique = if is_qualified(name) {
-                    CallResolution::Exact
-                } else {
-                    CallResolution::NameMatch
+    /// The symbols `call` may call, with how each was found.
+    fn targets(&self, site: &Site, call: &CallReference) -> Vec<(DefId, CallResolution)> {
+        let name = call.callee_name.as_str();
+        match call.form {
+            CallForm::Bare => self.resolve_bare(site, name),
+            CallForm::Member => match call.chain.as_deref().and_then(|c| receiver_steps(c, name)) {
+                Some(receiver) => self.resolve_member(site, receiver, name),
+                None => self.methods_named(site, name),
+            },
+            CallForm::New => {
+                let receiver = call.chain.as_deref().and_then(|c| receiver_steps(c, name));
+                let classes = match receiver.map(|r| self.receiver(site, r)) {
+                    Some(Receiver::Module(files)) => {
+                        self.top_level_in(&files, name, Def::is_class_like)
+                    }
+                    Some(_) => Vec::new(),
+                    None => self.classes_in_scope(site, name),
                 };
-                return Some((self.pool.get(uid_id), resolution(unique, ambiguous)));
+                pick(classes, CallResolution::Exact)
             }
-            if let Some((uid_id, ambiguous)) = pick(&self.name_to_uid) {
-                return Some((
-                    self.pool.get(uid_id),
-                    resolution(CallResolution::NameMatch, ambiguous),
-                ));
+            CallForm::SuperConstructor => Vec::new(),
+            CallForm::Unknown => self.resolve_by_name(site, call),
+        }
+    }
+
+    // --- bare calls -------------------------------------------------------
+
+    /// `f()`: nearest scope first; nothing outside the scopes the language
+    /// has.
+    fn resolve_bare(&self, site: &Site, name: &str) -> Vec<(DefId, CallResolution)> {
+        let name = self.unalias(site, name);
+        if implicit_this(site.family) {
+            let members = self.enclosing_members(site, name);
+            if !members.is_empty() {
+                return pick(members, CallResolution::Exact);
             }
         }
+        let local = self.in_file(site, name, Def::is_callable);
+        if !local.is_empty() {
+            return pick(local, CallResolution::NameMatch);
+        }
+        if let Some(bound) = self.imported(site, name) {
+            return match bound {
+                Bound::Defs(defs) => pick(
+                    defs.into_iter()
+                        .filter(|&id| self.defs[id].is_callable())
+                        .collect(),
+                    CallResolution::Import,
+                ),
+                Bound::Module(_) | Bound::External => Vec::new(),
+            };
+        }
+        if package_scope(site.family) {
+            let package = self.in_package(site, name, |d| d.is_callable() && d.container.is_none());
+            return pick(package, CallResolution::NameMatch);
+        }
+        Vec::new()
+    }
 
-        // Fall back to the module graph for cross-file resolution
-        if let (Some(graph), Some(file_path)) = (&self.module_graph, file) {
-            if let Some(uid) = graph.resolve_import(file_path, name) {
-                if self.family_of_uid.get(uid).map(String::as_str) == Some(family) {
-                    return Some((uid, CallResolution::Import));
+    /// The target of an SSA alias in the call's file (`handler =
+    /// authenticate; handler()`), else `name`.
+    fn unalias<'a>(&self, site: &Site<'a>, name: &'a str) -> &'a str {
+        site.context
+            .and_then(|c| c.aliases.iter().rev().find(|(local, _)| local == name))
+            .map_or(name, |(_, target)| target.as_str())
+    }
+
+    /// Members named `name` of the classes enclosing the caller, innermost
+    /// class first.
+    fn enclosing_members(&self, site: &Site, name: &str) -> Vec<DefId> {
+        for class in self.enclosing_classes(site) {
+            let members = self.members_of(class, name);
+            if !members.is_empty() {
+                return members;
+            }
+        }
+        Vec::new()
+    }
+
+    /// The classes whose bodies contain the call site, innermost first.
+    fn enclosing_classes(&self, site: &Site) -> Vec<DefId> {
+        let mut classes: Vec<DefId> = self
+            .by_file
+            .get(site.file)
+            .into_iter()
+            .flatten()
+            .copied()
+            .filter(|&id| self.defs[id].is_class_like() && self.defs[id].contains(site.line))
+            .collect();
+        classes.sort_by_key(|&id| self.defs[id].end - self.defs[id].start);
+        classes
+    }
+
+    /// Methods and nested definitions named `name` declared in `class`.
+    fn members_of(&self, class: DefId, name: &str) -> Vec<DefId> {
+        let class = &self.defs[class];
+        self.named(name)
+            .filter(|&id| {
+                let def = &self.defs[id];
+                def.family == class.family
+                    && def.is_callable()
+                    && def
+                        .container
+                        .as_deref()
+                        .is_some_and(|c| c.rsplit('.').next() == Some(class.name.as_str()))
+                    && (def.file == class.file || def.dir() == class.dir())
+            })
+            .collect()
+    }
+
+    /// Definitions named `name` in the caller's file that are visible from
+    /// the call site: one nested in a function that contains the call (it
+    /// shadows the rest), else the top-level ones.
+    fn in_file(&self, site: &Site, name: &str, accept: impl Fn(&Def) -> bool) -> Vec<DefId> {
+        let (nested, top): (Vec<DefId>, Vec<DefId>) = self
+            .named(name)
+            .filter(|&id| {
+                let def = &self.defs[id];
+                def.file == site.file
+                    && accept(def)
+                    && def.container.is_none()
+                    && def
+                        .enclosing_fn
+                        .is_none_or(|(start, end)| start <= site.line && site.line <= end)
+            })
+            .partition(|&id| self.defs[id].enclosing_fn.is_some());
+        let innermost = nested
+            .iter()
+            .map(|&id| self.defs[id].enclosing_fn.map_or(0, |(s, e)| e - s))
+            .min();
+        match innermost {
+            Some(span) => nested
+                .into_iter()
+                .filter(|&id| self.defs[id].enclosing_fn.map_or(0, |(s, e)| e - s) == span)
+                .collect(),
+            None => top,
+        }
+    }
+
+    /// Definitions named `name` in the other files of the caller's
+    /// directory.
+    fn in_package(&self, site: &Site, name: &str, accept: impl Fn(&Def) -> bool) -> Vec<DefId> {
+        let dir = parent_dir(site.file);
+        self.named(name)
+            .filter(|&id| {
+                let def = &self.defs[id];
+                def.family == site.family
+                    && def.file != site.file
+                    && def.dir() == dir
+                    && def.enclosing_fn.is_none()
+                    && accept(def)
+            })
+            .collect()
+    }
+
+    /// Top-level definitions named `name` in `files`.
+    fn top_level_in(
+        &self,
+        files: &[String],
+        name: &str,
+        accept: impl Fn(&Def) -> bool,
+    ) -> Vec<DefId> {
+        self.named(name)
+            .filter(|&id| {
+                let def = &self.defs[id];
+                def.is_top_level() && accept(def) && files.iter().any(|f| *f == def.file)
+            })
+            .collect()
+    }
+
+    fn named<'a>(&'a self, name: &str) -> impl Iterator<Item = DefId> + 'a {
+        self.by_name.get(name).into_iter().flatten().copied()
+    }
+
+    /// What the import of `name` in the caller's file binds, if `name` is
+    /// imported.
+    fn imported(&self, site: &Site, name: &str) -> Option<Bound> {
+        let context = site.context?;
+        if let Some(import) = context.imports.iter().find(|i| i.local_name == name) {
+            if let Some(bound) = self.resolve_import(site, import) {
+                return Some(bound);
+            }
+        }
+        // A wildcard import (`from m import *`, `use m::*`, Go's `import .`)
+        // binds every top-level name of its module.
+        context
+            .imports
+            .iter()
+            .filter(|i| imports::is_wildcard(site.family, i))
+            .find_map(|import| match self.resolve_import(site, import)? {
+                Bound::Module(files) => {
+                    let defs = self.top_level_in(&files, name, |_| true);
+                    (!defs.is_empty()).then_some(Bound::Defs(defs))
                 }
+                _ => None,
+            })
+    }
+
+    /// Classes named `name` visible from the call site: nested in an
+    /// enclosing class (Java), in the caller's file, imported, or (Go, Java)
+    /// in the same package.
+    fn classes_in_scope(&self, site: &Site, name: &str) -> Vec<DefId> {
+        let local: Vec<DefId> = self
+            .named(name)
+            .filter(|&id| {
+                let def = &self.defs[id];
+                def.file == site.file && def.is_class_like()
+            })
+            .collect();
+        if !local.is_empty() {
+            return local;
+        }
+        match self.imported(site, name) {
+            Some(Bound::Defs(defs)) => {
+                return defs
+                    .into_iter()
+                    .filter(|&id| self.defs[id].is_class_like())
+                    .collect()
+            }
+            Some(Bound::Module(files)) => {
+                return self.top_level_in(&files, name, Def::is_class_like)
+            }
+            Some(Bound::External) => return Vec::new(),
+            None => {}
+        }
+        if package_scope(site.family) {
+            return self.in_package(site, name, Def::is_class_like);
+        }
+        Vec::new()
+    }
+
+    // --- calls on a receiver ---------------------------------------------
+
+    /// `receiver.name()`.
+    fn resolve_member(
+        &self,
+        site: &Site,
+        receiver: &[ExpressionStep],
+        name: &str,
+    ) -> Vec<(DefId, CallResolution)> {
+        match self.receiver(site, receiver) {
+            Receiver::Module(files) => pick(
+                self.top_level_in(&files, name, Def::is_callable),
+                CallResolution::Import,
+            ),
+            Receiver::External => Vec::new(),
+            Receiver::Unknown => self.methods_named(site, name),
+        }
+    }
+
+    /// What a receiver expression is, as far as the imports tell.
+    fn receiver(&self, site: &Site, steps: &[ExpressionStep]) -> Receiver {
+        match steps {
+            [ExpressionStep::Literal, ..] => Receiver::External,
+            [ExpressionStep::Ident(name)] => match self.imported(site, name) {
+                Some(Bound::Module(files)) => Receiver::Module(files),
+                Some(Bound::External) => Receiver::External,
+                _ => Receiver::Unknown,
+            },
+            _ => Receiver::Unknown,
+        }
+    }
+
+    /// Any method named `name` in the caller's language family: the call is
+    /// on a receiver whose type is not known.
+    fn methods_named(&self, site: &Site, name: &str) -> Vec<(DefId, CallResolution)> {
+        let methods = self
+            .named(name)
+            .filter(|&id| {
+                let def = &self.defs[id];
+                def.family == site.family && def.kind == SymbolKind::Method
+            })
+            .collect();
+        pick(methods, CallResolution::NameMatch)
+    }
+
+    // --- languages without call forms -----------------------------------
+
+    /// A call from an extractor that does not record call forms: by name,
+    /// nearest scope first, any callable kind.
+    fn resolve_by_name(&self, site: &Site, call: &CallReference) -> Vec<(DefId, CallResolution)> {
+        let name = self.unalias(site, &call.callee_name);
+        // `Receiver.method` where exactly one symbol has that qualified name.
+        if let Some(receiver) = call.chain.as_deref().and_then(|chain| {
+            chain.iter().find_map(|step| match step {
+                ExpressionStep::Ident(name) => Some(name.as_str()),
+                _ => None,
+            })
+        }) {
+            let qualified: Vec<DefId> = self
+                .named(name)
+                .filter(|&id| {
+                    let def = &self.defs[id];
+                    def.family == site.family
+                        && def
+                            .container
+                            .as_deref()
+                            .is_some_and(|c| c.rsplit('.').next() == Some(receiver))
+                })
+                .collect();
+            if qualified.len() == 1 {
+                return pick(qualified, CallResolution::Exact);
             }
         }
+        let local = self.in_file(site, name, Def::is_callable);
+        if !local.is_empty() {
+            return pick(local, CallResolution::NameMatch);
+        }
+        if let Some(Bound::Defs(defs)) = self.imported(site, name) {
+            let defs: Vec<DefId> = defs
+                .into_iter()
+                .filter(|&id| self.defs[id].is_callable())
+                .collect();
+            if !defs.is_empty() {
+                return pick(defs, CallResolution::Import);
+            }
+        }
+        let package = self.in_package(site, name, Def::is_callable);
+        if !package.is_empty() {
+            return pick(package, CallResolution::NameMatch);
+        }
+        let family = self
+            .named(name)
+            .filter(|&id| {
+                let def = &self.defs[id];
+                def.family == site.family && def.is_callable()
+            })
+            .collect();
+        pick(family, CallResolution::NameMatch)
+    }
+}
 
-        None
+/// The receiver part of a call's chain: the steps before the final
+/// `.name()`. `None` when the chain does not end in a call of `name`.
+fn receiver_steps<'a>(chain: &'a [ExpressionStep], name: &str) -> Option<&'a [ExpressionStep]> {
+    let chain = chain.strip_suffix(&[ExpressionStep::Call]).unwrap_or(chain);
+    match chain.split_last() {
+        Some((ExpressionStep::Field(last), receiver)) if last == name && !receiver.is_empty() => {
+            Some(receiver)
+        }
+        _ => None,
+    }
+}
+
+/// One candidate: an edge with the given label. Several: an `ambiguous`
+/// edge to each, up to [`MAX_AMBIGUOUS_TARGETS`]. None, or too many: no
+/// edge.
+fn pick(mut candidates: Vec<DefId>, unique: CallResolution) -> Vec<(DefId, CallResolution)> {
+    candidates.sort_unstable();
+    candidates.dedup();
+    match candidates.len() {
+        1 => vec![(candidates[0], unique)],
+        n if n <= MAX_AMBIGUOUS_TARGETS => candidates
+            .into_iter()
+            .map(|id| (id, CallResolution::Ambiguous))
+            .collect(),
+        _ => Vec::new(),
     }
 }
 
@@ -409,20 +769,18 @@ impl CallResolver {
 mod tests {
     use super::*;
 
-    const FILE: &str = "src/lib.rs";
-
-    /// A symbol in [`FILE`] spanning lines 1-2000, so it contains every
-    /// call site these tests use; the innermost one named like the caller
-    /// is the caller.
-    fn sym(name: &str, qualified: &str, uid: &str) -> CodeSymbol {
+    /// A symbol `name` in `file`, lines `start..=end`; `container` is the
+    /// class or type it belongs to.
+    fn symbol(file: &str, qualified: &str, kind: SymbolKind, lines: (u32, u32)) -> CodeSymbol {
+        let name = qualified.rsplit('.').next().unwrap();
         CodeSymbol {
-            uid: uid.to_string(),
+            uid: format!("{file}::{qualified}"),
             name: name.to_string(),
             qualified_name: qualified.to_string(),
-            kind: SymbolKind::Function,
-            file_path: FILE.to_string(),
-            start_line: 1,
-            end_line: 2000,
+            kind,
+            file_path: file.to_string(),
+            start_line: lines.0,
+            end_line: lines.1,
             signature: String::new(),
             content: String::new(),
             repo_id: "repo".to_string(),
@@ -430,186 +788,144 @@ mod tests {
         }
     }
 
-    #[test]
-    fn simple_alias_resolves_call() {
-        let mut resolver = CallResolver::new();
-        resolver.register_symbol(&sym("main", "mod::main", "uid-main"));
-        resolver.register_symbol(&sym("authenticate", "mod::authenticate", "uid-auth"));
-        resolver.register_alias("handler", "authenticate");
-
-        let calls = vec![CallReference {
-            caller_name: "main".to_string(),
-            callee_name: "handler".to_string(),
-            line: 10,
-            chain: None,
-            file: Some(FILE.to_string()),
-        }];
-
-        let rels = resolver.resolve_calls(&calls, "repo-1");
-        assert_eq!(rels.len(), 1);
-        assert_eq!(rels[0].source_uid, "uid-main");
-        assert_eq!(rels[0].target_uid, "uid-auth");
+    fn function(file: &str, name: &str, lines: (u32, u32)) -> CodeSymbol {
+        symbol(file, name, SymbolKind::Function, lines)
     }
 
-    #[test]
-    fn import_alias_takes_precedence_over_ssa_alias() {
-        let mut resolver = CallResolver::new();
-        resolver.register_symbol(&sym("main", "mod::main", "uid-main"));
-        resolver.register_symbol(&sym("connect", "db::connect", "uid-connect"));
-        resolver.register_symbol(&sym("other", "mod::other", "uid-other"));
-
-        // Both import alias and SSA alias point to different targets
-        let import_local_id = resolver.pool.intern("db");
-        let import_target_id = resolver.pool.intern("connect");
-        resolver
-            .import_aliases
-            .insert(import_local_id, import_target_id);
-        resolver.register_alias("db", "other");
-
-        let calls = vec![CallReference {
-            caller_name: "main".to_string(),
-            callee_name: "db".to_string(),
-            line: 5,
-            chain: None,
-            file: Some(FILE.to_string()),
-        }];
-
-        let rels = resolver.resolve_calls(&calls, "repo-1");
-        assert_eq!(rels.len(), 1);
-        // Import alias wins
-        assert_eq!(rels[0].target_uid, "uid-connect");
+    fn method(file: &str, qualified: &str, lines: (u32, u32)) -> CodeSymbol {
+        symbol(file, qualified, SymbolKind::Method, lines)
     }
 
-    #[test]
-    fn multiple_aliases_to_same_target() {
-        let mut resolver = CallResolver::new();
-        resolver.register_symbol(&sym("main", "mod::main", "uid-main"));
-        resolver.register_symbol(&sym("validate", "mod::validate", "uid-validate"));
-        resolver.register_alias("check", "validate");
-        resolver.register_alias("verify", "validate");
-
-        let calls = vec![
-            CallReference {
-                caller_name: "main".to_string(),
-                callee_name: "check".to_string(),
-                line: 10,
-                chain: None,
-                file: Some(FILE.to_string()),
-            },
-            CallReference {
-                caller_name: "main".to_string(),
-                callee_name: "verify".to_string(),
-                line: 11,
-                chain: None,
-                file: Some(FILE.to_string()),
-            },
-        ];
-
-        let rels = resolver.resolve_calls(&calls, "repo-1");
-        // Both resolve to validate, but dedup collapses them to one edge
-        assert_eq!(rels.len(), 1);
-        assert_eq!(rels[0].target_uid, "uid-validate");
+    fn class(file: &str, name: &str, lines: (u32, u32)) -> CodeSymbol {
+        symbol(file, name, SymbolKind::Class, lines)
     }
 
-    fn call(caller: &str, callee: &str) -> CallReference {
+    /// A call of `callee` at `file:line`, made from `caller`.
+    fn call(file: &str, line: u32, caller: &str, callee: &str, form: CallForm) -> CallReference {
         CallReference {
             caller_name: caller.to_string(),
             callee_name: callee.to_string(),
-            line: 7,
+            line,
             chain: None,
-            file: Some(FILE.to_string()),
+            file: Some(file.to_string()),
+            form,
+            arg_count: None,
         }
     }
 
-    #[test]
-    fn edges_record_how_their_target_was_resolved() {
-        let mut resolver = CallResolver::new();
-        resolver.register_symbol(&sym("main", "main", "uid-main"));
-        resolver.register_symbol(&sym("unique", "unique", "uid-unique"));
-        resolver.register_symbol(&sym("bar", "Foo.bar", "uid-foo-bar"));
-        // Two different symbols named `parse`.
-        resolver.register_symbol(&sym("parse", "auth.parse", "uid-auth-parse"));
-        resolver.register_symbol(&sym("parse", "config.parse", "uid-config-parse"));
-        // Registering the same symbol twice is not an ambiguity.
-        resolver.register_symbol(&sym("unique", "unique", "uid-unique"));
+    /// `receiver.callee()` with the receiver given as chain steps.
+    fn member(
+        file: &str,
+        line: u32,
+        caller: &str,
+        receiver: Vec<ExpressionStep>,
+        callee: &str,
+    ) -> CallReference {
+        let mut chain = receiver;
+        chain.push(ExpressionStep::Field(callee.to_string()));
+        chain.push(ExpressionStep::Call);
+        CallReference {
+            chain: Some(chain),
+            ..call(file, line, caller, callee, CallForm::Member)
+        }
+    }
 
-        let resolution_of = |callee: &str| {
-            let rels = resolver.resolve_calls(&[call("main", callee)], "repo");
-            assert_eq!(rels.len(), 1, "{callee} should resolve");
-            assert!(
-                rels[0].metadata.starts_with("line:7;"),
-                "{}",
-                rels[0].metadata
-            );
-            CallResolution::from_metadata(&rels[0].metadata).expect("labelled edge")
-        };
-        assert_eq!(resolution_of("Foo.bar"), CallResolution::Exact);
-        assert_eq!(resolution_of("unique"), CallResolution::NameMatch);
-        assert_eq!(resolution_of("bar"), CallResolution::NameMatch);
-        assert_eq!(resolution_of("parse"), CallResolution::Ambiguous);
+    fn ident(name: &str) -> ExpressionStep {
+        ExpressionStep::Ident(name.to_string())
+    }
+
+    fn import(local: &str, module: &str, original: Option<&str>) -> ImportInfo {
+        ImportInfo {
+            local_name: local.to_string(),
+            source_module: module.to_string(),
+            original_name: original.map(str::to_string),
+        }
+    }
+
+    fn resolver(symbols: &[CodeSymbol]) -> CallResolver {
+        let mut resolver = CallResolver::new();
+        for symbol in symbols {
+            resolver.register_symbol(symbol);
+        }
+        resolver
+    }
+
+    /// `(source uid, target uid, label)` of every edge `calls` produce.
+    fn edges(
+        resolver: &mut CallResolver,
+        calls: &[CallReference],
+    ) -> Vec<(String, String, &'static str)> {
+        let mut edges: Vec<_> = resolver
+            .resolve_calls(calls, "repo")
+            .into_iter()
+            .map(|r| {
+                let label = CallResolution::from_metadata(&r.metadata)
+                    .expect("labelled")
+                    .label();
+                (r.source_uid, r.target_uid, label)
+            })
+            .collect();
+        edges.sort();
+        edges
+    }
+
+    fn edge(source: &str, target: &str, label: &'static str) -> (String, String, &'static str) {
+        (source.to_string(), target.to_string(), label)
     }
 
     /// Two functions named `parse` in different files: a call made inside
     /// the second one is attributed to the second one, by position, not to
-    /// whichever `parse` a name lookup returns (#139).
+    /// whichever `parse` a lookup by name returns (#139).
     #[test]
     fn the_caller_is_the_definition_containing_the_call_site() {
-        let mut resolver = CallResolver::new();
-        let at = |uid: &str, file: &str, lines: (u32, u32)| CodeSymbol {
-            file_path: file.to_string(),
-            start_line: lines.0,
-            end_line: lines.1,
-            ..sym("parse", "parse", uid)
-        };
-        // Registered last, so a lookup by name would return a.py's parse.
-        resolver.register_symbol(&at("uid-b-parse", "b.py", (10, 20)));
-        resolver.register_symbol(&at("uid-a-parse", "a.py", (1, 5)));
-        resolver.register_symbol(&CodeSymbol {
-            file_path: "b.py".to_string(),
-            start_line: 30,
-            end_line: 31,
-            ..sym("decode", "decode", "uid-decode")
-        });
-
-        let mut call = call("parse", "decode");
-        call.file = Some("b.py".to_string());
-        call.line = 12;
-        let rels = resolver.resolve_calls(std::slice::from_ref(&call), "repo");
-        assert_eq!(rels.len(), 1);
-        assert_eq!(rels[0].source_uid, "uid-b-parse");
-
+        let mut resolver = resolver(&[
+            function("b.py", "parse", (10, 20)),
+            function("b.py", "decode", (30, 31)),
+            function("a.py", "parse", (1, 5)),
+        ]);
+        let inside = call("b.py", 12, "parse", "decode", CallForm::Bare);
+        assert_eq!(
+            edges(&mut resolver, &[inside.clone()]),
+            [edge("b.py::parse", "b.py::decode", "name-match")]
+        );
         // Outside every definition, or without a file, a call has no caller.
-        call.line = 25;
-        assert!(resolver
-            .resolve_calls(std::slice::from_ref(&call), "repo")
-            .is_empty());
-        call.line = 12;
-        call.file = None;
-        assert!(resolver.resolve_calls(&[call], "repo").is_empty());
+        let outside = CallReference {
+            line: 25,
+            ..inside.clone()
+        };
+        let nowhere = CallReference {
+            file: None,
+            ..inside
+        };
+        assert!(edges(&mut resolver, &[outside, nowhere]).is_empty());
     }
 
     /// A TypeScript `.map()` never resolves to a Rust `map`, however unique
     /// the name; a `.vue` file and a `.ts` file are one family (#139).
     #[test]
     fn calls_resolve_only_within_the_callers_language_family() {
-        let mut resolver = CallResolver::new();
-        let in_file = |name: &str, uid: &str, file: &str| CodeSymbol {
-            file_path: file.to_string(),
-            ..sym(name, name, uid)
-        };
-        resolver.register_symbol(&in_file("render", "uid-render", "src/view.tsx"));
-        resolver.register_symbol(&in_file("map", "uid-rust-map", "src/utils.rs"));
-        resolver.register_symbol(&in_file("format", "uid-format", "src/format.ts"));
-
-        let mut to_map = call("render", "map");
-        to_map.file = Some("src/view.tsx".to_string());
-        assert!(resolver.resolve_calls(&[to_map], "repo").is_empty());
-
-        let mut to_format = call("render", "format");
-        to_format.file = Some("src/view.tsx".to_string());
-        let rels = resolver.resolve_calls(&[to_format], "repo");
-        assert_eq!(rels.len(), 1);
-        assert_eq!(rels[0].target_uid, "uid-format");
+        let mut resolver = resolver(&[
+            function("src/view.tsx", "render", (1, 9)),
+            method("src/utils.rs", "Iter.map", (1, 3)),
+            method("src/format.ts", "Fmt.format", (1, 3)),
+            function("src/App.vue", "mount", (1, 3)),
+        ]);
+        let calls = [
+            member("src/view.tsx", 2, "render", vec![ident("items")], "map"),
+            member("src/view.tsx", 3, "render", vec![ident("value")], "format"),
+            call("src/App.vue", 2, "mount", "render", CallForm::Unknown),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge("src/App.vue::mount", "src/view.tsx::render", "name-match"),
+                edge(
+                    "src/view.tsx::render",
+                    "src/format.ts::Fmt.format",
+                    "name-match"
+                ),
+            ]
+        );
     }
 
     #[test]
@@ -625,6 +941,382 @@ mod tests {
         assert_eq!(language_family("Makefile"), None);
     }
 
+    /// `parse()` in Python: the caller's own file first, then what the file
+    /// imports; a method of that name is never a bare call's target, and a
+    /// name in neither scope (a built-in) gets no edge.
+    #[test]
+    fn a_bare_call_binds_like_the_language_does() {
+        let mut resolver = resolver(&[
+            function("shop/auth.py", "parse", (1, 5)),
+            function("shop/auth.py", "decode", (7, 8)),
+            function("shop/config.py", "decode", (1, 2)),
+            function("shop/validation.py", "validate", (1, 2)),
+            method("shop/validation.py", "Validator.validate", (4, 5)),
+            function("shop/other.py", "print", (1, 2)),
+        ]);
+        resolver.register_file(
+            "shop/auth.py",
+            &[import("validate", "shop.validation", Some("validate"))],
+            &[],
+        );
+        let calls = [
+            call("shop/auth.py", 2, "parse", "decode", CallForm::Bare),
+            call("shop/auth.py", 3, "parse", "validate", CallForm::Bare),
+            call("shop/auth.py", 4, "parse", "print", CallForm::Bare),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge("shop/auth.py::parse", "shop/auth.py::decode", "name-match"),
+                edge(
+                    "shop/auth.py::parse",
+                    "shop/validation.py::validate",
+                    "import"
+                ),
+            ]
+        );
+    }
+
+    /// An aliased import (`from shop.auth import parse as parse_token`), a
+    /// module import (`from shop import config; config.parse()`) and a
+    /// library module (`json.loads()`).
+    #[test]
+    fn imports_bind_aliases_and_modules() {
+        let mut resolver = resolver(&[
+            function("shop/service.py", "login", (1, 9)),
+            function("shop/auth.py", "parse", (1, 2)),
+            function("shop/config.py", "parse", (1, 2)),
+            method("shop/json.py", "Codec.loads", (1, 2)),
+        ]);
+        resolver.register_file(
+            "shop/service.py",
+            &[
+                import("parse_token", "shop.auth", Some("parse")),
+                import("config", "shop", Some("config")),
+                import("json", "json", None),
+            ],
+            &[],
+        );
+        resolver.register_file("shop/__init__.py", &[], &[]);
+        let calls = [
+            call("shop/service.py", 2, "login", "parse_token", CallForm::Bare),
+            member(
+                "shop/service.py",
+                3,
+                "login",
+                vec![ident("config")],
+                "parse",
+            ),
+            member("shop/service.py", 4, "login", vec![ident("json")], "loads"),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge("shop/service.py::login", "shop/auth.py::parse", "import"),
+                edge("shop/service.py::login", "shop/config.py::parse", "import"),
+            ]
+        );
+    }
+
+    /// TypeScript: relative specifiers resolve against the importer's
+    /// directory; a namespace import is a module; a package is a library.
+    #[test]
+    fn typescript_imports_resolve_relative_paths() {
+        let mut resolver = resolver(&[
+            function("src/app/main.ts", "main", (1, 9)),
+            function("src/app/util.ts", "format", (1, 2)),
+            function("src/lib/util.ts", "format", (1, 2)),
+            function("src/lib/config.ts", "parse", (1, 2)),
+            function("src/other/lodash.ts", "debounce", (1, 2)),
+        ]);
+        resolver.register_file(
+            "src/app/main.ts",
+            &[
+                import("format", "../lib/util", Some("format")),
+                import("config", "../lib/config", Some("*")),
+                import("debounce", "lodash", Some("debounce")),
+            ],
+            &[],
+        );
+        let calls = [
+            call("src/app/main.ts", 2, "main", "format", CallForm::Bare),
+            member("src/app/main.ts", 3, "main", vec![ident("config")], "parse"),
+            call("src/app/main.ts", 4, "main", "debounce", CallForm::Bare),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(
+                    "src/app/main.ts::main",
+                    "src/lib/config.ts::parse",
+                    "import"
+                ),
+                edge("src/app/main.ts::main", "src/lib/util.ts::format", "import"),
+            ]
+        );
+    }
+
+    /// Go: a package is a directory; `pkg.F()` resolves in the imported
+    /// package (never to a method), `F()` in the caller's package, and a
+    /// standard-library package is a library.
+    #[test]
+    fn go_packages_are_directories() {
+        let mut resolver = resolver(&[
+            function("svc/svc.go", "Run", (1, 9)),
+            function("svc/helpers.go", "helper", (1, 2)),
+            function("validation/validation.go", "Validate", (1, 2)),
+            method("validation/validation.go", "Validator.Validate", (4, 5)),
+            function("strings/strings.go", "Join", (1, 2)),
+        ]);
+        resolver.register_file(
+            "svc/svc.go",
+            &[
+                import("validation", "example.com/shop/validation", None),
+                import("strings", "strings", None),
+            ],
+            &[],
+        );
+        let calls = [
+            member(
+                "svc/svc.go",
+                2,
+                "Run",
+                vec![ident("validation")],
+                "Validate",
+            ),
+            call("svc/svc.go", 3, "Run", "helper", CallForm::Bare),
+            member("svc/svc.go", 4, "Run", vec![ident("strings")], "Join"),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge("svc/svc.go::Run", "svc/helpers.go::helper", "name-match"),
+                edge(
+                    "svc/svc.go::Run",
+                    "validation/validation.go::Validate",
+                    "import"
+                ),
+            ]
+        );
+    }
+
+    /// Rust: `use crate::m::item` binds the item in module file `m.rs`;
+    /// `use crate::m::{self}` binds the module; `std::` is a library.
+    #[test]
+    fn rust_use_paths_bind_items_and_modules() {
+        let mut resolver = resolver(&[
+            function("src/service.rs", "run", (1, 9)),
+            function("src/auth.rs", "parse", (1, 2)),
+            function("src/config.rs", "parse", (1, 2)),
+        ]);
+        resolver.register_file(
+            "src/service.rs",
+            &[
+                import(
+                    "parse_token",
+                    "crate::auth::parse",
+                    Some("crate::auth::parse"),
+                ),
+                import("config", "crate::config", Some("self")),
+                import("HashMap", "std::collections::HashMap", None),
+            ],
+            &[],
+        );
+        let calls = [
+            call("src/service.rs", 2, "run", "parse_token", CallForm::Bare),
+            member("src/service.rs", 3, "run", vec![ident("config")], "parse"),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge("src/service.rs::run", "src/auth.rs::parse", "import"),
+                edge("src/service.rs::run", "src/config.rs::parse", "import"),
+            ]
+        );
+    }
+
+    /// Java: an unqualified call reaches the enclosing class's methods (the
+    /// innermost class first), then a static import.
+    #[test]
+    fn java_unqualified_calls_reach_the_enclosing_class() {
+        let mut resolver = resolver(&[
+            class("shop/Main.java", "Main", (1, 30)),
+            method("shop/Main.java", "Main.handler", (2, 4)),
+            class("shop/Main.java", "Main.Worker", (5, 12)),
+            method("shop/Main.java", "Worker.handler", (6, 7)),
+            method("shop/Main.java", "Worker.run", (8, 10)),
+            method("shop/Main.java", "Main.run", (13, 20)),
+            class("shop/auth/Auth.java", "Auth", (1, 9)),
+            method("shop/auth/Auth.java", "Auth.parse", (2, 4)),
+        ]);
+        resolver.register_file(
+            "shop/Main.java",
+            &[import("parse", "shop.auth.Auth.parse", Some("static"))],
+            &[],
+        );
+        let calls = [
+            call("shop/Main.java", 9, "run", "handler", CallForm::Bare),
+            call("shop/Main.java", 14, "run", "handler", CallForm::Bare),
+            call("shop/Main.java", 15, "run", "parse", CallForm::Bare),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(
+                    "shop/Main.java::Main.run",
+                    "shop/Main.java::Main.handler",
+                    "exact"
+                ),
+                edge(
+                    "shop/Main.java::Main.run",
+                    "shop/auth/Auth.java::Auth.parse",
+                    "import"
+                ),
+                edge(
+                    "shop/Main.java::Worker.run",
+                    "shop/Main.java::Worker.handler",
+                    "exact"
+                ),
+            ]
+        );
+    }
+
+    /// A call on an unknown receiver may reach any method of that name, but
+    /// never a free function; a literal receiver reaches nothing.
+    #[test]
+    fn a_method_call_never_reaches_a_free_function() {
+        let mut resolver = resolver(&[
+            function("src/a.ts", "main", (1, 9)),
+            function("src/utils.ts", "map", (1, 2)),
+            method("src/models.ts", "Order.total", (1, 2)),
+        ]);
+        let calls = [
+            member("src/a.ts", 2, "main", vec![ident("items")], "map"),
+            member("src/a.ts", 3, "main", vec![ident("order")], "total"),
+            member(
+                "src/a.ts",
+                4,
+                "main",
+                vec![ExpressionStep::Literal],
+                "total",
+            ),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "src/a.ts::main",
+                "src/models.ts::Order.total",
+                "name-match"
+            )]
+        );
+    }
+
+    /// Several candidates: an `ambiguous` edge to each, up to
+    /// [`MAX_AMBIGUOUS_TARGETS`]; more than that: none.
+    #[test]
+    fn ambiguous_calls_link_a_few_candidates_or_none() {
+        let few = MAX_AMBIGUOUS_TARGETS.max(2);
+        let mut symbols = vec![function("src/a.py", "main", (1, 9))];
+        for i in 0..few {
+            symbols.push(method(&format!("src/m{i}.py"), "C.get", (1, 2)));
+        }
+        let mut resolver = resolver(&symbols);
+        let get = member("src/a.py", 2, "main", vec![ident("x")], "get");
+        let found = edges(&mut resolver, std::slice::from_ref(&get));
+        if MAX_AMBIGUOUS_TARGETS >= 2 {
+            assert_eq!(found.len(), few);
+            assert!(found.iter().all(|(_, _, label)| *label == "ambiguous"));
+        } else {
+            assert!(found.is_empty());
+        }
+
+        symbols.push(method("src/too_many.py", "C.get", (1, 2)));
+        for i in few..=MAX_AMBIGUOUS_TARGETS {
+            symbols.push(method(&format!("src/n{i}.py"), "C.get", (1, 2)));
+        }
+        let mut resolver = self::resolver(&symbols);
+        assert!(edges(&mut resolver, &[get]).is_empty());
+    }
+
+    /// `handler = authenticate; handler()` resolves to `authenticate`.
+    #[test]
+    fn an_ssa_alias_in_the_file_is_followed() {
+        let mut resolver = resolver(&[
+            function("app.py", "main", (1, 9)),
+            function("app.py", "authenticate", (10, 12)),
+        ]);
+        resolver.register_file(
+            "app.py",
+            &[],
+            &[("handler".to_string(), "authenticate".to_string())],
+        );
+        let calls = [call("app.py", 3, "main", "handler", CallForm::Bare)];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge("app.py::main", "app.py::authenticate", "name-match")]
+        );
+    }
+
+    /// A function nested in another one is visible only inside it.
+    #[test]
+    fn a_nested_function_is_visible_only_in_its_parent() {
+        let local = CodeSymbol {
+            uid: "app.ts::dispatch/handler".to_string(),
+            ..function("app.ts", "handler", (2, 2))
+        };
+        let mut resolver = resolver(&[
+            function("app.ts", "dispatch", (1, 5)),
+            local,
+            function("app.ts", "main", (6, 9)),
+            function("app.ts", "handler", (10, 12)),
+        ]);
+        let calls = [
+            call("app.ts", 3, "dispatch", "handler", CallForm::Bare),
+            call("app.ts", 7, "main", "handler", CallForm::Bare),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge("app.ts::dispatch", "app.ts::dispatch/handler", "name-match"),
+                edge("app.ts::main", "app.ts::handler", "name-match"),
+            ]
+        );
+    }
+
+    /// Several calls between one pair make one edge, with the strongest
+    /// label and that call's line.
+    #[test]
+    fn one_edge_per_pair_with_the_strongest_label() {
+        let mut resolver = resolver(&[
+            function("src/main.rs", "run", (1, 9)),
+            method("src/a.rs", "Repo.get", (1, 2)),
+            method("src/b.rs", "Cache.get", (1, 2)),
+        ]);
+        resolver.register_file(
+            "src/main.rs",
+            &[import("Repo", "crate::a::Repo", None)],
+            &[],
+        );
+        let calls = [
+            member("src/main.rs", 2, "run", vec![ident("x")], "get"),
+            CallReference {
+                form: CallForm::Unknown,
+                chain: Some(vec![
+                    ident("Repo"),
+                    ExpressionStep::Field("get".into()),
+                    ExpressionStep::Call,
+                ]),
+                ..call("src/main.rs", 5, "run", "get", CallForm::Unknown)
+            },
+        ];
+        let rels = resolver.resolve_calls(&calls, "repo");
+        let to_repo = rels
+            .iter()
+            .find(|r| r.target_uid == "src/a.rs::Repo.get")
+            .unwrap();
+        assert_eq!(to_repo.metadata, "line:5;resolved:exact");
+    }
+
     #[test]
     fn unlabelled_metadata_has_no_resolution() {
         assert_eq!(CallResolution::from_metadata("line:3"), None);
@@ -635,62 +1327,29 @@ mod tests {
         );
     }
 
+    /// Resolution stays linear-ish: a thousand symbols and calls.
     #[test]
-    fn stringpool_stress_test_1000_symbols() {
-        let mut resolver = CallResolver::new();
-
-        // Register 1000 symbols
+    fn a_thousand_symbols_and_calls() {
+        let mut symbols = vec![function("src/main.py", "main", (1, 5000))];
         for i in 0..1000 {
-            resolver.register_symbol(&sym(
+            symbols.push(function(
+                &format!("src/m{i}.py"),
                 &format!("func_{i}"),
-                &format!("mod::func_{i}"),
-                &format!("uid-{i}"),
+                (1, 2),
             ));
         }
-
-        // Register aliases for every 10th symbol
-        for i in (0..1000).step_by(10) {
-            resolver.register_alias(&format!("alias_{i}"), &format!("func_{i}"));
-        }
-
-        // Create call references from func_0 to every other symbol
-        let calls: Vec<CallReference> = (1..1000)
-            .map(|i| CallReference {
-                caller_name: "func_0".to_string(),
-                callee_name: format!("func_{i}"),
-                line: i as u32,
-                chain: None,
-                file: Some(FILE.to_string()),
+        let mut resolver = resolver(&symbols);
+        let calls: Vec<CallReference> = (0..1000)
+            .map(|i| {
+                call(
+                    "src/main.py",
+                    2 + i,
+                    "main",
+                    &format!("func_{i}"),
+                    CallForm::Unknown,
+                )
             })
             .collect();
-
-        let rels = resolver.resolve_calls(&calls, "repo-bench");
-        assert_eq!(rels.len(), 999);
-
-        // Verify alias-based calls resolve correctly
-        let alias_calls: Vec<CallReference> = (0..1000)
-            .step_by(10)
-            .map(|i| CallReference {
-                caller_name: "func_0".to_string(),
-                callee_name: format!("alias_{i}"),
-                line: (1000 + i) as u32,
-                chain: None,
-                file: Some(FILE.to_string()),
-            })
-            .collect();
-
-        let alias_rels = resolver.resolve_calls(&alias_calls, "repo-bench");
-        // alias_0 resolves to func_0, so func_0 -> func_0 is a self-call, still valid
-        assert_eq!(alias_rels.len(), 100);
-
-        for rel in &alias_rels {
-            assert_eq!(rel.source_uid, "uid-0");
-            assert!(rel.target_uid.starts_with("uid-"));
-        }
-
-        // Verify the pool is actually deduplicating (re-registering shouldn't grow it much)
-        let pool_size_before = resolver.pool.len();
-        resolver.register_symbol(&sym("func_0", "mod::func_0", "uid-0"));
-        assert_eq!(resolver.pool.len(), pool_size_before);
+        assert_eq!(resolver.resolve_calls(&calls, "repo").len(), 1000);
     }
 }

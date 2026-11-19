@@ -1,6 +1,6 @@
 //! JVM-family extraction: Java, Kotlin and Scala.
 
-use super::{CallReference, ImportInfo, ParsedSymbol, SourceParser};
+use super::{CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
 use myceliums_storage::SymbolKind;
 use tree_sitter::Node;
 
@@ -234,61 +234,58 @@ impl SourceParser {
         };
 
         let scope = fn_name.as_deref().or(current_fn);
+        let arg_count = node
+            .child_by_field_name("arguments")
+            .map(|args| args.named_child_count() as u32);
+        let mut push = |callee: String, chain: Option<Vec<ExpressionStep>>, form: CallForm| {
+            if let Some(caller) = scope {
+                calls.push(CallReference {
+                    caller_name: caller.to_string(),
+                    callee_name: callee,
+                    line: node.start_position().row as u32 + 1,
+                    chain,
+                    file: None,
+                    form,
+                    arg_count,
+                });
+            }
+        };
 
         match kind {
             "method_invocation" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let callee = self.node_text(name_node, source).to_string();
-                    if let Some(caller) = scope {
-                        calls.push(CallReference {
-                            caller_name: caller.to_string(),
-                            callee_name: callee,
-                            line: node.start_position().row as u32 + 1,
-                            chain: None,
-                            file: None,
-                        });
+                    match node.child_by_field_name("object") {
+                        // `obj.m()`, `Type.m()`, `this.m()`
+                        Some(object) => {
+                            let mut steps = Vec::new();
+                            self.collect_java_chain_steps(object, source, &mut steps);
+                            steps.push(ExpressionStep::Field(callee.clone()));
+                            steps.push(ExpressionStep::Call);
+                            push(callee, Some(steps), CallForm::Member);
+                        }
+                        // `m()`: a method of this class, an outer class, a
+                        // base class, or a static import.
+                        None => push(callee, None, CallForm::Bare),
                     }
                 }
             }
             "object_creation_expression" => {
                 // new ClassName(args) — extract the type name as callee
                 if let Some(type_node) = node.child_by_field_name("type") {
-                    let type_name = self.node_text(type_node, source).to_string();
-                    // Strip generic parameters (e.g., `ArrayList<String>` -> `ArrayList`)
-                    let clean_name = type_name
-                        .split('<')
-                        .next()
-                        .unwrap_or(&type_name)
-                        .trim()
-                        .to_string();
-                    if let Some(caller) = scope {
-                        calls.push(CallReference {
-                            caller_name: caller.to_string(),
-                            callee_name: clean_name,
-                            line: node.start_position().row as u32 + 1,
-                            chain: None,
-                            file: None,
-                        });
-                    }
+                    let clean_name = java_type_name(self.node_text(type_node, source));
+                    push(clean_name, None, CallForm::New);
                 }
             }
             "explicit_constructor_invocation" => {
                 // super(...) or this(...) calls
-                let cursor = &mut node.walk();
-                for child in node.children(cursor) {
-                    let child_text = self.node_text(child, source);
-                    if child_text == "super" || child_text == "this" {
-                        if let Some(caller) = scope {
-                            calls.push(CallReference {
-                                caller_name: caller.to_string(),
-                                callee_name: child_text.to_string(),
-                                line: node.start_position().row as u32 + 1,
-                                chain: None,
-                                file: None,
-                            });
-                        }
-                        break;
-                    }
+                match node
+                    .child_by_field_name("constructor")
+                    .map(|c| self.node_text(c, source))
+                {
+                    Some("super") => push("super".to_string(), None, CallForm::SuperConstructor),
+                    Some("this") => push("this".to_string(), None, CallForm::Unknown),
+                    _ => {}
                 }
             }
             _ => {}
@@ -297,6 +294,81 @@ impl SourceParser {
         let cursor = &mut node.walk();
         for child in node.children(cursor) {
             self.extract_java_calls(child, source, calls, scope);
+        }
+    }
+
+    /// Chain steps of a Java expression used as a receiver.
+    pub(super) fn collect_java_chain_steps(
+        &self,
+        node: Node,
+        source: &[u8],
+        steps: &mut Vec<ExpressionStep>,
+    ) {
+        match node.kind() {
+            "method_invocation" => {
+                if let Some(object) = node.child_by_field_name("object") {
+                    self.collect_java_chain_steps(object, source, steps);
+                }
+                if let Some(name) = node.child_by_field_name("name") {
+                    steps.push(ExpressionStep::Field(
+                        self.node_text(name, source).to_string(),
+                    ));
+                }
+                steps.push(ExpressionStep::Call);
+            }
+            "field_access" => {
+                if let Some(object) = node.child_by_field_name("object") {
+                    self.collect_java_chain_steps(object, source, steps);
+                }
+                if let Some(field) = node.child_by_field_name("field") {
+                    steps.push(ExpressionStep::Field(
+                        self.node_text(field, source).to_string(),
+                    ));
+                }
+            }
+            "identifier" | "type_identifier" => steps.push(ExpressionStep::Ident(
+                self.node_text(node, source).to_string(),
+            )),
+            "this" => steps.push(ExpressionStep::This),
+            "super" => steps.push(ExpressionStep::Super),
+            // `new T(...)` and `(T) x` are values of type T.
+            "object_creation_expression" | "cast_expression" => {
+                match node.child_by_field_name("type") {
+                    Some(ty) => steps.push(ExpressionStep::New(java_type_name(
+                        self.node_text(ty, source),
+                    ))),
+                    None => steps.push(ExpressionStep::Literal),
+                }
+            }
+            "parenthesized_expression" => match node.named_child(0) {
+                Some(inner) => self.collect_java_chain_steps(inner, source, steps),
+                None => steps.push(ExpressionStep::Literal),
+            },
+            "array_access" => {
+                if let Some(array) = node.child_by_field_name("array") {
+                    self.collect_java_chain_steps(array, source, steps);
+                }
+                steps.push(ExpressionStep::Index);
+            }
+            "string_literal"
+            | "text_block"
+            | "character_literal"
+            | "decimal_integer_literal"
+            | "hex_integer_literal"
+            | "octal_integer_literal"
+            | "binary_integer_literal"
+            | "decimal_floating_point_literal"
+            | "hex_floating_point_literal"
+            | "true"
+            | "false"
+            | "null_literal"
+            | "array_creation_expression"
+            | "lambda_expression"
+            | "method_reference"
+            | "class_literal" => steps.push(ExpressionStep::Literal),
+            _ => steps.push(ExpressionStep::Ident(
+                self.node_text(node, source).to_string(),
+            )),
         }
     }
 
@@ -585,6 +657,7 @@ impl SourceParser {
                         line: node.start_position().row as u32 + 1,
                         chain: None,
                         file: None,
+                        ..Default::default()
                     });
                 }
             }
@@ -830,6 +903,7 @@ impl SourceParser {
                         line: node.start_position().row as u32 + 1,
                         chain: None,
                         file: None,
+                        ..Default::default()
                     });
                 }
             }
@@ -903,6 +977,18 @@ impl SourceParser {
             self.extract_scala_imports(child, source, imports);
         }
     }
+}
+
+/// The class a Java type names, without generic arguments or array
+/// brackets kept apart: `Repository<User>` → `Repository`, `List<?>` →
+/// `List`; an array type (`String[]`) keeps its brackets, so it never
+/// matches a project class.
+pub(super) fn java_type_name(text: &str) -> String {
+    let text = text.trim();
+    if text.ends_with(']') {
+        return text.to_string();
+    }
+    text.split('<').next().unwrap_or(text).trim().to_string()
 }
 
 #[cfg(test)]

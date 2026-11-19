@@ -1,6 +1,6 @@
 //! Go extraction.
 
-use super::{CallReference, ImportInfo, ParsedSymbol, SourceParser};
+use super::{CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
 use myceliums_storage::SymbolKind;
 use tree_sitter::Node;
 
@@ -178,10 +178,7 @@ impl SourceParser {
 
         // Track current function scope
         let fn_name = match kind {
-            "function_declaration" => node
-                .child_by_field_name("name")
-                .map(|n| self.node_text(n, source).to_string()),
-            "method_declaration" => node
+            "function_declaration" | "method_declaration" => node
                 .child_by_field_name("name")
                 .map(|n| self.node_text(n, source).to_string()),
             _ => None,
@@ -189,99 +186,119 @@ impl SourceParser {
 
         let scope = fn_name.as_deref().or(current_fn);
 
-        match kind {
-            "call_expression" => {
-                if let Some(func_node) = node.child_by_field_name("function") {
-                    let callee = match func_node.kind() {
-                        "identifier" => self.node_text(func_node, source).to_string(),
-                        "selector_expression" => {
-                            if let Some(field) = func_node.child_by_field_name("field") {
-                                self.node_text(field, source).to_string()
-                            } else {
-                                self.node_text(func_node, source).to_string()
-                            }
+        // Calls in `go f()` and `defer f()` are ordinary call_expressions
+        // below those statements.
+        if kind == "call_expression" {
+            if let (Some(func_node), Some(caller)) = (node.child_by_field_name("function"), scope) {
+                let (callee, chain, form) = match func_node.kind() {
+                    "identifier" => (
+                        self.node_text(func_node, source).to_string(),
+                        None,
+                        CallForm::Bare,
+                    ),
+                    // `pkg.F()`, `value.Method()`
+                    "selector_expression" => {
+                        let name = func_node
+                            .child_by_field_name("field")
+                            .map(|f| self.node_text(f, source).to_string())
+                            .unwrap_or_else(|| self.node_text(func_node, source).to_string());
+                        let mut steps = Vec::new();
+                        if let Some(operand) = func_node.child_by_field_name("operand") {
+                            self.collect_go_chain_steps(operand, source, &mut steps);
                         }
-                        _ => self.node_text(func_node, source).to_string(),
-                    };
-                    if let Some(caller) = scope {
-                        calls.push(CallReference {
-                            caller_name: caller.to_string(),
-                            callee_name: callee,
-                            line: node.start_position().row as u32 + 1,
-                            chain: None,
-                            file: None,
-                        });
+                        steps.push(ExpressionStep::Field(name.clone()));
+                        steps.push(ExpressionStep::Call);
+                        (name, Some(steps), CallForm::Member)
                     }
-                }
+                    _ => (
+                        self.node_text(func_node, source).to_string(),
+                        None,
+                        CallForm::Unknown,
+                    ),
+                };
+                calls.push(CallReference {
+                    caller_name: caller.to_string(),
+                    callee_name: callee,
+                    line: node.start_position().row as u32 + 1,
+                    chain,
+                    file: None,
+                    form,
+                    arg_count: node
+                        .child_by_field_name("arguments")
+                        .map(|args| args.named_child_count() as u32),
+                });
             }
-            "go_statement" => {
-                // go handleRequest(conn) — extract the call inside
-                let cursor = &mut node.walk();
-                for child in node.children(cursor) {
-                    if child.kind() == "call_expression" {
-                        if let Some(func_node) = child.child_by_field_name("function") {
-                            let callee = match func_node.kind() {
-                                "identifier" => self.node_text(func_node, source).to_string(),
-                                "selector_expression" => {
-                                    if let Some(field) = func_node.child_by_field_name("field") {
-                                        self.node_text(field, source).to_string()
-                                    } else {
-                                        self.node_text(func_node, source).to_string()
-                                    }
-                                }
-                                _ => self.node_text(func_node, source).to_string(),
-                            };
-                            if let Some(caller) = scope {
-                                calls.push(CallReference {
-                                    caller_name: caller.to_string(),
-                                    callee_name: callee,
-                                    line: child.start_position().row as u32 + 1,
-                                    chain: None,
-                                    file: None,
-                                });
-                            }
-                        }
-                    }
-                }
-                return; // Don't recurse further (already handled the call)
-            }
-            "defer_statement" => {
-                // defer file.Close() — extract the call inside
-                let cursor = &mut node.walk();
-                for child in node.children(cursor) {
-                    if child.kind() == "call_expression" {
-                        if let Some(func_node) = child.child_by_field_name("function") {
-                            let callee = match func_node.kind() {
-                                "identifier" => self.node_text(func_node, source).to_string(),
-                                "selector_expression" => {
-                                    if let Some(field) = func_node.child_by_field_name("field") {
-                                        self.node_text(field, source).to_string()
-                                    } else {
-                                        self.node_text(func_node, source).to_string()
-                                    }
-                                }
-                                _ => self.node_text(func_node, source).to_string(),
-                            };
-                            if let Some(caller) = scope {
-                                calls.push(CallReference {
-                                    caller_name: caller.to_string(),
-                                    callee_name: callee,
-                                    line: child.start_position().row as u32 + 1,
-                                    chain: None,
-                                    file: None,
-                                });
-                            }
-                        }
-                    }
-                }
-                return; // Don't recurse further
-            }
-            _ => {}
         }
 
         let cursor = &mut node.walk();
         for child in node.children(cursor) {
             self.extract_go_calls(child, source, calls, scope);
+        }
+    }
+
+    /// Chain steps of a Go expression used as a receiver.
+    pub(super) fn collect_go_chain_steps(
+        &self,
+        node: Node,
+        source: &[u8],
+        steps: &mut Vec<ExpressionStep>,
+    ) {
+        match node.kind() {
+            "selector_expression" => {
+                if let Some(operand) = node.child_by_field_name("operand") {
+                    self.collect_go_chain_steps(operand, source, steps);
+                }
+                if let Some(field) = node.child_by_field_name("field") {
+                    steps.push(ExpressionStep::Field(
+                        self.node_text(field, source).to_string(),
+                    ));
+                }
+            }
+            "call_expression" => {
+                if let Some(function) = node.child_by_field_name("function") {
+                    self.collect_go_chain_steps(function, source, steps);
+                }
+                steps.push(ExpressionStep::Call);
+            }
+            "identifier" => steps.push(ExpressionStep::Ident(
+                self.node_text(node, source).to_string(),
+            )),
+            "unary_expression" | "parenthesized_expression" => {
+                match node
+                    .child_by_field_name("operand")
+                    .or_else(|| node.named_child(0))
+                {
+                    Some(inner) => self.collect_go_chain_steps(inner, source, steps),
+                    None => steps.push(ExpressionStep::Literal),
+                }
+            }
+            "index_expression" => {
+                if let Some(operand) = node.child_by_field_name("operand") {
+                    self.collect_go_chain_steps(operand, source, steps);
+                }
+                steps.push(ExpressionStep::Index);
+            }
+            // `T{...}` and `x.(T)` are values of type T.
+            "composite_literal" | "type_assertion_expression" => {
+                let ty = node.child_by_field_name("type");
+                match ty.map(|t| go_type_name(self.node_text(t, source))) {
+                    Some(name) => steps.push(ExpressionStep::New(name)),
+                    None => steps.push(ExpressionStep::Literal),
+                }
+            }
+            "interpreted_string_literal"
+            | "raw_string_literal"
+            | "int_literal"
+            | "float_literal"
+            | "imaginary_literal"
+            | "rune_literal"
+            | "true"
+            | "false"
+            | "nil"
+            | "func_literal" => steps.push(ExpressionStep::Literal),
+            _ => steps.push(ExpressionStep::Ident(
+                self.node_text(node, source).to_string(),
+            )),
         }
     }
 
@@ -344,6 +361,22 @@ impl SourceParser {
             });
         }
     }
+}
+
+/// The type a Go type expression names, without pointers, slices of
+/// pointers or generic arguments: `*store.Repo[*model.User]` → `store.Repo`.
+/// A slice, array, map, channel or function type keeps its full text, so it
+/// never matches a project type.
+pub(super) fn go_type_name(text: &str) -> String {
+    let text = text.trim().trim_start_matches('*').trim();
+    if text.starts_with('[')
+        || text.starts_with("map[")
+        || text.starts_with("chan ")
+        || text.starts_with("func")
+    {
+        return text.to_string();
+    }
+    text.split('[').next().unwrap_or(text).trim().to_string()
 }
 
 #[cfg(test)]

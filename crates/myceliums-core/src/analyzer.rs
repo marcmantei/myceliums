@@ -19,7 +19,6 @@ use crate::email::{self, ParsedEmail};
 use crate::file_guard::{should_skip_file, FileSkipReason};
 use crate::git_metadata::GitMetadataExtractor;
 use crate::mbox;
-use crate::module_graph::ModuleGraph;
 use crate::notebook;
 use crate::parser::ParsedRationale;
 use crate::parser::{self, SourceLanguage, SourceParser};
@@ -362,9 +361,6 @@ impl Analyzer {
         let mut all_rationales: Vec<(String, Vec<ParsedRationale>)> = Vec::new();
         let mut resolver = CallResolver::new();
         let mut skipped_count: usize = 0;
-        // Per-file tracking for module graph construction
-        let mut file_symbols: Vec<(String, Vec<(String, String)>)> = Vec::new();
-        let mut file_imports: Vec<(String, Vec<crate::parser::ImportInfo>)> = Vec::new();
         let mut skip_reasons: HashMap<FileSkipReason, usize> = HashMap::new();
 
         // Batched-write cursors — track how many symbols/files have already
@@ -620,13 +616,6 @@ impl Analyzer {
                 &repo_id,
             );
 
-            // Track per-file symbols for module graph
-            let sym_pairs: Vec<(String, String)> = symbols
-                .iter()
-                .map(|s| (s.name.clone(), s.uid.clone()))
-                .collect();
-            file_symbols.push((file_result.rel_path.clone(), sym_pairs));
-
             for sym in &symbols {
                 resolver.register_symbol(sym);
             }
@@ -653,21 +642,13 @@ impl Analyzer {
                 ));
             }
 
-            // Track per-file imports for module graph
-            if !file_result.parse_result.imports.is_empty() {
-                file_imports.push((
-                    file_result.rel_path.clone(),
-                    file_result.parse_result.imports.clone(),
-                ));
-            }
-
-            resolver.register_imports(&file_result.parse_result.imports);
+            // Imports and SSA aliases scope the file's calls.
+            resolver.register_file(
+                &file_result.rel_path,
+                &file_result.parse_result.imports,
+                &file_result.parse_result.aliases,
+            );
             all_imports.extend(file_result.parse_result.imports);
-
-            // Feed SSA-discovered aliases to the resolver
-            for (local, target) in &file_result.parse_result.aliases {
-                resolver.register_alias(local, target);
-            }
 
             // Flush symbols and files in batches during parsing
             if config.batch_size > 0 && all_symbols.len() - symbols_written >= config.batch_size {
@@ -740,10 +721,10 @@ impl Analyzer {
                 call.file = Some(rel_path.clone());
                 call
             }));
+            resolver.register_file(&rel_path, &result.imports, &result.aliases);
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
             }
-            resolver.register_imports(&result.imports);
             all_imports.extend(result.imports);
 
             // Flush notebook symbols and files in batches
@@ -948,18 +929,6 @@ impl Analyzer {
         }
         all_symbols.extend(conversation_syms);
         email_rels.extend(conversation_rels);
-
-        // Build module graph for cross-file import resolution
-        let mut module_graph = ModuleGraph::new();
-        for (path, syms) in &file_symbols {
-            module_graph.register_module(path, syms);
-        }
-        for (path, imports) in &file_imports {
-            for import in imports {
-                module_graph.register_import(path, import);
-            }
-        }
-        resolver.set_module_graph(module_graph);
 
         // Pass 2: Resolve calls to relationships
         self.check_cancelled()?;
@@ -1513,10 +1482,10 @@ impl Analyzer {
                     call.file = Some(rel_path.clone());
                     call
                 }));
+                resolver.register_file(&rel_path, &result.imports, &result.aliases);
                 if !result.rationales.is_empty() {
                     all_rationales.push((rel_path, result.rationales));
                 }
-                resolver.register_imports(&result.imports);
                 all_imports.extend(result.imports);
                 continue;
             }
@@ -1684,11 +1653,10 @@ impl Analyzer {
                 call.file = Some(rel_path.clone());
                 call
             }));
+            resolver.register_file(&rel_path, &result.imports, &result.aliases);
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
             }
-
-            resolver.register_imports(&result.imports);
             all_imports.extend(result.imports);
         }
 

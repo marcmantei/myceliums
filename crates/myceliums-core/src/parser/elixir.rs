@@ -159,6 +159,7 @@ impl SourceParser {
                                 line: node.start_position().row as u32 + 1,
                                 chain: None,
                                 file: None,
+                                ..Default::default()
                             });
                         }
                     }

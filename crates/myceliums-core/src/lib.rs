@@ -149,12 +149,10 @@ pub mod wiki_export;
 // ── Internal modules (not part of the public API) ────────────────────
 
 pub(crate) mod content;
-pub(crate) mod module_graph;
 pub(crate) mod resolver;
 pub use resolver::CallResolution;
 #[allow(dead_code)]
 pub(crate) mod ssa;
-pub(crate) mod string_pool;
 
 // ── Top-level re-exports ─────────────────────────────────────────────
 

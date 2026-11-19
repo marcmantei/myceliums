@@ -1,6 +1,6 @@
 //! Python extraction.
 
-use super::{CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
+use super::{CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
 use myceliums_storage::{SymbolKind, SymbolMetadata};
 use tree_sitter::Node;
 
@@ -96,8 +96,12 @@ impl SourceParser {
 
         if kind == "call" {
             if let Some(func_node) = node.child_by_field_name("function") {
-                let (callee, chain) = match func_node.kind() {
-                    "identifier" => (self.node_text(func_node, source).to_string(), None),
+                let (callee, chain, form) = match func_node.kind() {
+                    "identifier" => (
+                        self.node_text(func_node, source).to_string(),
+                        None,
+                        CallForm::Bare,
+                    ),
                     "attribute" => {
                         let chain = self.build_py_chain(func_node, source);
                         let name = if let Some(attr) = func_node.child_by_field_name("attribute") {
@@ -105,9 +109,13 @@ impl SourceParser {
                         } else {
                             self.node_text(func_node, source).to_string()
                         };
-                        (name, chain)
+                        (name, chain, CallForm::Member)
                     }
-                    _ => (self.node_text(func_node, source).to_string(), None),
+                    _ => (
+                        self.node_text(func_node, source).to_string(),
+                        None,
+                        CallForm::Unknown,
+                    ),
                 };
                 if let Some(caller) = scope {
                     calls.push(CallReference {
@@ -116,6 +124,8 @@ impl SourceParser {
                         line: node.start_position().row as u32 + 1,
                         chain,
                         file: None,
+                        form,
+                        arg_count: None,
                     });
                 }
             }
@@ -139,8 +149,38 @@ impl SourceParser {
         }
     }
 
-    fn collect_py_chain_steps(&self, node: Node, source: &[u8], steps: &mut Vec<ExpressionStep>) {
+    pub(super) fn collect_py_chain_steps(
+        &self,
+        node: Node,
+        source: &[u8],
+        steps: &mut Vec<ExpressionStep>,
+    ) {
         match node.kind() {
+            "string"
+            | "concatenated_string"
+            | "integer"
+            | "float"
+            | "true"
+            | "false"
+            | "none"
+            | "list"
+            | "dictionary"
+            | "set"
+            | "tuple"
+            | "list_comprehension"
+            | "dictionary_comprehension"
+            | "set_comprehension" => steps.push(ExpressionStep::Literal),
+            "parenthesized_expression" => {
+                if let Some(inner) = node.named_child(0) {
+                    self.collect_py_chain_steps(inner, source, steps);
+                }
+            }
+            "subscript" => {
+                if let Some(value) = node.child_by_field_name("value") {
+                    self.collect_py_chain_steps(value, source, steps);
+                }
+                steps.push(ExpressionStep::Index);
+            }
             "attribute" => {
                 if let Some(obj) = node.child_by_field_name("object") {
                     self.collect_py_chain_steps(obj, source, steps);
@@ -250,6 +290,12 @@ impl SourceParser {
                                 });
                             }
                         }
+                        // `from m import *`
+                        "wildcard_import" => imports.push(ImportInfo {
+                            local_name: "*".to_string(),
+                            source_module: module.clone(),
+                            original_name: None,
+                        }),
                         _ => {}
                     }
                 }

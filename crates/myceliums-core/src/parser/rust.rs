@@ -1,6 +1,6 @@
 //! Rust extraction.
 
-use super::{CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
+use super::{CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
 use myceliums_storage::{SymbolKind, SymbolMetadata, Visibility};
 use tree_sitter::Node;
 
@@ -221,88 +221,90 @@ impl SourceParser {
 
         match kind {
             "call_expression" => {
-                if let Some(func_node) = node.child_by_field_name("function") {
-                    let (callee, chain) = match func_node.kind() {
-                        "identifier" => (self.node_text(func_node, source).to_string(), None),
+                if let (Some(func_node), Some(caller)) =
+                    (node.child_by_field_name("function"), scope)
+                {
+                    // `foo::<T>()`, `x.foo::<T>()`: the turbofish is noise here.
+                    let func_node = match func_node.kind() {
+                        "generic_function" => func_node
+                            .child_by_field_name("function")
+                            .unwrap_or(func_node),
+                        _ => func_node,
+                    };
+                    let (callee, chain, form) = match func_node.kind() {
+                        "identifier" => (
+                            self.node_text(func_node, source).to_string(),
+                            None,
+                            CallForm::Bare,
+                        ),
+                        // `Type::new()`, `module::f()`, `Self::f()`: the path
+                        // before the name is the receiver.
                         "scoped_identifier" => {
-                            // e.g., `Vec::new()` or `std::io::stdin()`
-                            let name = if let Some(name) = func_node.child_by_field_name("name") {
-                                self.node_text(name, source).to_string()
-                            } else {
-                                self.node_text(func_node, source).to_string()
+                            let mut steps = self.rust_path_steps(func_node, source);
+                            let name = match steps.pop() {
+                                Some(ExpressionStep::Field(name) | ExpressionStep::Ident(name)) => {
+                                    name
+                                }
+                                _ => self.node_text(func_node, source).to_string(),
                             };
-                            (name, None)
+                            if steps.is_empty() {
+                                (name, None, CallForm::Bare)
+                            } else {
+                                steps.push(ExpressionStep::Field(name.clone()));
+                                steps.push(ExpressionStep::Call);
+                                (name, Some(steps), CallForm::Member)
+                            }
                         }
+                        // `self.method()`, `value.method()`
                         "field_expression" => {
-                            // e.g., `self.method()` via call_expression
                             let chain = self.build_rust_chain(func_node, source);
                             let name = if let Some(field) = func_node.child_by_field_name("field") {
                                 self.node_text(field, source).to_string()
                             } else {
                                 self.node_text(func_node, source).to_string()
                             };
-                            (name, chain)
+                            (name, chain, CallForm::Member)
                         }
-                        "generic_function" => {
-                            // e.g., `foo::<Type>()` — turbofish
-                            if let Some(func_inner) = func_node.child_by_field_name("function") {
-                                let (name, chain) = match func_inner.kind() {
-                                    "identifier" => {
-                                        (self.node_text(func_inner, source).to_string(), None)
-                                    }
-                                    "scoped_identifier" => {
-                                        let n = if let Some(name) =
-                                            func_inner.child_by_field_name("name")
-                                        {
-                                            self.node_text(name, source).to_string()
-                                        } else {
-                                            self.node_text(func_inner, source).to_string()
-                                        };
-                                        (n, None)
-                                    }
-                                    "field_expression" => {
-                                        let c = self.build_rust_chain(func_inner, source);
-                                        let n = if let Some(field) =
-                                            func_inner.child_by_field_name("field")
-                                        {
-                                            self.node_text(field, source).to_string()
-                                        } else {
-                                            self.node_text(func_inner, source).to_string()
-                                        };
-                                        (n, c)
-                                    }
-                                    _ => (self.node_text(func_inner, source).to_string(), None),
-                                };
-                                (name, chain)
-                            } else {
-                                (self.node_text(func_node, source).to_string(), None)
-                            }
-                        }
-                        _ => (self.node_text(func_node, source).to_string(), None),
+                        _ => (
+                            self.node_text(func_node, source).to_string(),
+                            None,
+                            CallForm::Unknown,
+                        ),
                     };
-                    if let Some(caller) = scope {
-                        calls.push(CallReference {
-                            caller_name: caller.to_string(),
-                            callee_name: callee,
-                            line: node.start_position().row as u32 + 1,
-                            chain,
-                            file: None,
-                        });
-                    }
+                    calls.push(CallReference {
+                        caller_name: caller.to_string(),
+                        callee_name: callee,
+                        line: node.start_position().row as u32 + 1,
+                        chain,
+                        file: None,
+                        form,
+                        arg_count: node
+                            .child_by_field_name("arguments")
+                            .map(|args| args.named_child_count() as u32),
+                    });
                 }
             }
             "macro_invocation" => {
                 // e.g., `println!("hello")`, `vec![1, 2, 3]`
-                if let Some(macro_node) = node.child_by_field_name("macro") {
-                    let macro_name = self.node_text(macro_node, source).to_string();
-                    if let Some(caller) = scope {
-                        calls.push(CallReference {
-                            caller_name: caller.to_string(),
-                            callee_name: macro_name,
-                            line: node.start_position().row as u32 + 1,
-                            chain: None,
-                            file: None,
-                        });
+                if let (Some(macro_node), Some(caller)) = (node.child_by_field_name("macro"), scope)
+                {
+                    let macro_name = match macro_node.child_by_field_name("name") {
+                        Some(name) => self.node_text(name, source),
+                        None => self.node_text(macro_node, source),
+                    };
+                    calls.push(CallReference {
+                        caller_name: caller.to_string(),
+                        callee_name: macro_name.to_string(),
+                        line: node.start_position().row as u32 + 1,
+                        chain: None,
+                        file: None,
+                        form: CallForm::Bare,
+                        arg_count: None,
+                    });
+                    // The arguments of a macro are an unparsed token tree:
+                    // `println!("{}", run(&argv))` still calls `run`.
+                    if let Some(tree) = self.find_child_by_kind(node, "token_tree") {
+                        self.extract_rust_token_tree_calls(tree, source, calls, caller);
                     }
                 }
             }
@@ -312,6 +314,84 @@ impl SourceParser {
         let cursor = &mut node.walk();
         for child in node.children(cursor) {
             self.extract_rust_calls(child, source, calls, scope);
+        }
+    }
+
+    /// Bare calls written inside a macro's token tree: an identifier followed
+    /// by a parenthesised token tree, not preceded by `.` or `::` (method and
+    /// path calls are left out: without a parse their receiver is unknown).
+    fn extract_rust_token_tree_calls(
+        &self,
+        tree: Node,
+        source: &[u8],
+        calls: &mut Vec<CallReference>,
+        caller: &str,
+    ) {
+        let cursor = &mut tree.walk();
+        let tokens: Vec<Node> = tree.children(cursor).collect();
+        for (i, token) in tokens.iter().enumerate() {
+            if token.kind() != "token_tree" {
+                continue;
+            }
+            let called = i > 0
+                && tokens[i - 1].kind() == "identifier"
+                && self.node_text(*token, source).starts_with('(')
+                && !(i > 1 && matches!(self.node_text(tokens[i - 2], source), "." | "::"));
+            if called {
+                let name = tokens[i - 1];
+                calls.push(CallReference {
+                    caller_name: caller.to_string(),
+                    callee_name: self.node_text(name, source).to_string(),
+                    line: name.start_position().row as u32 + 1,
+                    chain: None,
+                    file: None,
+                    form: CallForm::Bare,
+                    arg_count: None,
+                });
+            }
+            self.extract_rust_token_tree_calls(*token, source, calls, caller);
+        }
+    }
+
+    /// `a::b::c` as chain steps `[Ident(a), Field(b), Field(c)]`; generic
+    /// arguments (`Repo::<User>::new`) are dropped.
+    pub(super) fn rust_path_steps(&self, node: Node, source: &[u8]) -> Vec<ExpressionStep> {
+        let mut segments = Vec::new();
+        self.rust_path_segments(node, source, &mut segments);
+        segments
+            .into_iter()
+            .enumerate()
+            .map(|(i, s)| {
+                if i == 0 {
+                    ExpressionStep::Ident(s)
+                } else {
+                    ExpressionStep::Field(s)
+                }
+            })
+            .collect()
+    }
+
+    fn rust_path_segments(&self, node: Node, source: &[u8], segments: &mut Vec<String>) {
+        match node.kind() {
+            "scoped_identifier" | "scoped_type_identifier" => {
+                if let Some(path) = node.child_by_field_name("path") {
+                    self.rust_path_segments(path, source, segments);
+                }
+                if let Some(name) = node.child_by_field_name("name") {
+                    segments.push(self.node_text(name, source).to_string());
+                }
+            }
+            "generic_type" => {
+                if let Some(ty) = node.child_by_field_name("type") {
+                    self.rust_path_segments(ty, source, segments);
+                }
+            }
+            "generic_function" => {
+                if let Some(function) = node.child_by_field_name("function") {
+                    self.rust_path_segments(function, source, segments);
+                }
+            }
+            _ => segments.push(self.node_text(node, source).to_string()),
         }
     }
 
@@ -327,7 +407,12 @@ impl SourceParser {
         }
     }
 
-    fn collect_rust_chain_steps(&self, node: Node, source: &[u8], steps: &mut Vec<ExpressionStep>) {
+    pub(super) fn collect_rust_chain_steps(
+        &self,
+        node: Node,
+        source: &[u8],
+        steps: &mut Vec<ExpressionStep>,
+    ) {
         match node.kind() {
             "field_expression" => {
                 if let Some(obj) = node.child_by_field_name("value") {
@@ -345,6 +430,9 @@ impl SourceParser {
                 }
                 steps.push(ExpressionStep::Call);
             }
+            "scoped_identifier" | "scoped_type_identifier" | "generic_function" => {
+                steps.extend(self.rust_path_steps(node, source))
+            }
             "identifier" => {
                 let text = self.node_text(node, source);
                 if text == "self" {
@@ -356,6 +444,38 @@ impl SourceParser {
                 }
             }
             "self" => steps.push(ExpressionStep::This),
+            "reference_expression"
+            | "parenthesized_expression"
+            | "try_expression"
+            | "unary_expression"
+            | "await_expression" => {
+                let inner = node.child_by_field_name("value").or_else(|| {
+                    node.named_child(node.named_child_count().saturating_sub(1) as u32)
+                });
+                match inner {
+                    Some(inner) => self.collect_rust_chain_steps(inner, source, steps),
+                    None => steps.push(ExpressionStep::Literal),
+                }
+            }
+            "index_expression" => {
+                if let Some(value) = node.named_child(0) {
+                    self.collect_rust_chain_steps(value, source, steps);
+                }
+                steps.push(ExpressionStep::Index);
+            }
+            // `Foo { .. }` builds a Foo.
+            "struct_expression" => {
+                let mut segments = Vec::new();
+                if let Some(name) = node.child_by_field_name("name") {
+                    self.rust_path_segments(name, source, &mut segments);
+                }
+                steps.push(ExpressionStep::New(segments.join("::")));
+            }
+            "string_literal" | "raw_string_literal" | "integer_literal" | "float_literal"
+            | "boolean_literal" | "char_literal" | "array_expression" | "tuple_expression"
+            | "macro_invocation" | "range_expression" | "closure_expression" => {
+                steps.push(ExpressionStep::Literal)
+            }
             _ => {
                 steps.push(ExpressionStep::Ident(
                     self.node_text(node, source).to_string(),

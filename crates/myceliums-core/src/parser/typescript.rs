@@ -1,7 +1,7 @@
 //! TypeScript, TSX and JavaScript extraction, plus the Vue/Svelte
 //! `<script>` block that is parsed as TypeScript.
 
-use super::{CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
+use super::{CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
 use myceliums_storage::{SymbolKind, SymbolMetadata};
 use tree_sitter::Node;
 
@@ -198,10 +198,19 @@ impl SourceParser {
 
         let scope = fn_name.as_deref().or(current_fn);
 
-        if kind == "call_expression" {
-            if let Some(func_node) = node.child_by_field_name("function") {
-                let (callee, chain) = match func_node.kind() {
-                    "identifier" => (self.node_text(func_node, source).to_string(), None),
+        if kind == "call_expression" || kind == "new_expression" {
+            let field = if kind == "new_expression" {
+                "constructor"
+            } else {
+                "function"
+            };
+            if let Some(func_node) = node.child_by_field_name(field) {
+                let (callee, chain, form) = match func_node.kind() {
+                    "identifier" => (
+                        self.node_text(func_node, source).to_string(),
+                        None,
+                        CallForm::Bare,
+                    ),
                     "member_expression" => {
                         let chain = self.build_ts_chain(func_node, source);
                         let name = if let Some(prop) = func_node.child_by_field_name("property") {
@@ -209,9 +218,19 @@ impl SourceParser {
                         } else {
                             self.node_text(func_node, source).to_string()
                         };
-                        (name, chain)
+                        (name, chain, CallForm::Member)
                     }
-                    _ => (self.node_text(func_node, source).to_string(), None),
+                    "super" => ("super".to_string(), None, CallForm::SuperConstructor),
+                    _ => (
+                        self.node_text(func_node, source).to_string(),
+                        None,
+                        CallForm::Unknown,
+                    ),
+                };
+                // `new X()` and `new ns.X()` construct X.
+                let form = match (kind, form) {
+                    ("new_expression", CallForm::Bare | CallForm::Member) => CallForm::New,
+                    (_, form) => form,
                 };
                 if let Some(caller) = scope {
                     calls.push(CallReference {
@@ -220,6 +239,8 @@ impl SourceParser {
                         line: node.start_position().row as u32 + 1,
                         chain,
                         file: None,
+                        form,
+                        arg_count: None,
                     });
                 }
             }
@@ -243,8 +264,41 @@ impl SourceParser {
         }
     }
 
-    fn collect_ts_chain_steps(&self, node: Node, source: &[u8], steps: &mut Vec<ExpressionStep>) {
+    pub(super) fn collect_ts_chain_steps(
+        &self,
+        node: Node,
+        source: &[u8],
+        steps: &mut Vec<ExpressionStep>,
+    ) {
         match node.kind() {
+            "string" | "template_string" | "number" | "true" | "false" | "null" | "undefined"
+            | "regex" | "array" | "object" => steps.push(ExpressionStep::Literal),
+            "new_expression" => {
+                let name = node
+                    .child_by_field_name("constructor")
+                    .map(|c| match c.child_by_field_name("property") {
+                        Some(prop) => self.node_text(prop, source),
+                        None => self.node_text(c, source),
+                    })
+                    .unwrap_or_default();
+                steps.push(ExpressionStep::New(name.to_string()));
+            }
+            "parenthesized_expression"
+            | "non_null_expression"
+            | "await_expression"
+            | "as_expression"
+            | "satisfies_expression"
+            | "type_assertion" => {
+                if let Some(inner) = node.named_child(0) {
+                    self.collect_ts_chain_steps(inner, source, steps);
+                }
+            }
+            "subscript_expression" => {
+                if let Some(obj) = node.child_by_field_name("object") {
+                    self.collect_ts_chain_steps(obj, source, steps);
+                }
+                steps.push(ExpressionStep::Index);
+            }
             "member_expression" => {
                 if let Some(obj) = node.child_by_field_name("object") {
                     self.collect_ts_chain_steps(obj, source, steps);
@@ -308,6 +362,19 @@ impl SourceParser {
                                     source_module: module.clone(),
                                     original_name: None,
                                 });
+                            }
+                            // `import * as ns from "./m"`: the original name
+                            // `*` marks a module namespace.
+                            "namespace_import" => {
+                                if let Some(name) =
+                                    self.find_child_by_kind(clause_child, "identifier")
+                                {
+                                    imports.push(ImportInfo {
+                                        local_name: self.node_text(name, source).to_string(),
+                                        source_module: module.clone(),
+                                        original_name: Some("*".to_string()),
+                                    });
+                                }
                             }
                             "named_imports" => {
                                 let spec_cursor = &mut clause_child.walk();

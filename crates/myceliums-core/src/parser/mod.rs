@@ -328,8 +328,31 @@ pub enum ExpressionStep {
     This,
     /// `super` keyword.
     Super,
-    /// Constructor call (e.g. `new Foo`).
+    /// Constructor call (e.g. `new Foo`), or a struct/composite literal
+    /// (`Foo { .. }`, `&Foo{}`): an instance of the named type.
     New(String),
+    /// A literal (string, number, list, map, ...): a value of a built-in
+    /// type, never an instance of a project class.
+    Literal,
+}
+
+/// How a call site names its target, as far as the extractor records it
+/// (#139). The resolver uses it to tell a call of a free function from a
+/// method call: `f()` never calls a method in Python, TypeScript, Go or Rust,
+/// and `x.f()` never calls a free function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CallForm {
+    /// The extractor does not say; the resolver matches by name alone.
+    #[default]
+    Unknown,
+    /// `f(...)`: a bare name, with no receiver or qualifier.
+    Bare,
+    /// `x.f(...)`, `X::f(...)`, `pkg.F(...)`: the receiver is in the chain.
+    Member,
+    /// `new X(...)`: the callee is the class.
+    New,
+    /// `super(...)`: the base class's constructor.
+    SuperConstructor,
 }
 
 /// A full expression chain with source location.
@@ -342,7 +365,7 @@ pub struct CallChain {
 }
 
 /// A detected function call from caller to callee.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CallReference {
     /// Name of the calling function.
     pub caller_name: String,
@@ -354,6 +377,11 @@ pub struct CallReference {
     pub chain: Option<Vec<ExpressionStep>>,
     /// File path where the call occurs (set during analysis accumulation).
     pub file: Option<String>,
+    /// How the call site names its target.
+    pub form: CallForm,
+    /// Number of arguments, where the extractor counts them (selects among
+    /// overloads).
+    pub arg_count: Option<u32>,
 }
 
 /// An import statement linking a local name to a source module.
@@ -546,6 +574,7 @@ impl SourceParser {
                     line: c.line,
                     chain: c.chain,
                     file: None,
+                    ..Default::default()
                 })
                 .collect();
 

@@ -304,6 +304,7 @@ impl SourceParser {
                         line: node.start_position().row as u32 + 1,
                         chain: None,
                         file: None,
+                        ..Default::default()
                     });
                 }
             }
@@ -546,6 +547,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 } else if let Some(name_node) = node.child_by_field_name("name") {
@@ -557,6 +559,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 }
@@ -572,6 +575,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 }

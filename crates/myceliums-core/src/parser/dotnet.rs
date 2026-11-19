@@ -210,6 +210,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 }
@@ -225,6 +226,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 }
@@ -397,6 +399,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 } else if let Some(cmd_node) = node.child(0) {
@@ -410,6 +413,7 @@ impl SourceParser {
                                 line: node.start_position().row as u32 + 1,
                                 chain: None,
                                 file: None,
+                                ..Default::default()
                             });
                         }
                     }
@@ -425,6 +429,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 }
@@ -440,6 +445,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 } else if let Some(member_node) = node.child_by_field_name("member") {
@@ -451,6 +457,7 @@ impl SourceParser {
                             line: node.start_position().row as u32 + 1,
                             chain: None,
                             file: None,
+                            ..Default::default()
                         });
                     }
                 }
