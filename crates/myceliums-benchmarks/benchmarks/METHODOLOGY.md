@@ -599,6 +599,14 @@ corpora parse to byte-identical symbol inventories after the rebase. Its
 `-dirty` suffix came from the untracked `tee` log in the CI workspace, not from
 uncommitted code; the evaluator now ignores untracked files there.
 
+**One label has changed since.** Review feedback found a missing answer:
+`requests-conceptual-session-cookie-persistence` (a dev query) now also labels
+`SessionRedirectMixin.resolve_redirects`, which carries cookies across redirect
+hops. The dataset moved to version `2026-11-19`; the run below was measured on
+`2026-11-12` and has not been repeated, so that one dev query is scored
+against seven labels instead of eight. The held-out numbers, and therefore
+the decision, are unaffected. The next weekly run measures the current set.
+
 **All labels are unreviewed agent drafts.** Read every number below as
 provisional.
 
@@ -689,10 +697,11 @@ indistinguishable from zero in both directions.
   almost nothing. RRF `k` between 10 and 100 reorders a few near-ties. The
   values that ship were asserted, not tuned; they now are measured, and
   nothing measurably beats them.
-- **On real repositories hybrid no longer loses to semantic search — but it
-  does not beat it either.** The golden set showed hybrid 0.046 nDCG@10 below
-  semantic (interval excluding zero). Here the difference is +0.004
-  [−0.033, +0.041] overall and +0.016 [−0.043, +0.075] on held-out. The two
+- **On real repositories hybrid and semantic search are not distinguishable.**
+  The golden set showed hybrid 0.046 nDCG@10 below semantic (interval
+  excluding zero). Here the difference is +0.004 [−0.033, +0.041] overall and
+  +0.016 [−0.043, +0.075] on held-out — intervals about ±0.04 and ±0.06 wide,
+  so a real difference of that size either way is not ruled out. The two
   trade places by intent: fusion helps `paraphrase` queries (nDCG@10
   0.392 → 0.480) and costs `exact-name` queries (0.670 → 0.589). A plausible
   reading, not checked query by query: BM25 contributes where a paraphrase
@@ -709,11 +718,12 @@ indistinguishable from zero in both directions.
   0.751). The reranker was not tuned, so all 168 queries are a fair sample for
   it; the held-out interval is simply wider.
 - **hono is hard.** 10,420 symbols, 8,503 of them in test, runtime-test and
-  benchmark files (6,604 are local constants there); every mode scores 0.15–0.36 nDCG@10 there against 0.48–0.65 on the Python
-  repositories. An exploratory run before #135, when hono's vectors still went
-  through the IVF-PQ index, gave semantic 0.314 nDCG@10 on hono against 0.254
-  with today's exact scan — 42 queries, unreviewed labels, one run each; worth
-  a look under #117, not a finding.
+  benchmark files (6,604 are local constants there); every mode scores
+  0.15–0.36 nDCG@10 there against 0.48–0.65 on the Python repositories. An
+  exploratory run before #135, when hono's vectors still went through the
+  IVF-PQ index, gave semantic 0.314 nDCG@10 on hono against 0.254 with today's
+  exact scan — 42 queries, unreviewed labels, one run each. Tracked in #141;
+  not a finding.
 - **Scores are lower than on the golden set across the board** (hybrid
   nDCG@10 0.48 vs 0.74). Real identifiers are numerous and repetitive, and
   tests and examples compete with the definitions. The golden-set numbers are
@@ -723,15 +733,25 @@ indistinguishable from zero in both directions.
 
 - **Unreviewed labels**, drafted by one agent. Until a human reviews them,
   label errors and the labeller's reading of each query are inside every
-  number. `real-repo-review` is the way out.
-- **The held-out split has been read twice.** An exploratory CI run before the
-  final rebase (IVF-PQ still active for hono, and a 60-configuration grid that
-  also swept a BM25-leg weight of 0.25/0.5/1) picked `k = 20`, 50 candidates,
-  weight 0.25 on dev; on held-out it moved nDCG@10 by +0.012 [−0.037, +0.061],
-  so nothing changed. The weight was then dropped to keep the sweep to the
-  knobs hybrid search has, and the protocol was re-run as recorded above.
-  Neither look changed a default, but a future weight experiment should not
-  treat this held-out split as untouched.
+  number. `real-repo-review` catches wrong labels; it cannot show a reviewer
+  the answers that are *missing* (the cookie-persistence query above lacked
+  one), so recall-type numbers may be biased in either direction.
+- **The held-out split is no longer clean for future tuning.** It was read
+  twice here: an exploratory CI run before the final rebase (IVF-PQ still
+  active for hono, and a 60-configuration grid that also swept a BM25-leg
+  weight of 0.25/0.5/1) picked `k = 20`, 50 candidates, weight 0.25 on dev and
+  moved held-out nDCG@10 by +0.012 [−0.037, +0.061]; the weight was then
+  dropped to keep the sweep to the knobs hybrid search has, and the protocol
+  was re-run as recorded above. Neither look changed a default, but every look
+  is a chance to fit the held-out queries. The next tuning question — fusion
+  weights, the rerank pool, a model swap — needs fresh held-out queries (new
+  queries, or new repositories), not another pass over these 72.
+- **Intervals ignore clustering by repository.** The bootstrap resamples
+  queries independently, but queries of one repository share a corpus, an
+  index and a labeller's reading of that code, so they are not independent.
+  With four repositories the honest intervals are wider than those reported
+  — likely noticeably so; a cluster (repository-level) bootstrap with four
+  clusters would be too coarse to help. Treat a bound near zero as zero.
 - **Four repositories, three languages, English queries**; 18–24 queries per
   repository per split. Per-repository and per-intent cells rest on 9–56
   queries and are directions, not estimates.

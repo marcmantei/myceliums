@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "dataset_version": "2026-11-12",
+  "dataset_version": "2026-11-19",
   "repos": [
     {
       "name": "requests",
@@ -685,9 +685,14 @@
           "file": "src/requests/sessions.py",
           "symbol": "Session.send",
           "why": "After each send, extracts cookies from the response and its redirect history into self.cookies."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.resolve_redirects",
+          "why": "On every redirect hop it extracts the response's cookies into the request's jar, merges the session cookies back in, re-prepares the Cookie header and saves the hop's Set-Cookie headers into self.cookies — Session.send only stores the first response's cookies."
         }
       ],
-      "rationale": "Cookie persistence spans the session (cookies merged in before sending and saved back after), request preparation and the cookie helpers. MockRequest/MockResponse are cookielib adapters and create_cookie/cookiejar_from_dict only build cookies, so they were not labelled.",
+      "rationale": "Cookie persistence spans the session (cookies merged in before sending and saved back after), request preparation and the cookie helpers. MockRequest/MockResponse are cookielib adapters and create_cookie/cookiejar_from_dict only build cookies, so they were not labelled. SessionRedirectMixin.resolve_redirects was added in review (2026-11-19): it carries cookies across redirect hops and was missed in the first draft.",
       "labelled_by": "agent:claude",
       "reviewed_by": null
     },

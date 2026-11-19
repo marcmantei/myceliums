@@ -33,8 +33,11 @@ indexes one repository; vector search is exact at every size (#117), so hono's
 - `fetch.sh` — checks every repository out at its pinned commit into
   `$MYC_EVAL_REPOS_DIR` (default `~/.cache/myceliums-eval-repos`). The sources
   are fetched, never vendored. Needs `git` and `jq`.
-- `recorded-run.json` — the run the methodology's numbers come from, written by
-  `real-repo-eval --record`. Generated; never edit it by hand.
+- `recorded-run.json` — the run the methodology's numbers come from: the JSON
+  report of a `real-repo-eval` run (here the CI workflow's artifact; locally,
+  `--record` writes it). Generated; never edit it by hand. It was measured on
+  dataset `2026-11-12`, one label before the current file (see the
+  methodology).
 
 ## Running
 
@@ -61,14 +64,26 @@ For each unreviewed query the helper prints the query, its intent and split,
 the rationale, and every labelled symbol with its `why` and its source code
 from the pinned checkout. Answer `y` if the labels are right — `reviewed_by`
 becomes `human:<handle>` and the file is saved immediately — or `n` with a
-note to list the query for fixing by hand; `s` skips, `q` stops. An `agent:`
-identity is refused as a reviewer.
+note to list the query for fixing by hand; `s` skips, `q` stops. The file is
+written to a temporary file and renamed, so an interrupted save cannot
+truncate it. An `agent:` identity (any letter case) and the query's own
+labeller are refused as reviewers — by the helper and, for hand edits, by the
+dataset validation every tool runs on load.
 
 Ask, for each query: would I want to read exactly these symbols first to
 answer it? Is any labelled symbol only a caller, a test or a type that merely
-names the answer? Is an equally good answer missing? Reviewing changes the
-dataset digest; re-run `real-repo-eval --record` afterwards so the recorded
-numbers belong to the reviewed labels.
+names the answer? Reviewing changes the dataset digest; re-run
+`real-repo-eval --record` afterwards so the recorded numbers belong to the
+reviewed labels.
+
+**The helper shows what is labelled, not what is missing.** It lets a reviewer
+reject a wrong label; it cannot show an answer the labeller never found. To
+look for those, read the code around the labelled symbols — callers, sibling
+methods, the other half of a feature — or grep the checkout for the query's
+key terms. Example: `requests-conceptual-session-cookie-persistence` was first
+drafted without `SessionRedirectMixin.resolve_redirects`, which carries
+cookies across redirect hops; review feedback added it (dataset `2026-11-19`).
+Add a missing answer by hand, with its `why`, and say so in the rationale.
 
 ## How the labels were made
 
