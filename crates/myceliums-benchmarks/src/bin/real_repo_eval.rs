@@ -751,7 +751,9 @@ fn sort_modes(mut rows: Vec<(String, MetricValues)>) -> Vec<(String, MetricValue
     rows
 }
 
-/// Commit the run measured, with `-dirty` for uncommitted code; informational.
+/// Commit the run measured, with `-dirty` for uncommitted changes to tracked
+/// files; informational. Untracked files are ignored: CI writes its own log
+/// into the checkout while the run is going.
 fn commit_sha() -> String {
     let git = |args: &[&str]| {
         std::process::Command::new("git")
@@ -762,7 +764,10 @@ fn commit_sha() -> String {
             .filter(|out| out.status.success())
             .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
     };
-    match (git(&["rev-parse", "HEAD"]), git(&["status", "--porcelain"])) {
+    match (
+        git(&["rev-parse", "HEAD"]),
+        git(&["status", "--porcelain", "--untracked-files=no"]),
+    ) {
         (Some(sha), Some(changes)) if !changes.is_empty() => format!("{sha}-dirty"),
         (Some(sha), _) => sha,
         _ => "unknown".to_string(),

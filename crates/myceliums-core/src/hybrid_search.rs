@@ -67,15 +67,17 @@ pub struct HybridExplain {
 /// Reciprocal-rank-fusion constant the shipped hybrid search uses.
 ///
 /// Swept from 10 to 100 on the development split of the real-repository set
-/// (#95) and confirmed or rejected on its held-out split; the protocol and the
-/// numbers are in `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.
+/// (#95): every value scored within ±0.004 nDCG@10 of this one, and the dev
+/// winner did not beat it on the held-out split, so it stays. Protocol and
+/// numbers: `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.
 pub const DEFAULT_RRF_K: f64 = 60.0;
 
 /// Fewest vector candidates the hybrid vector leg fetches, however small the
 /// requested result count — the vector leg asks for
 /// `limit.max(vector_candidates)` so RRF has enough overlap with BM25.
 ///
-/// Swept from 50 to 400 alongside [`DEFAULT_RRF_K`] (#95).
+/// Swept from 50 to 400 alongside [`DEFAULT_RRF_K`] (#95) and kept: more
+/// candidates did not help a 20-result list, fewer changed almost nothing.
 pub const DEFAULT_VECTOR_CANDIDATES: usize = 100;
 
 /// The tunable knobs of hybrid search.
