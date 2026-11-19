@@ -47,6 +47,10 @@ name = "corpus-inventory"
 path = "src/bin/corpus_inventory.rs"
 
 [[bin]]
+name = "graph-eval"
+path = "src/bin/graph_eval.rs"
+
+[[bin]]
 name = "ann-recall"
 path = "src/bin/ann_recall.rs"
 

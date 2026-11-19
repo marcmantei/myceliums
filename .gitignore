@@ -13,3 +13,6 @@ crates/myceliums-benchmarks/golden/report.json
 # only results/<label>/ is committed.
 evals/agent/runs/
 __pycache__/
+
+# Per-run graph-eval output; graph-gold/baseline.json is the reference.
+crates/myceliums-benchmarks/graph-gold/report.json

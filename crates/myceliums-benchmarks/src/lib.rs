@@ -6,6 +6,7 @@ pub mod ann;
 pub mod ann_real;
 pub mod eval;
 pub mod fixtures;
+pub mod graph_eval;
 pub mod large_repo;
 pub mod metrics;
 pub mod report;

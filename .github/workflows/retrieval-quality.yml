@@ -1,5 +1,8 @@
 name: Retrieval Quality
 
+# Also reports graph accuracy (symbols and CALLS edges against a gold set) as
+# a non-blocking step; see crates/myceliums-benchmarks/graph-gold/README.md.
+#
 # Scores all four search modes — lexical, semantic, hybrid, hybrid+rerank —
 # against the golden set on every push and pull request, with the shipped
 # default models, and writes the tables to the job summary.
@@ -49,8 +52,18 @@ jobs:
         with:
           shared-key: retrieval
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Build the evaluator
-        run: cargo build -p myceliums-benchmarks --bin retrieval-eval --locked
+      - name: Build the evaluators
+        run: cargo build -p myceliums-benchmarks --bin retrieval-eval --bin graph-eval --locked
+      # Symbol and CALLS-edge accuracy against the hand-labelled gold set
+      # (crates/myceliums-benchmarks/graph-gold/). Report only, not a gate:
+      # the labels are agent-written and await human review (#94). Runs before
+      # the retrieval steps so its tables appear even when those fail.
+      - name: Graph accuracy (report only)
+        continue-on-error: true
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          target/debug/graph-eval --summary "$GITHUB_STEP_SUMMARY" | tee graph.txt
       - name: Resolve the model weights cache
         id: models
         # fastembed reads HF_HOME, myceliums reads FASTEMBED_CACHE_DIR first:
@@ -97,4 +110,6 @@ jobs:
           path: |
             crates/myceliums-benchmarks/golden/report.json
             retrieval.txt
+            crates/myceliums-benchmarks/graph-gold/report.json
+            graph.txt
           retention-days: 90
