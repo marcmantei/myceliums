@@ -141,9 +141,13 @@ pub struct AnalysisSection {
     /// When false (default), uses hand-coded extractors.
     #[serde(default)]
     pub use_dsl: bool,
-    /// Minimum number of symbols before creating an ANN index for vector search.
-    #[serde(default = "AnalysisSection::default_ann_threshold")]
-    pub ann_threshold: usize,
+    /// Deprecated and ignored. Vector search is exact at every size and no ANN
+    /// index is built (issue #117); the field was never read before that
+    /// either. Still accepted so existing `.myceliums.toml` files parse —
+    /// [`ProjectConfig::load`] logs a deprecation warning when it is set — and
+    /// never written by `myc init`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ann_threshold: Option<usize>,
     /// Number of symbols to embed in a single batch (default 256).
     /// Smaller values reduce peak memory for large repositories.
     #[serde(default = "AnalysisSection::default_embedding_batch_size")]
@@ -181,7 +185,7 @@ impl Default for AnalysisSection {
             batch_size: Self::default_batch_size(),
             channel_buffer_size: Self::default_channel_buffer_size(),
             use_dsl: false,
-            ann_threshold: Self::default_ann_threshold(),
+            ann_threshold: None,
             embedding_batch_size: Self::default_embedding_batch_size(),
         }
     }
@@ -230,10 +234,6 @@ impl AnalysisSection {
         8
     }
 
-    fn default_ann_threshold() -> usize {
-        10_000
-    }
-
     fn default_embedding_batch_size() -> usize {
         256
     }
@@ -267,6 +267,9 @@ impl ProjectConfig {
             .with_context(|| format!("Failed to read config file: {}", path.display()))?;
         let config: ProjectConfig =
             toml::from_str(&content).with_context(|| "Failed to parse .myceliums.toml")?;
+        if let Some(threshold) = config.analysis.ann_threshold {
+            tracing::warn!("{}", ann_threshold_deprecation(path, threshold));
+        }
         Ok(config)
     }
 
@@ -277,6 +280,16 @@ impl ProjectConfig {
             .with_context(|| format!("Failed to write config file: {}", path.display()))?;
         Ok(())
     }
+}
+
+/// The warning [`ProjectConfig::load`] logs when `analysis.ann_threshold` is set.
+fn ann_threshold_deprecation(path: &Path, threshold: usize) -> String {
+    format!(
+        "{}: `analysis.ann_threshold = {threshold}` is deprecated and ignored — vector \
+         search is exact at every repository size and no ANN index is built. \
+         Remove the line.",
+        path.display()
+    )
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────
@@ -291,7 +304,24 @@ mod tests {
         assert_eq!(cfg.analysis.max_file_size_kb, 512);
         assert_eq!(cfg.community.min_community_size, 3);
         assert!(!cfg.analysis.exclude.is_empty());
-        assert_eq!(cfg.analysis.ann_threshold, 10_000);
+        assert_eq!(cfg.analysis.ann_threshold, None);
+    }
+
+    /// Issue #117: `ann_threshold` is deprecated. An old config that sets it
+    /// still loads (with a warning naming the file), and `myc init`'s
+    /// template — the serialized default — no longer contains it.
+    #[test]
+    fn deprecated_ann_threshold_still_parses_and_is_not_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(CONFIG_FILENAME);
+        std::fs::write(&path, "[analysis]\nann_threshold = 10000\n").unwrap();
+        let cfg = ProjectConfig::load(&path).unwrap();
+        assert_eq!(cfg.analysis.ann_threshold, Some(10_000));
+        let warning = ann_threshold_deprecation(&path, 10_000);
+        assert!(warning.contains("deprecated") && warning.contains(".myceliums.toml"));
+
+        let template = toml::to_string_pretty(&ProjectConfig::default()).unwrap();
+        assert!(!template.contains("ann_threshold"), "{template}");
     }
 
     #[test]

@@ -117,14 +117,17 @@ query time, so this is the identical geometry used by the vector leg of
 `hybrid_search` — the same query over the same index yields the same top-k
 ordering in both tools.
 
-**Index selection.** Repositories with **5,000 or more embedded symbols** get an
-IVF-PQ approximate-nearest-neighbour (ANN) index, built automatically after
-analysis; smaller repositories use an exact brute-force scan. Below the
-threshold an exact scan is both faster and perfectly accurate, and IVF-PQ
-quantization would cost recall for nothing. The exposed score is cosine
-similarity either way, so the index type is not observable in the score — but
-above the threshold results are *approximate*: a low-ranked result may
-occasionally be missed in exchange for a substantially faster query.
+**Exact search.** Since #117 every vector search is exact: a brute-force
+scan over all embedded symbols, at every repository size, with no approximate
+(ANN) index. Measured median latency of one search over 384-dimensional
+vectors on one Apple-silicon Mac: 2.4 ms at 5,000 symbols and 5.2 ms at 20,000
+(real embeddings of Django), 9.5 ms at 50,000 and 15 ms at 100,000 (synthetic
+vectors). Cost grows linearly with the number of symbols, so a repository of a
+million symbols would take on the order of 150 ms per query (extrapolated, not
+measured). Earlier releases built an IVF-PQ index from 5,000 symbols that
+returned only about 4 of the true 10 nearest neighbours; searches now bypass
+such an index, and the next `myc analyze` deletes it.
+[Measurements](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs).
 
 > **Partial-index warning.** `semantic_search` can only return symbols that were
 > embedded. If some symbols failed to embed during analysis, the response is

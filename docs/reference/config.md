@@ -28,7 +28,7 @@ Created with `myc init`. All fields are optional. Omitted fields use their defau
 | `batch_size` | integer | `500` | Number of items to buffer before flushing a batch to storage |
 | `channel_buffer_size` | integer | `8` | Capacity of the async channel between producers and the batch writer |
 | `use_dsl` | bool | `false` | Use DSL-driven parsing for supported languages (Python, Go). When false, uses hand-coded extractors |
-| `ann_threshold` | integer | `10000` | Minimum number of symbols before creating an ANN index for vector search |
+| `ann_threshold` | integer | unset | **Deprecated, ignored.** Vector search is exact at every repository size and no ANN index is built (#117). Still accepted so existing files parse; `myc` logs a deprecation warning when it is set. Remove the line |
 | `embedding_batch_size` | integer | `256` | Number of symbols to embed in a single batch. Smaller values reduce peak memory for large repositories |
 
 **Default `exclude` patterns:**
@@ -208,7 +208,6 @@ skip_patterns = ["min.js", "min.css", "bundle.js", "map"]
 batch_size = 500
 channel_buffer_size = 8
 use_dsl = false
-ann_threshold = 10000
 embedding_batch_size = 256
 
 [process]

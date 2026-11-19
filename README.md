@@ -469,7 +469,7 @@ Alternatively, set `provider = "openai-compatible"` to use any server speaking t
 
 **Why the same model matters:** Each embedding model defines its own vector space. Queries and documents must be embedded with the same model — mixing models produces meaningless similarity scores. Myceliums records the model inside each index and always queries with that model; switching models in the config takes effect on the next full `myc analyze`, which rebuilds the vectors.
 
-Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector database (no server required). For repositories with 5,000 symbols or more, an approximate nearest neighbor (IVF-PQ) index is built automatically. It is approximate: on a synthetic 5,000-vector table it returned about 4 of the true 10 nearest neighbours ([measurement](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs)); how much it loses on real embeddings is not yet measured (#117).
+Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector database (no server required). Every vector search is exact, at any repository size: a brute-force scan took about 5 ms per query at 20,000 symbols (real embeddings) and 15 ms at 100,000 (synthetic vectors), growing linearly ([measurements](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs)). Releases before #117 built an approximate IVF-PQ index from 5,000 symbols that returned only about 4 of the true 10 nearest neighbours; run `myc analyze` once to delete it (searches already ignore it).
 
 ### Hybrid search — best of both worlds
 
