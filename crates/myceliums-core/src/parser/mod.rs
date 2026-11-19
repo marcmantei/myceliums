@@ -249,16 +249,12 @@ const INLINE_TREE_DEPTH: usize = 64;
 /// Stack reserved per tree level for deeper trees. The reservation is virtual
 /// memory; only the pages the walk touches are committed, but it is reserved
 /// per extracting worker: about three times the worst per-level cost measured
-/// in an unoptimized build (~11 KiB) while `debug_assertions` are on, and
-/// half that in release builds: still ~1.5x the unoptimized worst case,
-/// assuming (not measured) that optimized frames are no larger than
-/// unoptimized ones. At [`MAX_TREE_DEPTH`] this reserves ~315 MiB with
-/// `debug_assertions`, ~160 MiB without.
-const STACK_BYTES_PER_LEVEL: usize = if cfg!(debug_assertions) {
-    32 * 1024
-} else {
-    16 * 1024
-};
+/// in an unoptimized build (~11 KiB). The same size is used in release builds:
+/// optimized frame sizes were not measured and no CI job exercises the
+/// release path, so a smaller release value would be an untested bet whose
+/// failure mode (stack overflow) aborts the whole indexer. At
+/// [`MAX_TREE_DEPTH`] this reserves ~315 MiB of address space per worker.
+const STACK_BYTES_PER_LEVEL: usize = 32 * 1024;
 
 /// Why [`SourceParser`] gave up on a file without extracting anything.
 ///
