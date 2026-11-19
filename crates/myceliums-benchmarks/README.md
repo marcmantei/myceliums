@@ -9,12 +9,20 @@ Two kinds of measurement live in this crate:
   vector index would cost against exact search, on synthetic and real embeddings,
   next to production's exact search (#117). Method, numbers and limits:
   [`benchmarks/METHODOLOGY.md`](benchmarks/METHODOLOGY.md).
+- **Retrieval quality on real repositories** — `real-repo-eval` scores the
+  same four modes on 168 labelled queries over four open-source repositories
+  pinned by commit (requests, flask, gin, hono), tunes the hybrid fusion
+  parameters on a development split and confirms them on a held-out split. The
+  labels are agent drafts awaiting human review (`real-repo-review`); see
+  [`real-repos/README.md`](real-repos/README.md). Weekly in CI, report-only.
 - **Timings** — Criterion benchmarks for indexing, parsing and queries on
   synthetic fixtures, described below.
 
 ```bash
 cargo run -p myceliums-benchmarks --bin retrieval-eval                          # lexical only, offline
 cargo run -p myceliums-benchmarks --bin retrieval-eval -- --allow-model-download # all four modes
+crates/myceliums-benchmarks/real-repos/fetch.sh && \
+  cargo run -p myceliums-benchmarks --bin real-repo-eval                        # real repos + sweep
 cargo run -p myceliums-benchmarks --release --bin ann-recall                     # exact production search vs the old index, synthetic
 cargo run -p myceliums-benchmarks --release --bin ann-recall -- --sweep --sizes 5000,20000,50000
 cargo run -p myceliums-benchmarks --release --bin ann-recall -- --sweep \
