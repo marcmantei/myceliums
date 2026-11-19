@@ -1,6 +1,9 @@
 //! Python extraction.
 
-use super::{CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
+use super::{
+    BindingValue, CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser,
+    TypeBinding, FILE_SCOPE,
+};
 use myceliums_storage::{SymbolKind, SymbolMetadata};
 use tree_sitter::Node;
 
@@ -134,6 +137,225 @@ impl SourceParser {
         let cursor = &mut node.walk();
         for child in node.children(cursor) {
             self.extract_py_calls(child, source, calls, scope);
+        }
+    }
+
+    /// Parameters, local variables and `self.x` fields, with their
+    /// annotations or initialisers (#139). `function` is the enclosing
+    /// function's lines (`None` at module level and in a class body),
+    /// `class` the enclosing class.
+    pub(super) fn extract_py_bindings(
+        &self,
+        node: Node,
+        source: &[u8],
+        out: &mut Vec<TypeBinding>,
+        function: Option<(u32, u32)>,
+        class: Option<&str>,
+    ) {
+        let lines = |n: Node| {
+            (
+                n.start_position().row as u32 + 1,
+                n.end_position().row as u32 + 1,
+            )
+        };
+        // A local is visible from its line to the end of its function.
+        let local_scope = |n: Node| match function {
+            Some((_, end)) => (lines(n).0, end),
+            None => FILE_SCOPE,
+        };
+        let text = |n: Node| self.node_text(n, source).to_string();
+        let mut push =
+            |name: String, owner: Option<String>, scope: (u32, u32), value: BindingValue| {
+                out.push(TypeBinding {
+                    name,
+                    owner,
+                    scope,
+                    value,
+                })
+            };
+        match node.kind() {
+            "class_definition" => {
+                let name = node.child_by_field_name("name").map(text);
+                if let Some(body) = node.child_by_field_name("body") {
+                    self.extract_py_bindings(body, source, out, None, name.as_deref());
+                }
+                return;
+            }
+            "function_definition" | "lambda" => {
+                let span = lines(node);
+                if let Some(params) = node.child_by_field_name("parameters") {
+                    let cursor = &mut params.walk();
+                    for (i, param) in params.named_children(cursor).enumerate() {
+                        let (name, value) = match param.kind() {
+                            "identifier" => (text(param), BindingValue::Unknown),
+                            "typed_parameter" => {
+                                let Some(name) = self.find_child_by_kind(param, "identifier")
+                                else {
+                                    continue;
+                                };
+                                let ty = param.child_by_field_name("type").map(text);
+                                (
+                                    text(name),
+                                    ty.map_or(BindingValue::Unknown, BindingValue::Type),
+                                )
+                            }
+                            "default_parameter" | "typed_default_parameter" => {
+                                let Some(name) = param.child_by_field_name("name") else {
+                                    continue;
+                                };
+                                let ty = param.child_by_field_name("type").map(text);
+                                (
+                                    text(name),
+                                    ty.map_or(BindingValue::Unknown, BindingValue::Type),
+                                )
+                            }
+                            "list_splat_pattern" | "dictionary_splat_pattern" => {
+                                let Some(name) = self.find_child_by_kind(param, "identifier")
+                                else {
+                                    continue;
+                                };
+                                (text(name), BindingValue::Unknown)
+                            }
+                            _ => continue,
+                        };
+                        // `self` is the receiver (`This` in chains); `cls` in a
+                        // classmethod is the class itself.
+                        let value = match (i, class, name.as_str()) {
+                            (0, Some(_), "self") if node.kind() == "function_definition" => {
+                                continue
+                            }
+                            (0, Some(class), "cls") if node.kind() == "function_definition" => {
+                                BindingValue::Expr(vec![ExpressionStep::Ident(class.to_string())])
+                            }
+                            _ => value,
+                        };
+                        push(name, None, span, value);
+                    }
+                }
+                if let Some(body) = node.child_by_field_name("body") {
+                    self.extract_py_bindings(body, source, out, Some(span), class);
+                }
+                return;
+            }
+            "assignment" => {
+                let value = match (
+                    node.child_by_field_name("type"),
+                    node.child_by_field_name("right"),
+                ) {
+                    (Some(ty), _) => BindingValue::Type(text(ty)),
+                    (None, Some(right)) => self.py_binding_value(right, source),
+                    _ => BindingValue::Unknown,
+                };
+                if let Some(left) = node.child_by_field_name("left") {
+                    match left.kind() {
+                        // A name assigned in a class body is a class attribute.
+                        "identifier" => match (function, class) {
+                            (None, Some(class)) => {
+                                push(text(left), Some(class.to_string()), FILE_SCOPE, value)
+                            }
+                            _ => push(text(left), None, local_scope(node), value),
+                        },
+                        // `self.repo = repo`
+                        "attribute" => {
+                            let on_self = left
+                                .child_by_field_name("object")
+                                .is_some_and(|o| self.node_text(o, source) == "self");
+                            if let (true, Some(class), Some(attr)) =
+                                (on_self, class, left.child_by_field_name("attribute"))
+                            {
+                                push(
+                                    text(attr),
+                                    Some(class.to_string()),
+                                    function.unwrap_or(FILE_SCOPE),
+                                    value,
+                                );
+                            }
+                        }
+                        _ => self.py_unknown_names(left, source, local_scope(node), out),
+                    }
+                }
+            }
+            "for_statement" | "for_in_clause" => {
+                if let Some(left) = node.child_by_field_name("left") {
+                    let scope = match node.kind() {
+                        "for_in_clause" => node.parent().map_or(local_scope(node), lines),
+                        _ => local_scope(node),
+                    };
+                    self.py_unknown_names(left, source, scope, out);
+                }
+            }
+            "as_pattern" | "named_expression" => {
+                if let Some(alias) = node
+                    .child_by_field_name("alias")
+                    .or_else(|| node.child_by_field_name("name"))
+                {
+                    self.py_unknown_names(alias, source, local_scope(node), out);
+                }
+            }
+            _ => {}
+        }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            self.extract_py_bindings(child, source, out, function, class);
+        }
+    }
+
+    /// Every name a target pattern binds, of unknown type.
+    fn py_unknown_names(
+        &self,
+        pattern: Node,
+        source: &[u8],
+        scope: (u32, u32),
+        out: &mut Vec<TypeBinding>,
+    ) {
+        if pattern.kind() == "identifier" {
+            out.push(TypeBinding {
+                name: self.node_text(pattern, source).to_string(),
+                owner: None,
+                scope,
+                value: BindingValue::Unknown,
+            });
+            return;
+        }
+        if matches!(pattern.kind(), "attribute" | "subscript") {
+            return;
+        }
+        let cursor = &mut pattern.walk();
+        for child in pattern.named_children(cursor) {
+            self.py_unknown_names(child, source, scope, out);
+        }
+    }
+
+    /// What an assigned expression is, for a binding.
+    fn py_binding_value(&self, value: Node, source: &[u8]) -> BindingValue {
+        match value.kind() {
+            "call"
+            | "attribute"
+            | "identifier"
+            | "subscript"
+            | "parenthesized_expression"
+            | "string"
+            | "concatenated_string"
+            | "integer"
+            | "float"
+            | "true"
+            | "false"
+            | "list"
+            | "dictionary"
+            | "set"
+            | "tuple"
+            | "list_comprehension"
+            | "dictionary_comprehension"
+            | "set_comprehension" => {
+                let mut steps = Vec::new();
+                self.collect_py_chain_steps(value, source, &mut steps);
+                BindingValue::Expr(steps)
+            }
+            "await" => match value.named_child(0) {
+                Some(inner) => self.py_binding_value(inner, source),
+                None => BindingValue::Unknown,
+            },
+            _ => BindingValue::Unknown,
         }
     }
 
@@ -577,5 +799,114 @@ def main():
             .any(|(l, t)| l == "handler" && t == "authenticate"));
         // Call to handler() exists
         assert!(result.calls.iter().any(|c| c.callee_name == "handler"));
+    }
+}
+
+/// What the resolver needs from Python (#139): call forms, receivers,
+/// bindings.
+#[cfg(test)]
+mod resolution_facts {
+    use crate::parser::{BindingValue, CallForm, ExpressionStep, SourceLanguage, SourceParser};
+
+    const SOURCE: &str = r#"
+from shop import formatting
+from shop.models import *
+
+class UserService(Base):
+    def __init__(self, repo: Repository, limit=3):
+        self.repo = repo
+        self.validator = Validator([is_email])
+
+    def register(self, name):
+        user = User(name)
+        handler = lambda q: q
+        formatting.render(name)
+        "x".join([])
+        return user.save(self.repo)
+
+    @classmethod
+    def load(cls, text):
+        return cls(parse(text))
+"#;
+
+    #[test]
+    fn calls_record_their_form_and_receiver() {
+        let result = SourceParser::new(SourceLanguage::Python)
+            .unwrap()
+            .parse(SOURCE)
+            .unwrap();
+        let form = |callee: &str| {
+            let call = result
+                .calls
+                .iter()
+                .find(|c| c.callee_name == callee)
+                .unwrap();
+            (call.form, call.chain.clone())
+        };
+        assert_eq!(form("User").0, CallForm::Bare);
+        assert_eq!(
+            form("render"),
+            (
+                CallForm::Member,
+                Some(vec![
+                    ExpressionStep::Ident("formatting".into()),
+                    ExpressionStep::Field("render".into()),
+                    ExpressionStep::Call
+                ])
+            )
+        );
+        assert_eq!(
+            form("join").1.unwrap()[0],
+            ExpressionStep::Literal,
+            "a string receiver is a literal"
+        );
+        assert!(result
+            .imports
+            .iter()
+            .any(|i| i.local_name == "*" && i.source_module == "shop.models"));
+    }
+
+    #[test]
+    fn parameters_locals_and_self_fields_are_bound() {
+        let result = SourceParser::new(SourceLanguage::Python)
+            .unwrap()
+            .parse(SOURCE)
+            .unwrap();
+        let find = |name: &str, owner: Option<&str>| {
+            result
+                .bindings
+                .iter()
+                .find(|b| b.name == name && b.owner.as_deref() == owner)
+                .unwrap_or_else(|| panic!("{name} not bound: {:?}", result.bindings))
+                .clone()
+        };
+        assert_eq!(
+            find("repo", None).value,
+            BindingValue::Type("Repository".into())
+        );
+        assert_eq!(find("limit", None).value, BindingValue::Unknown);
+        assert_eq!(
+            find("repo", Some("UserService")).value,
+            BindingValue::Expr(vec![ExpressionStep::Ident("repo".into())])
+        );
+        assert_eq!(
+            find("validator", Some("UserService")).value,
+            BindingValue::Expr(vec![
+                ExpressionStep::Ident("Validator".into()),
+                ExpressionStep::Call
+            ])
+        );
+        assert_eq!(find("handler", None).value, BindingValue::Unknown);
+        assert_eq!(
+            find("cls", None).value,
+            BindingValue::Expr(vec![ExpressionStep::Ident("UserService".into())])
+        );
+        assert!(
+            !result.bindings.iter().any(|b| b.name == "self"),
+            "self is the receiver, not a binding"
+        );
+        // A local is visible from its line to the end of its function.
+        let user = find("user", None);
+        assert_eq!(user.scope, (11, 15));
     }
 }

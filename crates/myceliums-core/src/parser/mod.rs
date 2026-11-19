@@ -384,6 +384,43 @@ pub struct CallReference {
     pub arg_count: Option<u32>,
 }
 
+/// What a name in the code is bound to, for typing call receivers (#139): a
+/// parameter, a local variable or a field, with its declared type or the
+/// expression it was initialised from. No type inference: just what the
+/// declaration says.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeBinding {
+    /// The parameter, variable or field name.
+    pub name: String,
+    /// For a field (`self.repo`, `this.repo`, a Java, Rust or Go field): the
+    /// class or struct it belongs to. `None` for a parameter or a variable.
+    pub owner: Option<String>,
+    /// Lines the binding is visible in (1-based, inclusive): the function
+    /// for a parameter or local, the class for a declared field, the
+    /// assigning method for a field set by assignment, the whole file for a
+    /// module-level name.
+    pub scope: (u32, u32),
+    /// What it is bound to.
+    pub value: BindingValue,
+}
+
+/// The value side of a [`TypeBinding`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum BindingValue {
+    /// A declared type, as written (`Repository<User>`, `*store.Repo[*User]`,
+    /// `&mut Repo<User>`).
+    Type(String),
+    /// The expression it was assigned from, as chain steps (`User(...)` is
+    /// `[Ident(User), Call]`).
+    Expr(Vec<ExpressionStep>),
+    /// Bound, of unknown type: an untyped parameter, a closure, a loop
+    /// variable. It still shadows outer names.
+    Unknown,
+}
+
+/// The whole file, as a [`TypeBinding::scope`].
+pub const FILE_SCOPE: (u32, u32) = (0, u32::MAX);
+
 /// An import statement linking a local name to a source module.
 #[derive(Debug, Clone)]
 pub struct ImportInfo {
@@ -444,6 +481,9 @@ pub struct ParseResult {
     /// Variable aliases discovered during parsing (local_name, target_name).
     /// Used by the SSA resolver to track assignments like `handler = authenticate`.
     pub aliases: Vec<(String, String)>,
+    /// Parameters, locals and fields with what they are bound to (Python,
+    /// TypeScript/JavaScript, Go, Rust and Java).
+    pub bindings: Vec<TypeBinding>,
 }
 
 impl SourceParser {
@@ -586,6 +626,7 @@ impl SourceParser {
                 imports,
                 rationales,
                 aliases: vec![],
+                bindings: vec![],
             }
         })
     }
@@ -605,6 +646,7 @@ impl SourceParser {
         let mut calls = Vec::new();
         let mut imports = Vec::new();
         let mut aliases = Vec::new();
+        let mut bindings = Vec::new();
 
         match self.lang {
             SourceLanguage::TypeScript
@@ -616,27 +658,32 @@ impl SourceParser {
                 self.extract_ts_calls(root, source_bytes, &mut calls, None);
                 self.extract_ts_imports(root, source_bytes, &mut imports);
                 self.extract_ts_aliases(root, source_bytes, &mut aliases);
+                self.extract_ts_bindings(root, source_bytes, &mut bindings, None, None);
             }
             SourceLanguage::Python => {
                 self.extract_py_symbols(root, source_bytes, &mut symbols, None);
                 self.extract_py_calls(root, source_bytes, &mut calls, None);
                 self.extract_py_imports(root, source_bytes, &mut imports);
                 self.extract_py_aliases(root, source_bytes, &mut aliases);
+                self.extract_py_bindings(root, source_bytes, &mut bindings, None, None);
             }
             SourceLanguage::Go => {
                 self.extract_go_symbols(root, source_bytes, &mut symbols, None);
                 self.extract_go_calls(root, source_bytes, &mut calls, None);
                 self.extract_go_imports(root, source_bytes, &mut imports);
+                self.extract_go_bindings(root, source_bytes, &mut bindings, None);
             }
             SourceLanguage::Rust => {
                 self.extract_rust_symbols(root, source_bytes, &mut symbols, None);
                 self.extract_rust_calls(root, source_bytes, &mut calls, None);
                 self.extract_rust_imports(root, source_bytes, &mut imports);
+                self.extract_rust_bindings(root, source_bytes, &mut bindings, None);
             }
             SourceLanguage::Java => {
                 self.extract_java_symbols(root, source_bytes, &mut symbols, None);
                 self.extract_java_calls(root, source_bytes, &mut calls, None);
                 self.extract_java_imports(root, source_bytes, &mut imports);
+                self.extract_java_bindings(root, source_bytes, &mut bindings, None, None);
             }
             SourceLanguage::CSharp => {
                 self.extract_csharp_symbols(root, source_bytes, &mut symbols, None);
@@ -733,6 +780,7 @@ impl SourceParser {
             imports,
             rationales,
             aliases,
+            bindings,
         }
     }
 }

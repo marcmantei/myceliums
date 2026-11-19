@@ -31,14 +31,16 @@
 //! Every edge records how its target was found ([`CallResolution`]).
 
 mod imports;
+mod types;
 
 use std::collections::HashMap;
 
-use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, SymbolKind};
+use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, SymbolKind, SymbolMetadata};
 use uuid::Uuid;
 
-use crate::parser::{CallForm, CallReference, ExpressionStep, ImportInfo};
+use crate::parser::{CallForm, CallReference, ExpressionStep, ImportInfo, TypeBinding};
 use imports::Bound;
+use types::Ty;
 
 /// How the resolver picked the target of a CALLS edge.
 ///
@@ -93,7 +95,7 @@ impl CallResolution {
 /// Most symbols an ambiguous call is linked to. A call that several symbols
 /// qualify for gets an edge to each, labelled `ambiguous`, up to this many;
 /// beyond it the name says too little and the call gets no edge.
-pub const MAX_AMBIGUOUS_TARGETS: usize = 3;
+pub const MAX_AMBIGUOUS_TARGETS: usize = 2;
 
 /// The language family of a source file, by extension: a call is only ever
 /// resolved to a symbol of its own family (#139).
@@ -159,6 +161,13 @@ struct Def {
     /// function, a closure the extractor kept): that function's lines. It
     /// is visible only there.
     enclosing_fn: Option<(u32, u32)>,
+    /// Declared return type, as written.
+    return_type: Option<String>,
+    /// Base classes, implemented interfaces, embedded structs, as written.
+    bases: Vec<String>,
+    /// Number of parameters, where it selects among overloads (Java);
+    /// `None` for varargs or elsewhere.
+    params: Option<u32>,
 }
 
 impl Def {
@@ -205,25 +214,20 @@ struct FileContext {
     imports: Vec<ImportInfo>,
     /// `handler = authenticate`: local name → aliased name.
     aliases: Vec<(String, String)>,
+    /// Parameters, locals and fields with their types or initialisers.
+    bindings: Vec<TypeBinding>,
 }
 
-/// The call being resolved and where it is made.
+/// Where a call is made (or a declaration is evaluated).
 struct Site<'a> {
     file: &'a str,
     family: &'a str,
     line: u32,
-    caller: DefId,
+    /// The function or method the site is in.
+    caller: Option<DefId>,
     context: Option<&'a FileContext>,
-}
-
-/// What a call's receiver is.
-enum Receiver {
-    /// A module or package: the call is to one of its top-level symbols.
-    Module(Vec<String>),
-    /// Something outside the project (a literal, a library module): no edge.
-    External,
-    /// Not known: any method of the called name qualifies.
-    Unknown,
+    /// A binding not to see: the one whose initialiser is being evaluated.
+    exclude: Option<usize>,
 }
 
 /// Resolves call references to symbol UIDs. Two passes: register every
@@ -254,18 +258,30 @@ impl CallResolver {
             .and_then(|prefix| prefix.strip_suffix('.'))
             .filter(|prefix| !prefix.is_empty())
             .map(str::to_string);
+        let family = language_family(&symbol.file_path)
+            .unwrap_or_default()
+            .to_string();
+        let metadata: SymbolMetadata = symbol
+            .metadata
+            .as_deref()
+            .and_then(|json| serde_json::from_str(json).ok())
+            .unwrap_or_default();
+        let params = (family == "jvm")
+            .then(|| param_count(&symbol.signature, &symbol.name))
+            .flatten();
         self.defs.push(Def {
             uid: symbol.uid.clone(),
             name: symbol.name.clone(),
             kind: symbol.kind.clone(),
             file: symbol.file_path.clone(),
-            family: language_family(&symbol.file_path)
-                .unwrap_or_default()
-                .to_string(),
+            family,
             start: symbol.start_line,
             end: symbol.end_line,
             container,
             enclosing_fn: None,
+            return_type: metadata.return_type,
+            bases: metadata.superclasses,
+            params,
         });
         self.by_name
             .entry(symbol.name.clone())
@@ -279,18 +295,20 @@ impl CallResolver {
     }
 
     /// Pass 1: register what a parsed file declares beyond its symbols: its
-    /// imports and the aliases SSA analysis found (`handler =
-    /// authenticate`). Register every parsed file, also one without symbols:
-    /// imports are resolved to files.
+    /// imports, the aliases SSA analysis found (`handler = authenticate`)
+    /// and its typed bindings. Register every parsed file, also one without
+    /// symbols: imports are resolved to files.
     pub fn register_file(
         &mut self,
         path: &str,
         imports: &[ImportInfo],
         aliases: &[(String, String)],
+        bindings: &[TypeBinding],
     ) {
         let context = self.files.entry(path.to_string()).or_default();
         context.imports.extend(imports.iter().cloned());
         context.aliases.extend(aliases.iter().cloned());
+        context.bindings.extend(bindings.iter().cloned());
         self.prepared = false;
     }
 
@@ -335,11 +353,11 @@ impl CallResolver {
         let mut edges: Vec<(DefId, DefId, CallResolution, u32)> = Vec::new();
         let mut seen: HashMap<(DefId, DefId), usize> = HashMap::new();
         for call in calls {
-            let Some(site) = self.site(call) else {
+            let Some((site, caller)) = self.site(call) else {
                 continue;
             };
             for (target, resolution) in self.targets(&site, call) {
-                match seen.get(&(site.caller, target)) {
+                match seen.get(&(caller, target)) {
                     Some(&i) => {
                         if resolution > edges[i].2 {
                             edges[i].2 = resolution;
@@ -347,8 +365,8 @@ impl CallResolver {
                         }
                     }
                     None => {
-                        seen.insert((site.caller, target), edges.len());
-                        edges.push((site.caller, target, resolution, call.line));
+                        seen.insert((caller, target), edges.len());
+                        edges.push((caller, target, resolution, call.line));
                     }
                 }
             }
@@ -368,17 +386,19 @@ impl CallResolver {
 
     /// Where `call` is made: its file, family and caller. `None` for a call
     /// without a file or outside every definition.
-    fn site<'a>(&'a self, call: &'a CallReference) -> Option<Site<'a>> {
+    fn site<'a>(&'a self, call: &'a CallReference) -> Option<(Site<'a>, DefId)> {
         let file = call.file.as_deref()?;
         let family = language_family(file)?;
         let caller = self.caller_of(file, call)?;
-        Some(Site {
+        let site = Site {
             file,
             family,
             line: call.line,
-            caller,
+            caller: Some(caller),
             context: self.files.get(file),
-        })
+            exclude: None,
+        };
+        Some((site, caller))
     }
 
     /// The symbol a call is made from: the innermost definition in the call's
@@ -408,25 +428,77 @@ impl CallResolver {
     /// The symbols `call` may call, with how each was found.
     fn targets(&self, site: &Site, call: &CallReference) -> Vec<(DefId, CallResolution)> {
         let name = call.callee_name.as_str();
-        match call.form {
+        let targets = match call.form {
             CallForm::Bare => self.resolve_bare(site, name),
             CallForm::Member => match call.chain.as_deref().and_then(|c| receiver_steps(c, name)) {
                 Some(receiver) => self.resolve_member(site, receiver, name),
                 None => self.methods_named(site, name),
             },
+            // `new X()`, `new ns.X()`: the class.
             CallForm::New => {
                 let receiver = call.chain.as_deref().and_then(|c| receiver_steps(c, name));
-                let classes = match receiver.map(|r| self.receiver(site, r)) {
-                    Some(Receiver::Module(files)) => {
-                        self.top_level_in(&files, name, Def::is_class_like)
+                let class = match receiver {
+                    Some(receiver) => {
+                        let mut steps = receiver.to_vec();
+                        steps.push(ExpressionStep::Field(name.to_string()));
+                        self.eval(site, &steps, 0)
                     }
-                    Some(_) => Vec::new(),
-                    None => self.classes_in_scope(site, name),
+                    None => self.type_ty(site, name, 0),
                 };
-                pick(classes, CallResolution::Exact)
+                match class {
+                    Ty::Class(class) | Ty::Instance(class) => vec![(class, CallResolution::Exact)],
+                    _ => Vec::new(),
+                }
             }
-            CallForm::SuperConstructor => Vec::new(),
+            CallForm::SuperConstructor => self.super_constructor(site),
             CallForm::Unknown => self.resolve_by_name(site, call),
+        };
+        let targets = self.by_arity(targets, call.arg_count);
+        if targets.len() > MAX_AMBIGUOUS_TARGETS {
+            // The name says too little: no edge.
+            return Vec::new();
+        }
+        targets
+    }
+
+    /// Of several overloads (Java), the one taking `arg_count` arguments.
+    fn by_arity(
+        &self,
+        targets: Vec<(DefId, CallResolution)>,
+        arg_count: Option<u32>,
+    ) -> Vec<(DefId, CallResolution)> {
+        let Some(count) = arg_count.filter(|_| targets.len() > 1) else {
+            return targets;
+        };
+        let matching: Vec<DefId> = targets
+            .iter()
+            .map(|&(id, _)| id)
+            .filter(|&id| self.defs[id].params == Some(count))
+            .collect();
+        match matching.as_slice() {
+            // The overloads were found exactly; only their number made the
+            // call look ambiguous.
+            [one] => vec![(*one, CallResolution::Exact)],
+            _ => targets,
+        }
+    }
+
+    /// `super(...)`: the base class's constructor, else the base class.
+    fn super_constructor(&self, site: &Site) -> Vec<(DefId, CallResolution)> {
+        let Some(class) = self.enclosing_class(site) else {
+            return Vec::new();
+        };
+        let Some(&base) = self.bases(class, 0).first() else {
+            return Vec::new();
+        };
+        let base_name = self.defs[base].name.clone();
+        let constructor = ["constructor", "__init__", base_name.as_str()]
+            .iter()
+            .map(|name| self.members_of(base, name))
+            .find(|found| !found.is_empty());
+        match constructor {
+            Some(constructors) => pick(constructors, CallResolution::Exact),
+            None => vec![(base, CallResolution::Exact)],
         }
     }
 
@@ -436,6 +508,19 @@ impl CallResolver {
     /// has.
     fn resolve_bare(&self, site: &Site, name: &str) -> Vec<(DefId, CallResolution)> {
         let name = self.unalias(site, name);
+        // A parameter or local of that name shadows everything: a call
+        // through a function value, unless it holds a class (`cls()`).
+        // (A module-level binding is the definition itself: `export const
+        // f = () => ...`.)
+        let local = self
+            .binding(site, name)
+            .is_some_and(|(_, _, binding)| binding.scope.1 != u32::MAX);
+        if local {
+            return match self.eval(site, &[ExpressionStep::Ident(name.to_string())], 0) {
+                Ty::Class(class) => vec![(class, CallResolution::Exact)],
+                _ => Vec::new(),
+            };
+        }
         if implicit_this(site.family) {
             let members = self.enclosing_members(site, name);
             if !members.is_empty() {
@@ -474,9 +559,11 @@ impl CallResolver {
 
     /// Members named `name` of the classes enclosing the caller, innermost
     /// class first.
+    /// Members named `name` of the classes enclosing the caller (or of
+    /// their base classes), innermost class first.
     fn enclosing_members(&self, site: &Site, name: &str) -> Vec<DefId> {
         for class in self.enclosing_classes(site) {
-            let members = self.members_of(class, name);
+            let members = self.methods_on(class, name, 0);
             if !members.is_empty() {
                 return members;
             }
@@ -638,33 +725,25 @@ impl CallResolver {
 
     // --- calls on a receiver ---------------------------------------------
 
-    /// `receiver.name()`.
+    /// `receiver.name()`: on a typed receiver the class's method (or a base
+    /// class's), on a module its top-level function, on a library value
+    /// nothing; on a receiver of unknown type any method of that name.
     fn resolve_member(
         &self,
         site: &Site,
         receiver: &[ExpressionStep],
         name: &str,
     ) -> Vec<(DefId, CallResolution)> {
-        match self.receiver(site, receiver) {
-            Receiver::Module(files) => pick(
+        match self.eval(site, receiver, 0) {
+            Ty::Instance(class) | Ty::Class(class) => {
+                pick(self.methods_on(class, name, 0), CallResolution::Exact)
+            }
+            Ty::Module(files) => pick(
                 self.top_level_in(&files, name, Def::is_callable),
                 CallResolution::Import,
             ),
-            Receiver::External => Vec::new(),
-            Receiver::Unknown => self.methods_named(site, name),
-        }
-    }
-
-    /// What a receiver expression is, as far as the imports tell.
-    fn receiver(&self, site: &Site, steps: &[ExpressionStep]) -> Receiver {
-        match steps {
-            [ExpressionStep::Literal, ..] => Receiver::External,
-            [ExpressionStep::Ident(name)] => match self.imported(site, name) {
-                Some(Bound::Module(files)) => Receiver::Module(files),
-                Some(Bound::External) => Receiver::External,
-                _ => Receiver::Unknown,
-            },
-            _ => Receiver::Unknown,
+            Ty::Function(_) | Ty::External => Vec::new(),
+            Ty::Unknown => self.methods_named(site, name),
         }
     }
 
@@ -737,6 +816,30 @@ impl CallResolver {
     }
 }
 
+/// The number of parameters in a signature (`int add(T row, int copies)` →
+/// 2); `None` for varargs or an unreadable signature.
+fn param_count(signature: &str, name: &str) -> Option<u32> {
+    let start = signature.find(&format!("{name}("))? + name.len() + 1;
+    let rest = &signature[start..];
+    let (mut depth, mut count, mut empty) = (0i32, 0u32, true);
+    for (i, c) in rest.char_indices() {
+        match c {
+            '(' | '<' | '[' | '{' => depth += 1,
+            ')' if depth == 0 => {
+                if rest[..i].contains("...") {
+                    return None;
+                }
+                return Some(if empty { 0 } else { count + 1 });
+            }
+            ')' | '>' | ']' | '}' => depth -= 1,
+            ',' if depth == 0 => count += 1,
+            c if !c.is_whitespace() => empty = false,
+            _ => {}
+        }
+    }
+    None
+}
+
 /// The receiver part of a call's chain: the steps before the final
 /// `.name()`. `None` when the chain does not end in a call of `name`.
 fn receiver_steps<'a>(chain: &'a [ExpressionStep], name: &str) -> Option<&'a [ExpressionStep]> {
@@ -750,24 +853,24 @@ fn receiver_steps<'a>(chain: &'a [ExpressionStep], name: &str) -> Option<&'a [Ex
 }
 
 /// One candidate: an edge with the given label. Several: an `ambiguous`
-/// edge to each, up to [`MAX_AMBIGUOUS_TARGETS`]. None, or too many: no
-/// edge.
+/// edge to each ([`CallResolver::targets`] drops them beyond
+/// [`MAX_AMBIGUOUS_TARGETS`]).
 fn pick(mut candidates: Vec<DefId>, unique: CallResolution) -> Vec<(DefId, CallResolution)> {
     candidates.sort_unstable();
     candidates.dedup();
     match candidates.len() {
         1 => vec![(candidates[0], unique)],
-        n if n <= MAX_AMBIGUOUS_TARGETS => candidates
+        _ => candidates
             .into_iter()
             .map(|id| (id, CallResolution::Ambiguous))
             .collect(),
-        _ => Vec::new(),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::BindingValue;
 
     /// A symbol `name` in `file`, lines `start..=end`; `container` is the
     /// class or type it belongs to.
@@ -842,6 +945,21 @@ mod tests {
         }
     }
 
+    /// Parameters of unknown type, visible in all of `file`, as the parser
+    /// reports `def f(items, value)`.
+    fn declare_unknown(resolver: &mut CallResolver, file: &str, names: &[&str]) {
+        let bindings: Vec<TypeBinding> = names
+            .iter()
+            .map(|name| TypeBinding {
+                name: name.to_string(),
+                owner: None,
+                scope: (1, 10_000),
+                value: crate::parser::BindingValue::Unknown,
+            })
+            .collect();
+        resolver.register_file(file, &[], &[], &bindings);
+    }
+
     fn resolver(symbols: &[CodeSymbol]) -> CallResolver {
         let mut resolver = CallResolver::new();
         for symbol in symbols {
@@ -910,6 +1028,7 @@ mod tests {
             method("src/format.ts", "Fmt.format", (1, 3)),
             function("src/App.vue", "mount", (1, 3)),
         ]);
+        declare_unknown(&mut resolver, "src/view.tsx", &["items", "value"]);
         let calls = [
             member("src/view.tsx", 2, "render", vec![ident("items")], "map"),
             member("src/view.tsx", 3, "render", vec![ident("value")], "format"),
@@ -958,6 +1077,7 @@ mod tests {
             "shop/auth.py",
             &[import("validate", "shop.validation", Some("validate"))],
             &[],
+            &[],
         );
         let calls = [
             call("shop/auth.py", 2, "parse", "decode", CallForm::Bare),
@@ -996,8 +1116,9 @@ mod tests {
                 import("json", "json", None),
             ],
             &[],
+            &[],
         );
-        resolver.register_file("shop/__init__.py", &[], &[]);
+        resolver.register_file("shop/__init__.py", &[], &[], &[]);
         let calls = [
             call("shop/service.py", 2, "login", "parse_token", CallForm::Bare),
             member(
@@ -1037,6 +1158,7 @@ mod tests {
                 import("debounce", "lodash", Some("debounce")),
             ],
             &[],
+            &[],
         );
         let calls = [
             call("src/app/main.ts", 2, "main", "format", CallForm::Bare),
@@ -1074,6 +1196,7 @@ mod tests {
                 import("validation", "example.com/shop/validation", None),
                 import("strings", "strings", None),
             ],
+            &[],
             &[],
         );
         let calls = [
@@ -1121,6 +1244,7 @@ mod tests {
                 import("HashMap", "std::collections::HashMap", None),
             ],
             &[],
+            &[],
         );
         let calls = [
             call("src/service.rs", 2, "run", "parse_token", CallForm::Bare),
@@ -1152,6 +1276,7 @@ mod tests {
         resolver.register_file(
             "shop/Main.java",
             &[import("parse", "shop.auth.Auth.parse", Some("static"))],
+            &[],
             &[],
         );
         let calls = [
@@ -1190,6 +1315,7 @@ mod tests {
             function("src/utils.ts", "map", (1, 2)),
             method("src/models.ts", "Order.total", (1, 2)),
         ]);
+        declare_unknown(&mut resolver, "src/a.ts", &["items", "order"]);
         let calls = [
             member("src/a.ts", 2, "main", vec![ident("items")], "map"),
             member("src/a.ts", 3, "main", vec![ident("order")], "total"),
@@ -1221,6 +1347,7 @@ mod tests {
             symbols.push(method(&format!("src/m{i}.py"), "C.get", (1, 2)));
         }
         let mut resolver = resolver(&symbols);
+        declare_unknown(&mut resolver, "src/a.py", &["x"]);
         let get = member("src/a.py", 2, "main", vec![ident("x")], "get");
         let found = edges(&mut resolver, std::slice::from_ref(&get));
         if MAX_AMBIGUOUS_TARGETS >= 2 {
@@ -1235,6 +1362,7 @@ mod tests {
             symbols.push(method(&format!("src/n{i}.py"), "C.get", (1, 2)));
         }
         let mut resolver = self::resolver(&symbols);
+        declare_unknown(&mut resolver, "src/a.py", &["x"]);
         assert!(edges(&mut resolver, &[get]).is_empty());
     }
 
@@ -1249,6 +1377,7 @@ mod tests {
             "app.py",
             &[],
             &[("handler".to_string(), "authenticate".to_string())],
+            &[],
         );
         let calls = [call("app.py", 3, "main", "handler", CallForm::Bare)];
         assert_eq!(
@@ -1296,7 +1425,9 @@ mod tests {
             "src/main.rs",
             &[import("Repo", "crate::a::Repo", None)],
             &[],
+            &[],
         );
+        declare_unknown(&mut resolver, "src/main.rs", &["x"]);
         let calls = [
             member("src/main.rs", 2, "run", vec![ident("x")], "get"),
             CallReference {
@@ -1314,7 +1445,402 @@ mod tests {
             .iter()
             .find(|r| r.target_uid == "src/a.rs::Repo.get")
             .unwrap();
+        assert_eq!(rels.len(), 2, "line 2 links both get methods");
         assert_eq!(to_repo.metadata, "line:5;resolved:exact");
+    }
+
+    // --- receiver typing ---------------------------------------------------
+
+    fn binding(name: &str, scope: (u32, u32), value: BindingValue) -> TypeBinding {
+        TypeBinding {
+            name: name.to_string(),
+            owner: None,
+            scope,
+            value,
+        }
+    }
+
+    fn field(owner: &str, name: &str, value: BindingValue) -> TypeBinding {
+        TypeBinding {
+            owner: Some(owner.to_string()),
+            ..binding(name, crate::parser::FILE_SCOPE, value)
+        }
+    }
+
+    fn with_metadata(mut symbol: CodeSymbol, metadata: SymbolMetadata) -> CodeSymbol {
+        symbol.metadata = Some(serde_json::to_string(&metadata).unwrap());
+        symbol
+    }
+
+    fn this(name: &str) -> Vec<ExpressionStep> {
+        vec![
+            ExpressionStep::This,
+            ExpressionStep::Field(name.to_string()),
+        ]
+    }
+
+    /// The shop domain in Python: two classes with `save`/`add`/`get`, a
+    /// subclass, typed and untyped receivers.
+    fn python_shop() -> CallResolver {
+        let mut resolver = resolver(&[
+            class("shop/models.py", "User", (1, 9)),
+            method("shop/models.py", "User.save", (2, 4)),
+            class("shop/models.py", "Order", (10, 19)),
+            method("shop/models.py", "Order.save", (11, 13)),
+            method("shop/models.py", "Order.add", (14, 15)),
+            class("shop/storage.py", "Repository", (1, 9)),
+            method("shop/storage.py", "Repository.add", (2, 3)),
+            method("shop/storage.py", "Repository.get", (4, 5)),
+            class("shop/reports.py", "Report", (1, 9)),
+            method("shop/reports.py", "Report.__init__", (2, 3)),
+            method("shop/reports.py", "Report.header", (4, 5)),
+            method("shop/reports.py", "Report.render", (6, 8)),
+            with_metadata(
+                class("shop/reports.py", "OrderReport", (10, 19)),
+                SymbolMetadata {
+                    superclasses: vec!["Report".to_string()],
+                    ..SymbolMetadata::default()
+                },
+            ),
+            method("shop/reports.py", "OrderReport.__init__", (11, 12)),
+            method("shop/reports.py", "OrderReport.summary", (13, 14)),
+            function("shop/service.py", "register", (1, 9)),
+        ]);
+        resolver.register_file(
+            "shop/models.py",
+            &[import("Repository", "shop.storage", Some("Repository"))],
+            &[],
+            &[binding(
+                "repo",
+                (2, 4),
+                BindingValue::Type("Repository".to_string()),
+            )],
+        );
+        resolver.register_file(
+            "shop/service.py",
+            &[import("User", "shop.models", Some("User"))],
+            &[],
+            &[
+                binding(
+                    "user",
+                    (3, 9),
+                    BindingValue::Expr(vec![ident("User"), ExpressionStep::Call]),
+                ),
+                binding("rows", (1, 9), BindingValue::Type("list[str]".to_string())),
+                binding("thing", (1, 9), BindingValue::Unknown),
+            ],
+        );
+        resolver
+    }
+
+    /// `repo: Repository` makes `repo.add()` Repository.add, not Order.add;
+    /// `user = User(...)` makes `user.save()` User.save; a list's `.get()`
+    /// is nobody's; an untyped receiver falls back to the method name.
+    #[test]
+    fn declared_and_constructed_receivers_select_the_class() {
+        let mut resolver = python_shop();
+        let calls = [
+            member("shop/models.py", 3, "save", vec![ident("repo")], "add"),
+            member(
+                "shop/service.py",
+                4,
+                "register",
+                vec![ident("user")],
+                "save",
+            ),
+            member("shop/service.py", 5, "register", vec![ident("rows")], "get"),
+            member(
+                "shop/service.py",
+                6,
+                "register",
+                vec![ident("thing")],
+                "add",
+            ),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(
+                    "shop/models.py::User.save",
+                    "shop/storage.py::Repository.add",
+                    "exact"
+                ),
+                edge(
+                    "shop/service.py::register",
+                    "shop/models.py::Order.add",
+                    "ambiguous"
+                ),
+                edge(
+                    "shop/service.py::register",
+                    "shop/models.py::User.save",
+                    "exact"
+                ),
+                edge(
+                    "shop/service.py::register",
+                    "shop/storage.py::Repository.add",
+                    "ambiguous"
+                ),
+            ]
+        );
+    }
+
+    /// `self.header()` is the enclosing class's; `self.render()` in a
+    /// subclass is the base class's; `super().__init__()` is the base
+    /// constructor.
+    #[test]
+    fn self_and_super_follow_the_class_hierarchy() {
+        let mut resolver = python_shop();
+        let super_init = vec![ExpressionStep::Super, ExpressionStep::Call];
+        let calls = [
+            member(
+                "shop/reports.py",
+                7,
+                "render",
+                this("").into_iter().take(1).collect(),
+                "header",
+            ),
+            member(
+                "shop/reports.py",
+                14,
+                "summary",
+                vec![ExpressionStep::This],
+                "render",
+            ),
+            member("shop/reports.py", 12, "__init__", super_init, "__init__"),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(
+                    "shop/reports.py::OrderReport.__init__",
+                    "shop/reports.py::Report.__init__",
+                    "exact"
+                ),
+                edge(
+                    "shop/reports.py::OrderReport.summary",
+                    "shop/reports.py::Report.render",
+                    "exact"
+                ),
+                edge(
+                    "shop/reports.py::Report.render",
+                    "shop/reports.py::Report.header",
+                    "exact"
+                ),
+            ]
+        );
+    }
+
+    /// A parameter or local named like a function shadows it: the call goes
+    /// through a function value and gets no edge, unless the name holds a
+    /// class (`cls()` in a classmethod).
+    #[test]
+    fn a_local_binding_shadows_a_function_of_that_name() {
+        let mut resolver = resolver(&[
+            function("cli.py", "handler", (1, 2)),
+            function("cli.py", "dispatch", (3, 6)),
+            class("cli.py", "Config", (7, 12)),
+            method("cli.py", "Config.load", (8, 9)),
+        ]);
+        resolver.register_file(
+            "cli.py",
+            &[],
+            &[],
+            &[
+                binding("handler", (4, 6), BindingValue::Unknown),
+                binding("cls", (8, 9), BindingValue::Expr(vec![ident("Config")])),
+            ],
+        );
+        let calls = [
+            call("cli.py", 5, "dispatch", "handler", CallForm::Bare),
+            call("cli.py", 9, "load", "cls", CallForm::Bare),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge("cli.py::Config.load", "cli.py::Config", "exact")]
+        );
+    }
+
+    /// A declared return type types the call's result:
+    /// `config.Config.load(text).get()` reaches Config.get.
+    #[test]
+    fn return_types_type_call_results() {
+        let mut resolver = resolver(&[
+            class("src/config.ts", "Config", (1, 9)),
+            with_metadata(
+                method("src/config.ts", "Config.load", (2, 4)),
+                SymbolMetadata {
+                    return_type: Some("Config".to_string()),
+                    ..SymbolMetadata::default()
+                },
+            ),
+            method("src/config.ts", "Config.get", (5, 6)),
+            class("src/storage.ts", "Repository", (1, 9)),
+            method("src/storage.ts", "Repository.get", (2, 3)),
+            function("src/service.ts", "settings", (1, 9)),
+        ]);
+        resolver.register_file(
+            "src/service.ts",
+            &[import("config", "./config", Some("*"))],
+            &[],
+            &[binding(
+                "cfg",
+                (2, 9),
+                BindingValue::Expr(vec![
+                    ident("config"),
+                    ExpressionStep::Field("Config".to_string()),
+                    ExpressionStep::Field("load".to_string()),
+                    ExpressionStep::Call,
+                ]),
+            )],
+        );
+        let calls = [member(
+            "src/service.ts",
+            3,
+            "settings",
+            vec![ident("cfg")],
+            "get",
+        )];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "src/service.ts::settings",
+                "src/config.ts::Config.get",
+                "exact"
+            )]
+        );
+    }
+
+    /// Go: a receiver parameter typed `*UserService`, a struct field typed
+    /// `*validation.Validator` in another package.
+    #[test]
+    fn struct_fields_type_chained_receivers() {
+        let mut resolver = resolver(&[
+            class("service/service.go", "UserService", (1, 4)),
+            method("service/service.go", "UserService.Register", (6, 9)),
+            class("validation/validation.go", "Validator", (1, 3)),
+            method("validation/validation.go", "Validator.Validate", (4, 5)),
+            function("validation/validation.go", "Validate", (7, 8)),
+        ]);
+        resolver.register_file(
+            "service/service.go",
+            &[import("validation", "example.com/shop/validation", None)],
+            &[],
+            &[
+                field(
+                    "UserService",
+                    "validator",
+                    BindingValue::Type("*validation.Validator".to_string()),
+                ),
+                binding("s", (6, 9), BindingValue::Type("*UserService".to_string())),
+            ],
+        );
+        let receiver = vec![ident("s"), ExpressionStep::Field("validator".to_string())];
+        let calls = [member(
+            "service/service.go",
+            7,
+            "Register",
+            receiver,
+            "Validate",
+        )];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "service/service.go::UserService.Register",
+                "validation/validation.go::Validator.Validate",
+                "exact"
+            )]
+        );
+    }
+
+    /// Rust `Self::new()` and `Type::assoc()`; Java overloads by arity;
+    /// `super(...)` to the base constructor.
+    #[test]
+    fn paths_constructors_and_overloads() {
+        let mut resolver = resolver(&[
+            class("src/config.rs", "Config", (1, 3)),
+            method("src/config.rs", "Config.new", (5, 6)),
+            method("src/config.rs", "Config.load", (7, 9)),
+            class("src/Repo.java", "Repo", (1, 20)),
+            CodeSymbol {
+                signature: "public int add(T row)".to_string(),
+                ..method("src/Repo.java", "Repo.add", (2, 4))
+            },
+            CodeSymbol {
+                signature: "public int add(T row, int copies)".to_string(),
+                uid: "src/Repo.java::Repo.add(T, int)".to_string(),
+                ..method("src/Repo.java", "Repo.add", (5, 9))
+            },
+            class("src/Report.java", "Report", (1, 5)),
+            method("src/Report.java", "Report.Report", (2, 3)),
+            with_metadata(
+                class("src/OrderReport.java", "OrderReport", (1, 9)),
+                SymbolMetadata {
+                    superclasses: vec!["Report".to_string()],
+                    ..SymbolMetadata::default()
+                },
+            ),
+            method("src/OrderReport.java", "OrderReport.OrderReport", (2, 4)),
+        ]);
+        let calls = [
+            member("src/config.rs", 8, "load", vec![ident("Self")], "new"),
+            CallReference {
+                arg_count: Some(1),
+                ..call("src/Repo.java", 6, "add", "add", CallForm::Bare)
+            },
+            call(
+                "src/OrderReport.java",
+                3,
+                "OrderReport",
+                "super",
+                CallForm::SuperConstructor,
+            ),
+            call(
+                "src/OrderReport.java",
+                3,
+                "OrderReport",
+                "Report",
+                CallForm::New,
+            ),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(
+                    "src/OrderReport.java::OrderReport.OrderReport",
+                    "src/Report.java::Report",
+                    "exact"
+                ),
+                edge(
+                    "src/OrderReport.java::OrderReport.OrderReport",
+                    "src/Report.java::Report.Report",
+                    "exact"
+                ),
+                edge(
+                    "src/Repo.java::Repo.add(T, int)",
+                    "src/Repo.java::Repo.add",
+                    "exact"
+                ),
+                edge(
+                    "src/config.rs::Config.load",
+                    "src/config.rs::Config.new",
+                    "exact"
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn parameter_counts_come_from_signatures() {
+        assert_eq!(
+            param_count("public int add(T row, int copies)", "add"),
+            Some(2)
+        );
+        assert_eq!(param_count("int size()", "size"), Some(0));
+        assert_eq!(param_count("void put(Map<K, V> m)", "put"), Some(1));
+        assert_eq!(
+            param_count("static String join(String... cells)", "join"),
+            None
+        );
     }
 
     #[test]

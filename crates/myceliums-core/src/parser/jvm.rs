@@ -1,7 +1,10 @@
 //! JVM-family extraction: Java, Kotlin and Scala.
 
-use super::{CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
-use myceliums_storage::SymbolKind;
+use super::{
+    BindingValue, CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser,
+    TypeBinding, FILE_SCOPE,
+};
+use myceliums_storage::{SymbolKind, SymbolMetadata};
 use tree_sitter::Node;
 
 impl SourceParser {
@@ -27,7 +30,7 @@ impl SourceParser {
                         signature: self.extract_java_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: None,
+                        metadata: self.java_supertypes(node, source),
                     });
                     // Recurse into class body with class name as parent
                     if let Some(body) = node.child_by_field_name("body") {
@@ -47,7 +50,7 @@ impl SourceParser {
                         signature: self.extract_java_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: None,
+                        metadata: self.java_supertypes(node, source),
                     });
                     // Recurse into interface body with interface name as parent
                     if let Some(body) = node.child_by_field_name("body") {
@@ -122,7 +125,10 @@ impl SourceParser {
                         signature: self.extract_java_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: None,
+                        metadata: node.child_by_field_name("type").map(|ty| SymbolMetadata {
+                            return_type: Some(self.node_text(ty, source).to_string()),
+                            ..SymbolMetadata::default()
+                        }),
                     });
                 }
             }
@@ -205,6 +211,39 @@ impl SourceParser {
         for child in node.children(cursor) {
             self.extract_java_symbols(child, source, symbols, parent);
         }
+    }
+
+    /// `extends` and `implements` of a Java class, `extends` of an
+    /// interface.
+    fn java_supertypes(&self, node: Node, source: &[u8]) -> Option<SymbolMetadata> {
+        let mut supertypes = Vec::new();
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            if !matches!(
+                child.kind(),
+                "superclass" | "super_interfaces" | "extends_interfaces"
+            ) {
+                continue;
+            }
+            let mut stack = vec![child];
+            while let Some(n) = stack.pop() {
+                match n.kind() {
+                    "type_identifier" | "generic_type" | "scoped_type_identifier" => {
+                        supertypes.push(java_type_name(self.node_text(n, source)))
+                    }
+                    _ => {
+                        // Reversed, so the stack pops them in source order.
+                        let cursor = &mut n.walk();
+                        let children: Vec<Node> = n.children(cursor).collect();
+                        stack.extend(children.into_iter().rev());
+                    }
+                }
+            }
+        }
+        (!supertypes.is_empty()).then(|| SymbolMetadata {
+            superclasses: supertypes,
+            ..SymbolMetadata::default()
+        })
     }
 
     fn extract_java_signature(&self, node: Node, source: &[u8]) -> String {
@@ -297,6 +336,170 @@ impl SourceParser {
         }
     }
 
+    /// Parameters, local variables and fields with their declared types
+    /// (#139); `var` locals with their initialisers.
+    pub(super) fn extract_java_bindings(
+        &self,
+        node: Node,
+        source: &[u8],
+        out: &mut Vec<TypeBinding>,
+        function: Option<(u32, u32)>,
+        class: Option<&str>,
+    ) {
+        let lines = |n: Node| {
+            (
+                n.start_position().row as u32 + 1,
+                n.end_position().row as u32 + 1,
+            )
+        };
+        let local_scope = |n: Node| match function {
+            Some((_, end)) => (lines(n).0, end),
+            None => lines(n),
+        };
+        let text = |n: Node| self.node_text(n, source).to_string();
+        match node.kind() {
+            "class_declaration"
+            | "interface_declaration"
+            | "enum_declaration"
+            | "record_declaration" => {
+                let name = node.child_by_field_name("name").map(text);
+                // A record's components are its fields.
+                if let (Some(name), Some(params)) = (&name, node.child_by_field_name("parameters"))
+                {
+                    let cursor = &mut params.walk();
+                    for param in params.named_children(cursor) {
+                        if let (Some(ty), Some(field)) = (
+                            param.child_by_field_name("type"),
+                            param.child_by_field_name("name"),
+                        ) {
+                            out.push(TypeBinding {
+                                name: text(field),
+                                owner: Some(name.clone()),
+                                scope: FILE_SCOPE,
+                                value: BindingValue::Type(text(ty)),
+                            });
+                        }
+                    }
+                }
+                if let Some(body) = node.child_by_field_name("body") {
+                    self.extract_java_bindings(body, source, out, None, name.as_deref().or(class));
+                }
+                return;
+            }
+            "field_declaration" | "constant_declaration" => {
+                if let (Some(class), Some(ty)) = (class, node.child_by_field_name("type")) {
+                    let cursor = &mut node.walk();
+                    for declarator in node.children_by_field_name("declarator", cursor) {
+                        if let Some(name) = declarator.child_by_field_name("name") {
+                            out.push(TypeBinding {
+                                name: text(name),
+                                owner: Some(class.to_string()),
+                                scope: FILE_SCOPE,
+                                value: BindingValue::Type(text(ty)),
+                            });
+                        }
+                    }
+                }
+            }
+            "method_declaration"
+            | "constructor_declaration"
+            | "compact_constructor_declaration"
+            | "lambda_expression" => {
+                let span = lines(node);
+                if let Some(params) = node.child_by_field_name("parameters") {
+                    if params.kind() == "identifier" {
+                        // `x -> ...`
+                        out.push(TypeBinding {
+                            name: text(params),
+                            owner: None,
+                            scope: span,
+                            value: BindingValue::Unknown,
+                        });
+                    }
+                    let cursor = &mut params.walk();
+                    for param in params.named_children(cursor) {
+                        let (name, value) = match param.kind() {
+                            "formal_parameter" => match (
+                                param.child_by_field_name("name"),
+                                param.child_by_field_name("type"),
+                            ) {
+                                (Some(name), Some(ty)) => {
+                                    (text(name), BindingValue::Type(text(ty)))
+                                }
+                                _ => continue,
+                            },
+                            "identifier" => (text(param), BindingValue::Unknown),
+                            "spread_parameter" => match self
+                                .find_child_by_kind(param, "variable_declarator")
+                                .and_then(|d| d.child_by_field_name("name"))
+                            {
+                                Some(name) => (text(name), BindingValue::Unknown),
+                                None => continue,
+                            },
+                            _ => continue,
+                        };
+                        out.push(TypeBinding {
+                            name,
+                            owner: None,
+                            scope: span,
+                            value,
+                        });
+                    }
+                }
+                if let Some(body) = node.child_by_field_name("body") {
+                    self.extract_java_bindings(body, source, out, Some(span), class);
+                }
+                return;
+            }
+            "local_variable_declaration" => {
+                if let Some(ty) = node.child_by_field_name("type") {
+                    let declared = text(ty);
+                    let cursor = &mut node.walk();
+                    for declarator in node.children_by_field_name("declarator", cursor) {
+                        let Some(name) = declarator.child_by_field_name("name") else {
+                            continue;
+                        };
+                        let value =
+                            match (declared.as_str(), declarator.child_by_field_name("value")) {
+                                ("var", Some(value)) => {
+                                    let mut steps = Vec::new();
+                                    self.collect_java_chain_steps(value, source, &mut steps);
+                                    BindingValue::Expr(steps)
+                                }
+                                ("var", None) => BindingValue::Unknown,
+                                _ => BindingValue::Type(declared.clone()),
+                            };
+                        out.push(TypeBinding {
+                            name: text(name),
+                            owner: None,
+                            scope: local_scope(node),
+                            value,
+                        });
+                    }
+                }
+            }
+            "enhanced_for_statement" | "catch_formal_parameter" => {
+                if let Some(name) = node.child_by_field_name("name") {
+                    let value = match node.child_by_field_name("type").map(text) {
+                        Some(ty) if ty != "var" => BindingValue::Type(ty),
+                        _ => BindingValue::Unknown,
+                    };
+                    out.push(TypeBinding {
+                        name: text(name),
+                        owner: None,
+                        scope: local_scope(node),
+                        value,
+                    });
+                }
+            }
+            _ => {}
+        }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            self.extract_java_bindings(child, source, out, function, class);
+        }
+    }
+
     /// Chain steps of a Java expression used as a receiver.
     pub(super) fn collect_java_chain_steps(
         &self,
@@ -306,13 +509,17 @@ impl SourceParser {
     ) {
         match node.kind() {
             "method_invocation" => {
-                if let Some(object) = node.child_by_field_name("object") {
-                    self.collect_java_chain_steps(object, source, steps);
-                }
-                if let Some(name) = node.child_by_field_name("name") {
-                    steps.push(ExpressionStep::Field(
-                        self.node_text(name, source).to_string(),
-                    ));
+                let name = node
+                    .child_by_field_name("name")
+                    .map(|n| self.node_text(n, source).to_string())
+                    .unwrap_or_default();
+                match node.child_by_field_name("object") {
+                    Some(object) => {
+                        self.collect_java_chain_steps(object, source, steps);
+                        steps.push(ExpressionStep::Field(name));
+                    }
+                    // `m()`: a method in scope, by name.
+                    None => steps.push(ExpressionStep::Ident(name)),
                 }
                 steps.push(ExpressionStep::Call);
             }
@@ -1408,5 +1615,97 @@ import java.util.UUID as JavaUUID
         assert_eq!(lang, Some(SourceLanguage::Kotlin));
         let lang = SourceLanguage::from_extension("kts");
         assert_eq!(lang, Some(SourceLanguage::Kotlin));
+    }
+}
+
+/// What the resolver needs from Java (#139).
+#[cfg(test)]
+mod resolution_facts {
+    use crate::parser::{BindingValue, CallForm, ExpressionStep, SourceLanguage, SourceParser};
+
+    const SOURCE: &str = r#"
+public class OrderReport extends Report implements Sink {
+    private final Repository<Order> repo;
+
+    public OrderReport(Repository<Order> repo) {
+        super("Orders");
+        this.repo = repo;
+    }
+
+    public Config settings(String text) {
+        Config cfg = Config.load(text);
+        var worker = new Worker();
+        repo.add(this, 1);
+        return render(rows -> rows.size());
+    }
+}
+"#;
+
+    fn parse() -> crate::parser::ParseResult {
+        SourceParser::new(SourceLanguage::Java)
+            .unwrap()
+            .parse(SOURCE)
+            .unwrap()
+    }
+
+    #[test]
+    fn calls_record_form_receiver_and_arguments() {
+        let result = parse();
+        let call = |callee: &str| {
+            result
+                .calls
+                .iter()
+                .find(|c| c.callee_name == callee)
+                .unwrap()
+        };
+        assert_eq!(call("super").form, CallForm::SuperConstructor);
+        assert_eq!(call("Worker").form, CallForm::New);
+        assert_eq!(call("render").form, CallForm::Bare);
+        let add = call("add");
+        assert_eq!((add.form, add.arg_count), (CallForm::Member, Some(2)));
+        assert_eq!(
+            add.chain.as_deref().unwrap()[0],
+            ExpressionStep::Ident("repo".into())
+        );
+    }
+
+    #[test]
+    fn symbols_carry_supertypes_and_return_types() {
+        let result = parse();
+        let meta = |name: &str| {
+            result
+                .symbols
+                .iter()
+                .find(|s| s.name == name)
+                .and_then(|s| s.metadata.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(meta("OrderReport").superclasses, ["Report", "Sink"]);
+        assert_eq!(meta("settings").return_type.as_deref(), Some("Config"));
+    }
+
+    #[test]
+    fn fields_parameters_and_locals_are_bound() {
+        let result = parse();
+        let find = |name: &str, owner: Option<&str>| {
+            result
+                .bindings
+                .iter()
+                .find(|b| b.name == name && b.owner.as_deref() == owner)
+                .unwrap_or_else(|| panic!("{name} not bound: {:?}", result.bindings))
+                .value
+                .clone()
+        };
+        assert_eq!(
+            find("repo", Some("OrderReport")),
+            BindingValue::Type("Repository<Order>".into())
+        );
+        assert_eq!(find("text", None), BindingValue::Type("String".into()));
+        assert_eq!(find("cfg", None), BindingValue::Type("Config".into()));
+        assert_eq!(
+            find("worker", None),
+            BindingValue::Expr(vec![ExpressionStep::New("Worker".into())])
+        );
+        assert_eq!(find("rows", None), BindingValue::Unknown);
     }
 }

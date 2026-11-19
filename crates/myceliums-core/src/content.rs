@@ -159,6 +159,7 @@ fn parse_markdown(source: &str) -> ParseResult {
         imports,
         rationales: vec![],
         aliases: vec![],
+        bindings: vec![],
     }
 }
 
@@ -180,6 +181,7 @@ fn parse_plain_text(source: &str) -> ParseResult {
         imports: vec![],
         rationales: vec![],
         aliases: vec![],
+        bindings: vec![],
     }
 }
 

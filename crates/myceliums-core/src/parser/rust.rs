@@ -1,6 +1,9 @@
 //! Rust extraction.
 
-use super::{CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser};
+use super::{
+    BindingValue, CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser,
+    TypeBinding, FILE_SCOPE,
+};
 use myceliums_storage::{SymbolKind, SymbolMetadata, Visibility};
 use tree_sitter::Node;
 
@@ -317,6 +320,171 @@ impl SourceParser {
         }
     }
 
+    /// Parameters, `let` bindings and struct fields with their declared
+    /// types or initialisers (#139).
+    pub(super) fn extract_rust_bindings(
+        &self,
+        node: Node,
+        source: &[u8],
+        out: &mut Vec<TypeBinding>,
+        function: Option<(u32, u32)>,
+    ) {
+        let lines = |n: Node| {
+            (
+                n.start_position().row as u32 + 1,
+                n.end_position().row as u32 + 1,
+            )
+        };
+        let local_scope = |n: Node| match function {
+            Some((_, end)) => (lines(n).0, end),
+            None => FILE_SCOPE,
+        };
+        let text = |n: Node| self.node_text(n, source).to_string();
+        match node.kind() {
+            "struct_item" => {
+                let name = node.child_by_field_name("name").map(text);
+                let body = node.child_by_field_name("body");
+                if let (Some(name), Some(body)) = (name, body) {
+                    let cursor = &mut body.walk();
+                    for field in body.named_children(cursor) {
+                        if let (Some(field_name), Some(ty)) = (
+                            field.child_by_field_name("name"),
+                            field.child_by_field_name("type"),
+                        ) {
+                            out.push(TypeBinding {
+                                name: text(field_name),
+                                owner: Some(name.clone()),
+                                scope: FILE_SCOPE,
+                                value: BindingValue::Type(text(ty)),
+                            });
+                        }
+                    }
+                }
+                return;
+            }
+            "function_item" | "closure_expression" => {
+                let span = lines(node);
+                if let Some(params) = node.child_by_field_name("parameters") {
+                    let cursor = &mut params.walk();
+                    for param in params.named_children(cursor) {
+                        match param.kind() {
+                            "parameter" => {
+                                let ty = param.child_by_field_name("type").map(text);
+                                if let Some(pattern) = param.child_by_field_name("pattern") {
+                                    match (rust_pattern_name(pattern, source), ty) {
+                                        (Some(name), Some(ty)) => out.push(TypeBinding {
+                                            name,
+                                            owner: None,
+                                            scope: span,
+                                            value: BindingValue::Type(ty),
+                                        }),
+                                        _ => self.rust_unknown_names(pattern, source, span, out),
+                                    }
+                                }
+                            }
+                            "self_parameter" => {}
+                            _ => self.rust_unknown_names(param, source, span, out),
+                        }
+                    }
+                }
+                if let Some(body) = node.child_by_field_name("body") {
+                    self.extract_rust_bindings(body, source, out, Some(span));
+                }
+                return;
+            }
+            "let_declaration" => {
+                if let Some(pattern) = node.child_by_field_name("pattern") {
+                    let value = match (
+                        node.child_by_field_name("type"),
+                        node.child_by_field_name("value"),
+                    ) {
+                        (Some(ty), _) => BindingValue::Type(text(ty)),
+                        (None, Some(value)) => self.rust_binding_value(value, source),
+                        _ => BindingValue::Unknown,
+                    };
+                    match rust_pattern_name(pattern, source) {
+                        Some(name) => out.push(TypeBinding {
+                            name,
+                            owner: None,
+                            scope: local_scope(node),
+                            value,
+                        }),
+                        None => self.rust_unknown_names(pattern, source, local_scope(node), out),
+                    }
+                }
+            }
+            "for_expression" | "let_condition" | "match_arm" => {
+                let pattern = node.child_by_field_name("pattern");
+                if let Some(pattern) = pattern {
+                    self.rust_unknown_names(pattern, source, local_scope(node), out);
+                }
+            }
+            _ => {}
+        }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            self.extract_rust_bindings(child, source, out, function);
+        }
+    }
+
+    /// Every name a pattern binds, of unknown type.
+    fn rust_unknown_names(
+        &self,
+        pattern: Node,
+        source: &[u8],
+        scope: (u32, u32),
+        out: &mut Vec<TypeBinding>,
+    ) {
+        if pattern.kind() == "identifier" {
+            out.push(TypeBinding {
+                name: self.node_text(pattern, source).to_string(),
+                owner: None,
+                scope,
+                value: BindingValue::Unknown,
+            });
+            return;
+        }
+        // The path of a tuple-struct or struct pattern names a type, not a binding.
+        let cursor = &mut pattern.walk();
+        for (i, child) in pattern.children(cursor).enumerate() {
+            if pattern.field_name_for_child(i as u32) == Some("type") {
+                continue;
+            }
+            self.rust_unknown_names(child, source, scope, out);
+        }
+    }
+
+    /// What a `let` initialiser is, for a binding.
+    fn rust_binding_value(&self, value: Node, source: &[u8]) -> BindingValue {
+        match value.kind() {
+            "call_expression"
+            | "field_expression"
+            | "identifier"
+            | "scoped_identifier"
+            | "struct_expression"
+            | "reference_expression"
+            | "try_expression"
+            | "await_expression"
+            | "parenthesized_expression"
+            | "index_expression"
+            | "string_literal"
+            | "raw_string_literal"
+            | "integer_literal"
+            | "float_literal"
+            | "boolean_literal"
+            | "char_literal"
+            | "array_expression"
+            | "tuple_expression"
+            | "macro_invocation"
+            | "self" => {
+                let mut steps = Vec::new();
+                self.collect_rust_chain_steps(value, source, &mut steps);
+                BindingValue::Expr(steps)
+            }
+            _ => BindingValue::Unknown,
+        }
+    }
+
     /// Bare calls written inside a macro's token tree: an identifier followed
     /// by a parenthesised token tree, not preceded by `.` or `::` (method and
     /// path calls are left out: without a parse their receiver is unknown).
@@ -346,6 +514,28 @@ impl SourceParser {
                     chain: None,
                     file: None,
                     form: CallForm::Bare,
+                    arg_count: None,
+                });
+            }
+            // `self.method(...)`: the one receiver a token tree spells out.
+            let on_self = i > 2
+                && tokens[i - 1].kind() == "identifier"
+                && self.node_text(*token, source).starts_with('(')
+                && self.node_text(tokens[i - 2], source) == "."
+                && tokens[i - 3].kind() == "self";
+            if on_self {
+                let name = self.node_text(tokens[i - 1], source).to_string();
+                calls.push(CallReference {
+                    caller_name: caller.to_string(),
+                    callee_name: name.clone(),
+                    line: tokens[i - 1].start_position().row as u32 + 1,
+                    chain: Some(vec![
+                        ExpressionStep::This,
+                        ExpressionStep::Field(name),
+                        ExpressionStep::Call,
+                    ]),
+                    file: None,
+                    form: CallForm::Member,
                     arg_count: None,
                 });
             }
@@ -744,6 +934,23 @@ impl SourceParser {
     }
 }
 
+/// The name a simple pattern binds: `x`, `mut x`, `ref x`; `None` for a
+/// destructuring pattern.
+fn rust_pattern_name(pattern: Node, source: &[u8]) -> Option<String> {
+    let text = |n: Node| n.utf8_text(source).unwrap_or_default().to_string();
+    match pattern.kind() {
+        "identifier" => Some(text(pattern)),
+        "mut_pattern" | "ref_pattern" => {
+            let cursor = &mut pattern.walk();
+            let inner = pattern
+                .named_children(cursor)
+                .find(|c| c.kind() == "identifier");
+            inner.map(text)
+        }
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::parser::{ExpressionStep, SourceLanguage, SourceParser};
@@ -1019,5 +1226,100 @@ use crate::parser::SourceLanguage;
             .expect("should find compute");
         let meta = func.metadata.as_ref().expect("should have metadata");
         assert!(meta.return_type.is_some(), "should have return type");
+    }
+}
+
+/// What the resolver needs from Rust (#139).
+#[cfg(test)]
+mod resolution_facts {
+    use crate::parser::{BindingValue, CallForm, ExpressionStep, SourceLanguage, SourceParser};
+
+    const SOURCE: &str = r#"
+pub struct UserService {
+    validator: Validator,
+}
+
+impl Config {
+    pub fn load(text: &str, repo: &mut Repo<User>) -> Self {
+        let mut users = UserService::new(Repo::<User>::new());
+        let handler = |q: &str| q.len();
+        println!("{}", run(self.render(&text)));
+        Self::new(parse(text))
+    }
+}
+"#;
+
+    fn parse() -> crate::parser::ParseResult {
+        SourceParser::new(SourceLanguage::Rust)
+            .unwrap()
+            .parse(SOURCE)
+            .unwrap()
+    }
+
+    #[test]
+    fn paths_and_macro_arguments_are_calls() {
+        let result = parse();
+        let chain_of = |callee: &str, first: &str| {
+            result
+                .calls
+                .iter()
+                .find(|c| {
+                    c.callee_name == callee
+                        && c.chain.as_deref().and_then(|ch| ch.first())
+                            == Some(&ExpressionStep::Ident(first.to_string()))
+                })
+                .map(|c| c.form)
+        };
+        assert_eq!(chain_of("new", "UserService"), Some(CallForm::Member));
+        assert_eq!(
+            chain_of("new", "Repo"),
+            Some(CallForm::Member),
+            "turbofish dropped"
+        );
+        assert_eq!(chain_of("new", "Self"), Some(CallForm::Member));
+        let run = result
+            .calls
+            .iter()
+            .find(|c| c.callee_name == "run")
+            .unwrap();
+        assert_eq!(run.form, CallForm::Bare, "a call inside println!");
+        let render = result
+            .calls
+            .iter()
+            .find(|c| c.callee_name == "render")
+            .unwrap();
+        assert_eq!(render.chain.as_deref().unwrap()[0], ExpressionStep::This);
+    }
+
+    #[test]
+    fn parameters_lets_and_struct_fields_are_bound() {
+        let result = parse();
+        let find = |name: &str, owner: Option<&str>| {
+            result
+                .bindings
+                .iter()
+                .find(|b| b.name == name && b.owner.as_deref() == owner)
+                .unwrap_or_else(|| panic!("{name} not bound: {:?}", result.bindings))
+                .value
+                .clone()
+        };
+        assert_eq!(
+            find("validator", Some("UserService")),
+            BindingValue::Type("Validator".into())
+        );
+        assert_eq!(
+            find("repo", None),
+            BindingValue::Type("&mut Repo<User>".into())
+        );
+        assert_eq!(
+            find("users", None),
+            BindingValue::Expr(vec![
+                ExpressionStep::Ident("UserService".into()),
+                ExpressionStep::Field("new".into()),
+                ExpressionStep::Call
+            ])
+        );
+        assert_eq!(find("handler", None), BindingValue::Unknown);
+        assert_eq!(find("q", None), BindingValue::Type("&str".into()));
     }
 }

@@ -647,6 +647,7 @@ impl Analyzer {
                 &file_result.rel_path,
                 &file_result.parse_result.imports,
                 &file_result.parse_result.aliases,
+                &file_result.parse_result.bindings,
             );
             all_imports.extend(file_result.parse_result.imports);
 
@@ -721,7 +722,12 @@ impl Analyzer {
                 call.file = Some(rel_path.clone());
                 call
             }));
-            resolver.register_file(&rel_path, &result.imports, &result.aliases);
+            resolver.register_file(
+                &rel_path,
+                &result.imports,
+                &result.aliases,
+                &result.bindings,
+            );
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
             }
@@ -1482,7 +1488,12 @@ impl Analyzer {
                     call.file = Some(rel_path.clone());
                     call
                 }));
-                resolver.register_file(&rel_path, &result.imports, &result.aliases);
+                resolver.register_file(
+                    &rel_path,
+                    &result.imports,
+                    &result.aliases,
+                    &result.bindings,
+                );
                 if !result.rationales.is_empty() {
                     all_rationales.push((rel_path, result.rationales));
                 }
@@ -1653,7 +1664,12 @@ impl Analyzer {
                 call.file = Some(rel_path.clone());
                 call
             }));
-            resolver.register_file(&rel_path, &result.imports, &result.aliases);
+            resolver.register_file(
+                &rel_path,
+                &result.imports,
+                &result.aliases,
+                &result.bindings,
+            );
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
             }
