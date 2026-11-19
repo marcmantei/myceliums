@@ -153,12 +153,22 @@ pub struct ServeOptions {
 /// How often `--stats-file` is rewritten while the server is answering calls.
 pub const STATS_FILE_INTERVAL: Duration = Duration::from_secs(30);
 
+/// Recovers the leftovers of rebuilds whose process died (see
+/// [`myceliums_core::staging`]) before serving.
+fn recover_interrupted_rebuilds() {
+    let data = crate::repo::data_dir().join("data");
+    for done in myceliums_core::recover_leftovers(&data) {
+        info!("Recovered an interrupted index rebuild: {done:?}");
+    }
+}
+
 /// Serve MCP over stdio.
 pub async fn run_mcp_server(opts: ServeOptions) -> Result<()> {
     info!(
         "Starting Myceliums MCP server (toolsets: {})",
         opts.toolsets
     );
+    recover_interrupted_rebuilds();
     let server = MyceliumsMcp::new();
     let stats = StatsFile::start(opts.stats_file, server.stats.clone());
 
@@ -188,6 +198,7 @@ pub async fn run_mcp_http_server(http: McpHttpOptions, opts: ServeOptions) -> Re
     use http_security::HttpSecurity;
 
     let security = HttpSecurity::plan(&http)?;
+    recover_interrupted_rebuilds();
     let addr = http.addr.as_str();
     info!(
         "Starting Myceliums MCP HTTP server on {addr} (toolsets: {})",

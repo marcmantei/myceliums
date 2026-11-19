@@ -59,6 +59,33 @@ pub struct Analyzer {
     skip_embeddings: bool,
     global_config: crate::global_config::GlobalConfig,
     progress: Option<Arc<dyn ProgressReporter>>,
+    cancel: Option<CancelCheck>,
+}
+
+/// Asked between steps of an analysis: `true` stops it with
+/// [`AnalysisCancelled`].
+pub type CancelCheck = Arc<dyn Fn() -> bool + Send + Sync>;
+
+/// The error of an analysis stopped through [`Analyzer::with_cancel`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnalysisCancelled;
+
+impl std::fmt::Display for AnalysisCancelled {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("analysis cancelled")
+    }
+}
+
+impl std::error::Error for AnalysisCancelled {}
+
+/// Aborts a spawned task when dropped, so a helper task (the parse progress
+/// poller) never outlives an analysis that returned early.
+struct AbortOnDrop(tokio::task::JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
 }
 
 impl Analyzer {
@@ -71,6 +98,7 @@ impl Analyzer {
             skip_embeddings: false,
             global_config: crate::global_config::GlobalConfig::default(),
             progress: None,
+            cancel: None,
         }
     }
 
@@ -83,6 +111,7 @@ impl Analyzer {
             skip_embeddings: false,
             global_config: crate::global_config::GlobalConfig::default(),
             progress: None,
+            cancel: None,
         }
     }
 
@@ -90,6 +119,23 @@ impl Analyzer {
     pub fn with_progress(mut self, reporter: Arc<dyn ProgressReporter>) -> Self {
         self.progress = Some(reporter);
         self
+    }
+
+    /// Stop the analysis early once `is_cancelled` returns `true`: it is
+    /// asked between files, between phases and before embedding, and the
+    /// analysis then fails with [`AnalysisCancelled`]. What was written to
+    /// the store so far stays there, so cancel only a build whose store is
+    /// thrown away (see [`crate::StagedIndex`]).
+    pub fn with_cancel(mut self, is_cancelled: CancelCheck) -> Self {
+        self.cancel = Some(is_cancelled);
+        self
+    }
+
+    fn check_cancelled(&self) -> Result<()> {
+        if self.cancel.as_ref().is_some_and(|c| c()) {
+            return Err(AnalysisCancelled.into());
+        }
+        Ok(())
     }
 
     /// Set the global configuration for LLM providers and other settings.
@@ -334,6 +380,7 @@ impl Analyzer {
         }
 
         let source_files = self.discover_files()?;
+        self.check_cancelled()?;
         let file_discovery_ms = file_discovery_timer.elapsed_ms();
         info!(
             "Discovered {} source files ({:.2}ms)",
@@ -369,6 +416,7 @@ impl Analyzer {
         let mut notebook_files: Vec<(PathBuf, SourceLanguage)> = Vec::new();
 
         for (path, lang) in &source_files {
+            self.check_cancelled()?;
             let rel_path_display = path
                 .strip_prefix(&self.repo_path)
                 .unwrap_or(path)
@@ -457,7 +505,7 @@ impl Analyzer {
         // Spawn a polling task to report progress periodically
         let progress_reporter = self.progress.clone();
         let poll_handle = if progress_reporter.is_some() {
-            Some(tokio::spawn({
+            Some(AbortOnDrop(tokio::spawn({
                 let progress_reporter = progress_reporter.clone();
                 let parse_progress = parse_progress.clone();
                 async move {
@@ -473,19 +521,24 @@ impl Analyzer {
                         }
                     }
                 }
-            }))
+            })))
         } else {
             None
         };
 
         // Each file either parses or is skipped, with a reason when the
         // skip was a budget (time, nesting depth) rather than an error.
+        let cancel = self.cancel.clone();
         let parse_outcomes: Vec<Result<FileParseResult, Option<FileSkipReason>>> =
             tokio::task::spawn_blocking(move || {
                 use rayon::prelude::*;
                 code_files
                     .par_iter()
                     .map(|(rel_path, lang, source)| {
+                        if cancel.as_ref().is_some_and(|c| c()) {
+                            parse_progress_clone.increment();
+                            return Err(None);
+                        }
                         let result = if lang.is_content() {
                             let result = parse_content(source, *lang);
                             Ok(FileParseResult {
@@ -540,9 +593,8 @@ impl Analyzer {
         }
 
         // Stop the progress polling task
-        if let Some(handle) = poll_handle {
-            handle.abort();
-        }
+        drop(poll_handle);
+        self.check_cancelled()?;
         // Final progress report for parse completion
         if let Some(ref p) = self.progress {
             p.report(AnalysisPhase::Parsing {
@@ -906,6 +958,7 @@ impl Analyzer {
         resolver.set_module_graph(module_graph);
 
         // Pass 2: Resolve calls to relationships
+        self.check_cancelled()?;
         let graph_construction_timer = Timer::start();
         let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
         info!("Resolved {} call relationships", call_rels.len());
@@ -1073,6 +1126,7 @@ impl Analyzer {
         );
 
         // Generate and store embeddings (optional — skip if requested or feature disabled)
+        self.check_cancelled()?;
         #[cfg(not(feature = "embeddings"))]
         let embedding_count: usize = 0;
         #[cfg(not(feature = "embeddings"))]

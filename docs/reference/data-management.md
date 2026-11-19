@@ -46,7 +46,9 @@ The registry is a JSON file that tracks all analyzed repositories. Each entry co
 
 Each repository's analysis data is stored in LanceDB format. This is a columnar storage format optimized for vector search and structured queries. The directory contains multiple `.lance` table directories for symbols, relationships, communities, processes, and other graph entities.
 
-The MCP `analyze` tool builds a new index in `data/.build-<id>/` and, once it is complete, renames the live directory to `data/.old-<id>/`, the new one into place, and deletes the old one. A failed or cancelled analysis deletes its `.build-` directory. A `.build-` or `.old-` directory that survives (the process was killed mid-way) is reported as orphaned and removed by `myc clean --orphans`; never remove one while an analysis is running.
+The MCP `analyze` tool builds a new index in `data/.build-<pid>-…/` and, once it is complete, swaps it with the live directory: in one system call where the platform supports it (Linux `renameat2(RENAME_EXCHANGE)`, macOS `renamex_np(RENAME_SWAP)`), otherwise by renaming the live directory to `data/.old-<pid>-…/` and the new one into place. A journal file `data/.swap-<pid>-…` names the directory being replaced while the swap runs. A failed or cancelled analysis deletes its `.build-` directory.
+
+**Interrupted rebuilds are recovered automatically.** When a process is killed mid-build, or between the two renames, its `.build-`, `.old-` and `.swap-` entries stay behind. Every `myc` command (except the grep hook), every MCP server start and every new rebuild checks for entries whose process no longer runs: an `.old-` directory whose live directory is missing is renamed back (the previous index returns), everything else is deleted. Entries of running processes are never touched, and none of these entries — nor `data/.locks/` — counts as an orphaned repository.
 
 ### Snapshots (`snapshots/<repo-id>/`)
 
@@ -172,14 +174,14 @@ Orphaned data directories occur when:
 
 ## Lock Files
 
-Myceliums uses lock files to prevent concurrent analysis of the same repository. A lock is acquired at the start of analysis and released when analysis completes.
+Myceliums uses lock files to prevent concurrent analysis of the same repository. A lock is acquired at the start of analysis and released when analysis completes. Locks live in `data/.locks/<repo-id>.lock` (PID and start time), outside the index directory, which a rebuild replaces as a whole. (Older releases wrote `data/<repo-id>/analysis.lock`; `myc doctor` still reports stale ones there.)
 
 **Stale locks** can occur when a process crashes or is forcefully terminated during analysis. Stale locks are detected and auto-cleaned by:
 
 - `myc doctor` (reports stale locks)
 - `myc analyze`, `myc session` and the MCP `analyze` tool (auto-clean stale locks before starting)
 
-The MCP `analyze` tool takes the same lock, so `myc analyze` and the MCP server never index the same repository at once; a refused MCP call is an `isError` result saying `Analysis already running`.
+The MCP `analyze` tool takes the same lock, so `myc analyze` and the MCP server never index the same repository at once; a refused MCP call is an `isError` result saying `Analysis already running`. The MCP `delete` tool refuses a repository that is being analyzed the same way.
 
 A lock is considered stale if the process that created it is no longer running.
 

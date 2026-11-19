@@ -10,7 +10,7 @@
 //! process-wide, so the tests share one directory and take turns.
 
 use myceliums_core::{AnalysisPhase, ProgressReporter};
-use myceliums_mcp::{AnalyzeParams, GetCallersParams, MyceliumsMcp, SearchParams};
+use myceliums_mcp::{AnalyzeParams, DeleteParams, GetCallersParams, MyceliumsMcp, SearchParams};
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use tokio_util::sync::CancellationToken;
@@ -120,7 +120,7 @@ fn leftovers() -> Vec<String> {
     std::fs::read_dir(data_dir().join("data"))
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|n| n.starts_with('.'))
+        .filter(|n| n.starts_with('.') && n != ".locks")
         .collect()
 }
 
@@ -203,7 +203,10 @@ async fn a_crash_mid_analyze_keeps_the_previous_index_and_releases_the_lock() {
     assert!(err.contains("analysis task failed"), "{err}");
     assert_previous_index(&server, &repo_id).await;
     assert!(leftovers().is_empty(), "{:?}", leftovers());
-    let lock = data_dir().join("data").join(&repo_id).join("analysis.lock");
+    let lock = data_dir()
+        .join("data")
+        .join(".locks")
+        .join(format!("{repo_id}.lock"));
     assert!(!lock.exists(), "the lock is released");
 
     server
@@ -246,6 +249,14 @@ async fn a_second_analyze_of_a_running_repo_is_refused_while_queries_keep_workin
         .expect_err("a second analyze is refused");
     assert!(second.contains("Analysis already running"), "{second}");
     assert!(second.contains("Next:"), "{second}");
+    let delete = server
+        .delete_for_test(DeleteParams {
+            repo_id: repo_id.clone(),
+            confirm: true,
+        })
+        .await
+        .expect_err("no delete during an analysis");
+    assert!(delete.contains("an analysis of it is running"), "{delete}");
     // The runtime is free and the old index answers during the analysis.
     assert_previous_index(&server, &repo_id).await;
 
@@ -255,4 +266,53 @@ async fn a_second_analyze_of_a_running_repo_is_refused_while_queries_keep_workin
     assert!(leftovers().is_empty());
     // And the repository is free again.
     server.analyze_for_test(params(&project)).await.unwrap();
+}
+
+/// Records the phases it sees and cancels `ct` at the first `Discovering`.
+struct CancelAtStart {
+    ct: CancellationToken,
+    seen: Mutex<Vec<String>>,
+}
+
+impl ProgressReporter for CancelAtStart {
+    fn report(&self, phase: AnalysisPhase) {
+        if matches!(phase, AnalysisPhase::Discovering) {
+            self.ct.cancel();
+        }
+        self.seen.lock().unwrap().push(format!("{phase:?}"));
+    }
+}
+
+#[tokio::test]
+async fn cancelling_stops_the_analyzer_early_and_recovers_dead_leftovers() {
+    let _turn = serial().await;
+    let server = new_server();
+    let (_dir, project, repo_id) = analyzed_project(&server, "early-stop-project").await;
+    add_probe(&project);
+
+    // A rebuild killed earlier (no Drop) by a process that no longer runs.
+    let dead_build = data_dir().join("data").join(".build-99999999-1-0");
+    std::fs::create_dir_all(dead_build.join("symbols.lance")).unwrap();
+
+    let ct = CancellationToken::new();
+    let observer = Arc::new(CancelAtStart {
+        ct: ct.clone(),
+        seen: Mutex::new(Vec::new()),
+    });
+    let err = server
+        .analyze_observed_for_test(params(&project), Some(observer.clone()), ct)
+        .await
+        .expect_err("cancelled");
+    assert!(err.contains("cancelled"), "{err}");
+    let seen = observer.seen.lock().unwrap().clone();
+    assert!(
+        !seen.iter().any(|p| p.starts_with("BuildingRelationships")),
+        "the analyzer stops before resolving calls: {seen:?}"
+    );
+    assert_previous_index(&server, &repo_id).await;
+    assert!(
+        !dead_build.exists(),
+        "a dead process's staging dir is removed"
+    );
+    assert!(leftovers().is_empty(), "{:?}", leftovers());
 }

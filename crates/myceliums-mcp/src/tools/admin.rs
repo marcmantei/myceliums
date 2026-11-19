@@ -111,6 +111,9 @@ impl MyceliumsMcp {
                 "only if the user asked for the deletion, call delete again with confirm=true",
             ));
         }
+        // Not while an analysis of it runs: its swap would bring it back.
+        let _guard = crate::analysis::RunningGuard::acquire(&data_dir(), &params.repo_id)
+            .map_err(|busy| busy.for_delete(&params.repo_id))?;
         let info = registry
             .remove(&params.repo_id)
             .expect("registered_db_path accepted the id, so it is registered");
@@ -222,7 +225,8 @@ impl MyceliumsMcp {
         // Write path: `repo_id` was derived from the canonical project path
         // above, not supplied by the caller, and this run registers it.
         let data_dir = data_dir();
-        let guard = crate::analysis::RunningGuard::acquire(&data_dir, &repo_id)?;
+        let guard = crate::analysis::RunningGuard::acquire(&data_dir, &repo_id)
+            .map_err(|busy| busy.for_analyze(&repo_id))?;
         let output = crate::analysis::Rebuild {
             repo_id,
             repo_name,

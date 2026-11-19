@@ -294,10 +294,13 @@ fail CI on a partial index.
 
 **The previous index stays usable.** A full analysis builds the new index in a
 staging directory beside the live one (`data/.build-…`) and swaps it in only
-when it is complete; the graph cache is dropped at the swap. Until then every
-tool answers from the previous index. A failed or cancelled analysis deletes
-the staging directory and leaves the previous index as it was; the error says
-so.
+when it is complete — in one system call on Linux and macOS — and the graph
+cache is dropped at the swap. Until then every tool answers from the previous
+index. A failed or cancelled analysis deletes the staging directory and leaves
+the previous index as it was; the error says so. Cancelling the request stops
+the analyzer at its next check (between files, between phases, before
+embedding). A rebuild killed outright is recovered at the next server or `myc`
+start (see [Data management](data-management.md#data-directory-datarepo-id)).
 
 **One analysis per repository.** While a repository is being analyzed — by
 this server or by another process such as `myc analyze` — another `analyze`
@@ -800,7 +803,7 @@ Link an Architecture Decision Record to a code symbol. Creates a traceability co
 
 Permanently delete a repository's index (not the project files). Without
 `confirm: true` the call is refused with an `isError` result and nothing is
-deleted.
+deleted; so is a call while the repository is being analyzed.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|

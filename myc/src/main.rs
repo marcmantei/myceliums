@@ -750,12 +750,13 @@ enum LogFormat {
 }
 
 /// The default log filter when `RUST_LOG` is unset. The MCP server logs one
-/// INFO line per tool call (and its own lifecycle); everything else, and
-/// every other command, prints errors only. Logs go to stderr: stdout is the
+/// INFO line per tool call (and its own lifecycle) and the core's warnings
+/// (skipped files, index problems); everything else, and every other
+/// command, prints errors only. Logs go to stderr: stdout is the
 /// stdio MCP transport.
 fn default_log_filter(command: &Commands) -> &'static str {
     match command {
-        Commands::Mcp { .. } => "error,myceliums_mcp=info",
+        Commands::Mcp { .. } => "error,myceliums_core=warn,myceliums_mcp=info",
         _ => "error",
     }
 }
@@ -801,6 +802,12 @@ fn main() -> Result<()> {
 }
 
 async fn run(cli: Cli) -> Result<()> {
+    // Restore or delete what interrupted index rebuilds of dead processes
+    // left in the data directory. Skipped by the grep hook, which must
+    // answer fast and only reads.
+    if !matches!(cli.command, Commands::HookGrep) {
+        myceliums_core::recover_leftovers(&data_dir().join("data"));
+    }
     // First-run detection: offer setup wizard on first interactive use
     if !data_dir().exists() && is_interactive_command(&cli.command) {
         let is_terminal = std::io::IsTerminal::is_terminal(&std::io::stdin());
@@ -1713,10 +1720,17 @@ fn find_orphans() -> Result<Vec<(String, PathBuf, u64)>> {
     }
     let registry = RepoRegistry::load(&registry_path()).unwrap_or_default();
     let mut orphans = Vec::new();
+    // Leftovers of interrupted rebuilds whose process died are recovered
+    // (an index restored, the rest deleted); those of running processes are
+    // internal entries, as is the lock directory: never orphans.
+    myceliums_core::recover_leftovers(&data_path);
     for entry in std::fs::read_dir(&data_path)? {
         let entry = entry?;
         if entry.file_type()?.is_dir() {
             let dir_name = entry.file_name().to_string_lossy().to_string();
+            if myceliums_core::is_internal_entry(&dir_name) {
+                continue;
+            }
             if registry.get(&dir_name).is_none() {
                 let size = dir_size_bytes(&entry.path());
                 orphans.push((dir_name, entry.path(), size));
@@ -3220,29 +3234,23 @@ async fn cmd_doctor(download: bool) -> Result<()> {
         let data_path = data.join("data");
         let mut stale_locks = 0u32;
         if data_path.exists() {
-            for entry in std::fs::read_dir(&data_path)
+            // Locks live in data/.locks/<repo>.lock (older releases wrote
+            // data/<repo>/analysis.lock; those are checked too).
+            let locks = std::fs::read_dir(myceliums_core::lock::locks_dir(&data))
                 .into_iter()
                 .flatten()
                 .filter_map(|e| e.ok())
-            {
-                let lock_path = entry.path().join("analysis.lock");
-                if lock_path.exists() {
+                .map(|e| e.path());
+            let legacy = std::fs::read_dir(&data_path)
+                .into_iter()
+                .flatten()
+                .filter_map(|e| e.ok())
+                .map(|e| e.path().join("analysis.lock"));
+            for lock_path in locks.chain(legacy) {
+                if lock_path.is_file() {
                     if let Ok(content) = std::fs::read_to_string(&lock_path) {
-                        let pid = content
-                            .lines()
-                            .next()
-                            .and_then(|l| l.trim().parse::<u32>().ok());
-                        let alive = pid
-                            .map(|p| {
-                                std::process::Command::new("kill")
-                                    .args(["-0", &p.to_string()])
-                                    .stdout(std::process::Stdio::null())
-                                    .stderr(std::process::Stdio::null())
-                                    .status()
-                                    .map(|s| s.success())
-                                    .unwrap_or(false)
-                            })
-                            .unwrap_or(false);
+                        let pid = myceliums_core::lock::parse_lock_pid(&content);
+                        let alive = pid.is_some_and(myceliums_core::lock::is_process_alive);
                         if !alive {
                             stale_locks += 1;
                             println!(

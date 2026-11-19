@@ -23,17 +23,15 @@ use crate::output::AnalyzeOutput;
 use myceliums_core::analyzer::Analyzer;
 use myceliums_core::config::ProjectConfig;
 use myceliums_core::{
-    build_snapshot, AnalysisLock, AnalysisPhase, CommunityDetector, GraphService, LockOutcome,
-    ProcessTracer, ProgressReporter, StagedIndex,
+    build_snapshot, AnalysisCancelled, AnalysisLock, AnalysisPhase, CommunityDetector,
+    GraphService, LockOutcome, ProcessTracer, ProgressReporter, StagedIndex,
 };
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
 use rmcp::model::{ProgressNotificationParam, ProgressToken};
 use rmcp::service::{Peer, RequestContext, RoleServer};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
-use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -51,15 +49,48 @@ pub(crate) struct RunningGuard {
     _claim: Claim,
 }
 
+/// Why a repository could not be claimed.
+#[derive(Debug)]
+pub(crate) enum Busy {
+    /// An analysis of it is running; the text says where.
+    Running(String),
+    Failed(ToolError),
+}
+
+impl Busy {
+    /// The error of an `analyze` that found the repository busy.
+    pub(crate) fn for_analyze(self, repo_id: &str) -> ToolError {
+        match self {
+            Busy::Running(holder) => ToolError::recoverable(
+                format!("Analysis already running for {repo_id:?} ({holder})."),
+                "wait until it finishes, then call analyze again (without force it reuses the \
+                 fresh index); until then the tools answer from the previous index",
+            ),
+            Busy::Failed(e) => e,
+        }
+    }
+
+    /// The error of a `delete` that found the repository busy.
+    pub(crate) fn for_delete(self, repo_id: &str) -> ToolError {
+        match self {
+            Busy::Running(holder) => ToolError::recoverable(
+                format!("Cannot delete {repo_id:?}: an analysis of it is running ({holder})."),
+                "wait until the analysis finishes, then call delete again",
+            ),
+            Busy::Failed(e) => e,
+        }
+    }
+}
+
 impl RunningGuard {
-    /// Claims `repo_id`, or explains that an analysis of it is running.
-    pub(crate) fn acquire(data_dir: &std::path::Path, repo_id: &str) -> Result<Self, ToolError> {
+    /// Claims `repo_id`, or says that an analysis of it is running.
+    pub(crate) fn acquire(data_dir: &std::path::Path, repo_id: &str) -> Result<Self, Busy> {
         if !RUNNING
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .insert(repo_id.to_string())
         {
-            return Err(already_running(repo_id, "in this server"));
+            return Err(Busy::Running("in this server".to_string()));
         }
         // From here on, dropping `claim` releases the in-process mark.
         let claim = Claim(repo_id.to_string());
@@ -71,9 +102,14 @@ impl RunningGuard {
                     0 => "in another process".to_string(),
                     pid => format!("in process {pid}"),
                 };
-                return Err(already_running(repo_id, &holder));
+                return Err(Busy::Running(holder));
             }
-            Err(e) => return Err(ToolError::internal("cannot take the analysis lock", e)),
+            Err(e) => {
+                return Err(Busy::Failed(ToolError::internal(
+                    "cannot take the analysis lock",
+                    e,
+                )))
+            }
         };
         Ok(Self {
             _lock: lock,
@@ -94,14 +130,6 @@ impl Drop for Claim {
     }
 }
 
-fn already_running(repo_id: &str, where_: &str) -> ToolError {
-    ToolError::recoverable(
-        format!("Analysis already running for {repo_id:?} ({where_})."),
-        "wait until it finishes, then call analyze again (without force it reuses the fresh \
-         index); until then the tools answer from the previous index",
-    )
-}
-
 // ── Progress notifications ───────────────────────────────────────────
 
 /// Forwards analysis progress to the client as `notifications/progress`.
@@ -111,23 +139,40 @@ pub(crate) struct ProgressSink {
     forwarder: tokio::task::JoinHandle<()>,
 }
 
+/// What the forwarder receives.
+enum Forward {
+    Progress(ProgressNotificationParam),
+    /// Everything before this is sent; stop.
+    Stop,
+}
+
 struct SinkInner {
     token: ProgressToken,
-    tx: mpsc::UnboundedSender<ProgressNotificationParam>,
-    /// The last percentage sent: progress must increase.
-    last: AtomicU32,
+    tx: mpsc::UnboundedSender<Forward>,
+    /// The last percentage sent: progress must increase. Also serializes
+    /// sends, so `Stop` is the last message. `u32::MAX` once closed.
+    last: Mutex<u32>,
 }
 
 impl SinkInner {
     fn send(&self, percent: u32, message: impl Into<String>) {
-        if self.last.fetch_max(percent, Ordering::Relaxed) >= percent {
+        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if *last >= percent {
             return;
         }
-        let _ = self.tx.send(
+        *last = percent;
+        let _ = self.tx.send(Forward::Progress(
             ProgressNotificationParam::new(self.token.clone(), f64::from(percent))
                 .with_total(100.0)
                 .with_message(message),
-        );
+        ));
+    }
+
+    /// Sends nothing more after this.
+    fn close(&self) {
+        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        *last = u32::MAX;
+        let _ = self.tx.send(Forward::Stop);
     }
 
     fn report(&self, phase: &AnalysisPhase) {
@@ -168,10 +213,10 @@ impl ProgressSink {
     }
 
     fn new(token: ProgressToken, peer: Peer<RoleServer>) -> Self {
-        let (tx, mut rx) = mpsc::unbounded_channel::<ProgressNotificationParam>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<Forward>();
         // One forwarder keeps the notifications in order.
         let forwarder = tokio::spawn(async move {
-            while let Some(param) = rx.recv().await {
+            while let Some(Forward::Progress(param)) = rx.recv().await {
                 if let Err(e) = peer.notify_progress(param).await {
                     tracing::debug!("cannot send a progress notification: {e}");
                 }
@@ -181,19 +226,17 @@ impl ProgressSink {
             inner: Arc::new(SinkInner {
                 token,
                 tx,
-                last: AtomicU32::new(0),
+                last: Mutex::new(0),
             }),
             forwarder,
         }
     }
 
-    /// Sends what is still queued, so no notification follows the response.
+    /// Sends what is queued and stops, so no notification follows the
+    /// response. Copies of the sink still held elsewhere send nothing more.
     pub(crate) async fn close(self) {
-        let Self { inner, forwarder } = self;
-        drop(inner);
-        // The analyzer's copies are gone once it returns; the timeout only
-        // guards against a client that stopped reading.
-        let _ = tokio::time::timeout(Duration::from_secs(2), forwarder).await;
+        self.inner.close();
+        let _ = self.forwarder.await;
     }
 }
 
@@ -303,12 +346,20 @@ impl Rebuild {
             None => Analyzer::new(store, project.clone()),
         }
         .set_skip_embeddings(skip_embeddings)
-        .with_progress(reporters.clone());
-        let result = analyzer
-            .analyze()
-            .await
-            .map_err(|e| ToolError::internal("analysis failed", e))?;
+        .with_progress(reporters.clone())
+        .with_cancel({
+            let ct = ct.clone();
+            Arc::new(move || ct.is_cancelled())
+        });
+        let result = analyzer.analyze().await;
         drop(analyzer);
+        let result = match result {
+            Ok(result) => result,
+            Err(e) if e.downcast_ref::<AnalysisCancelled>().is_some() => {
+                return Err(cancelled().expect("cancelled"))
+            }
+            Err(e) => return Err(ToolError::internal("analysis failed", e)),
+        };
         if let Some(e) = cancelled() {
             return Err(e);
         }
@@ -407,15 +458,12 @@ impl Rebuild {
 mod tests {
     use super::*;
 
-    fn sink() -> (
-        Arc<SinkInner>,
-        mpsc::UnboundedReceiver<ProgressNotificationParam>,
-    ) {
+    fn sink() -> (Arc<SinkInner>, mpsc::UnboundedReceiver<Forward>) {
         let (tx, rx) = mpsc::unbounded_channel();
         let inner = Arc::new(SinkInner {
             token: ProgressToken(rmcp::model::NumberOrString::Number(7)),
             tx,
-            last: AtomicU32::new(0),
+            last: Mutex::new(0),
         });
         (inner, rx)
     }
@@ -449,10 +497,21 @@ mod tests {
         sink.report(&AnalysisPhase::DetectingCommunities);
         sink.report(&AnalysisPhase::TracingProcesses);
         sink.send(100, "done");
-        drop(sink);
+        sink.close();
+        sink.send(100, "after close");
+        sink.report(&AnalysisPhase::Discovering);
 
         let mut seen = Vec::new();
-        while let Ok(p) = rx.try_recv() {
+        let mut stopped = false;
+        while let Ok(msg) = rx.try_recv() {
+            assert!(!stopped, "nothing follows Stop");
+            let p = match msg {
+                Forward::Progress(p) => p,
+                Forward::Stop => {
+                    stopped = true;
+                    continue;
+                }
+            };
             assert_eq!(p.total, Some(100.0));
             assert_eq!(
                 p.progress_token,
@@ -463,6 +522,7 @@ mod tests {
         let values: Vec<f64> = seen.iter().map(|(v, _)| *v).collect();
         assert_eq!(values, vec![1.0, 2.0, 31.0, 62.0, 80.0, 85.0, 90.0, 100.0]);
         assert_eq!(seen[2].1, "parsing files: 5/10");
+        assert!(stopped);
     }
 
     #[test]
@@ -471,7 +531,8 @@ mod tests {
         let first = RunningGuard::acquire(data.path(), "guard-test").expect("first claim");
         let second = RunningGuard::acquire(data.path(), "guard-test")
             .err()
-            .expect("second claim is refused");
+            .expect("second claim is refused")
+            .for_analyze("guard-test");
         let message = second.message();
         assert!(message.contains("Analysis already running"), "{message}");
         assert!(matches!(second, ToolError::Recoverable { .. }));

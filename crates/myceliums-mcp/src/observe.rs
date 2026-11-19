@@ -2,7 +2,7 @@
 //!
 //! [`Observed`] wraps the rmcp router: every `tools/call` request runs inside
 //! one `tool_call` span (target `myceliums_mcp::calls`) carrying the tool,
-//! its toolset, the repository it was asked about, and — once it answers —
+//! its toolset, the `repo_id` it was asked about, and — once it answers —
 //! the duration, the size of the result text, an approximate token count
 //! (bytes / 4) and the outcome (`ok`, `is_error`, `protocol_error`, or
 //! `cancelled` when the request is dropped unanswered). The span ends with
@@ -147,14 +147,16 @@ impl Drop for ToolCall {
     }
 }
 
-/// The repository a call is about: its `repo_id` argument, or for `analyze`
-/// the project `path`. `None` when the tool falls back to the working
-/// directory's repository.
+/// The repository a call is about: its `repo_id` argument. `None` when the
+/// tool falls back to the working directory's repository — and for
+/// `analyze`, whose `path` is a project directory (other tools' `path` is a
+/// filter), so no path is logged as a repository.
 fn repo_of(params: &CallToolRequestParams) -> Option<&str> {
-    let args = params.arguments.as_ref()?;
-    ["repo_id", "path"]
-        .iter()
-        .find_map(|key| args.get(*key)?.as_str())
+    params
+        .arguments
+        .as_ref()?
+        .get("repo_id")?
+        .as_str()
         .filter(|s| !s.is_empty())
 }
 
@@ -193,7 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn repo_comes_from_repo_id_or_path() {
+    fn repo_comes_from_repo_id_only() {
         let with = |args: serde_json::Value| {
             let serde_json::Value::Object(args) = args else {
                 unreachable!()
@@ -204,10 +206,7 @@ mod tests {
             repo_of(&with(serde_json::json!({"repo_id": "r1"}))),
             Some("r1")
         );
-        assert_eq!(
-            repo_of(&with(serde_json::json!({"path": "/p"}))),
-            Some("/p")
-        );
+        assert_eq!(repo_of(&with(serde_json::json!({"path": "src/"}))), None);
         assert_eq!(repo_of(&with(serde_json::json!({"query": "x"}))), None);
         assert_eq!(repo_of(&CallToolRequestParams::new("t")), None);
     }

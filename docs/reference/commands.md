@@ -586,7 +586,9 @@ myc mcp --log-format json --stats-file ~/.myceliums/mcp-stats.json
 
 `myc mcp` logs to **stderr** only; with the stdio transport, stdout carries
 the MCP messages and nothing else. Without `RUST_LOG`, the server logs at
-INFO for its own crate (`myceliums_mcp`) and errors only for everything else;
+INFO for its own crate (`myceliums_mcp`), at WARN for the analysis core
+(`myceliums_core`: skipped files, index problems) and errors only for
+everything else;
 `RUST_LOG` replaces that default (for example `RUST_LOG=debug`, or
 `RUST_LOG=error` to silence the per-call lines). Colour codes are written
 only when stderr is a terminal.
@@ -596,13 +598,13 @@ and ends with one line — INFO `tool call finished` for a result, WARN
 `tool call failed` for a JSON-RPC error or a call dropped unanswered:
 
 ```text
-2026-11-19T02:09:17.379749Z  INFO tool_call{tool=analyze toolset=core repo=/work/app duration_ms=597.33 result_bytes=170 approx_tokens=43 outcome=ok}: tool call finished
+2026-11-19T02:09:17.379749Z  INFO tool_call{tool=find_callers toolset=core repo=my-app-1a2b3c4d duration_ms=597.33 result_bytes=170 approx_tokens=43 outcome=ok}: tool call finished
 ```
 
 | Field | Meaning |
 |-------|---------|
 | `tool`, `toolset` | The tool called and its [toolset](mcp-tools.md#toolsets) (`-` for an unknown name) |
-| `repo` | The `repo_id` argument, or `path` for `analyze`; absent when the tool uses the working directory's repository |
+| `repo` | The `repo_id` argument; absent when the tool uses the working directory's repository, and for `analyze` (its `path` is a directory, not a repository id) |
 | `duration_ms` | Time from receiving the request to its answer |
 | `result_bytes` | Bytes of result text the agent reads (the text blocks; the JSON of `structuredContent` when there are none; the message of a protocol error) |
 | `approx_tokens` | `result_bytes / 4`, rounded up — a rough size, not a tokenizer count |
