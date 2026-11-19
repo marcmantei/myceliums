@@ -153,8 +153,8 @@ pub struct RunReport {
     /// Who labelled the gold set and who reviewed it — `null` until a human has.
     pub labelled_by: String,
     pub reviewed_by: Option<String>,
-    /// `os-arch` of the run. The analyzer walks files in directory order,
-    /// which decides some ambiguous resolutions, so platforms may differ.
+    /// `os-arch` of the run, recorded in case a platform difference (say,
+    /// in path handling) ever shows up in the numbers.
     pub platform: String,
     /// Keyed by setup: [`ISOLATED`], [`POLYGLOT`].
     pub setups: BTreeMap<String, SetupReport>,
@@ -366,7 +366,7 @@ pub fn markdown_comparison(current: &RunReport, baseline: &RunReport) -> String 
         let _ = writeln!(
             out,
             "Baseline platform `{}`, this run `{}`: ambiguous resolutions can \
-             differ with directory order.\n",
+             differ if anything platform-specific reaches the analyzer.\n",
             baseline.platform, current.platform
         );
     }

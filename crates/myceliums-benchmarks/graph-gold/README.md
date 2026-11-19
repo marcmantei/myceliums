@@ -129,7 +129,7 @@ their interpretation. In short: per-label precision says how far to trust an
 edge carrying that label; `recall_share` is the part of all gold edges found
 with that label (the shares add up to the overall recall).
 
-The analyzer walks files in directory order, and that order decides which of
-several same-named symbols a bare-name call resolves to. Numbers can
-therefore differ slightly between platforms; the report records the platform
-and the comparison flags a mismatch.
+The analyzer walks files in name order, and that order decides which of
+several same-named symbols a bare-name call resolves to, so a run is
+deterministic. The report still records the platform, and the comparison
+flags a mismatch.

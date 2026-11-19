@@ -35,7 +35,7 @@ fn parse(json: &str) -> Result<Config> { /* ... */ }
 let token = parse(user_input);  // Which parse() is this?
 ```
 
-Both `parse` functions collide in the global map. The resolver cannot distinguish whether `main.rs` is calling `auth::parse` or `config::parse`, so it picks one (the last one registered, which depends on the order files are walked). This produces a false edge in the call graph, labelled `ambiguous`.
+Both `parse` functions collide in the global map. The resolver cannot distinguish whether `main.rs` is calling `auth::parse` or `config::parse`, so it picks one: the last one registered. Files are walked in name order, so that is the one in the alphabetically last file. This produces a false edge in the call graph, labelled `ambiguous`.
 
 The same collision applies to callers: a call inside `config::parse` can be recorded as a call from `auth::parse`.
 
@@ -60,12 +60,12 @@ Recorded baseline (macOS, `crates/myceliums-benchmarks/graph-gold/baseline.json`
 
 | language | symbol precision | symbol recall | gold edges | extracted | correct | call precision | call recall | call F1 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Go | 1.00 | 0.98 | 45 | 49 | 31 | 0.63 | 0.69 | 0.66 |
+| Go | 1.00 | 0.98 | 45 | 49 | 30 | 0.61 | 0.67 | 0.64 |
 | Java | 1.00 | 1.00 | 59 | 58 | 36 | 0.62 | 0.61 | 0.62 |
 | Python | 1.00 | 1.00 | 43 | 44 | 27 | 0.61 | 0.63 | 0.62 |
 | Rust | 1.00 | 1.00 | 52 | 53 | 24 | 0.45 | 0.46 | 0.46 |
 | TypeScript | 0.99 | 0.99 | 50 | 41 | 22 | 0.54 | 0.44 | 0.48 |
-| **all** | **1.00** | **0.99** | **249** | **245** | **140** | **0.57** (0.51–0.63) | **0.56** (0.50–0.62) | **0.57** |
+| **all** | **1.00** | **0.99** | **249** | **245** | **139** | **0.57** (0.50–0.63) | **0.56** (0.50–0.62) | **0.56** |
 
 By resolution label, all languages together:
 
@@ -74,13 +74,13 @@ By resolution label, all languages together:
 | `exact` | 2 | 2 | 1.00 (0.34–1.00) | 0.01 |
 | `import` | 0 | – | – | 0.00 |
 | `name-match` | 134 | 97 | 0.72 (0.64–0.79) | 0.39 |
-| `ambiguous` | 109 | 41 | 0.38 (0.29–0.47) | 0.16 |
+| `ambiguous` | 109 | 40 | 0.37 (0.28–0.46) | 0.16 |
 
 ### What the numbers say
 
 **Symbols are reliable.** 335 of 337 gold symbols are found; the misses are interface method declarations in Go and TypeScript (`Sink.Write`, `Sink.write`), and the one extra symbol is a local arrow function in TypeScript. Symbol extraction is not where the graph goes wrong.
 
-**Roughly every other CALLS edge is wrong or missing.** Precision and recall both sit near 0.57 on these fixtures.
+**Roughly every other CALLS edge is wrong or missing.** Precision and recall both sit near 0.56 on these fixtures.
 
 **Does `exact` deserve its name?** On this evidence, yes when it appears, but it almost never appears: 2 of 245 extracted edges, both correct, both Python method calls on a freshly built object whose expression starts with the class name (`Config({...}).get(...)`, `OrderReport([]).summary()`). Two edges do not establish a precision; the interval runs from 0.34 to 1.00. The label needs the first identifier of the call expression to be the name of the class that defines the method, so `cfg.get()` on a `Config` variable is never `exact`.
 
@@ -88,27 +88,27 @@ By resolution label, all languages together:
 
 **`name-match` is right about three times in four** (0.72). A unique name is good evidence for the *callee*, but a quarter of these edges are still wrong, mostly for two reasons: the call was attributed to the wrong *caller* (a function elsewhere with the caller's name), or a library method shares the name of a project function (`items.map(...)` linked to the project's own `map()`, `rows.find(...)` linked to `Repository.find` as a recursive call).
 
-**`ambiguous` is wrong more often than right** (0.38). Treat it as a hint that *some* function of that name is called, not which one.
+**`ambiguous` is wrong more often than right** (0.37). Treat it as a hint that *some* function of that name is called, not which one.
 
-**The caller is as much a problem as the callee.** At least 44 of the 105 wrong edges (42%) are recorded at a call site outside the caller's body: the call was made by another function of the same name (two `__init__`s, two `get`s, two `new`s) and attributed to whichever one the name lookup returned. This is a lower bound; edge metadata keeps the call line but not its file.
+**The caller is as much a problem as the callee.** At least 43 of the 106 wrong edges (41%) are recorded at a call site outside the caller's body: the call was made by another function of the same name (two `__init__`s, two `get`s, two `new`s) and attributed to whichever one the name lookup returned. This is a lower bound; edge metadata keeps the call line but not its file.
 
 **What gets missed**, by the tags the gold set puts on each edge (found / labelled):
 
 | situation | found |
 |---|---:|
 | callee name unique in the fixture (no `same-name` tag) | 106 / 147 (0.72) |
-| callee shares its name with another fixture symbol | 34 / 102 (0.33) |
-| receiver's declared type decides the target (`repo.add()` on a `Repository`) | 32 / 64 |
+| callee shares its name with another fixture symbol | 33 / 102 (0.32) |
+| receiver's declared type decides the target (`repo.add()` on a `Repository`) | 34 / 64 |
 | call on `self`/`this` | 6 / 25 |
-| instantiation / constructor | 29 / 51 |
+| instantiation / constructor | 28 / 51 |
 | inherited method, `super(...)`, Java overloads | 1 / 4, 0 / 3, 0 / 3 |
 | recursion, interface dispatch | 5 / 5, 4 / 4 |
 
 Both calls written inside a Rust macro (`println!("{}", run(&argv))`) were missed: to the parser, the arguments of a macro are an unparsed token tree.
 
-**Several languages in one index make it much worse.** With all five fixtures indexed as one repository, call precision drops to 0.26 and recall to 0.16. 68 of the 109 wrong edges connect two languages; for example, TypeScript's `items.map(...)` inside `Order.total` became an edge from Java's `Order.total` to Rust's `utils::map`: wrong caller and wrong callee at once. Nothing in the resolver prevents a call from one language resolving to a symbol in another. The fixtures share one vocabulary on purpose, so this is a worst case, but a real polyglot monorepo is exposed to the same mechanism.
+**Several languages in one index make it much worse.** With all five fixtures indexed as one repository, call precision drops to 0.34 and recall to 0.20. 45 of the 97 wrong edges connect two languages. For example, the call to `config.New` in Go's `run` became an edge from Rust's `run` to Go's `config.New`: the caller was resolved by name to the other language's `run`. Nothing in the resolver prevents a call from one language resolving to a symbol in another. The fixtures share one vocabulary on purpose, so this is a worst case, but a real polyglot monorepo is exposed to the same mechanism.
 
-**The result depends on file order.** Which of several same-named symbols wins is decided by the order the analyzer walks the directory, which is the filesystem's order. Two machines can produce different `ambiguous` edges for the same code.
+**Ties are broken by file name.** Which of several same-named symbols wins depends on the order the analyzer walks the files. Until #94 that was the filesystem's order, so two machines could produce different `ambiguous` edges for the same code; now files are walked in name order. Switching from macOS directory order to name order moved overall precision and recall by less than 0.01 in the isolated setup but changed the polyglot numbers substantially (Java's polyglot recall went from 0.17 to 0), which shows how much of an ambiguous resolution is luck.
 
 ## Interpreting Results: Confidence Guidelines
 
@@ -158,7 +158,6 @@ These limitations are acknowledged; the gold set (`graph-eval`) measures any cha
 - **Per-file/scope keying**: Same-named symbols within different scopes become separate entries
 - **Type inference**: Build receiver types to resolve method calls exactly (e.g., `foo.bar()` becomes `TypeOfFoo.bar`)
 - **Language-aware resolution**: never resolve a call to a symbol in another language
-- **Deterministic tie-breaking**: walk files in a fixed order so `ambiguous` edges do not depend on the filesystem
 - **LSP enrichment**: Optional language-server integration for precise resolution
 
 For now, treat Myceliums as a **high-fidelity heuristic tool**: excellent for understanding code structure and identifying likely relationships, but not a replacement for static analysis tools (like `rust-analyzer`) or full-program analysis.

@@ -2151,6 +2151,7 @@ impl Analyzer {
         };
 
         for entry in WalkDir::new(&self.repo_path)
+            .sort_by_file_name() // Fixed order: it decides which same-named symbol a call resolves to
             .follow_links(false) // Do not follow symlinks — avoids circular symlink loops
             .into_iter()
             .filter_entry(|e| {

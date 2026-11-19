@@ -1,8 +1,8 @@
 {
   "schema_version": "1.0",
   "regenerate_with": "cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline",
-  "timestamp": "2026-11-19T02:41:51Z",
-  "commit_sha": "1e9aca5c9749fe1efc4316c6794c765b0dab2f66",
+  "timestamp": "2026-11-19T02:48:54Z",
+  "commit_sha": "666031368d5123bf9531837fbe423aeaf0198347",
   "dataset_digest": "76d698e8ff6a23c1150016ff25e12ad49077587d17f08f52ff3e87af9a6b5bd1",
   "labelled_by": "agent",
   "reviewed_by": null,
@@ -25,16 +25,16 @@
         "calls": {
           "gold": 249,
           "predicted": 245,
-          "true_positives": 140,
-          "false_positives": 105,
-          "false_negatives": 109
+          "true_positives": 139,
+          "false_positives": 106,
+          "false_negatives": 110
         },
         "call_rates": {
-          "precision": 0.5714,
-          "recall": 0.5622,
-          "f1": 0.5668
+          "precision": 0.5673,
+          "recall": 0.5582,
+          "f1": 0.5628
         },
-        "wrong_caller": 44
+        "wrong_caller": 43
       },
       "summary": {
         "go": {
@@ -53,16 +53,16 @@
           "calls": {
             "gold": 45,
             "predicted": 49,
-            "true_positives": 31,
-            "false_positives": 18,
-            "false_negatives": 14
+            "true_positives": 30,
+            "false_positives": 19,
+            "false_negatives": 15
           },
           "call_rates": {
-            "precision": 0.6327,
-            "recall": 0.6889,
-            "f1": 0.6596
+            "precision": 0.6122,
+            "recall": 0.6667,
+            "f1": 0.6383
           },
-          "wrong_caller": 7
+          "wrong_caller": 9
         },
         "java": {
           "symbols": {
@@ -143,7 +143,7 @@
             "recall": 0.4615,
             "f1": 0.4571
           },
-          "wrong_caller": 11
+          "wrong_caller": 9
         },
         "typescript": {
           "symbols": {
@@ -170,16 +170,16 @@
             "recall": 0.44,
             "f1": 0.4835
           },
-          "wrong_caller": 8
+          "wrong_caller": 7
         }
       },
       "by_label": {
         "ambiguous": {
           "predicted": 109,
-          "true_positives": 41,
-          "false_positives": 68,
-          "precision": 0.3761,
-          "recall_share": 0.1647
+          "true_positives": 40,
+          "false_positives": 69,
+          "precision": 0.367,
+          "recall_share": 0.1606
         },
         "exact": {
           "predicted": 2,
@@ -200,10 +200,10 @@
         "go": {
           "ambiguous": {
             "predicted": 17,
-            "true_positives": 7,
-            "false_positives": 10,
-            "precision": 0.4118,
-            "recall_share": 0.1556
+            "true_positives": 6,
+            "false_positives": 11,
+            "precision": 0.3529,
+            "recall_share": 0.1333
           },
           "name-match": {
             "predicted": 32,
@@ -288,7 +288,7 @@
       "by_tag": {
         "alias": {
           "gold": 6,
-          "found": 3
+          "found": 1
         },
         "arrow-function": {
           "gold": 3,
@@ -300,11 +300,11 @@
         },
         "constructor": {
           "gold": 51,
-          "found": 29
+          "found": 28
         },
         "cross-file": {
           "gold": 27,
-          "found": 25
+          "found": 22
         },
         "dispatch": {
           "gold": 3,
@@ -328,7 +328,7 @@
         },
         "method-vs-function": {
           "gold": 10,
-          "found": 5
+          "found": 3
         },
         "module-qualified": {
           "gold": 9,
@@ -340,7 +340,7 @@
         },
         "qualified": {
           "gold": 22,
-          "found": 9
+          "found": 8
         },
         "recursion": {
           "gold": 5,
@@ -352,7 +352,7 @@
         },
         "same-name": {
           "gold": 102,
-          "found": 34
+          "found": 33
         },
         "self-call": {
           "gold": 25,
@@ -372,7 +372,7 @@
         },
         "typed-receiver": {
           "gold": 64,
-          "found": 32
+          "found": 34
         }
       },
       "detail": {
@@ -395,18 +395,18 @@
             "counts": {
               "gold": 45,
               "predicted": 49,
-              "true_positives": 31,
-              "false_positives": 18,
-              "false_negatives": 14
+              "true_positives": 30,
+              "false_positives": 19,
+              "false_negatives": 15
             },
             "redundant": 0,
             "dynamic": 0,
-            "wrong_caller": 7,
+            "wrong_caller": 9,
             "by_label": {
               "ambiguous": {
                 "predicted": 17,
-                "true_positives": 7,
-                "false_positives": 10
+                "true_positives": 6,
+                "false_positives": 11
               },
               "name-match": {
                 "predicted": 32,
@@ -417,7 +417,7 @@
             "by_tag": {
               "alias": {
                 "gold": 2,
-                "found": 2
+                "found": 1
               },
               "chained": {
                 "gold": 1,
@@ -429,7 +429,7 @@
               },
               "cross-file": {
                 "gold": 11,
-                "found": 11
+                "found": 10
               },
               "generic": {
                 "gold": 1,
@@ -445,7 +445,7 @@
               },
               "method-vs-function": {
                 "gold": 3,
-                "found": 2
+                "found": 1
               },
               "module-qualified": {
                 "gold": 2,
@@ -461,7 +461,7 @@
               },
               "same-name": {
                 "gold": 18,
-                "found": 8
+                "found": 7
               },
               "self-call": {
                 "gold": 4,
@@ -474,30 +474,32 @@
             },
             "false_positives": [
               {
-                "from": "auth/auth.go::Parse",
-                "to": "auth/auth.go::Parse",
-                "label": "ambiguous",
-                "line": 76,
-                "note": "wrong caller: the call site is outside auth/auth.go::Parse's lines 19-25"
+                "from": "config/config.go::Parse",
+                "to": "auth/auth.go::decode",
+                "label": "name-match",
+                "line": 24,
+                "note": "wrong caller: the call site is outside config/config.go::Parse's lines 10-16"
               },
               {
-                "from": "auth/auth.go::Parse",
+                "from": "config/config.go::Parse",
                 "to": "config/config.go::New",
                 "label": "name-match",
-                "line": 22
+                "line": 22,
+                "note": "wrong caller: the call site is outside config/config.go::Parse's lines 10-16"
               },
               {
-                "from": "auth/auth.go::Parse",
-                "to": "config/config.go::normalize",
-                "label": "name-match",
-                "line": 15,
-                "note": "wrong caller: the call site is outside auth/auth.go::Parse's lines 19-25"
-              },
-              {
-                "from": "config/config.go::Load",
-                "to": "auth/auth.go::Parse",
+                "from": "config/config.go::Parse",
+                "to": "config/config.go::Parse",
                 "label": "ambiguous",
-                "line": 38
+                "line": 76,
+                "note": "wrong caller: the call site is outside config/config.go::Parse's lines 10-16"
+              },
+              {
+                "from": "config/config.go::Parse",
+                "to": "validation/validation.go::Validate",
+                "label": "ambiguous",
+                "line": 21,
+                "note": "wrong caller: the call site is outside config/config.go::Parse's lines 10-16"
               },
               {
                 "from": "main.go::dispatch",
@@ -553,6 +555,12 @@
                 "note": "wrong caller: the call site is outside report/report.go::Render's lines 35-37"
               },
               {
+                "from": "service/service.go::UserService.Login",
+                "to": "config/config.go::Parse",
+                "label": "ambiguous",
+                "line": 36
+              },
+              {
                 "from": "service/service.go::UserService.Register",
                 "to": "config/config.go::New",
                 "label": "name-match",
@@ -593,22 +601,24 @@
             ],
             "false_negatives": [
               {
-                "from": "config/config.go::Parse",
-                "to": "config/config.go::normalize",
-                "line": 15,
+                "from": "auth/auth.go::Parse",
+                "to": "validation/validation.go::Validate",
+                "line": 21,
+                "tags": [
+                  "cross-file",
+                  "same-name",
+                  "method-vs-function"
+                ],
+                "why": "`validation.Validate` is the package function, not the method Validator.Validate"
+              },
+              {
+                "from": "auth/auth.go::Parse",
+                "to": "auth/auth.go::decode",
+                "line": 24,
                 "tags": [
                   "same-file"
                 ],
                 "why": "package-local function"
-              },
-              {
-                "from": "config/config.go::Load",
-                "to": "config/config.go::Parse",
-                "line": 38,
-                "tags": [
-                  "same-name"
-                ],
-                "why": "unqualified Parse inside package config is config.Parse; not auth.Parse or OrderService.Parse"
               },
               {
                 "from": "model/model.go::User.Save",
@@ -687,6 +697,16 @@
                   "same-name"
                 ],
                 "why": "user is *model.User; not Order.Save"
+              },
+              {
+                "from": "service/service.go::UserService.Login",
+                "to": "auth/auth.go::Parse",
+                "line": 36,
+                "tags": [
+                  "alias",
+                  "same-name"
+                ],
+                "why": "`tok` is an import alias for package auth"
               },
               {
                 "from": "service/service.go::UserService.Settings",
@@ -868,13 +888,6 @@
                 "line": 18
               },
               {
-                "from": "src/shop/report/ConsoleSink.java::ConsoleSink.write",
-                "to": "src/shop/store/Repository.java::Repository.add(T, int)",
-                "label": "ambiguous",
-                "line": 12,
-                "note": "wrong caller: the call site is outside src/shop/report/ConsoleSink.java::ConsoleSink.write's lines 5-8"
-              },
-              {
                 "from": "src/shop/report/Formatting.java::Formatting.join",
                 "to": "src/shop/report/Formatting.java::Formatting.join",
                 "label": "name-match",
@@ -921,6 +934,13 @@
                 "label": "name-match",
                 "line": 19,
                 "note": "wrong caller: the call site is outside src/shop/report/Report.java::Report.renderRow's lines 27-29"
+              },
+              {
+                "from": "src/shop/report/Sink.java::Sink.write",
+                "to": "src/shop/store/Repository.java::Repository.add(T, int)",
+                "label": "ambiguous",
+                "line": 12,
+                "note": "wrong caller: the call site is outside src/shop/report/Sink.java::Sink.write's lines 5-5"
               },
               {
                 "from": "src/shop/service/OrderService.java::OrderService.parse",
@@ -1409,7 +1429,7 @@
                 "from": "shop/storage.py::Repository.get",
                 "to": "shop/storage.py::Repository.get",
                 "label": "ambiguous",
-                "line": 31,
+                "line": 25,
                 "note": "wrong caller: the call site is outside shop/storage.py::Repository.get's lines 12-13"
               },
               {
@@ -1615,7 +1635,7 @@
             },
             "redundant": 0,
             "dynamic": 0,
-            "wrong_caller": 11,
+            "wrong_caller": 9,
             "by_label": {
               "ambiguous": {
                 "predicted": 24,
@@ -1639,11 +1659,11 @@
               },
               "constructor": {
                 "gold": 9,
-                "found": 1
+                "found": 0
               },
               "cross-file": {
                 "gold": 6,
-                "found": 5
+                "found": 4
               },
               "generic": {
                 "gold": 1,
@@ -1655,7 +1675,7 @@
               },
               "method-vs-function": {
                 "gold": 3,
-                "found": 2
+                "found": 1
               },
               "module-qualified": {
                 "gold": 1,
@@ -1663,7 +1683,7 @@
               },
               "qualified": {
                 "gold": 11,
-                "found": 3
+                "found": 2
               },
               "recursion": {
                 "gold": 1,
@@ -1687,59 +1707,25 @@
               },
               "typed-receiver": {
                 "gold": 14,
-                "found": 6
+                "found": 7
               }
             },
             "false_positives": [
               {
-                "from": "src/auth.rs::parse",
-                "to": "src/auth.rs::parse",
-                "label": "ambiguous",
-                "line": 65,
-                "note": "wrong caller: the call site is outside src/auth.rs::parse's lines 10-16"
-              },
-              {
-                "from": "src/auth.rs::parse",
-                "to": "src/config.rs::normalize",
-                "label": "name-match",
-                "line": 5,
-                "note": "wrong caller: the call site is outside src/auth.rs::parse's lines 10-16"
-              },
-              {
-                "from": "src/auth.rs::parse",
-                "to": "src/service.rs::UserService.get",
-                "label": "ambiguous",
-                "line": 66,
-                "note": "wrong caller: the call site is outside src/auth.rs::parse's lines 10-16"
-              },
-              {
-                "from": "src/auth.rs::parse",
-                "to": "src/utils.rs::map",
-                "label": "name-match",
-                "line": 5,
-                "note": "wrong caller: the call site is outside src/auth.rs::parse's lines 10-16"
-              },
-              {
                 "from": "src/config.rs::Config.load",
-                "to": "src/auth.rs::parse",
-                "label": "ambiguous",
-                "line": 39
-              },
-              {
-                "from": "src/config.rs::Config.load",
-                "to": "src/model.rs::Order.new",
+                "to": "src/validation.rs::Validator.new",
                 "label": "ambiguous",
                 "line": 39
               },
               {
                 "from": "src/config.rs::Config.theme",
-                "to": "src/auth.rs::parse",
+                "to": "src/config.rs::parse",
                 "label": "ambiguous",
                 "line": 50
               },
               {
                 "from": "src/config.rs::Config.theme",
-                "to": "src/service.rs::UserService.get",
+                "to": "src/store.rs::Repo.get",
                 "label": "ambiguous",
                 "line": 50
               },
@@ -1751,6 +1737,41 @@
                 "note": "trap (line 10): Iterator::map, not utils::map"
               },
               {
+                "from": "src/config.rs::parse",
+                "to": "src/auth.rs::decode",
+                "label": "name-match",
+                "line": 15,
+                "note": "wrong caller: the call site is outside src/config.rs::parse's lines 3-6"
+              },
+              {
+                "from": "src/config.rs::parse",
+                "to": "src/config.rs::parse",
+                "label": "ambiguous",
+                "line": 65,
+                "note": "wrong caller: the call site is outside src/config.rs::parse's lines 3-6"
+              },
+              {
+                "from": "src/config.rs::parse",
+                "to": "src/store.rs::Repo.get",
+                "label": "ambiguous",
+                "line": 66,
+                "note": "wrong caller: the call site is outside src/config.rs::parse's lines 3-6"
+              },
+              {
+                "from": "src/config.rs::parse",
+                "to": "src/utils.rs::map",
+                "label": "name-match",
+                "line": 5,
+                "note": "trap (line 5): Iterator::map, not utils::map"
+              },
+              {
+                "from": "src/config.rs::parse",
+                "to": "src/validation.rs::validate",
+                "label": "ambiguous",
+                "line": 12,
+                "note": "wrong caller: the call site is outside src/config.rs::parse's lines 3-6"
+              },
+              {
                 "from": "src/main.rs::dispatch",
                 "to": "src/main.rs::handler",
                 "label": "name-match",
@@ -1759,29 +1780,15 @@
               },
               {
                 "from": "src/main.rs::run",
-                "to": "src/model.rs::Order.new",
-                "label": "ambiguous",
-                "line": 31
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "src/service.rs::UserService.get",
+                "to": "src/store.rs::Repo.get",
                 "label": "ambiguous",
                 "line": 44
               },
               {
-                "from": "src/model.rs::Order.new",
-                "to": "src/model.rs::Order.new",
+                "from": "src/main.rs::run",
+                "to": "src/validation.rs::Validator.new",
                 "label": "ambiguous",
-                "line": 7,
-                "note": "wrong caller: the call site is outside src/model.rs::Order.new's lines 39-41"
-              },
-              {
-                "from": "src/model.rs::Order.save",
-                "to": "src/model.rs::Order.add",
-                "label": "ambiguous",
-                "line": 23,
-                "note": "wrong caller: the call site is outside src/model.rs::Order.save's lines 43-45"
+                "line": 31
               },
               {
                 "from": "src/model.rs::Order.total",
@@ -1838,17 +1845,10 @@
                 "note": "wrong caller: the call site is outside src/report.rs::render's lines 25-27"
               },
               {
-                "from": "src/service.rs::UserService.get",
-                "to": "src/service.rs::UserService.get",
+                "from": "src/service.rs::OrderService.place",
+                "to": "src/validation.rs::Validator.new",
                 "label": "ambiguous",
-                "line": 43,
-                "note": "wrong caller: the call site is outside src/service.rs::UserService.get's lines 40-42"
-              },
-              {
-                "from": "src/service.rs::UserService.register",
-                "to": "src/model.rs::Order.new",
-                "label": "ambiguous",
-                "line": 26
+                "line": 59
               },
               {
                 "from": "src/service.rs::UserService.register",
@@ -1858,13 +1858,19 @@
               },
               {
                 "from": "src/service.rs::UserService.register",
+                "to": "src/validation.rs::Validator.new",
+                "label": "ambiguous",
+                "line": 26
+              },
+              {
+                "from": "src/service.rs::UserService.register",
                 "to": "src/validation.rs::validate",
                 "label": "ambiguous",
                 "line": 23
               },
               {
                 "from": "src/service.rs::UserService.settings",
-                "to": "src/service.rs::UserService.get",
+                "to": "src/store.rs::Repo.get",
                 "label": "ambiguous",
                 "line": 37
               },
@@ -1876,6 +1882,19 @@
                 "note": "trap (line 20): Iterator::find, not a recursive Repo::find"
               },
               {
+                "from": "src/store.rs::Repo.get",
+                "to": "src/store.rs::Repo.get",
+                "label": "ambiguous",
+                "line": 43,
+                "note": "wrong caller: the call site is outside src/store.rs::Repo.get's lines 15-17"
+              },
+              {
+                "from": "src/validation.rs::Validator.new",
+                "to": "src/validation.rs::Validator.new",
+                "label": "ambiguous",
+                "line": 18
+              },
+              {
                 "from": "src/validation.rs::validate",
                 "to": "src/validation.rs::Validator.check",
                 "label": "name-match",
@@ -1885,9 +1904,20 @@
             ],
             "false_negatives": [
               {
-                "from": "src/config.rs::parse",
-                "to": "src/config.rs::normalize",
-                "line": 5,
+                "from": "src/auth.rs::parse",
+                "to": "src/validation.rs::validate",
+                "line": 12,
+                "tags": [
+                  "cross-file",
+                  "same-name",
+                  "method-vs-function"
+                ],
+                "why": "`use crate::validation::validate` binds the free function, not Validator::validate"
+              },
+              {
+                "from": "src/auth.rs::parse",
+                "to": "src/auth.rs::decode",
+                "line": 15,
                 "tags": [
                   "same-file"
                 ],
@@ -1903,15 +1933,6 @@
                   "same-name"
                 ],
                 "why": "`Self::new` is Config::new"
-              },
-              {
-                "from": "src/config.rs::Config.load",
-                "to": "src/config.rs::parse",
-                "line": 39,
-                "tags": [
-                  "same-name"
-                ],
-                "why": "bare parse in module config is config::parse; not Theme::parse or auth::parse"
               },
               {
                 "from": "src/config.rs::Config.theme",
@@ -1942,16 +1963,6 @@
                   "same-name"
                 ],
                 "why": "repo: &mut Repo<User>; not Order::add"
-              },
-              {
-                "from": "src/model.rs::Order.save",
-                "to": "src/store.rs::Repo.add",
-                "line": 44,
-                "tags": [
-                  "typed-receiver",
-                  "same-name"
-                ],
-                "why": "repo: &mut Repo<Order>; not the sibling Order::add"
               },
               {
                 "from": "src/validation.rs::Validator.validate",
@@ -2072,6 +2083,17 @@
                   "same-name"
                 ],
                 "why": "self.repo: Repo<User>; not a recursive call"
+              },
+              {
+                "from": "src/service.rs::OrderService.place",
+                "to": "src/model.rs::Order.new",
+                "line": 59,
+                "tags": [
+                  "qualified",
+                  "constructor",
+                  "same-name"
+                ],
+                "why": "`Order::new`"
               },
               {
                 "from": "src/service.rs::OrderService.parse",
@@ -2197,7 +2219,7 @@
             },
             "redundant": 0,
             "dynamic": 0,
-            "wrong_caller": 8,
+            "wrong_caller": 7,
             "by_label": {
               "ambiguous": {
                 "predicted": 20,
@@ -2213,7 +2235,7 @@
             "by_tag": {
               "alias": {
                 "gold": 1,
-                "found": 1
+                "found": 0
               },
               "arrow-function": {
                 "gold": 3,
@@ -2229,7 +2251,7 @@
               },
               "cross-file": {
                 "gold": 6,
-                "found": 6
+                "found": 5
               },
               "dispatch": {
                 "gold": 1,
@@ -2277,36 +2299,37 @@
               },
               "typed-receiver": {
                 "gold": 13,
-                "found": 6
+                "found": 7
               }
             },
             "false_positives": [
               {
-                "from": "src/auth.ts::parse",
-                "to": "src/auth.ts::parse",
+                "from": "src/config.ts::parse",
+                "to": "src/auth.ts::decode",
+                "label": "name-match",
+                "line": 14,
+                "note": "wrong caller: the call site is outside src/config.ts::parse's lines 1-4"
+              },
+              {
+                "from": "src/config.ts::parse",
+                "to": "src/config.ts::parse",
                 "label": "ambiguous",
                 "line": 2,
-                "note": "wrong caller: the call site is outside src/auth.ts::parse's lines 9-15"
+                "note": "trap (line 2): JSON.parse, not a project parse()"
               },
               {
-                "from": "src/auth.ts::parse",
-                "to": "src/config.ts::normalize",
-                "label": "name-match",
-                "line": 3,
-                "note": "wrong caller: the call site is outside src/auth.ts::parse's lines 9-15"
-              },
-              {
-                "from": "src/auth.ts::parse",
-                "to": "src/service.ts::UserService.get",
+                "from": "src/config.ts::parse",
+                "to": "src/storage.ts::Repository.get",
                 "label": "ambiguous",
                 "line": 53,
-                "note": "wrong caller: the call site is outside src/auth.ts::parse's lines 9-15"
+                "note": "wrong caller: the call site is outside src/config.ts::parse's lines 1-4"
               },
               {
-                "from": "src/config.ts::Config.load",
-                "to": "src/auth.ts::parse",
+                "from": "src/config.ts::parse",
+                "to": "src/validation.ts::validate",
                 "label": "ambiguous",
-                "line": 18
+                "line": 11,
+                "note": "wrong caller: the call site is outside src/config.ts::parse's lines 1-4"
               },
               {
                 "from": "src/formatting.ts::render",
@@ -2338,16 +2361,9 @@
               },
               {
                 "from": "src/index.ts::main",
-                "to": "src/service.ts::UserService.get",
+                "to": "src/storage.ts::Repository.get",
                 "label": "ambiguous",
                 "line": 25
-              },
-              {
-                "from": "src/models.ts::Order.save",
-                "to": "src/models.ts::Order.add",
-                "label": "ambiguous",
-                "line": 16,
-                "note": "wrong caller: the call site is outside src/models.ts::Order.save's lines 31-34"
               },
               {
                 "from": "src/models.ts::Order.total",
@@ -2369,11 +2385,10 @@
                 "line": 61
               },
               {
-                "from": "src/service.ts::UserService.get",
-                "to": "src/service.ts::UserService.get",
+                "from": "src/service.ts::UserService.login",
+                "to": "src/config.ts::parse",
                 "label": "ambiguous",
-                "line": 22,
-                "note": "wrong caller: the call site is outside src/service.ts::UserService.get's lines 33-35"
+                "line": 24
               },
               {
                 "from": "src/service.ts::UserService.register",
@@ -2389,7 +2404,7 @@
               },
               {
                 "from": "src/service.ts::UserService.settings",
-                "to": "src/service.ts::UserService.get",
+                "to": "src/storage.ts::Repository.get",
                 "label": "ambiguous",
                 "line": 30
               },
@@ -2401,6 +2416,13 @@
                 "note": "trap (line 14): Array.prototype.find, not a recursive Repository.find"
               },
               {
+                "from": "src/storage.ts::Repository.get",
+                "to": "src/storage.ts::Repository.get",
+                "label": "ambiguous",
+                "line": 22,
+                "note": "wrong caller: the call site is outside src/storage.ts::Repository.get's lines 9-11"
+              },
+              {
                 "from": "src/validation.ts::validate",
                 "to": "src/validation.ts::Validator.check",
                 "label": "name-match",
@@ -2410,9 +2432,19 @@
             ],
             "false_negatives": [
               {
-                "from": "src/config.ts::parse",
-                "to": "src/config.ts::normalize",
-                "line": 3,
+                "from": "src/auth.ts::parse",
+                "to": "src/validation.ts::validate",
+                "line": 11,
+                "tags": [
+                  "cross-file",
+                  "same-name"
+                ],
+                "why": "named import of the free function validate, not Validator.validate"
+              },
+              {
+                "from": "src/auth.ts::parse",
+                "to": "src/auth.ts::decode",
+                "line": 14,
                 "tags": [
                   "same-file"
                 ],
@@ -2428,15 +2460,6 @@
                 "why": "`new Config(...)` in Config's static factory"
               },
               {
-                "from": "src/config.ts::Config.load",
-                "to": "src/config.ts::parse",
-                "line": 18,
-                "tags": [
-                  "same-name"
-                ],
-                "why": "bare parse in config.ts is the module's own; not auth.parse or OrderService.parse"
-              },
-              {
                 "from": "src/models.ts::User.save",
                 "to": "src/storage.ts::Repository.add",
                 "line": 16,
@@ -2445,16 +2468,6 @@
                   "same-name"
                 ],
                 "why": "repo: Repository<User>; not Order.add"
-              },
-              {
-                "from": "src/models.ts::Order.save",
-                "to": "src/storage.ts::Repository.add",
-                "line": 32,
-                "tags": [
-                  "typed-receiver",
-                  "same-name"
-                ],
-                "why": "repo: Repository<Order>; not the sibling Order.add"
               },
               {
                 "from": "src/reports.ts::Report.render",
@@ -2551,6 +2564,16 @@
                   "same-name"
                 ],
                 "why": "user is a User; not Order.save"
+              },
+              {
+                "from": "src/service.ts::UserService.login",
+                "to": "src/auth.ts::parse",
+                "line": 24,
+                "tags": [
+                  "alias",
+                  "same-name"
+                ],
+                "why": "`import { parse as parseToken } from \"./auth\"`"
               },
               {
                 "from": "src/service.ts::UserService.settings",
@@ -2696,16 +2719,16 @@
         "calls": {
           "gold": 249,
           "predicted": 148,
-          "true_positives": 39,
-          "false_positives": 109,
-          "false_negatives": 210
+          "true_positives": 51,
+          "false_positives": 97,
+          "false_negatives": 198
         },
         "call_rates": {
-          "precision": 0.2635,
-          "recall": 0.1566,
-          "f1": 0.1965
+          "precision": 0.3446,
+          "recall": 0.2048,
+          "f1": 0.2569
         },
-        "wrong_caller": 57
+        "wrong_caller": 46
       },
       "summary": {
         "go": {
@@ -2724,16 +2747,16 @@
           "calls": {
             "gold": 45,
             "predicted": 35,
-            "true_positives": 18,
-            "false_positives": 17,
-            "false_negatives": 27
+            "true_positives": 17,
+            "false_positives": 18,
+            "false_negatives": 28
           },
           "call_rates": {
-            "precision": 0.5143,
-            "recall": 0.4,
-            "f1": 0.45
+            "precision": 0.4857,
+            "recall": 0.3778,
+            "f1": 0.425
           },
-          "wrong_caller": 7
+          "wrong_caller": 9
         },
         "java": {
           "symbols": {
@@ -2750,17 +2773,17 @@
           },
           "calls": {
             "gold": 59,
-            "predicted": 35,
-            "true_positives": 10,
-            "false_positives": 25,
-            "false_negatives": 49
+            "predicted": 0,
+            "true_positives": 0,
+            "false_positives": 0,
+            "false_negatives": 59
           },
           "call_rates": {
-            "precision": 0.2857,
-            "recall": 0.1695,
-            "f1": 0.2128
+            "precision": null,
+            "recall": 0.0,
+            "f1": null
           },
-          "wrong_caller": 22
+          "wrong_caller": 0
         },
         "python": {
           "symbols": {
@@ -2804,17 +2827,17 @@
           },
           "calls": {
             "gold": 52,
-            "predicted": 75,
-            "true_positives": 11,
-            "false_positives": 64,
-            "false_negatives": 41
+            "predicted": 37,
+            "true_positives": 4,
+            "false_positives": 33,
+            "false_negatives": 48
           },
           "call_rates": {
-            "precision": 0.1467,
-            "recall": 0.2115,
-            "f1": 0.1732
+            "precision": 0.1081,
+            "recall": 0.0769,
+            "f1": 0.0899
           },
-          "wrong_caller": 26
+          "wrong_caller": 3
         },
         "typescript": {
           "symbols": {
@@ -2831,26 +2854,26 @@
           },
           "calls": {
             "gold": 50,
-            "predicted": 1,
-            "true_positives": 0,
-            "false_positives": 1,
-            "false_negatives": 50
+            "predicted": 74,
+            "true_positives": 30,
+            "false_positives": 44,
+            "false_negatives": 20
           },
           "call_rates": {
-            "precision": 0.0,
-            "recall": 0.0,
-            "f1": 0.0
+            "precision": 0.4054,
+            "recall": 0.6,
+            "f1": 0.4839
           },
-          "wrong_caller": 1
+          "wrong_caller": 33
         }
       },
       "by_label": {
         "ambiguous": {
           "predicted": 119,
-          "true_positives": 27,
-          "false_positives": 92,
-          "precision": 0.2269,
-          "recall_share": 0.1084
+          "true_positives": 39,
+          "false_positives": 80,
+          "precision": 0.3277,
+          "recall_share": 0.1566
         },
         "name-match": {
           "predicted": 29,
@@ -2864,10 +2887,10 @@
         "go": {
           "ambiguous": {
             "predicted": 19,
-            "true_positives": 7,
-            "false_positives": 12,
-            "precision": 0.3684,
-            "recall_share": 0.1556
+            "true_positives": 6,
+            "false_positives": 13,
+            "precision": 0.3158,
+            "recall_share": 0.1333
           },
           "name-match": {
             "predicted": 16,
@@ -2877,15 +2900,7 @@
             "recall_share": 0.2444
           }
         },
-        "java": {
-          "ambiguous": {
-            "predicted": 35,
-            "true_positives": 10,
-            "false_positives": 25,
-            "precision": 0.2857,
-            "recall_share": 0.1695
-          }
-        },
+        "java": {},
         "python": {
           "ambiguous": {
             "predicted": 2,
@@ -2897,22 +2912,29 @@
         },
         "rust": {
           "ambiguous": {
-            "predicted": 62,
-            "true_positives": 10,
-            "false_positives": 52,
-            "precision": 0.1613,
-            "recall_share": 0.1923
+            "predicted": 25,
+            "true_positives": 3,
+            "false_positives": 22,
+            "precision": 0.12,
+            "recall_share": 0.0577
           },
           "name-match": {
-            "predicted": 13,
+            "predicted": 12,
             "true_positives": 1,
-            "false_positives": 12,
-            "precision": 0.0769,
+            "false_positives": 11,
+            "precision": 0.0833,
             "recall_share": 0.0192
           }
         },
         "typescript": {
           "ambiguous": {
+            "predicted": 73,
+            "true_positives": 30,
+            "false_positives": 43,
+            "precision": 0.411,
+            "recall_share": 0.6
+          },
+          "name-match": {
             "predicted": 1,
             "true_positives": 0,
             "false_positives": 1,
@@ -2924,23 +2946,23 @@
       "by_tag": {
         "alias": {
           "gold": 6,
-          "found": 2
+          "found": 1
         },
         "arrow-function": {
           "gold": 3,
-          "found": 0
+          "found": 3
         },
         "chained": {
           "gold": 10,
-          "found": 2
+          "found": 3
         },
         "constructor": {
           "gold": 51,
-          "found": 7
+          "found": 11
         },
         "cross-file": {
           "gold": 27,
-          "found": 7
+          "found": 9
         },
         "dispatch": {
           "gold": 3,
@@ -2960,15 +2982,15 @@
         },
         "interface-dispatch": {
           "gold": 4,
-          "found": 1
+          "found": 2
         },
         "method-vs-function": {
           "gold": 10,
-          "found": 3
+          "found": 1
         },
         "module-qualified": {
           "gold": 9,
-          "found": 1
+          "found": 3
         },
         "overload": {
           "gold": 3,
@@ -2976,7 +2998,7 @@
         },
         "qualified": {
           "gold": 22,
-          "found": 1
+          "found": 0
         },
         "recursion": {
           "gold": 5,
@@ -2988,7 +3010,7 @@
         },
         "same-name": {
           "gold": 102,
-          "found": 11
+          "found": 13
         },
         "self-call": {
           "gold": 25,
@@ -3008,7 +3030,7 @@
         },
         "typed-receiver": {
           "gold": 64,
-          "found": 8
+          "found": 11
         }
       },
       "detail": {
@@ -3031,18 +3053,18 @@
             "counts": {
               "gold": 45,
               "predicted": 35,
-              "true_positives": 18,
-              "false_positives": 17,
-              "false_negatives": 27
+              "true_positives": 17,
+              "false_positives": 18,
+              "false_negatives": 28
             },
             "redundant": 0,
             "dynamic": 0,
-            "wrong_caller": 7,
+            "wrong_caller": 9,
             "by_label": {
               "ambiguous": {
                 "predicted": 19,
-                "true_positives": 7,
-                "false_positives": 12
+                "true_positives": 6,
+                "false_positives": 13
               },
               "name-match": {
                 "predicted": 16,
@@ -3053,7 +3075,7 @@
             "by_tag": {
               "alias": {
                 "gold": 2,
-                "found": 2
+                "found": 1
               },
               "chained": {
                 "gold": 1,
@@ -3065,7 +3087,7 @@
               },
               "cross-file": {
                 "gold": 11,
-                "found": 4
+                "found": 3
               },
               "generic": {
                 "gold": 1,
@@ -3081,7 +3103,7 @@
               },
               "method-vs-function": {
                 "gold": 3,
-                "found": 2
+                "found": 1
               },
               "module-qualified": {
                 "gold": 2,
@@ -3097,7 +3119,7 @@
               },
               "same-name": {
                 "gold": 18,
-                "found": 7
+                "found": 6
               },
               "self-call": {
                 "gold": 4,
@@ -3110,37 +3132,39 @@
             },
             "false_positives": [
               {
-                "from": "auth/auth.go::Parse",
-                "to": "auth/auth.go::Parse",
-                "label": "ambiguous",
-                "line": 76,
-                "note": "wrong caller: the call site is outside auth/auth.go::Parse's lines 19-25"
-              },
-              {
-                "from": "auth/auth.go::Parse",
+                "from": "config/config.go::Parse",
                 "to": "config/config.go::New",
                 "label": "name-match",
-                "line": 22
+                "line": 22,
+                "note": "wrong caller: the call site is outside config/config.go::Parse's lines 10-16"
               },
               {
-                "from": "auth/auth.go::Parse",
-                "to": "rust/src/auth.rs::decode [other fixture]",
+                "from": "config/config.go::Parse",
+                "to": "config/config.go::Parse",
+                "label": "ambiguous",
+                "line": 76,
+                "note": "wrong caller: the call site is outside config/config.go::Parse's lines 10-16"
+              },
+              {
+                "from": "config/config.go::Parse",
+                "to": "typescript/src/auth.ts::decode [other fixture]",
                 "label": "ambiguous",
                 "line": 24,
+                "note": "wrong caller: the call site is outside config/config.go::Parse's lines 10-16"
+              },
+              {
+                "from": "config/config.go::Parse",
+                "to": "typescript/src/config.ts::normalize [other fixture]",
+                "label": "ambiguous",
+                "line": 15,
                 "note": "endpoint is not a gold symbol"
               },
               {
-                "from": "auth/auth.go::Parse",
-                "to": "rust/src/config.rs::normalize [other fixture]",
+                "from": "config/config.go::Parse",
+                "to": "validation/validation.go::Validate",
                 "label": "ambiguous",
-                "line": 15,
-                "note": "wrong caller: the call site is outside auth/auth.go::Parse's lines 19-25"
-              },
-              {
-                "from": "config/config.go::Load",
-                "to": "auth/auth.go::Parse",
-                "label": "ambiguous",
-                "line": 38
+                "line": 21,
+                "note": "wrong caller: the call site is outside config/config.go::Parse's lines 10-16"
               },
               {
                 "from": "report/report.go::Join",
@@ -3183,6 +3207,12 @@
                 "note": "wrong caller: the call site is outside report/report.go::Render's lines 35-37"
               },
               {
+                "from": "service/service.go::UserService.Login",
+                "to": "config/config.go::Parse",
+                "label": "ambiguous",
+                "line": 36
+              },
+              {
                 "from": "service/service.go::UserService.Register",
                 "to": "config/config.go::New",
                 "label": "name-match",
@@ -3215,13 +3245,24 @@
               },
               {
                 "from": "validation/validation.go::Validate",
-                "to": "java/src/shop/validation/Validator.java::Validator.check [other fixture]",
+                "to": "typescript/src/validation.ts::Validator.check [other fixture]",
                 "label": "ambiguous",
                 "line": 32,
                 "note": "wrong caller: the call site is outside validation/validation.go::Validate's lines 10-12"
               }
             ],
             "false_negatives": [
+              {
+                "from": "auth/auth.go::Parse",
+                "to": "validation/validation.go::Validate",
+                "line": 21,
+                "tags": [
+                  "cross-file",
+                  "same-name",
+                  "method-vs-function"
+                ],
+                "why": "`validation.Validate` is the package function, not the method Validator.Validate"
+              },
               {
                 "from": "auth/auth.go::Parse",
                 "to": "auth/auth.go::decode",
@@ -3239,15 +3280,6 @@
                   "same-file"
                 ],
                 "why": "package-local function"
-              },
-              {
-                "from": "config/config.go::Load",
-                "to": "config/config.go::Parse",
-                "line": 38,
-                "tags": [
-                  "same-name"
-                ],
-                "why": "unqualified Parse inside package config is config.Parse; not auth.Parse or OrderService.Parse"
               },
               {
                 "from": "model/model.go::User.Save",
@@ -3326,6 +3358,16 @@
                   "same-name"
                 ],
                 "why": "user is *model.User; not Order.Save"
+              },
+              {
+                "from": "service/service.go::UserService.Login",
+                "to": "auth/auth.go::Parse",
+                "line": 36,
+                "tags": [
+                  "alias",
+                  "same-name"
+                ],
+                "why": "`tok` is an import alias for package auth"
               },
               {
                 "from": "service/service.go::UserService.Settings",
@@ -3500,21 +3542,15 @@
           "calls": {
             "counts": {
               "gold": 59,
-              "predicted": 35,
-              "true_positives": 10,
-              "false_positives": 25,
-              "false_negatives": 49
+              "predicted": 0,
+              "true_positives": 0,
+              "false_positives": 0,
+              "false_negatives": 59
             },
             "redundant": 0,
             "dynamic": 0,
-            "wrong_caller": 22,
-            "by_label": {
-              "ambiguous": {
-                "predicted": 35,
-                "true_positives": 10,
-                "false_positives": 25
-              }
-            },
+            "wrong_caller": 0,
+            "by_label": {},
             "by_tag": {
               "alias": {
                 "gold": 1,
@@ -3522,11 +3558,11 @@
               },
               "chained": {
                 "gold": 3,
-                "found": 1
+                "found": 0
               },
               "constructor": {
                 "gold": 15,
-                "found": 4
+                "found": 0
               },
               "dispatch": {
                 "gold": 1,
@@ -3554,7 +3590,7 @@
               },
               "qualified": {
                 "gold": 11,
-                "found": 1
+                "found": 0
               },
               "recursion": {
                 "gold": 1,
@@ -3562,7 +3598,7 @@
               },
               "same-name": {
                 "gold": 22,
-                "found": 1
+                "found": 0
               },
               "self-call": {
                 "gold": 10,
@@ -3578,185 +3614,10 @@
               },
               "typed-receiver": {
                 "gold": 14,
-                "found": 4
+                "found": 0
               }
             },
-            "false_positives": [
-              {
-                "from": "src/shop/config/Config.java::Config.load",
-                "to": "rust/src/model.rs::Order.new [other fixture]",
-                "label": "ambiguous",
-                "line": 39,
-                "note": "wrong caller: the call site is outside src/shop/config/Config.java::Config.load's lines 29-31"
-              },
-              {
-                "from": "src/shop/model/Order.java::Order.total",
-                "to": "rust/src/utils.rs::map [other fixture]",
-                "label": "ambiguous",
-                "line": 37,
-                "note": "wrong caller: the call site is outside src/shop/model/Order.java::Order.total's lines 22-24"
-              },
-              {
-                "from": "src/shop/model/User.java::User.displayName",
-                "to": "typescript/src/models.ts::formatName [other fixture]",
-                "label": "ambiguous",
-                "line": 21,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/shop/model/User.java::User.save",
-                "to": "src/shop/store/Repository.java::Repository.add(T, int)",
-                "label": "ambiguous",
-                "line": 12,
-                "note": "wrong caller: the call site is outside src/shop/model/User.java::User.save's lines 15-18"
-              },
-              {
-                "from": "src/shop/report/ConsoleSink.java::ConsoleSink.write",
-                "to": "src/shop/store/Repository.java::Repository.add(T, int)",
-                "label": "ambiguous",
-                "line": 12,
-                "note": "wrong caller: the call site is outside src/shop/report/ConsoleSink.java::ConsoleSink.write's lines 5-8"
-              },
-              {
-                "from": "src/shop/report/OrderReport.java::OrderReport.summary",
-                "to": "rust/src/report.rs::OrderReport.render_row [other fixture]",
-                "label": "ambiguous",
-                "line": 76,
-                "note": "wrong caller: the call site is outside src/shop/report/OrderReport.java::OrderReport.summary's lines 22-24"
-              },
-              {
-                "from": "src/shop/report/OrderReport.java::OrderReport.summary",
-                "to": "rust/src/report.rs::render [other fixture]",
-                "label": "ambiguous",
-                "line": 32,
-                "note": "wrong caller: the call site is outside src/shop/report/OrderReport.java::OrderReport.summary's lines 22-24"
-              },
-              {
-                "from": "src/shop/report/OrderReport.java::OrderReport.summary",
-                "to": "rust/src/utils.rs::map [other fixture]",
-                "label": "ambiguous",
-                "line": 73,
-                "note": "wrong caller: the call site is outside src/shop/report/OrderReport.java::OrderReport.summary's lines 22-24"
-              },
-              {
-                "from": "src/shop/report/Report.java::Report.header",
-                "to": "rust/src/report.rs::render [other fixture]",
-                "label": "ambiguous",
-                "line": 12,
-                "note": "wrong caller: the call site is outside src/shop/report/Report.java::Report.header's lines 14-16"
-              },
-              {
-                "from": "src/shop/report/Report.java::Report.renderRow",
-                "to": "rust/src/report.rs::join [other fixture]",
-                "label": "ambiguous",
-                "line": 19,
-                "note": "wrong caller: the call site is outside src/shop/report/Report.java::Report.renderRow's lines 27-29"
-              },
-              {
-                "from": "src/shop/report/Report.java::Report.renderRow",
-                "to": "src/shop/model/Order.java::Order.total",
-                "label": "ambiguous",
-                "line": 48,
-                "note": "wrong caller: the call site is outside src/shop/report/Report.java::Report.renderRow's lines 27-29"
-              },
-              {
-                "from": "src/shop/report/Report.java::Report.renderRow",
-                "to": "typescript/src/models.ts::formatName [other fixture]",
-                "label": "ambiguous",
-                "line": 48,
-                "note": "wrong caller: the call site is outside src/shop/report/Report.java::Report.renderRow's lines 27-29"
-              },
-              {
-                "from": "src/shop/service/OrderService.java::OrderService.place",
-                "to": "rust/src/model.rs::Order.new [other fixture]",
-                "label": "ambiguous",
-                "line": 59,
-                "note": "wrong caller: the call site is outside src/shop/service/OrderService.java::OrderService.place's lines 19-23"
-              },
-              {
-                "from": "src/shop/service/OrderService.java::OrderService.place",
-                "to": "src/shop/model/User.java::User.save",
-                "label": "ambiguous",
-                "line": 40,
-                "note": "wrong caller: the call site is outside src/shop/service/OrderService.java::OrderService.place's lines 19-23"
-              },
-              {
-                "from": "src/shop/service/UserService.java::UserService",
-                "to": "src/shop/validation/Validator.java::Validator",
-                "label": "ambiguous",
-                "line": 22
-              },
-              {
-                "from": "src/shop/service/UserService.java::UserService.login",
-                "to": "rust/src/auth.rs::parse [other fixture]",
-                "label": "ambiguous",
-                "line": 24,
-                "note": "wrong caller: the call site is outside src/shop/service/UserService.java::UserService.login's lines 33-36"
-              },
-              {
-                "from": "src/shop/service/UserService.java::UserService.login",
-                "to": "rust/src/auth.rs::refresh [other fixture]",
-                "label": "ambiguous",
-                "line": 24,
-                "note": "wrong caller: the call site is outside src/shop/service/UserService.java::UserService.login's lines 33-36"
-              },
-              {
-                "from": "src/shop/service/UserService.java::UserService.names",
-                "to": "rust/src/model.rs::User.display_name [other fixture]",
-                "label": "ambiguous",
-                "line": 45,
-                "note": "wrong caller: the call site is outside src/shop/service/UserService.java::UserService.names's lines 47-49"
-              },
-              {
-                "from": "src/shop/service/UserService.java::UserService.names",
-                "to": "rust/src/utils.rs::map [other fixture]",
-                "label": "ambiguous",
-                "line": 38,
-                "note": "wrong caller: the call site is outside src/shop/service/UserService.java::UserService.names's lines 47-49"
-              },
-              {
-                "from": "src/shop/service/UserService.java::UserService.register",
-                "to": "rust/src/model.rs::Order.new [other fixture]",
-                "label": "ambiguous",
-                "line": 26,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/shop/service/UserService.java::UserService.register",
-                "to": "rust/src/validation.rs::validate [other fixture]",
-                "label": "ambiguous",
-                "line": 17,
-                "note": "wrong caller: the call site is outside src/shop/service/UserService.java::UserService.register's lines 25-31"
-              },
-              {
-                "from": "src/shop/service/UserService.java::UserService.settings",
-                "to": "src/shop/store/Repository.java::Repository.get",
-                "label": "ambiguous",
-                "line": 28,
-                "note": "wrong caller: the call site is outside src/shop/service/UserService.java::UserService.settings's lines 38-41"
-              },
-              {
-                "from": "src/shop/store/Repository.java::Repository.add(T, int)",
-                "to": "src/shop/store/Repository.java::Repository.add(T, int)",
-                "label": "ambiguous",
-                "line": 27,
-                "note": "wrong caller: the call site is outside src/shop/store/Repository.java::Repository.add(T, int)'s lines 17-22"
-              },
-              {
-                "from": "src/shop/store/Repository.java::Repository.find",
-                "to": "src/shop/store/Repository.java::Repository.find",
-                "label": "ambiguous",
-                "line": 14,
-                "note": "wrong caller: the call site is outside src/shop/store/Repository.java::Repository.find's lines 28-30"
-              },
-              {
-                "from": "src/shop/store/Repository.java::Repository.get",
-                "to": "src/shop/store/Repository.java::Repository.get",
-                "label": "ambiguous",
-                "line": 31,
-                "note": "wrong caller: the call site is outside src/shop/store/Repository.java::Repository.get's lines 24-26"
-              }
-            ],
+            "false_positives": [],
             "false_negatives": [
               {
                 "from": "src/shop/auth/Auth.java::Auth.parse",
@@ -3818,6 +3679,15 @@
               },
               {
                 "from": "src/shop/service/OrderService.java::OrderService.place",
+                "to": "src/shop/model/Order.java::Order",
+                "line": 20,
+                "tags": [
+                  "constructor"
+                ],
+                "why": "`new Order(user, items)`"
+              },
+              {
+                "from": "src/shop/service/OrderService.java::OrderService.place",
                 "to": "src/shop/model/Order.java::Order.save",
                 "line": 21,
                 "tags": [
@@ -3825,6 +3695,15 @@
                   "same-name"
                 ],
                 "why": "order is an Order; not User.save"
+              },
+              {
+                "from": "src/shop/service/OrderService.java::OrderService.place",
+                "to": "src/shop/model/Order.java::Order.total",
+                "line": 22,
+                "tags": [
+                  "typed-receiver"
+                ],
+                "why": "order is an Order"
               },
               {
                 "from": "src/shop/service/OrderService.java::OrderService.parse",
@@ -3854,6 +3733,15 @@
                   "self-call"
                 ],
                 "why": "unqualified static call within Config"
+              },
+              {
+                "from": "src/shop/config/Config.java::Config.load",
+                "to": "src/shop/config/Config.java::Config",
+                "line": 30,
+                "tags": [
+                  "constructor"
+                ],
+                "why": "`new Config(...)` in Config's static factory"
               },
               {
                 "from": "src/shop/config/Config.java::Config.load",
@@ -3934,6 +3822,24 @@
                 "why": "unqualified render is inherited from Report; not Formatting.render"
               },
               {
+                "from": "src/shop/report/OrderReport.java::OrderReport.empty",
+                "to": "src/shop/report/OrderReport.java::OrderReport",
+                "line": 27,
+                "tags": [
+                  "constructor"
+                ],
+                "why": "`new OrderReport(List.of())`"
+              },
+              {
+                "from": "src/shop/report/OrderReport.java::OrderReport.empty",
+                "to": "src/shop/report/OrderReport.java::OrderReport.summary",
+                "line": 27,
+                "tags": [
+                  "chained"
+                ],
+                "why": "`.summary()` on the new OrderReport"
+              },
+              {
                 "from": "src/shop/report/Report.java::Report.header",
                 "to": "src/shop/report/Formatting.java::Formatting.render",
                 "line": 15,
@@ -4012,6 +3918,25 @@
                 "why": "the field validator is a Validator; not the static Validation.validate"
               },
               {
+                "from": "src/shop/service/UserService.java::UserService.register",
+                "to": "src/shop/model/User.java::User",
+                "line": 29,
+                "tags": [
+                  "constructor"
+                ],
+                "why": "`new User(name, email)`"
+              },
+              {
+                "from": "src/shop/service/UserService.java::UserService.register",
+                "to": "src/shop/model/User.java::User.save",
+                "line": 30,
+                "tags": [
+                  "typed-receiver",
+                  "same-name"
+                ],
+                "why": "user is a User; not Order.save"
+              },
+              {
                 "from": "src/shop/service/UserService.java::UserService.login",
                 "to": "src/shop/auth/Auth.java::Auth.parse",
                 "line": 34,
@@ -4029,6 +3954,15 @@
                   "qualified"
                 ],
                 "why": "`Auth.refresh`"
+              },
+              {
+                "from": "src/shop/service/UserService.java::UserService.settings",
+                "to": "src/shop/config/Config.java::Config.load",
+                "line": 39,
+                "tags": [
+                  "qualified"
+                ],
+                "why": "`Config.load`"
               },
               {
                 "from": "src/shop/service/UserService.java::UserService.settings",
@@ -4059,6 +3993,24 @@
                   "same-name"
                 ],
                 "why": "`Utils.map`, not Stream.map"
+              },
+              {
+                "from": "src/shop/service/UserService.java::UserService.names",
+                "to": "src/shop/store/Repository.java::Repository.all",
+                "line": 48,
+                "tags": [
+                  "typed-receiver"
+                ],
+                "why": "repo is a Repository"
+              },
+              {
+                "from": "src/shop/service/UserService.java::UserService.names",
+                "to": "src/shop/model/User.java::User.displayName",
+                "line": 48,
+                "tags": [
+                  "typed-receiver"
+                ],
+                "why": "`user.displayName()` in a lambda over Users"
               },
               {
                 "from": "src/shop/validation/Validator.java::Validator.validate",
@@ -4326,17 +4278,17 @@
             "false_positives": [
               {
                 "from": "shop/validation.py::Validator.__init__",
-                "to": "java/src/shop/validation/Validator.java::Validator [other fixture]",
-                "label": "ambiguous",
-                "line": 14,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "shop/validation.py::Validator.__init__",
                 "to": "shop/validation.py::Validator.__init__",
                 "label": "ambiguous",
                 "line": 25,
                 "note": "wrong caller: the call site is outside shop/validation.py::Validator.__init__'s lines 13-14"
+              },
+              {
+                "from": "shop/validation.py::Validator.__init__",
+                "to": "typescript/src/validation.ts::Validator [other fixture]",
+                "label": "ambiguous",
+                "line": 14,
+                "note": "endpoint is not a gold symbol"
               }
             ],
             "false_negatives": [
@@ -4763,24 +4715,24 @@
           "calls": {
             "counts": {
               "gold": 52,
-              "predicted": 75,
-              "true_positives": 11,
-              "false_positives": 64,
-              "false_negatives": 41
+              "predicted": 37,
+              "true_positives": 4,
+              "false_positives": 33,
+              "false_negatives": 48
             },
             "redundant": 0,
             "dynamic": 0,
-            "wrong_caller": 26,
+            "wrong_caller": 3,
             "by_label": {
               "ambiguous": {
-                "predicted": 62,
-                "true_positives": 10,
-                "false_positives": 52
+                "predicted": 25,
+                "true_positives": 3,
+                "false_positives": 22
               },
               "name-match": {
-                "predicted": 13,
+                "predicted": 12,
                 "true_positives": 1,
-                "false_positives": 12
+                "false_positives": 11
               }
             },
             "by_tag": {
@@ -4798,7 +4750,7 @@
               },
               "cross-file": {
                 "gold": 6,
-                "found": 3
+                "found": 1
               },
               "generic": {
                 "gold": 1,
@@ -4810,7 +4762,7 @@
               },
               "method-vs-function": {
                 "gold": 3,
-                "found": 1
+                "found": 0
               },
               "module-qualified": {
                 "gold": 1,
@@ -4822,15 +4774,15 @@
               },
               "recursion": {
                 "gold": 1,
-                "found": 1
+                "found": 0
               },
               "same-file": {
                 "gold": 8,
-                "found": 6
+                "found": 2
               },
               "same-name": {
                 "gold": 30,
-                "found": 3
+                "found": 1
               },
               "self-call": {
                 "gold": 5,
@@ -4847,169 +4799,11 @@
             },
             "false_positives": [
               {
-                "from": "src/auth.rs::decode",
-                "to": "java/src/shop/auth/Token.java::Token [other fixture]",
-                "label": "ambiguous",
-                "line": 18,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/auth.rs::parse",
-                "to": "java/src/shop/store/Repository.java::Repository.get [other fixture]",
-                "label": "ambiguous",
-                "line": 45,
-                "note": "wrong caller: the call site is outside src/auth.rs::parse's lines 10-16"
-              },
-              {
-                "from": "src/auth.rs::parse",
-                "to": "src/config.rs::normalize",
-                "label": "ambiguous",
-                "line": 9,
-                "note": "wrong caller: the call site is outside src/auth.rs::parse's lines 10-16"
-              },
-              {
-                "from": "src/auth.rs::parse",
-                "to": "src/utils.rs::map",
-                "label": "ambiguous",
-                "line": 5,
-                "note": "wrong caller: the call site is outside src/auth.rs::parse's lines 10-16"
-              },
-              {
-                "from": "src/auth.rs::refresh",
-                "to": "java/src/shop/auth/Token.java::Token [other fixture]",
-                "label": "ambiguous",
-                "line": 26,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/auth.rs::refresh",
-                "to": "java/src/shop/store/Repository.java::Repository.get [other fixture]",
-                "label": "ambiguous",
-                "line": 21,
-                "note": "wrong caller: the call site is outside src/auth.rs::refresh's lines 26-40"
-              },
-              {
                 "from": "src/config.rs::Config.theme",
-                "to": "java/src/shop/store/Repository.java::Repository.get [other fixture]",
+                "to": "typescript/src/storage.ts::Repository.get [other fixture]",
                 "label": "ambiguous",
                 "line": 50,
                 "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/config.rs::normalize",
-                "to": "java/src/shop/model/Order.java::Order.items [other fixture]",
-                "label": "name-match",
-                "line": 13,
-                "note": "wrong caller: the call site is outside src/config.rs::normalize's lines 8-12"
-              },
-              {
-                "from": "src/config.rs::normalize",
-                "to": "src/utils.rs::map",
-                "label": "ambiguous",
-                "line": 9,
-                "note": "trap (line 10): Iterator::map, not utils::map"
-              },
-              {
-                "from": "src/main.rs::dispatch",
-                "to": "src/main.rs::handler",
-                "label": "ambiguous",
-                "line": 23,
-                "note": "trap (line 22): the local closure `handler` shadows the fn handler"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "java/src/shop/config/Config.java::Config [other fixture]",
-                "label": "ambiguous",
-                "line": 27,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "java/src/shop/config/Config.java::Config.get [other fixture]",
-                "label": "ambiguous",
-                "line": 27,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "java/src/shop/service/OrderService.java::OrderService [other fixture]",
-                "label": "ambiguous",
-                "line": 21,
-                "note": "wrong caller: the call site is outside src/main.rs::main's lines 25-28"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "java/src/shop/service/OrderService.java::OrderService.place [other fixture]",
-                "label": "ambiguous",
-                "line": 23,
-                "note": "wrong caller: the call site is outside src/main.rs::main's lines 25-28"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "java/src/shop/service/UserService.java::UserService [other fixture]",
-                "label": "ambiguous",
-                "line": 20,
-                "note": "wrong caller: the call site is outside src/main.rs::main's lines 25-28"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "java/src/shop/service/UserService.java::UserService.register [other fixture]",
-                "label": "ambiguous",
-                "line": 22,
-                "note": "wrong caller: the call site is outside src/main.rs::main's lines 25-28"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "java/src/shop/store/Repository.java::Repository [other fixture]",
-                "label": "ambiguous",
-                "line": 19,
-                "note": "wrong caller: the call site is outside src/main.rs::main's lines 25-28"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "java/src/shop/store/Repository.java::Repository.get [other fixture]",
-                "label": "ambiguous",
-                "line": 25,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "src/main.rs::dispatch",
-                "label": "ambiguous",
-                "line": 25
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "src/main.rs::handler",
-                "label": "ambiguous",
-                "line": 26
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "src/model.rs::format_name",
-                "label": "ambiguous",
-                "line": 24,
-                "note": "wrong caller: the call site is outside src/main.rs::main's lines 25-28"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "src/report.rs::join",
-                "label": "ambiguous",
-                "line": 25
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "src/report.rs::publish",
-                "label": "ambiguous",
-                "line": 24,
-                "note": "wrong caller: the call site is outside src/main.rs::main's lines 25-28"
-              },
-              {
-                "from": "src/main.rs::main",
-                "to": "typescript/src/models.ts::formatName [other fixture]",
-                "label": "ambiguous",
-                "line": 21,
-                "note": "wrong caller: the call site is outside src/main.rs::main's lines 25-28"
               },
               {
                 "from": "src/main.rs::run",
@@ -5090,92 +4884,50 @@
               },
               {
                 "from": "src/main.rs::run",
-                "to": "java/src/shop/config/Config.java::Config [other fixture]",
-                "label": "ambiguous",
-                "line": 45,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/config/Config.java::Config.load [other fixture]",
-                "label": "ambiguous",
-                "line": 43,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/model/Item.java::Item [other fixture]",
-                "label": "ambiguous",
-                "line": 40,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/report/ConsoleSink.java::ConsoleSink [other fixture]",
-                "label": "ambiguous",
-                "line": 44,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/report/OrderReport.java::OrderReport [other fixture]",
-                "label": "ambiguous",
-                "line": 44,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/service/OrderService.java::OrderService [other fixture]",
-                "label": "ambiguous",
-                "line": 38,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/service/OrderService.java::OrderService.place [other fixture]",
-                "label": "ambiguous",
-                "line": 37,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/service/UserService.java::UserService [other fixture]",
-                "label": "ambiguous",
-                "line": 37,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/service/UserService.java::UserService.register [other fixture]",
-                "label": "ambiguous",
-                "line": 33,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/store/Repository.java::Repository [other fixture]",
-                "label": "ambiguous",
-                "line": 37,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
-                "to": "java/src/shop/store/Repository.java::Repository.get [other fixture]",
-                "label": "ambiguous",
-                "line": 44,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/main.rs::run",
                 "to": "src/main.rs::run",
                 "label": "ambiguous",
                 "line": 42
               },
               {
                 "from": "src/main.rs::run",
-                "to": "src/model.rs::Order.new",
+                "to": "src/validation.rs::Validator.new",
                 "label": "ambiguous",
                 "line": 31
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/config.ts::Config [other fixture]",
+                "label": "ambiguous",
+                "line": 45,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/config.ts::Config.load [other fixture]",
+                "label": "ambiguous",
+                "line": 43,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/index.ts::dispatch [other fixture]",
+                "label": "ambiguous",
+                "line": 39,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/index.ts::handler [other fixture]",
+                "label": "ambiguous",
+                "line": 40,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/models.ts::Item [other fixture]",
+                "label": "ambiguous",
+                "line": 40,
+                "note": "endpoint is not a gold symbol"
               },
               {
                 "from": "src/main.rs::run",
@@ -5185,11 +4937,67 @@
                 "note": "endpoint is not a gold symbol"
               },
               {
-                "from": "src/model.rs::Order.new",
-                "to": "src/model.rs::Order.new",
+                "from": "src/main.rs::run",
+                "to": "typescript/src/reports.ts::ConsoleSink [other fixture]",
                 "label": "ambiguous",
-                "line": 7,
-                "note": "wrong caller: the call site is outside src/model.rs::Order.new's lines 39-41"
+                "line": 44,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/reports.ts::OrderReport [other fixture]",
+                "label": "ambiguous",
+                "line": 44,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/reports.ts::publish [other fixture]",
+                "label": "ambiguous",
+                "line": 44,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/service.ts::OrderService [other fixture]",
+                "label": "ambiguous",
+                "line": 38,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/service.ts::OrderService.place [other fixture]",
+                "label": "ambiguous",
+                "line": 40,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/service.ts::UserService [other fixture]",
+                "label": "ambiguous",
+                "line": 37,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/service.ts::UserService.register [other fixture]",
+                "label": "ambiguous",
+                "line": 39,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/storage.ts::Repository [other fixture]",
+                "label": "ambiguous",
+                "line": 37,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "typescript/src/storage.ts::Repository.get [other fixture]",
+                "label": "ambiguous",
+                "line": 39,
+                "note": "endpoint is not a gold symbol"
               },
               {
                 "from": "src/model.rs::format_name",
@@ -5200,7 +5008,7 @@
               },
               {
                 "from": "src/report.rs::OrderReport.render_row",
-                "to": "java/src/shop/model/Order.java::Order.total [other fixture]",
+                "to": "typescript/src/models.ts::Order.total [other fixture]",
                 "label": "ambiguous",
                 "line": 29,
                 "note": "wrong caller: the call site is outside src/report.rs::OrderReport.render_row's lines 68-70"
@@ -5209,88 +5017,46 @@
                 "from": "src/report.rs::join",
                 "to": "src/report.rs::join",
                 "label": "ambiguous",
-                "line": 30,
-                "note": "trap (line 30): slice join; report::join does not recurse"
+                "line": 12,
+                "note": "wrong caller: the call site is outside src/report.rs::join's lines 29-31"
               },
               {
-                "from": "src/report.rs::publish",
-                "to": "java/src/shop/report/ConsoleSink.java::ConsoleSink.write [other fixture]",
+                "from": "src/validation.rs::Validator.new",
+                "to": "src/validation.rs::Validator.new",
                 "label": "ambiguous",
-                "line": 61,
-                "note": "wrong caller: the call site is outside src/report.rs::publish's lines 82-84"
-              },
-              {
-                "from": "src/report.rs::publish",
-                "to": "src/report.rs::render",
-                "label": "ambiguous",
-                "line": 61,
-                "note": "wrong caller: the call site is outside src/report.rs::publish's lines 82-84"
-              },
-              {
-                "from": "src/report.rs::render",
-                "to": "java/src/shop/report/Report.java::Report.header [other fixture]",
-                "label": "ambiguous",
-                "line": 15,
-                "note": "wrong caller: the call site is outside src/report.rs::render's lines 25-27"
-              },
-              {
-                "from": "src/report.rs::render",
-                "to": "java/src/shop/report/Report.java::Report.renderRow [other fixture]",
-                "label": "ambiguous",
-                "line": 32,
-                "note": "wrong caller: the call site is outside src/report.rs::render's lines 25-27"
-              },
-              {
-                "from": "src/report.rs::render",
-                "to": "java/src/shop/store/Repository.java::Repository.add [other fixture]",
-                "label": "ambiguous",
-                "line": 20,
-                "note": "wrong caller: the call site is outside src/report.rs::render's lines 25-27"
-              },
-              {
-                "from": "src/report.rs::render",
-                "to": "src/report.rs::OrderReport.render_row",
-                "label": "ambiguous",
-                "line": 16,
-                "note": "wrong caller: the call site is outside src/report.rs::render's lines 25-27"
-              },
-              {
-                "from": "src/report.rs::render",
-                "to": "src/report.rs::join",
-                "label": "ambiguous",
-                "line": 17,
-                "note": "wrong caller: the call site is outside src/report.rs::render's lines 25-27"
-              },
-              {
-                "from": "src/report.rs::render",
-                "to": "src/utils.rs::map",
-                "label": "ambiguous",
-                "line": 44,
-                "note": "wrong caller: the call site is outside src/report.rs::render's lines 25-27"
-              },
-              {
-                "from": "src/utils.rs::map",
-                "to": "java/src/shop/store/Repository.java::Repository.add [other fixture]",
-                "label": "ambiguous",
-                "line": 14,
-                "note": "wrong caller: the call site is outside src/utils.rs::map's lines 1-7"
-              },
-              {
-                "from": "src/validation.rs::validate",
-                "to": "java/src/shop/store/Repository.java::Repository.all [other fixture]",
-                "label": "ambiguous",
-                "line": 5,
-                "note": "endpoint is not a gold symbol"
-              },
-              {
-                "from": "src/validation.rs::validate",
-                "to": "java/src/shop/validation/Validator.java::Validator.check [other fixture]",
-                "label": "ambiguous",
-                "line": 17,
-                "note": "wrong caller: the call site is outside src/validation.rs::validate's lines 3-5"
+                "line": 18
               }
             ],
             "false_negatives": [
+              {
+                "from": "src/auth.rs::parse",
+                "to": "src/validation.rs::validate",
+                "line": 12,
+                "tags": [
+                  "cross-file",
+                  "same-name",
+                  "method-vs-function"
+                ],
+                "why": "`use crate::validation::validate` binds the free function, not Validator::validate"
+              },
+              {
+                "from": "src/auth.rs::parse",
+                "to": "src/auth.rs::decode",
+                "line": 15,
+                "tags": [
+                  "same-file"
+                ],
+                "why": "module-private function"
+              },
+              {
+                "from": "src/auth.rs::refresh",
+                "to": "src/auth.rs::refresh",
+                "line": 31,
+                "tags": [
+                  "recursion"
+                ],
+                "why": "refresh calls itself on an expired token"
+              },
               {
                 "from": "src/config.rs::parse",
                 "to": "src/config.rs::normalize",
@@ -5597,6 +5363,15 @@
                 "why": "`config::parse`; not auth::parse, Theme::parse or OrderService::parse itself"
               },
               {
+                "from": "src/main.rs::main",
+                "to": "src/main.rs::run",
+                "line": 27,
+                "tags": [
+                  "same-file"
+                ],
+                "why": "crate-root function"
+              },
+              {
                 "from": "src/main.rs::run",
                 "to": "src/service.rs::UserService.new",
                 "line": 31,
@@ -5659,6 +5434,25 @@
               },
               {
                 "from": "src/main.rs::run",
+                "to": "src/main.rs::dispatch",
+                "line": 39,
+                "tags": [
+                  "same-file"
+                ],
+                "why": "crate-root function"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "src/main.rs::handler",
+                "line": 40,
+                "tags": [
+                  "same-file",
+                  "same-name"
+                ],
+                "why": "the crate-root fn handler; run has no local of that name"
+              },
+              {
+                "from": "src/main.rs::run",
                 "to": "src/report.rs::OrderReport.new",
                 "line": 41,
                 "tags": [
@@ -5667,6 +5461,15 @@
                   "same-name"
                 ],
                 "why": "`OrderReport::new`"
+              },
+              {
+                "from": "src/main.rs::run",
+                "to": "src/report.rs::publish",
+                "line": 42,
+                "tags": [
+                  "cross-file"
+                ],
+                "why": "imported from report"
               },
               {
                 "from": "src/main.rs::run",
@@ -5721,16 +5524,21 @@
           "calls": {
             "counts": {
               "gold": 50,
-              "predicted": 1,
-              "true_positives": 0,
-              "false_positives": 1,
-              "false_negatives": 50
+              "predicted": 74,
+              "true_positives": 30,
+              "false_positives": 44,
+              "false_negatives": 20
             },
             "redundant": 0,
             "dynamic": 0,
-            "wrong_caller": 1,
+            "wrong_caller": 33,
             "by_label": {
               "ambiguous": {
+                "predicted": 73,
+                "true_positives": 30,
+                "false_positives": 43
+              },
+              "name-match": {
                 "predicted": 1,
                 "true_positives": 0,
                 "false_positives": 1
@@ -5743,19 +5551,19 @@
               },
               "arrow-function": {
                 "gold": 3,
-                "found": 0
+                "found": 3
               },
               "chained": {
                 "gold": 2,
-                "found": 0
+                "found": 2
               },
               "constructor": {
                 "gold": 11,
-                "found": 0
+                "found": 8
               },
               "cross-file": {
                 "gold": 6,
-                "found": 0
+                "found": 5
               },
               "dispatch": {
                 "gold": 1,
@@ -5771,7 +5579,7 @@
               },
               "interface-dispatch": {
                 "gold": 1,
-                "found": 0
+                "found": 1
               },
               "method-vs-function": {
                 "gold": 1,
@@ -5779,19 +5587,19 @@
               },
               "module-qualified": {
                 "gold": 3,
-                "found": 0
+                "found": 2
               },
               "recursion": {
                 "gold": 1,
-                "found": 0
+                "found": 1
               },
               "same-file": {
                 "gold": 6,
-                "found": 0
+                "found": 4
               },
               "same-name": {
                 "gold": 17,
-                "found": 0
+                "found": 6
               },
               "self-call": {
                 "gold": 3,
@@ -5803,16 +5611,309 @@
               },
               "typed-receiver": {
                 "gold": 13,
-                "found": 0
+                "found": 7
               }
             },
             "false_positives": [
               {
-                "from": "src/formatting.ts::pad",
-                "to": "rust/src/report.rs::render [other fixture]",
+                "from": "src/auth.ts::decode",
+                "to": "src/auth.ts::Token",
                 "label": "ambiguous",
-                "line": 9,
-                "note": "wrong caller: the call site is outside src/formatting.ts::pad's lines 5-7"
+                "line": 18
+              },
+              {
+                "from": "src/auth.ts::refresh",
+                "to": "src/auth.ts::Token",
+                "label": "ambiguous",
+                "line": 26
+              },
+              {
+                "from": "src/auth.ts::refresh",
+                "to": "src/storage.ts::Repository.get",
+                "label": "ambiguous",
+                "line": 21
+              },
+              {
+                "from": "src/config.ts::Config.load",
+                "to": "rust/src/validation.rs::Validator.new [other fixture]",
+                "label": "ambiguous",
+                "line": 39,
+                "note": "wrong caller: the call site is outside src/config.ts::Config.load's lines 17-19"
+              },
+              {
+                "from": "src/config.ts::normalize",
+                "to": "java/src/shop/model/Order.java::Order.items [other fixture]",
+                "label": "name-match",
+                "line": 13,
+                "note": "wrong caller: the call site is outside src/config.ts::normalize's lines 6-12"
+              },
+              {
+                "from": "src/config.ts::normalize",
+                "to": "src/utils.ts::map",
+                "label": "ambiguous",
+                "line": 9
+              },
+              {
+                "from": "src/config.ts::parse",
+                "to": "src/auth.ts::decode",
+                "label": "ambiguous",
+                "line": 14,
+                "note": "wrong caller: the call site is outside src/config.ts::parse's lines 1-4"
+              },
+              {
+                "from": "src/config.ts::parse",
+                "to": "src/storage.ts::Repository.get",
+                "label": "ambiguous",
+                "line": 45,
+                "note": "wrong caller: the call site is outside src/config.ts::parse's lines 1-4"
+              },
+              {
+                "from": "src/config.ts::parse",
+                "to": "src/utils.ts::map",
+                "label": "ambiguous",
+                "line": 5,
+                "note": "wrong caller: the call site is outside src/config.ts::parse's lines 1-4"
+              },
+              {
+                "from": "src/config.ts::parse",
+                "to": "src/validation.ts::validate",
+                "label": "ambiguous",
+                "line": 11,
+                "note": "wrong caller: the call site is outside src/config.ts::parse's lines 1-4"
+              },
+              {
+                "from": "src/formatting.ts::render",
+                "to": "rust/src/report.rs::OrderReport.render_row [other fixture]",
+                "label": "ambiguous",
+                "line": 16,
+                "note": "wrong caller: the call site is outside src/formatting.ts::render's lines 1-3"
+              },
+              {
+                "from": "src/formatting.ts::render",
+                "to": "rust/src/report.rs::join [other fixture]",
+                "label": "ambiguous",
+                "line": 24,
+                "note": "wrong caller: the call site is outside src/formatting.ts::render's lines 1-3"
+              },
+              {
+                "from": "src/formatting.ts::render",
+                "to": "src/reports.ts::OrderReport.renderRow",
+                "label": "ambiguous",
+                "line": 22,
+                "note": "wrong caller: the call site is outside src/formatting.ts::render's lines 1-3"
+              },
+              {
+                "from": "src/formatting.ts::render",
+                "to": "src/reports.ts::Report.header",
+                "label": "ambiguous",
+                "line": 20,
+                "note": "wrong caller: the call site is outside src/formatting.ts::render's lines 1-3"
+              },
+              {
+                "from": "src/formatting.ts::render",
+                "to": "src/storage.ts::Repository.add",
+                "label": "ambiguous",
+                "line": 20,
+                "note": "wrong caller: the call site is outside src/formatting.ts::render's lines 1-3"
+              },
+              {
+                "from": "src/formatting.ts::render",
+                "to": "src/utils.ts::map",
+                "label": "ambiguous",
+                "line": 44,
+                "note": "wrong caller: the call site is outside src/formatting.ts::render's lines 1-3"
+              },
+              {
+                "from": "src/index.ts::dispatch",
+                "to": "src/index.ts::handler [not gold]",
+                "label": "ambiguous",
+                "line": 23,
+                "note": "wrong caller: the call site is outside src/index.ts::dispatch's lines 11-14"
+              },
+              {
+                "from": "src/index.ts::main",
+                "to": "rust/src/main.rs::run [other fixture]",
+                "label": "ambiguous",
+                "line": 27,
+                "note": "wrong caller: the call site is outside src/index.ts::main's lines 16-26"
+              },
+              {
+                "from": "src/index.ts::main",
+                "to": "rust/src/model.rs::format_name [other fixture]",
+                "label": "ambiguous",
+                "line": 24,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/index.ts::main",
+                "to": "rust/src/report.rs::join [other fixture]",
+                "label": "ambiguous",
+                "line": 25,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/index.ts::main",
+                "to": "src/index.ts::handler [not gold]",
+                "label": "ambiguous",
+                "line": 26,
+                "note": "endpoint is not a gold symbol"
+              },
+              {
+                "from": "src/index.ts::main",
+                "to": "src/storage.ts::Repository.get",
+                "label": "ambiguous",
+                "line": 25
+              },
+              {
+                "from": "src/models.ts::Order.total",
+                "to": "src/utils.ts::map",
+                "label": "ambiguous",
+                "line": 23,
+                "note": "wrong caller: the call site is outside src/models.ts::Order.total's lines 36-38"
+              },
+              {
+                "from": "src/reports.ts::MemorySink.write",
+                "to": "src/storage.ts::Repository.add",
+                "label": "ambiguous",
+                "line": 12,
+                "note": "wrong caller: the call site is outside src/reports.ts::MemorySink.write's lines 17-19"
+              },
+              {
+                "from": "src/reports.ts::OrderReport.renderRow",
+                "to": "rust/src/report.rs::join [other fixture]",
+                "label": "ambiguous",
+                "line": 19,
+                "note": "wrong caller: the call site is outside src/reports.ts::OrderReport.renderRow's lines 47-49"
+              },
+              {
+                "from": "src/reports.ts::OrderReport.summary",
+                "to": "rust/src/report.rs::OrderReport.render_row [other fixture]",
+                "label": "ambiguous",
+                "line": 76,
+                "note": "wrong caller: the call site is outside src/reports.ts::OrderReport.summary's lines 51-53"
+              },
+              {
+                "from": "src/reports.ts::OrderReport.summary",
+                "to": "src/formatting.ts::render",
+                "label": "ambiguous",
+                "line": 23,
+                "note": "wrong caller: the call site is outside src/reports.ts::OrderReport.summary's lines 51-53"
+              },
+              {
+                "from": "src/reports.ts::OrderReport.summary",
+                "to": "src/utils.ts::map",
+                "label": "ambiguous",
+                "line": 73,
+                "note": "wrong caller: the call site is outside src/reports.ts::OrderReport.summary's lines 51-53"
+              },
+              {
+                "from": "src/reports.ts::publish",
+                "to": "src/formatting.ts::render",
+                "label": "ambiguous",
+                "line": 32,
+                "note": "wrong caller: the call site is outside src/reports.ts::publish's lines 60-62"
+              },
+              {
+                "from": "src/service.ts::OrderService.place",
+                "to": "rust/src/validation.rs::Validator.new [other fixture]",
+                "label": "ambiguous",
+                "line": 59,
+                "note": "wrong caller: the call site is outside src/service.ts::OrderService.place's lines 45-49"
+              },
+              {
+                "from": "src/service.ts::UserService",
+                "to": "src/validation.ts::Validator",
+                "label": "ambiguous",
+                "line": 22
+              },
+              {
+                "from": "src/service.ts::UserService.login",
+                "to": "src/config.ts::parse",
+                "label": "ambiguous",
+                "line": 24
+              },
+              {
+                "from": "src/service.ts::UserService.names",
+                "to": "rust/src/model.rs::User.display_name [other fixture]",
+                "label": "ambiguous",
+                "line": 45,
+                "note": "wrong caller: the call site is outside src/service.ts::UserService.names's lines 37-39"
+              },
+              {
+                "from": "src/service.ts::UserService.names",
+                "to": "src/models.ts::User.displayName",
+                "label": "ambiguous",
+                "line": 48,
+                "note": "wrong caller: the call site is outside src/service.ts::UserService.names's lines 37-39"
+              },
+              {
+                "from": "src/service.ts::UserService.register",
+                "to": "rust/src/validation.rs::Validator.new [other fixture]",
+                "label": "ambiguous",
+                "line": 26,
+                "note": "wrong caller: the call site is outside src/service.ts::UserService.register's lines 15-21"
+              },
+              {
+                "from": "src/service.ts::UserService.register",
+                "to": "src/models.ts::Order.save",
+                "label": "ambiguous",
+                "line": 30,
+                "note": "wrong caller: the call site is outside src/service.ts::UserService.register's lines 15-21"
+              },
+              {
+                "from": "src/service.ts::UserService.register",
+                "to": "src/validation.ts::validate",
+                "label": "ambiguous",
+                "line": 26,
+                "note": "wrong caller: the call site is outside src/service.ts::UserService.register's lines 15-21"
+              },
+              {
+                "from": "src/service.ts::UserService.settings",
+                "to": "src/storage.ts::Repository.get",
+                "label": "ambiguous",
+                "line": 40,
+                "note": "wrong caller: the call site is outside src/service.ts::UserService.settings's lines 28-31"
+              },
+              {
+                "from": "src/storage.ts::Repository.add",
+                "to": "src/storage.ts::Repository.add",
+                "label": "ambiguous",
+                "line": 27,
+                "note": "wrong caller: the call site is outside src/storage.ts::Repository.add's lines 4-7"
+              },
+              {
+                "from": "src/storage.ts::Repository.find",
+                "to": "src/storage.ts::Repository.find",
+                "label": "ambiguous",
+                "line": 20,
+                "note": "wrong caller: the call site is outside src/storage.ts::Repository.find's lines 13-15"
+              },
+              {
+                "from": "src/storage.ts::Repository.get",
+                "to": "src/storage.ts::Repository.get",
+                "label": "ambiguous",
+                "line": 34,
+                "note": "wrong caller: the call site is outside src/storage.ts::Repository.get's lines 9-11"
+              },
+              {
+                "from": "src/utils.ts::map",
+                "to": "src/storage.ts::Repository.add",
+                "label": "ambiguous",
+                "line": 14,
+                "note": "wrong caller: the call site is outside src/utils.ts::map's lines 1-7"
+              },
+              {
+                "from": "src/validation.ts::validate",
+                "to": "src/storage.ts::Repository.all",
+                "label": "ambiguous",
+                "line": 5
+              },
+              {
+                "from": "src/validation.ts::validate",
+                "to": "src/validation.ts::Validator.check",
+                "label": "ambiguous",
+                "line": 15,
+                "note": "wrong caller: the call site is outside src/validation.ts::validate's lines 3-5"
               }
             ],
             "false_negatives": [
@@ -5836,33 +5937,6 @@
                 "why": "module-local function"
               },
               {
-                "from": "src/auth.ts::refresh",
-                "to": "src/auth.ts::refresh",
-                "line": 26,
-                "tags": [
-                  "recursion"
-                ],
-                "why": "refresh calls itself on an expired token"
-              },
-              {
-                "from": "src/config.ts::parse",
-                "to": "src/config.ts::normalize",
-                "line": 3,
-                "tags": [
-                  "same-file"
-                ],
-                "why": "module-local function"
-              },
-              {
-                "from": "src/config.ts::Config.load",
-                "to": "src/config.ts::Config",
-                "line": 18,
-                "tags": [
-                  "constructor"
-                ],
-                "why": "`new Config(...)` in Config's static factory"
-              },
-              {
                 "from": "src/config.ts::Config.load",
                 "to": "src/config.ts::parse",
                 "line": 18,
@@ -5880,36 +5954,6 @@
                   "same-name"
                 ],
                 "why": "repo: Repository<User>; not Order.add"
-              },
-              {
-                "from": "src/models.ts::User.displayName",
-                "to": "src/models.ts::formatName",
-                "line": 21,
-                "tags": [
-                  "same-file",
-                  "arrow-function"
-                ],
-                "why": "formatName is a module-level arrow function"
-              },
-              {
-                "from": "src/models.ts::Order.save",
-                "to": "src/storage.ts::Repository.add",
-                "line": 32,
-                "tags": [
-                  "typed-receiver",
-                  "same-name"
-                ],
-                "why": "repo: Repository<Order>; not the sibling Order.add"
-              },
-              {
-                "from": "src/reports.ts::Report.header",
-                "to": "src/formatting.ts::render",
-                "line": 26,
-                "tags": [
-                  "module-qualified",
-                  "same-name"
-                ],
-                "why": "`formatting.render` via `import * as formatting`; not the method Report.render"
               },
               {
                 "from": "src/reports.ts::Report.render",
@@ -5941,25 +5985,6 @@
                 "why": "`super(...)` runs the base-class constructor"
               },
               {
-                "from": "src/reports.ts::OrderReport.renderRow",
-                "to": "src/models.ts::formatName",
-                "line": 48,
-                "tags": [
-                  "cross-file",
-                  "arrow-function"
-                ],
-                "why": "imported arrow function"
-              },
-              {
-                "from": "src/reports.ts::OrderReport.renderRow",
-                "to": "src/models.ts::Order.total",
-                "line": 48,
-                "tags": [
-                  "typed-receiver"
-                ],
-                "why": "order: Order"
-              },
-              {
                 "from": "src/reports.ts::OrderReport.summary",
                 "to": "src/reports.ts::Report.render",
                 "line": 52,
@@ -5968,33 +5993,6 @@
                   "same-name"
                 ],
                 "why": "`this.render` is inherited from Report; not formatting.render"
-              },
-              {
-                "from": "src/reports.ts::OrderReport.empty",
-                "to": "src/reports.ts::OrderReport",
-                "line": 56,
-                "tags": [
-                  "constructor"
-                ],
-                "why": "`new OrderReport([])`"
-              },
-              {
-                "from": "src/reports.ts::OrderReport.empty",
-                "to": "src/reports.ts::OrderReport.summary",
-                "line": 56,
-                "tags": [
-                  "chained"
-                ],
-                "why": "`.summary()` on the new OrderReport"
-              },
-              {
-                "from": "src/reports.ts::publish",
-                "to": "src/reports.ts::Sink.write",
-                "line": 61,
-                "tags": [
-                  "interface-dispatch"
-                ],
-                "why": "sink: Sink; the static target is the interface method"
               },
               {
                 "from": "src/reports.ts::publish",
@@ -6027,15 +6025,6 @@
               },
               {
                 "from": "src/service.ts::UserService.register",
-                "to": "src/models.ts::User",
-                "line": 19,
-                "tags": [
-                  "constructor"
-                ],
-                "why": "`new User(name, email)`"
-              },
-              {
-                "from": "src/service.ts::UserService.register",
                 "to": "src/models.ts::User.save",
                 "line": 20,
                 "tags": [
@@ -6053,24 +6042,6 @@
                   "same-name"
                 ],
                 "why": "`import { parse as parseToken } from \"./auth\"`"
-              },
-              {
-                "from": "src/service.ts::UserService.login",
-                "to": "src/auth.ts::refresh",
-                "line": 25,
-                "tags": [
-                  "cross-file"
-                ],
-                "why": "named import from ./auth"
-              },
-              {
-                "from": "src/service.ts::UserService.settings",
-                "to": "src/config.ts::Config.load",
-                "line": 29,
-                "tags": [
-                  "module-qualified"
-                ],
-                "why": "`config.Config.load` via `import * as config`"
               },
               {
                 "from": "src/service.ts::UserService.settings",
@@ -6093,53 +6064,6 @@
                 "why": "this.repo: Repository<User>; not a recursive call"
               },
               {
-                "from": "src/service.ts::UserService.names",
-                "to": "src/utils.ts::map",
-                "line": 38,
-                "tags": [
-                  "cross-file",
-                  "same-name"
-                ],
-                "why": "the imported free function map(), not Array.prototype.map"
-              },
-              {
-                "from": "src/service.ts::UserService.names",
-                "to": "src/storage.ts::Repository.all",
-                "line": 38,
-                "tags": [
-                  "typed-receiver"
-                ],
-                "why": "this.repo: Repository<User>"
-              },
-              {
-                "from": "src/service.ts::OrderService.place",
-                "to": "src/models.ts::Order",
-                "line": 46,
-                "tags": [
-                  "constructor"
-                ],
-                "why": "`new Order(user, items)`"
-              },
-              {
-                "from": "src/service.ts::OrderService.place",
-                "to": "src/models.ts::Order.save",
-                "line": 47,
-                "tags": [
-                  "typed-receiver",
-                  "same-name"
-                ],
-                "why": "order: Order; not User.save"
-              },
-              {
-                "from": "src/service.ts::OrderService.place",
-                "to": "src/models.ts::Order.total",
-                "line": 48,
-                "tags": [
-                  "typed-receiver"
-                ],
-                "why": "order: Order"
-              },
-              {
                 "from": "src/service.ts::OrderService.parse",
                 "to": "src/config.ts::parse",
                 "line": 52,
@@ -6151,70 +6075,6 @@
               },
               {
                 "from": "src/index.ts::main",
-                "to": "src/service.ts::UserService",
-                "line": 17,
-                "tags": [
-                  "constructor"
-                ],
-                "why": "`new UserService(...)`"
-              },
-              {
-                "from": "src/index.ts::main",
-                "to": "src/storage.ts::Repository",
-                "line": 17,
-                "tags": [
-                  "constructor"
-                ],
-                "why": "`new Repository<User>()`; the class declares no constructor"
-              },
-              {
-                "from": "src/index.ts::main",
-                "to": "src/service.ts::OrderService",
-                "line": 18,
-                "tags": [
-                  "constructor"
-                ],
-                "why": "`new OrderService(...)`"
-              },
-              {
-                "from": "src/index.ts::main",
-                "to": "src/service.ts::UserService.register",
-                "line": 19,
-                "tags": [
-                  "typed-receiver"
-                ],
-                "why": "users: UserService"
-              },
-              {
-                "from": "src/index.ts::main",
-                "to": "src/service.ts::OrderService.place",
-                "line": 20,
-                "tags": [
-                  "typed-receiver"
-                ],
-                "why": "orders: OrderService"
-              },
-              {
-                "from": "src/index.ts::main",
-                "to": "src/models.ts::formatName",
-                "line": 21,
-                "tags": [
-                  "cross-file",
-                  "arrow-function"
-                ],
-                "why": "imported arrow function"
-              },
-              {
-                "from": "src/index.ts::main",
-                "to": "src/index.ts::dispatch",
-                "line": 22,
-                "tags": [
-                  "same-file"
-                ],
-                "why": "module-local function"
-              },
-              {
-                "from": "src/index.ts::main",
                 "to": "src/index.ts::handler",
                 "line": 23,
                 "tags": [
@@ -6222,15 +6082,6 @@
                   "same-name"
                 ],
                 "why": "the module function handler(); main has no local of that name"
-              },
-              {
-                "from": "src/index.ts::main",
-                "to": "src/reports.ts::publish",
-                "line": 24,
-                "tags": [
-                  "cross-file"
-                ],
-                "why": "named import from ./reports"
               },
               {
                 "from": "src/index.ts::main",
@@ -6251,25 +6102,6 @@
                 "why": "`new ConsoleSink()`; the class declares no constructor"
               },
               {
-                "from": "src/index.ts::main",
-                "to": "src/config.ts::Config",
-                "line": 25,
-                "tags": [
-                  "constructor"
-                ],
-                "why": "`new Config(new Map(...))`"
-              },
-              {
-                "from": "src/index.ts::main",
-                "to": "src/config.ts::Config.get",
-                "line": 25,
-                "tags": [
-                  "chained",
-                  "same-name"
-                ],
-                "why": "`.get` on the new Config; not Map.get, Repository.get or UserService.get"
-              },
-              {
                 "from": "src/validation.ts::Validator.validate",
                 "to": "src/validation.ts::Validator.check",
                 "line": 15,
@@ -6277,16 +6109,6 @@
                   "self-call"
                 ],
                 "why": "`this.check` inside an arrow function of Validator.validate"
-              },
-              {
-                "from": "src/formatting.ts::pad",
-                "to": "src/formatting.ts::render",
-                "line": 6,
-                "tags": [
-                  "same-file",
-                  "same-name"
-                ],
-                "why": "module-local render, not the method Report.render"
               }
             ]
           }
