@@ -1,16 +1,18 @@
 //! Graph snapshot storage and diff comparison.
 //!
-//! After each analysis, a lightweight snapshot (symbol UIDs + edge UIDs) is
-//! saved to `~/.myceliums/snapshots/<repo_id>.json`. The [`diff_snapshots`]
-//! function compares two snapshots and returns the sets of added/removed
-//! symbols and relationships.
+//! Every analysis records a lightweight snapshot (stable symbol and edge keys
+//! with display labels, see [`build_snapshot`]) with [`record_snapshot`]:
+//! versioned under `<data_dir>/snapshots/<repo_id>/`, the newest
+//! [`SNAPSHOTS_KEPT`] kept, plus `<data_dir>/snapshots/<repo_id>.json` for
+//! the latest. [`diff_snapshots`] compares two snapshots and returns the sets
+//! of added/removed symbols and relationships.
 
 use myceliums_storage::{CodeSymbol, Relationship};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-/// A lightweight graph snapshot — just UIDs and display-friendly names.
+/// A lightweight graph snapshot — stable keys and display-friendly names.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphSnapshot {
     pub repo_id: String,
@@ -40,29 +42,58 @@ pub struct DiffEntry {
 }
 
 /// Build a snapshot from the current store contents.
+///
+/// Symbols and edges are keyed by a stable identity, not by their uid: uids
+/// are generated anew by every analysis, so uid keys would make two analyses
+/// of unchanged code look completely different. A symbol's key is
+/// `file_path:qualified_name:kind` (with `#2`, `#3`, ... for symbols sharing
+/// one, in line order); an edge's key is its kind and its two endpoint keys.
 pub fn build_snapshot(
     repo_id: &str,
     symbols: &[CodeSymbol],
     relationships: &[Relationship],
 ) -> GraphSnapshot {
+    let mut ordered: Vec<&CodeSymbol> = symbols.iter().collect();
+    ordered.sort_by(|a, b| {
+        (&a.file_path, &a.qualified_name, a.start_line, &a.uid).cmp(&(
+            &b.file_path,
+            &b.qualified_name,
+            b.start_line,
+            &b.uid,
+        ))
+    });
     let mut sym_map = BTreeMap::new();
-    for s in symbols {
-        let label = format!("{}  {}", s.kind, s.qualified_name);
-        sym_map.insert(s.uid.clone(), label);
+    let mut key_of: std::collections::HashMap<&str, String> = std::collections::HashMap::new();
+    for s in ordered {
+        let base = format!("{}:{}:{}", s.file_path, s.qualified_name, s.kind);
+        let mut key = base.clone();
+        let mut n = 1;
+        while sym_map.contains_key(&key) {
+            n += 1;
+            key = format!("{base}#{n}");
+        }
+        let label = format!("{}  {} ({})", s.kind, s.qualified_name, s.file_path);
+        sym_map.insert(key.clone(), label);
+        key_of.insert(s.uid.as_str(), key);
     }
 
     let mut edge_map = BTreeMap::new();
-    // Build a quick uid->name lookup for edge labels
-    let uid_to_name: BTreeMap<&str, &str> = symbols
+    let uid_to_name: std::collections::HashMap<&str, &str> = symbols
         .iter()
         .map(|s| (s.uid.as_str(), s.name.as_str()))
         .collect();
-
     for r in relationships {
         let src = uid_to_name.get(r.source_uid.as_str()).unwrap_or(&"?");
         let tgt = uid_to_name.get(r.target_uid.as_str()).unwrap_or(&"?");
+        let src_key = key_of
+            .get(r.source_uid.as_str())
+            .map_or("?", String::as_str);
+        let tgt_key = key_of
+            .get(r.target_uid.as_str())
+            .map_or("?", String::as_str);
+        let key = format!("{} {src_key} -> {tgt_key}", r.kind);
         let label = format!("{}  {} -> {}", r.kind, src, tgt);
-        edge_map.insert(r.uid.clone(), label);
+        edge_map.insert(key, label);
     }
 
     GraphSnapshot {
@@ -196,6 +227,35 @@ pub fn save_versioned_snapshot(
     Ok(snapshot_id)
 }
 
+/// How many versioned snapshots [`record_snapshot`] keeps per repository.
+pub const SNAPSHOTS_KEPT: usize = 10;
+
+/// Records the graph of a finished analysis: a versioned snapshot (plus the
+/// "latest" single file), keeping the newest [`SNAPSHOTS_KEPT`]. Drift and
+/// diff tools compare these, so every analysis must record one. Returns the
+/// snapshot id.
+pub fn record_snapshot(
+    data_dir: &Path,
+    snapshot: &GraphSnapshot,
+    commit_sha: Option<&str>,
+) -> anyhow::Result<String> {
+    let id = save_versioned_snapshot(data_dir, snapshot, commit_sha)?;
+    prune_snapshots(data_dir, &snapshot.repo_id, SNAPSHOTS_KEPT)?;
+    Ok(id)
+}
+
+/// Deletes all but the `keep` newest versioned snapshots of `repo_id`.
+/// Returns how many were deleted.
+pub fn prune_snapshots(data_dir: &Path, repo_id: &str, keep: usize) -> anyhow::Result<usize> {
+    let dir = snapshot_dir(data_dir, repo_id);
+    let mut removed = 0;
+    for old in list_snapshots(data_dir, repo_id)?.iter().skip(keep) {
+        std::fs::remove_file(dir.join(format!("{}.json", old.snapshot_id)))?;
+        removed += 1;
+    }
+    Ok(removed)
+}
+
 /// List all snapshots for a repo, sorted newest first.
 pub fn list_snapshots(data_dir: &Path, repo_id: &str) -> anyhow::Result<Vec<SnapshotSummary>> {
     let dir = snapshot_dir(data_dir, repo_id);
@@ -265,6 +325,104 @@ struct VersionedSnapshotWrapper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn symbol(uid: &str, name: &str, file: &str, line: u32) -> CodeSymbol {
+        CodeSymbol {
+            uid: uid.into(),
+            name: name.into(),
+            qualified_name: name.into(),
+            kind: myceliums_storage::SymbolKind::Function,
+            file_path: file.into(),
+            start_line: line,
+            end_line: line,
+            signature: String::new(),
+            content: String::new(),
+            repo_id: "r".into(),
+            metadata: None,
+        }
+    }
+
+    fn calls(uid: &str, from: &str, to: &str) -> Relationship {
+        Relationship {
+            uid: uid.into(),
+            source_uid: from.into(),
+            target_uid: to.into(),
+            kind: myceliums_storage::RelationshipKind::Calls,
+            repo_id: "r".into(),
+            metadata: String::new(),
+        }
+    }
+
+    #[test]
+    fn snapshots_of_unchanged_code_match_whatever_the_uids() {
+        // Every analysis assigns fresh uids; only the code decides the keys.
+        let first = build_snapshot(
+            "r",
+            &[symbol("u1", "a", "x.rs", 1), symbol("u2", "b", "x.rs", 5)],
+            &[calls("e1", "u1", "u2")],
+        );
+        let second = build_snapshot(
+            "r",
+            &[symbol("v2", "b", "x.rs", 7), symbol("v1", "a", "x.rs", 1)],
+            &[calls("f1", "v1", "v2")],
+        );
+        let diff = diff_snapshots(&first, &second);
+        assert!(diff.added_symbols.is_empty() && diff.removed_symbols.is_empty());
+        assert!(diff.added_edges.is_empty() && diff.removed_edges.is_empty());
+
+        let third = build_snapshot(
+            "r",
+            &[symbol("w1", "a", "x.rs", 1), symbol("w3", "c", "y.rs", 1)],
+            &[calls("g1", "w1", "w3")],
+        );
+        let diff = diff_snapshots(&second, &third);
+        assert_eq!(diff.added_symbols.len(), 1);
+        assert_eq!(diff.added_symbols[0].label, "Function  c (y.rs)");
+        assert_eq!(diff.removed_symbols.len(), 1);
+        assert_eq!(diff.added_edges.len(), 1);
+        assert_eq!(diff.removed_edges.len(), 1);
+    }
+
+    #[test]
+    fn symbols_sharing_an_identity_get_ordinals() {
+        let snap = build_snapshot(
+            "r",
+            &[symbol("u2", "f", "x.rs", 9), symbol("u1", "f", "x.rs", 2)],
+            &[],
+        );
+        let keys: Vec<&String> = snap.symbols.keys().collect();
+        assert_eq!(keys, ["x.rs:f:Function", "x.rs:f:Function#2"]);
+    }
+
+    #[test]
+    fn recording_keeps_the_newest_snapshots_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ids = Vec::new();
+        for i in 0..(SNAPSHOTS_KEPT + 2) {
+            let snap = GraphSnapshot {
+                repo_id: "repo".into(),
+                created_at: format!("2026-01-01T00:00:{i:02}+00:00"),
+                symbols: [(format!("s{i}"), "Function  f".into())]
+                    .into_iter()
+                    .collect(),
+                edges: BTreeMap::new(),
+            };
+            ids.push(record_snapshot(dir.path(), &snap, Some("abc")).unwrap());
+        }
+        let kept: Vec<String> = list_snapshots(dir.path(), "repo")
+            .unwrap()
+            .into_iter()
+            .map(|s| s.snapshot_id)
+            .collect();
+        assert_eq!(kept.len(), SNAPSHOTS_KEPT);
+        assert_eq!(kept[0], ids[ids.len() - 1], "newest first");
+        assert!(!kept.contains(&ids[0]) && !kept.contains(&ids[1]));
+        // The "latest" single-file snapshot follows the newest record.
+        let latest = load_snapshot(dir.path(), "repo").unwrap().unwrap();
+        assert!(latest
+            .symbols
+            .contains_key(&format!("s{}", SNAPSHOTS_KEPT + 1)));
+    }
 
     #[test]
     fn load_snapshot_by_id_rejects_path_like_ids() {

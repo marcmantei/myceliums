@@ -178,7 +178,7 @@ pub use cycles::{detect_cycles, DependencyCycle};
 pub use dependencies::{
     compute_file_dependencies, compute_module_coupling, FileDependency, ModuleCoupling,
 };
-pub use drift::{detect_drift, DriftReport};
+pub use drift::{detect_drift, drift_score, DriftReport};
 pub use email::{parse_eml, parse_eml_file, EmailAttachment, ParsedEmail};
 pub use embedding_stats::EmbeddingStats;
 #[cfg(feature = "embeddings")]
@@ -218,8 +218,8 @@ pub use service::{GraphService, GraphTable, IndexFingerprint, SymbolContext};
 pub use service_map::{load_service_mappings, save_service_mapping, ServiceMapping};
 pub use snapshot::{
     build_snapshot, diff_snapshots, list_snapshots, load_snapshot, load_snapshot_by_id,
-    save_snapshot, save_versioned_snapshot, snapshot_dir, snapshot_path, DiffEntry, GraphDiff,
-    GraphSnapshot, SnapshotSummary,
+    prune_snapshots, record_snapshot, save_snapshot, save_versioned_snapshot, snapshot_dir,
+    snapshot_path, DiffEntry, GraphDiff, GraphSnapshot, SnapshotSummary, SNAPSHOTS_KEPT,
 };
 pub use surprising_connections::{compute_surprising_connections, SurprisingConnectionItem};
 pub use timing::{Timer, TimingReport};

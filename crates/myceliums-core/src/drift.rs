@@ -3,7 +3,7 @@
 //! Computes a drift score (0–100, higher = less drift) and identifies
 //! structural changes: added/removed symbols, community size changes.
 
-use crate::snapshot::{build_snapshot, diff_snapshots, GraphSnapshot};
+use crate::snapshot::{build_snapshot, diff_snapshots, GraphDiff, GraphSnapshot};
 use myceliums_storage::{CodeSymbol, Community, Relationship};
 use serde::Serialize;
 
@@ -29,6 +29,23 @@ pub struct DriftReport {
     pub summary: String,
 }
 
+/// Drift score of `diff` (from `previous` to `current`): 100 when nothing
+/// changed, falling with the share of symbols and edges added or removed,
+/// never below 0.
+pub fn drift_score(previous: &GraphSnapshot, current: &GraphSnapshot, diff: &GraphDiff) -> f64 {
+    let total_entities = previous.symbols.len().max(current.symbols.len())
+        + previous.edges.len().max(current.edges.len());
+    let total_changes = diff.added_symbols.len()
+        + diff.removed_symbols.len()
+        + diff.added_edges.len()
+        + diff.removed_edges.len();
+    if total_entities == 0 {
+        100.0
+    } else {
+        (100.0 - (total_changes as f64 / total_entities as f64 * 100.0)).max(0.0)
+    }
+}
+
 /// Detect architectural drift between a baseline snapshot and the current graph.
 ///
 /// Returns a `DriftReport` with a score from 0 (completely different) to 100
@@ -42,20 +59,7 @@ pub fn detect_drift(
 ) -> DriftReport {
     let current = build_snapshot(&baseline.repo_id, current_symbols, current_relationships);
     let diff = diff_snapshots(baseline, &current);
-
-    let total_entities = baseline.symbols.len().max(current.symbols.len())
-        + baseline.edges.len().max(current.edges.len());
-
-    let total_changes = diff.added_symbols.len()
-        + diff.removed_symbols.len()
-        + diff.added_edges.len()
-        + diff.removed_edges.len();
-
-    let drift_score = if total_entities == 0 {
-        100.0
-    } else {
-        (100.0 - (total_changes as f64 / total_entities as f64 * 100.0)).max(0.0)
-    };
+    let drift_score = drift_score(baseline, &current, &diff);
 
     // Compare communities by label
     let mut community_changes = Vec::new();
