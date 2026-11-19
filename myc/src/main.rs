@@ -484,6 +484,10 @@ enum Commands {
         /// Do not install the code-explorer subagent (removes an existing one)
         #[arg(long)]
         no_agent: bool,
+        /// Keep every myceliums tool behind tool search ("alwaysLoad": false)
+        /// instead of loading the core tools up front
+        #[arg(long)]
+        no_always_load: bool,
         /// Remove everything myceliums installed at this scope
         #[arg(long)]
         uninstall: bool,
@@ -911,12 +915,14 @@ async fn run(cli: Cli) -> Result<()> {
             no_routing,
             no_redirect_hook,
             no_agent,
+            no_always_load,
             uninstall,
         } => {
             let layers = commands::setup_claude::Layers {
                 routing: !no_routing,
                 redirect_hook: !no_redirect_hook,
                 agent: !no_agent,
+                tool_loading: commands::setup_claude::ToolLoading::for_config(no_always_load),
             };
             commands::setup_claude::cmd_setup_claude(scope, project.as_deref(), layers, uninstall)
         }
