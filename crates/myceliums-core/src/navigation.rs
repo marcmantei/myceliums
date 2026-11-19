@@ -876,11 +876,23 @@ impl IndexFreshness {
     }
 }
 
+/// A git call for the freshness line that takes longer than this is
+/// abandoned: the line is a courtesy and must not stall an answer.
+const FRESHNESS_GIT_TIMEOUT: std::time::Duration = std::time::Duration::from_millis(1500);
+
 /// Freshness of a registered repository's index. Runs `git rev-parse HEAD`
-/// in the repository (a few milliseconds); any git failure yields
-/// [`FreshnessState::Unknown`] rather than an error.
+/// in the repository through [`crate::git_read`] (no optional locks, killed
+/// after 1.5 s); any git failure yields [`FreshnessState::Unknown`] rather
+/// than an error.
 pub fn index_freshness(info: &RepoInfo) -> IndexFreshness {
-    let head = crate::cache::get_head_commit(Path::new(&info.path)).ok();
+    let head = crate::git_read::git_read(
+        Path::new(&info.path),
+        &["rev-parse", "HEAD"],
+        FRESHNESS_GIT_TIMEOUT,
+    )
+    .ok()
+    .map(|out| out.trim().to_string())
+    .filter(|commit| !commit.is_empty());
     IndexFreshness::compare(
         &info.analyzed_at,
         info.analyzed_commit.as_deref(),

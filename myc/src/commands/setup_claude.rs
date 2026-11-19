@@ -657,6 +657,18 @@ fn myc_on_path() -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+/// The top level of the git checkout containing `dir`, if any.
+pub(crate) fn git_toplevel(dir: &Path) -> Option<PathBuf> {
+    myceliums_core::git_read::git_read(
+        dir,
+        &["rev-parse", "--show-toplevel"],
+        std::time::Duration::from_secs(5),
+    )
+    .ok()
+    .map(|out| PathBuf::from(out.trim()))
+    .filter(|p| !p.as_os_str().is_empty())
+}
+
 /// The project root: `--project`, else the git top level of the working
 /// directory.
 fn project_root(explicit: Option<&Path>) -> Result<PathBuf> {
@@ -664,16 +676,13 @@ fn project_root(explicit: Option<&Path>) -> Result<PathBuf> {
         Some(p) => std::fs::canonicalize(p)
             .with_context(|| format!("No such directory: {}", p.display()))?,
         None => {
-            let out = std::process::Command::new("git")
-                .args(["rev-parse", "--show-toplevel"])
-                .output()
-                .context("git is needed to find the project root (or pass --project <dir>)")?;
-            if !out.status.success() {
+            let cwd = std::env::current_dir().context("Cannot read the working directory")?;
+            let Some(top) = git_toplevel(&cwd) else {
                 bail!(
-                    "Not inside a git repository. Run this in your project, pass --project <dir>, or use --scope user."
+                    "Not inside a git repository (or git is not installed). Run this in your project, pass --project <dir>, or use --scope user."
                 );
-            }
-            PathBuf::from(String::from_utf8_lossy(&out.stdout).trim())
+            };
+            top
         }
     };
     if dirs::home_dir().is_some_and(|h| std::fs::canonicalize(h).is_ok_and(|h| h == root)) {

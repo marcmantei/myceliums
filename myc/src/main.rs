@@ -3908,12 +3908,9 @@ async fn cmd_setup_editor(editor_name: &str, uninstall: bool) -> Result<()> {
 /// project's AGENTS.md when run inside a git repository (#126).
 async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result<()> {
     cmd_setup_editor("codex", uninstall).await?;
-    let root = std::process::Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
+    let root = std::env::current_dir()
         .ok()
-        .filter(|o| o.status.success())
-        .map(|o| PathBuf::from(String::from_utf8_lossy(&o.stdout).trim()));
+        .and_then(|cwd| commands::setup_claude::git_toplevel(&cwd));
     let Some(root) = root else {
         if !uninstall && !no_routing {
             println!("  Not inside a git repository: no AGENTS.md routing block written.");
