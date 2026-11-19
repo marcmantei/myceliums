@@ -10,7 +10,11 @@ repository files.
 | `cypher_execute` | Parses and executes arbitrary UTF-8 against a small fixed graph (`crates/myceliums-cypher/tests/support/small_graph.rs`); checks `LIMIT`. |
 | `extract_symbols` | First byte picks one of the 23 tree-sitter languages, the rest is the file; runs `SourceParser::parse` and `parse_with_dsl`. |
 
-A target fails on any panic, stack overflow, or timeout.
+A target fails on any panic, stack overflow, or timeout. `extract_symbols`
+parses under the analyzer's size-aware parse budget (under 0.6 s per parse at
+`-max_len=4096`, see `analysis.parse_timeout_secs` in
+`docs/reference/config.md`), so a libFuzzer timeout there is time spent in our
+extractors, not in tree-sitter.
 
 This directory is its own Cargo workspace and is excluded from the main one, so
 `cargo build --workspace` on stable never sees it. Faster, always-on coverage
@@ -47,8 +51,8 @@ A crash is written to `fuzz/artifacts/<target>/`. Reproduce it with
 it, and add a regression test next to the code it exercises.
 
 `fuzz/seeds/` holds a few hand-written starting inputs plus past findings
-(e.g. `extract_symbols/objc_error_recovery_127*.bin`, an input tree-sitter 0.25
-never finished parsing); `fuzz/corpus/` (the growing corpus) and
+(e.g. `extract_symbols/objc_error_recovery_127*.bin`, inputs tree-sitter's
+Objective-C error recovery never finishes parsing); `fuzz/corpus/` (the growing corpus) and
 `fuzz/artifacts/` are git-ignored.
 
 ## CI

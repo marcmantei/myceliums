@@ -8,6 +8,8 @@
 //! Mixed-language notebooks are supported: the kernel language is used as
 //! default, but individual cells can override via cell-level metadata.
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use myceliums_storage::SymbolKind;
 use serde::Deserialize;
@@ -109,7 +111,12 @@ fn language_from_name(name: &str) -> Option<SourceLanguage> {
 ///
 /// The `line_offset` for each cell's symbols is accumulated so that line numbers
 /// in the returned symbols correspond to a virtual concatenation of all cells.
-pub fn parse_notebook(source: &str) -> Result<ParseResult> {
+///
+/// `parse_timeout` caps each code cell's tree-sitter budget, as
+/// [`SourceParser::set_timeout`] does for a source file
+/// (`analysis.parse_timeout_secs`); a cell over budget is skipped with a
+/// warning and the rest of the notebook is still indexed.
+pub fn parse_notebook(source: &str, parse_timeout: Option<Duration>) -> Result<ParseResult> {
     let notebook: Notebook = serde_json::from_str(source).context("Failed to parse .ipynb JSON")?;
 
     // Determine the default language from notebook metadata.
@@ -169,8 +176,12 @@ pub fn parse_notebook(source: &str) -> Result<ParseResult> {
                 };
 
                 // Parse the code cell with tree-sitter.
-                let result = match SourceParser::new(lang) {
-                    Ok(mut parser) => match parser.parse(&cell_source) {
+                let parsed = SourceParser::new(lang).map(|mut parser| {
+                    parser.set_timeout(parse_timeout);
+                    parser.parse(&cell_source)
+                });
+                let result = match parsed {
+                    Ok(parsed) => match parsed {
                         Ok(r) => r,
                         Err(e) => {
                             warn!("Failed to parse code cell {}: {}", cell_index, e);
@@ -238,6 +249,7 @@ pub fn parse_notebook(source: &str) -> Result<ParseResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::parser::DEFAULT_PARSE_TIMEOUT;
 
     fn make_notebook(kernel_lang: &str, cells: &[(&str, &str)]) -> String {
         let cells_json: Vec<String> = cells
@@ -283,7 +295,7 @@ mod tests {
             ],
         );
 
-        let result = parse_notebook(&nb).unwrap();
+        let result = parse_notebook(&nb, Some(DEFAULT_PARSE_TIMEOUT)).unwrap();
         let names: Vec<&str> = result.symbols.iter().map(|s| s.name.as_str()).collect();
         assert!(names.contains(&"hello"), "should find hello function");
         assert!(names.contains(&"world"), "should find world function");
@@ -296,14 +308,14 @@ mod tests {
     #[test]
     fn test_parse_empty_cells_skipped() {
         let nb = make_notebook("python", &[("code", ""), ("markdown", "")]);
-        let result = parse_notebook(&nb).unwrap();
+        let result = parse_notebook(&nb, Some(DEFAULT_PARSE_TIMEOUT)).unwrap();
         assert!(result.symbols.is_empty());
     }
 
     #[test]
     fn test_parse_unsupported_language() {
         let nb = make_notebook("julia", &[("code", "function hello() end")]);
-        let result = parse_notebook(&nb).unwrap();
+        let result = parse_notebook(&nb, Some(DEFAULT_PARSE_TIMEOUT)).unwrap();
         // Julia is not supported, so code cells should be skipped
         assert!(result.symbols.is_empty());
     }
@@ -314,7 +326,7 @@ mod tests {
             "javascript",
             &[("code", "function greet(name) { return name; }")],
         );
-        let result = parse_notebook(&nb).unwrap();
+        let result = parse_notebook(&nb, Some(DEFAULT_PARSE_TIMEOUT)).unwrap();
         assert!(result.symbols.iter().any(|s| s.name == "greet"));
     }
 
@@ -327,7 +339,7 @@ mod tests {
                 ("code", "def c():\n    pass"),
             ],
         );
-        let result = parse_notebook(&nb).unwrap();
+        let result = parse_notebook(&nb, Some(DEFAULT_PARSE_TIMEOUT)).unwrap();
         let lines: Vec<u32> = result.symbols.iter().map(|s| s.start_line).collect();
         // Each symbol's start line should be >= the previous
         for i in 1..lines.len() {
@@ -338,9 +350,26 @@ mod tests {
         }
     }
 
+    /// The `analysis.parse_timeout_secs` cap reaches each code cell's parser:
+    /// a cell over budget is skipped, the rest of the notebook is kept.
+    #[test]
+    fn code_cells_run_under_the_parse_timeout() {
+        // Long enough that tree-sitter checks the budget before it finishes
+        // (it does so every ~100 parse operations).
+        let code = "def hello():\n    pass\n\n".repeat(500);
+        let nb = make_notebook("python", &[("code", &code), ("markdown", "# My Notebook")]);
+        let result = parse_notebook(&nb, Some(Duration::ZERO)).unwrap();
+        let names: Vec<&str> = result.symbols.iter().map(|s| s.name.as_str()).collect();
+        assert!(!names.contains(&"hello"), "{names:?}");
+        assert!(names.iter().any(|n| n.contains("My Notebook")), "{names:?}");
+
+        let result = parse_notebook(&nb, None).unwrap();
+        assert!(result.symbols.iter().any(|s| s.name == "hello"));
+    }
+
     #[test]
     fn test_invalid_json_returns_error() {
-        let result = parse_notebook("not valid json");
+        let result = parse_notebook("not valid json", Some(DEFAULT_PARSE_TIMEOUT));
         assert!(result.is_err());
     }
 }
