@@ -73,6 +73,11 @@ async-imap = { version = "0.10", default-features = false, features = ["runtime-
 async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
 futures = "0.3"
 
+[target.'cfg(unix)'.dependencies]
+# kill(pid, 0) for lock liveness, and the atomic directory exchange
+# (renameat2 / renamex_np) of a rebuilt index.
+libc = "0.2"
+
 [dev-dependencies]
 tempfile = { workspace = true }
 proptest = { workspace = true }

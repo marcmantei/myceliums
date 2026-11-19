@@ -365,7 +365,7 @@ release:
 | Layer | What | Installed by |
 |---|---|---|
 | 1. Instructions | Routing block in CLAUDE.md / AGENTS.md: structural questions to myceliums, grep for literals and config | `myc setup-claude`, `myc setup-codex` |
-| 2. Tool surface | 9 task-named core tools (`search_code`, `find_callers`, `impact_of_change`, ...) by default, loaded up front (`alwaysLoad`); 50 more opt-in by group | `myc mcp` default; `myc setup-claude` sets `alwaysLoad` |
+| 2. Tool surface | 9 task-named core tools (`search_code`, `find_callers`, `impact_of_change`, ...) by default, loaded up front (`alwaysLoad`); 51 more opt-in by group | `myc mcp` default; `myc setup-claude` sets `alwaysLoad` |
 | 3. Hooks | PreToolUse hook: a grep for a known symbol gets the matching `myc callers …` call as context (never blocks) | `myc setup-claude` |
 | 4. Subagent | `code-explorer` with only the myceliums tools, Read and ToolSearch | `myc setup-claude` |
 | 5. Custom harness | Prefetch `myc context --json` into the prompt | [example](examples/agent-sdk-prefetch/) |

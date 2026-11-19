@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "MCP server for Myceliums — a core toolset of task-named code-intelligence tools (50 more opt-in by group) and 5 resource endpoints (1 static, 4 templated) over stdio or HTTP for AI agent integration"
+description = "MCP server for Myceliums — a core toolset of task-named code-intelligence tools (51 more opt-in by group) and 5 resource endpoints (1 static, 4 templated) over stdio or HTTP for AI agent integration"
 readme = "../../README.md"
 keywords = ["code-analysis", "knowledge-graph", "mcp", "ai-agent", "developer-tools"]
 categories = ["development-tools", "command-line-utilities"]
@@ -55,3 +55,5 @@ tower = { version = "0.5", features = ["util"] }
 # An in-process MCP client drives `tests/tool_contract.rs` over real JSON-RPC
 # (the `client` feature only adds `tokio-stream`, already in the lock file).
 rmcp = { workspace = true, features = ["client"] }
+# A capturing subscriber checks the per-call span fields (`tests/observability.rs`).
+tracing-subscriber = { workspace = true }

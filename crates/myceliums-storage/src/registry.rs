@@ -44,7 +44,14 @@ impl RepoRegistry {
     }
 
     /// Inserts or replaces a repository entry.
+    ///
+    /// A legacy entry for the same project path whose id starts with `.`
+    /// (ids made before such names were sanitized) is replaced by this one,
+    /// so a re-analysis does not leave a stale twin behind; its index
+    /// directory becomes an orphan (`myc clean --orphans`).
     pub fn register(&mut self, info: RepoInfo) {
+        self.repos
+            .retain(|id, old| !(id.starts_with('.') && old.path == info.path && *id != info.id));
         self.repos.insert(info.id.clone(), info);
     }
 
@@ -109,7 +116,27 @@ impl RepoRegistry {
     /// hold is anything that changes which directory `data/<repo_id>` points
     /// at: this platform's path separators, `.`/`..`, NUL, and on Windows `:`
     /// (drive prefixes and alternate data streams).
+    ///
+    /// New ids also never start with `.`: `data/` keeps its own entries
+    /// (`.locks`, `.staging`) under dot names, and a repository must never be
+    /// mistaken for one. [`RepoRegistry::sanitize_repo_name`] guarantees
+    /// that. Ids registered before that rule are still accepted by
+    /// [`RepoRegistry::require`] and [`RepoRegistry::validate_registered_repo_id`].
     pub fn validate_repo_id(repo_id: &str) -> Result<(), RepoIdError> {
+        Self::validate_registered_repo_id(repo_id)?;
+        if repo_id.starts_with('.') {
+            return Err(RepoIdError::Invalid {
+                id: repo_id.to_string(),
+                reason: "it starts with '.'",
+            });
+        }
+        Ok(())
+    }
+
+    /// [`RepoRegistry::validate_repo_id`] without the leading-dot rule, for
+    /// ids read from the registry: those registered before the rule stay
+    /// usable. Still rejects anything that leaves `data/`.
+    pub fn validate_registered_repo_id(repo_id: &str) -> Result<(), RepoIdError> {
         let invalid = |reason: &'static str| {
             Err(RepoIdError::Invalid {
                 id: repo_id.to_string(),
@@ -141,8 +168,14 @@ impl RepoRegistry {
     pub fn sanitize_repo_name(name: &str) -> String {
         const SUFFIX_BYTES: usize = 9; // "-" + 8 hex digits
         let mut out = String::with_capacity(name.len());
-        for c in name.chars() {
-            let c = if is_forbidden_id_char(c) { '_' } else { c };
+        for (i, c) in name.chars().enumerate() {
+            // A leading '.' would make the id look like one of data/'s own
+            // dot entries (see `validate_repo_id`).
+            let c = if is_forbidden_id_char(c) || (i == 0 && c == '.') {
+                '_'
+            } else {
+                c
+            };
             if out.len() + c.len_utf8() > MAX_REPO_ID_BYTES - SUFFIX_BYTES {
                 break;
             }
@@ -158,7 +191,7 @@ impl RepoRegistry {
     /// yields [`RepoIdError::Unknown`], whose message lists the known ids so
     /// the caller can correct the request.
     pub fn require(&self, repo_id: &str) -> Result<&RepoInfo, RepoIdError> {
-        Self::validate_repo_id(repo_id)?;
+        Self::validate_registered_repo_id(repo_id)?;
         self.repos.get(repo_id).ok_or_else(|| RepoIdError::Unknown {
             id: repo_id.to_string(),
             known: self.list().iter().map(|r| r.id.clone()).collect(),
@@ -256,10 +289,52 @@ mod tests {
             "My Project-1a2b3c4d",
             "größe-ü-1a2b3c4d",
             "proj_🦀-1a2b3c4d",
-            ".dotfiles-1a2b3c4d",
+            "_dotfiles-1a2b3c4d",
         ] {
             assert_eq!(RepoRegistry::validate_repo_id(id), Ok(()), "{id}");
         }
+    }
+
+    #[test]
+    fn dot_ids_are_refused_for_new_indexes_but_legacy_ones_stay_readable() {
+        for id in [
+            ".dotfiles-1a2b3c4d",
+            ".build-123-1a2b3c4d",
+            ".locks",
+            ".staging",
+        ] {
+            assert!(
+                matches!(
+                    RepoRegistry::validate_repo_id(id),
+                    Err(RepoIdError::Invalid { .. })
+                ),
+                "{id}"
+            );
+        }
+        assert_eq!(RepoRegistry::sanitize_repo_name(".build-123"), "_build-123");
+        assert_eq!(RepoRegistry::sanitize_repo_name(".."), "_.");
+        assert_eq!(RepoRegistry::sanitize_repo_name("a.b"), "a.b");
+
+        let legacy = registry_with(&[".dotfiles-1a2b3c4d"]);
+        assert!(legacy.require(".dotfiles-1a2b3c4d").is_ok());
+        assert_eq!(
+            legacy
+                .registered_db_path(Path::new("/d"), ".dotfiles-1a2b3c4d")
+                .unwrap(),
+            PathBuf::from("/d/data/.dotfiles-1a2b3c4d")
+        );
+        assert!(legacy.require("..").is_err());
+    }
+
+    #[test]
+    fn re_registering_a_project_replaces_its_legacy_dot_id() {
+        let mut registry = registry_with(&[".dotfiles-1a2b3c4d", ".other-1a2b3c4d"]);
+        let mut info = registry.get(".dotfiles-1a2b3c4d").unwrap().clone();
+        info.id = "_dotfiles-1a2b3c4d".to_string();
+        registry.register(info);
+        let ids: Vec<&str> = registry.list().iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids.len(), 2, "{ids:?}");
+        assert!(ids.contains(&"_dotfiles-1a2b3c4d") && ids.contains(&".other-1a2b3c4d"));
     }
 
     #[test]
@@ -315,6 +390,7 @@ mod tests {
             "",
             ".",
             "..",
+            ".build-123",
             long.as_str(),
         ];
         for name in names {

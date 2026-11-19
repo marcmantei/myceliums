@@ -335,7 +335,9 @@ impl GraphService {
         if let Some(existing) = self.stores.get(repo_id) {
             return Ok(existing.clone());
         }
-        let store = Store::open(db_path, repo_id)
+        // A registered repository's index exists; never create an empty one
+        // here (a read during a rebuild's swap would otherwise leave one).
+        let store = Store::open_existing(db_path, repo_id)
             .await
             .map_err(|e| MyceliumError::Storage(e.to_string()))?;
         // Two callers can both miss the cache above and both open the database,

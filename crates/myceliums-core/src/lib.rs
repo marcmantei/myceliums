@@ -136,6 +136,7 @@ pub mod search;
 pub mod service;
 pub mod service_map;
 pub mod snapshot;
+pub mod staging;
 pub mod surprising_connections;
 pub mod text;
 pub mod timing;
@@ -158,7 +159,9 @@ pub(crate) mod string_pool;
 pub use adr::{
     adr_path, link_decision_to_symbol, load_decisions, save_decision, AdrStatus, ArchDecisionRecord,
 };
-pub use analyzer::{compute_member_of_relationships, AnalysisResult, Analyzer};
+pub use analyzer::{
+    compute_member_of_relationships, AnalysisCancelled, AnalysisResult, Analyzer, CancelCheck,
+};
 pub use arch_diagram::{
     generate_architecture_diagram, ArchDiagram, ServiceConnection, ServiceNode,
 };
@@ -222,6 +225,7 @@ pub use snapshot::{
     snapshot_dir, snapshot_path, DiffEntry, GraphDiff, GraphSnapshot, SnapshotSummary,
     SNAPSHOTS_KEPT,
 };
+pub use staging::{is_internal_entry, recover_leftovers, Recovered, StagedIndex};
 pub use surprising_connections::{compute_surprising_connections, SurprisingConnectionItem};
 pub use timing::{Timer, TimingReport};
 pub use wiki_export::{export_wiki, WikiExportConfig, WikiExportResult};

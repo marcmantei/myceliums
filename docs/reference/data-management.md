@@ -46,6 +46,12 @@ The registry is a JSON file that tracks all analyzed repositories. Each entry co
 
 Each repository's analysis data is stored in LanceDB format. This is a columnar storage format optimized for vector search and structured queries. The directory contains multiple `.lance` table directories for symbols, relationships, communities, processes, and other graph entities.
 
+The MCP `analyze` tool builds a new index in `data/.staging/build-<pid>-…/` and, once it is complete, swaps it with the live directory: in one system call where the platform supports it (Linux `renameat2(RENAME_EXCHANGE)`, macOS `renamex_np(RENAME_SWAP)`), otherwise by renaming the live directory to `data/.staging/old-<pid>-…/` and the new one into place (a failed second rename is undone). A journal file `data/.staging/swap-<pid>-…` names the directory being replaced; it stays as long as an `old-` directory exists. A failed or cancelled analysis deletes its `build-` directory.
+
+`data/.staging/` and `data/.locks/` are Myceliums' own; repository ids never start with `.` (a project folder named `.foo` gets the id `_foo-<hash>`), so no repository can be confused with them. Ids registered before this rule stay readable; re-analyzing such a project registers it under the new id and replaces the old entry, whose directory then shows up as orphaned.
+
+**Interrupted rebuilds are recovered automatically.** When a process is killed mid-build, or between the two renames, or an undo fails, its `build-`, `old-` and `swap-` entries stay in `data/.staging/`. Every `myc` command (except the grep hook), every MCP server start and every new rebuild checks for entries of rebuilds that no longer run: an `old-` directory is renamed back (the previous index returns) unless its journal records that the swap committed — whatever then sits at the live path (nothing, or an empty directory a reader recreated) is moved aside first — and everything else is deleted. Read paths open an index only if its directory exists, so they do not recreate one. Journal, swap and `committed` marker are each flushed to disk (`fsync` of the file and its directory) before the next step relies on them, so the order survives a power loss. Rebuilds still running are never touched, and neither `data/.staging/` nor `data/.locks/` counts as an orphaned repository. Liveness is judged by PID, so two processes sharing one data directory from different PID namespaces (containers) are not supported.
+
 ### Snapshots (`snapshots/<repo-id>/`)
 
 Snapshots capture the state of the knowledge graph at a point in time: symbols and edges keyed by file, qualified name and kind, so two analyses of unchanged code compare equal. Every analysis (MCP `analyze` or `myc analyze`) records one in `snapshots/<repo-id>/`; the newest 10 per repository are kept, and `snapshots/<repo-id>.json` holds the latest. `detect_architecture_drift` compares them (by default the previous analysis with the current graph).
@@ -170,12 +176,14 @@ Orphaned data directories occur when:
 
 ## Lock Files
 
-Myceliums uses lock files to prevent concurrent analysis of the same repository. A lock is acquired at the start of analysis and released when analysis completes.
+Myceliums uses lock files to prevent concurrent analysis of the same repository. A lock is acquired at the start of analysis and released when analysis completes. Locks live in `data/.locks/<repo-id>.lock` (PID and start time), outside the index directory, which a rebuild replaces as a whole. (Older releases wrote `data/<repo-id>/analysis.lock`; `myc doctor` still reports stale ones there.)
 
 **Stale locks** can occur when a process crashes or is forcefully terminated during analysis. Stale locks are detected and auto-cleaned by:
 
 - `myc doctor` (reports stale locks)
-- `myc analyze` and `myc session` (auto-clean stale locks before starting)
+- `myc analyze`, `myc session` and the MCP `analyze` tool (auto-clean stale locks before starting)
+
+The MCP `analyze` tool takes the same lock, so `myc analyze` and the MCP server never index the same repository at once; a refused MCP call is an `isError` result saying `Analysis already running`. The MCP `delete` tool refuses a repository that is being analyzed the same way.
 
 A lock is considered stale if the process that created it is no longer running.
 

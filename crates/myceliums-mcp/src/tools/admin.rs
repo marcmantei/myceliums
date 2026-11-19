@@ -1,4 +1,5 @@
-//! Repository lifecycle: analyze, list, delete.
+//! Repository lifecycle — analyze, list, delete — and the server's call
+//! statistics. The analysis itself lives in [`crate::analysis`].
 
 use super::prelude::*;
 
@@ -17,6 +18,123 @@ impl MyceliumsMcp {
     pub(crate) async fn analyze(
         &self,
         Parameters(params): Parameters<AnalyzeParams>,
+        context: RequestContext<RoleServer>,
+    ) -> TextResult {
+        let control = crate::analysis::RunControl {
+            sink: crate::analysis::ProgressSink::for_request(&context),
+            observer: None,
+            ct: context.ct.clone(),
+        };
+        self.analyze_with(params, control).await
+    }
+
+    #[tool(
+        name = "server_stats",
+        description = "Tool-call statistics of this MCP server since it started: calls, isError results, protocol errors, p50/p95/max latency and result size (bytes, ~tokens) per tool. Kept in memory on this machine only; nothing is ever sent anywhere.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn server_stats(&self) -> TextResult {
+        text(self.stats.snapshot().to_text())
+    }
+
+    #[tool(
+        name = "list_repos",
+        description = "List the analyzed repositories (id, name, path, when and from which commit they were indexed, size). Tools default to the repository of the working directory; pass another one's id as repo_id.",
+        annotations(
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn list_repos(
+        &self,
+        Parameters(params): Parameters<ListReposParams>,
+    ) -> Result<Json<ReposOutput>, ToolError> {
+        let registry = registry()?;
+        let mut repos = registry.list();
+        // Most recently analyzed first (RFC 3339 in one offset sorts as text).
+        repos.sort_by(|a, b| b.analyzed_at.cmp(&a.analyzed_at).then(a.id.cmp(&b.id)));
+        let total_count = repos.len();
+        let page = Page::new(params.limit, params.offset, Budget::LIST).take(repos);
+        let notice = if total_count == 0 {
+            Some("No repositories analyzed yet: run analyze with the project path.".to_string())
+        } else {
+            page.notice
+        };
+        Ok(Json(ReposOutput {
+            repos: page
+                .items
+                .into_iter()
+                .map(|r| RepoItem {
+                    id: r.id.clone(),
+                    name: r.name.clone(),
+                    path: r.path.clone(),
+                    analyzed_at: r.analyzed_at.clone(),
+                    analyzed_commit: r.analyzed_commit.clone(),
+                    symbols: r.symbol_count,
+                    files: r.file_count,
+                })
+                .collect(),
+            total_count,
+            notice,
+        }))
+    }
+
+    #[tool(
+        name = "delete",
+        description = "Permanently delete a repository's index (not the project files). Irreversible: requires confirm=true; only do it when the user asked for it.",
+        annotations(
+            read_only_hint = false,
+            destructive_hint = true,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    pub(crate) async fn delete(&self, Parameters(params): Parameters<DeleteParams>) -> TextResult {
+        let mut registry = registry()?;
+
+        let db_path = registry
+            .registered_db_path(&data_dir(), &params.repo_id)
+            .map_err(repo_id_error)?;
+        if !params.confirm {
+            return Err(ToolError::recoverable(
+                format!(
+                    "Refusing to delete the index of {:?} without confirm=true.",
+                    params.repo_id
+                ),
+                "only if the user asked for the deletion, call delete again with confirm=true",
+            ));
+        }
+        // Not while an analysis of it runs: its swap would bring it back.
+        let _guard = crate::analysis::RunningGuard::acquire(&data_dir(), &params.repo_id)
+            .map_err(|busy| busy.for_delete(&params.repo_id))?;
+        let info = registry
+            .remove(&params.repo_id)
+            .expect("registered_db_path accepted the id, so it is registered");
+        registry
+            .save()
+            .map_err(|e| ToolError::internal("cannot save the repository registry", e))?;
+        self.service.invalidate(&params.repo_id);
+        if db_path.exists() {
+            std::fs::remove_dir_all(&db_path)
+                .map_err(|e| ToolError::internal("cannot remove the index directory", e))?;
+        }
+        text(format!("Deleted: {} ({})", info.name, params.repo_id))
+    }
+}
+
+impl MyceliumsMcp {
+    /// `analyze` with explicit progress and cancellation (tests drive these).
+    pub(crate) async fn analyze_with(
+        &self,
+        params: AnalyzeParams,
+        control: crate::analysis::RunControl,
     ) -> TextResult {
         let path = PathBuf::from(&params.path);
         let abs_path = std::fs::canonicalize(&path).map_err(|e| {
@@ -89,193 +207,40 @@ impl MyceliumsMcp {
         let started_at = chrono::Utc::now().to_rfc3339();
         let analyzed_commit = cache::get_head_commit(&abs_path).ok();
 
-        // Write path: `repo_id` was derived from the canonical project path
-        // above, not supplied by the caller, and this run registers it.
-        // The index is about to be rewritten: drop the cached graph now, and
-        // again once the new index is complete (below).
-        self.service.invalidate(&repo_id);
-        let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
-        std::fs::create_dir_all(&db_path)
-            .map_err(|e| ToolError::internal("cannot create the index directory", e))?;
-
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| ToolError::internal("cannot open the index", e))?;
-        store
-            .delete_repo_data()
-            .await
-            .map_err(|e| ToolError::internal("cannot clear the old index", e))?;
-
-        let skip_embeddings = params.skip_embeddings.unwrap_or(false);
         // Honor the project's .myceliums.toml (analysis filters, embedding
         // model) the same way the CLI does.
         let config_path = abs_path.join(myceliums_core::config::CONFIG_FILENAME);
-        let analyzer = if config_path.exists() {
+        let config = if config_path.exists() {
             let cfg = myceliums_core::config::ProjectConfig::load(&config_path).map_err(|e| {
                 ToolError::recoverable(
                     format!("Invalid {}: {e}", config_path.display()),
                     "fix or remove that config file, then call analyze again",
                 )
             })?;
-            Analyzer::with_config(store, abs_path.clone(), cfg)
+            Some(cfg)
         } else {
-            Analyzer::new(store, abs_path.clone())
+            None
         };
-        let analyzer = analyzer.set_skip_embeddings(skip_embeddings);
-        let result = analyzer
-            .analyze()
-            .await
-            .map_err(|e| ToolError::internal("analysis failed", e))?;
 
-        // Community detection and process tracing
-        let store = Store::open(&db_path, &repo_id)
-            .await
-            .map_err(|e| ToolError::internal("cannot open the index", e))?;
-        let symbols = store
-            .get_symbols()
-            .await
-            .map_err(|e| ToolError::internal("cannot read symbols", e))?;
-        let relationships = store
-            .get_relationships()
-            .await
-            .map_err(|e| ToolError::internal("cannot read relationships", e))?;
-
-        let communities = CommunityDetector::detect(&symbols, &relationships, &repo_id)
-            .map_err(|e| ToolError::internal("community detection failed", e))?;
-        let community_count = store
-            .store_communities(&communities)
-            .await
-            .map_err(|e| ToolError::internal("cannot store communities", e))?;
-
-        let processes = ProcessTracer::trace(&symbols, &relationships, &repo_id)
-            .map_err(|e| ToolError::internal("process tracing failed", e))?;
-        let process_count = store
-            .store_processes(&processes)
-            .await
-            .map_err(|e| ToolError::internal("cannot store processes", e))?;
-
-        let mut registry = registry()?;
-        registry.register(RepoInfo {
-            id: repo_id.clone(),
-            name: repo_name,
-            path: abs_path.to_string_lossy().to_string(),
-            analyzed_at: started_at,
-            symbol_count: result.symbol_count as u32,
-            file_count: result.file_count as u32,
-            analyzed_commit: analyzed_commit.clone(),
-            vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
-        });
-        registry
-            .save()
-            .map_err(|e| ToolError::internal("cannot save the repository registry", e))?;
-        // Reads from here on see the new index, not a graph cached mid-run.
-        self.service.invalidate(&repo_id);
-
-        // Record this analysis for detect_architecture_drift. Best effort: a
-        // failed write costs the drift history, not the index.
-        let snapshot = build_snapshot(&repo_id, &symbols, &relationships);
-        if let Err(e) =
-            myceliums_core::record_snapshot(&data_dir(), &snapshot, analyzed_commit.as_deref())
-        {
-            tracing::warn!("cannot record the graph snapshot: {e}");
-        }
-
-        let embedding_stats = result.embedding_stats();
-        let output = AnalyzeOutput {
+        // Write path: `repo_id` was derived from the canonical project path
+        // above, not supplied by the caller, and this run registers it.
+        let data_dir = data_dir();
+        let guard = crate::analysis::RunningGuard::acquire(&data_dir, &repo_id)
+            .map_err(|busy| busy.for_analyze(&repo_id))?;
+        let output = crate::analysis::Rebuild {
             repo_id,
-            symbols: result.symbol_count,
-            files: result.file_count,
-            relationships: result.relationship_count,
-            communities: community_count,
-            processes: process_count,
-            symbols_embedded: embedding_stats.symbols_embedded,
-            symbols_total: embedding_stats.symbols_total,
-            embedding_failures: embedding_stats.embedding_failures,
-            cached: false,
-        };
+            repo_name,
+            project: abs_path,
+            config,
+            skip_embeddings: params.skip_embeddings.unwrap_or(false),
+            data_dir,
+            service: self.service.clone(),
+            started_at,
+            analyzed_commit,
+            guard,
+        }
+        .run(control)
+        .await?;
         text(format::format_analyze(&output))
-    }
-
-    #[tool(
-        name = "list_repos",
-        description = "List the analyzed repositories (id, name, path, when and from which commit they were indexed, size). Tools default to the repository of the working directory; pass another one's id as repo_id.",
-        annotations(
-            read_only_hint = true,
-            destructive_hint = false,
-            idempotent_hint = true,
-            open_world_hint = false
-        )
-    )]
-    pub(crate) async fn list_repos(
-        &self,
-        Parameters(params): Parameters<ListReposParams>,
-    ) -> Result<Json<ReposOutput>, ToolError> {
-        let registry = registry()?;
-        let mut repos = registry.list();
-        // Most recently analyzed first (RFC 3339 in one offset sorts as text).
-        repos.sort_by(|a, b| b.analyzed_at.cmp(&a.analyzed_at).then(a.id.cmp(&b.id)));
-        let total_count = repos.len();
-        let page = Page::new(params.limit, params.offset, Budget::LIST).take(repos);
-        let notice = if total_count == 0 {
-            Some("No repositories analyzed yet: run analyze with the project path.".to_string())
-        } else {
-            page.notice
-        };
-        Ok(Json(ReposOutput {
-            repos: page
-                .items
-                .into_iter()
-                .map(|r| RepoItem {
-                    id: r.id.clone(),
-                    name: r.name.clone(),
-                    path: r.path.clone(),
-                    analyzed_at: r.analyzed_at.clone(),
-                    analyzed_commit: r.analyzed_commit.clone(),
-                    symbols: r.symbol_count,
-                    files: r.file_count,
-                })
-                .collect(),
-            total_count,
-            notice,
-        }))
-    }
-
-    #[tool(
-        name = "delete",
-        description = "Permanently delete a repository's index (not the project files). Irreversible: requires confirm=true; only do it when the user asked for it.",
-        annotations(
-            read_only_hint = false,
-            destructive_hint = true,
-            idempotent_hint = true,
-            open_world_hint = false
-        )
-    )]
-    pub(crate) async fn delete(&self, Parameters(params): Parameters<DeleteParams>) -> TextResult {
-        let mut registry = registry()?;
-
-        let db_path = registry
-            .registered_db_path(&data_dir(), &params.repo_id)
-            .map_err(repo_id_error)?;
-        if !params.confirm {
-            return Err(ToolError::recoverable(
-                format!(
-                    "Refusing to delete the index of {:?} without confirm=true.",
-                    params.repo_id
-                ),
-                "only if the user asked for the deletion, call delete again with confirm=true",
-            ));
-        }
-        let info = registry
-            .remove(&params.repo_id)
-            .expect("registered_db_path accepted the id, so it is registered");
-        registry
-            .save()
-            .map_err(|e| ToolError::internal("cannot save the repository registry", e))?;
-        self.service.invalidate(&params.repo_id);
-        if db_path.exists() {
-            std::fs::remove_dir_all(&db_path)
-                .map_err(|e| ToolError::internal("cannot remove the index directory", e))?;
-        }
-        text(format!("Deleted: {} ({})", info.name, params.repo_id))
     }
 }
