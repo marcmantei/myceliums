@@ -59,19 +59,24 @@ impl MyceliumsMcp {
                 (subject, vec![s])
             }
             (None, Some(path)) => {
-                let path = path.trim().trim_start_matches("./");
-                let roots: Vec<&myceliums_storage::CodeSymbol> =
-                    symbols.iter().filter(|s| s.file_path == path).collect();
-                if roots.is_empty() {
-                    let files = self.files(&repo_id).await?;
-                    if !files.iter().any(|f| f.path == path) {
-                        return Err(ToolError::recoverable(
-                            format!("File `{path}` is not in the index."),
-                            "pass the path relative to the repository root (e.g. src/main.rs), or find the code with search_code",
-                        ));
+                // Core's file matching (exact path, else a unique suffix), as
+                // `myc impact <file>` uses it.
+                let roots = navigation::symbols_in_file(&symbols, &path);
+                let path = match roots.first() {
+                    Some(s) => s.file_path.clone(),
+                    None => {
+                        let path = path.trim().trim_start_matches("./").to_string();
+                        let files = self.files(&repo_id).await?;
+                        if !files.iter().any(|f| f.path == path) {
+                            return Err(ToolError::recoverable(
+                                format!("File `{path}` is not in the index."),
+                                "pass the path relative to the repository root (e.g. src/main.rs), or find the code with search_code",
+                            ));
+                        }
+                        path
                     }
-                }
-                (format!("{path} ({} symbols)", roots.len()), roots)
+                };
+                (format!("{path} ({} definitions)", roots.len()), roots)
             }
             (None, None) => {
                 let diff_text = diff_or_git(params.diff, &repo_id)?;

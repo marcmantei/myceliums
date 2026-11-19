@@ -65,6 +65,18 @@ impl ToolError {
         )
     }
 
+    /// The symbol does not exist, but names like it do.
+    pub(crate) fn symbol_not_found_did_you_mean(name: &str, similar: &[String]) -> Self {
+        let similar: Vec<String> = similar.iter().map(|s| format!("`{s}`")).collect();
+        Self::recoverable(
+            format!("Symbol `{name}` not found in the index."),
+            format!(
+                "did you mean {}? Otherwise find it with search_code, or re-run analyze if it is new",
+                similar.join(", ")
+            ),
+        )
+    }
+
     /// The agent-visible text, whichever channel carries it.
     pub(crate) fn message(&self) -> String {
         match self {

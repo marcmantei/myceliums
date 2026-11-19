@@ -65,9 +65,10 @@ mod prelude {
     pub(crate) use crate::format::{self, untrusted};
     pub(crate) use crate::index_status::{load_embedding_stats, partial_index_warning};
     pub(crate) use crate::navigation;
+    pub(crate) use crate::navigation::resolve as resolve_symbol;
     pub(crate) use crate::output::*;
     pub(crate) use crate::params::*;
-    pub(crate) use crate::repo::{data_dir, registry, repo_info, resolve_symbol};
+    pub(crate) use crate::repo::{data_dir, registry, repo_info};
     pub(crate) use crate::MyceliumsMcp;
 }
 
