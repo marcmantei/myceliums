@@ -628,7 +628,7 @@ impl Analyzer {
             file_symbols.push((file_result.rel_path.clone(), sym_pairs));
 
             for sym in &symbols {
-                resolver.register_symbol(&sym.name, &sym.qualified_name, &sym.uid);
+                resolver.register_symbol(sym);
             }
 
             let file_node = FileNode {
@@ -724,7 +724,7 @@ impl Analyzer {
                 .to_string();
             let symbols = parser::to_code_symbols(&result.symbols, &rel_path, self.store.repo_id());
             for sym in &symbols {
-                resolver.register_symbol(&sym.name, &sym.qualified_name, &sym.uid);
+                resolver.register_symbol(sym);
             }
             let file_node = FileNode {
                 uid: Uuid::new_v4().to_string(),
@@ -735,7 +735,11 @@ impl Analyzer {
             };
             all_files.push(file_node);
             all_symbols.extend(symbols);
-            all_calls.extend(result.calls);
+            // Calls carry their file: the resolver finds the caller by position.
+            all_calls.extend(result.calls.into_iter().map(|mut call| {
+                call.file = Some(rel_path.clone());
+                call
+            }));
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
             }
@@ -1493,7 +1497,7 @@ impl Analyzer {
                 let symbols =
                     parser::to_code_symbols(&result.symbols, &rel_path, self.store.repo_id());
                 for sym in &symbols {
-                    resolver.register_symbol(&sym.name, &sym.qualified_name, &sym.uid);
+                    resolver.register_symbol(sym);
                 }
                 let file_node = FileNode {
                     uid: Uuid::new_v4().to_string(),
@@ -1504,7 +1508,11 @@ impl Analyzer {
                 };
                 all_files.push(file_node);
                 all_symbols.extend(symbols);
-                all_calls.extend(result.calls);
+                // Calls carry their file: the resolver finds the caller by position.
+                all_calls.extend(result.calls.into_iter().map(|mut call| {
+                    call.file = Some(rel_path.clone());
+                    call
+                }));
                 if !result.rationales.is_empty() {
                     all_rationales.push((rel_path, result.rationales));
                 }
@@ -1658,7 +1666,7 @@ impl Analyzer {
             let symbols = parser::to_code_symbols(&result.symbols, &rel_path, self.store.repo_id());
 
             for sym in &symbols {
-                resolver.register_symbol(&sym.name, &sym.qualified_name, &sym.uid);
+                resolver.register_symbol(sym);
             }
 
             let file_node = FileNode {
@@ -1671,7 +1679,11 @@ impl Analyzer {
 
             all_files.push(file_node);
             all_symbols.extend(symbols);
-            all_calls.extend(result.calls);
+            // Calls carry their file: the resolver finds the caller by position.
+            all_calls.extend(result.calls.into_iter().map(|mut call| {
+                call.file = Some(rel_path.clone());
+                call
+            }));
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
             }

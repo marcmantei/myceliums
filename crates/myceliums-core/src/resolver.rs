@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use myceliums_storage::{Relationship, RelationshipKind};
+use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, SymbolKind};
 use uuid::Uuid;
 
 use crate::module_graph::ModuleGraph;
@@ -112,6 +112,17 @@ pub struct CallResolver {
     aliases: HashMap<StrId, StrId>,
     /// Optional module graph for cross-file import resolution.
     module_graph: Option<ModuleGraph>,
+    /// Every registered definition, per file: where callers are looked up.
+    defs_by_file: HashMap<String, Vec<Def>>,
+}
+
+/// Where a registered symbol is defined.
+struct Def {
+    uid: String,
+    name: String,
+    kind: SymbolKind,
+    start: u32,
+    end: u32,
 }
 
 impl Default for CallResolver {
@@ -130,6 +141,7 @@ impl CallResolver {
             import_aliases: HashMap::new(),
             aliases: HashMap::new(),
             module_graph: None,
+            defs_by_file: HashMap::new(),
         }
     }
 
@@ -138,11 +150,23 @@ impl CallResolver {
         self.module_graph = Some(graph);
     }
 
-    /// Pass 1: Register all symbol definitions
-    pub fn register_symbol(&mut self, name: &str, qualified_name: &str, uid: &str) {
-        let name_id = self.pool.intern(name);
-        let qualified_id = self.pool.intern(qualified_name);
-        let uid_id = self.pool.intern(uid);
+    /// Pass 1: Register a symbol definition: by name for callee lookup, and
+    /// by file and line span so a call's caller is the symbol whose body
+    /// contains the call site.
+    pub fn register_symbol(&mut self, symbol: &CodeSymbol) {
+        self.defs_by_file
+            .entry(symbol.file_path.clone())
+            .or_default()
+            .push(Def {
+                uid: symbol.uid.clone(),
+                name: symbol.name.clone(),
+                kind: symbol.kind.clone(),
+                start: symbol.start_line,
+                end: symbol.end_line,
+            });
+        let name_id = self.pool.intern(&symbol.name);
+        let qualified_id = self.pool.intern(&symbol.qualified_name);
+        let uid_id = self.pool.intern(&symbol.uid);
         if let Some(previous) = self.name_to_uid.insert(name_id, uid_id) {
             if previous != uid_id {
                 self.ambiguous.insert(name_id);
@@ -200,7 +224,7 @@ impl CallResolver {
         let mut relationships = Vec::new();
 
         for call in calls {
-            let caller_uid = self.resolve_name(&call.caller_name, call.file.as_deref());
+            let caller_uid = self.caller_of(call);
 
             // Try chain-based qualified resolution first, then import/SSA aliases.
             let callee_uid = self.resolve_with_chain(call).or_else(|| {
@@ -217,7 +241,7 @@ impl CallResolver {
                 }
             });
 
-            if let (Some((source, _)), Some((target, resolution))) = (caller_uid, callee_uid) {
+            if let (Some(source), Some((target, resolution))) = (caller_uid, callee_uid) {
                 relationships.push(Relationship {
                     uid: Uuid::new_v4().to_string(),
                     source_uid: source.to_string(),
@@ -237,6 +261,30 @@ impl CallResolver {
         });
 
         relationships
+    }
+
+    /// The symbol a call is made from: the innermost definition in the call's
+    /// file whose lines contain the call site, preferring one with the name
+    /// the extractor gave as the caller (a closure or local function inside
+    /// it may be extracted as a symbol of its own). Never a lookup by name
+    /// alone: a call without a file, or outside every definition, has no
+    /// caller.
+    fn caller_of(&self, call: &CallReference) -> Option<&str> {
+        let defs = self.defs_by_file.get(call.file.as_deref()?)?;
+        let containing = || {
+            defs.iter()
+                .filter(|d| d.start <= call.line && call.line <= d.end)
+        };
+        let innermost = |d: &&Def| (d.end - d.start, d.start);
+        containing()
+            .filter(|d| d.name == call.caller_name)
+            .min_by_key(innermost)
+            .or_else(|| {
+                containing()
+                    .filter(|d| matches!(d.kind, SymbolKind::Function | SymbolKind::Method))
+                    .min_by_key(innermost)
+            })
+            .map(|d| d.uid.as_str())
     }
 
     /// Attempt to resolve a call using its expression chain.
@@ -306,11 +354,32 @@ impl CallResolver {
 mod tests {
     use super::*;
 
+    const FILE: &str = "src/lib.rs";
+
+    /// A symbol in [`FILE`] spanning lines 1-2000, so it contains every
+    /// call site these tests use; the innermost one named like the caller
+    /// is the caller.
+    fn sym(name: &str, qualified: &str, uid: &str) -> CodeSymbol {
+        CodeSymbol {
+            uid: uid.to_string(),
+            name: name.to_string(),
+            qualified_name: qualified.to_string(),
+            kind: SymbolKind::Function,
+            file_path: FILE.to_string(),
+            start_line: 1,
+            end_line: 2000,
+            signature: String::new(),
+            content: String::new(),
+            repo_id: "repo".to_string(),
+            metadata: None,
+        }
+    }
+
     #[test]
     fn simple_alias_resolves_call() {
         let mut resolver = CallResolver::new();
-        resolver.register_symbol("main", "mod::main", "uid-main");
-        resolver.register_symbol("authenticate", "mod::authenticate", "uid-auth");
+        resolver.register_symbol(&sym("main", "mod::main", "uid-main"));
+        resolver.register_symbol(&sym("authenticate", "mod::authenticate", "uid-auth"));
         resolver.register_alias("handler", "authenticate");
 
         let calls = vec![CallReference {
@@ -318,7 +387,7 @@ mod tests {
             callee_name: "handler".to_string(),
             line: 10,
             chain: None,
-            file: None,
+            file: Some(FILE.to_string()),
         }];
 
         let rels = resolver.resolve_calls(&calls, "repo-1");
@@ -330,9 +399,9 @@ mod tests {
     #[test]
     fn import_alias_takes_precedence_over_ssa_alias() {
         let mut resolver = CallResolver::new();
-        resolver.register_symbol("main", "mod::main", "uid-main");
-        resolver.register_symbol("connect", "db::connect", "uid-connect");
-        resolver.register_symbol("other", "mod::other", "uid-other");
+        resolver.register_symbol(&sym("main", "mod::main", "uid-main"));
+        resolver.register_symbol(&sym("connect", "db::connect", "uid-connect"));
+        resolver.register_symbol(&sym("other", "mod::other", "uid-other"));
 
         // Both import alias and SSA alias point to different targets
         let import_local_id = resolver.pool.intern("db");
@@ -347,7 +416,7 @@ mod tests {
             callee_name: "db".to_string(),
             line: 5,
             chain: None,
-            file: None,
+            file: Some(FILE.to_string()),
         }];
 
         let rels = resolver.resolve_calls(&calls, "repo-1");
@@ -359,8 +428,8 @@ mod tests {
     #[test]
     fn multiple_aliases_to_same_target() {
         let mut resolver = CallResolver::new();
-        resolver.register_symbol("main", "mod::main", "uid-main");
-        resolver.register_symbol("validate", "mod::validate", "uid-validate");
+        resolver.register_symbol(&sym("main", "mod::main", "uid-main"));
+        resolver.register_symbol(&sym("validate", "mod::validate", "uid-validate"));
         resolver.register_alias("check", "validate");
         resolver.register_alias("verify", "validate");
 
@@ -370,14 +439,14 @@ mod tests {
                 callee_name: "check".to_string(),
                 line: 10,
                 chain: None,
-                file: None,
+                file: Some(FILE.to_string()),
             },
             CallReference {
                 caller_name: "main".to_string(),
                 callee_name: "verify".to_string(),
                 line: 11,
                 chain: None,
-                file: None,
+                file: Some(FILE.to_string()),
             },
         ];
 
@@ -393,21 +462,21 @@ mod tests {
             callee_name: callee.to_string(),
             line: 7,
             chain: None,
-            file: None,
+            file: Some(FILE.to_string()),
         }
     }
 
     #[test]
     fn edges_record_how_their_target_was_resolved() {
         let mut resolver = CallResolver::new();
-        resolver.register_symbol("main", "main", "uid-main");
-        resolver.register_symbol("unique", "unique", "uid-unique");
-        resolver.register_symbol("bar", "Foo.bar", "uid-foo-bar");
+        resolver.register_symbol(&sym("main", "main", "uid-main"));
+        resolver.register_symbol(&sym("unique", "unique", "uid-unique"));
+        resolver.register_symbol(&sym("bar", "Foo.bar", "uid-foo-bar"));
         // Two different symbols named `parse`.
-        resolver.register_symbol("parse", "auth.parse", "uid-auth-parse");
-        resolver.register_symbol("parse", "config.parse", "uid-config-parse");
+        resolver.register_symbol(&sym("parse", "auth.parse", "uid-auth-parse"));
+        resolver.register_symbol(&sym("parse", "config.parse", "uid-config-parse"));
         // Registering the same symbol twice is not an ambiguity.
-        resolver.register_symbol("unique", "unique", "uid-unique");
+        resolver.register_symbol(&sym("unique", "unique", "uid-unique"));
 
         let resolution_of = |callee: &str| {
             let rels = resolver.resolve_calls(&[call("main", callee)], "repo");
@@ -423,6 +492,45 @@ mod tests {
         assert_eq!(resolution_of("unique"), CallResolution::NameMatch);
         assert_eq!(resolution_of("bar"), CallResolution::NameMatch);
         assert_eq!(resolution_of("parse"), CallResolution::Ambiguous);
+    }
+
+    /// Two functions named `parse` in different files: a call made inside
+    /// the second one is attributed to the second one, by position, not to
+    /// whichever `parse` a name lookup returns (#139).
+    #[test]
+    fn the_caller_is_the_definition_containing_the_call_site() {
+        let mut resolver = CallResolver::new();
+        let at = |uid: &str, file: &str, lines: (u32, u32)| CodeSymbol {
+            file_path: file.to_string(),
+            start_line: lines.0,
+            end_line: lines.1,
+            ..sym("parse", "parse", uid)
+        };
+        // Registered last, so a lookup by name would return a.py's parse.
+        resolver.register_symbol(&at("uid-b-parse", "b.py", (10, 20)));
+        resolver.register_symbol(&at("uid-a-parse", "a.py", (1, 5)));
+        resolver.register_symbol(&CodeSymbol {
+            file_path: "b.py".to_string(),
+            start_line: 30,
+            end_line: 31,
+            ..sym("decode", "decode", "uid-decode")
+        });
+
+        let mut call = call("parse", "decode");
+        call.file = Some("b.py".to_string());
+        call.line = 12;
+        let rels = resolver.resolve_calls(std::slice::from_ref(&call), "repo");
+        assert_eq!(rels.len(), 1);
+        assert_eq!(rels[0].source_uid, "uid-b-parse");
+
+        // Outside every definition, or without a file, a call has no caller.
+        call.line = 25;
+        assert!(resolver
+            .resolve_calls(std::slice::from_ref(&call), "repo")
+            .is_empty());
+        call.line = 12;
+        call.file = None;
+        assert!(resolver.resolve_calls(&[call], "repo").is_empty());
     }
 
     #[test]
@@ -441,11 +549,11 @@ mod tests {
 
         // Register 1000 symbols
         for i in 0..1000 {
-            resolver.register_symbol(
+            resolver.register_symbol(&sym(
                 &format!("func_{i}"),
                 &format!("mod::func_{i}"),
                 &format!("uid-{i}"),
-            );
+            ));
         }
 
         // Register aliases for every 10th symbol
@@ -460,7 +568,7 @@ mod tests {
                 callee_name: format!("func_{i}"),
                 line: i as u32,
                 chain: None,
-                file: None,
+                file: Some(FILE.to_string()),
             })
             .collect();
 
@@ -475,7 +583,7 @@ mod tests {
                 callee_name: format!("alias_{i}"),
                 line: (1000 + i) as u32,
                 chain: None,
-                file: None,
+                file: Some(FILE.to_string()),
             })
             .collect();
 
@@ -490,7 +598,7 @@ mod tests {
 
         // Verify the pool is actually deduplicating (re-registering shouldn't grow it much)
         let pool_size_before = resolver.pool.len();
-        resolver.register_symbol("func_0", "mod::func_0", "uid-0");
+        resolver.register_symbol(&sym("func_0", "mod::func_0", "uid-0"));
         assert_eq!(resolver.pool.len(), pool_size_before);
     }
 }
