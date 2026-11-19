@@ -60,6 +60,7 @@ jobs:
       # the retrieval steps so its tables appear even when those fail.
       - name: Graph accuracy (report only)
         continue-on-error: true
+        timeout-minutes: 10
         run: |
           set -o pipefail
           target/debug/graph-eval --summary "$GITHUB_STEP_SUMMARY" | tee graph.txt

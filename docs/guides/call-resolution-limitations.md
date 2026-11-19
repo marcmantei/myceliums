@@ -102,7 +102,7 @@ By resolution label, all languages together:
 | call on `self`/`this` | 6 / 25 |
 | instantiation / constructor | 28 / 51 |
 | inherited method, `super(...)`, Java overloads | 1 / 4, 0 / 3, 0 / 3 |
-| recursion, interface dispatch | 5 / 5, 4 / 4 |
+| recursion, interface dispatch | 5 / 5, 4 / 4 (small counts; for interface dispatch the gold accepts every implementation, so a hit only means the name lookup landed on *some* implementation) |
 
 Both calls written inside a Rust macro (`println!("{}", run(&argv))`) were missed: to the parser, the arguments of a macro are an unparsed token tree.
 
@@ -118,10 +118,11 @@ When using `myc impact` or querying the call graph, apply these heuristics:
 
 - Edges labelled `exact` (rare: the call expression starts with the defining class's name)
 - Edges labelled `name-match` whose caller and callee both have names that are unique across the repository (e.g., `initializeAuthenticationSystem`)
-- Recursion and calls through an interface or trait object, which were all found in the gold set
+- Recursion (5 of 5 found; 95% interval 0.57-1.00, so treat as encouraging, not proven)
 
 ### Low Confidence (Verify Manually)
 
+- Calls through an interface or trait object: the edge points to whichever implementation the name lookup picked (often labelled `ambiguous`); myceliums does not model dispatch, and the Go/TS interface method declaration itself is not extracted
 - Edges labelled `ambiguous`: on the gold set, fewer than half are correct
 - Calls to or from functions with **common names** (`parse`, `handle`, `process`, `validate`, `get`, `add`, `map`, `filter`, `transform`): both the callee and the caller may be the wrong function of that name
 - Method calls on an object (`repo.add(x)`): the receiver's type is not used, so any method of that name qualifies
