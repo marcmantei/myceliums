@@ -33,7 +33,7 @@ If the file does not exist yet, create it with the content above. If it already 
 
 ## After setup
 
-Cursor loads the MCP server when it starts. The myceliums tools (`context_search`, `symbol_context`, `detect_impact`, `cypher_query`, etc.) become available in Cursor's AI chat.
+Cursor loads the MCP server when it starts. The myceliums core tools (`search_code`, `find_callers`, `impact_of_change`, `explain_symbol`, etc.) become available in Cursor's AI chat; add groups with `myc mcp --toolsets` (see [Toolsets](../reference/mcp-tools.md#toolsets)).
 
 You may need to restart Cursor after running the setup command for the MCP server to be picked up.
 

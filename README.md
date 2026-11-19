@@ -328,24 +328,29 @@ myc setup-continue    # Continue
 
 Any other MCP-compatible editor can use myceliums by pointing to `myc mcp`.
 
-**Most-used MCP tools** — the server exposes 55 in total; see the
-[MCP tools reference](docs/reference/mcp-tools.md) for the complete list:
+**MCP tools.** By default `myc mcp` exposes the **core toolset**: nine tools
+named after the questions agents ask, marked to load up front in Claude Code
+(`_meta["anthropic/alwaysLoad"]`) instead of hiding behind tool search:
 
-| Tool | Description |
+| Tool | Answers |
 |---|---|
-| `analyze` | Analyze a codebase (cache-aware, set `force: true` to bypass) |
-| `context_search` | BM25 symbol search |
-| `hybrid_search` | BM25 + vector search with Reciprocal Rank Fusion |
-| `semantic_search` | Vector embedding search for natural-language queries |
-| `search_documents` | Full-text search across all code content |
-| `symbol_context` | Get a symbol's callers, callees, and definition |
-| `cypher_query` | Execute a read-only Cypher query |
-| `detect_impact` | Trace the blast radius of a git diff |
-| `get_review_context` | Token-optimized structural summary for code reviews |
-| `rename_symbol` | Preview a cross-codebase symbol rename |
-| `get_processes` | Retrieve traced execution flows with optional filtering |
-| `list_repos` | List analyzed repositories and their `repo_id`s |
-| `delete` | Remove a repository's analysis data |
+| `search_code` | Where is X implemented / which function does Y? (keyword, semantic or hybrid; `auto` picks) |
+| `explain_symbol` | Show X with its source, signature, callers and callees |
+| `find_callers` | What calls X? (`depth` for callers of callers) |
+| `find_callees` | What does X call? |
+| `impact_of_change` | What breaks if I change this symbol, this file, or my uncommitted diff? |
+| `trace_flow` | How does control get from A to B? (call chains) |
+| `find_dead_code` | Which functions are never called? (optionally under a path) |
+| `list_repos` | Which repositories are indexed, under which `repo_id`? |
+| `analyze` | Index a project (cache-aware, `force: true` to rebuild) |
+
+Fifty more tools are opt-in by group — `graph`, `review`, `architecture`,
+`knowledge`, `email`, `cross_repo`, `admin` — with
+`myc mcp --toolsets core,architecture` or `myc configure --set
+mcp.toolsets=architecture`; `--toolsets all` exposes everything, including the
+old tool names (`context_search`, `symbol_context`, `get_callers`,
+`detect_impact`, ...) as deprecated aliases for one release. See the
+[MCP tools reference](docs/reference/mcp-tools.md#toolsets).
 
 ---
 

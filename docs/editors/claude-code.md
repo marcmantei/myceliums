@@ -34,6 +34,8 @@ A settings or MCP file that is not valid JSON is reported and left untouched.
 
 ### MCP server
 
+Registers myceliums as an MCP server so Claude Code can call tools like `search_code`, `find_callers`, and `impact_of_change`. These nine core tools mark themselves to load up front (`_meta["anthropic/alwaysLoad"]`), so they are in context from the first turn instead of behind tool search; see [Toolsets](../reference/mcp-tools.md#toolsets).
+
 ```json
 {
   "mcpServers": {

@@ -48,7 +48,7 @@ Each repository's analysis data is stored in LanceDB format. This is a columnar 
 
 ### Snapshots (`snapshots/<repo-id>/`)
 
-Snapshots capture the state of the knowledge graph at a point in time. They are used for drift detection (`myc diff`, `detect_architecture_drift`) and historical comparison (`snapshot_diff`). A new snapshot is saved automatically after each analysis.
+Snapshots capture the state of the knowledge graph at a point in time: symbols and edges keyed by file, qualified name and kind, so two analyses of unchanged code compare equal. Every analysis (MCP `analyze` or `myc analyze`) records one in `snapshots/<repo-id>/`; the newest 10 per repository are kept, and `snapshots/<repo-id>.json` holds the latest. `detect_architecture_drift` compares them (by default the previous analysis with the current graph).
 
 ---
 

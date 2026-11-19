@@ -62,7 +62,7 @@ In Step 2 of the wizard, enable AI instructions. This configures the SessionStar
 
 ### Step 2: Verify the Hook Is Active
 
-After setup, start a new session. You should see a message from myceliums in the session initialization indicating the knowledge graph is available. The hook is meant to make the agent prefer `context_search`, `symbol_context`, and `get_review_context` over reading raw files; how much it does is not measured. Without the hook, with only the MCP server and its instructions in context, the agent in the [agent benchmark](../../evals/agent/README.md) called a myceliums tool in 0 of 90 sessions.
+After setup, start a new session. You should see a message from myceliums in the session initialization indicating the knowledge graph is available. The hook is meant to make the agent prefer `search_code`, `find_callers`, `impact_of_change` and `explain_symbol` over reading raw files; how much it does is not measured. Without the hook, with only the MCP server and its instructions in context, the agent in the [agent benchmark](../../evals/agent/README.md) called a myceliums tool in 0 of 90 sessions.
 
 ### Step 3: For Cursor Users
 

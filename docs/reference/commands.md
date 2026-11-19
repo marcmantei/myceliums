@@ -560,10 +560,14 @@ Start the MCP (Model Context Protocol) server. By default uses stdio transport. 
 |------|------|---------|-------------|
 | `--http` | string, optional | stdio | Run as Streamable HTTP server on this address (e.g. `127.0.0.1:9999`). Non-loopback addresses are refused without `--allow-remote`. |
 | `--allow-remote` | flag | off | Allow a non-loopback `--http` address (e.g. `0.0.0.0:9999`). Every request must then send `Authorization: Bearer <token>`. |
+| `--toolsets` | comma-separated list | `mcp.toolsets` config, else `core` | Tool groups to expose: `core` (always on), `graph`, `review`, `architecture`, `knowledge`, `email`, `cross_repo`, `admin`, `deprecated`, or `all`. An unknown name is an error. See [Toolsets](mcp-tools.md#toolsets). |
 
 ```bash
-# Stdio transport (used by editor integrations)
+# Stdio transport (used by editor integrations), core toolset
 myc mcp
+
+# Core plus the architecture and review tools
+myc mcp --toolsets core,architecture,review
 
 # HTTP transport, loopback only
 myc mcp --http 127.0.0.1:9999
