@@ -25,16 +25,17 @@
 use anyhow::{anyhow, bail, Context, Result};
 use myceliums_core::config::EmbeddingSection;
 use myceliums_core::embeddings::EMBEDDING_TEXT_VERSION;
+use myceliums_core::search::SearchResult;
 use myceliums_core::{
-    check_model_cache, embedder_for_index, get_embedder_for, get_reranker, hybrid_search,
-    local_model_code, rerank_results, reranker_spec, Embedder, IndexEmbeddingMeta,
+    check_model_cache, embedder_for_index, get_embedder_for, get_reranker, hybrid_search_with,
+    local_model_code, rerank_results, reranker_spec, Embedder, HybridParams, IndexEmbeddingMeta,
 };
 use myceliums_storage::{CodeSymbol, Store};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::corpus::{Corpus, CORPUS_REPO_ID};
+use super::corpus::Corpus;
 use super::evaluator::SearchMode;
 
 /// Environment variable that opts in to downloading model weights.
@@ -48,15 +49,39 @@ pub const ALLOW_DOWNLOAD_FLAG: &str = "--allow-model-download";
 /// reorders, so the rerank mode is measured on the pool users actually get.
 pub const SHIPPED_HYBRID_LIMIT: usize = 20;
 
-/// Reciprocal-rank-fusion constant used by [`hybrid_search`]. Recorded in the
-/// report's provenance, not used to compute anything here.
-pub const SHIPPED_RRF_K: u32 = 60;
+/// Reciprocal-rank-fusion constant the shipped hybrid search uses
+/// ([`myceliums_core::DEFAULT_RRF_K`]). Recorded in the report's provenance,
+/// not used to compute anything here.
+pub const SHIPPED_RRF_K: u32 = myceliums_core::DEFAULT_RRF_K as u32;
 
 /// fastembed version in `Cargo.lock`, read by the build script.
 pub const FASTEMBED_VERSION: &str = env!("MYC_FASTEMBED_VERSION");
 
 /// Embedding batch size `myc analyze` uses when the project sets none.
-const SHIPPED_EMBEDDING_BATCH: usize = 256;
+pub const SHIPPED_EMBEDDING_BATCH: usize = 256;
+
+/// Environment variable that lowers the embedding batch size, for machines
+/// whose memory the shipped batch exhausts.
+///
+/// A batch of 256 symbols at the model's 512-token budget holds attention
+/// buffers of several gigabytes — fine on a workstation, enough to take down
+/// a 16 GB CI runner on a real repository. The batch only decides which
+/// symbols are padded together; each symbol's vector is the same up to float
+/// noise, as `myc analyze` with a lower `embedding_batch_size` would produce.
+pub const EMBEDDING_BATCH_ENV: &str = "MYC_EVAL_EMBEDDING_BATCH";
+
+/// The embedding batch size of this run: [`EMBEDDING_BATCH_ENV`] when it holds
+/// a positive integer, else [`SHIPPED_EMBEDDING_BATCH`].
+pub fn embedding_batch() -> usize {
+    parse_batch(std::env::var(EMBEDDING_BATCH_ENV).ok().as_deref())
+}
+
+fn parse_batch(value: Option<&str>) -> usize {
+    value
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|&n| n > 0)
+        .unwrap_or(SHIPPED_EMBEDDING_BATCH)
+}
 
 /// Whether this run may download model weights.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -303,7 +328,7 @@ impl ModelIndex {
             bail!("cannot build the embedding index: {reason}");
         }
         let dir = tempfile::tempdir().context("creating a scratch directory for the index")?;
-        let store = Store::open(dir.path(), CORPUS_REPO_ID)
+        let store = Store::open(dir.path(), corpus.repo_id())
             .await
             .context("opening the scratch LanceDB store")?;
 
@@ -319,7 +344,7 @@ impl ModelIndex {
             .await
             .context("loading the embedding model")?;
         let vectors = embedder
-            .embed_symbols(corpus.symbols(), SHIPPED_EMBEDDING_BATCH)
+            .embed_symbols(corpus.symbols(), embedding_batch())
             .await
             .context("embedding the corpus")?;
         let pairs: Vec<(String, Vec<f32>)> = corpus
@@ -368,12 +393,14 @@ impl ModelIndex {
     }
 
     /// Rank corpus symbols for `query` under a model-backed `mode`, best first,
-    /// at most `depth` deep.
+    /// at most `depth` deep. `params` are the fusion parameters of the hybrid
+    /// modes; semantic search does not read them.
     pub async fn rank(
         &self,
         mode: SearchMode,
         query: &str,
         depth: usize,
+        params: &HybridParams,
     ) -> Result<Vec<CodeSymbol>> {
         if let Some(reason) = self.setup.blocker(mode, self.policy) {
             bail!("mode '{}' cannot rank '{query}': {reason}", mode.id());
@@ -393,7 +420,7 @@ impl ModelIndex {
                     .collect())
             }
             SearchMode::Hybrid => Ok(self
-                .hybrid(query, depth.max(SHIPPED_HYBRID_LIMIT))
+                .hybrid(query, depth.max(SHIPPED_HYBRID_LIMIT), params)
                 .await?
                 .into_iter()
                 .take(depth)
@@ -401,7 +428,7 @@ impl ModelIndex {
                 .collect()),
             SearchMode::HybridRerank => {
                 // Rerank the pool `--rerank` reorders by default, then cut.
-                let pool = self.hybrid(query, SHIPPED_HYBRID_LIMIT).await?;
+                let pool = self.hybrid(query, SHIPPED_HYBRID_LIMIT, params).await?;
                 let reranker = self.embedder.meta().reranker.clone();
                 Ok(rerank_results(query, pool, reranker.as_deref())
                     .await?
@@ -417,11 +444,92 @@ impl ModelIndex {
         &self,
         query: &str,
         limit: usize,
+        params: &HybridParams,
     ) -> Result<Vec<myceliums_core::HybridSearchResult>> {
         // The BM25 leg gets `store.get_symbols()`, exactly as `myc search
         // --hybrid` and the MCP tool pass it, so RRF and BM25 ties break the
         // way they do in the product. The lexical mode ranks the same slice.
-        hybrid_search(&self.embedder, &self.symbols, &self.store, query, limit).await
+        // With default `params` this is `hybrid_search` itself.
+        hybrid_search_with(
+            &self.embedder,
+            &self.symbols,
+            &self.store,
+            query,
+            limit,
+            params,
+        )
+        .await
+    }
+
+    /// The two inputs of hybrid fusion for `query`, computed once so that many
+    /// fusion settings can be scored without repeating them: the full BM25
+    /// ranking over the stored symbols, and the nearest-vector candidates for
+    /// each requested candidate count.
+    ///
+    /// Each piece comes from the function the product calls —
+    /// [`myceliums_core::search_symbols`], [`Embedder::embed_query`] and
+    /// [`Store::vector_search`] with `limit.max(candidates)` results — so
+    /// fusing them with [`myceliums_core::reciprocal_rank_fusion`] reproduces
+    /// [`hybrid_search_with`]. The parameter sweep checks that on
+    /// every query at the shipped defaults rather than taking it on trust.
+    pub async fn fusion_inputs(
+        &self,
+        query: &str,
+        limit: usize,
+        candidate_counts: &[usize],
+    ) -> Result<FusionInputs> {
+        let bm25 = myceliums_core::search_symbols(&self.symbols, query);
+        let query_vector = self.embedder.embed_query(query).await?;
+        let mut vector = Vec::with_capacity(candidate_counts.len());
+        for &candidates in candidate_counts {
+            let hits = self
+                .store
+                .vector_search(&query_vector, limit.max(candidates))
+                .await?
+                .into_iter()
+                .map(|(symbol, score)| (symbol, score as f64))
+                .collect();
+            vector.push((candidates, hits));
+        }
+        Ok(FusionInputs { bm25, vector })
+    }
+}
+
+/// The BM25 ranking and vector candidates of one query; see
+/// [`ModelIndex::fusion_inputs`].
+pub struct FusionInputs {
+    /// Every BM25 match, best first — what the hybrid BM25 leg fuses.
+    pub bm25: Vec<SearchResult>,
+    /// Nearest-vector candidates per candidate count, best first.
+    pub vector: Vec<(usize, Vec<(CodeSymbol, f64)>)>,
+}
+
+impl FusionInputs {
+    /// Fuse the inputs under `params`, keeping the top `limit` — the ranking
+    /// [`hybrid_search_with`] returns for the same query, limit and params.
+    pub fn fuse(&self, params: &HybridParams, limit: usize) -> Result<Vec<CodeSymbol>> {
+        let vector = self
+            .vector
+            .iter()
+            .find(|(candidates, _)| *candidates == params.vector_candidates)
+            .map(|(_, hits)| hits.clone())
+            .ok_or_else(|| {
+                anyhow!(
+                    "no vector candidates fetched for a count of {}",
+                    params.vector_candidates
+                )
+            })?;
+        let bm25 = self
+            .bm25
+            .iter()
+            .map(|hit| (hit.symbol.clone(), hit.score, None))
+            .collect();
+        Ok(
+            myceliums_core::reciprocal_rank_fusion(bm25, vector, params.rrf_k, limit)
+                .into_iter()
+                .map(|result| result.symbol)
+                .collect(),
+        )
     }
 }
 
@@ -433,7 +541,7 @@ impl ModelIndex {
 /// the product's symbol order whether or not model weights are present.
 pub async fn stored_symbols(corpus: &Corpus) -> Result<Vec<CodeSymbol>> {
     let dir = tempfile::tempdir().context("creating a scratch directory for the store")?;
-    let store = Store::open(dir.path(), CORPUS_REPO_ID)
+    let store = Store::open(dir.path(), corpus.repo_id())
         .await
         .context("opening the scratch LanceDB store")?;
     store
@@ -459,6 +567,15 @@ mod tests {
         assert!(ModelPolicy::resolve(true, None).allow_download);
         assert!(ModelPolicy::resolve(false, Some("1")).allow_download);
         assert!(ModelPolicy::resolve(false, Some(" TRUE ")).allow_download);
+    }
+
+    #[test]
+    fn the_embedding_batch_defaults_to_the_shipped_one() {
+        assert_eq!(parse_batch(None), SHIPPED_EMBEDDING_BATCH);
+        assert_eq!(parse_batch(Some("")), SHIPPED_EMBEDDING_BATCH);
+        assert_eq!(parse_batch(Some("0")), SHIPPED_EMBEDDING_BATCH);
+        assert_eq!(parse_batch(Some("lots")), SHIPPED_EMBEDDING_BATCH);
+        assert_eq!(parse_batch(Some(" 32 ")), 32);
     }
 
     #[test]

@@ -76,7 +76,8 @@ pub struct BootstrapConfig {
 }
 
 impl BootstrapConfig {
-    fn current() -> Self {
+    /// The settings this build computes intervals with.
+    pub fn current() -> Self {
         Self {
             method: "paired bootstrap over queries, percentile interval".to_string(),
             resamples: BOOTSTRAP_RESAMPLES,
@@ -328,7 +329,7 @@ pub fn rounded(estimate: DeltaEstimate) -> DeltaEstimate {
 }
 
 /// `os-arch` of this build, e.g. `macos-aarch64`.
-fn platform() -> String {
+pub fn platform() -> String {
     format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
 }
 

@@ -454,7 +454,8 @@ differ, not as estimates precise to the second decimal.
   real repositories, where identifiers are long, domain-specific and far more
   numerous. Nothing here was tuned on this set, and nothing should be: RRF `k`,
   leg weights, the rerank pool and model choice belong on a separate
-  development split (#95), with this set kept for the final measurement.
+  development split, with this set kept for the final measurement. That split
+  now exists — see [the real-repository set](#real-repository-held-out-set-95).
 
 ### The exact-name failure
 
@@ -466,6 +467,299 @@ above the getter that was actually asked for. The vector leg barely helps:
 miss. Qualifying a query with its class makes retrieval *worse*, which is the
 opposite of what anyone typing it would expect; the query stays in the set so
 that a fix shows up as a win.
+
+## Real-repository held-out set (#95)
+
+The golden set above is 51 queries over 96 symbols in five toy fixtures,
+labelled by the same automation that wrote the search code. It is a good
+regression guard and a poor place to choose parameters: anything tuned on it
+would be tuned to it. RRF `k = 60` and the 100 vector candidates of hybrid
+search were asserted, never measured. This section describes the set built to
+measure them, how they were tuned, and what came out.
+
+```bash
+crates/myceliums-benchmarks/real-repos/fetch.sh          # check out the pinned repositories
+cargo run -p myceliums-benchmarks --bin real-repo-eval    # score, sweep on dev, confirm on held-out
+cargo run -p myceliums-benchmarks --bin real-repo-review -- --reviewer <handle>   # review the labels
+```
+
+### The set
+
+168 queries over four open-source repositories, each pinned to the commit of
+a release and fetched by `real-repos/fetch.sh` into a cache directory
+(`$MYC_EVAL_REPOS_DIR`, default `~/.cache/myceliums-eval-repos`) — never
+vendored. The evaluator refuses a checkout at any other commit.
+
+| Repository | Language | Release · commit | Symbols | Queries |
+| --- | --- | --- | ---: | ---: |
+| psf/requests | Python | `v2.34.2` · `6e83187b8f` | 801 | 42 |
+| pallets/flask | Python | `3.1.3` · `22d924701a` | 1,574 | 42 |
+| gin-gonic/gin | Go | `v1.12.0` · `73726dc606` | 1,898 | 42 |
+| honojs/hono | TypeScript | `v4.13.18` · `f6fbaf0299` | 10,420 | 42 |
+
+Each repository has 9 `exact-name`, 10 `paraphrase`, 14 `behavioural` and 9
+`conceptual` queries (the golden set's closed vocabulary). Each repository is
+indexed on its own, as `myc analyze` indexes one repository; vector search is
+exact at every size (see the ANN section), so hono's 10,420 symbols are
+scanned exactly like the smaller repositories.
+
+**Corpus.** `Corpus::load_repository` walks a checkout with the analyzer's
+discovery rules (hidden directories, `node_modules`, `target`, `dist`,
+`build`, virtualenvs and `__pycache__` skipped; symlinks not followed) and its
+pre-parse filter `should_skip_file` under the default `[analysis]` settings.
+Tests and examples stay in: they are what an agent's search competes with in a
+real repository. As in the golden set, Markdown and other prose files are not
+corpus — the labels are code symbols. A ranking that returns two symbols with
+the same `(file, qualified_name)` (overloads, a getter and its setter) scores
+the second as a miss in its slot, so one answer never counts twice.
+
+**Labels.** Every label is a `(file, qualified_name)` pair the parser
+produces, with a `why` naming what in that symbol's code answers the query,
+plus a per-query `rationale` saying what was deliberately left out. They were
+drafted by an AI agent reading the code at the pinned commit — never from
+myceliums search output, which would have let the engine grade itself — and
+are marked `"labelled_by": "agent:claude"`, `"reviewed_by": null`. **No human
+has reviewed them yet; the set is not authoritative until one has**
+(`real-repo-review` prints each query with its labels' source and records the
+reviewer). The labelling rules applied across all four repositories — notably
+"one implementation in several files: label every copy" and "thin wrappers
+only when the query names them" — are in
+[`real-repos/README.md`](../real-repos/README.md).
+
+### Development and held-out split
+
+`RealRepoSet::split` puts each query in `dev` or `held-out` deterministically:
+within each (repository, intent) stratum, queries are ordered by SHA-256 of a
+fixed salt and their id, and the first `round(0.6 × n)` are dev. That gives 96
+dev and 72 held-out queries, 24 + 18 per repository, every stratum split as
+close to 60/40 as its size allows. The assignment depends on the ids only — not
+on file order, machine or run — and adding a query to a stratum moves at most
+one other across the boundary (`adding_a_query_moves_at_most_one_other`). The
+report records the full assignment.
+
+Parameters are chosen on dev only. Held-out is read to confirm or reject the
+dev choice.
+
+### Sweep protocol
+
+Fixed before any number was seen:
+
+- **Grid** — every combination of RRF `k` ∈ {10, 20, 40, 60, 100} and minimum
+  vector candidates ∈ {50, 100, 200, 400}: 20 configurations, the shipped
+  `k = 60`, 100 candidates among them. Hybrid search exposes no other knob.
+- **Selection** — the highest dev mean nDCG@10 wins; the shipped default is
+  the incumbent, so a tie keeps it.
+- **Confirmation** — the winner and the default are run on held-out through
+  the production `hybrid_search_with` / `hybrid_search`, and the paired
+  bootstrap difference (10,000 resamples, 95%) is taken on nDCG@10.
+- **Decision** — the defaults change only if that held-out interval lies
+  wholly above zero. Otherwise they stay, whatever dev said: the dev winner is
+  the best of 20 tries on the queries it was picked on, and its dev margin is
+  biased upward by exactly that.
+
+Scoring 20 configurations per query by calling `hybrid_search_with` 20 times
+would repeat the BM25 pass and the query embedding 20 times. The sweep instead
+computes them once per query (`ModelIndex::fusion_inputs`: the production
+`search_symbols`, `embed_query` and `Store::vector_search` with
+`limit.max(candidates)`) and fuses with the production
+`reciprocal_rank_fusion`. The evaluator checks on every dev query that this
+reproduces the production `hybrid_search` scores exactly at the shipped
+defaults, and fails the run otherwise. The held-out confirmation does not rely
+on the shortcut.
+
+Not swept: the rerank pool and the models; the vector index is #117's
+subject (it is now an exact scan).
+
+### CI
+
+`.github/workflows/retrieval-quality-real-repos.yml` runs the whole thing
+weekly and on `workflow_dispatch` — report-only, with the summary in the job
+summary and the JSON report as an artifact. Indexing four repositories and
+reranking 168 queries took 88 and 109 minutes in the two runs so far on a
+hosted runner (reranking is most of it), far
+too long for every pull request; the golden-set gate above stays the per-PR
+check. The checkouts are cached under a key derived from the pins only, the
+model weights share the golden-set job's cache, and the job embeds in batches
+of 32 (`MYC_EVAL_EMBEDDING_BATCH`) because the shipped batch of 256 took the
+16 GB runner down — batch size changes padding, not vectors beyond float noise.
+The job fails only when it cannot measure honestly: a checkout at the wrong
+commit, a label naming no corpus symbol, or a sweep that no longer reproduces
+the production hybrid ranking.
+
+### Recorded results — real repositories
+
+Recorded on 2026-11-19 by the CI workflow (`linux-x86_64`, hosted runner),
+dataset `2026-11-12` (digest `0eeb0ba91cf3…`), shipped models
+`multilingual-e5-small` (embedding-text version 1) and `bge-reranker-v2-m3`
+via fastembed 4.9.1, rerank pool 20, embedding batch 32. The full report is
+[`real-repos/recorded-run.json`](../real-repos/recorded-run.json). It names
+commit `e0feab8…`: this branch before its final rebase onto main's #136/#137,
+which touch neither the search paths nor the parser output — all four
+corpora parse to byte-identical symbol inventories after the rebase. Its
+`-dirty` suffix came from the untracked `tee` log in the CI workspace, not from
+uncommitted code; the evaluator now ignores untracked files there.
+
+**One label has changed since.** Review feedback found a missing answer:
+`requests-conceptual-session-cookie-persistence` (a dev query) now also labels
+`SessionRedirectMixin.resolve_redirects`, which carries cookies across redirect
+hops. The dataset moved to version `2026-11-19`; the run below was measured on
+`2026-11-12` and has not been repeated, so that one dev query is scored
+against seven labels instead of eight. The held-out numbers, and therefore
+the decision, are unaffected. The next weekly run measures the current set.
+
+**All labels are unreviewed agent drafts.** Read every number below as
+provisional.
+
+All 168 queries:
+
+| Mode | MRR@10 | nDCG@10 | recall@10 | hit@1 | hit@10 | R-precision |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `lexical` | 0.3834 | 0.3818 | 0.5050 | 0.2619 | 0.6250 | 0.2619 |
+| `semantic` | 0.5025 | 0.4774 | 0.5922 | 0.4167 | 0.7083 | 0.3485 |
+| `hybrid` | 0.4928 | 0.4818 | 0.6268 | 0.3750 | 0.7619 | 0.3325 |
+| `hybrid+rerank` | 0.5491 | 0.5320 | 0.6397 | 0.4286 | 0.7679 | 0.3951 |
+
+Held-out split only (72 queries):
+
+| Mode | MRR@10 | nDCG@10 | recall@10 | hit@1 | hit@10 | R-precision |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `lexical` | 0.4451 | 0.4388 | 0.5840 | 0.3056 | 0.7083 | 0.2807 |
+| `semantic` | 0.5611 | 0.5481 | 0.6706 | 0.4722 | 0.7778 | 0.4082 |
+| `hybrid` | 0.5884 | 0.5639 | 0.7065 | 0.4722 | 0.8611 | 0.3972 |
+| `hybrid+rerank` | 0.6029 | 0.5737 | 0.6954 | 0.4444 | 0.8472 | 0.4093 |
+
+Differences, paired bootstrap 95% CI, uncorrected; **bold** intervals exclude
+zero:
+
+| Comparison | Δ nDCG@10, all 168 | Δ MRR@10, all 168 | Δ nDCG@10, held-out 72 |
+| --- | ---: | ---: | ---: |
+| semantic − lexical | **+0.096 [+0.044, +0.146]** | **+0.119 [+0.058, +0.179]** | **+0.109 [+0.029, +0.189]** |
+| hybrid − lexical | **+0.100 [+0.069, +0.132]** | **+0.109 [+0.073, +0.146]** | **+0.125 [+0.078, +0.171]** |
+| hybrid+rerank − lexical | **+0.150 [+0.096, +0.204]** | **+0.166 [+0.101, +0.230]** | **+0.135 [+0.058, +0.208]** |
+| hybrid − semantic | +0.004 [−0.033, +0.041] | −0.010 [−0.056, +0.036] | +0.016 [−0.043, +0.075] |
+| hybrid+rerank − hybrid | **+0.050 [+0.008, +0.091]** | +0.056 [−0.000, +0.113] | +0.010 [−0.050, +0.068] |
+
+By repository, nDCG@10 / MRR@10:
+
+| Repository | `lexical` | `semantic` | `hybrid` | `hybrid+rerank` |
+| --- | ---: | ---: | ---: | ---: |
+| requests | 0.531 / 0.528 | 0.539 / 0.581 | 0.582 / 0.598 | 0.637 / 0.667 |
+| flask | 0.483 / 0.469 | 0.596 / 0.611 | 0.608 / 0.609 | 0.647 / 0.631 |
+| gin | 0.360 / 0.370 | 0.521 / 0.540 | 0.498 / 0.519 | 0.520 / 0.544 |
+| hono | 0.153 / 0.167 | 0.254 / 0.278 | 0.240 / 0.245 | 0.324 / 0.355 |
+
+By intent, MRR@10 / nDCG@10, all queries:
+
+| Intent (queries) | `lexical` | `semantic` | `hybrid` | `hybrid+rerank` |
+| --- | ---: | ---: | ---: | ---: |
+| `exact-name` (36) | 0.386 / 0.451 | 0.617 / 0.670 | 0.523 / 0.589 | 0.720 / 0.751 |
+| `paraphrase` (40) | 0.366 / 0.407 | 0.357 / 0.392 | 0.441 / 0.480 | 0.469 / 0.498 |
+| `behavioural` (56) | 0.386 / 0.386 | 0.497 / 0.482 | 0.485 / 0.489 | 0.545 / 0.516 |
+| `conceptual` (36) | 0.395 / 0.278 | 0.557 / 0.372 | 0.532 / 0.366 | 0.473 / 0.375 |
+
+**Sweep on dev (96 queries).** The fused dev rankings reproduced the
+production `hybrid_search` scores on all 96 dev queries at the shipped
+defaults. Δ is against the shipped `k = 60`, 100 candidates on the same
+queries:
+
+| RRF k | 50 candidates | 100 candidates | 200 candidates | 400 candidates |
+| ---: | ---: | ---: | ---: | ---: |
+| 10 | 0.4220 (+0.002) | 0.4218 (+0.002) | 0.4218 (+0.002) | 0.4219 (+0.002) |
+| 20 | **0.4244 (+0.004)** | 0.4242 (+0.004) | 0.4195 (−0.001) | 0.4195 (−0.001) |
+| 40 | 0.4235 (+0.003) | 0.4230 (+0.003) | 0.4216 (+0.001) | 0.4216 (+0.001) |
+| 60 | 0.4209 (+0.001) | 0.4202 (shipped) | 0.4172 (−0.003) | 0.4172 (−0.003) |
+| 100 | 0.4219 (+0.002) | 0.4201 (−0.000) | 0.4169 (−0.003) | 0.4169 (−0.003) |
+
+Cells are dev nDCG@10. No dev difference has an interval that excludes zero
+except `k = 60` with 50 candidates, whose +0.001 [+0.000, +0.002] is a single
+query moving by a fraction of a rank.
+
+**Held-out confirmation (72 queries).** The dev winner, `k = 20` with 50
+candidates, against the shipped default, both through the production path:
+
+| Metric | Δ (k = 20, 50 − shipped) [95% CI] |
+| --- | ---: |
+| nDCG@10 | −0.001 [−0.015, +0.014] |
+| MRR@10 | −0.003 [−0.013, +0.007] |
+| recall@10 | +0.007 [−0.023, +0.045] |
+| hit@10 | −0.014 [−0.069, +0.028] |
+
+**Decision: the defaults stay** — `k = 60` and 100 vector candidates. The dev
+lead of +0.004 does not survive on held-out, where the difference is
+indistinguishable from zero in both directions.
+
+### What the numbers say — and do not
+
+- **The parameters do not matter much on this set.** All 20 configurations
+  sit within ±0.004 nDCG@10 of the default on dev. With a result list of 20,
+  more than 100 vector candidates only adds deep vector-only symbols that
+  rarely reach the top 20, and slightly hurt; fewer than 100 changed
+  almost nothing. RRF `k` between 10 and 100 reorders a few near-ties. The
+  values that ship were asserted, not tuned; they now are measured, and
+  nothing measurably beats them.
+- **On real repositories hybrid and semantic search are not distinguishable.**
+  The golden set showed hybrid 0.046 nDCG@10 below semantic (interval
+  excluding zero). Here the difference is +0.004 [−0.033, +0.041] overall and
+  +0.016 [−0.043, +0.075] on held-out — intervals about ±0.04 and ±0.06 wide,
+  so a real difference of that size either way is not ruled out. The two
+  trade places by intent: fusion helps `paraphrase` queries (nDCG@10
+  0.392 → 0.480) and costs `exact-name` queries (0.670 → 0.589). A plausible
+  reading, not checked query by query: BM25 contributes where a paraphrase
+  still shares a domain word with the identifier, and on exact names it lifts
+  other symbols that repeat the name — tests, callers — into the fused list.
+  Hybrid finds *something* more often (hit@10 0.762 vs 0.708, recall@10
+  +0.035), semantic puts it first more often (hit@1 0.417 vs 0.375).
+- **Everything model-backed beats BM25 by about 0.1 nDCG@10**, on all queries
+  and on held-out alike — the one finding that carries over from the golden
+  set unchanged.
+- **Reranking helps on all queries, not provably on held-out.** +0.050
+  [+0.008, +0.091] nDCG@10 over 168 queries, +0.010 [−0.050, +0.068] over the
+  72 held-out ones; the gain is concentrated in `exact-name` queries (0.589 →
+  0.751). The reranker was not tuned, so all 168 queries are a fair sample for
+  it; the held-out interval is simply wider.
+- **hono is hard.** 10,420 symbols, 8,503 of them in test, runtime-test and
+  benchmark files (6,604 are local constants there); every mode scores
+  0.15–0.36 nDCG@10 there against 0.48–0.65 on the Python repositories. An
+  exploratory run before #135, when hono's vectors still went through the
+  IVF-PQ index, gave semantic 0.314 nDCG@10 on hono against 0.254 with today's
+  exact scan — 42 queries, unreviewed labels, one run each. Tracked in #141;
+  not a finding.
+- **Scores are lower than on the golden set across the board** (hybrid
+  nDCG@10 0.48 vs 0.74). Real identifiers are numerous and repetitive, and
+  tests and examples compete with the definitions. The golden-set numbers are
+  a regression guard, not an estimate of real-repository quality.
+
+### Limits of this set
+
+- **Unreviewed labels**, drafted by one agent. Until a human reviews them,
+  label errors and the labeller's reading of each query are inside every
+  number. `real-repo-review` catches wrong labels; it cannot show a reviewer
+  the answers that are *missing* (the cookie-persistence query above lacked
+  one), so recall-type numbers may be biased in either direction.
+- **The held-out split is no longer clean for future tuning.** It was read
+  twice here: an exploratory CI run before the final rebase (IVF-PQ still
+  active for hono, and a 60-configuration grid that also swept a BM25-leg
+  weight of 0.25/0.5/1) picked `k = 20`, 50 candidates, weight 0.25 on dev and
+  moved held-out nDCG@10 by +0.012 [−0.037, +0.061]; the weight was then
+  dropped to keep the sweep to the knobs hybrid search has, and the protocol
+  was re-run as recorded above. Neither look changed a default, but every look
+  is a chance to fit the held-out queries. The next tuning question — fusion
+  weights, the rerank pool, a model swap — needs fresh held-out queries (new
+  queries, or new repositories), not another pass over these 72.
+- **Intervals ignore clustering by repository.** The bootstrap resamples
+  queries independently, but queries of one repository share a corpus, an
+  index and a labeller's reading of that code, so they are not independent.
+  With four repositories the honest intervals are wider than those reported
+  — likely noticeably so; a cluster (repository-level) bootstrap with four
+  clusters would be too coarse to help. Treat a bound near zero as zero.
+- **Four repositories, three languages, English queries**; 18–24 queries per
+  repository per split. Per-repository and per-intent cells rest on 9–56
+  queries and are directions, not estimates.
+- **Prose is excluded** from the corpus; an agent searching a real index also
+  sees Markdown sections.
+- **One platform.** The recorded run is `linux-x86_64`; model arithmetic can
+  differ in the last bits elsewhere (see Determinism).
+
 
 ## ANN recall: what the vector index costs
 
@@ -674,9 +968,9 @@ checks the harness itself.
   corpus grows. Vector search stays exact at every size (see the ANN
   section), so only its latency grows. These numbers are a regression guard and a
   first comparison of modes, not a promise about real repositories.
-- **No development split.** Every query is in the one evaluation set. Nothing
-  was tuned on it, and tuning must not happen on it; that needs a separate
-  split (#95).
+- **No development split in the golden set.** Every golden query is in the
+  one evaluation set; nothing is tuned on it. Tuning happens on the dev split
+  of the real-repository set (#95), whose own limits are listed in its section.
 - **Single labeller.** Labels reflect one reviewer's judgement, recorded in each
   query's `rationale`. There is no inter-annotator agreement measure.
 - **English-only queries**, and five languages of the twenty the parser supports.

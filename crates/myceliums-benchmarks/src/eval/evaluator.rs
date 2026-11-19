@@ -14,6 +14,7 @@ use super::metrics::{
     hit_at_k, mean, ndcg_at_k, r_precision, recall_at_k, reciprocal_rank, RelevantSet,
 };
 use super::models::{stored_symbols, ModelIndex};
+use myceliums_core::HybridParams;
 use myceliums_storage::CodeSymbol;
 
 /// The cutoffs recall and hit rate are reported at.
@@ -239,6 +240,9 @@ impl SearchMode {
 pub struct Retrieval<'a> {
     symbols: Vec<CodeSymbol>,
     models: Option<&'a ModelIndex>,
+    /// Fusion parameters of the hybrid modes — the shipped defaults unless a
+    /// parameter sweep asks for others.
+    hybrid: HybridParams,
 }
 
 impl<'a> Retrieval<'a> {
@@ -248,6 +252,7 @@ impl<'a> Retrieval<'a> {
         Ok(Retrieval {
             symbols: stored_symbols(corpus).await?,
             models: None,
+            hybrid: HybridParams::default(),
         })
     }
 
@@ -256,7 +261,20 @@ impl<'a> Retrieval<'a> {
         Self {
             symbols: models.symbols().to_vec(),
             models: Some(models),
+            hybrid: HybridParams::default(),
         }
+    }
+
+    /// The same retrieval with other fusion parameters for the hybrid modes.
+    /// Lexical and semantic rankings do not depend on them.
+    pub fn with_hybrid_params(mut self, params: HybridParams) -> Self {
+        self.hybrid = params;
+        self
+    }
+
+    /// Fusion parameters the hybrid modes use.
+    pub fn hybrid_params(&self) -> HybridParams {
+        self.hybrid
     }
 
     /// The symbols the lexical mode ranks, in store order.
@@ -285,11 +303,35 @@ impl<'a> Retrieval<'a> {
                         mode.id()
                     );
                 };
-                models.rank(mode, query, RANKING_DEPTH).await?
+                models
+                    .rank(mode, query, RANKING_DEPTH, &self.hybrid)
+                    .await?
             }
         };
-        Ok(symbols.iter().map(symbol_ref).collect())
+        Ok(mask_repeats(symbols.iter().map(symbol_ref).collect()))
     }
+}
+
+/// Replace every repeat of an earlier reference in `ranking` with a
+/// placeholder that matches no label.
+///
+/// A label names `(file, qualified_name)`, and real code can hold two symbols
+/// with the same pair — overloads, a property getter and its setter, a name
+/// bound twice in one scope. Retrieving both is one answer, not two: counted
+/// twice, recall and nDCG could exceed 1. The repeat keeps its rank position,
+/// because the agent still has to read past it, but scores as a miss.
+pub fn mask_repeats(ranking: Vec<SymbolRef>) -> Vec<SymbolRef> {
+    let mut seen = std::collections::BTreeSet::new();
+    ranking
+        .into_iter()
+        .map(|reference| {
+            if seen.insert(reference.clone()) {
+                reference
+            } else {
+                SymbolRef::new("", format!("<repeat of {reference}>"))
+            }
+        })
+        .collect()
 }
 
 /// Scores for a single query under a single mode.
@@ -361,7 +403,17 @@ pub async fn evaluate(
     retrieval: &Retrieval<'_>,
     set: &GoldenSet,
 ) -> Result<ModeScore> {
-    if let Some(deepest) = set.queries.iter().map(|q| q.relevant.len()).max() {
+    evaluate_queries(mode, retrieval, &set.queries).await
+}
+
+/// [`evaluate`] over any slice of labelled queries — one repository's share of
+/// the real-repo set, or one split of it.
+pub async fn evaluate_queries(
+    mode: SearchMode,
+    retrieval: &Retrieval<'_>,
+    golden: &[GoldenQuery],
+) -> Result<ModeScore> {
+    if let Some(deepest) = golden.iter().map(|q| q.relevant.len()).max() {
         if deepest > RANKING_DEPTH {
             bail!(
                 "a golden query labels {deepest} answers but modes are only asked for \
@@ -371,36 +423,53 @@ pub async fn evaluate(
         }
     }
 
-    let mut queries = Vec::with_capacity(set.len());
-    for query in &set.queries {
+    let mut queries = Vec::with_capacity(golden.len());
+    for query in golden {
         queries.push(score_query(mode, retrieval, query).await?);
     }
+    Ok(ModeScore::from_queries(mode, queries))
+}
 
-    let mean = MetricValues::mean_of(queries.iter().map(|q| &q.values));
-    let mut by_intent = BTreeMap::new();
-    for intent in QueryIntent::ALL {
-        let rows: Vec<&MetricValues> = queries
-            .iter()
-            .filter(|q| q.intent == intent)
-            .map(|q| &q.values)
-            .collect();
-        if !rows.is_empty() {
-            by_intent.insert(
-                intent,
-                IntentScore {
-                    queries: rows.len(),
-                    mean: MetricValues::mean_of(rows.iter().copied()),
-                },
-            );
+impl ModeScore {
+    /// Aggregate per-query scores: the unweighted mean and per-intent means.
+    /// Used by [`evaluate`] and to merge the scores of several repositories.
+    pub fn from_queries(mode: SearchMode, queries: Vec<QueryScore>) -> Self {
+        let mean = MetricValues::mean_of(queries.iter().map(|q| &q.values));
+        let mut by_intent = BTreeMap::new();
+        for intent in QueryIntent::ALL {
+            let rows: Vec<&MetricValues> = queries
+                .iter()
+                .filter(|q| q.intent == intent)
+                .map(|q| &q.values)
+                .collect();
+            if !rows.is_empty() {
+                by_intent.insert(
+                    intent,
+                    IntentScore {
+                        queries: rows.len(),
+                        mean: MetricValues::mean_of(rows.iter().copied()),
+                    },
+                );
+            }
+        }
+
+        ModeScore {
+            mode,
+            mean,
+            by_intent,
+            queries,
         }
     }
+}
 
-    Ok(ModeScore {
-        mode,
-        mean,
-        by_intent,
-        queries,
-    })
+/// Score one ranking against one labelled query.
+pub fn score_ranking(query: &GoldenQuery, ranking: &[SymbolRef]) -> QueryScore {
+    let relevant: RelevantSet = query.relevant.iter().cloned().collect();
+    QueryScore {
+        id: query.id.clone(),
+        intent: query.intent,
+        values: MetricValues::from_fn(|metric| metric.score(ranking, &relevant)),
+    }
 }
 
 async fn score_query(
@@ -409,12 +478,7 @@ async fn score_query(
     query: &GoldenQuery,
 ) -> Result<QueryScore> {
     let ranking = retrieval.rank(mode, &query.query).await?;
-    let relevant: RelevantSet = query.relevant.iter().cloned().collect();
-    Ok(QueryScore {
-        id: query.id.clone(),
-        intent: query.intent,
-        values: MetricValues::from_fn(|metric| metric.score(&ranking, &relevant)),
-    })
+    Ok(score_ranking(query, &ranking))
 }
 
 #[cfg(test)]
@@ -470,6 +534,28 @@ mod tests {
             );
         }
         assert_eq!(json.as_object().unwrap().len(), Metric::ALL.len());
+    }
+
+    #[test]
+    fn a_repeated_reference_keeps_its_rank_but_scores_as_a_miss() {
+        let answer = SymbolRef::new("f.py", "answer");
+        let other = SymbolRef::new("f.py", "other");
+        let ranking = mask_repeats(vec![answer.clone(), answer.clone(), other.clone()]);
+        assert_eq!(ranking.len(), 3, "a repeat still occupies its slot");
+        assert_eq!(ranking[0], answer);
+        assert_ne!(ranking[1], answer);
+        assert_eq!(ranking[2], other);
+        let relevant: RelevantSet = [answer].into_iter().collect();
+        assert_eq!(Metric::RecallAt5.score(&ranking, &relevant), 1.0);
+        assert_eq!(Metric::NdcgAt10.score(&ranking, &relevant), 1.0);
+        let unmasked = vec![
+            SymbolRef::new("f.py", "answer"),
+            SymbolRef::new("f.py", "answer"),
+        ];
+        assert!(
+            Metric::RecallAt5.score(&unmasked, &relevant) > 1.0,
+            "without masking the same answer counts twice"
+        );
     }
 
     #[test]

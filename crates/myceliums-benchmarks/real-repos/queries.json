@@ -1,0 +1,4168 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "2026-11-19",
+  "repos": [
+    {
+      "name": "requests",
+      "url": "https://github.com/psf/requests",
+      "tag": "v2.34.2",
+      "commit": "6e83187b8feb273ed4c6cdab5efd8d54901dfab3",
+      "language": "Python",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "flask",
+      "url": "https://github.com/pallets/flask",
+      "tag": "3.1.3",
+      "commit": "22d924701a6ae2e4cd01e9a15bbaf3946094af65",
+      "language": "Python",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "gin",
+      "url": "https://github.com/gin-gonic/gin",
+      "tag": "v1.12.0",
+      "commit": "73726dc606796a025971fe451f0aa6f1b9b847f6",
+      "language": "Go",
+      "license": "MIT"
+    },
+    {
+      "name": "hono",
+      "url": "https://github.com/honojs/hono",
+      "tag": "v4.13.18",
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "language": "TypeScript",
+      "license": "MIT"
+    }
+  ],
+  "queries": [
+    {
+      "id": "requests-exact-name-resolve-redirects",
+      "repo": "requests",
+      "query": "resolve redirects",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.resolve_redirects",
+          "why": "Generator that follows each Location target, raises TooManyRedirects past max_redirects, rewrites method/auth/proxies/cookies on a copied request and sends every hop with allow_redirects=False."
+        }
+      ],
+      "rationale": "Only one definition carries this name. Session.send drives the generator and the many redirect tests in tests/test_requests.py exercise it, but they call it rather than define it, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-exact-name-httpadapter-send",
+      "repo": "requests",
+      "query": "HTTPAdapter send",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.send",
+          "why": "Gets a urllib3 connection, applies cert_verify and the timeout, calls conn.urlopen and maps urllib3 errors to requests exceptions before calling build_response."
+        }
+      ],
+      "rationale": "The query names the HTTPAdapter method explicitly. BaseAdapter.send only raises NotImplementedError and Session.send is a different class's method that delegates to the adapter, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-exact-name-case-insensitive-dict",
+      "repo": "requests",
+      "query": "case insensitive dict",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/structures.py",
+          "symbol": "CaseInsensitiveDict",
+          "why": "MutableMapping that stores each entry under key.lower() together with the original key casing, so lookups ignore case while iteration keeps it."
+        }
+      ],
+      "rationale": "The class definition is the answer and covers its dunder methods. The TestCaseInsensitiveDict test class in tests/test_requests.py and the tests in tests/test_structures.py only exercise it, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-exact-name-raise-for-status",
+      "repo": "requests",
+      "query": "raise for status",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.raise_for_status",
+          "why": "Decodes the reason phrase (utf-8, then iso-8859-1) and raises HTTPError with a 'Client Error' or 'Server Error' message for 4xx and 5xx status codes."
+        }
+      ],
+      "rationale": "Single definition. Response.ok and Response.__bool__ call raise_for_status to compute truthiness, so they use the answer rather than implement it and were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-exact-name-super-len",
+      "repo": "requests",
+      "query": "super_len helper",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "super_len",
+          "why": "Measures strings, objects with __len__ or len, real files via os.fstat and seekable streams via seek/tell, and returns the length remaining after the current position."
+        }
+      ],
+      "rationale": "Single definition in utils.py. Its callers PreparedRequest.prepare_body and PreparedRequest.prepare_content_length were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-exact-name-build-digest-header",
+      "repo": "requests",
+      "query": "build digest header",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/auth.py",
+          "symbol": "HTTPDigestAuth.build_digest_header",
+          "why": "Picks the hash function from the challenge algorithm, computes HA1/HA2, the nonce count and cnonce, and returns the 'Digest ...' Authorization value."
+        }
+      ],
+      "rationale": "The nested hash helpers (md5_utf8, sha_utf8, sha256_utf8, sha512_utf8, KD) are separate inventory rows inside this method, but they are fragments of it and not the symbol the query names. handle_401 and __call__ only call it.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-exact-name-cookiejar-from-dict",
+      "repo": "requests",
+      "query": "cookiejar from dict",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/cookies.py",
+          "symbol": "cookiejar_from_dict",
+          "why": "Creates a RequestsCookieJar when none is passed and inserts create_cookie(name, value) for each dict entry, skipping existing names when overwrite is False."
+        }
+      ],
+      "rationale": "One label covers the three overload rows. add_dict_to_cookiejar (a utils wrapper with a different name) and the inverse dict_from_cookiejar were not labelled because the query names this function.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-exact-name-dispatch-hook",
+      "repo": "requests",
+      "query": "dispatch hook",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/hooks.py",
+          "symbol": "dispatch_hook",
+          "why": "Looks up the hooks for an event key, wraps a single callable in a list, and calls each hook in turn, replacing the data with any non-None return value."
+        }
+      ],
+      "rationale": "Single definition in hooks.py. Session.send calls it for the 'response' event and tests/test_hooks.py exercises it. Neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-exact-name-response-iter-lines",
+      "repo": "requests",
+      "query": "Response iter_lines",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.iter_lines",
+          "why": "Iterates over iter_content chunks, splits them on the delimiter or with splitlines, and carries a trailing partial line into the next chunk."
+        }
+      ],
+      "rationale": "One label covers the overload rows. Response.iter_content, which it builds on, and the test_response_iter_lines tests were not labelled because the query names iter_lines.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-forget-credentials-on-cross-site-redirect",
+      "repo": "requests",
+      "query": "forget login credentials when a redirect goes to a different site",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.should_strip_auth",
+          "why": "Compares the hostname, scheme and port of the old and new URLs (allowing the http to https upgrade on default ports) to decide whether Authorization must be dropped."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.rebuild_auth",
+          "why": "Deletes the Authorization header from the redirected request when should_strip_auth says so, then re-applies .netrc credentials for the new host if trust_env is set."
+        }
+      ],
+      "rationale": "The decision and the deletion live in two adjacent methods, and both are equally good to read first. resolve_redirects only calls rebuild_auth, and tests such as test_auth_is_retained_for_redirect_on_host were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-downgrade-post-to-get-after-redirect",
+      "repo": "requests",
+      "query": "turn a POST into a GET after a 302 or 303 response",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.rebuild_method",
+          "why": "Changes the method to GET for a 303 or 302 (unless HEAD) and for a POST answered with 301, which copies browser behaviour."
+        }
+      ],
+      "rationale": "A single method holds the rule. resolve_redirects only calls it and test_HTTP_302_ALLOW_REDIRECT_GET tests it. Neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-reset-upload-stream-before-resending",
+      "repo": "requests",
+      "query": "seek the upload stream back so it can be resent after a redirect",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "rewind_body",
+          "why": "Calls body.seek(prepared_request._body_position) and raises UnrewindableBodyError when the body cannot seek or no integer start position was recorded."
+        }
+      ],
+      "rationale": "rewind_body is the redirect-time rewind. PreparedRequest.prepare_body only records _body_position, and HTTPDigestAuth.handle_401 does its own seek for digest retries, not redirects, so neither was labelled. The test_rewind_body* tests were also excluded.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-stored-login-from-home-credentials-file",
+      "repo": "requests",
+      "query": "look up stored login for a host in the home-directory credentials file",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "get_netrc_auth",
+          "why": "Finds $NETRC or ~/.netrc / ~/_netrc, parses it with the netrc module and returns the (login, password) pair for the URL's hostname."
+        }
+      ],
+      "rationale": "Single implementation. Session.prepare_request and SessionRedirectMixin.rebuild_auth call it, and TestRequests.get_netrc_auth_mock is a test stub. None of them were labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-detect-json-utf-width-from-null-bytes",
+      "repo": "requests",
+      "query": "tell whether JSON bytes are UTF-16 or UTF-32 by counting nulls",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "guess_json_utf",
+          "why": "Checks for byte-order marks, then counts and locates null bytes in the first four bytes to return utf-8, utf-16-be/le or utf-32-be/le."
+        }
+      ],
+      "rationale": "The name is not obvious from the query. Response.json calls it when no encoding is set, but it only uses the result, so it was not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-pick-installed-charset-sniffing-library",
+      "repo": "requests",
+      "query": "pick whichever character-set sniffing library is installed",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/compat.py",
+          "symbol": "_resolve_char_detection",
+          "why": "Tries importlib.import_module on 'chardet' and then 'charset_normalizer' and returns the first module that imports, or None."
+        }
+      ],
+      "rationale": "This compat helper is the only code that chooses the library. Response.apparent_encoding uses the chosen module and __init__.check_compatibility only validates its version, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-convert-http-cookies-entry-to-jar-cookie",
+      "repo": "requests",
+      "query": "turn an http.cookies entry into a cookielib cookie, honouring max-age",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/cookies.py",
+          "symbol": "morsel_to_cookie",
+          "why": "Turns a Morsel's max-age or expires into an expiry timestamp and builds a Cookie via create_cookie with its domain, path, secure and HttpOnly attributes."
+        }
+      ],
+      "rationale": "create_cookie is the generic builder it delegates to, and RequestsCookieJar.set only sends Morsel values to this function. Both were left unlabelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-numeric-status-codes-to-friendly-names",
+      "repo": "requests",
+      "query": "map numeric HTTP status codes to friendly attribute names",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/status_codes.py",
+          "symbol": "_init",
+          "why": "Iterates the _codes table and setattr's every title, plus its upper-case form, onto the codes LookupDict, then appends the code list to the module docstring."
+        }
+      ],
+      "rationale": "_init is where names like codes.ok are registered. LookupDict is only the generic container and the nested doc() helper only formats docstring lines, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-host-and-tls-params-for-urllib3-pool",
+      "repo": "requests",
+      "query": "work out host and TLS parameters used to choose a urllib3 pool",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.build_connection_pool_key_attributes",
+          "why": "Documented, overridable hook that returns the (host_params, pool_kwargs) tuple by delegating to _urllib3_request_context."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "_urllib3_request_context",
+          "why": "Parses scheme, host and port from the request URL and sets cert_reqs, ca_certs or ca_cert_dir, and cert_file/key_file from verify and the client cert."
+        }
+      ],
+      "rationale": "The method is a thin public wrapper over the module function that does the work, so both are labelled. get_connection_with_tls_context uses the result to fetch a pool and was not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-paraphrase-base64-user-password-for-authorization",
+      "repo": "requests",
+      "query": "base64-encode username and password into an Authorization value",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/requests/auth.py",
+          "symbol": "_basic_auth_str",
+          "why": "Converts non-string credentials to strings with a deprecation warning, latin1-encodes them, base64-encodes 'user:pass' and prefixes 'Basic '."
+        }
+      ],
+      "rationale": "HTTPBasicAuth.__call__, HTTPProxyAuth.__call__, HTTPAdapter.proxy_headers and rebuild_proxies all call this helper to set headers, but none of them do the encoding, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-content-length-for-request-body",
+      "repo": "requests",
+      "query": "where is the Content-Length header set for an outgoing request body",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/models.py",
+          "symbol": "PreparedRequest.prepare_content_length",
+          "why": "Sets Content-Length from super_len(body), or to '0' for body-less requests whose method is not GET or HEAD."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "PreparedRequest.prepare_body",
+          "why": "For streamed or iterable bodies sets Content-Length from super_len or falls back to Transfer-Encoding: chunked; otherwise encodes the body and calls prepare_content_length."
+        }
+      ],
+      "rationale": "These two methods write the header. super_len only measures objects, prepare_auth only calls prepare_content_length again, and HTTPAdapter.send only reads the header to choose chunked mode, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-digest-retry-after-401-challenge",
+      "repo": "requests",
+      "query": "retry the request with credentials after a 401 digest challenge",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/auth.py",
+          "symbol": "HTTPDigestAuth.handle_401",
+          "why": "Response hook that, for a 4xx with a 'digest' WWW-Authenticate header, parses the challenge, rewinds the body, adds the Digest Authorization header and resends via r.connection.send."
+        }
+      ],
+      "rationale": "handle_401 is the code that resends. build_digest_header only computes the header value and __call__ only registers the hook. The test_DIGEST* and test_digestauth* tests were also excluded.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-invalid-json-response-error",
+      "repo": "requests",
+      "query": "what exception is raised when a response body is not valid JSON",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.json",
+          "why": "Decodes the body (using guess_json_utf when no encoding is set) and catches the json/simplejson JSONDecodeError to raise requests' own JSONDecodeError."
+        },
+        {
+          "file": "src/requests/exceptions.py",
+          "symbol": "JSONDecodeError",
+          "why": "Defines the requests exception that inherits from both InvalidJSONError and the compat JSONDecodeError, with a custom __init__ and __reduce__."
+        }
+      ],
+      "rationale": "Response.json shows when the error is raised and JSONDecodeError defines what it is. InvalidJSONError is the parent class, and prepare_body raises it for request bodies that cannot be serialised, not when parsing a response, so it was not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-choose-transport-adapter-for-url",
+      "repo": "requests",
+      "query": "how does a session decide which transport adapter handles a URL",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "Session.get_adapter",
+          "why": "Returns the first mounted adapter whose prefix matches the start of the URL, ignoring case, and otherwise raises InvalidSchema."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "Session.mount",
+          "why": "Registers an adapter for a prefix and reorders the adapters dict so longer prefixes come first, which makes get_adapter's first match the most specific one."
+        }
+      ],
+      "rationale": "The match happens in get_adapter, but it is only correct because mount keeps the longest prefixes first, so both are labelled. Session.send only calls get_adapter and Session.__init__ only mounts the two default adapters.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-guess-text-encoding-without-charset",
+      "repo": "requests",
+      "query": "how is the text encoding guessed when Content-Type has no charset",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "get_encoding_from_headers",
+          "why": "Returns the charset parameter if present, otherwise ISO-8859-1 for text/* and utf-8 for application/json."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.apparent_encoding",
+          "why": "Runs chardet/charset_normalizer detect() on the content and falls back to 'utf-8' when no detector is installed."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.text",
+          "why": "Uses apparent_encoding when Response.encoding is None and decodes the content with errors='replace'."
+        }
+      ],
+      "rationale": "The header defaults, the detection and the fallback decision are split across these three symbols. HTTPAdapter.build_response only assigns the header-derived encoding, and the deprecated get_unicode_from_response and get_encodings_from_content helpers are not on the normal code path, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-record-set-cookie-from-response",
+      "repo": "requests",
+      "query": "where are Set-Cookie headers from a server response recorded",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/cookies.py",
+          "symbol": "extract_cookies_to_jar",
+          "why": "Wraps the request in MockRequest and the raw httplib message in MockResponse, then calls jar.extract_cookies to store the server's cookies."
+        }
+      ],
+      "rationale": "This is the single function that parses Set-Cookie into a jar. Its callers (HTTPAdapter.build_response, Session.send, resolve_redirects, handle_401) and the MockRequest/MockResponse shims were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-no-proxy-match-against-host",
+      "repo": "requests",
+      "query": "where is the no_proxy environment variable matched against the target host",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "should_bypass_proxies",
+          "why": "Reads no_proxy (lower- or upper-case), matches the hostname by CIDR/IP or by domain suffix with and without the port, then falls back to urllib's proxy_bypass."
+        }
+      ],
+      "rationale": "All no_proxy matching happens here. get_environ_proxies and resolve_proxies only call it, and the Windows-only proxy_bypass_registry handles registry overrides rather than the environment variable, so none of them were labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-reject-headers-with-newlines",
+      "repo": "requests",
+      "query": "where are header names or values with newlines rejected",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "check_header_validity",
+          "why": "Splits a (name, value) header tuple and validates each part with _validate_header_part."
+        },
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "_validate_header_part",
+          "why": "Chooses the str or bytes regex for a name or value and raises InvalidHeader for leading whitespace, reserved characters or CR/LF."
+        }
+      ],
+      "rationale": "The public checker is a thin wrapper over the private validator, so both are labelled. PreparedRequest.prepare_headers only calls the checker and InvalidHeader only defines the error, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-ca-bundle-env-var",
+      "repo": "requests",
+      "query": "where does the session pick up REQUESTS_CA_BUNDLE from the environment",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "Session.merge_environment_settings",
+          "why": "When trust_env is set, merges environment proxies and replaces verify=True/None with REQUESTS_CA_BUNDLE or CURL_CA_BUNDLE before merging with the session defaults."
+        }
+      ],
+      "rationale": "Only this method reads the CA bundle variables. HTTPAdapter.cert_verify uses the resulting verify path and Session.request calls the method. Neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-non-ascii-hostname-to-punycode",
+      "repo": "requests",
+      "query": "where are non-ASCII hostnames converted to punycode",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/models.py",
+          "symbol": "PreparedRequest._get_idna_encoded_host",
+          "why": "Encodes the host with idna.encode(uts46=True) and turns an IDNAError into a UnicodeError."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "PreparedRequest.prepare_url",
+          "why": "Calls _get_idna_encoded_host when unicode_is_ascii(host) is false and raises InvalidURL if that fails, before rebuilding the netloc."
+        }
+      ],
+      "rationale": "The encoding and the decision to apply it are in these two methods. unicode_is_ascii is only a predicate, and the idna-related tests in tests/test_help.py and tests/test_packages.py were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-request-line-url-via-http-proxy",
+      "repo": "requests",
+      "query": "which URL goes on the request line when sending through an HTTP proxy",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.request_url",
+          "why": "Returns path_url normally, but for non-HTTPS requests through a non-SOCKS proxy returns the full URL with fragment and credentials removed by urldefragauth."
+        }
+      ],
+      "rationale": "request_url decides between the path and the absolute URL. urldefragauth is a generic URL-trimming helper and RequestEncodingMixin.path_url only builds the path, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-multipart-body-for-file-uploads",
+      "repo": "requests",
+      "query": "where is a multipart/form-data body assembled for file uploads",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/models.py",
+          "symbol": "RequestEncodingMixin._encode_files",
+          "why": "Turns data fields and 2/3/4-tuple file specs into urllib3 RequestFields and calls encode_multipart_formdata to produce the body and content type."
+        }
+      ],
+      "rationale": "prepare_body only calls _encode_files when files are given and guess_filename only derives a filename, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-import-time-dependency-version-checks",
+      "repo": "requests",
+      "query": "where does importing requests assert supported urllib3 and chardet versions",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/requests/__init__.py",
+          "symbol": "check_compatibility",
+          "why": "Parses the urllib3, chardet and charset_normalizer versions and asserts they are in supported ranges, warning with RequestsDependencyWarning if no detector is present."
+        }
+      ],
+      "rationale": "_check_cryptography only warns about old cryptography versions and help.info only reports versions, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-behavioural-tests-local-socket-server",
+      "repo": "requests",
+      "query": "how do the tests spin up a throwaway local socket server",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "tests/testserver/server.py",
+          "symbol": "Server",
+          "why": "threading.Thread subclass that binds a socket (port 0 by default), passes a fixed number of accepted connections to a handler, and works as a context manager that returns (host, port)."
+        }
+      ],
+      "rationale": "The query is explicitly about test infrastructure, so the test server class is the answer. TLSServer is a TLS-specific subclass and tests/test_testserver.py only tests Server, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-authentication-handlers",
+      "repo": "requests",
+      "query": "authentication handlers and how they attach to requests",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/auth.py",
+          "symbol": "AuthBase",
+          "why": "Base class that defines the contract: an auth object is called with a PreparedRequest and returns it."
+        },
+        {
+          "file": "src/requests/auth.py",
+          "symbol": "HTTPBasicAuth",
+          "why": "Sets the Authorization header to a Basic credential in __call__."
+        },
+        {
+          "file": "src/requests/auth.py",
+          "symbol": "HTTPProxyAuth",
+          "why": "HTTPBasicAuth subclass that sets Proxy-Authorization instead of Authorization."
+        },
+        {
+          "file": "src/requests/auth.py",
+          "symbol": "HTTPDigestAuth",
+          "why": "Stateful Digest handler that keeps per-thread nonce state, registers 401 and redirect response hooks, and builds Digest headers."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "PreparedRequest.prepare_auth",
+          "why": "Falls back to credentials in the URL, wraps 2-tuples in HTTPBasicAuth, calls the handler on the request and recomputes Content-Length."
+        }
+      ],
+      "rationale": "These define the auth handlers and the place where they are applied. _basic_auth_str is a low-level encoding helper and get_netrc_auth is a credential source rather than a handler, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-session-cookie-persistence",
+      "repo": "requests",
+      "query": "how cookies persist across requests in a session",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/cookies.py",
+          "symbol": "RequestsCookieJar",
+          "why": "Dict-like CookieJar subclass used for Session.cookies and Response.cookies."
+        },
+        {
+          "file": "src/requests/cookies.py",
+          "symbol": "extract_cookies_to_jar",
+          "why": "Stores the Set-Cookie values of a response into a jar."
+        },
+        {
+          "file": "src/requests/cookies.py",
+          "symbol": "merge_cookies",
+          "why": "Merges a dict or another CookieJar into an existing jar."
+        },
+        {
+          "file": "src/requests/cookies.py",
+          "symbol": "get_cookie_header",
+          "why": "Builds the outgoing Cookie header string from a jar for a request via MockRequest."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "PreparedRequest.prepare_cookies",
+          "why": "Stores the jar on the prepared request and writes the Cookie header from it."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "Session.prepare_request",
+          "why": "Merges the session's cookies with the per-request cookies into the jar passed to PreparedRequest.prepare."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "Session.send",
+          "why": "After each send, extracts cookies from the response and its redirect history into self.cookies."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.resolve_redirects",
+          "why": "On every redirect hop it extracts the response's cookies into the request's jar, merges the session cookies back in, re-prepares the Cookie header and saves the hop's Set-Cookie headers into self.cookies — Session.send only stores the first response's cookies."
+        }
+      ],
+      "rationale": "Cookie persistence spans the session (cookies merged in before sending and saved back after), request preparation and the cookie helpers. MockRequest/MockResponse are cookielib adapters and create_cookie/cookiejar_from_dict only build cookies, so they were not labelled. SessionRedirectMixin.resolve_redirects was added in review (2026-11-19): it carries cookies across redirect hops and was missed in the first draft.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-proxy-configuration-and-selection",
+      "repo": "requests",
+      "query": "how proxies are configured, selected and bypassed",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "resolve_proxies",
+          "why": "Adds the environment proxy for the request's scheme to the explicit proxies unless the URL is bypassed."
+        },
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "select_proxy",
+          "why": "Picks the proxy for a URL by trying the scheme://host, scheme, all://host and all keys in order."
+        },
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "should_bypass_proxies",
+          "why": "Applies no_proxy and the platform proxy_bypass to decide whether proxies are skipped."
+        },
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "get_environ_proxies",
+          "why": "Returns getproxies() from the environment unless the URL should bypass proxies."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "Session.merge_environment_settings",
+          "why": "When trust_env is set, adds environment proxies to the request proxies and merges them with the session's proxies."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.proxy_manager_for",
+          "why": "Creates and caches a urllib3 ProxyManager or SOCKSProxyManager for each proxy URL."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.proxy_headers",
+          "why": "Builds Proxy-Authorization from credentials in the proxy URL."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.rebuild_proxies",
+          "why": "Resolves proxies again for a redirected URL and resets the Proxy-Authorization header."
+        }
+      ],
+      "rationale": "These make up the proxy pipeline from environment variables to the connection. HTTPAdapter.request_url only touches proxies when choosing the URL form, and HTTPProxyAuth is an auth handler, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-network-failure-exception-types",
+      "repo": "requests",
+      "query": "exception classes for connection and timeout failures",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/exceptions.py",
+          "symbol": "RequestException",
+          "why": "Base IOError subclass that stores the request and response on every requests error."
+        },
+        {
+          "file": "src/requests/exceptions.py",
+          "symbol": "ConnectionError",
+          "why": "Base class for connection-level failures."
+        },
+        {
+          "file": "src/requests/exceptions.py",
+          "symbol": "ProxyError",
+          "why": "ConnectionError subclass for proxy failures."
+        },
+        {
+          "file": "src/requests/exceptions.py",
+          "symbol": "SSLError",
+          "why": "ConnectionError subclass for TLS failures."
+        },
+        {
+          "file": "src/requests/exceptions.py",
+          "symbol": "Timeout",
+          "why": "Base timeout class whose docstring says catching it covers both connect and read timeouts."
+        },
+        {
+          "file": "src/requests/exceptions.py",
+          "symbol": "ConnectTimeout",
+          "why": "Inherits from both ConnectionError and Timeout and covers timeouts while connecting."
+        },
+        {
+          "file": "src/requests/exceptions.py",
+          "symbol": "ReadTimeout",
+          "why": "Timeout subclass for a server that sends no data in time."
+        }
+      ],
+      "rationale": "These form the connection and timeout branch of the exception hierarchy. HTTPAdapter.send raises them but does not define them, and exceptions in other branches such as InvalidURL, RetryError or ChunkedEncodingError were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-redirect-following",
+      "repo": "requests",
+      "query": "how redirects are followed and the request rewritten between hops",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.resolve_redirects",
+          "why": "Main loop that follows Location targets, enforces the redirect limit and rebuilds the request for each hop."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.get_redirect_target",
+          "why": "Reads the Location header of a redirect response and re-decodes it from latin1 to utf8."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.rebuild_method",
+          "why": "Changes the method to GET for 301/302/303 responses as browsers do."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.rebuild_auth",
+          "why": "Removes or re-applies Authorization for the new URL."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.should_strip_auth",
+          "why": "Decides whether the redirect target is a different origin."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "SessionRedirectMixin.rebuild_proxies",
+          "why": "Recomputes proxies and Proxy-Authorization for the new URL."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.is_redirect",
+          "why": "Defines a redirect as a status in REDIRECT_STATI with a Location header."
+        }
+      ],
+      "rationale": "These are the redirect mechanics. Session.send only starts resolve_redirects, rewind_body is a generic body helper, and the many redirect tests were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-response-event-hooks",
+      "repo": "requests",
+      "query": "event hook system for response callbacks",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/hooks.py",
+          "symbol": "default_hooks",
+          "why": "Creates the empty {'response': []} hook registry."
+        },
+        {
+          "file": "src/requests/hooks.py",
+          "symbol": "dispatch_hook",
+          "why": "Calls each registered hook for an event and passes return values on to the next hook."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "RequestHooksMixin.register_hook",
+          "why": "Checks the event name and appends a callable, or each callable in an iterable."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "RequestHooksMixin.deregister_hook",
+          "why": "Removes a previously registered hook and reports whether it existed."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "merge_hooks",
+          "why": "Merges request and session hooks and handles empty 'response' lists."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "PreparedRequest.prepare_hooks",
+          "why": "Registers the given hooks on the prepared request."
+        }
+      ],
+      "rationale": "These define, register, merge and fire hooks. Session.send and HTTPDigestAuth.__call__ use hooks, and tests/test_hooks.py exercises them, so none of those were labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-tls-verification-and-client-certs",
+      "repo": "requests",
+      "query": "TLS certificate verification and client certificates",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.cert_verify",
+          "why": "Sets cert_reqs, ca_certs or ca_cert_dir and cert_file/key_file on the connection, raising OSError when a bundle, cert or key path does not exist."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "_urllib3_request_context",
+          "why": "Turns verify and the client cert into urllib3 pool kwargs (cert_reqs, ca_certs/ca_cert_dir, cert_file/key_file)."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.build_connection_pool_key_attributes",
+          "why": "Overridable wrapper whose docstring describes how verify and cert map onto the TLS pool key attributes."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.get_connection_with_tls_context",
+          "why": "Gets a connection pool from the pool or proxy manager keyed by those TLS parameters."
+        },
+        {
+          "file": "src/requests/sessions.py",
+          "symbol": "Session.merge_environment_settings",
+          "why": "Takes verify from REQUESTS_CA_BUNDLE/CURL_CA_BUNDLE and merges verify and cert with the session defaults."
+        }
+      ],
+      "rationale": "These are the places where verify and cert are interpreted. SSLError only defines the error and help.info only reports OpenSSL versions, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-streaming-response-body",
+      "repo": "requests",
+      "query": "streaming a large response body in chunks",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.iter_content",
+          "why": "Checks chunk_size, raises StreamConsumedError if the stream was already read, and yields raw chunks or replayed slices, optionally decoded to text."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.generate",
+          "why": "Inner generator that reads raw.stream() or raw.read() and maps urllib3 errors to ChunkedEncodingError, ContentDecodingError and ConnectionError."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.iter_lines",
+          "why": "Line-by-line streaming built on iter_content."
+        },
+        {
+          "file": "src/requests/utils.py",
+          "symbol": "stream_decode_response_unicode",
+          "why": "Decodes byte chunks one by one with an incremental decoder for the response encoding."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.__iter__",
+          "why": "Makes the response itself iterable in 128-byte chunks via iter_content."
+        }
+      ],
+      "rationale": "These implement reading the body chunk by chunk. Response.content reads the whole body at once and iter_slices only replays content that is already buffered, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-connection-pooling",
+      "repo": "requests",
+      "query": "connection pooling and returning connections to the pool",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.__init__",
+          "why": "Takes pool_connections, pool_maxsize, max_retries and pool_block and sets up the pool manager."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.init_poolmanager",
+          "why": "Creates the urllib3 PoolManager with num_pools, maxsize and block."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.proxy_manager_for",
+          "why": "Caches one pooled ProxyManager per proxy URL with the same pool sizing."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.get_connection_with_tls_context",
+          "why": "Gets a connection pool from the pool or proxy manager for a request."
+        },
+        {
+          "file": "src/requests/adapters.py",
+          "symbol": "HTTPAdapter.close",
+          "why": "Clears the PoolManager and every ProxyManager, which closes pooled connections."
+        },
+        {
+          "file": "src/requests/models.py",
+          "symbol": "Response.close",
+          "why": "Closes the raw stream if it was not fully read and calls release_conn to return the connection to the pool."
+        }
+      ],
+      "rationale": "These create, select, release and dispose of pools. Session.close only calls each adapter's close, and the deprecated HTTPAdapter.get_connection does the same job as get_connection_with_tls_context on an old code path, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-url-for",
+      "repo": "flask",
+      "query": "url_for function",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/helpers.py",
+          "symbol": "url_for",
+          "why": "The public flask.url_for function; it forwards endpoint, _anchor, _method, _scheme, _external and values to current_app.url_for."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.url_for",
+          "why": "Holds the URL-building logic: resolves '.endpoint' against the current blueprint, picks the request or app-context URL adapter, injects URL defaults, calls url_adapter.build and routes BuildError to handle_url_build_error."
+        }
+      ],
+      "rationale": "Both symbols carry the exact name; the helper is the public entry point and Flask.url_for has the logic, so an agent typing the name wants either. App.inject_url_defaults and App.handle_url_build_error are only called from it, and TestUrlFor.* tests are distractors, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-blueprint-register",
+      "repo": "flask",
+      "query": "Blueprint.register method",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "Blueprint.register",
+          "why": "Defines Blueprint.register: checks name clashes, creates the BlueprintSetupState, adds the static route, merges hooks, runs every deferred function, attaches CLI commands and recursively registers nested blueprints."
+        }
+      ],
+      "rationale": "Only the sansio Blueprint defines register; the WSGI flask.blueprints.Blueprint inherits it. App.register_blueprint (one line calling blueprint.register) and Blueprint.register_blueprint (only appends to _blueprints for nesting) look similar but are not this method, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-secure-cookie-session-interface",
+      "repo": "flask",
+      "query": "SecureCookieSessionInterface class",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/sessions.py",
+          "symbol": "SecureCookieSessionInterface",
+          "why": "The default session interface class: sets salt, sha1 digest, hmac key derivation and the tagged JSON serializer, and implements get_signing_serializer, open_session and save_session for signed cookies."
+        }
+      ],
+      "rationale": "The query names the class itself; its methods sit inside its span. SecureCookieSession (the session dict class) and SessionInterface (the abstract base) have similar names but are different symbols, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-tagged-json-serializer",
+      "repo": "flask",
+      "query": "tagged json serializer",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/json/tag.py",
+          "symbol": "TaggedJSONSerializer",
+          "why": "The serializer class that registers the default JSONTag subclasses and tags/untags values (tuples, bytes, Markup, UUID, datetime) for compact lossless JSON."
+        }
+      ],
+      "rationale": "Loosely spaced lower-case form of the class name. The individual JSONTag subclasses (TagTuple, TagBytes, etc.) and the generic json/__init__ dumps/loads are related but not the named symbol, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-config-from-prefixed-env",
+      "repo": "flask",
+      "query": "config from_prefixed_env",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/config.py",
+          "symbol": "Config.from_prefixed_env",
+          "why": "Iterates sorted os.environ keys starting with 'FLASK_', strips the prefix, json-decodes values where possible and splits '__' into nested dicts."
+        }
+      ],
+      "rationale": "One method carries this name. Config.from_envvar also reads the environment but only to locate a config file, and tests/test_config.py::test_from_prefixed_env* are test distractors, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-stream-with-context",
+      "repo": "flask",
+      "query": "stream with context",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/helpers.py",
+          "symbol": "stream_with_context",
+          "why": "Wraps a generator (or a generator function via an inner decorator) so that iteration re-pushes the captured app and request contexts with 'with app_ctx, req_ctx'."
+        }
+      ],
+      "rationale": "The inventory lists three overload rows for stream_with_context; one label covers them. Its nested 'generator' and 'decorator' closures lie inside its span and are not labelled separately; templating._stream only calls it.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-method-view",
+      "repo": "flask",
+      "query": "MethodView class",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/views.py",
+          "symbol": "MethodView",
+          "why": "The class-based view that collects HTTP method names in __init_subclass__ and dispatches to the matching lower-case instance method in dispatch_request."
+        }
+      ],
+      "rationale": "The class itself is named; its two methods are inside its span. The base View class and test classes such as tests/test_async.py::AsyncMethodView are distractors and are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-flask-group",
+      "repo": "flask",
+      "query": "FlaskGroup click group",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/cli.py",
+          "symbol": "FlaskGroup",
+          "why": "The click group behind the 'flask' command: adds --env-file/--app/--debug options, default run/shell/routes commands, plugin entry-point commands, and loads app commands through ScriptInfo."
+        }
+      ],
+      "rationale": "The query names the class. AppGroup is its parent (it wraps commands in with_appcontext) and is easily confused with it, but it is not FlaskGroup, so it is not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-exact-name-session-transaction",
+      "repo": "flask",
+      "query": "test client session_transaction",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/flask/testing.py",
+          "symbol": "FlaskClient.session_transaction",
+          "why": "Context manager that opens the session through a test request context with the client's cookies, yields it, then saves it and updates the client's cookies from the Set-Cookie headers."
+        }
+      ],
+      "rationale": "Only one library symbol has this name. tests/test_testing.py::test_session_transactions* call it and are test distractors, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-one-off-response-callback-in-view",
+      "repo": "flask",
+      "query": "register a one-off callback to tweak the response from inside a view",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "after_this_request",
+          "why": "Appends the function to the active RequestContext's _after_request_functions so it runs on this request's response only, and raises RuntimeError outside a request context."
+        }
+      ],
+      "rationale": "after_this_request is the per-request version of the hook. Scaffold.after_request registers for every request, and Flask.process_response only runs the stored callbacks, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-app-context-scratch-namespace",
+      "repo": "flask",
+      "query": "namespace object for stashing arbitrary data during an app context",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "_AppCtxGlobals",
+          "why": "Plain namespace class (exposed as the 'g' proxy) whose __getattr__/__setattr__/__delattr__ work on __dict__ and which adds get, pop, setdefault, __contains__ and __iter__."
+        }
+      ],
+      "rationale": "The answer has a non-obvious private name. The 'g' proxy itself is a module-level LocalProxy in globals.py with no inventory row. AppContext.__init__ only creates the instance, and tests/test_basic.py::test_g_iteration_protocol only tests it, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-config-subset-by-key-prefix",
+      "repo": "flask",
+      "query": "pull every config key sharing a prefix into a lowercase dict",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/config.py",
+          "symbol": "Config.get_namespace",
+          "why": "Loops over config items whose key starts with the namespace, optionally trims the prefix and lowercases the key, and returns them as a new dict."
+        }
+      ],
+      "rationale": "Config.from_prefixed_env also deals with key prefixes, but it loads from environment variables, not from existing config, so it is deliberately not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-class-into-routable-function",
+      "repo": "flask",
+      "query": "convert a class into a routable function that instantiates it per request",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/views.py",
+          "symbol": "View.as_view",
+          "why": "Builds a view closure that creates a class instance per request (or reuses one when init_every_request is False), calls dispatch_request through ensure_sync, applies cls.decorators and copies methods/provide_automatic_options."
+        }
+      ],
+      "rationale": "View.as_view is the converter. The inventory also has two nested 'View.view' closures inside its span; they are part of as_view and are not labelled separately. MethodView.dispatch_request handles dispatch, not the conversion.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-safe-file-download-from-folder",
+      "repo": "flask",
+      "query": "safely send a user-requested file from inside a given folder",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/helpers.py",
+          "symbol": "send_from_directory",
+          "why": "Delegates to werkzeug's send_from_directory (safe_join, 404 if missing) with Flask kwargs from _prepare_send_file_kwargs, so a client-supplied path cannot escape the directory."
+        }
+      ],
+      "rationale": "send_file is explicitly documented as unsafe for user-supplied paths. Flask/Blueprint.send_static_file only use this helper for the static folder, and _prepare_send_file_kwargs only fills arguments, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-log-destination-server-error-channel",
+      "repo": "flask",
+      "query": "log destination that switches between the server error channel and stderr",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/logging.py",
+          "symbol": "wsgi_errors_stream",
+          "why": "LocalProxy-decorated function that returns request.environ['wsgi.errors'] while a request is active and sys.stderr otherwise."
+        }
+      ],
+      "rationale": "Only this function chooses the stream. create_logger only attaches the module-level default_handler that uses it, and tests/test_logging.py::test_wsgi_errors_stream is a test, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-cli-table-of-url-rules",
+      "repo": "flask",
+      "query": "command that prints a table of every URL rule with methods",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/cli.py",
+          "symbol": "routes_command",
+          "why": "Iterates current_app.url_map.iter_rules(), builds endpoint/methods/(host or subdomain)/rule rows, sorts by the --sort key and echoes column-aligned output."
+        }
+      ],
+      "rationale": "routes_command is the only implementation. FlaskGroup.__init__ only registers it, and tests/test_cli.py::TestRoutes.* are test distractors, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-html-escaping-by-template-extension",
+      "repo": "flask",
+      "query": "decide which template file extensions get HTML escaping enabled",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/sansio/app.py",
+          "symbol": "App.select_jinja_autoescape",
+          "why": "Returns True when no filename is given or the name ends with .html, .htm, .xml, .xhtml or .svg."
+        }
+      ],
+      "rationale": "The decision lives in the sansio App. Flask.create_jinja_environment only passes it as the 'autoescape' option, so it is not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-queue-one-time-user-notice",
+      "repo": "flask",
+      "query": "queue a one-time notice to show the user on the next page",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/helpers.py",
+          "symbol": "flash",
+          "why": "Appends (category, message) to session['_flashes'], reassigns the list so external session stores notice the change, and sends the message_flashed signal."
+        }
+      ],
+      "rationale": "The query is about queueing, which flash does. get_flashed_messages is the read side (it pops the messages for display), so it is deliberately not labelled; tests/test_basic.py::test_flashes is a test distractor.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-paraphrase-json-fallback-encoder",
+      "repo": "flask",
+      "query": "fallback encoder for objects the standard json module cannot serialise",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/flask/json/provider.py",
+          "symbol": "_default",
+          "why": "Converts dates to HTTP date strings, Decimal and UUID to str, dataclasses via asdict and __html__ objects to strings, and raises TypeError for anything else."
+        }
+      ],
+      "rationale": "_default is the encoder, under a non-obvious name. DefaultJSONProvider only stores it as its 'default' attribute, and the session TaggedJSONSerializer tags are a separate mechanism, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-session-cookie-loaded-and-verified",
+      "repo": "flask",
+      "query": "where is the signed session cookie loaded and verified on each request",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/sessions.py",
+          "symbol": "SecureCookieSessionInterface.open_session",
+          "why": "Reads the session cookie from request.cookies, calls the serializer's loads with max_age from permanent_session_lifetime, and returns an empty session on BadSignature."
+        },
+        {
+          "file": "src/flask/sessions.py",
+          "symbol": "SecureCookieSessionInterface.get_signing_serializer",
+          "why": "Builds the URLSafeTimedSerializer that does the signature check, from SECRET_KEY plus SECRET_KEY_FALLBACKS, the salt and the hmac/sha1 signer settings."
+        }
+      ],
+      "rationale": "Loading happens in open_session and verification keys come from get_signing_serializer. RequestContext.push only calls open_session, SessionInterface.open_session is abstract, and tests/test_reqctx.py::FailingSessionInterface.open_session is a test stub, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-error-handler-selection",
+      "repo": "flask",
+      "query": "how is the right error handler chosen for a raised exception",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/sansio/app.py",
+          "symbol": "App._find_error_handler",
+          "why": "Looks up error_handler_spec by status code then None, blueprint names before the app, and walks the exception class MRO, returning the first handler found."
+        }
+      ],
+      "rationale": "The lookup order lives only in _find_error_handler. Flask.handle_user_exception and handle_http_exception call it, and Scaffold._get_exc_class_and_code only maps a class to (class, code); tests/test_basic.py::test_errorhandler_precedence is a test distractor. None of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-unhandled-exception-to-500",
+      "repo": "flask",
+      "query": "what happens when an exception has no handler and becomes a 500",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.handle_exception",
+          "why": "Sends got_request_exception, re-raises when PROPAGATE_EXCEPTIONS (or testing/debug) is on, otherwise logs the error, wraps it in InternalServerError(original_exception=e), runs any 500 handler and finalizes with from_error_handler=True."
+        }
+      ],
+      "rationale": "handle_exception owns the whole fallback path. Flask.log_exception is a one-line logger call, and Flask.wsgi_app only invokes handle_exception, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-after-request-and-session-save",
+      "repo": "flask",
+      "query": "where do after-request functions run and the session get saved",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.process_response",
+          "why": "Runs the request context's after_this_request callbacks, then blueprint and app after_request_funcs in reverse order, then calls session_interface.save_session unless the session is a null session."
+        }
+      ],
+      "rationale": "Both steps happen in process_response. Scaffold.after_request only registers functions, and SecureCookieSessionInterface.save_session is the cookie writer, not the place where after-request code runs, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-cli-discovers-app-without-option",
+      "repo": "flask",
+      "query": "how does the flask command find the app when no --app is given",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/cli.py",
+          "symbol": "ScriptInfo.load_app",
+          "why": "With no create_app or import path, tries 'wsgi.py' then 'app.py' via prepare_import and locate_app(raise_if_not_found=False), and raises NoAppException if neither yields an app."
+        },
+        {
+          "file": "src/flask/cli.py",
+          "symbol": "locate_app",
+          "why": "Imports the module, reports import errors, and calls find_best_app when no app name was given."
+        },
+        {
+          "file": "src/flask/cli.py",
+          "symbol": "find_best_app",
+          "why": "Searches the module for 'app'/'application', then a single Flask instance, then a 'create_app'/'make_app' factory callable without arguments."
+        }
+      ],
+      "rationale": "These three form the discovery chain; locate_app's overload rows are covered by one label. prepare_import only converts a path to a module name, and find_app_by_string runs only when a name is given, so neither is labelled; tests/test_cli.py::test_find_best_app is a test.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-dotenv-files-into-environ",
+      "repo": "flask",
+      "query": "where are .env and .flaskenv files read into environment variables",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/cli.py",
+          "symbol": "load_dotenv",
+          "why": "Finds .flaskenv and .env with dotenv.find_dotenv, merges them with an explicit path taking precedence, and sets os.environ only for keys not already set."
+        }
+      ],
+      "rationale": "load_dotenv does the reading. _env_file_callback and Flask.run only call it, and helpers.get_load_dotenv only checks FLASK_SKIP_DOTENV, so none of them is labelled; tests/test_cli.py::test_load_dotenv is a test.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-blueprint-url-prefix-and-endpoint-name",
+      "repo": "flask",
+      "query": "where do blueprint routes get their url prefix and dotted endpoint name",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "BlueprintSetupState.add_url_rule",
+          "why": "Joins url_prefix with the rule, defaults the subdomain, prefixes the endpoint as 'name_prefix.name.endpoint', merges url_defaults and calls app.add_url_rule."
+        },
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "BlueprintSetupState.__init__",
+          "why": "Resolves url_prefix, subdomain, name and name_prefix from the register_blueprint options with fallback to the blueprint's own defaults."
+        }
+      ],
+      "rationale": "The setup state computes and applies the prefix and endpoint name. Blueprint.add_url_rule only defers via record, and Blueprint.register only composes prefixes for nested blueprints, so neither is labelled; tests/test_blueprints.py::test_blueprint_prefix_slash is a test.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-debug-error-on-post-slash-redirect",
+      "repo": "flask",
+      "query": "debug mode error when a POST is redirected to the trailing-slash URL",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.raise_routing_exception",
+          "why": "In debug mode, for a RequestRedirect that is not 307/308 on a non-GET/HEAD/OPTIONS request, raises FormDataRoutingRedirect instead of the redirect."
+        },
+        {
+          "file": "src/flask/debughelpers.py",
+          "symbol": "FormDataRoutingRedirect",
+          "why": "The AssertionError subclass whose __init__ builds the message about the canonical URL, the trailing-slash redirect and browsers dropping form data."
+        }
+      ],
+      "rationale": "The trigger and the exception are both needed; FormDataRoutingRedirect.__init__ is inside the labelled class span. Flask.dispatch_request only calls raise_routing_exception, and tests/test_basic.py::test_routing_redirect_debugging is a test, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-template-context-processors-run",
+      "repo": "flask",
+      "query": "where are context processors run to fill template variables before rendering",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.update_template_context",
+          "why": "Runs template_context_processors for the app and the request's blueprints, merges their results into the context, then re-applies the original values so explicit render arguments win."
+        },
+        {
+          "file": "src/flask/templating.py",
+          "symbol": "_default_template_ctx_processor",
+          "why": "The built-in processor, registered for every app, that injects the concrete g and request objects into the template context."
+        }
+      ],
+      "rationale": "These are the runner and the default processor. templating._render/_stream only call update_template_context, and Scaffold.context_processor only registers functions, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-template-lookup-across-blueprints",
+      "repo": "flask",
+      "query": "how templates are looked up across the app and blueprint template folders",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/templating.py",
+          "symbol": "DispatchingJinjaLoader._iter_loaders",
+          "why": "Yields the app's jinja_loader first, then each registered blueprint's jinja_loader in registration order."
+        },
+        {
+          "file": "src/flask/templating.py",
+          "symbol": "DispatchingJinjaLoader._get_source_fast",
+          "why": "Tries each loader from _iter_loaders and returns the first source found, raising TemplateNotFound if none match."
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "symbol": "Scaffold.jinja_loader",
+          "why": "Creates the FileSystemLoader for an app's or blueprint's template_folder relative to root_path."
+        }
+      ],
+      "rationale": "Lookup order and the per-folder loader together answer the question. DispatchingJinjaLoader.get_source only chooses between the fast and explained paths, and _get_source_explained / explain_template_loading_attempts are the EXPLAIN_TEMPLATE_LOADING debug variant, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-async-views-under-wsgi",
+      "repo": "flask",
+      "query": "how async def view functions are run under a sync WSGI worker",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.ensure_sync",
+          "why": "Checks iscoroutinefunction and wraps coroutine functions with async_to_sync, returning plain functions unchanged."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.async_to_sync",
+          "why": "Imports asgiref's async_to_sync to wrap the coroutine function, and raises a RuntimeError asking for the 'async' extra if asgiref is missing."
+        }
+      ],
+      "rationale": "Both methods do the conversion. Callers such as Flask.dispatch_request and View.as_view only call ensure_sync, and tests/test_async.py::* are test distractors, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-request-body-size-limit",
+      "repo": "flask",
+      "query": "where is the maximum allowed request body size determined",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/wrappers.py",
+          "symbol": "Request.max_content_length",
+          "why": "The property returns the per-request override if set, otherwise current_app.config['MAX_CONTENT_LENGTH'], falling back to werkzeug's default outside an app; the setter stores the override."
+        }
+      ],
+      "rationale": "The getter and setter share one name, so one label covers both. Request.max_form_memory_size and max_form_parts limit multipart form fields rather than the whole body, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-missing-multipart-enctype-error",
+      "repo": "flask",
+      "query": "friendlier error when request.files is read without multipart enctype",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/wrappers.py",
+          "symbol": "Request._load_form_data",
+          "why": "After loading form data, in debug mode with a non-multipart mimetype and no files, calls attach_enctype_error_multidict on the request."
+        },
+        {
+          "file": "src/flask/debughelpers.py",
+          "symbol": "attach_enctype_error_multidict",
+          "why": "Swaps request.files' class for a subclass whose __getitem__ raises DebugFilesKeyError when the missing key was sent as a form field."
+        },
+        {
+          "file": "src/flask/debughelpers.py",
+          "symbol": "DebugFilesKeyError",
+          "why": "The KeyError subclass whose message explains that the form needs enctype=\"multipart/form-data\" and lists the submitted file names."
+        }
+      ],
+      "rationale": "The trigger, the patch and the error class together form the answer. The nested newcls.__getitem__ is inside attach_enctype_error_multidict and not labelled separately; tests/test_basic.py::test_enctype_debug_helper is a test distractor.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-behavioural-logger-default-handler",
+      "repo": "flask",
+      "query": "when does the app logger get a default stream handler attached",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/flask/logging.py",
+          "symbol": "create_logger",
+          "why": "Gets the logger named after the app, sets DEBUG level when app.debug and no level is set, and adds default_handler only if has_level_handler is False."
+        },
+        {
+          "file": "src/flask/logging.py",
+          "symbol": "has_level_handler",
+          "why": "Walks the logger and its propagating parents to check whether any handler's level would handle the effective level."
+        }
+      ],
+      "rationale": "These two decide when the handler is attached. App.logger is a cached_property that only returns create_logger(self), and tests/test_logging.py::test_existing_handler is a test, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-app-and-request-context-lifecycle",
+      "repo": "flask",
+      "query": "how app and request contexts are pushed, popped and torn down",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "AppContext.push",
+          "why": "Sets the _cv_app context variable and sends appcontext_pushed."
+        },
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "AppContext.pop",
+          "why": "On the last pop calls do_teardown_appcontext, resets the context variable, checks it popped the right context and sends appcontext_popped."
+        },
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "RequestContext.push",
+          "why": "Pushes a fresh app context if needed, sets _cv_request, opens the session (or a null session) and matches the URL."
+        },
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "RequestContext.pop",
+          "why": "On the last pop runs do_teardown_request, closes the request, resets the context variable and pops the app context it pushed."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.wsgi_app",
+          "why": "Per-request driver that creates the request context, pushes it, runs full_dispatch_request or handle_exception, and pops it with the error in a finally block."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.do_teardown_request",
+          "why": "Runs blueprint and app teardown_request functions in reverse with the exception and sends request_tearing_down."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.do_teardown_appcontext",
+          "why": "Runs teardown_appcontext functions in reverse with the exception and sends appcontext_tearing_down."
+        }
+      ],
+      "rationale": "Push/pop on both context classes, the WSGI driver and the two teardown runners cover the lifecycle. Flask.app_context/request_context only construct objects, __enter__/__exit__ only delegate to push/pop, and globals.py proxies have no inventory rows; none of these is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-json-provider-serialisation",
+      "repo": "flask",
+      "query": "JSON serialisation through the app's pluggable JSON provider",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/json/provider.py",
+          "symbol": "JSONProvider",
+          "why": "The base provider interface (dumps/loads abstract, dump/load/response built on them) that an app holds as app.json."
+        },
+        {
+          "file": "src/flask/json/provider.py",
+          "symbol": "DefaultJSONProvider",
+          "why": "The stdlib-json provider with the default, ensure_ascii, sort_keys, compact and mimetype settings."
+        },
+        {
+          "file": "src/flask/json/provider.py",
+          "symbol": "DefaultJSONProvider.dumps",
+          "why": "Applies the default, ensure_ascii and sort_keys settings before calling json.dumps."
+        },
+        {
+          "file": "src/flask/json/provider.py",
+          "symbol": "DefaultJSONProvider.response",
+          "why": "Serialises args or kwargs, indenting in debug or when compact is False, and returns an application/json response_class instance."
+        },
+        {
+          "file": "src/flask/json/provider.py",
+          "symbol": "_default",
+          "why": "Fallback encoder for date, Decimal, UUID, dataclass and __html__ objects."
+        },
+        {
+          "file": "src/flask/json/__init__.py",
+          "symbol": "dumps",
+          "why": "Module-level flask.json.dumps that uses current_app.json.dumps when an app is active, else stdlib json with _default."
+        },
+        {
+          "file": "src/flask/json/__init__.py",
+          "symbol": "loads",
+          "why": "Module-level flask.json.loads that uses current_app.json.loads when an app is active, else stdlib json."
+        },
+        {
+          "file": "src/flask/json/__init__.py",
+          "symbol": "jsonify",
+          "why": "Returns current_app.json.response(*args, **kwargs), the provider-backed JSON response helper."
+        }
+      ],
+      "rationale": "The provider classes, their key methods and the module-level dispatch functions make up the concept. DefaultJSONProvider.loads and JSONProvider.dump/load are trivial pass-throughs, TaggedJSONSerializer is the separate session-cookie serialiser, and tests/test_json.py::CustomProvider is a test, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-signals-emitted-during-request",
+      "repo": "flask",
+      "query": "where are the framework's signals emitted during a request",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.full_dispatch_request",
+          "why": "Sends request_started before preprocessing and dispatch."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.finalize_request",
+          "why": "Sends request_finished with the processed response."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.handle_exception",
+          "why": "Sends got_request_exception for unhandled exceptions."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.do_teardown_request",
+          "why": "Sends request_tearing_down after the teardown_request functions."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.do_teardown_appcontext",
+          "why": "Sends appcontext_tearing_down after the teardown_appcontext functions."
+        },
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "AppContext.push",
+          "why": "Sends appcontext_pushed."
+        },
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "AppContext.pop",
+          "why": "Sends appcontext_popped."
+        },
+        {
+          "file": "src/flask/templating.py",
+          "symbol": "_render",
+          "why": "Sends before_render_template and template_rendered around template.render."
+        },
+        {
+          "file": "src/flask/templating.py",
+          "symbol": "_stream",
+          "why": "Sends before_render_template and, in its generate closure, template_rendered for streamed templates."
+        },
+        {
+          "file": "src/flask/helpers.py",
+          "symbol": "flash",
+          "why": "Sends message_flashed with the message and category."
+        }
+      ],
+      "rationale": "signals.py holds only module-level Namespace.signal() assignments with no inventory rows, so the answer is every function that calls .send(); a grep of src/ finds exactly these ten. The nested templating 'generate' closure lies inside _stream, and tests/test_signals.py::* only connect to signals, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-before-after-teardown-request-hooks",
+      "repo": "flask",
+      "query": "before, after and teardown request hooks: registration and execution",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "symbol": "Scaffold.before_request",
+          "why": "Registers a function in before_request_funcs[None] for app or blueprint."
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "symbol": "Scaffold.after_request",
+          "why": "Registers a function in after_request_funcs[None] for app or blueprint."
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "symbol": "Scaffold.teardown_request",
+          "why": "Registers a function in teardown_request_funcs[None] for app or blueprint."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.preprocess_request",
+          "why": "Runs url_value_preprocessors, then before_request_funcs for app and blueprints, and returns early if one gives a non-None value."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.process_response",
+          "why": "Runs after_this_request callbacks, then blueprint and app after_request_funcs in reverse, and saves the session."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.do_teardown_request",
+          "why": "Runs blueprint and app teardown_request_funcs in reverse with the exception."
+        }
+      ],
+      "rationale": "Three registration decorators and their three executors. The Blueprint.before_app_request/after_app_request/teardown_app_request variants and Blueprint._merge_blueprint_funcs only feed the same dicts, and after_this_request is per-request, so none of them is labelled; test_* teardown functions are distractors.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-url-routing-register-and-match",
+      "repo": "flask",
+      "query": "URL routing: registering rules and matching incoming requests to views",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "symbol": "Scaffold.route",
+          "why": "Decorator that pops 'endpoint' and calls add_url_rule with the view function."
+        },
+        {
+          "file": "src/flask/sansio/app.py",
+          "symbol": "App.add_url_rule",
+          "why": "Computes the endpoint and methods (adding OPTIONS automatically), builds the Rule, adds it to url_map and records the view in view_functions."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.create_url_adapter",
+          "why": "Binds url_map to the request environ (trusted hosts, SERVER_NAME, subdomain/host matching) or to SERVER_NAME outside a request."
+        },
+        {
+          "file": "src/flask/ctx.py",
+          "symbol": "RequestContext.match_request",
+          "why": "Calls url_adapter.match(return_rule=True) to set request.url_rule and view_args, or stores the routing exception."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.dispatch_request",
+          "why": "Raises any routing exception, answers automatic OPTIONS, and calls view_functions[rule.endpoint] with the view args."
+        }
+      ],
+      "rationale": "These cover registration, binding, matching and dispatch. Scaffold.add_url_rule only raises NotImplementedError (docstring only), the get/post/put shortcuts go through _method_route to route, and Blueprint.add_url_rule defers to the setup state, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-session-interface-and-cookie-backend",
+      "repo": "flask",
+      "query": "session interface abstraction and the default cookie-based backend",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/sessions.py",
+          "symbol": "SessionInterface",
+          "why": "Base interface with abstract open_session/save_session, null-session handling, cookie setting getters, get_expiration_time and should_set_cookie."
+        },
+        {
+          "file": "src/flask/sessions.py",
+          "symbol": "SessionMixin",
+          "why": "Adds the permanent property and new/modified/accessed flags that every session object must expose."
+        },
+        {
+          "file": "src/flask/sessions.py",
+          "symbol": "NullSession",
+          "why": "Fallback session that allows reads but raises a 'no secret key' RuntimeError on any mutation."
+        },
+        {
+          "file": "src/flask/sessions.py",
+          "symbol": "SecureCookieSession",
+          "why": "CallbackDict-based session whose on_update callback sets modified=True."
+        },
+        {
+          "file": "src/flask/sessions.py",
+          "symbol": "SecureCookieSessionInterface",
+          "why": "The default backend that signs the session into a cookie with itsdangerous and the tagged JSON serializer."
+        }
+      ],
+      "rationale": "The abstraction and default backend live entirely in sessions.py. Callers (RequestContext.push opening the session, Flask.process_response saving it) and test stubs such as tests/test_reqctx.py::FailingSessionInterface are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-testing-without-a-server",
+      "repo": "flask",
+      "query": "utilities for testing a Flask app without running a server",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/testing.py",
+          "symbol": "FlaskClient",
+          "why": "Werkzeug test client subclass that knows Flask's contexts, with session_transaction and context preservation in a with block."
+        },
+        {
+          "file": "src/flask/testing.py",
+          "symbol": "FlaskClient.open",
+          "why": "Builds the request from an EnvironBuilder, dict or Request, sends it, attaches app.json to the response and re-pushes preserved contexts."
+        },
+        {
+          "file": "src/flask/testing.py",
+          "symbol": "EnvironBuilder",
+          "why": "Builds a WSGI environ with base_url from SERVER_NAME, APPLICATION_ROOT and PREFERRED_URL_SCHEME, and JSON bodies via app.json."
+        },
+        {
+          "file": "src/flask/testing.py",
+          "symbol": "FlaskCliRunner",
+          "why": "Click CliRunner that invokes app.cli by default with a ScriptInfo that returns the app under test."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.test_client",
+          "why": "Instantiates test_client_class (default FlaskClient) bound to the app and response_class."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.test_request_context",
+          "why": "Creates a RequestContext from a flask.testing.EnvironBuilder environ to run code that needs a request without dispatching one."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.test_cli_runner",
+          "why": "Instantiates test_cli_runner_class (default FlaskCliRunner) for the app."
+        }
+      ],
+      "rationale": "Library testing utilities and their app factories. The query is not about the test suite, so pytest fixtures in tests/conftest.py and examples/*/tests/conftest.py are deliberately not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-blueprint-deferred-setup",
+      "repo": "flask",
+      "query": "how blueprints defer their setup until registered on an app",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "Blueprint.record",
+          "why": "Appends a callback to deferred_functions to be called with the setup state at registration."
+        },
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "Blueprint.record_once",
+          "why": "Wraps a callback so it only runs when state.first_registration is true."
+        },
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "Blueprint.make_setup_state",
+          "why": "Creates the BlueprintSetupState passed to every deferred callback."
+        },
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "Blueprint.register",
+          "why": "At registration, builds the state, merges hooks, and calls each deferred function with the state."
+        },
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "Blueprint._merge_blueprint_funcs",
+          "why": "Copies the blueprint's error handlers, view functions and hook dicts into the app, keyed by the blueprint's dotted name."
+        },
+        {
+          "file": "src/flask/sansio/blueprints.py",
+          "symbol": "BlueprintSetupState",
+          "why": "Holder of app, blueprint, options, url_prefix, subdomain and url_defaults handed to deferred callbacks."
+        }
+      ],
+      "rationale": "These make up the record-then-replay mechanism. Users of it (Blueprint.add_url_rule, app_template_filter, before_app_request, ...) only call record/record_once, and App.register_blueprint just forwards to register, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-static-files-and-cache-max-age",
+      "repo": "flask",
+      "query": "static file serving and its browser cache max age",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.send_static_file",
+          "why": "The static view: checks has_static_folder, computes max_age with get_send_file_max_age and calls send_from_directory."
+        },
+        {
+          "file": "src/flask/blueprints.py",
+          "symbol": "Blueprint.send_static_file",
+          "why": "Blueprint copy of the static view that serves from the blueprint's static_folder."
+        },
+        {
+          "file": "src/flask/app.py",
+          "symbol": "Flask.get_send_file_max_age",
+          "why": "Reads SEND_FILE_MAX_AGE_DEFAULT, returning None or converting a timedelta to seconds."
+        },
+        {
+          "file": "src/flask/blueprints.py",
+          "symbol": "Blueprint.get_send_file_max_age",
+          "why": "Blueprint copy of the SEND_FILE_MAX_AGE_DEFAULT lookup."
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "symbol": "Scaffold.static_folder",
+          "why": "Property and setter that resolve the static folder against root_path and strip trailing slashes."
+        },
+        {
+          "file": "src/flask/sansio/scaffold.py",
+          "symbol": "Scaffold.static_url_path",
+          "why": "Property and setter that derive the static URL prefix from the folder's basename when it is not configured."
+        }
+      ],
+      "rationale": "The view, the cache lookup and the path properties make up static serving. The static route is registered by a few lines inside Flask.__init__ (and Blueprint.register for blueprints); both are large methods mostly about other things, so neither is labelled, and send_from_directory is the generic helper. tests/test_basic.py::test_static_* are tests.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-should-bind-body-with",
+      "repo": "gin",
+      "query": "c.ShouldBindBodyWith reuse body",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "context.go",
+          "symbol": "Context.ShouldBindBodyWith",
+          "why": "Reads the request body once, caches the bytes in the context under BodyBytesKey and passes them to a BindingBody's BindBody, so binding can run more than once."
+        }
+      ],
+      "rationale": "The query names the method exactly. The ShouldBindBodyWithJSON/XML/YAML/TOML/Plain shortcuts only forward to it with a fixed binding, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-abort-with-status-json",
+      "repo": "gin",
+      "query": "Context AbortWithStatusJSON",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "context.go",
+          "symbol": "Context.AbortWithStatusJSON",
+          "why": "Calls Abort and then writes the status code and a JSON body through c.JSON."
+        }
+      ],
+      "rationale": "A single method matches the name. AbortWithStatusPureJSON, AbortWithStatus and AbortWithError are siblings with different names and behaviour, so they are left out.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-logger-with-config",
+      "repo": "gin",
+      "query": "LoggerWithConfig middleware",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "logger.go",
+          "symbol": "LoggerWithConfig",
+          "why": "Builds the logging middleware from a LoggerConfig: it picks the formatter and output, detects a terminal, sets up skip paths, and after c.Next() fills LogFormatterParams and writes the formatted line."
+        }
+      ],
+      "rationale": "Exact function name. Logger, LoggerWithFormatter and LoggerWithWriter are thin wrappers that build a LoggerConfig and call it, and the LoggerConfig struct is only its input, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-engine-handle-context",
+      "repo": "gin",
+      "query": "Engine HandleContext",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "gin.go",
+          "symbol": "Engine.HandleContext",
+          "why": "Saves the context's handler index and chain, resets it, runs handleHTTPRequest again for the rewritten request, then restores the saved index and handlers."
+        }
+      ],
+      "rationale": "The query names one method. handleHTTPRequest does the actual routing but is a different symbol that the method calls, so it is not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-set-trusted-proxies",
+      "repo": "gin",
+      "query": "engine SetTrustedProxies",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "gin.go",
+          "symbol": "Engine.SetTrustedProxies",
+          "why": "Stores the given proxy list on the engine and calls parseTrustedProxies to turn it into trusted CIDRs."
+        }
+      ],
+      "rationale": "Exact method name. parseTrustedProxies and prepareTrustedCIDRs are internal helpers it calls, and test functions with the name in them are distractors.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-basic-auth-for-proxy",
+      "repo": "gin",
+      "query": "basic auth for proxy",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "auth.go",
+          "symbol": "BasicAuthForProxy",
+          "why": "Returns middleware that checks the Proxy-Authorization header against the accounts. On a miss it sets Proxy-Authenticate and aborts with 407, and on a match it stores the user under AuthProxyUserKey."
+        }
+      ],
+      "rationale": "A loosely spaced version of the function name. BasicAuth and BasicAuthForRealm handle the normal Authorization header with 401 and are deliberately excluded.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-find-case-insensitive-path",
+      "repo": "gin",
+      "query": "tree findCaseInsensitivePath",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "tree.go",
+          "symbol": "node.findCaseInsensitivePath",
+          "why": "The named method: it allocates the buffer and calls the recursive helper, returning the case-corrected path and whether it was found."
+        },
+        {
+          "file": "tree.go",
+          "symbol": "node.findCaseInsensitivePathRec",
+          "why": "Does the real case-insensitive tree walk with EqualFold, rune buffers and optional trailing-slash fixing, for the method above."
+        }
+      ],
+      "rationale": "The named method is a thin wrapper over its recursive helper, so both are equally good answers. redirectFixedPath only calls it and is not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-map-form-with-tag",
+      "repo": "gin",
+      "query": "MapFormWithTag binding",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "binding/form_mapping.go",
+          "symbol": "MapFormWithTag",
+          "why": "The exported function with this name. It maps a form value map onto a pointer using a caller-chosen struct tag."
+        },
+        {
+          "file": "binding/form_mapping.go",
+          "symbol": "mapFormByTag",
+          "why": "The implementation MapFormWithTag delegates to: it handles map targets through setFormMap and otherwise calls mappingByPtr with a formSource for the tag."
+        }
+      ],
+      "rationale": "MapFormWithTag is a one-line public wrapper of mapFormByTag, so both are labelled. mapForm and mapURI are fixed-tag wrappers with other names and are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-exact-name-render-write-json",
+      "repo": "gin",
+      "query": "render WriteJSON",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "render/json.go",
+          "symbol": "WriteJSON",
+          "why": "Sets the JSON content type, marshals the object with the configured json.API and writes the bytes to the response."
+        }
+      ],
+      "rationale": "Exact function name in the render package. JSON.Render only forwards to it, and WriteString and WriteMsgPack are similarly named helpers for other formats.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-stop-remaining-handlers",
+      "repo": "gin",
+      "query": "stop the remaining handlers in the chain from running",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "context.go",
+          "symbol": "Context.Abort",
+          "why": "Sets the context index to abortIndex so Next will not call any further handlers."
+        }
+      ],
+      "rationale": "Abort is the primitive that skips pending handlers. The AbortWith* variants also write a status or body and only call Abort, and IsAborted only reads the state, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-context-safe-for-goroutine",
+      "repo": "gin",
+      "query": "make the request context safe to hand to a background goroutine",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "context.go",
+          "symbol": "Context.Copy",
+          "why": "Builds a detached copy of the context with a nil underlying writer, aborted index, cloned Keys (under the read lock) and copied Params, for use outside the request scope."
+        }
+      ],
+      "rationale": "Copy is the one function for this purpose. reset and the context.Context methods (Deadline/Done/Value) are about request lifecycle, not detaching, and are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-url-param-with-fallback",
+      "repo": "gin",
+      "query": "read a URL search parameter or a fallback value when it is missing",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "context.go",
+          "symbol": "Context.DefaultQuery",
+          "why": "Looks up the key with GetQuery and returns the caller-supplied default if the key is not present."
+        }
+      ],
+      "rationale": "DefaultQuery is the only query accessor that takes a fallback. Query and GetQuery return an empty string or a bool instead. DefaultPostForm does the same thing for form bodies, not the URL, so it is excluded.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-adapt-net-http-handler",
+      "repo": "gin",
+      "query": "adapt a standard library http handler to run inside gin",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "utils.go",
+          "symbol": "WrapH",
+          "why": "Wraps an http.Handler in a HandlerFunc that calls ServeHTTP with the context's Writer and Request."
+        },
+        {
+          "file": "utils.go",
+          "symbol": "WrapF",
+          "why": "Wraps an http.HandlerFunc in a HandlerFunc that calls it with the context's Writer and Request."
+        }
+      ],
+      "rationale": "Both adapters answer the query equally: one is for http.Handler and one for http.HandlerFunc. gin.Bind in the same file builds binding middleware, not an adapter, so it is not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-anti-hijacking-json-prefix",
+      "repo": "gin",
+      "query": "prepend an anti-hijacking prefix to JSON array responses",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "render/json.go",
+          "symbol": "SecureJSON.Render",
+          "why": "Marshals the data and, when the output starts with '[' and ends with ']', writes the configured Prefix before the JSON bytes."
+        }
+      ],
+      "rationale": "The prefixing logic lives only in SecureJSON.Render. Context.SecureJSON just passes the engine's prefix in, and Engine.SecureJsonPrefix only sets it, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-canonicalise-url-path",
+      "repo": "gin",
+      "query": "canonicalise a URL path by removing dot segments and duplicate slashes",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "path.go",
+          "symbol": "cleanPath",
+          "why": "Rewrites the path into a buffer, collapsing repeated slashes, dropping '.' elements, resolving '..' against the previous element and keeping a trailing slash."
+        }
+      ],
+      "rationale": "cleanPath is the URL version of path.Clean. removeRepeatedChar only collapses repeated characters and does not resolve dot segments, and bufApp is a buffer helper, so both are excluded.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-switch-run-mode",
+      "repo": "gin",
+      "query": "switch the framework between debug, release and test behaviour",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "mode.go",
+          "symbol": "SetMode",
+          "why": "Maps the mode string (defaulting to test under go test, otherwise debug) to an atomic mode code, panics on an unknown value, and stores the name."
+        }
+      ],
+      "rationale": "SetMode is the switch. Mode only reads the stored name, IsDebugging only checks the code, and the mode.go init only calls SetMode with GIN_MODE, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-constant-time-credential-compare",
+      "repo": "gin",
+      "query": "compare submitted credentials in constant time",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "auth.go",
+          "symbol": "authPairs.searchCredential",
+          "why": "Loops over the precomputed auth pairs and uses subtle.ConstantTimeCompare on the header value to find the matching user."
+        }
+      ],
+      "rationale": "The constant-time comparison happens only in searchCredential, whose name does not suggest it. BasicAuthForRealm and BasicAuthForProxy call it, and processAccounts and authorizationHeader only precompute header values, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-zero-copy-string-bytes",
+      "repo": "gin",
+      "query": "zero-allocation conversion between strings and byte slices",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "internal/bytesconv/bytesconv.go",
+          "symbol": "StringToBytes",
+          "why": "Uses unsafe.Slice over unsafe.StringData to view a string as a []byte without copying."
+        },
+        {
+          "file": "internal/bytesconv/bytesconv.go",
+          "symbol": "BytesToString",
+          "why": "Uses unsafe.String over unsafe.SliceData to view a []byte as a string without copying."
+        }
+      ],
+      "rationale": "The two internal helpers cover the two directions and are equally relevant. Callers such as SecureJSON.Render or searchCredential use them but are not the answer.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-paraphrase-hide-directory-indexes",
+      "repo": "gin",
+      "query": "hide directory indexes when serving a folder of assets",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "fs.go",
+          "symbol": "Dir",
+          "why": "Returns plain http.Dir when listDirectory is true and otherwise wraps it in OnlyFilesFS to block listings."
+        },
+        {
+          "file": "fs.go",
+          "symbol": "OnlyFilesFS.Open",
+          "why": "Opens the file from the wrapped filesystem and returns it as a neutralizedReaddirFile."
+        },
+        {
+          "file": "fs.go",
+          "symbol": "neutralizedReaddirFile.Readdir",
+          "why": "Always returns nil, nil, which is what stops http.FileServer from listing the directory."
+        }
+      ],
+      "rationale": "These three form the mechanism: Dir chooses the wrapper, Open applies it and Readdir disables listing. The bare OnlyFilesFS struct only holds a field, and RouterGroup.Static/createStaticHandler only consume the filesystem, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-match-path-capture-params",
+      "repo": "gin",
+      "query": "where does the router match a request path and capture wildcard parameters",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "tree.go",
+          "symbol": "node.getValue",
+          "why": "Walks the radix tree for the path, backtracks through skippedNodes, fills Params for ':param' and catch-all nodes (with optional unescaping) and sets the trailing-slash recommendation."
+        }
+      ],
+      "rationale": "getValue is the lookup routine. Engine.handleHTTPRequest only calls it for the right method tree, and Params.ByName/Context.Param only read the captured values afterwards, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-route-wildcard-conflict-panic",
+      "repo": "gin",
+      "query": "where does registering a route panic on a conflicting wildcard segment",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "tree.go",
+          "symbol": "node.addRoute",
+          "why": "While inserting into an existing tree, it panics with \"conflicts with existing wildcard\" when a new path segment clashes with an existing param or catch-all child, and panics on duplicate handlers."
+        },
+        {
+          "file": "tree.go",
+          "symbol": "node.insertChild",
+          "why": "Panics on more than one wildcard per segment, unnamed wildcards, a catch-all that is not at the end, and a catch-all that conflicts with an existing path segment."
+        }
+      ],
+      "rationale": "The conflict panics are raised in these two tree functions. findWildcard only panics on an invalid escape, and Engine.addRoute only asserts basic preconditions, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-method-not-allowed-allow-header",
+      "repo": "gin",
+      "query": "where is a 405 response with an Allow header produced",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "gin.go",
+          "symbol": "Engine.handleHTTPRequest",
+          "why": "When HandleMethodNotAllowed is set and no route matches, it checks the other method trees, sets the Allow header to the methods that match and calls serveError with 405."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "serveError",
+          "why": "Runs the NoMethod handler chain with the 405 status and writes the default body as text/plain if no handler wrote a response."
+        }
+      ],
+      "rationale": "The Allow header is built in handleHTTPRequest and the response is written in serveError. Engine.NoMethod and rebuild405Handlers only register handlers, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-trailing-slash-redirect",
+      "repo": "gin",
+      "query": "how does a request with an extra trailing slash get redirected",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "gin.go",
+          "symbol": "redirectTrailingSlash",
+          "why": "Adds or strips the trailing slash on the request path (honouring a sanitised X-Forwarded-Prefix) and then calls redirectRequest."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "redirectRequest",
+          "why": "Sends the redirect with 301 for GET and 307 for other methods, then writes the headers."
+        }
+      ],
+      "rationale": "These two functions perform the redirect. node.getValue only sets the tsr hint, and handleHTTPRequest only decides to call redirectTrailingSlash, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-context-pool-reuse",
+      "repo": "gin",
+      "query": "how are Context objects pooled and reset between requests",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "gin.go",
+          "symbol": "Engine.ServeHTTP",
+          "why": "Takes a *Context from engine.pool, resets its writer and request, handles the request and puts the context back in the pool."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.allocateContext",
+          "why": "The pool's constructor: it creates a Context with preallocated Params and skippedNodes sized from maxParams and maxSections."
+        },
+        {
+          "file": "context.go",
+          "symbol": "Context.reset",
+          "why": "Clears handlers, index, keys, errors, caches and params so a pooled Context can be reused for a new request."
+        }
+      ],
+      "rationale": "These three cover get/put, allocation and clearing. New only installs pool.New, and CreateTestContext is a test helper that reuses allocateContext, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-client-ip-behind-proxies",
+      "repo": "gin",
+      "query": "how is the real client IP worked out behind trusted proxies",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "context.go",
+          "symbol": "Context.ClientIP",
+          "why": "Checks the trusted platform header, trusts unix sockets, tests whether RemoteIP is a trusted proxy, and if so reads the configured RemoteIPHeaders through validateHeader."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.validateHeader",
+          "why": "Walks X-Forwarded-For entries from right to left and returns the first IP that is not a trusted proxy."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.isTrustedProxy",
+          "why": "Reports whether an IP falls inside any of the engine's trusted CIDRs."
+        }
+      ],
+      "rationale": "These three hold the resolution logic. SetTrustedProxies/prepareTrustedCIDRs only configure the CIDR list, and RemoteIP just splits RemoteAddr, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-bind-failure-status-code",
+      "repo": "gin",
+      "query": "what status code is sent back when binding the request body fails",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "context.go",
+          "symbol": "Context.MustBindWith",
+          "why": "On a binding error it aborts with 413 for http.MaxBytesError and 400 otherwise, recording the error as ErrorTypeBind."
+        }
+      ],
+      "rationale": "MustBindWith alone maps bind errors to status codes. Bind/BindJSON etc. only forward to it, and ShouldBindWith returns the error without writing a status, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-broken-pipe-no-stack-trace",
+      "repo": "gin",
+      "query": "why is no stack trace logged when the client connection is broken",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "recovery.go",
+          "symbol": "CustomRecoveryWithWriter",
+          "why": "In its deferred recover it marks EPIPE, ECONNRESET and ErrAbortHandler as a broken pipe, logs only the error and request dump without stack(), then records the error and aborts instead of calling the handler."
+        }
+      ],
+      "rationale": "The broken-pipe branch lives only in CustomRecoveryWithWriter. Recovery/RecoveryWithWriter/CustomRecovery are wrappers, and stack() is the trace it skips, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-time-field-form-binding",
+      "repo": "gin",
+      "query": "how are time fields parsed from form values, including unix timestamps",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "binding/form_mapping.go",
+          "symbol": "setTimeField",
+          "why": "Reads the time_format tag (default RFC3339), handles unix/unixmilli/unixmicro/unixnano as integers, and otherwise parses in the location given by time_utc or time_location."
+        }
+      ],
+      "rationale": "setTimeField does all time parsing. setWithProperType only dispatches to it for time.Time, and setTimeDuration handles time.Duration rather than timestamps, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-customise-route-debug-output",
+      "repo": "gin",
+      "query": "how can I change how registered routes are printed at startup",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "debug.go",
+          "symbol": "debugPrintRoute",
+          "why": "In debug mode it prints method, path, handler name and handler count, either with the built-in format or by calling DebugPrintRouteFunc when that is set."
+        },
+        {
+          "file": "debug.go",
+          "symbol": "DebugPrintRouteFunc",
+          "why": "The exported hook variable that, when set, replaces the default route log format in debugPrintRoute."
+        }
+      ],
+      "rationale": "The route log line and its override hook are these two symbols. Engine.addRoute only calls debugPrintRoute, and DebugPrintFunc/debugPrint are the generic debug logger rather than route-specific, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-default-listen-port",
+      "repo": "gin",
+      "query": "how is the listen port chosen when Run is called without an address",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "utils.go",
+          "symbol": "resolveAddress",
+          "why": "With no address it uses the PORT environment variable, or falls back to \":8080\". It returns a single given address unchanged and panics on more than one."
+        }
+      ],
+      "rationale": "The defaulting logic sits in a helper whose name does not suggest it. Engine.Run only calls resolveAddress, and ginS.Run wraps Engine.Run, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-status-override-after-write",
+      "repo": "gin",
+      "query": "where does gin warn about changing the status code after headers were written",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "response_writer.go",
+          "symbol": "responseWriter.WriteHeader",
+          "why": "If a different positive code is requested after the response was written, it logs the 'Headers were already written' warning and keeps the old status. Otherwise it stores the new code."
+        }
+      ],
+      "rationale": "Only WriteHeader contains the warning. WriteHeaderNow flushes the stored status, and Context.Status only calls WriteHeader, so neither is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-group-middleware-merge",
+      "repo": "gin",
+      "query": "how are a group's middleware merged with a route's own handlers",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "routergroup.go",
+          "symbol": "RouterGroup.combineHandlers",
+          "why": "Allocates a new HandlersChain, copies the group's Handlers first and the route's handlers after them, and asserts the total stays below abortIndex."
+        }
+      ],
+      "rationale": "combineHandlers does the merge. RouterGroup.handle and Group only call it, and RouterGroup.Use only appends to the group's own list, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-behavioural-default-access-log-format",
+      "repo": "gin",
+      "query": "where is the default access log line layout defined",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "logger.go",
+          "symbol": "defaultLogFormatter",
+          "why": "A function variable that applies the colour codes, truncates latency and Sprintfs the \"[GIN] time | status | latency | ip | method path\" line."
+        }
+      ],
+      "rationale": "The default format is a function stored in a variable, so its symbol kind is not obvious. LoggerWithConfig only falls back to it, and the LogFormatterParams colour methods supply pieces of it, so none of them is labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-request-binding-validation",
+      "repo": "gin",
+      "query": "request binding and struct validation",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "binding/binding.go",
+          "symbol": "Binding",
+          "why": "The core interface (Name, Bind(*http.Request, any)) that every request binder implements."
+        },
+        {
+          "file": "binding/binding.go",
+          "symbol": "BindingBody",
+          "why": "Extends Binding with BindBody for binding from already-read bytes."
+        },
+        {
+          "file": "binding/binding.go",
+          "symbol": "Default",
+          "why": "Chooses the binder from the HTTP method and Content-Type (Form for GET, then JSON, XML, ProtoBuf, MsgPack, YAML, TOML, multipart or BSON)."
+        },
+        {
+          "file": "binding/binding.go",
+          "symbol": "StructValidator",
+          "why": "The pluggable validator interface (ValidateStruct, Engine) that binders call after decoding."
+        },
+        {
+          "file": "binding/binding.go",
+          "symbol": "validate",
+          "why": "The shared step every binder calls after decoding: it runs Validator.ValidateStruct unless validation is disabled."
+        },
+        {
+          "file": "binding/default_validator.go",
+          "symbol": "defaultValidator.ValidateStruct",
+          "why": "The default validator. It validates structs and pointers through go-playground/validator, iterates slices and arrays, and collects SliceValidationError."
+        },
+        {
+          "file": "context.go",
+          "symbol": "Context.ShouldBindWith",
+          "why": "The core context entry point that runs b.Bind on the request and returns the error."
+        },
+        {
+          "file": "context.go",
+          "symbol": "Context.MustBindWith",
+          "why": "Binds through ShouldBindWith and on failure aborts with 400/413 and an ErrorTypeBind error."
+        },
+        {
+          "file": "binding/binding_nomsgpack.go",
+          "symbol": "Binding",
+          "why": "Build-tag variant (nomsgpack) of the Binding interface: same Name/Bind contract."
+        },
+        {
+          "file": "binding/binding_nomsgpack.go",
+          "symbol": "BindingBody",
+          "why": "Build-tag variant (nomsgpack) of the BindingBody interface: same BindBody contract."
+        },
+        {
+          "file": "binding/binding_nomsgpack.go",
+          "symbol": "StructValidator",
+          "why": "Build-tag variant (nomsgpack) of the StructValidator interface: same ValidateStruct/Engine contract."
+        },
+        {
+          "file": "binding/binding_nomsgpack.go",
+          "symbol": "Default",
+          "why": "Build-tag variant (nomsgpack) of Default: the same method/content-type to binder switch, without the msgpack case."
+        },
+        {
+          "file": "binding/binding_nomsgpack.go",
+          "symbol": "validate",
+          "why": "Build-tag variant (nomsgpack) of validate: identical call into the configured Validator."
+        }
+      ],
+      "rationale": "Covers the interfaces, binder selection, validation hook and the two context entry points. binding_nomsgpack.go is the build-tag variant of binding.go (compiled with -tags nomsgpack) and defines the same symbols, so its copies are labelled too (same-implementation copies rule). Format binders (jsonBinding.Bind etc.) and the per-format ShouldBindX shortcuts are many thin variants and are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-response-render-formats",
+      "repo": "gin",
+      "query": "response rendering for different output formats",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "render/render.go",
+          "symbol": "Render",
+          "why": "The interface (Render, WriteContentType) that every output format implements."
+        },
+        {
+          "file": "context.go",
+          "symbol": "Context.Render",
+          "why": "Sets the status, writes only the content type for body-less statuses, and otherwise calls r.Render, recording any error."
+        },
+        {
+          "file": "render/json.go",
+          "symbol": "JSON.Render",
+          "why": "Renders JSON through WriteJSON."
+        },
+        {
+          "file": "render/xml.go",
+          "symbol": "XML.Render",
+          "why": "Writes the XML content type and encodes the data with encoding/xml."
+        },
+        {
+          "file": "render/yaml.go",
+          "symbol": "YAML.Render",
+          "why": "Marshals the data with yaml.Marshal and writes it with the YAML content type."
+        },
+        {
+          "file": "render/toml.go",
+          "symbol": "TOML.Render",
+          "why": "Marshals the data with toml.Marshal and writes it with the TOML content type."
+        },
+        {
+          "file": "render/protobuf.go",
+          "symbol": "ProtoBuf.Render",
+          "why": "Marshals a proto.Message and writes it as application/x-protobuf."
+        },
+        {
+          "file": "render/msgpack.go",
+          "symbol": "MsgPack.Render",
+          "why": "Encodes the data as MessagePack through WriteMsgPack."
+        },
+        {
+          "file": "render/bson.go",
+          "symbol": "BSON.Render",
+          "why": "Marshals the data with bson.Marshal and writes it as application/bson."
+        },
+        {
+          "file": "render/html.go",
+          "symbol": "HTML.Render",
+          "why": "Executes the named HTML template with the data under the text/html content type."
+        },
+        {
+          "file": "render/text.go",
+          "symbol": "String.Render",
+          "why": "Writes formatted plain text through WriteString."
+        },
+        {
+          "file": "render/data.go",
+          "symbol": "Data.Render",
+          "why": "Writes raw bytes with a caller-supplied content type and Content-Length."
+        }
+      ],
+      "rationale": "Labels the interface, the dispatcher and one Render per distinct format. The JSON flavours (Indented/Secure/Jsonp/Ascii/Pure) are variants of the JSON format, and Reader/Redirect are not serialisation formats, so they are left out. The Context.JSON/XML shortcuts only build render values and are also excluded.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-radix-tree-routing",
+      "repo": "gin",
+      "query": "radix tree route storage and lookup",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tree.go",
+          "symbol": "node",
+          "why": "The radix tree node with path, indices, wildChild, nType, priority, children and handlers."
+        },
+        {
+          "file": "tree.go",
+          "symbol": "node.addRoute",
+          "why": "Inserts a path by finding the longest common prefix, splitting edges and descending or adding children."
+        },
+        {
+          "file": "tree.go",
+          "symbol": "node.insertChild",
+          "why": "Creates param and catch-all wildcard nodes for the remainder of a path."
+        },
+        {
+          "file": "tree.go",
+          "symbol": "findWildcard",
+          "why": "Scans a path segment for a ':' or '*' wildcard and checks that its name is valid."
+        },
+        {
+          "file": "tree.go",
+          "symbol": "node.getValue",
+          "why": "Looks up a request path in the tree, capturing params and computing the trailing-slash recommendation."
+        },
+        {
+          "file": "tree.go",
+          "symbol": "methodTrees.get",
+          "why": "Returns the root node of the per-HTTP-method tree."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.addRoute",
+          "why": "Gets or creates the method tree root, inserts the route and tracks maxParams/maxSections."
+        }
+      ],
+      "rationale": "Covers the node type, insertion, wildcard parsing, lookup and per-method roots. Helpers like longestCommonPrefix, incrementChildPrio and the case-insensitive lookup are secondary details, and RouterGroup.handle is only a caller, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-request-error-collection",
+      "repo": "gin",
+      "query": "collecting and reporting errors attached during a request",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "context.go",
+          "symbol": "Context.Error",
+          "why": "Appends an error to c.Errors, wrapping plain errors as private *Error values, and panics on nil."
+        },
+        {
+          "file": "errors.go",
+          "symbol": "Error",
+          "why": "The error record with the wrapped Err, a Type bitmask and optional Meta."
+        },
+        {
+          "file": "errors.go",
+          "symbol": "Error.JSON",
+          "why": "Turns one error and its Meta into a JSON-ready map or struct."
+        },
+        {
+          "file": "errors.go",
+          "symbol": "errorMsgs.ByType",
+          "why": "Filters the collected errors by an ErrorType mask."
+        },
+        {
+          "file": "errors.go",
+          "symbol": "errorMsgs.Last",
+          "why": "Returns the most recent collected error."
+        },
+        {
+          "file": "errors.go",
+          "symbol": "errorMsgs.Errors",
+          "why": "Returns the collected errors as a slice of message strings."
+        },
+        {
+          "file": "errors.go",
+          "symbol": "errorMsgs.JSON",
+          "why": "Turns the collected errors into a single JSON value or an array."
+        },
+        {
+          "file": "logger.go",
+          "symbol": "ErrorLoggerT",
+          "why": "Middleware that runs the chain and then renders the errors of a given type as JSON."
+        }
+      ],
+      "rationale": "Covers attaching errors, the error type, querying and serialising the list, and the reporting middleware. AbortWithError and MustBindWith only call Context.Error, and the MarshalJSON/String methods are thin wrappers, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-html-template-rendering",
+      "repo": "gin",
+      "query": "HTML template loading and rendering",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "gin.go",
+          "symbol": "Engine.LoadHTMLGlob",
+          "why": "Parses templates from a glob. In debug mode it installs an HTMLDebug renderer, otherwise it calls SetHTMLTemplate."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.LoadHTMLFiles",
+          "why": "Loads templates from a list of files, using HTMLDebug in debug mode and a parsed template otherwise."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.LoadHTMLFS",
+          "why": "Loads templates from an http.FileSystem with patterns, with the same debug/production split."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.SetHTMLTemplate",
+          "why": "Installs an HTMLProduction renderer with the template and the engine FuncMap."
+        },
+        {
+          "file": "render/html.go",
+          "symbol": "HTMLProduction.Instance",
+          "why": "Returns an HTML render that uses the preloaded template."
+        },
+        {
+          "file": "render/html.go",
+          "symbol": "HTMLDebug.Instance",
+          "why": "Returns an HTML render with templates reloaded on every call through loadTemplate."
+        },
+        {
+          "file": "render/html.go",
+          "symbol": "HTMLDebug.loadTemplate",
+          "why": "Re-parses templates from Files, Glob or FileSystem patterns with the configured delims and FuncMap."
+        },
+        {
+          "file": "render/html.go",
+          "symbol": "HTML.Render",
+          "why": "Executes the template (or the named template) into the response with the HTML content type."
+        },
+        {
+          "file": "context.go",
+          "symbol": "Context.HTML",
+          "why": "Handler entry point that asks the engine's HTMLRender for an instance and renders it with the status code."
+        }
+      ],
+      "rationale": "Covers loading (three loaders plus SetHTMLTemplate), the production and debug renderers, and execution. Delims/SetFuncMap only set options, and the ginS wrappers forward to Engine, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-static-file-serving",
+      "repo": "gin",
+      "query": "serving static files and directories from routes",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "routergroup.go",
+          "symbol": "RouterGroup.Static",
+          "why": "Serves a directory root by calling StaticFS with Dir(root, false)."
+        },
+        {
+          "file": "routergroup.go",
+          "symbol": "RouterGroup.StaticFS",
+          "why": "Rejects parameterised paths and registers GET/HEAD on '<path>/*filepath' with a static handler."
+        },
+        {
+          "file": "routergroup.go",
+          "symbol": "RouterGroup.createStaticHandler",
+          "why": "Builds the handler that opens the requested file, falls back to the NoRoute handlers on a miss and otherwise serves it with http.FileServer."
+        },
+        {
+          "file": "routergroup.go",
+          "symbol": "RouterGroup.StaticFile",
+          "why": "Registers a route that serves one local file through c.File."
+        },
+        {
+          "file": "routergroup.go",
+          "symbol": "RouterGroup.StaticFileFS",
+          "why": "Registers a route that serves one file from a custom http.FileSystem through c.FileFromFS."
+        },
+        {
+          "file": "routergroup.go",
+          "symbol": "RouterGroup.staticFileHandler",
+          "why": "Shared helper for single files: it rejects ':' or '*' paths and registers GET and HEAD."
+        },
+        {
+          "file": "fs.go",
+          "symbol": "Dir",
+          "why": "Builds the http.FileSystem used by Static, optionally blocking directory listing."
+        }
+      ],
+      "rationale": "Covers the RouterGroup static API and the filesystem it uses. Context.File/FileFromFS are generic per-request file writers and the ginS wrappers only forward, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-server-startup-transports",
+      "repo": "gin",
+      "query": "starting the server over HTTP, TLS, unix sockets, file descriptors or QUIC",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "gin.go",
+          "symbol": "Engine.Run",
+          "why": "Warns about trusting all proxies, updates the route trees, resolves the address and calls ListenAndServe."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.RunTLS",
+          "why": "Starts an http.Server with ListenAndServeTLS using the cert and key files."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.RunUnix",
+          "why": "Listens on a unix socket file, serves on it and removes the file afterwards."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.RunFd",
+          "why": "Wraps a file descriptor in a net.FileListener and serves on it through RunListener."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.RunQUIC",
+          "why": "Serves HTTP/3 with http3.ListenAndServeQUIC."
+        },
+        {
+          "file": "gin.go",
+          "symbol": "Engine.RunListener",
+          "why": "Serves on an arbitrary net.Listener."
+        }
+      ],
+      "rationale": "All six Run variants are equally relevant. Engine.Handler (h2c wrapping), resolveAddress and the ginS Run* wrappers only support or forward to them, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-pluggable-json-codec",
+      "repo": "gin",
+      "query": "swappable JSON library chosen by build tags",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "codec/json/api.go",
+          "symbol": "Core",
+          "why": "The codec interface (Marshal, Unmarshal, MarshalIndent, NewEncoder, NewDecoder) that each backend implements."
+        },
+        {
+          "file": "codec/json/api.go",
+          "symbol": "API",
+          "why": "The package-level Core variable that the build-tagged init functions assign and the rest of gin calls."
+        },
+        {
+          "file": "codec/json/json.go",
+          "symbol": "jsonApi",
+          "why": "The default encoding/json backend, used when no alternative build tag is set."
+        },
+        {
+          "file": "codec/json/go_json.go",
+          "symbol": "gojsonApi",
+          "why": "The goccy/go-json backend selected by the go_json tag."
+        },
+        {
+          "file": "codec/json/jsoniter.go",
+          "symbol": "jsoniterApi",
+          "why": "The json-iterator backend selected by the jsoniter tag."
+        },
+        {
+          "file": "codec/json/sonic.go",
+          "symbol": "sonicApi",
+          "why": "The bytedance/sonic backend selected by the sonic tag on supported OSes."
+        }
+      ],
+      "rationale": "Covers the abstraction, the global hook and the four backends. The per-backend Marshal/NewDecoder methods and init functions are one-line forwarders, and the Encoder/Decoder sub-interfaces are secondary, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-panic-recovery-middleware",
+      "repo": "gin",
+      "query": "panic recovery middleware and crash logging",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "recovery.go",
+          "symbol": "CustomRecoveryWithWriter",
+          "why": "The core middleware: it recovers panics, special-cases broken pipes, logs the request dump and stack, and calls the handler."
+        },
+        {
+          "file": "recovery.go",
+          "symbol": "Recovery",
+          "why": "The default recovery middleware, writing to DefaultErrorWriter."
+        },
+        {
+          "file": "recovery.go",
+          "symbol": "CustomRecovery",
+          "why": "Recovery with a user-supplied RecoveryFunc."
+        },
+        {
+          "file": "recovery.go",
+          "symbol": "RecoveryWithWriter",
+          "why": "Recovery for a chosen writer, defaulting to defaultHandleRecovery."
+        },
+        {
+          "file": "recovery.go",
+          "symbol": "defaultHandleRecovery",
+          "why": "The default panic response: it aborts with 500."
+        },
+        {
+          "file": "recovery.go",
+          "symbol": "stack",
+          "why": "Builds the formatted stack trace, with file:line and source text for each frame, that is logged on panic."
+        },
+        {
+          "file": "recovery.go",
+          "symbol": "secureRequestDump",
+          "why": "Dumps the request for the panic log with the Authorization header masked."
+        }
+      ],
+      "rationale": "Covers the middleware family, the default handler and the logging helpers. readNthLine/function/timeFormat are lower-level helpers of stack and the log line, and test helpers are distractors, so they are not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-regexprouter-class",
+      "repo": "hono",
+      "query": "RegExpRouter class",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/router/reg-exp-router/router.ts",
+          "symbol": "RegExpRouter",
+          "why": "Defines RegExpRouter: add() inserts each method's paths into a Trie, and buildAllMatchers/#buildMatcher compile them into one RegExp plus a static-path map per method, which match() uses."
+        }
+      ],
+      "rationale": "Only the class the query names is labelled. PreparedRegExpRouter, the reg-exp-router Trie/Node helpers and matcher.ts::match support or derive from it but are not the named class.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-jsx-renderer-middleware",
+      "repo": "hono",
+      "query": "jsx renderer middleware",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/middleware/jsx-renderer/index.ts",
+          "symbol": "jsxRenderer",
+          "why": "Middleware that wraps the layout via c.setLayout and installs createRenderer(...) as the context renderer before calling next()."
+        }
+      ],
+      "rationale": "jsxRenderer is the exported middleware the query names. createRenderer (internal function that builds the HTML/streamed response) and useRequestContext live in the same file but are not the named symbol.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-get-runtime-key",
+      "repo": "hono",
+      "query": "getRuntimeKey helper",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/helper/adapter/index.ts",
+          "symbol": "getRuntimeKey",
+          "why": "Returns the runtime name by matching navigator.userAgent against knownUserAgents, then checking EdgeRuntime, fastly and process.release.name, else 'other'."
+        }
+      ],
+      "rationale": "Single exact match. env() calls it and checkUserAgentEquals is a small helper it uses; neither is the named function.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-httpexception-class",
+      "repo": "hono",
+      "query": "HTTPException class",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/http-exception.ts",
+          "symbol": "HTTPException",
+          "why": "Error subclass that stores a status and optional res, with getResponse() building the Response to send for the exception."
+        }
+      ],
+      "rationale": "The class row covers its constructor and getResponse. The many middlewares that throw HTTPException (bodyLimit, basicAuth, timeout, csrf...) only use it and were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-hc-client",
+      "repo": "hono",
+      "query": "hc client",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/client/client.ts",
+          "symbol": "hc",
+          "why": "Creates the typed RPC client: a createProxy callback maps the accessed path and $method to a URL and returns a URL/path, opens a WebSocket, or sends the request through ClientRequestImpl.fetch."
+        }
+      ],
+      "rationale": "hc is the named entry point. createProxy and ClientRequestImpl are its internals, and testClient wraps hc, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-secure-headers-middleware",
+      "repo": "hono",
+      "query": "secureHeaders middleware",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/middleware/secure-headers/secure-headers.ts",
+          "symbol": "secureHeaders",
+          "why": "Builds the header list from DEFAULT_OPTIONS plus CSP, Permissions-Policy and reporting options, sets the headers on the response after next() and removes X-Powered-By."
+        }
+      ],
+      "rationale": "Only the middleware factory is labelled. getCSPDirectives, getFilteredHeaders and setHeaders are its internals, and SecureHeadersOptions is a type.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-compose-middleware-function",
+      "repo": "hono",
+      "query": "compose middleware function",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/compose.ts",
+          "symbol": "compose",
+          "why": "Koa-style composer: its inner dispatch(i) runs handler i with a next that dispatches i+1, rejects a second next() call, sends errors to onError and calls onNotFound when the chain ends without a response."
+        }
+      ],
+      "rationale": "compose.ts::compose is the named function. The combine middleware (some/every/except) also combines middleware, but under other names, and every() only calls compose.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-errorboundary-component",
+      "repo": "hono",
+      "query": "ErrorBoundary component",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/jsx/components.ts",
+          "symbol": "ErrorBoundary",
+          "why": "Server-side async component that renders its children, catches errors (also from async and streamed children) and renders fallback or fallbackRender(error) after calling onError."
+        },
+        {
+          "file": "src/jsx/dom/components.ts",
+          "symbol": "ErrorBoundary",
+          "why": "Client DOM version: wraps the children in a Fragment with a DOM_ERROR_HANDLER that calls onError and returns fallbackRender(err) or fallback."
+        }
+      ],
+      "rationale": "The two rows are separate implementations: server string rendering and client DOM rendering. Suspense uses the same pattern but is a different component.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-exact-name-testclient-helper",
+      "repo": "hono",
+      "query": "testClient helper",
+      "intent": "exact-name",
+      "relevant": [
+        {
+          "file": "src/helper/testing/index.ts",
+          "symbol": "testClient",
+          "why": "Returns an hc client for http://localhost whose custom fetch calls app.request(input, init, Env, executionCtx), so routes are called in-process."
+        }
+      ],
+      "rationale": "Single named helper. hc is the client it wraps and is not the named symbol; the *.test.ts files that call testClient are distractors.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-allow-browsers-other-origins",
+      "repo": "hono",
+      "query": "let browsers on other origins call my API",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/middleware/cors/index.ts",
+          "symbol": "cors",
+          "why": "Sets Access-Control-Allow-Origin, -Credentials and -Expose-Headers, and answers OPTIONS preflights with Allow-Methods, Allow-Headers and Max-Age and a 204 response."
+        }
+      ],
+      "rationale": "The CORS middleware is the only implementation. csrf also reads the Origin header, but it blocks cross-site requests instead of allowing them. CORSOptions is a type and the query asks about behaviour.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-reject-oversized-request-payloads",
+      "repo": "hono",
+      "query": "reject request payloads above a maximum size",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/middleware/body-limit/index.ts",
+          "symbol": "bodyLimit",
+          "why": "Trusts Content-Length when there is no Transfer-Encoding. Otherwise it reads the body and counts bytes. Above maxSize it calls onError, which by default throws a 413 HTTPException."
+        }
+      ],
+      "rationale": "bodyLimit is the only code that limits body size. The cache middleware's maxQueryBodySize and the nesting limits in utils/body.ts also look like limits, but they limit other things.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-skip-middleware-on-some-paths",
+      "repo": "hono",
+      "query": "skip a middleware for certain paths",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/middleware/combine/index.ts",
+          "symbol": "except",
+          "why": "Turns path patterns (matched with a TrieRouter) and condition functions into conditions, and runs the given middleware only when no condition matches."
+        }
+      ],
+      "rationale": "except is the helper for this, and its name gives no hint of paths. some and every in the same file are the combinators it uses. Path arguments to app.use() choose where middleware runs, not where it is skipped.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-compare-secrets-safely",
+      "repo": "hono",
+      "query": "compare passwords and tokens safely against side-channel attacks",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/utils/buffer.ts",
+          "symbol": "timingSafeEqual",
+          "why": "Entry point used by basicAuth and bearerAuth. For strings it delegates to timingSafeEqualString. For other values it hashes both inputs (sha256 by default) and compares the hashes."
+        },
+        {
+          "file": "src/utils/buffer.ts",
+          "symbol": "timingSafeEqualString",
+          "why": "Hashes both strings and returns true only if both the hash comparison and the raw comparison pass constantTimeEqualString."
+        },
+        {
+          "file": "src/utils/buffer.ts",
+          "symbol": "constantTimeEqualString",
+          "why": "Combines the length difference and the XOR of every character pair, up to the longer length, into one value, so the loop never exits early."
+        }
+      ],
+      "rationale": "These three buffer.ts functions together are the constant-time comparison. basicAuth and bearerAuth only call timingSafeEqual. utils/buffer.ts::equal exits early, so it is not timing-safe.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-detect-visitor-preferred-locale",
+      "repo": "hono",
+      "query": "work out the visitor's preferred locale",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/middleware/language/language.ts",
+          "symbol": "languageDetector",
+          "why": "Middleware that merges and validates the options, then runs c.set('language', detectLanguage(ctx, options)) on each request."
+        },
+        {
+          "file": "src/middleware/language/language.ts",
+          "symbol": "detectLanguage",
+          "why": "Runs the querystring, cookie, header and path detectors in the configured order, falls back to fallbackLanguage and saves a detected language in a cookie."
+        }
+      ],
+      "rationale": "These are the middleware and its main detection loop. The per-source detectors (detectFromHeader, detectFromCookie...) and normalizeLanguage are lower-level steps. parseAcceptLanguage only parses the header.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-reach-current-request-anywhere",
+      "repo": "hono",
+      "query": "reach the current request from deep inside a helper without passing it down",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/middleware/context-storage/index.ts",
+          "symbol": "contextStorage",
+          "why": "Middleware that runs the rest of the chain inside asyncLocalStorage.run(c, next), so each request's Context is stored."
+        },
+        {
+          "file": "src/middleware/context-storage/index.ts",
+          "symbol": "getContext",
+          "why": "Returns the stored Context from AsyncLocalStorage and throws 'Context is not available' when there is none."
+        },
+        {
+          "file": "src/middleware/context-storage/index.ts",
+          "symbol": "tryGetContext",
+          "why": "Returns asyncLocalStorage.getStore(), or undefined, without throwing."
+        }
+      ],
+      "rationale": "These three functions are the whole feature. jsx-renderer's useRequestContext gives the context only inside JSX components, and jsx/context.ts holds JSX contexts, so neither was labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-print-all-registered-endpoints",
+      "repo": "hono",
+      "query": "print a table of all registered endpoints to the console",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/helper/dev/index.ts",
+          "symbol": "showRoutes",
+          "why": "Groups the app routes by method and path, aligns the columns and prints them with console.log, optionally with handler names and colour."
+        },
+        {
+          "file": "src/helper/dev/index.ts",
+          "symbol": "inspectRoutes",
+          "why": "Maps hono.routes to {path, method, name, isMiddleware} records, which showRoutes then prints."
+        }
+      ],
+      "rationale": "showRoutes prints the table and inspectRoutes supplies its data. getRouterName in the same file and HonoRequest.matchedRoutes give other route information.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-read-env-vars-any-runtime",
+      "repo": "hono",
+      "query": "read environment variables the same way on Node, Deno, Bun and Workers",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/helper/adapter/index.ts",
+          "symbol": "env",
+          "why": "Uses getRuntimeKey to find the runtime, then returns process.env on node, bun and edge-light, Deno.env.toObject() on Deno, and c.env on workerd."
+        }
+      ],
+      "rationale": "env is the portable accessor. getRuntimeKey only detects the runtime. The test constants named env are distractors.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-mark-string-trusted-markup",
+      "repo": "hono",
+      "query": "mark a string as trusted markup so it is not escaped again",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/utils/html.ts",
+          "symbol": "raw",
+          "why": "Wraps the value in a String object with isEscaped = true and optional callbacks. The html helper and the JSX renderer check this flag and skip escaping."
+        }
+      ],
+      "rationale": "raw has a single definition. helper/html only re-exports it. escapeToBuffer does the escaping that raw prevents.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-paraphrase-prerender-pages-to-disk",
+      "repo": "hono",
+      "query": "pre-render every page of the app into files on disk",
+      "intent": "paraphrase",
+      "relevant": [
+        {
+          "file": "src/helper/ssg/ssg.ts",
+          "symbol": "toSSG",
+          "why": "Collects the plugin hooks, iterates fetchRoutesContent, writes each result with saveContentToFile into the output directory and returns the list of generated files."
+        },
+        {
+          "file": "src/helper/ssg/ssg.ts",
+          "symbol": "fetchRoutesContent",
+          "why": "For each route that can be generated statically, calls app.fetch/app.request (expanding ssgParams for dynamic routes) and yields the content and MIME type."
+        },
+        {
+          "file": "src/helper/ssg/ssg.ts",
+          "symbol": "saveContentToFile",
+          "why": "Builds the file path for a route and MIME type, creates the directories and writes the content through the fs module."
+        }
+      ],
+      "rationale": "These three functions are the core static generator. The Bun and Deno toSSG wrappers only pass a filesystem module to the helper. ssgParams and disableSSG are per-route controls, not the generator.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-head-request-without-head-route",
+      "repo": "hono",
+      "query": "how are HEAD requests answered when only a GET route exists",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/hono-base.ts",
+          "symbol": "Hono.#dispatch",
+          "why": "Its first branch sees method HEAD, dispatches the request again as GET and returns new Response(null, ...) with the status and headers of the GET response."
+        }
+      ],
+      "rationale": "The HEAD handling is the first branch of #dispatch. methodNotAllowed only adds HEAD to the Allow header, and etag, cache and compress only test for HEAD, so they were not labelled.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-thrown-httpexception-response",
+      "repo": "hono",
+      "query": "what response is sent when a handler throws an HTTPException",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/hono-base.ts",
+          "symbol": "errorHandler",
+          "why": "The default error handler. If the error has getResponse() it returns c.newResponse(res.body, res). Otherwise it logs the error and returns 'Internal Server Error' with status 500."
+        },
+        {
+          "file": "src/http-exception.ts",
+          "symbol": "HTTPException.getResponse",
+          "why": "Returns the custom res with the status of the exception, or a new Response(message, {status})."
+        }
+      ],
+      "rationale": "These two functions decide the response. compose and Hono.#handleError only send the caught error to errorHandler.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-headers-kept-when-response-replaced",
+      "repo": "hono",
+      "query": "how do headers set by middleware survive when the response object is replaced",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/context.ts",
+          "symbol": "Context.res",
+          "why": "The res setter copies every header except content-type from the previous response onto the new one (it appends set-cookie values again), then stores the new response and marks the context finalized."
+        }
+      ],
+      "rationale": "The headers are merged in the Context.res setter; one label covers the getter and setter rows. Context.#newResponse also starts from the existing headers, but only on the c.body/c.json path, not when c.res is replaced.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-default-router-selection",
+      "repo": "hono",
+      "query": "how does the default app decide which router to use",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/hono.ts",
+          "symbol": "Hono.constructor",
+          "why": "Sets this.router to options.router, or else to new SmartRouter({ routers: [new RegExpRouter(), new TrieRouter()] })."
+        },
+        {
+          "file": "src/router/smart-router/router.ts",
+          "symbol": "SmartRouter.match",
+          "why": "On the first match it adds all routes to each candidate router in turn, skips routers that throw UnsupportedPathError and keeps the first one that works as the active router."
+        }
+      ],
+      "rationale": "The constructor sets the candidates and SmartRouter.match makes the choice. The quick and tiny preset constructors choose other routers but are not the default app. The RegExpRouter and TrieRouter internals do not make the decision.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-when-304-not-modified-sent",
+      "repo": "hono",
+      "query": "when does the server reply 304 Not Modified instead of the body",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/middleware/etag/index.ts",
+          "symbol": "etag",
+          "why": "After next(), for an ok GET, HEAD or QUERY response, it takes or computes the ETag. If If-None-Match is * or matches, it replaces the response with a 304 that keeps only the retained headers."
+        },
+        {
+          "file": "src/middleware/etag/index.ts",
+          "symbol": "etagMatches",
+          "why": "Removes the W/ prefix from the ETag and checks whether any quoted tag in If-None-Match is equal to it."
+        }
+      ],
+      "rationale": "These two functions contain the 304 decision. generateDigest only hashes the body to make the ETag and does not decide about the 304.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-why-response-not-cached",
+      "repo": "hono",
+      "query": "why is a response not stored by the cache middleware",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/middleware/cache/index.ts",
+          "symbol": "shouldSkipCache",
+          "why": "Skips caching when the response Vary names headers that are not configured, when Cache-Control is private, no-store or no-cache, or when Set-Cookie is present."
+        },
+        {
+          "file": "src/middleware/cache/index.ts",
+          "symbol": "shouldSkipCacheControl",
+          "why": "A regex that finds the private, no-store and no-cache directives in Cache-Control."
+        },
+        {
+          "file": "src/middleware/cache/index.ts",
+          "symbol": "cache",
+          "why": "Does not cache requests that are not GET or QUERY, requests with Authorization, QUERY requests without a body digest, or status codes outside cacheableStatusCodes. Then it calls shouldSkipCache."
+        }
+      ],
+      "rationale": "These three functions hold all the skip conditions. createCacheKey and createQueryDigest build cache keys and do not decide whether to store. The etag middleware is a different kind of HTTP caching.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-route-params-percent-decoded",
+      "repo": "hono",
+      "query": "where are route parameter values percent-decoded",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.#getDecodedParam",
+          "why": "Finds the value of the param for the current route index and returns tryDecodeURIComponent(param)."
+        },
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.#getAllDecodedParams",
+          "why": "Decodes every param of the current route with tryDecodeURIComponent into a record."
+        },
+        {
+          "file": "src/utils/url.ts",
+          "symbol": "tryDecodeURIComponent",
+          "why": "Decodes only when the value contains '%'. It uses tryDecode, so malformed escape sequences are kept as they are instead of throwing."
+        }
+      ],
+      "rationale": "The routers return raw captures. The decoding happens on access in these HonoRequest methods through tryDecodeURIComponent. getPath decodes the whole path with decodeURI, which is a different step.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-validator-malformed-json-400",
+      "repo": "hono",
+      "query": "where does input validation reject a malformed JSON body with 400",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/validator/validator.ts",
+          "symbol": "validator",
+          "why": "For the json target with a JSON media type, it calls c.req.json() in a try/catch and throws HTTPException(400, 'Malformed JSON in request body') on failure."
+        }
+      ],
+      "rationale": "Only validator contains this check. HonoRequest.json only parses the cached text with JSON.parse and throws a plain error. getMediaType only strips the content-type parameters.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-sse-message-wire-format",
+      "repo": "hono",
+      "query": "how is a server-sent event message formatted before it is written",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/helper/streaming/sse.ts",
+          "symbol": "SSEStreamingApi.writeSSE",
+          "why": "Splits data into 'data:' lines, rejects CR or LF in event and id, adds the event, id and retry fields and writes the block followed by a blank line."
+        }
+      ],
+      "rationale": "The wire format is only in writeSSE. streamSSE sets the text/event-stream headers and runs the callback, and StreamingApi.write only encodes bytes.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-lambda-event-type-detection",
+      "repo": "hono",
+      "query": "how does the Lambda adapter tell which kind of AWS event it received",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/adapter/aws-lambda/handler.ts",
+          "symbol": "getProcessor",
+          "why": "Returns the ALB, API Gateway v2 or VPC Lattice processor when the matching predicate is true, else the v1 processor."
+        },
+        {
+          "file": "src/adapter/aws-lambda/handler.ts",
+          "symbol": "isProxyEventALB",
+          "why": "Identifies ALB events by an elb key in requestContext."
+        },
+        {
+          "file": "src/adapter/aws-lambda/handler.ts",
+          "symbol": "isProxyEventV2",
+          "why": "Requires both rawPath and requestContext.http, so a v1 event behind a custom domain, which also has rawPath, is not taken as v2."
+        },
+        {
+          "file": "src/adapter/aws-lambda/handler.ts",
+          "symbol": "isLatticeEventV2",
+          "why": "Identifies VPC Lattice v2 events by requestContext.serviceArn."
+        },
+        {
+          "file": "adapters/aws-lambda/src/handler.ts",
+          "symbol": "getProcessor",
+          "why": "Copy in the @hono/aws-lambda package of the same processor selection."
+        },
+        {
+          "file": "adapters/aws-lambda/src/handler.ts",
+          "symbol": "isProxyEventALB",
+          "why": "Copy in the @hono/aws-lambda package of the ALB check (requestContext.elb)."
+        },
+        {
+          "file": "adapters/aws-lambda/src/handler.ts",
+          "symbol": "isProxyEventV2",
+          "why": "Copy in the @hono/aws-lambda package of the v2 check (rawPath and requestContext.http)."
+        },
+        {
+          "file": "adapters/aws-lambda/src/handler.ts",
+          "symbol": "isLatticeEventV2",
+          "why": "Copy in the @hono/aws-lambda package of the Lattice check (requestContext.serviceArn)."
+        }
+      ],
+      "rationale": "The adapters/aws-lambda package has its own copy of handler.ts with the same code, so both copies are labelled. The EventV1/V2/ALB/Lattice processor classes convert an event after it is detected, and handle() only calls getProcessor.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-dotted-form-fields-nested-objects",
+      "repo": "hono",
+      "query": "how are dotted form field names like user.name turned into nested objects",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/utils/body.ts",
+          "symbol": "handleParsingNestedValues",
+          "why": "Splits the key on '.', creates the intermediate objects and puts the value at the last key. It skips __proto__ paths and enforces the depth and object-count limits."
+        },
+        {
+          "file": "src/utils/body.ts",
+          "symbol": "convertFormDataToBodyData",
+          "why": "When the dot option is set, it sends each key that contains '.' to handleParsingNestedValues and deletes the flat key."
+        }
+      ],
+      "rationale": "These two functions do the nesting. parseBody and parseFormData only send the request to them, and handleParsingAllValues handles repeated and [] keys, not dots.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-cookie-host-secure-prefix-rules",
+      "repo": "hono",
+      "query": "where are __Host- and __Secure- cookie prefix rules enforced",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/utils/cookie.ts",
+          "symbol": "_serialize",
+          "why": "Throws when a __Secure- cookie has no Secure attribute, or when a __Host- cookie has no Secure, has a path other than '/', or sets Domain."
+        },
+        {
+          "file": "src/helper/cookie/index.ts",
+          "symbol": "generateCookie",
+          "why": "For the 'secure' and 'host' prefix options it adds __Secure- or __Host- to the name and forces secure: true (and, for host, path '/' and no domain) before it calls serialize."
+        },
+        {
+          "file": "src/helper/cookie/index.ts",
+          "symbol": "generateSignedCookie",
+          "why": "Applies the same prefix and attribute rules to signed cookies before it calls serializeSigned."
+        }
+      ],
+      "rationale": "_serialize checks the rules and the two generate* helpers apply them. getCookie and getSignedCookie only add the prefix to the name they look up.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-jwt-exp-nbf-claims-checked",
+      "repo": "hono",
+      "query": "where are JWT expiry and not-before claims checked",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/utils/jwt/jwt.ts",
+          "symbol": "verify",
+          "why": "Compares payload.nbf, exp and iat with the current time and throws JwtTokenNotBefore, JwtTokenExpired or JwtTokenIssuedAt. Then it checks iss, aud and the signature."
+        }
+      ],
+      "rationale": "Only utils/jwt verify checks the claims. middleware/jwt/jwt.ts::verify is a re-export constant with no implementation of its own, verifyWithJwks hands over to verify, and the JwtTokenExpired classes only define the errors.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-behavioural-escape-html-special-characters",
+      "repo": "hono",
+      "query": "where are <, > and & replaced with HTML entities",
+      "intent": "behavioural",
+      "relevant": [
+        {
+          "file": "src/utils/html.ts",
+          "symbol": "escapeToBuffer",
+          "why": "Searches the string for &, <, >, ' and \" and writes the &amp;, &lt;, &gt;, &#39; and &quot; replacements into the buffer."
+        }
+      ],
+      "rationale": "escapeToBuffer is the only escaping routine. html, stringBufferToString and the JSX attribute serialiser call it but do not replace characters themselves, and raw prevents escaping.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-routing-algorithms",
+      "repo": "hono",
+      "query": "routing algorithms available and how they match paths",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/router/reg-exp-router/router.ts",
+          "symbol": "RegExpRouter",
+          "why": "Compiles the routes of each method into one combined RegExp plus a map of static paths, and match uses that matcher."
+        },
+        {
+          "file": "src/router/trie-router/router.ts",
+          "symbol": "TrieRouter",
+          "why": "Expands optional parameters, inserts the routes into a tree of trie-router Nodes, and match calls Node.search."
+        },
+        {
+          "file": "src/router/pattern-router/router.ts",
+          "symbol": "PatternRouter",
+          "why": "Turns each route into its own RegExp with named groups, and match tests every route in turn."
+        },
+        {
+          "file": "src/router/linear-router/router.ts",
+          "symbol": "LinearRouter",
+          "why": "Keeps the routes in a list, and match walks the list and compares static, wildcard and :label segments by string scanning, without a compile step."
+        },
+        {
+          "file": "src/router/smart-router/router.ts",
+          "symbol": "SmartRouter",
+          "why": "Wraps several routers and, on the first match, keeps the first one that accepts all registered routes."
+        },
+        {
+          "file": "src/router/reg-exp-router/prepared-router.ts",
+          "symbol": "PreparedRegExpRouter",
+          "why": "Starts from matchers that buildInitParams compiled in advance from RegExpRouter output, so no RegExp is built at runtime. add only places handlers into the prepared matchers."
+        }
+      ],
+      "rationale": "Each class implements the Router interface with a different matching strategy. Internals such as the reg-exp-router Trie and Node and trie-router Node.search were left out, as was the Router interface type.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-jwt-create-validate",
+      "repo": "hono",
+      "query": "creating and validating JSON web tokens",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/utils/jwt/jwt.ts",
+          "symbol": "sign",
+          "why": "Encodes the header and payload as base64url, signs 'header.payload' with signing() and adds the signature to the end."
+        },
+        {
+          "file": "src/utils/jwt/jwt.ts",
+          "symbol": "verify",
+          "why": "Checks alg, then the nbf, exp, iat, iss and aud claims, then the signature with verifying()."
+        },
+        {
+          "file": "src/utils/jwt/jwt.ts",
+          "symbol": "verifyWithJwks",
+          "why": "Requires a kid, rejects symmetric and disallowed algorithms, loads keys (optionally from jwks_uri), selects the key with the matching kid and calls verify."
+        },
+        {
+          "file": "src/utils/jwt/jws.ts",
+          "symbol": "signing",
+          "why": "Imports the private key for the algorithm and calls crypto.subtle.sign."
+        },
+        {
+          "file": "src/utils/jwt/jws.ts",
+          "symbol": "verifying",
+          "why": "Imports the public key for the algorithm and calls crypto.subtle.verify."
+        }
+      ],
+      "rationale": "utils/jwt contains the token logic and the jws functions do the cryptographic signing and checking. decode only decodes the token and does not validate it. The jwt and jwk middlewares and the re-export constants in middleware/jwt only call these functions.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-request-authentication-middleware",
+      "repo": "hono",
+      "query": "ways to authenticate incoming requests",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/middleware/basic-auth/index.ts",
+          "symbol": "basicAuth",
+          "why": "Decodes the Basic credentials with auth(), checks them with verifyUser or timingSafeEqual and otherwise throws a 401 with WWW-Authenticate."
+        },
+        {
+          "file": "src/middleware/bearer-auth/index.ts",
+          "symbol": "bearerAuth",
+          "why": "Takes the token after the Bearer prefix, checks its format and compares it with timingSafeEqual or verifyToken. On failure it throws a 400 or 401 HTTPException."
+        },
+        {
+          "file": "src/middleware/jwt/jwt.ts",
+          "symbol": "jwt",
+          "why": "Reads a token from the Authorization header or a cookie (signed or not), verifies it with Jwt.verify and the secret, and sets jwtPayload."
+        },
+        {
+          "file": "src/middleware/jwk/jwk.ts",
+          "symbol": "jwk",
+          "why": "Like jwt, but verifies with Jwt.verifyWithJwks against given keys or a jwks_uri, and can allow anonymous requests."
+        }
+      ],
+      "rationale": "These are the four built-in authentication middlewares. utils/basic-auth.ts::auth and the utils/jwt functions are building blocks. csrf and ipRestriction restrict access but do not identify the caller.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-reading-request-body",
+      "repo": "hono",
+      "query": "different ways to read the request body",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.json",
+          "why": "Reads the cached text body and parses it with JSON.parse."
+        },
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.text",
+          "why": "Returns the body as text through the body cache of the request."
+        },
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.arrayBuffer",
+          "why": "Returns the body as an ArrayBuffer through the body cache."
+        },
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.bytes",
+          "why": "Reads the cached arrayBuffer and wraps it in a Uint8Array."
+        },
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.blob",
+          "why": "Returns the body as a Blob through the body cache."
+        },
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.formData",
+          "why": "Returns the body as FormData through the body cache."
+        },
+        {
+          "file": "src/request.ts",
+          "symbol": "HonoRequest.parseBody",
+          "why": "Hands over to utils/body parseBody to get the form fields as a plain object."
+        },
+        {
+          "file": "src/utils/body.ts",
+          "symbol": "parseBody",
+          "why": "For multipart/form-data or urlencoded content types it parses the form (with the all and dot options), otherwise it returns {}."
+        }
+      ],
+      "rationale": "These are the body readers of HonoRequest, which all use the body cache, plus the form parser behind parseBody. The validator also reads the body, but to validate it, and bodyLimit only counts bytes.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-streaming-responses",
+      "repo": "hono",
+      "query": "streaming a response to the client in chunks",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/helper/streaming/stream.ts",
+          "symbol": "stream",
+          "why": "Creates a StreamingApi on a TransformStream, runs the callback in the background with error handling and returns c.newResponse(stream.responseReadable)."
+        },
+        {
+          "file": "src/helper/streaming/text.ts",
+          "symbol": "streamText",
+          "why": "Sets the text/plain, nosniff and chunked headers, then calls stream()."
+        },
+        {
+          "file": "src/helper/streaming/sse.ts",
+          "symbol": "streamSSE",
+          "why": "Sets the text/event-stream, no-cache and keep-alive headers and runs the callback with an SSEStreamingApi."
+        },
+        {
+          "file": "src/utils/stream.ts",
+          "symbol": "StreamingApi",
+          "why": "Writer class over a WritableStream with write, writeln, sleep, pipe, close, abort and onAbort, which also exposes responseReadable."
+        },
+        {
+          "file": "src/helper/streaming/sse.ts",
+          "symbol": "SSEStreamingApi",
+          "why": "Extends StreamingApi with writeSSE, which writes messages in event-stream format."
+        }
+      ],
+      "rationale": "These are the three helpers and the two writer classes. jsx/streaming.ts::renderToReadableStream only streams JSX output with Suspense, so it was not labelled for this general query. isOldBunVersion is a small workaround.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-websocket-across-runtimes",
+      "repo": "hono",
+      "query": "WebSocket support across runtimes",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/helper/websocket/index.ts",
+          "symbol": "defineWebSocketHelper",
+          "why": "Makes an upgradeWebSocket function from a handler for one runtime, and supports both the middleware form and the direct-call form."
+        },
+        {
+          "file": "src/helper/websocket/index.ts",
+          "symbol": "WSContext",
+          "why": "Socket wrapper that does not depend on the runtime and has send, close, readyState, url and protocol."
+        },
+        {
+          "file": "src/adapter/cloudflare-workers/websocket.ts",
+          "symbol": "upgradeWebSocket",
+          "why": "Creates a WebSocketPair, connects the close, message and error events through a WSContext and returns a 101 response with the client socket."
+        },
+        {
+          "file": "src/adapter/deno/websocket.ts",
+          "symbol": "upgradeWebSocket",
+          "why": "Calls Deno.upgradeWebSocket, sends back the first requested subprotocol and forwards open, message, close and error to the events."
+        },
+        {
+          "file": "src/adapter/bun/websocket.ts",
+          "symbol": "upgradeWebSocket",
+          "why": "Calls server.upgrade on the Bun server with the events, the URL and the subprotocol as socket data."
+        },
+        {
+          "file": "src/adapter/bun/websocket.ts",
+          "symbol": "websocket",
+          "why": "Bun websocket handler object. Its open, close and message hooks call the stored events with a WSContext."
+        },
+        {
+          "file": "adapters/cloudflare-workers/src/websocket.ts",
+          "symbol": "upgradeWebSocket",
+          "why": "Copy in the @hono/cloudflare-workers package of the WebSocketPair upgrade."
+        },
+        {
+          "file": "adapters/deno/src/websocket.ts",
+          "symbol": "upgradeWebSocket",
+          "why": "Copy in the @hono/deno package of the Deno.upgradeWebSocket upgrade."
+        },
+        {
+          "file": "adapters/bun/src/websocket.ts",
+          "symbol": "upgradeWebSocket",
+          "why": "Copy in the @hono/bun package of the server.upgrade call."
+        },
+        {
+          "file": "adapters/bun/src/websocket.ts",
+          "symbol": "websocket",
+          "why": "Copy in the @hono/bun package of the Bun websocket event handler object."
+        }
+      ],
+      "rationale": "The shared helper plus each runtime's upgrade code, including the copies in the adapters/ packages, which have their own implementation. createBunWebSocket only returns upgradeWebSocket and websocket together, and createWSContext is a Bun-specific helper.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-client-ip-per-platform",
+      "repo": "hono",
+      "query": "getting the client IP address on each deployment platform",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/adapter/aws-lambda/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Takes the address from identity.sourceIp (API Gateway v1) or http.sourceIp (v2), or from X-Forwarded-For for ALB."
+        },
+        {
+          "file": "src/adapter/bun/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Calls server.requestIP(c.req.raw) and returns the address, family and port."
+        },
+        {
+          "file": "src/adapter/cloudflare-pages/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Returns the cf-connecting-ip header as the remote address."
+        },
+        {
+          "file": "src/adapter/cloudflare-workers/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Returns the cf-connecting-ip header as the remote address."
+        },
+        {
+          "file": "src/adapter/deno/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Returns hostname, port and transport from c.env.remoteAddr."
+        },
+        {
+          "file": "src/adapter/lambda-edge/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Returns the clientIp of the CloudFront request in the event."
+        },
+        {
+          "file": "src/adapter/netlify/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Returns c.env.context.ip from the Netlify context."
+        },
+        {
+          "file": "src/adapter/vercel/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Returns the x-real-ip header as the remote address."
+        },
+        {
+          "file": "adapters/aws-lambda/src/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Copy in the @hono/aws-lambda package of the sourceIp/X-Forwarded-For lookup."
+        },
+        {
+          "file": "adapters/bun/src/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Copy in the @hono/bun package of the server.requestIP lookup."
+        },
+        {
+          "file": "adapters/cloudflare-workers/src/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Copy in the @hono/cloudflare-workers package of the cf-connecting-ip lookup."
+        },
+        {
+          "file": "adapters/deno/src/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Copy in the @hono/deno package of the remoteAddr lookup."
+        },
+        {
+          "file": "adapters/lambda-edge/src/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Copy in the @hono/lambda-edge package of the CloudFront clientIp lookup."
+        },
+        {
+          "file": "adapters/netlify/src/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Copy in the @hono/netlify package of the context.ip lookup."
+        },
+        {
+          "file": "adapters/vercel/src/conninfo.ts",
+          "symbol": "getConnInfo",
+          "why": "Copy in the @hono/vercel package of the x-real-ip lookup."
+        }
+      ],
+      "rationale": "Every adapter's getConnInfo is labelled, both in src/adapter and in the copy in its adapters/ package (cloudflare-pages has no copy). The ConnInfo and GetConnInfo types and ipRestriction, which only uses the result, were left out. The getConnInfo test mock in ip-restriction is a distractor.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-jsx-hooks-state-effects",
+      "repo": "hono",
+      "query": "React-style hooks for state and side effects in hono/jsx",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/jsx/hooks/index.ts",
+          "symbol": "useState",
+          "why": "Keeps the state for each hook index in the DOM_STASH of the node. The setter schedules an update when the new value differs (Object.is)."
+        },
+        {
+          "file": "src/jsx/hooks/index.ts",
+          "symbol": "useReducer",
+          "why": "Uses useState and useCallback, and applies the reducer to the current state on dispatch."
+        },
+        {
+          "file": "src/jsx/hooks/index.ts",
+          "symbol": "useEffectCommon",
+          "why": "Shared effect code: compares the deps with isDepsChanged, runs the previous cleanup and puts the effect runner into the slot for its phase."
+        },
+        {
+          "file": "src/jsx/hooks/index.ts",
+          "symbol": "useEffect",
+          "why": "Calls useEffectCommon with slot 3, the effect that runs after rendering."
+        },
+        {
+          "file": "src/jsx/hooks/index.ts",
+          "symbol": "useLayoutEffect",
+          "why": "Calls useEffectCommon with slot 1, the layout phase."
+        },
+        {
+          "file": "src/jsx/hooks/index.ts",
+          "symbol": "useMemo",
+          "why": "Caches factory() for each hook index and calculates it again only when the deps change."
+        },
+        {
+          "file": "src/jsx/hooks/index.ts",
+          "symbol": "useCallback",
+          "why": "Returns the cached callback unless the deps changed."
+        },
+        {
+          "file": "src/jsx/hooks/index.ts",
+          "symbol": "useRef",
+          "why": "Keeps one {current} object for each hook index across renders."
+        }
+      ],
+      "rationale": "These are the core state, effect and memo hooks. useTransition, useViewTransition and the form hooks in jsx/dom/hooks cover other concerns. isDepsChanged is only a helper of the effect and memo hooks.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-cookie-read-write-sign",
+      "repo": "hono",
+      "query": "reading, writing and signing cookies",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/helper/cookie/index.ts",
+          "symbol": "getCookie",
+          "why": "Reads the Cookie header and parses one cookie, optionally with a __Secure-/__Host- prefix, or all cookies."
+        },
+        {
+          "file": "src/helper/cookie/index.ts",
+          "symbol": "getSignedCookie",
+          "why": "Like getCookie, but uses parseSigned to verify the HMAC signatures with the secret."
+        },
+        {
+          "file": "src/helper/cookie/index.ts",
+          "symbol": "setCookie",
+          "why": "Appends a Set-Cookie header that generateCookie builds."
+        },
+        {
+          "file": "src/helper/cookie/index.ts",
+          "symbol": "setSignedCookie",
+          "why": "Appends a Set-Cookie header that generateSignedCookie builds with the secret."
+        },
+        {
+          "file": "src/helper/cookie/index.ts",
+          "symbol": "deleteCookie",
+          "why": "Reads the current value, then sets the cookie again with maxAge 0."
+        },
+        {
+          "file": "src/utils/cookie.ts",
+          "symbol": "parse",
+          "why": "Splits the Cookie header on ';', checks the names and values, removes quotes and URI-decodes the values."
+        },
+        {
+          "file": "src/utils/cookie.ts",
+          "symbol": "parseSigned",
+          "why": "Parses the cookies, splits each value into value and signature, and verifies the 44-character HMAC-SHA256 signature. A bad signature gives false."
+        },
+        {
+          "file": "src/utils/cookie.ts",
+          "symbol": "serialize",
+          "why": "URI-encodes the value and builds the Set-Cookie string with _serialize."
+        },
+        {
+          "file": "src/utils/cookie.ts",
+          "symbol": "serializeSigned",
+          "why": "Adds an HMAC signature from makeSignature to the value, then serializes it."
+        }
+      ],
+      "rationale": "These are the public helper API and the utils parse/serialize functions behind it. generateCookie, _serialize, getCryptoKey, makeSignature and verifySignature are internal steps. The client's use of serialize for request cookies is a caller.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    }
+  ]
+}
