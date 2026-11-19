@@ -18,10 +18,10 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<SearchEmailsParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         require_query("query", &params.query)?;
         let query_lower = params.query.to_lowercase();
@@ -70,7 +70,7 @@ impl MyceliumsMcp {
         if results.is_empty() {
             return self
                 .graph_text(
-                    &repo_id,
+                    &graph,
                     format!("No emails found matching '{}'.", params.query),
                 )
                 .await;
@@ -93,7 +93,7 @@ impl MyceliumsMcp {
             untrusted("emails", &emails)
         );
 
-        self.graph_text(&repo_id, page.with_notice(output)).await
+        self.graph_text(&graph, page.with_notice(output)).await
     }
 
     #[tool(
@@ -110,10 +110,10 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetConversationParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         // Find the conversation symbol
         let conv = symbols
@@ -176,7 +176,7 @@ impl MyceliumsMcp {
             "{total} emails in thread:\n\n{}\n",
             untrusted(&format!("conversation {}", conv.uid), &thread)
         );
-        self.graph_text(&repo_id, page.with_notice(output)).await
+        self.graph_text(&graph, page.with_notice(output)).await
     }
 
     #[tool(
@@ -193,10 +193,10 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetPersonContextParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
 
         require_query("person", &params.person)?;
         let person_lower = params.person.to_lowercase();
@@ -214,7 +214,7 @@ impl MyceliumsMcp {
         if person_syms.is_empty() {
             return self
                 .graph_text(
-                    &repo_id,
+                    &graph,
                     format!("No person found matching '{}'.", params.person),
                 )
                 .await;
@@ -283,6 +283,6 @@ impl MyceliumsMcp {
         }
 
         let output = format!("{}\n", untrusted("emails", &listing));
-        self.graph_text(&repo_id, page.with_notice(output)).await
+        self.graph_text(&graph, page.with_notice(output)).await
     }
 }

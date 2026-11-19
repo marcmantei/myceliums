@@ -185,10 +185,11 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetContractsParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
         let repo = repo_info(&repo_id)?;
 
-        let symbols = self.symbols(&repo_id).await?;
+        let symbols = graph.symbols().await?;
 
         let mut report = detect_contracts(std::path::Path::new(&repo.path), &symbols);
         let page = Page::new(params.limit, params.offset, Budget::new(50, 500))
@@ -196,7 +197,7 @@ impl MyceliumsMcp {
         report.unlinked_endpoints = page.items;
 
         let body = with_notice(format::format_contracts(&report), page.notice.as_deref());
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 }
 

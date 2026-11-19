@@ -269,7 +269,7 @@ fn mcp_http_app(
     // One graph service and one set of call statistics for all sessions:
     // each session gets its own server value, but they share the store
     // handles, the cached graphs and the counters.
-    let graphs = Arc::new(myceliums_core::GraphService::new(crate::repo::data_dir()));
+    let graphs = Arc::new(crate::repo::graph_service());
     let service: StreamableHttpService<
         crate::Observed<rmcp::handler::server::router::Router<MyceliumsMcp>>,
         LocalSessionManager,

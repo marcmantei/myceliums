@@ -136,6 +136,10 @@ pub(crate) fn service_error(e: MyceliumError) -> ToolError {
     match e {
         MyceliumError::Repo(e) => repo_id_error(e),
         MyceliumError::SymbolNotFound(name) => ToolError::symbol_not_found(&name),
+        MyceliumError::IndexChanged(repo_id) => ToolError::recoverable(
+            format!("The index of {repo_id} was replaced while this call was reading it."),
+            "retry the call; it reads the new index",
+        ),
         other => ToolError::internal("graph read failed", other),
     }
 }

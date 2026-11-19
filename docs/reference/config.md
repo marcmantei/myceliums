@@ -277,6 +277,10 @@ Preferences saved by the setup wizard. These are typically set automatically, no
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `toolsets` | list of strings | `["core"]` | Tool groups `myc mcp` exposes when `--toolsets` is not given: `core` (always on), `graph`, `review`, `architecture`, `knowledge`, `email`, `cross_repo`, `admin`, `deprecated`, or `all`. See [Toolsets](mcp-tools.md#toolsets) |
+| `graph_cache_max_repos` | integer | `8` | Most repositories whose graph tables (symbols, relationships, files, communities, processes) `myc mcp` keeps in memory. When a call reads one more, the least recently used repository is dropped and read from disk again when next needed. At least `1` |
+| `graph_cache_max_mb` | integer | `1024` | Upper bound, in MiB, on the estimated size of all cached graphs (row structs plus their strings; allocator overhead not counted). Least recently used repositories are dropped first; the repository a call is reading always stays, even if it alone is larger. `0` disables the size bound |
+
+The server also drops a cached repository as soon as it is no longer in the registry (deleted by `myc delete` or another process), and re-reads a repository's tables when its index changes on disk. Each tool call reads all its graph tables, and the results of its vector search, from one index generation; if a re-analysis replaces the index in the middle of a call (including a read that fails because the swap removed its files), the call fails with `isError` and a `Next: retry the call` step instead of mixing old and new data. A repository that alone exceeds `graph_cache_max_mb` is logged once as a warning.
 
 ### Configurable Keys via CLI
 
@@ -297,6 +301,8 @@ The `myc configure --set` command supports these dot-separated keys:
 | `llm.mentions_max_symbols` | integer | Max symbols for mentions |
 | `llm.mentions_min_confidence` | float | 0.0 to 1.0 |
 | `mcp.toolsets` | comma-separated list | Toolsets for `myc mcp` (names are checked; empty resets to `core`) |
+| `mcp.graph_cache_max_repos` | integer | Repositories `myc mcp` keeps cached (at least 1) |
+| `mcp.graph_cache_max_mb` | integer | Size bound of the graph cache in MiB (`0` = no size bound) |
 
 ```bash
 # Examples
@@ -308,6 +314,7 @@ myc configure --set llm.api_key=sk-...
 myc configure --set llm.enable_mentions=true
 myc configure --set analysis.default_exclude="node_modules,dist,build,.git"
 myc configure --set mcp.toolsets=core,architecture
+myc configure --set mcp.graph_cache_max_repos=4
 ```
 
 ### Example: Full Global Configuration
@@ -338,6 +345,8 @@ configured_editors = ["claude", "vscode", "zed"]
 
 [mcp]
 toolsets = ["core", "architecture"]
+graph_cache_max_repos = 8
+graph_cache_max_mb = 1024
 ```
 
 ### Precedence

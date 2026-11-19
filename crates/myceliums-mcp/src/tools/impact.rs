@@ -43,12 +43,13 @@ impl MyceliumsMcp {
                 "give at most one of symbol_name, file_path and diff",
             ));
         }
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
         let depth = params.depth.unwrap_or(2).clamp(1, 10);
         let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
         let (subject, roots) = match (params.symbol_name, params.file_path) {
             (Some(name), _) => {
                 let s = navigation::resolve(&symbols, &name)?;
@@ -66,7 +67,7 @@ impl MyceliumsMcp {
                     Some(s) => s.file_path.clone(),
                     None => {
                         let path = path.trim().trim_start_matches("./").to_string();
-                        let files = self.files(&repo_id).await?;
+                        let files = graph.files().await?;
                         if !files.iter().any(|f| f.path == path) {
                             return Err(ToolError::recoverable(
                                 format!("File `{path}` is not in the index."),
@@ -86,12 +87,12 @@ impl MyceliumsMcp {
                     let report = detect_impact(&diff_text, &symbols, &relationships, depth);
                     format::format_impact_report(&report, page)
                 };
-                return self.graph_text(&repo_id, body).await;
+                return self.graph_text(&graph, body).await;
             }
         };
         let hits = navigation::dependents(&symbols, &relationships, &roots, depth);
         let body = format::format_dependents(&subject, &hits, depth, page);
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -134,14 +135,15 @@ impl MyceliumsMcp {
         Parameters(params): Parameters<RenameParams>,
     ) -> TextResult {
         require_query("new_name", &params.new_name)?;
-        let symbols = self.symbols(&params.repo_id).await?;
-        let relationships = self.relationships(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
         let target = resolve_symbol(&symbols, &params.symbol_name)?;
         let plan = RenamePlan::for_symbol(&symbols, &relationships, target, &params.new_name)
             .map_err(|e| ToolError::internal("cannot build the rename plan", e))?;
         let page = Page::new(params.limit, params.offset, Budget::new(100, 500));
         let body = format::format_rename_plan(&plan, page);
-        self.graph_text(&params.repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -158,18 +160,19 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<ReviewContextParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
         let diff_text = diff_or_git(params.diff, &repo_id)?;
 
         if diff_text.trim().is_empty() {
             return self
-                .graph_text(&repo_id, "No changes detected (empty diff).".to_string())
+                .graph_text(&graph, "No changes detected (empty diff).".to_string())
                 .await;
         }
 
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
-        let communities = self.communities(&repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
+        let communities = graph.communities().await?;
 
         let depth = params.depth.unwrap_or(1).clamp(1, 10);
         let include_source = params.include_source.unwrap_or(false);
@@ -307,7 +310,7 @@ impl MyceliumsMcp {
             full_source_tokens: full_source_chars / 4,
         };
 
-        self.graph_text(&repo_id, format::format_review_context(&context))
+        self.graph_text(&graph, format::format_review_context(&context))
             .await
     }
 
@@ -325,13 +328,14 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetSuggestedQuestionsParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
 
-        let symbols = self.symbols(&repo_id).await?;
+        let symbols = graph.symbols().await?;
 
-        let relationships = self.relationships(&repo_id).await?;
+        let relationships = graph.relationships().await?;
 
-        let files = self.files(&repo_id).await?;
+        let files = graph.files().await?;
 
         let diff_text = diff_or_git(params.diff, &repo_id)?;
 
@@ -345,7 +349,7 @@ impl MyceliumsMcp {
             }),
             page.notice.as_deref(),
         );
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(

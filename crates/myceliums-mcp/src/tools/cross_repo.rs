@@ -12,7 +12,12 @@ fn embedder_error(e: impl std::fmt::Display) -> ToolError {
 
 impl MyceliumsMcp {
     /// A result over two repositories: one freshness line for each.
-    async fn two_repo_text(&self, source: &str, target: &str, body: String) -> TextResult {
+    async fn two_repo_text(
+        &self,
+        source: &Graph<'_>,
+        target: &Graph<'_>,
+        body: String,
+    ) -> TextResult {
         let source_status = self.index_status(source).await?;
         let target_status = self.index_status(target).await?;
         text(format!(
@@ -39,7 +44,8 @@ impl MyceliumsMcp {
     ) -> TextResult {
         use myceliums_core::cross_repo::{self, IsolateConfig};
 
-        let store = self.store(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let store = graph.store();
 
         let registry = registry()?;
         let repo_name = registry
@@ -47,9 +53,9 @@ impl MyceliumsMcp {
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.repo_id.clone());
 
-        let symbols = self.symbols(&params.repo_id).await?;
-        let relationships = self.relationships(&params.repo_id).await?;
-        let communities = self.communities(&params.repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
+        let communities = graph.communities().await?;
 
         let config = IsolateConfig {
             max_symbols: params.max_symbols.unwrap_or(50).clamp(1, 200),
@@ -72,8 +78,9 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
+        graph.verify()?;
 
-        self.graph_text(&params.repo_id, format::format_intent_slice(&slice))
+        self.graph_text(&graph, format::format_intent_slice(&slice))
             .await
     }
 
@@ -102,14 +109,15 @@ impl MyceliumsMcp {
         };
 
         // Isolate intent in source repo
-        let src_store = self.store(&params.source_repo_id).await?;
+        let src_graph = self.graph(&params.source_repo_id).await?;
+        let src_store = src_graph.store();
         let src_name = registry
             .get(&params.source_repo_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.source_repo_id.clone());
-        let src_symbols = self.symbols(&params.source_repo_id).await?;
-        let src_rels = self.relationships(&params.source_repo_id).await?;
-        let src_communities = self.communities(&params.source_repo_id).await?;
+        let src_symbols = src_graph.symbols().await?;
+        let src_rels = src_graph.relationships().await?;
+        let src_communities = src_graph.communities().await?;
 
         let src_embedder = myceliums_core::embedder_for_index(&src_store)
             .await
@@ -127,16 +135,18 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("source isolation failed", e))?;
+        src_graph.verify()?;
 
         // Isolate intent in target repo
-        let tgt_store = self.store(&params.target_repo_id).await?;
+        let tgt_graph = self.graph(&params.target_repo_id).await?;
+        let tgt_store = tgt_graph.store();
         let tgt_name = registry
             .get(&params.target_repo_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.target_repo_id.clone());
-        let tgt_symbols = self.symbols(&params.target_repo_id).await?;
-        let tgt_rels = self.relationships(&params.target_repo_id).await?;
-        let tgt_communities = self.communities(&params.target_repo_id).await?;
+        let tgt_symbols = tgt_graph.symbols().await?;
+        let tgt_rels = tgt_graph.relationships().await?;
+        let tgt_communities = tgt_graph.communities().await?;
 
         let tgt_embedder = myceliums_core::embedder_for_index(&tgt_store)
             .await
@@ -154,6 +164,7 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("target isolation failed", e))?;
+        tgt_graph.verify()?;
 
         // Get vectors for differentiation
         let src_vectors = src_store
@@ -178,8 +189,8 @@ impl MyceliumsMcp {
         );
 
         self.two_repo_text(
-            &params.source_repo_id,
-            &params.target_repo_id,
+            &src_graph,
+            &tgt_graph,
             format::format_differentiation_report(&report),
         )
         .await
@@ -210,14 +221,15 @@ impl MyceliumsMcp {
         };
 
         // Isolate both repos
-        let src_store = self.store(&params.source_repo_id).await?;
+        let src_graph = self.graph(&params.source_repo_id).await?;
+        let src_store = src_graph.store();
         let src_name = registry
             .get(&params.source_repo_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.source_repo_id.clone());
-        let src_symbols = self.symbols(&params.source_repo_id).await?;
-        let src_rels = self.relationships(&params.source_repo_id).await?;
-        let src_communities = self.communities(&params.source_repo_id).await?;
+        let src_symbols = src_graph.symbols().await?;
+        let src_rels = src_graph.relationships().await?;
+        let src_communities = src_graph.communities().await?;
 
         let src_embedder = myceliums_core::embedder_for_index(&src_store)
             .await
@@ -235,15 +247,17 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
+        src_graph.verify()?;
 
-        let tgt_store = self.store(&params.target_repo_id).await?;
+        let tgt_graph = self.graph(&params.target_repo_id).await?;
+        let tgt_store = tgt_graph.store();
         let tgt_name = registry
             .get(&params.target_repo_id)
             .map(|r| r.name.clone())
             .unwrap_or_else(|| params.target_repo_id.clone());
-        let tgt_symbols = self.symbols(&params.target_repo_id).await?;
-        let tgt_rels = self.relationships(&params.target_repo_id).await?;
-        let tgt_communities = self.communities(&params.target_repo_id).await?;
+        let tgt_symbols = tgt_graph.symbols().await?;
+        let tgt_rels = tgt_graph.relationships().await?;
+        let tgt_communities = tgt_graph.communities().await?;
 
         let tgt_embedder = myceliums_core::embedder_for_index(&tgt_store)
             .await
@@ -261,6 +275,7 @@ impl MyceliumsMcp {
         )
         .await
         .map_err(|e| ToolError::internal("cross-repo analysis failed", e))?;
+        tgt_graph.verify()?;
 
         // Differentiate
         let src_vectors = src_store
@@ -289,8 +304,8 @@ impl MyceliumsMcp {
         let plan = cross_repo::plan_adaptation(&report, direction);
 
         self.two_repo_text(
-            &params.source_repo_id,
-            &params.target_repo_id,
+            &src_graph,
+            &tgt_graph,
             format::format_adaptation_plan(&plan),
         )
         .await

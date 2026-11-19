@@ -25,6 +25,7 @@ mod knowledge;
 mod search;
 
 use crate::errors::ToolError;
+use crate::repo::Graph;
 use crate::toolsets::Toolsets;
 use crate::MyceliumsMcp;
 use rmcp::handler::server::tool::ToolRouter;
@@ -68,7 +69,7 @@ mod prelude {
     pub(crate) use crate::navigation::resolve as resolve_symbol;
     pub(crate) use crate::output::*;
     pub(crate) use crate::params::*;
-    pub(crate) use crate::repo::{data_dir, registry, repo_info};
+    pub(crate) use crate::repo::{data_dir, registry, repo_info, Graph};
     pub(crate) use crate::MyceliumsMcp;
 }
 
@@ -77,15 +78,14 @@ mod prelude {
 impl MyceliumsMcp {
     /// One line on how current `repo_id`'s index is (see
     /// [`crate::index_status::freshness_line`]).
-    pub(crate) async fn index_status(&self, repo_id: &str) -> Result<String, ToolError> {
-        let info = crate::repo::repo_info(repo_id)?;
-        let indexed = self.files(repo_id).await?.shared();
-        Ok(crate::index_status::freshness_line(&info, indexed).await)
+    pub(crate) async fn index_status(&self, graph: &Graph<'_>) -> Result<String, ToolError> {
+        let indexed = graph.files().await?.shared();
+        Ok(crate::index_status::freshness_line(graph.info(), indexed).await)
     }
 
     /// A text graph result: freshness line, then `body`.
-    pub(crate) async fn graph_text(&self, repo_id: &str, body: String) -> TextResult {
-        let status = self.index_status(repo_id).await?;
+    pub(crate) async fn graph_text(&self, graph: &Graph<'_>, body: String) -> TextResult {
+        let status = self.index_status(graph).await?;
         text(format!("{status}\n\n{body}"))
     }
 }

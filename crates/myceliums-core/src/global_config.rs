@@ -35,6 +35,23 @@ pub struct McpConfig {
     /// `email`, `cross_repo`, `admin`, `deprecated`, or `all`.
     #[serde(default = "default_mcp_toolsets")]
     pub toolsets: Vec<String>,
+    /// Most repositories whose graph the MCP server (`myc mcp`, stdio or
+    /// `--http`) keeps in memory; the least recently used one is evicted
+    /// first. At least 1.
+    #[serde(default = "default_graph_cache_max_repos")]
+    pub graph_cache_max_repos: usize,
+    /// Upper bound, in MiB, on the estimated size of the cached graphs of all
+    /// repositories; `0` disables the size bound.
+    #[serde(default = "default_graph_cache_max_mb")]
+    pub graph_cache_max_mb: u64,
+}
+
+fn default_graph_cache_max_repos() -> usize {
+    crate::service::GraphCacheLimits::DEFAULT_MAX_REPOS
+}
+
+fn default_graph_cache_max_mb() -> u64 {
+    crate::service::GraphCacheLimits::DEFAULT_MAX_MB
 }
 
 fn default_mcp_toolsets() -> Vec<String> {
@@ -45,6 +62,8 @@ impl Default for McpConfig {
     fn default() -> Self {
         Self {
             toolsets: default_mcp_toolsets(),
+            graph_cache_max_repos: default_graph_cache_max_repos(),
+            graph_cache_max_mb: default_graph_cache_max_mb(),
         }
     }
 }
@@ -250,7 +269,8 @@ impl GlobalConfig {
     /// Supported keys:
     ///   defaults.max_results, defaults.log_level,
     ///   analysis.max_file_size_kb, analysis.default_exclude,
-    ///   llm.*, mcp.toolsets (comma-separated; names are checked by the caller)
+    ///   llm.*, mcp.toolsets (comma-separated; names are checked by the caller),
+    ///   mcp.graph_cache_max_repos, mcp.graph_cache_max_mb
     pub fn set(&mut self, key: &str, value: &str) -> Result<()> {
         match key {
             "defaults.max_results" => {
@@ -341,13 +361,27 @@ impl GlobalConfig {
                     names
                 };
             }
+            "mcp.graph_cache_max_repos" => {
+                let repos: usize = value
+                    .parse()
+                    .context("mcp.graph_cache_max_repos must be a positive integer")?;
+                if repos == 0 {
+                    anyhow::bail!("mcp.graph_cache_max_repos must be at least 1");
+                }
+                self.mcp.graph_cache_max_repos = repos;
+            }
+            "mcp.graph_cache_max_mb" => {
+                self.mcp.graph_cache_max_mb = value.parse().context(
+                    "mcp.graph_cache_max_mb must be a non-negative integer (0 = no size bound)",
+                )?;
+            }
             _ => {
                 anyhow::bail!(
                     "Unknown config key '{}'. Valid keys: defaults.max_results, \
                      defaults.log_level, analysis.max_file_size_kb, analysis.default_exclude, \
                      llm.provider, llm.model, llm.base_url, llm.api_key, llm.enable_mentions, \
                      llm.mentions_max_content_chars, llm.mentions_max_symbols, llm.mentions_min_confidence, \
-                     mcp.toolsets",
+                     mcp.toolsets, mcp.graph_cache_max_repos, mcp.graph_cache_max_mb",
                     key
                 );
             }
@@ -388,5 +422,43 @@ mod tests {
 
         config.set("mcp.toolsets", "").unwrap();
         assert_eq!(config.mcp.toolsets, vec!["core"]);
+    }
+
+    #[test]
+    fn graph_cache_limits_default_round_trip_and_reject_zero_repos() {
+        use crate::service::GraphCacheLimits;
+        let dir = tempfile::tempdir().unwrap();
+        let mut config = GlobalConfig::load(dir.path()).unwrap();
+        assert_eq!(
+            GraphCacheLimits::from_config(&config),
+            GraphCacheLimits::default()
+        );
+
+        config.set("mcp.graph_cache_max_repos", "3").unwrap();
+        config.set("mcp.graph_cache_max_mb", "0").unwrap();
+        assert!(config.set("mcp.graph_cache_max_repos", "0").is_err());
+        assert!(config.set("mcp.graph_cache_max_mb", "-1").is_err());
+        config.save().unwrap();
+
+        let loaded = GlobalConfig::load(dir.path()).unwrap();
+        assert_eq!(
+            GraphCacheLimits::from_config(&loaded),
+            GraphCacheLimits {
+                max_repos: 3,
+                max_bytes: None,
+            }
+        );
+
+        // A config written before the keys existed gets the defaults.
+        std::fs::write(
+            GlobalConfig::config_path(dir.path()),
+            "[mcp]\ntoolsets = [\"core\"]\n",
+        )
+        .unwrap();
+        let old = GlobalConfig::load(dir.path()).unwrap();
+        assert_eq!(
+            GraphCacheLimits::from_config(&old),
+            GraphCacheLimits::default()
+        );
     }
 }

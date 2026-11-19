@@ -122,9 +122,9 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<TraceFlowParams>,
     ) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
-        let symbols = self.symbols(&repo_id).await?;
-        let relationships = self.relationships(&repo_id).await?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
         let from = navigation::resolve(&symbols, &params.from_symbol)?;
         let to = navigation::resolve(&symbols, &params.to_symbol)?;
         if from.uid == to.uid {
@@ -137,7 +137,7 @@ impl MyceliumsMcp {
         let page = Page::new(params.limit, params.offset, Budget::LIST);
         let chains = navigation::call_chains(&symbols, &relationships, from, to, max_depth, extra);
         let body = format::format_call_chains(from, to, chains.as_ref(), max_depth, page);
-        self.graph_text(&repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -154,7 +154,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetProcessesParams>,
     ) -> TextResult {
-        let processes = self.processes(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let processes = graph.processes().await?;
 
         // Filter first, then page the filtered list.
         let filter = ProcessFilter {
@@ -177,7 +178,7 @@ impl MyceliumsMcp {
             })
             .collect();
         let body = with_notice(format::format_processes(&items), page.notice.as_deref());
-        self.graph_text(&params.repo_id, body).await
+        self.graph_text(&graph, body).await
     }
 
     #[tool(
@@ -194,8 +195,9 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCommunitiesParams>,
     ) -> Result<Json<CommunitiesOutput>, ToolError> {
-        let communities = self.communities(&params.repo_id).await?;
-        let index_status = self.index_status(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let communities = graph.communities().await?;
+        let index_status = self.index_status(&graph).await?;
 
         let total_count = communities.len();
         let page = Page::new(params.limit, params.offset, Budget::LIST)
@@ -234,11 +236,12 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetCommunityDetailParams>,
     ) -> Result<Json<CommunityDetailOutput>, ToolError> {
-        let communities = self.communities(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let communities = graph.communities().await?;
 
-        let symbols = self.symbols(&params.repo_id).await?;
+        let symbols = graph.symbols().await?;
 
-        let relationships = self.relationships(&params.repo_id).await?;
+        let relationships = graph.relationships().await?;
 
         let community = communities
             .iter()
@@ -296,7 +299,7 @@ impl MyceliumsMcp {
         }
 
         Ok(Json(CommunityDetailOutput {
-            index_status: self.index_status(&params.repo_id).await?,
+            index_status: self.index_status(&graph).await?,
             uid: community.uid.clone(),
             label: community.label.clone(),
             member_count: community.member_count,
@@ -321,7 +324,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetSymbolDefinitionParams>,
     ) -> Result<Json<SymbolDefinitionOutput>, ToolError> {
-        let symbols = self.symbols(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let symbols = graph.symbols().await?;
         let symbol = resolve_symbol(&symbols, &params.symbol_name)?;
         let origin = format!(
             "{}:{}-{}",
@@ -329,7 +333,7 @@ impl MyceliumsMcp {
         );
 
         Ok(Json(SymbolDefinitionOutput {
-            index_status: self.index_status(&params.repo_id).await?,
+            index_status: self.index_status(&graph).await?,
             uid: symbol.uid.clone(),
             name: symbol.name.clone(),
             qualified_name: symbol.qualified_name.clone(),
@@ -410,7 +414,8 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetFileSymbolsParams>,
     ) -> Result<Json<FileSymbolsOutput>, ToolError> {
-        let symbols = self.symbols(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let symbols = graph.symbols().await?;
 
         let file_symbols: Vec<FileSymbolItem> = symbols
             .iter()
@@ -425,7 +430,7 @@ impl MyceliumsMcp {
             })
             .collect();
         if file_symbols.is_empty() {
-            let files = self.files(&params.repo_id).await?;
+            let files = graph.files().await?;
             if !files.iter().any(|f| f.path == params.file_path) {
                 return Err(ToolError::recoverable(
                     format!("File `{}` is not in the index.", params.file_path),
@@ -438,7 +443,7 @@ impl MyceliumsMcp {
         let page = Page::new(params.limit, params.offset, Budget::new(50, 500)).take(file_symbols);
 
         Ok(Json(FileSymbolsOutput {
-            index_status: self.index_status(&params.repo_id).await?,
+            index_status: self.index_status(&graph).await?,
             file_path: params.file_path,
             symbols: page.items,
             total_count,
@@ -457,11 +462,11 @@ impl MyceliumsMcp {
         )
     )]
     async fn find_path(&self, Parameters(params): Parameters<FindPathParams>) -> TextResult {
-        let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
 
-        let symbols = self.symbols(&repo_id).await?;
+        let symbols = graph.symbols().await?;
 
-        let relationships = self.relationships(&repo_id).await?;
+        let relationships = graph.relationships().await?;
 
         let from_symbol = resolve_symbol(&symbols, &params.from_symbol)?;
         let to_symbol = resolve_symbol(&symbols, &params.to_symbol)?;
@@ -579,8 +584,7 @@ impl MyceliumsMcp {
             }
         };
 
-        self.graph_text(&repo_id, format::format_path(&output))
-            .await
+        self.graph_text(&graph, format::format_path(&output)).await
     }
 
     #[tool(
@@ -597,15 +601,16 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<GetStatsParams>,
     ) -> Result<Json<StatsOutput>, ToolError> {
-        let symbols = self.symbols(&params.repo_id).await?;
+        let graph = self.graph(&params.repo_id).await?;
+        let symbols = graph.symbols().await?;
 
-        let files = self.files(&params.repo_id).await?;
+        let files = graph.files().await?;
 
-        let relationships = self.relationships(&params.repo_id).await?;
+        let relationships = graph.relationships().await?;
 
-        let communities = self.communities(&params.repo_id).await?;
+        let communities = graph.communities().await?;
 
-        let processes = self.processes(&params.repo_id).await?;
+        let processes = graph.processes().await?;
 
         // Count symbols by kind
         let mut symbol_counts = std::collections::HashMap::new();
@@ -628,7 +633,7 @@ impl MyceliumsMcp {
         }
 
         Ok(Json(StatsOutput {
-            index_status: self.index_status(&params.repo_id).await?,
+            index_status: self.index_status(&graph).await?,
             symbol_counts,
             total_symbols: symbols.len() as u32,
             total_files: files.len() as u32,
@@ -790,8 +795,9 @@ impl MyceliumsMcp {
         limit: Option<usize>,
         offset: Option<usize>,
     ) -> Result<CallList, ToolError> {
-        let symbols = self.symbols(repo_id).await?;
-        let relationships = self.relationships(repo_id).await?;
+        let graph = self.graph(repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
         let start = navigation::resolve(&symbols, name)?;
         let max_depth = depth.clamp(1, 10);
         let hits = navigation::walk_calls(&symbols, &relationships, start, direction, max_depth);
@@ -815,7 +821,7 @@ impl MyceliumsMcp {
             })
             .collect();
         Ok(CallList {
-            index_status: self.index_status(repo_id).await?,
+            index_status: self.index_status(&graph).await?,
             symbol_name: start.name.clone(),
             items,
             total_count,
@@ -827,8 +833,9 @@ impl MyceliumsMcp {
     /// A symbol's source (at most `max_lines` lines), signature, location,
     /// and direct callers and callees (the first [`CONTEXT_EDGES`] of each).
     async fn symbol_context_text(&self, repo_id: &str, name: &str, max_lines: usize) -> TextResult {
-        let symbols = self.symbols(repo_id).await?;
-        let relationships = self.relationships(repo_id).await?;
+        let graph = self.graph(repo_id).await?;
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
         let symbol = navigation::resolve(&symbols, name)?;
         let edges = |direction| -> Vec<String> {
             navigation::walk_calls(&symbols, &relationships, symbol, direction, 1)
@@ -856,7 +863,7 @@ impl MyceliumsMcp {
             metadata: symbol.metadata.clone(),
             source_notice,
         };
-        self.graph_text(repo_id, format::format_symbol_context(&output))
+        self.graph_text(&graph, format::format_symbol_context(&output))
             .await
     }
 }

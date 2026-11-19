@@ -36,6 +36,12 @@ pub enum MyceliumError {
     #[error(transparent)]
     Repo(#[from] myceliums_storage::RepoIdError),
 
+    /// The repository's index was replaced while a [`crate::RepoGraph`]
+    /// still had tables to load: serving them would mix two index
+    /// generations in one answer. Retrying the call reads the new index.
+    #[error("the index of repository {0} changed during this call (a re-analysis finished)")]
+    IndexChanged(String),
+
     /// A storage operation (LanceDB / store) failed.
     #[error("storage error: {0}")]
     Storage(String),
