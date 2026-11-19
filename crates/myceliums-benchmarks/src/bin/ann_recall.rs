@@ -1,7 +1,8 @@
-//! Measure how much recall the ANN vector index costs against exact search.
+//! Measure how much recall an ANN vector index costs against exact search.
 //!
 //! ```text
-//! # The production setting on synthetic tables at the production threshold:
+//! # Production search (exact, no index) on the synthetic tables at --sizes
+//! # (default 5000), next to the pre-#117 IVF-PQ index on the same table:
 //! cargo run -p myceliums-benchmarks --release --bin ann-recall
 //!
 //! # The issue #117 sweep — every setting in `ann::sweep_settings`, synthetic
@@ -24,11 +25,10 @@
 
 use anyhow::{bail, Context, Result};
 use myceliums_benchmarks::ann::{
-    describe, measure, sweep_settings, AnnConfig, AnnRecall, Bench, Distribution, Synthetic,
+    describe, production_check, sweep_settings, AnnRecall, Bench, Distribution, Synthetic,
 };
 use myceliums_benchmarks::ann_real::load_or_embed;
 use myceliums_benchmarks::eval::models::ModelSetup;
-use myceliums_storage::AnnSettings;
 use std::io::Write;
 use std::path::PathBuf;
 
@@ -101,9 +101,12 @@ async fn main() -> Result<()> {
     };
     print_header();
     if !args.sweep {
-        for distribution in [Distribution::Clustered, Distribution::Uniform] {
-            let result = measure(&AnnConfig::at_threshold(distribution)).await?;
-            report(&result, json.as_mut())?;
+        for &rows in &args.sizes {
+            for distribution in [Distribution::Clustered, Distribution::Uniform] {
+                let check = production_check(&Synthetic::standard(distribution, rows)).await?;
+                report(&check.stale_index, json.as_mut())?;
+                report(&check.production, json.as_mut())?;
+            }
         }
         return Ok(());
     }
@@ -147,12 +150,10 @@ async fn main() -> Result<()> {
                 Err(e) => eprintln!("{rows} rows, {}: {e:#}", describe(&settings)),
             }
         }
-        let production = AnnSettings::PRODUCTION;
         eprintln!(
-            "{rows} rows: flat scan p50/p95 {:.2}/{:.2} ms; production threshold {}",
+            "{rows} rows: exact (production) search p50/p95 {:.2}/{:.2} ms",
             bench.flat_latency_ms().0,
             bench.flat_latency_ms().1,
-            production.threshold
         );
     }
     Ok(())

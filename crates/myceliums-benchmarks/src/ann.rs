@@ -1,10 +1,12 @@
-//! How much recall does the ANN vector index cost against exact search?
+//! How much recall would an ANN vector index cost against exact search?
 //!
-//! Once a repository reaches [`ANN_INDEX_THRESHOLD`] symbols, `store_embeddings`
-//! builds an ANN index over the vector column and every semantic and hybrid
-//! query goes through it instead of an exact flat scan. An approximate index
-//! can return a different top 10 than exact search. This module measures by
-//! how much, through the production [`Store`] API.
+//! Production searches exactly at every size ([`AnnSettings::PRODUCTION`] has
+//! no index threshold, issue #117). Until #117 a repository of 5,000 symbols
+//! or more got an IVF-PQ index that every semantic and hybrid query went
+//! through. This module measures what an index setting costs — recall and
+//! latency against exact search — through the production [`Store`] API, so a
+//! future index can be judged on numbers, and checks that production search
+//! stays exact even when an older release left an index behind.
 //!
 //! The procedure for one table:
 //!
@@ -32,8 +34,9 @@
 
 use anyhow::{bail, Context, Result};
 use myceliums_storage::schema::{l2_normalize, DEFAULT_EMBEDDING_DIM};
-use myceliums_storage::store::ANN_INDEX_THRESHOLD;
-use myceliums_storage::{AnnIndexBuild, AnnSettings, CodeSymbol, Probes, Store, SymbolKind};
+use myceliums_storage::{
+    AnnIndexBuild, AnnIndexKind, AnnQuery, AnnSettings, CodeSymbol, Probes, Store, SymbolKind,
+};
 use serde::Serialize;
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -144,60 +147,73 @@ impl Synthetic {
     }
 }
 
-/// One measurement of the production setting on a synthetic table — what the
-/// CI check and `ann-recall` without arguments run.
+/// One index measurement on a synthetic table.
 #[derive(Debug, Clone)]
 pub struct AnnConfig {
     /// The synthetic table.
     pub data: Synthetic,
     /// Neighbours compared per query.
     pub k: usize,
-    /// Index policy under test; its `threshold` must not exceed `data.rows`.
+    /// Index policy under test; its `threshold` must be set and must not
+    /// exceed `data.rows`.
     pub settings: AnnSettings,
 }
 
-impl AnnConfig {
-    /// The production setting on a table exactly at the production threshold.
-    pub fn at_threshold(distribution: Distribution) -> Self {
-        Self {
-            data: Synthetic::standard(distribution, ANN_INDEX_THRESHOLD),
-            k: 10,
-            settings: AnnSettings::PRODUCTION,
-        }
+/// The production setting before #117: IVF-PQ with 16 sub-vectors and
+/// LanceDB's default probes and no refine step, from 5,000 rows. Indexes built
+/// by older releases look like this until the next embedding write drops them.
+pub fn pre_117_settings() -> AnnSettings {
+    AnnSettings {
+        threshold: Some(5_000),
+        index: AnnIndexKind::IvfPq { sub_vectors: 16 },
+        query: AnnQuery::default(),
     }
 }
 
-/// Lowest ANN recall@10 the production setting may score on the clustered
-/// table of the CI check ([`ci_check_config`]); below it `cargo test` fails
-/// (issue #117). Measured: 1.0 (release build).
-pub const CI_RECALL_FLOOR: f64 = 0.9;
+/// Recall@10 production search must reach in the CI check: exact, i.e. 1.0
+/// (tie-tolerant). Production builds no index, so anything less means a
+/// search went through an index (issue #117).
+pub const CI_RECALL_FLOOR: f64 = 1.0;
 
-/// The same for the uniform table — the structureless worst case, where
-/// recall depends almost entirely on the share of partitions probed.
-/// Measured: 0.917 with 75% probes; 50% probes scored 0.726 and the pre-#117
-/// IVF-PQ setting 0.09, so this floor catches a probe or quantisation
-/// regression while leaving room for untrained-seed variation.
-pub const CI_UNIFORM_RECALL_FLOOR: f64 = 0.85;
+/// Table size of the CI check — large enough for a real IVF-PQ build, small
+/// enough for a debug `cargo test`.
+pub const CI_CHECK_ROWS: usize = 2_000;
 
-/// The CI check: the production index and query setting on a synthetic table
-/// (fixed seed) at [`CI_CHECK_ROWS`] rows — below the production threshold,
-/// so a debug `cargo test` can afford it.
-pub fn ci_check_config(distribution: Distribution) -> AnnConfig {
-    AnnConfig {
-        data: Synthetic {
-            queries: 100,
-            ..Synthetic::standard(distribution, CI_CHECK_ROWS)
-        },
-        k: 10,
-        settings: AnnSettings {
-            threshold: CI_CHECK_ROWS,
-            ..AnnSettings::PRODUCTION
-        },
+/// The CI check's table: `distribution`, [`CI_CHECK_ROWS`] rows, 100 queries,
+/// fixed seed.
+pub fn ci_check_data(distribution: Distribution) -> Synthetic {
+    Synthetic {
+        queries: 100,
+        ..Synthetic::standard(distribution, CI_CHECK_ROWS)
     }
 }
 
-/// Table size of the CI check.
-pub const CI_CHECK_ROWS: usize = 5_000;
+/// What the production check found on one table.
+#[derive(Debug, Clone)]
+pub struct ProductionCheck {
+    /// Searching through a pre-#117 index with the pre-#117 settings — what
+    /// users got before, and what the stale index would return if used.
+    pub stale_index: AnnRecall,
+    /// Production search over the same table with that stale index present.
+    pub production: AnnRecall,
+}
+
+/// Load `data`, leave a pre-#117 IVF-PQ index on it as an upgrade does, and
+/// measure production search against exact search. Production must be exact.
+pub async fn production_check(data: &Synthetic) -> Result<ProductionCheck> {
+    let bench = Bench::load(data.generate(), 10).await?;
+    let stale_index = bench
+        .measure(AnnSettings {
+            threshold: Some(0),
+            ..pre_117_settings()
+        })
+        .await?;
+    let production = bench.measure_production().await?;
+    Ok(ProductionCheck {
+        stale_index,
+        production,
+    })
+}
 
 /// What one measurement found.
 #[derive(Debug, Clone, Serialize)]
@@ -256,12 +272,8 @@ impl Bench {
         let dim = data.table[0].len();
         let dir = tempfile::tempdir()?;
         let path = dir.path().to_path_buf();
-        let store = Store::open(&path, REPO_ID)
-            .await?
-            .with_ann_settings(AnnSettings {
-                threshold: usize::MAX,
-                ..AnnSettings::PRODUCTION
-            });
+        // Production settings: no index is built, every search is exact.
+        let store = Store::open(&path, REPO_ID).await?;
         store.set_embedding_dim(dim as i32);
         let symbols: Vec<CodeSymbol> = (0..data.table.len()).map(synthetic_symbol).collect();
         store.store_symbols(&symbols).await?;
@@ -314,10 +326,15 @@ impl Bench {
     /// whatever index a previous measurement left) and measure it.
     pub async fn measure(&self, settings: AnnSettings) -> Result<AnnRecall> {
         let rows = self.rows();
-        if rows < settings.threshold {
+        let Some(threshold) = settings.threshold else {
             bail!(
-                "{rows} rows is below the index threshold {} — nothing approximate to measure",
-                settings.threshold
+                "{} sets no index threshold — nothing approximate to measure",
+                describe(&settings)
+            );
+        };
+        if rows < threshold {
+            bail!(
+                "{rows} rows is below the index threshold {threshold} — nothing approximate to measure"
             );
         }
         let store = Store::open(&self.path, REPO_ID)
@@ -326,7 +343,7 @@ impl Bench {
         store.set_embedding_dim(self.data.table[0].len() as i32);
         let started = Instant::now();
         let build = store
-            .create_ann_index(rows, settings.threshold)
+            .create_ann_index(rows, threshold)
             .await
             .with_context(|| format!("building the {} index", settings.index.label()))?;
         let build_ms = started.elapsed().as_secs_f64() * 1e3;
@@ -355,6 +372,35 @@ impl Bench {
             build_ms,
             flat_latency_ms: self.flat_latency_ms,
             ann_latency_ms: percentiles(&ann.latency_ms),
+        })
+    }
+
+    /// Search the loaded table — and whatever index a previous measurement
+    /// left on it — with [`AnnSettings::PRODUCTION`] and measure it.
+    pub async fn measure_production(&self) -> Result<AnnRecall> {
+        let store = Store::open(&self.path, REPO_ID).await?;
+        store.set_embedding_dim(self.data.table[0].len() as i32);
+        let probe = self.run_queries(&store).await?;
+        let zeros = vec![0.0; probe.recall.len()];
+        let DeltaEstimate {
+            delta,
+            ci_low,
+            ci_high,
+        } = paired_bootstrap_default(&probe.recall, &zeros)?;
+        Ok(AnnRecall {
+            data: self.data.label.clone(),
+            setting: describe(&AnnSettings::PRODUCTION),
+            rows: self.rows(),
+            queries: self.data.queries.len(),
+            k: self.k,
+            flat_recall: self.flat_recall,
+            ann_recall: delta,
+            ann_recall_ci: (ci_low, ci_high),
+            ann_top1_agreement: mean(&probe.top1),
+            partitions: 0,
+            build_ms: 0.0,
+            flat_latency_ms: self.flat_latency_ms,
+            ann_latency_ms: percentiles(&probe.latency_ms),
         })
     }
 
@@ -409,8 +455,12 @@ struct Probe {
 }
 
 /// Human-readable description of an index setting, e.g.
-/// `IVF_PQ/16 nprobes=20 refine=10`. Unset query knobs are omitted.
+/// `IVF_PQ/16 nprobes=20 refine=10`. Unset query knobs are omitted; a setting
+/// with no threshold builds no index and reads `exact (production)`.
 pub fn describe(settings: &AnnSettings) -> String {
+    if settings.threshold.is_none() {
+        return "exact (production)".to_string();
+    }
     let mut text = settings.index.label();
     match settings.query.nprobes {
         Some(Probes::Fixed(n)) => text.push_str(&format!(" nprobes={n}")),
@@ -426,12 +476,12 @@ pub fn describe(settings: &AnnSettings) -> String {
     text
 }
 
-/// The settings the `--sweep` run compares (issue #117): the old production
-/// setting, then one knob at a time — refine factor, probes, PQ sub-vectors,
-/// other index types — and the production setting. Thresholds are zero: the
-/// sweep decides the size, not the policy.
+/// The index settings the `--sweep` run compares (issue #117): the pre-#117
+/// production setting, then one knob at a time — refine factor, probes, PQ
+/// sub-vectors, other index types. Thresholds are zero: the sweep decides the
+/// size, not the policy. Production itself builds no index; its exact search
+/// is the flat-scan column of every row.
 pub fn sweep_settings() -> Vec<AnnSettings> {
-    use myceliums_storage::{AnnIndexKind, AnnQuery};
     let pq = |sub_vectors| AnnIndexKind::IvfPq { sub_vectors };
     let query = |nprobes: Option<usize>, refine_factor: Option<u32>, ef: Option<usize>| AnnQuery {
         nprobes: nprobes.map(Probes::Fixed),
@@ -443,7 +493,7 @@ pub fn sweep_settings() -> Vec<AnnSettings> {
         refine_factor,
         ef,
     };
-    let mut settings = vec![
+    let settings = vec![
         // Before #117: IVF_PQ, 16 sub-vectors, LanceDB defaults.
         (pq(16), query(None, None, None)),
         (pq(16), query(None, Some(5), None)),
@@ -473,14 +523,10 @@ pub fn sweep_settings() -> Vec<AnnSettings> {
         (AnnIndexKind::IvfHnswSq, share(75, None, Some(100))),
         (AnnIndexKind::IvfHnswSq, share(75, None, Some(200))),
     ];
-    let production = (AnnSettings::PRODUCTION.index, AnnSettings::PRODUCTION.query);
-    if !settings.contains(&production) {
-        settings.push(production);
-    }
     settings
         .into_iter()
         .map(|(index, query)| AnnSettings {
-            threshold: 0,
+            threshold: Some(0),
             index,
             query,
         })
@@ -608,7 +654,7 @@ mod tests {
             },
             k: 10,
             settings: AnnSettings {
-                threshold: 500,
+                threshold: Some(500),
                 ..AnnSettings::PRODUCTION
             },
         };
@@ -624,26 +670,31 @@ mod tests {
         assert!(result.ann_latency_ms.0 <= result.ann_latency_ms.1);
     }
 
-    /// Issue #117 CI check: the production index setting must keep ANN
-    /// recall@10 against exact search at or above the floors on the
-    /// deterministic synthetic tables. Runs on every `cargo test`.
+    /// Issue #117 CI check: production vector search is exact — recall@10
+    /// [`CI_RECALL_FLOOR`] (1.0) against brute force — on deterministic
+    /// synthetic tables, even with a pre-#117 IVF-PQ index left on the table
+    /// as an upgrade leaves it. The stale index itself must score clearly
+    /// below that, or the check could not tell a bypass from an index search.
+    /// Runs on every `cargo test`.
     #[tokio::test]
-    async fn the_production_index_keeps_recall_above_the_floor() {
-        for (distribution, floor) in [
-            (Distribution::Clustered, CI_RECALL_FLOOR),
-            (Distribution::Uniform, CI_UNIFORM_RECALL_FLOOR),
-        ] {
-            let result = measure(&ci_check_config(distribution)).await.unwrap();
-            assert_eq!(result.flat_recall, 1.0);
+    async fn production_search_is_exact_even_over_a_stale_index() {
+        for distribution in [Distribution::Clustered, Distribution::Uniform] {
+            let check = production_check(&ci_check_data(distribution))
+                .await
+                .unwrap();
+            let label = distribution.label();
+            assert_eq!(check.production.flat_recall, 1.0);
             assert!(
-                result.ann_recall >= floor,
-                "{} table: ANN recall@10 {:.4} (95% CI {:.4}–{:.4}) is below the CI floor \
-                 {floor} for {} — see benchmarks/METHODOLOGY.md, ANN recall",
-                distribution.label(),
-                result.ann_recall,
-                result.ann_recall_ci.0,
-                result.ann_recall_ci.1,
-                result.setting
+                check.stale_index.ann_recall < 0.9,
+                "{label}: the pre-#117 index scored {:.4} — too close to exact for this \
+                 check to mean anything",
+                check.stale_index.ann_recall
+            );
+            assert!(
+                check.production.ann_recall >= CI_RECALL_FLOOR,
+                "{label}: production recall@10 {:.4} is below {CI_RECALL_FLOOR} — a vector \
+                 search went through an index; see benchmarks/METHODOLOGY.md, ANN recall",
+                check.production.ann_recall
             );
         }
     }
@@ -654,9 +705,16 @@ mod tests {
             data: Synthetic::standard(Distribution::Uniform, 100),
             k: 10,
             settings: AnnSettings {
-                threshold: 500,
+                threshold: Some(500),
                 ..AnnSettings::PRODUCTION
             },
+        };
+        assert!(measure(&config).await.is_err());
+        // Production builds no index: there is nothing approximate to measure.
+        let config = AnnConfig {
+            data: Synthetic::standard(Distribution::Uniform, 100),
+            k: 10,
+            settings: AnnSettings::PRODUCTION,
         };
         assert!(measure(&config).await.is_err());
     }

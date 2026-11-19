@@ -5,9 +5,9 @@ Two kinds of measurement live in this crate:
 - **Retrieval quality** — `retrieval-eval` scores lexical, semantic, hybrid and
   hybrid+rerank search against a hand-labelled golden set (recall@k, hit@k,
   MRR@10, nDCG@10, R-precision, with paired bootstrap confidence intervals) and
-  gates CI on regressions whose 95% interval lies below zero (per comparison, uncorrected). `ann-recall` measures what the ANN
-  vector index costs against exact search, on synthetic and real embeddings,
-  for the production setting and the alternatives compared in #117. Method, numbers and limits:
+  gates CI on regressions whose 95% interval lies below zero (per comparison, uncorrected). `ann-recall` measures what an ANN
+  vector index would cost against exact search, on synthetic and real embeddings,
+  next to production's exact search (#117). Method, numbers and limits:
   [`benchmarks/METHODOLOGY.md`](benchmarks/METHODOLOGY.md).
 - **Timings** — Criterion benchmarks for indexing, parsing and queries on
   synthetic fixtures, described below.
@@ -15,7 +15,7 @@ Two kinds of measurement live in this crate:
 ```bash
 cargo run -p myceliums-benchmarks --bin retrieval-eval                          # lexical only, offline
 cargo run -p myceliums-benchmarks --bin retrieval-eval -- --allow-model-download # all four modes
-cargo run -p myceliums-benchmarks --release --bin ann-recall                     # production setting, synthetic
+cargo run -p myceliums-benchmarks --release --bin ann-recall                     # exact production search vs the old index, synthetic
 cargo run -p myceliums-benchmarks --release --bin ann-recall -- --sweep --sizes 5000,20000,50000
 cargo run -p myceliums-benchmarks --release --bin ann-recall -- --sweep \
     --repo /path/to/checkout --cache /path/to/vectors.bin --sizes 5000,20000   # real embeddings

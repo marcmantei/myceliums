@@ -470,14 +470,15 @@ that a fix shows up as a win.
 ## ANN recall: what the vector index costs
 
 Every semantic query and the vector leg of every hybrid query search the
-`symbols` vector column. Below `ANN_INDEX_THRESHOLD` that search is an exact
-flat scan, which is what the golden-set numbers above measure. At and above it,
-`store_embeddings` builds an approximate-nearest-neighbour (ANN) index and
-queries go through it. `ann-recall` measures what the index costs against exact
-search, through the production `Store` API:
+`symbols` vector column. Since #117 that search is exact at every size — a flat
+scan, which is also what the golden-set numbers above measure. Until #117 a
+repository of 5,000 symbols or more got an approximate-nearest-neighbour (ANN)
+index that every query went through. `ann-recall` measures what an index
+setting costs against exact search, through the production `Store` API, and
+what production search returns:
 
 ```bash
-# The production setting, synthetic tables at the production threshold:
+# Production (exact) search next to the pre-#117 index, synthetic tables:
 cargo run -p myceliums-benchmarks --release --bin ann-recall
 # The comparison of index settings (issue #117), synthetic or real embeddings:
 cargo run -p myceliums-benchmarks --release --bin ann-recall -- --sweep --sizes 5000,20000,50000
@@ -596,10 +597,11 @@ These rows come from the heavily loaded run (latencies inflated). On the
 synthetic clusters a few partitions hold all true neighbours, so IVF probing
 is not what limits recall there and quantisation is; on real embeddings the
 opposite holds. That is why the first synthetic-only measurement pointed at
-the refine step and the real data did not confirm it. The production setting,
-re-measured on a lightly loaded machine, next to the runner-up:
+the refine step and the real data did not confirm it. The two best index
+settings from the real-embedding table, re-measured on synthetic tables with
+the machine lightly loaded:
 
-| Data | Rows | Setting | recall@10 [95% CI] | top-1 | latency ms p50 / p95 | flat ms p50 / p95 |
+| Data | Rows | Setting | recall@10 [95% CI] | top-1 | latency ms p50 / p95 | exact ms p50 / p95 |
 | --- | ---: | --- | ---: | ---: | ---: | ---: |
 | clustered | 5,000 | IVF_FLAT nprobes=75% | 1.000 | 1.00 | 3.4 / 8.9 | 3.8 / 9.8 |
 | clustered | 20,000 | IVF_FLAT nprobes=75% | 1.000 | 1.00 | 3.9 / 7.8 | 6.1 / 10.7 |
@@ -611,62 +613,66 @@ re-measured on a lightly loaded machine, next to the runner-up:
 | clustered | 100,000 | IVF_HNSW_SQ nprobes=75% ef=100 | 0.968 [0.961, 0.975] | 0.95 | 7.9 / 8.7 | 15.2 / 17.5 |
 | uniform | 100,000 | IVF_HNSW_SQ nprobes=75% ef=100 | 0.891 [0.878, 0.903] | 0.87 | 8.9 / 10.8 | 15.5 / 18.8 |
 
-### Choice
+### Choice: exact search at every size
 
-- **Exact search up to 100,000 rows** (`ANN_INDEX_THRESHOLD = 100_000`). The
-  flat scan costs 2.3 ms per query at 5,000 rows, 5.2 ms at 20,000, about
-  9.5 ms at 50,000 and about 15 ms at 100,000 — on the order of embedding the
-  query itself. An index saves a few milliseconds below that and costs about
-  one neighbour in a hundred, so every repository below 100,000 symbols now
-  gets exact results; Django (40,000 symbols) is one of them.
-- **From 100,000 rows: IVF_FLAT, √n partitions (≤ 256), 75% of the partitions
-  probed** (`Probes::Percent(75)`). Recall@10 0.988 and 0.987 on real
-  embeddings at the two measured sizes, 1.0 on clustered synthetic tables up
-  to 100,000 rows, and 6.5 ms against the flat scan's 15.7 ms at 100,000 rows.
-  IVF_FLAT stores the raw vectors, so scores stay exact cosine and only
-  membership of the top k can differ; the cost is a second copy of the vectors
-  on disk (about 1.5 KB per symbol) and a build of about 5 s at 100,000 rows.
-  IVF_HNSW_SQ with the same probes was the runner-up (0.97 real, slower at
-  100,000 rows, scores on 8-bit quantised vectors). IVF_PQ never reached 0.95
-  on real embeddings in any tested combination of refine factor, probes and
-  sub-vectors.
-- **Not measured**: real embeddings above 20,000 rows, so recall on real data
-  at 100,000+ rows is extrapolated from 5,000 and 20,000 (stable at 0.987) and
-  from the synthetic tables. Above 256 partitions × 75% probes the index scans
-  about three quarters of the table, so at millions of rows it would gain
-  little over the flat scan; no repository that size was measured. Latencies
-  are from one machine. The uniform tables (0.91) are the structureless worst
-  case; real embeddings are far more structured.
+Production builds no ANN index (`AnnSettings::PRODUCTION.threshold = None`).
+Every vector search is an exact scan.
 
-**Existing indexes.** Index parameters are not recorded in the index, so no
-fingerprint changes; instead every full `myc analyze` applies the current
-settings: at or above the threshold it rebuilds the index in place
-(`replace(true)`), and below it `create_ann_index` drops an index left by an
-older release once the table itself is below the threshold. An incremental
-re-index (`myc watch`) re-embeds only changed rows and never drops a large
-repository's index; rows added since the last build are searched exactly by
-LanceDB alongside the index until the next full analysis.
+**Exact-search latency** (median of one `vector_search`, 384-d, one
+Apple-silicon Mac, lightly loaded):
 
-**CI check.** `the_production_index_keeps_recall_above_the_floor` builds the
-production index type and query setting on two synthetic tables (5,000 rows,
-100 queries, seed 92) — below the production threshold so a debug
-`cargo test` can afford it — and fails if recall@10 falls under
-`CI_RECALL_FLOOR` = 0.9 on the clustered table or under
-`CI_UNIFORM_RECALL_FLOOR` = 0.85 on the uniform one. The uniform table is the
-sensitive one: it scored 0.917 with 75% probes, 0.726 with 50%, and 0.09 with
-the old IVF-PQ setting, so a return to fixed probes or to quantised ranking
-fails the build. LanceDB does not seed k-means, so the value varies slightly
-between runs; the floors leave room for that.
-`the_harness_checks_itself_on_a_small_table` checks the harness on every
-`cargo test` too.
+| Rows | Data | p50 ms | Runs |
+| ---: | --- | ---: | --- |
+| 5,000 | real (Django) | 2.4 | three runs, 2.3–2.5 |
+| 20,000 | real (Django) | 5.2 | one lightly loaded run |
+| 50,000 | synthetic | 9.5 | two runs, 9.3–9.6 |
+| 100,000 | synthetic | 15 | four runs, 14.5–15.7 |
+
+The cost is linear in the number of vectors — about 1.5 ms plus 0.135 ms per
+1,000 vectors over these points, so a million symbols would be on the order of
+150 ms per query (extrapolated, not measured). Vector data does not change the
+cost of a scan, so synthetic rows stand in for real ones here.
+
+**Why no index.** The best index measured, IVF_FLAT probing 75% of √n
+partitions (≤ 256), scored recall@10 0.987–0.988 on real embeddings at 5,000
+and 20,000 rows and cut a query at 100,000 synthetic rows from 15.7 to 6.5 ms.
+In exchange it stores a second copy of every vector (about 1.5 KB per symbol),
+runs a k-means build on every full analysis, loses about one true neighbour in
+a hundred, and was never measured on real embeddings at the sizes where it
+would apply. With partitions capped at 256 and 75% probed, its speed-up cannot
+grow much beyond that either (the uniform table at 100,000 rows: 13.3 against
+15.4 ms). IVF_HNSW_SQ with the same probes scored 0.97, and IVF-PQ never
+reached 0.95 on real embeddings in any tested combination of refine factor,
+probes and sub-vectors. Exact search is simpler and always right at the
+latencies above.
+
+**When to revisit.** If repositories of several hundred thousand symbols
+become common, or exact search shows up as a measured bottleneck: build the
+index for those sizes only (the machinery stays — set
+`AnnSettings::threshold`; `index`/`query` in `PRODUCTION` hold the best
+measured setting), measure its recall on real embeddings at that size with
+`ann-recall --sweep --repo`, and check the trade-off against the table above.
+
+**Existing indexes.** Indexes built by earlier releases do not change results
+any more: `vector_search` bypasses any index when no threshold is set. The
+next embedding write — `myc analyze`, or an incremental re-index — drops them
+to reclaim the disk space. No fingerprint changes; nothing is re-embedded.
+
+**CI check.** `production_search_is_exact_even_over_a_stale_index` runs on
+every `cargo test`. For a clustered and a uniform synthetic table (2,000 rows,
+100 queries, seed 92) it leaves a pre-#117 IVF-PQ index on the table, as an
+upgrade does, then searches through production settings. Recall@10 against
+brute force must be `CI_RECALL_FLOOR` = 1.0 (exact, tie-tolerant). The stale
+index itself must score below 0.9 when searched with the old settings, so
+the check can tell a bypass from an index search. `the_harness_checks_itself_on_a_small_table`
+checks the harness itself.
 
 ## Known limitations
 
 - **Fixture-scale corpus.** 96 symbols in five small projects. Larger real
   repositories behave differently — BM25 precision usually degrades as the
-  corpus grows, and from 100,000 symbols up the vector leg searches an
-  approximate index (recall@10 ≈ 0.99 against exact search on real
-  embeddings; see the ANN section). These numbers are a regression guard and a
+  corpus grows. Vector search stays exact at every size (see the ANN
+  section), so only its latency grows. These numbers are a regression guard and a
   first comparison of modes, not a promise about real repositories.
 - **No development split.** Every query is in the one evaluation set. Nothing
   was tuned on it, and tuning must not happen on it; that needs a separate

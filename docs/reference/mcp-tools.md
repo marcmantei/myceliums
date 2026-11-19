@@ -117,20 +117,17 @@ query time, so this is the identical geometry used by the vector leg of
 `hybrid_search` — the same query over the same index yields the same top-k
 ordering in both tools.
 
-**Index selection.** Repositories with fewer than **100,000 embedded symbols**
-are searched with an exact brute-force scan: on 384-dimensional vectors it took
-about 2 ms per query at 5,000 symbols and 15 ms at 100,000 (median, one
-Apple-silicon machine), so an index would cost recall for little speed.
-From 100,000 symbols an IVF_FLAT approximate-nearest-neighbour (ANN) index is
-built automatically after analysis and every query probes 75% of its
-partitions. Measured against exact search it returns about 99 of every 100 true
-top-10 neighbours (recall@10 0.987–0.988 on real embeddings of Django at 5,000
-and 20,000 symbols). The index keeps the raw vectors, so scores are exact
-cosine either way; what the index can change is which rows make the top k.
-[Measurements and trade-offs](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs).
-The index settings are applied whenever a full `myc analyze` writes the
-embeddings, so an index built by an older release is rebuilt — or dropped, if
-the repository is now below the threshold — on the next full analysis.
+**Exact search.** Since #117 every vector search is exact: a brute-force
+scan over all embedded symbols, at every repository size, with no approximate
+(ANN) index. Measured median latency of one search over 384-dimensional
+vectors on one Apple-silicon Mac: 2.4 ms at 5,000 symbols and 5.2 ms at 20,000
+(real embeddings of Django), 9.5 ms at 50,000 and 15 ms at 100,000 (synthetic
+vectors). Cost grows linearly with the number of symbols, so a repository of a
+million symbols would take on the order of 150 ms per query (extrapolated, not
+measured). Earlier releases built an IVF-PQ index from 5,000 symbols that
+returned only about 4 of the true 10 nearest neighbours; searches now bypass
+such an index, and the next `myc analyze` deletes it.
+[Measurements](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#ann-recall-what-the-vector-index-costs).
 
 > **Partial-index warning.** `semantic_search` can only return symbols that were
 > embedded. If some symbols failed to embed during analysis, the response is
