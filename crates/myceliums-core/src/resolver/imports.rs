@@ -345,13 +345,13 @@ impl CallResolver {
         let key = if specifier.starts_with("./") || specifier.starts_with("../") || specifier == "."
         {
             join_relative(parent_dir(importer), specifier)
-        } else if let Some(rest) = specifier
-            .strip_prefix("@/")
-            .or_else(|| specifier.strip_prefix("~/"))
-        {
-            rest.to_string()
         } else {
-            return None;
+            // `@/x`, `~/x`: a path alias for the source root; any other
+            // bare specifier is a package.
+            specifier
+                .strip_prefix("@/")
+                .or_else(|| specifier.strip_prefix("~/"))?
+                .to_string()
         };
         // `./models.js` may name `models.ts`.
         let key = stem(&key).to_string();
