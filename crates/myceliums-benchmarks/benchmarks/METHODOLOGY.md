@@ -839,6 +839,71 @@ here — the vector leg of hybrid search is the same exact scan this section
 checks, so the same reading applies to its candidates, but the size of the
 effect on fused rankings is not measured.
 
+### Test-code demotion (#146)
+
+The #141 finding — two thirds of hono's exact semantic top 10 is test code,
+and dropping it lifts nDCG@10 from 0.254 to 0.470 — made test code a ranking
+question. Search now ranks it lower by default; this section says how much
+lower and why.
+
+**Classification.** At index time each symbol is marked test or product code
+by unambiguous language conventions (`myceliums_core::parser::classify`; the
+rules are listed in [`docs/reference/mcp-tools.md`](../../../docs/reference/mcp-tools.md#test-code)).
+Test helpers that ship with the product, benchmarks and examples are product
+code. The share of symbols classified as test code is large: requests 481 of
+801, flask 1,126 of 1,574, gin 1,150 of 1,950, hono 8,440 of 10,470. One
+regular label names test code.
+
+**Demotion.** Every mode reorders its ranking by rank position: a test at
+position `p` is placed as if at `p / w`, ties keeping the earlier symbol
+first; `w = 1` reorders nothing. Rank positions, not scores, because BM25
+scores, cosines, RRF scores and cross-encoder logits live on unrelated scales
+and one weight has to mean the same in all of them. Hybrid search reorders the
+fused list before it is cut; with `--rerank` the pool comes from the demoted
+hybrid list and the cross-encoder's order is reordered again. Each mode reads
+`limit / w` candidates, enough to make the top `limit` exact.
+
+**Why the regular queries alone cannot pick `w`.** Their labels name the
+code under test, almost never a test, so every step towards excluding tests
+scores better on them — a sweep over them alone always picks the strongest
+weight it is offered. What demotion costs is visible only on queries that
+*look for* tests. `real-repos/test-seeking.json` adds 20 of them, five per
+repository ("which tests cover `should_bypass_proxies`", "tests for the CORS
+middleware", …), labelled like the regular set by reading the code: the test
+functions that exercise the feature; in hono, whose tests are `describe`/`it`
+callbacks the parser does not extract, the test file's `app` constant (the
+app under test) and its named helpers. They are agent-drafted and unreviewed
+like the rest, and not split: they are a constraint, not a tuning target.
+
+**Protocol**, fixed before the run below:
+
+- Grid `w ∈ {1, 0.5, 0.33, 0.25, 0.2, 0.1}`; below 0.1 the best test falls
+  off a ten-result page entirely.
+- Score every weight in all four modes on the 96 dev queries and on the 20
+  test-seeking queries.
+- Choose the **strongest** weight whose test-seeking hit@10, averaged over
+  the modes, is at least **0.8×** its value at `w = 1`, and whose dev
+  objective — nDCG@10 averaged over the modes — is higher than at `w = 1`.
+- Confirm on the 72 held-out queries: chosen vs `w = 1` through the
+  production paths, paired bootstrap of the objective; demotion stays on by
+  default only if that interval lies wholly above zero.
+
+The dev sweep reorders rankings computed once per query (the BM25 list, the
+fused hybrid list) with the production `TestPolicy::top`; semantic search runs
+per weight; each distinct rerank pool is reranked once. The run fails unless
+the sweep reproduces the production scores of every mode at the shipped
+weight and at `w = 1`, on every dev and test-seeking query.
+
+**Results.** Pending: the run of this protocol is
+[44815708513](https://github.com/marcmantei/myceliums/actions/runs/44815708513)
+(Retrieval Quality, real repositories). Until it is recorded here,
+`DEFAULT_TEST_WEIGHT` is 0.25, the fallback that keeps a test ranked 1st, 2nd
+or 3rd within the first 12 results. The earlier run on `af33385` measured
+keyword search only correctly (its vector hits carried no metadata, so the
+model-backed modes were barely demoted): weight 0.1 vs no demotion,
+nDCG@10 0.381 → 0.478 over all 168 queries and +0.100 [+0.063, +0.140] on
+the held-out 72, every repository improving.
+
 ### Limits of this set
 
 - **Unreviewed labels**, drafted by one agent. Until a human reviews them,
