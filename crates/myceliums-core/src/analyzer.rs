@@ -1,6 +1,5 @@
 use crate::error::Result;
 use anyhow::Context;
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use myceliums_storage::{
     CodeSymbol, FileNode, GitMetadataEntry, Relationship, RelationshipKind, Store, SymbolKind,
     SymbolMetadata,
@@ -19,6 +18,7 @@ use crate::content::parse_content;
 use crate::email::{self, ParsedEmail};
 use crate::file_guard::{should_skip_file, FileSkipReason};
 use crate::git_metadata::GitMetadataExtractor;
+use crate::index_scope::IndexScope;
 use crate::mbox;
 use crate::notebook;
 use crate::parser::ParsedRationale;
@@ -27,9 +27,6 @@ use crate::parser::{self, SourceLanguage, SourceParser};
 use crate::pdf;
 use crate::resolver::CallResolver;
 use crate::timing::Timer;
-
-/// Default maximum file size in bytes (512 KB) applied when no config is present.
-const DEFAULT_MAX_FILE_SIZE_BYTES: u64 = 512 * 1024;
 
 /// The main entry point for analyzing a code repository.
 ///
@@ -60,6 +57,9 @@ pub struct Analyzer {
     global_config: crate::global_config::GlobalConfig,
     progress: Option<Arc<dyn ProgressReporter>>,
     cancel: Option<CancelCheck>,
+    /// Vectors of the index this analysis replaces (#151).
+    #[cfg(feature = "embeddings")]
+    previous_vectors: Option<crate::embeddings::PreviousVectors>,
 }
 
 /// Asked between steps of an analysis: `true` stops it with
@@ -99,6 +99,8 @@ impl Analyzer {
             global_config: crate::global_config::GlobalConfig::default(),
             progress: None,
             cancel: None,
+            #[cfg(feature = "embeddings")]
+            previous_vectors: None,
         }
     }
 
@@ -112,7 +114,26 @@ impl Analyzer {
             global_config: crate::global_config::GlobalConfig::default(),
             progress: None,
             cancel: None,
+            #[cfg(feature = "embeddings")]
+            previous_vectors: None,
         }
+    }
+
+    /// Vectors of the index this full analysis replaces: symbols whose
+    /// embedding document is unchanged take them over instead of being
+    /// embedded again. They are also what keeps an index searchable by
+    /// meaning when this run does not embed — `skip_embeddings`, or a model
+    /// that fails to load or embed: unchanged symbols keep their vectors,
+    /// and only new or changed ones are left without (#151). Incremental
+    /// runs ([`Analyzer::analyze_files`]) keep their vectors in place and
+    /// ignore this.
+    #[cfg(feature = "embeddings")]
+    pub fn with_previous_vectors(
+        mut self,
+        previous: Option<crate::embeddings::PreviousVectors>,
+    ) -> Self {
+        self.previous_vectors = previous;
+        self
     }
 
     /// Attach a progress reporter for tracking analysis phases.
@@ -189,7 +210,21 @@ impl Analyzer {
         use crate::embeddings::IndexEmbeddingMeta;
 
         if self.skip_embeddings {
-            return Ok(None);
+            // Nothing is embedded, but a full run keeps the vectors of
+            // unchanged symbols from the index it replaces, under that
+            // index's model (#151).
+            let previous = if incremental {
+                None
+            } else {
+                self.previous_vectors.as_ref()
+            };
+            let Some(previous) = previous else {
+                return Ok(None);
+            };
+            let meta = previous.meta().clone();
+            self.store.set_embedding_dim(meta.dim as i32);
+            self.store.ensure_symbols_dim().await?;
+            return Ok(Some(meta));
         }
 
         let cfg = self
@@ -359,6 +394,103 @@ impl Analyzer {
             },
         };
         merged.record(&self.store).await
+    }
+
+    /// Embeds and stores the vectors of a full run's `symbols` under `meta`;
+    /// returns `(stored, failures, reused)`.
+    ///
+    /// Symbols whose document the previous index embedded with the same
+    /// model take that vector over; only the others are embedded — and not
+    /// at all with `skip_embeddings`, which leaves them without a vector
+    /// without counting a failure. A model that fails to load or embed
+    /// leaves only the symbols it had to embed without a vector, as failures.
+    #[cfg(feature = "embeddings")]
+    async fn embed_all(
+        &self,
+        symbols: &[CodeSymbol],
+        meta: &crate::embeddings::IndexEmbeddingMeta,
+    ) -> (usize, usize, usize) {
+        let total = symbols.len();
+        let mut pairs: Vec<(String, Vec<f32>)> = Vec::with_capacity(total);
+        let mut missing: Vec<&CodeSymbol> = Vec::new();
+        for symbol in symbols {
+            match self
+                .previous_vectors
+                .as_ref()
+                .and_then(|previous| previous.get(symbol, meta))
+            {
+                Some(vector) => pairs.push((symbol.uid.clone(), vector.clone())),
+                None => missing.push(symbol),
+            }
+        }
+        let reused = pairs.len();
+        if reused > 0 {
+            info!(
+                "Reusing {} vectors of the previous index; {} symbols to embed",
+                reused,
+                missing.len()
+            );
+        }
+
+        if !self.skip_embeddings && !missing.is_empty() {
+            let batch_sz = self
+                .config
+                .as_ref()
+                .map(|c| c.analysis.embedding_batch_size)
+                .unwrap_or(256);
+            match crate::embeddings::get_embedder_for(meta.clone()).await {
+                Ok(embedder) => {
+                    // All of them (the common case without previous vectors)
+                    // without copying.
+                    let generated = if reused == 0 {
+                        embedder.embed_symbols(symbols, batch_sz).await
+                    } else {
+                        let owned: Vec<CodeSymbol> = missing.iter().map(|s| (*s).clone()).collect();
+                        embedder.embed_symbols(&owned, batch_sz).await
+                    };
+                    match generated {
+                        Ok(vectors) => pairs
+                            .extend(missing.iter().zip(vectors).map(|(s, v)| (s.uid.clone(), v))),
+                        Err(e) => warn!(
+                            "Failed to generate embeddings: {} ({} symbols left un-embedded)",
+                            e,
+                            missing.len()
+                        ),
+                    }
+                }
+                Err(e) => warn!(
+                    "Failed to load embedding model: {} ({} symbols left un-embedded)",
+                    e,
+                    missing.len()
+                ),
+            }
+        }
+
+        let stored = match self.store.store_embeddings(pairs).await {
+            Ok(n) => {
+                if n > 0 {
+                    self.record_embedding_meta(meta).await;
+                }
+                // Every stored vector belongs to a candidate symbol.
+                debug_assert!(n <= total);
+                n
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to store embeddings: {} ({} symbols left un-embedded)",
+                    e, total
+                );
+                0
+            }
+        };
+        let reused = reused.min(stored);
+        // Not embedding on purpose is no failure.
+        let failures = if self.skip_embeddings {
+            0
+        } else {
+            total - stored
+        };
+        (stored, failures, reused)
     }
 
     /// Runs a full analysis of the repository: discovers and parses the files, resolves relationships, writes everything to the store and generates embeddings unless they are skipped.
@@ -1147,75 +1279,21 @@ impl Analyzer {
         let symbols_total = all_symbols.len();
 
         #[cfg(feature = "embeddings")]
-        let (embedding_count, embedding_failures, embedding_generation_ms): (
+        let (embedding_count, embedding_failures, embeddings_reused, embedding_generation_ms): (
+            usize,
             usize,
             usize,
             f64,
         ) = match &embed_meta {
-            None => (0, 0, 0.0),
+            None => (0, 0, 0, 0.0),
             Some(meta) => {
                 let embedding_timer = Timer::start();
-                // A failure at any stage (model load, generation, storage)
-                // leaves every candidate symbol un-embedded for this run.
-                let (count, failures) =
-                    match crate::embeddings::get_embedder_for(meta.clone()).await {
-                        Ok(embedder) => {
-                            let batch_sz = self
-                                .config
-                                .as_ref()
-                                .map(|c| c.analysis.embedding_batch_size)
-                                .unwrap_or(256);
-                            match embedder.embed_symbols(&all_symbols, batch_sz).await {
-                                Ok(vectors) => {
-                                    let pairs: Vec<(String, Vec<f32>)> = all_symbols
-                                        .iter()
-                                        .zip(vectors)
-                                        .map(|(s, v)| (s.uid.clone(), v))
-                                        .collect();
-                                    match self.store.store_embeddings(pairs).await {
-                                        Ok(n) => {
-                                            if n > 0 {
-                                                self.record_embedding_meta(meta).await;
-                                            }
-                                            // Every stored vector corresponds to
-                                            // a candidate symbol, so `n` is bounded
-                                            // by `symbols_total`; the rest failed.
-                                            debug_assert!(n <= symbols_total);
-                                            (n, symbols_total - n)
-                                        }
-                                        Err(e) => {
-                                            warn!(
-                                                "Failed to store embeddings: {} \
-                                                 ({} symbols left un-embedded)",
-                                                e, symbols_total
-                                            );
-                                            (0, symbols_total)
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        "Failed to generate embeddings: {} \
-                                         ({} symbols left un-embedded)",
-                                        e, symbols_total
-                                    );
-                                    (0, symbols_total)
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Failed to load embedding model: {} \
-                                 ({} symbols left un-embedded)",
-                                e, symbols_total
-                            );
-                            (0, symbols_total)
-                        }
-                    };
-                let elapsed = embedding_timer.elapsed_ms();
-                (count, failures, elapsed)
+                let (count, failures, reused) = self.embed_all(&all_symbols, meta).await;
+                (count, failures, reused, embedding_timer.elapsed_ms())
             }
         };
+        #[cfg(not(feature = "embeddings"))]
+        let embeddings_reused: usize = 0;
 
         // Persist the embedding accounting inside the index so query paths can
         // warn about partial indexes without scanning vectors.
@@ -1270,6 +1348,7 @@ impl Analyzer {
             symbols_total,
             symbols_embedded: embedding_count,
             embedding_failures,
+            embeddings_reused,
             mentions_count,
             timing: Some(timing),
             skip_reasons,
@@ -1393,6 +1472,7 @@ impl Analyzer {
                 symbols_total: 0,
                 symbols_embedded: 0,
                 embedding_failures: 0,
+                embeddings_reused: 0,
                 mentions_count: 0,
                 timing: None,
                 skip_reasons: HashMap::new(),
@@ -1899,6 +1979,7 @@ impl Analyzer {
             symbols_total,
             symbols_embedded: embedding_count,
             embedding_failures,
+            embeddings_reused: 0,
             mentions_count,
             timing: None,
             skip_reasons,
@@ -2219,113 +2300,8 @@ impl Analyzer {
     }
 
     fn discover_files(&self) -> Result<Vec<(PathBuf, SourceLanguage)>> {
-        let mut files = Vec::new();
-
-        // Build glob matchers from config if present
-        let (include_set, exclude_set, max_size) = if let Some(cfg) = &self.config {
-            let include = build_globset(&cfg.analysis.include)?;
-            let exclude = build_globset(&cfg.analysis.exclude)?;
-            let max_kb = if cfg.analysis.max_file_size_kb == 0 {
-                None
-            } else {
-                Some(cfg.analysis.max_file_size_kb * 1024)
-            };
-            (include, exclude, max_kb)
-        } else {
-            // Apply a sensible default max file size even without config
-            (None, None, Some(DEFAULT_MAX_FILE_SIZE_BYTES))
-        };
-
-        for entry in WalkDir::new(&self.repo_path)
-            .sort_by_file_name() // Fixed order: it decides which same-named symbol a call resolves to
-            .follow_links(false) // Do not follow symlinks — avoids circular symlink loops
-            .into_iter()
-            .filter_entry(|e| {
-                let name = e.file_name().to_string_lossy();
-                // Skip hidden dirs, node_modules, __pycache__, .git, target, dist
-                !name.starts_with('.')
-                    && name != "node_modules"
-                    && name != "__pycache__"
-                    && name != "target"
-                    && name != "dist"
-                    && name != "build"
-                    && name != ".venv"
-                    && name != "venv"
-            })
-        {
-            // Handle WalkDir errors (permission denied, broken symlinks, etc.) gracefully
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => {
-                    let path_info = e
-                        .path()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_else(|| "<unknown>".to_string());
-                    warn!("Skipping {} — directory walk error: {}", path_info, e);
-                    continue;
-                }
-            };
-
-            // Skip symlinks — they can cause loops and duplicates
-            if entry.path_is_symlink() {
-                warn!("Skipping {} — symlink", entry.path().display());
-                continue;
-            }
-
-            if entry.file_type().is_file() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                    if let Some(lang) = SourceLanguage::from_extension(ext) {
-                        let rel_path = entry
-                            .path()
-                            .strip_prefix(&self.repo_path)
-                            .unwrap_or(entry.path());
-
-                        // Apply include filter: if set, path must match
-                        if let Some(ref inc) = include_set {
-                            if !inc.is_match(rel_path) {
-                                continue;
-                            }
-                        }
-
-                        // Apply exclude filter: if set, skip matching paths
-                        if let Some(ref exc) = exclude_set {
-                            if exc.is_match(rel_path) {
-                                continue;
-                            }
-                        }
-
-                        // Apply max file size filter
-                        if let Some(max_bytes) = max_size {
-                            match entry.metadata() {
-                                Ok(meta) => {
-                                    if meta.len() > max_bytes {
-                                        warn!(
-                                            "Skipping {} — file too large ({} bytes, limit {} bytes)",
-                                            rel_path.display(),
-                                            meta.len(),
-                                            max_bytes
-                                        );
-                                        continue;
-                                    }
-                                }
-                                Err(e) => {
-                                    warn!(
-                                        "Skipping {} — cannot read metadata: {}",
-                                        rel_path.display(),
-                                        e
-                                    );
-                                    continue;
-                                }
-                            }
-                        }
-
-                        files.push((entry.into_path(), lang));
-                    }
-                }
-            }
-        }
-
-        Ok(files)
+        let scope = IndexScope::new(self.config.as_ref())?;
+        Ok(discover_files(&self.repo_path, &scope))
     }
 
     /// Enrich symbols with git metadata (author, modification date, commit count, age).
@@ -2484,6 +2460,10 @@ pub struct AnalysisResult {
     /// Symbols whose embedding generation or storage failed. Non-zero means the
     /// index is partial and semantic/hybrid search will omit those symbols.
     pub embedding_failures: usize,
+    /// Of `symbols_embedded`, the vectors taken over from the index this run
+    /// replaced (unchanged symbols, same model) instead of being embedded
+    /// again. 0 for incremental runs.
+    pub embeddings_reused: usize,
     /// Number of cross-domain mention relationships discovered.
     pub mentions_count: usize,
     /// Timing information for each phase of the analysis.
@@ -2552,21 +2532,66 @@ pub fn repo_name_from_path(path: &Path) -> String {
         .unwrap_or_else(|| "unknown".to_string())
 }
 
-/// Build a `GlobSet` from a list of glob pattern strings.
-/// Returns `None` if the list is empty.
-fn build_globset(patterns: &[String]) -> Result<Option<GlobSet>> {
-    if patterns.is_empty() {
-        return Ok(None);
+/// The files under `root` an analysis indexes, with their languages, in a
+/// fixed order (it decides which same-named symbol a call resolves to).
+/// Which files qualify is [`IndexScope`]'s decision, shared with the
+/// freshness checks; the parse phase may still skip a discovered file
+/// (minified, binary, lines too long, parse budget).
+fn discover_files(root: &Path, scope: &IndexScope) -> Vec<(PathBuf, SourceLanguage)> {
+    let mut files = Vec::new();
+    for entry in WalkDir::new(root)
+        .sort_by_file_name()
+        .follow_links(false) // Do not follow symlinks — avoids circular symlink loops
+        .into_iter()
+        .filter_entry(|e| !IndexScope::skips_name(&e.file_name().to_string_lossy()))
+    {
+        // Handle WalkDir errors (permission denied, broken symlinks, etc.) gracefully
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                let path_info = e
+                    .path()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| "<unknown>".to_string());
+                warn!("Skipping {} — directory walk error: {}", path_info, e);
+                continue;
+            }
+        };
+
+        // Skip symlinks — they can cause loops and duplicates
+        if entry.path_is_symlink() {
+            warn!("Skipping {} — symlink", entry.path().display());
+            continue;
+        }
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let rel_path = entry.path().strip_prefix(root).unwrap_or(entry.path());
+        let Some(lang) = scope.discovers(rel_path) else {
+            continue;
+        };
+        match entry.metadata() {
+            Ok(meta) if !scope.within_size(meta.len()) => {
+                warn!(
+                    "Skipping {} — file too large ({} bytes)",
+                    rel_path.display(),
+                    meta.len(),
+                );
+                continue;
+            }
+            Ok(_) => {}
+            Err(e) => {
+                warn!(
+                    "Skipping {} — cannot read metadata: {}",
+                    rel_path.display(),
+                    e
+                );
+                continue;
+            }
+        }
+        files.push((entry.into_path(), lang));
     }
-    let mut builder = GlobSetBuilder::new();
-    for pat in patterns {
-        builder.add(Glob::new(pat).with_context(|| format!("Invalid glob pattern: {}", pat))?);
-    }
-    Ok(Some(
-        builder
-            .build()
-            .with_context(|| "Failed to build glob set")?,
-    ))
+    files
 }
 
 /// Extract the immediate parent's short name from a member `qualified_name`.
@@ -2851,6 +2876,7 @@ mod tests {
             symbols_total: 10,
             symbols_embedded: 6,
             embedding_failures: 4,
+            embeddings_reused: 0,
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),
@@ -2880,6 +2906,7 @@ mod tests {
             symbols_total: 4,
             symbols_embedded: 4,
             embedding_failures: 0,
+            embeddings_reused: 0,
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),
@@ -2927,78 +2954,9 @@ mod tests {
         root: &Path,
         config: Option<ProjectConfig>,
     ) -> Result<Vec<(PathBuf, SourceLanguage)>> {
-        let (include_set, exclude_set, max_size) = if let Some(cfg) = &config {
-            let include = build_globset(&cfg.analysis.include)?;
-            let exclude = build_globset(&cfg.analysis.exclude)?;
-            let max_kb = if cfg.analysis.max_file_size_kb == 0 {
-                None
-            } else {
-                Some(cfg.analysis.max_file_size_kb * 1024)
-            };
-            (include, exclude, max_kb)
-        } else {
-            (None, None, Some(DEFAULT_MAX_FILE_SIZE_BYTES))
-        };
-
-        let mut files = Vec::new();
-
-        for entry in WalkDir::new(root)
-            .follow_links(false)
-            .into_iter()
-            .filter_entry(|e| {
-                let name = e.file_name().to_string_lossy();
-                !name.starts_with('.')
-                    && name != "node_modules"
-                    && name != "__pycache__"
-                    && name != "target"
-                    && name != "dist"
-                    && name != "build"
-                    && name != ".venv"
-                    && name != "venv"
-            })
-        {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-
-            if entry.path_is_symlink() {
-                continue;
-            }
-
-            if entry.file_type().is_file() {
-                if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
-                    if let Some(lang) = SourceLanguage::from_extension(ext) {
-                        let rel_path = entry.path().strip_prefix(root).unwrap_or(entry.path());
-
-                        if let Some(ref inc) = include_set {
-                            if !inc.is_match(rel_path) {
-                                continue;
-                            }
-                        }
-                        if let Some(ref exc) = exclude_set {
-                            if exc.is_match(rel_path) {
-                                continue;
-                            }
-                        }
-                        if let Some(max_bytes) = max_size {
-                            if let Ok(meta) = entry.metadata() {
-                                if meta.len() > max_bytes {
-                                    continue;
-                                }
-                            }
-                        }
-
-                        files.push((entry.into_path(), lang));
-                    }
-                }
-            }
-        }
-
-        Ok(files)
+        let scope = IndexScope::new(config.as_ref())?;
+        Ok(discover_files(root, &scope))
     }
-
-    // ── Parser edge-case tests ────────────────────────────────────────
 
     #[test]
     fn test_empty_file_parses_without_panic() {
@@ -3478,6 +3436,160 @@ mod tests {
                 repo_id: "test-repo".to_string(),
                 metadata: None,
             }
+        }
+
+        /// Each symbol's vector by name.
+        async fn vectors_by_name(db: &Path) -> HashMap<String, Option<Vec<f32>>> {
+            let store = Store::open(db, "test-repo").await.unwrap();
+            store
+                .get_symbols_with_vectors()
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|(s, v)| (s.name, v))
+                .collect()
+        }
+
+        /// A full re-analysis that does not embed keeps the vectors of the
+        /// symbols it did not change — with `skip_embeddings`, and when the
+        /// model cannot be reached — instead of replacing an embedded index
+        /// with one without vectors (#151).
+        #[tokio::test]
+        async fn a_reindex_that_does_not_embed_keeps_the_previous_vectors() {
+            use crate::embedding_stats::EmbeddingStats;
+            use crate::embeddings::PreviousVectors;
+
+            let dir = TempDir::new().unwrap();
+            let root = make_test_root(&dir);
+            fs::write(
+                root.join("a.ts"),
+                "export function alpha(): number {\n    return 1;\n}\n",
+            )
+            .unwrap();
+            fs::write(
+                root.join("b.ts"),
+                "export function beta(): number {\n    return 2;\n}\n",
+            )
+            .unwrap();
+            // Nothing listens on the discard port: loading or calling this
+            // model fails at once. Dimension = the store's default.
+            let mut section = openai_section("http://127.0.0.1:9/v1");
+            section.dim = Some(myceliums_storage::schema::DEFAULT_EMBEDDING_DIM as usize);
+            let meta = IndexEmbeddingMeta::from_config(&section).unwrap();
+            let config = ProjectConfig {
+                embedding: section,
+                ..Default::default()
+            };
+
+            // The previous index, with a vector per symbol as an embedding
+            // run with this model would have left it.
+            let first = dir.path().join("first");
+            Analyzer::with_config(
+                Store::open(&first, "test-repo").await.unwrap(),
+                root.clone(),
+                config.clone(),
+            )
+            .set_skip_embeddings(true)
+            .analyze()
+            .await
+            .unwrap();
+            let store = Store::open(&first, "test-repo").await.unwrap();
+            let dim = meta.dim;
+            let vectors = store
+                .get_symbols()
+                .await
+                .unwrap()
+                .iter()
+                .enumerate()
+                .map(|(i, s)| {
+                    let mut v = vec![0.0f32; dim];
+                    v[i % dim] = 1.0;
+                    (s.uid.clone(), v)
+                })
+                .collect();
+            store.store_embeddings(vectors).await.unwrap();
+            store
+                .set_index_meta(
+                    IndexEmbeddingMeta::META_KEY,
+                    &serde_json::to_string(&meta).unwrap(),
+                )
+                .await
+                .unwrap();
+            let before = vectors_by_name(&first).await;
+            assert!(before.values().all(Option::is_some), "{before:?}");
+            let previous = || async {
+                let store = Store::open(&first, "test-repo").await.unwrap();
+                PreviousVectors::load(&store).await.unwrap()
+            };
+
+            // skip_embeddings: nothing changed, every vector is kept.
+            let skipped = dir.path().join("skipped");
+            let result = Analyzer::with_config(
+                Store::open(&skipped, "test-repo").await.unwrap(),
+                root.clone(),
+                config.clone(),
+            )
+            .set_skip_embeddings(true)
+            .with_previous_vectors(previous().await)
+            .analyze()
+            .await
+            .unwrap();
+            assert_eq!(result.symbols_embedded, result.symbols_total);
+            assert_eq!(result.embeddings_reused, result.symbols_total);
+            assert_eq!(result.embedding_failures, 0);
+            assert_eq!(vectors_by_name(&skipped).await, before);
+            let store = Store::open(&skipped, "test-repo").await.unwrap();
+            let stats = EmbeddingStats::load(&store).await.unwrap().unwrap();
+            assert!(!stats.is_partial(), "{stats:?}");
+            let recorded: IndexEmbeddingMeta = serde_json::from_str(
+                &store
+                    .get_index_meta(IndexEmbeddingMeta::META_KEY)
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(recorded.fingerprint(), meta.fingerprint());
+
+            // `beta` changes and the model is unreachable: `alpha` keeps its
+            // vector, only `beta` is left without one — as a failure.
+            fs::write(
+                root.join("b.ts"),
+                "export function beta(): number {\n    return 3;\n}\n",
+            )
+            .unwrap();
+            let failing = dir.path().join("failing");
+            let result = Analyzer::with_config(
+                Store::open(&failing, "test-repo").await.unwrap(),
+                root.clone(),
+                config.clone(),
+            )
+            .with_previous_vectors(previous().await)
+            .analyze()
+            .await
+            .unwrap();
+            let after = vectors_by_name(&failing).await;
+            assert_eq!(after["alpha"], before["alpha"]);
+            assert_eq!(after["beta"], None);
+            let unembedded = after.values().filter(|v| v.is_none()).count();
+            assert_eq!(result.embedding_failures, unembedded);
+            assert_eq!(result.embeddings_reused, result.symbols_total - unembedded);
+            let store = Store::open(&failing, "test-repo").await.unwrap();
+            let stats = EmbeddingStats::load(&store).await.unwrap().unwrap();
+            assert_eq!(stats.embedding_failures, unembedded);
+
+            // Without previous vectors the same run embeds nothing.
+            let none = dir.path().join("none");
+            let result = Analyzer::with_config(
+                Store::open(&none, "test-repo").await.unwrap(),
+                root.clone(),
+                config,
+            )
+            .analyze()
+            .await
+            .unwrap();
+            assert_eq!(result.symbols_embedded, 0);
+            assert_eq!(result.embedding_failures, result.symbols_total);
         }
     }
 }

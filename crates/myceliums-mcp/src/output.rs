@@ -282,6 +282,9 @@ pub struct AnalyzeOutput {
     pub symbols_total: usize,
     /// Number of symbols whose embedding failed (0 = fully embedded / skipped).
     pub embedding_failures: usize,
+    /// Of `symbols_embedded`, the vectors kept from the previous index for
+    /// unchanged symbols (0 for a cached result).
+    pub embeddings_reused: usize,
     /// Call sites linked by a CALLS edge, and why the others were not: more
     /// candidates than the resolver links, a library target, a call through
     /// a variable, nothing in scope, outside any function. Absent for an

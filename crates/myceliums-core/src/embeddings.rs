@@ -940,6 +940,76 @@ impl Embedder {
     }
 }
 
+// ── Vectors of a previous index ──────────────────────────────────────
+
+/// The vectors of an earlier index of the same repository, keyed by each
+/// symbol's embedding document (#151).
+///
+/// A vector is a function of the model and the document text alone, so a
+/// symbol whose text is unchanged can take its vector over from the previous
+/// index instead of being embedded again. A full re-analysis uses this to
+/// keep existing embeddings when it does not (or cannot) embed: with
+/// `skip_embeddings`, and when the model fails to load or to embed.
+pub struct PreviousVectors {
+    meta: IndexEmbeddingMeta,
+    by_text: HashMap<[u8; 32], Vec<f32>>,
+}
+
+impl PreviousVectors {
+    /// Reads the vectors of the index in `store`; `None` when it holds none
+    /// (built with `skip_embeddings`, or without embedding metadata).
+    pub async fn load(store: &Store) -> Result<Option<Self>> {
+        let Some(json) = store.get_index_meta(IndexEmbeddingMeta::META_KEY).await? else {
+            return Ok(None);
+        };
+        let Ok(meta) = serde_json::from_str::<IndexEmbeddingMeta>(&json) else {
+            return Ok(None);
+        };
+        let by_text: HashMap<_, _> = store
+            .get_symbols_with_vectors()
+            .await?
+            .into_iter()
+            .filter_map(|(symbol, vector)| {
+                let vector = vector.filter(|v| v.len() == meta.dim)?;
+                Some((document_key(&symbol), vector))
+            })
+            .collect();
+        Ok((!by_text.is_empty()).then_some(Self { meta, by_text }))
+    }
+
+    /// The embedding model the vectors come from.
+    pub fn meta(&self) -> &IndexEmbeddingMeta {
+        &self.meta
+    }
+
+    /// How many distinct documents have a vector.
+    pub fn len(&self) -> usize {
+        self.by_text.len()
+    }
+
+    /// Whether there are no vectors (never true for a loaded value).
+    pub fn is_empty(&self) -> bool {
+        self.by_text.is_empty()
+    }
+
+    /// The vector of `symbol`'s document, when the previous index embedded
+    /// the same document with the model `meta` describes.
+    pub fn get(&self, symbol: &CodeSymbol, meta: &IndexEmbeddingMeta) -> Option<&Vec<f32>> {
+        if self.meta.fingerprint() != meta.fingerprint() {
+            return None;
+        }
+        self.by_text.get(&document_key(symbol))
+    }
+}
+
+/// SHA-256 of the symbol's untruncated embedding document. Untruncated, so
+/// the key does not depend on the model's content budget; equal keys under
+/// the same model mean equal (truncated) documents.
+fn document_key(symbol: &CodeSymbol) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(build_embedding_text_with_budget(symbol, usize::MAX).as_bytes()).into()
+}
+
 // ── Cached instances ──────────────────────────────────────────────────
 
 /// Embedder instances cached per fingerprint, so a model is loaded at most

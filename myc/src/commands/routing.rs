@@ -12,10 +12,11 @@ use std::path::Path;
 
 use anyhow::{bail, Context as _, Result};
 
-/// First line of the managed block.
-pub const BEGIN: &str = "<!-- BEGIN myceliums -->";
+/// First line of the managed block. Shared with the analyzer, which leaves
+/// the block out of the index (#151).
+pub const BEGIN: &str = myceliums_core::index_scope::MANAGED_BLOCK_BEGIN;
 /// Last line of the managed block.
-pub const END: &str = "<!-- END myceliums -->";
+pub const END: &str = myceliums_core::index_scope::MANAGED_BLOCK_END;
 /// Version of the block's wording; bump it when the text changes.
 pub const ROUTING_VERSION: u32 = 2;
 

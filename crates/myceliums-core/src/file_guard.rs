@@ -72,15 +72,19 @@ pub fn should_skip_file(
     }
 
     // Check extension against skip patterns
-    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-        for pattern in &config.skip_patterns {
-            if name.ends_with(pattern) {
-                return Some(FileSkipReason::MinifiedOrBundled);
-            }
-        }
+    if matches_skip_pattern(path, &config.skip_patterns) {
+        return Some(FileSkipReason::MinifiedOrBundled);
     }
 
     None
+}
+
+/// Whether `path`'s file name ends with one of `patterns`
+/// (`analysis.skip_patterns`: minified or bundled files).
+pub fn matches_skip_pattern(path: &Path, patterns: &[String]) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|name| patterns.iter().any(|p| name.ends_with(p.as_str())))
 }
 
 #[cfg(test)]

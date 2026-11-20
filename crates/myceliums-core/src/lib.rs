@@ -127,6 +127,7 @@ pub mod http_guard;
 pub mod hybrid_search;
 pub mod imap;
 pub mod impact;
+pub mod index_scope;
 pub mod llm;
 pub mod lock;
 pub mod mbox;
@@ -198,9 +199,9 @@ pub use embedding_stats::EmbeddingStats;
 pub use embeddings::{
     check_model_cache, embedder_for_index, embedding_cache_info, embedding_model_spec,
     get_embedder_for, get_reranker, index_embedding_meta, local_model_code, reranker_spec,
-    EmbedInput, Embedder, EmbeddingModelSpec, IndexEmbeddingMeta, ModelCacheInfo, Reranker,
-    RerankerSpec, DEFAULT_LOCAL_EMBEDDING_MODEL, DEFAULT_RERANKER_MODEL, EMBEDDING_MODELS,
-    LEGACY_LOCAL_EMBEDDING_MODEL, RERANKER_MODELS,
+    EmbedInput, Embedder, EmbeddingModelSpec, IndexEmbeddingMeta, ModelCacheInfo, PreviousVectors,
+    Reranker, RerankerSpec, DEFAULT_LOCAL_EMBEDDING_MODEL, DEFAULT_RERANKER_MODEL,
+    EMBEDDING_MODELS, LEGACY_LOCAL_EMBEDDING_MODEL, RERANKER_MODELS,
 };
 pub use error::MyceliumError;
 pub use file_guard::{should_skip_file, FileSkipReason};

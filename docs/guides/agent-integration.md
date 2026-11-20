@@ -72,13 +72,15 @@ myc setup-claude                  # project scope: files to commit for the team
 myc setup-claude --scope user     # or: every project, for you only
 ```
 
-In this order the files `setup-claude` writes (`CLAUDE.md`, `.mcp.json`,
-`.claude/`) are uncommitted and newer than the index. The SessionStart hook
-still reports the index as ready (it compares commits), but the MCP `analyze`
-tool's freshness check counts them as edits and re-indexes when the agent
-calls it: in the #125 matrix that happened twice on hono, once running into
-the 300 s tool timeout and once dropping the embeddings. Committing the files
-(as for a team) or `myc analyze . --force` after `setup-claude` avoids it.
+The files `setup-claude` writes after the analysis (`.mcp.json`, `.claude/`,
+the routing block in `CLAUDE.md`) do not make the index stale: freshness
+counts only files the analysis indexes, and the routing block is left out of
+the index. An edit to `CLAUDE.md` outside the block is a change, as for any
+indexed Markdown file.
+Before #151 the MCP `analyze` tool counted them as edits and re-indexed (in
+the #125 matrix once into the 300 s tool timeout, and once, called with
+`skip_embeddings`, into an index without embeddings); a re-index now also
+keeps the vectors of unchanged symbols.
 
 What each layer writes:
 

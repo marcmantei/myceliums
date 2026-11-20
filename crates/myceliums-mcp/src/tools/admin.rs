@@ -199,6 +199,7 @@ impl MyceliumsMcp {
                         symbols_embedded: embedding_stats.symbols_embedded,
                         symbols_total: embedding_stats.symbols_total,
                         embedding_failures: embedding_stats.embedding_failures,
+                        embeddings_reused: 0,
                         calls,
                         cached: true,
                     };

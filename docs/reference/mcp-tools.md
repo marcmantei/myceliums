@@ -105,7 +105,16 @@ and a footer explains it.
 **Freshness.** Every result read from a repository's graph starts with one
 `Index:` line comparing the analyzed commit with the current `HEAD` and
 counting files changed since indexing (modified or new untracked files newer
-than the analysis start, and deleted files the index still holds). It names
+than the analysis start, and deleted files the index still holds). Only files
+the analysis would index count — the same selection as `analyze`: no hidden
+files or directories (`.mcp.json`, `.claude/`), no `node_modules`, `target`,
+`dist`, `build`, `venv`, only extensions it parses, `.myceliums.toml`'s
+`include`/`exclude`/`skip_patterns` and size limit applied — plus
+`.myceliums.toml` itself. The routing block `myc setup-claude` / `myc
+setup-codex` keep in CLAUDE.md / AGENTS.md is not indexed, so a file whose
+only difference from its committed version is that block is no change either:
+`myc analyze` followed by `myc setup-claude` leaves an index that is up to
+date. It names
 the repository it describes, e.g. `Index: my-app, commit 1a2b3c4 = HEAD, up
 to date.` or `Index: my-app, commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run
 analyze to refresh.` Structured results carry it as `index_status`. Whenever the line
@@ -283,7 +292,7 @@ Analyze a codebase and build its knowledge graph. Parses source files in 20+ lan
 | `path` | string | yes | | Path to the project directory |
 | `force` | bool | no | `false` | Force full re-analysis |
 | `max_age_minutes` | integer | no | `60` | Maximum cache age in minutes |
-| `skip_embeddings` | bool | no | `false` | Skip embedding generation for faster analysis |
+| `skip_embeddings` | bool | no | `false` | Embed nothing, for faster analysis. Symbols the previous index already embedded keep their vectors; new and changed ones have none |
 
 The response includes embedding accounting — `symbols_embedded` of `symbols_total`
 symbols, plus an explicit failure line when any symbol could not be embedded. A
@@ -291,6 +300,19 @@ non-zero failure count means the index is partial and semantic/hybrid search wil
 omit the un-embedded symbols (see [Partial indexes](#partial-indexes)). The MCP
 tool has no strictness knob; use the `myc analyze --strict-embeddings` CLI flag to
 fail CI on a partial index.
+
+**A re-index keeps existing embeddings.** A vector depends only on the model
+and the symbol's embedding text, so symbols the previous index embedded with
+the same model, and whose text is unchanged, take their vectors over instead of
+being embedded again (`Embeddings: 1240/1243 symbols (1240 kept from the
+previous index)`). That makes a re-index after a small edit embed only the
+changed symbols, and it means a run that does not embed never drops the
+embeddings it replaces: with `skip_embeddings`, unchanged symbols keep their
+vectors and only new or changed ones are left without, reported as
+`⚠ 3 of 1243 symbols have no vector (embeddings skipped) …`; when the model
+fails to load or embed, only the symbols it had to embed are failures. A cached
+answer for an index built with `skip_embeddings` reports `0/N` symbols and the
+same warning instead of claiming a complete index.
 
 **The previous index stays usable.** A full analysis builds the new index in a
 staging directory beside the live one (`data/.staging/build-…`) and swaps it in only

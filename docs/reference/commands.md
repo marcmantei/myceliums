@@ -13,7 +13,7 @@ Analyze a codebase and build its knowledge graph. Parses source files, extracts 
 | `<path>` | positional, required | | Path to the project directory |
 | `--force` | bool | `false` | Force full re-analysis even if cache is fresh |
 | `--max-age` | integer (minutes) | `60` | Maximum cache age in minutes before triggering re-analysis |
-| `--skip-embeddings` | bool | `false` | Skip embedding generation (much faster, BM25 and Cypher still work) |
+| `--skip-embeddings` | bool | `false` | Skip embedding generation (much faster, BM25 and Cypher still work). Symbols the previous index embedded keep their vectors; new and changed ones have none |
 | `--strict-embeddings` | bool | `false` | Exit non-zero unless the index is fully embedded (for CI — see [Embedding accounting](#embedding-accounting)). Conflicts with `--skip-embeddings` |
 | `--watch` | bool | `false` | Watch for file changes and re-index incrementally |
 | `--no-git-check` | bool | `false` | Allow analyzing directories without a `.git` repository |
@@ -52,6 +52,13 @@ index is reported explicitly:
   ⚠ Embedding failures: 340 — 900 of 1240 symbols have no vector and are invisible to semantic/hybrid search
 ```
 
+- **A re-analysis keeps existing vectors.** Symbols whose embedding text is
+  unchanged take their vector over from the index being replaced (same model
+  only), shown as `Embeddings: 1240 (1243/1243 symbols, 1240 kept from the
+  previous index)`. So only changed symbols are embedded again, and a run that
+  does not embed — `--skip-embeddings`, the `myc session` default, or a model
+  that fails — leaves the unchanged symbols' vectors in place instead of
+  dropping them (#151).
 - **`--strict-embeddings`** turns an incompletely embedded index into a non-zero
   exit code, so CI can fail the build instead of silently shipping a half-empty
   index. Without the flag, failures are reported but the command still succeeds.
