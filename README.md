@@ -36,7 +36,7 @@ Repository ID: my-project-a1b2c3
 | No notion of the code's structure | Community detection groups related code |
 | Impact analysis by hand | `myc impact` traces the blast radius of a diff (with confidence flags) |
 
-These are capabilities, not measured outcomes. Measured on 30 code-understanding questions, a Claude Code agent with grep and file reading alone answered as accurately as with myceliums added, and never called myceliums when it had it: [results](#does-it-help-an-agent).
+These are capabilities, not measured outcomes. Measured on 30 code-understanding questions, a Claude Code agent with grep and file reading alone answered as accurately as with myceliums added, and never called myceliums when it had it. On 20 harder multi-hop questions, with the current core tools loaded up front, it called myceliums in 80-100 % of sessions depending on the integration, without a measurable change in accuracy, tokens or cost between integrations: [results](#does-it-help-an-agent).
 
 ### Key capabilities
 
@@ -70,7 +70,7 @@ myc setup-claude
 claude
 ```
 
-Claude Code can now call the knowledge-graph tools. Whether it does is up to the model: in the [agent benchmark](#does-it-help-an-agent), with only the MCP server attached, it never did and kept to its own search tools. `myc setup-claude` therefore also installs routing rules, a grep-redirect hook and a subagent; see [Integrating with agents](#integrating-with-agents).
+Claude Code can now call the knowledge-graph tools. Whether it does is up to the model: in the [agent benchmark](#does-it-help-an-agent) pilot, with the old 54 deferred tools, it never did; with the 9 core tools loaded up front it called them in 80 % of sessions with the MCP server alone and in 100 % with the routing block and hooks that `myc setup-claude` installs (it also installs a subagent, which the agent did not use); see [Integrating with agents](#integrating-with-agents).
 
 For the full walkthrough, see the [Getting Started guide](docs/getting-started.md).
 
@@ -358,11 +358,10 @@ old tool names (`context_search`, `symbol_context`, `get_callers`,
 
 ## Integrating with agents
 
-Attaching the MCP server is not enough: in the pilot below the agent called
-myceliums in 0 of 90 sessions, because Claude Code defers MCP tool schemas
-and nothing sent the agent from grep to the graph. There are five ways to
-route an agent to myceliums, from soft to hard; all five ship with this
-release:
+In the pilot below the agent called myceliums in 0 of 90 sessions: Claude
+Code deferred the 54 tool schemas and nothing sent the agent from grep to
+the graph. There are five ways to route an agent to myceliums, from soft to
+hard; all five ship with this release:
 
 | Layer | What | Installed by |
 |---|---|---|
@@ -374,9 +373,12 @@ release:
 
 The one-shot commands `myc callers`, `myc callees`, `myc impact <symbol|file>`
 and `myc context` give any agent with a shell the same answers in compact,
-token-budgeted form. How much each layer changes tool use, accuracy and cost
-is being measured in [#125](https://github.com/marcmantei/myceliums/issues/125);
-no layer has a measured effect yet. Guide:
+token-budgeted form. Measured in [#125](evals/agent/README.md#variant-matrix-125)
+(Claude Code 2.1.329, 20 multi-hop tasks): with layer 2 alone the agent called
+myceliums in 80 % of sessions; layers 1-3 together raised that to 100 % and
+made a graph query its first step; the subagent (layer 4) was never called.
+None of the variants changed accuracy, tokens or cost measurably on these
+tasks, where all of them were near the ceiling. Guide:
 [docs/guides/agent-integration.md](docs/guides/agent-integration.md).
 
 ---
@@ -426,6 +428,28 @@ tooling by an agent rather than reviewed by a human, and only the MCP server
 (not the SessionStart hook that `myc setup-claude` also installs). Method,
 per-task results and caveats: [`evals/agent/`](evals/agent/README.md) and the
 [pilot report](evals/agent/results/2026-11-12-pilot/REPORT.md).
+
+**Follow-up, 20 November 2026 (#125):** a headless Claude Code agent
+(2.1.329, `claude-sonnet-5-5`, `--effort medium`) on 20 harder multi-hop questions — callers up to five levels up, blast radius
+across up to 21 files, same-named symbols, the tests that reach a function,
+every function on a call chain — with myc's 9 core tools loaded up front,
+in three integrations, 116 graded sessions:
+
+| Per session | A: MCP server | C: + `setup-claude` routing and hooks | E: C + subagent |
+|---|---:|---:|---:|
+| Sessions with ≥ 1 myceliums call | 80 % | 100 % (+20 pp [+5, +38]) | 97 % (+18 pp [+5, +32]) |
+| Success (F1 ≥ 0.8) | 100 % | 98 % | 100 % |
+| Mean F1 | 0.984 | 0.983 | 0.989 |
+| Input tokens (ratio to A) | 166,868 | 0.96× [0.74×, 1.24×] | 0.96× [0.75×, 1.24×] |
+| Cost, USD (ratio to A) | 0.147 | 0.98× [0.82×, 1.18×] | 0.93× [0.78×, 1.13×] |
+
+The agent now uses myceliums, and more so with the routing block and hooks;
+the subagent was never called. The questions were still near the ceiling for
+this model, so the run shows no accuracy gain and no measurable token or cost
+change, and it has no run without myceliums on the same questions (the
+calibration of an earlier version of the set without myceliums: 10 of 10 at
+F1 = 1.00). [Report](evals/agent/results/2026-11-20-variants/REPORT.md),
+[method](evals/agent/README.md#variant-matrix-125).
 
 ---
 

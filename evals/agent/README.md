@@ -22,6 +22,15 @@ tokens [+17 %, +34 %] and took 20 % longer [+13 %, +28 %]. Tool selection:
 [53 of 54 intents right in each of two passes](results/2026-11-12-toolsel/TOOLSEL.md)
 (`claude-haiku-5-5`).
 
+**Variant matrix, 20 November 2026** (#125; myc at `66611980a487` with the 9
+core tools loaded up front, Claude Code 2.1.329, 116 graded sessions on 20
+harder multi-hop tasks): [report](results/2026-11-20-variants/REPORT.md),
+[method and summary](#variant-matrix-125). The agent called myceliums in 80 %
+of sessions with the MCP server alone (A), 100 % with what
+`myc setup-claude --no-agent` installs (C) and 97 % with the subagent added
+(E), which it never used. All three were near the ceiling (success
+98-100 %); accuracy, tokens and cost did not differ measurably between them.
+
 ## What is measured
 
 **Tasks** ([`tasks/tasks.json`](tasks/tasks.json)): 30 questions over three
@@ -119,7 +128,8 @@ re-index.
 The pilot (myc 0.3.2) offered all 55 tools, deferred behind tool search. Since
 #97 the default is the 9 task-named core tools, marked to load up front
 (`_meta["anthropic/alwaysLoad"]`); runs of different versions are therefore
-not comparable without saying so. Measuring that change is #125.
+not comparable without saying so. The variant matrix below (#125) runs that
+toolset.
 
 **Not included.** `myc setup-claude` also installs a SessionStart hook that
 re-indexes the project and prints a status line into the session, and a
@@ -174,6 +184,152 @@ secret-free parts on pull requests: the harness's unit tests, the task-file
 schema check, and a check that every committed `REPORT.md` / `TOOLSEL.md` is
 exactly what the generator produces from the committed results.
 
+## Variant matrix (#125)
+
+The pilot's tasks were too easy and its agent never called myceliums. The
+variant matrix asks the follow-up questions: on harder, multi-hop tasks, which
+integration layer of `myc setup-claude` makes the agent use myceliums, and
+does that change accuracy, tokens, cost or time?
+
+**Tasks.** Two hard sets of 20 tasks each over the same pinned checkouts, four
+per type:
+
+| Type | Question |
+|---|---|
+| `transitive_callers` | every caller up to N levels up the call chain |
+| `blast_radius` | the files holding a call to X or to a function up to N levels above it |
+| `ambiguous` | callers (up to N levels) of one of several same-named symbols (`Chars.Length` vs `Merger.Length`, `Context.header` vs `HonoRequest.header`, Starlette's vs FastAPI's `HTTPException`) |
+| `tests` | the tests (fzf: `Test…` functions; hono: test files) that reach X through a chain of direct calls of any length |
+| `flow` | every function on at least one call chain from A to B |
+
+Each question defines "call" precisely (direct calls of named functions;
+closures count for their enclosing function; calls through interfaces,
+function values or other objects' attributes do not). The gold sets were
+computed by [`groundtruth/hard_tasks.py`](groundtruth/hard_tasks.py) from
+call graphs built with compiler tooling, never from myceliums:
+`gotool edges` (go/packages + SSA, every function including closures, union
+of GOOS darwin/linux/windows), [`ts_edges.js`](groundtruth/ts_edges.js) (the
+TypeScript type checker resolves each call through imports, re-exports and
+receiver types) and [`py_edges.py`](groundtruth/py_edges.py) (import-aware
+AST resolution; every Python gold set was also checked against `py_refs.py`
+and grep for missed callers). Every gold item carries one evidence line that
+`check-tasks` re-verifies, and a note with its level or next hop.
+
+* [`tasks/tasks-hard-v1.json`](tasks/tasks-hard-v1.json): the first set
+  (8 to 18 items per task). The calibration run
+  ([report](results/2026-11-20-calibration/REPORT.md)) gave ten of its tasks,
+  two per type, to the agent without myceliums: all ten scored F1 = 1.00, in
+  22 s and 9 tool calls on average. The set was at the ceiling.
+* [`tasks/tasks-hard.json`](tasks/tasks-hard.json): the set the matrix ran on,
+  the same question types one to two levels deeper or wider (9 to 44 items per
+  task). The calibration allowance (10 sessions) was spent on v1, so this set
+  was not calibrated before the matrix.
+
+**Conditions.** All of them run the same prompt, model, effort, limits and
+built-in tools as the pilot, but load project settings
+(`--setting-sources project`) and CLAUDE.md files, so what `myc setup-claude`
+writes into the working copy takes effect:
+
+| Condition | Session |
+|---|---|
+| `none` | no MCP server (calibration only) |
+| `A` | the myceliums MCP server, default core toolset (9 tools with `_meta["anthropic/alwaysLoad"]`) |
+| `C` | A + `myc setup-claude --scope project --no-agent` run in the working copy: routing block in `CLAUDE.md`; SessionStart, PostToolUse and PreToolUse grep-redirect hooks in `.claude/settings.json` |
+| `E` | C + the `code-explorer` subagent (`myc setup-claude --scope project`) and the `Agent` tool; Claude Code's built-in subagents are denied (`--disallowedTools Agent(Explore),…`), so E adds exactly that one subagent |
+
+B (routing only) and D (C without the core tools loaded up front) were left
+out to fit the session budget. The MCP server and every hook reach the
+per-session index copy through a `myc` wrapper first on the session's PATH,
+which sets `MYCELIUMS_DATA_DIR` and `HOME` and logs each hook's input,
+output and reason for silence (`MYC_HOOK_DEBUG`) next to the transcript; the
+agent sees only what Claude Code passes on. `--include-hook-events` puts the
+hook runs into the transcript too.
+
+**Checking a setup without spending usage.** `agent_eval.py probe` starts a
+session exactly like `run` does, but against [`aeval/mockapi.py`](aeval/mockapi.py),
+a local stand-in for the Messages API with a fixed script (a Grep call, a
+delegation to `code-explorer`, a `find_callers` call by the subagent) and a
+dummy API key, so no model is called. It records the request bodies (never
+the headers) and reports what the session was given. For 2.1.329 it showed:
+the project `CLAUDE.md` (routing block) reaches the context in C and E and
+`~/.claude/CLAUDE.md` in no condition; the 9 core tools are sent with full
+schemas in A, C and E (none deferred); the grep hook's hint reaches the
+context; the SessionStart hook's `systemMessage` does not (it is shown to the
+user, not the model); in E the Agent tool offers `code-explorer` only, and the
+subagent gets the 9 myceliums tools and `Read`. The init event names the
+Agent tool `Task`.
+
+```bash
+export AEVAL_CACHE=~/.cache/myceliums-agent-eval-125 AEVAL_WORK_ROOT=/private/tmp/aeval125
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-hard.json check-tasks
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-hard.json probe --label p1 \
+    --task fzf-tc-tochars-d4 --conditions A,C,E --grep ToChars --callers ToChars
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-hard.json run --label my-matrix \
+    --conditions A,C,E --reps 2 --max-retries 0 --max-sessions 120
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-hard.json export --label my-matrix
+python3 evals/agent/agent_eval.py report my-matrix
+```
+
+**Results, 20 November 2026** (myc 0.3.2 at `66611980a487`, Claude Code
+2.1.329, `claude-sonnet-5-5`, `--effort medium`; 116 graded sessions over the
+20 v2 tasks; [report](results/2026-11-20-variants/REPORT.md)). Means over
+tasks, brackets 95 % paired bootstrap intervals against A:
+
+| Per session | A | C | E |
+|---|---:|---:|---:|
+| Sessions with ≥ 1 myceliums call | 80 % (32 of 40) | 100 % (38 of 38) | 97 % (37 of 38) |
+| … difference to A | | +20 pp [+5, +38] | +18 pp [+5, +32] |
+| First tool called (most common) | `Grep` (27 of 40) | `find_callers` (28 of 38) | `find_callers` (28 of 38) |
+| Success (F1 ≥ 0.8) | 100 % | 98 % | 100 % |
+| Mean F1 (difference to A) | 0.984 | 0.983 (−0.001 [−0.027, +0.022]) | 0.989 (+0.005 [−0.009, +0.021]) |
+| Input tokens (ratio to A) | 166,868 | 159,638 (0.96× [0.74×, 1.24×]) | 160,217 (0.96× [0.75×, 1.24×]) |
+| Prompt of the first model call | 10,162 | +348 | +2,212 |
+| Cost, USD (ratio to A) | 0.147 | 0.144 (0.98× [0.82×, 1.18×]) | 0.136 (0.93× [0.78×, 1.13×]) |
+| Tool calls (difference to A) | 11.2 | 9.3 (−1.9 [−4.4, +0.8]) | 8.6 (−2.5 [−4.9, −0.3]) |
+| Wall time, s (difference to A) | 35.3 | 49.2 (+13.8 [−4.6, +46.2]) | 34.1 (−1.2 [−6.0, +3.8]) |
+
+* **With the core tools loaded up front, the agent uses myceliums.** Even A,
+  the MCP server alone, called it in 80 % of sessions, against 0 of 90 in the
+  pilot (54 deferred tools, easier tasks, Claude Code 2.1.322). The matrix
+  has no deferred-tools control (variant D), so it does not isolate how much
+  of that jump is #97's doing. The `setup-claude` layers (C) raised the rate
+  to 100 % and made a myceliums tool, not Grep, the first call.
+* **No accuracy effect on these tasks.** All three variants were at or near
+  the ceiling (success 98-100 %); the F1 differences are within ±0.03. By
+  type, `tests` tasks gained F1 in C (+0.047 [+0.009, +0.098]) and E (+0.034
+  [+0.005, +0.080]) and `flow` tasks lost a little in C (−0.018 [−0.034,
+  −0.004]); with four tasks per type, read these as direction only.
+* **Cost and tokens did not change measurably.** Input tokens and cost were 4
+  and 2-7 % lower in C and E, with intervals spanning ±25 %. E used 2.5 fewer
+  tool calls (−23 %). The routing block adds 348 tokens to every request, the
+  Agent tool with the subagent 2,212.
+* **The subagent was never used.** In 0 of 38 E sessions did the main agent
+  delegate to `code-explorer`; it called the same myceliums tools itself.
+* **The grep hook fired as designed.** In C it ran on 175 Grep calls and added
+  a hint to 120 (69 %); the rest were not identifier-shaped or not in the
+  index. The hint names CLI commands (`myc callers X`), which these sessions
+  could not run (no shell).
+* **A side effect of setup-claude.** The files `myc setup-claude` writes
+  after `myc analyze` are uncommitted and newer than the index, so the MCP
+  `analyze` tool's freshness check calls the index stale and re-indexes when
+  the agent calls it: once it timed out after 300 s (hono, C; the +13.8 s
+  mean wall time of C is mostly that session), once it re-indexed without
+  embeddings (hono, E). The SessionStart hook's commit-based check reported
+  the same index as ready.
+
+Session accounting: 10 calibration sessions; 123 matrix launches, of which
+116 are graded and 7 were cut off without a result (3 when the benchmark
+machine went to sleep, 4 when the run was stopped externally); 4 planned
+repetition-2 sessions of two hono tasks were not run to stay near the budget
+of 120. Every task has at least one repetition in every variant. Three
+further sessions ran against the mock API (`probe`, no model call).
+
+`touch runs/<label>/STOP` ends a run cleanly (running sessions finish and
+are recorded). The report compares every variant with A by a paired
+bootstrap over tasks: myceliums tool-call rate (sessions with at least one
+call, calls per session, calls by the subagent), success, F1, tokens, cost,
+wall time, per task type and per task, and what the hooks did.
+
 ## Tool-selection eval
 
 [`toolsel/intents.json`](toolsel/intents.json) holds 56 natural-language
@@ -193,6 +349,14 @@ is denied, and `--max-turns 1` ends it. Accuracy per pass, agreement between
 passes and the most frequent confusions go to `TOOLSEL.md`.
 
 ## Limits
+
+* Variant matrix (#125): both hard sets turned out close to the ceiling for
+  this model, so the matrix measures tool use, tokens and time well and
+  accuracy hardly at all. Its task set was not calibrated (the allowance was
+  spent on the first set), B and D were not run, and 4 of 120 planned sessions
+  are missing. The gold sets follow static call rules the questions spell out
+  (interface and function-value calls do not count); an agent that reasons
+  about runtime behaviour instead loses precision.
 
 * Three repositories, 30 tasks, one model and one effort level. Small n per
   task type: read the per-type intervals as direction, not size.

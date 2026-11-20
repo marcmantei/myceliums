@@ -62,7 +62,7 @@ In Step 2 of the wizard, enable AI instructions. This configures the SessionStar
 
 ### Step 2: Verify the Hook Is Active
 
-After setup, start a new session. You should see a message from myceliums in the session initialization indicating the knowledge graph is available. The hook is meant to make the agent prefer `search_code`, `find_callers`, `impact_of_change` and `explain_symbol` over reading raw files; how much it does is not measured. Without the hook, with only the MCP server and its instructions in context, the agent in the [agent benchmark](../../evals/agent/README.md) called a myceliums tool in 0 of 90 sessions.
+After setup, start a new session. You should see a message from myceliums in the session initialization indicating the knowledge graph is available. That message is a `systemMessage`: Claude Code shows it to you, not to the model, so it does not steer the agent by itself. In the [variant matrix](../../evals/agent/README.md#variant-matrix-125) (Claude Code 2.1.329) the agent called a myceliums tool in 80 % of sessions with the MCP server alone (the core tools load up front) and in 100 % with the routing block and hooks `myc setup-claude` installs; in the earlier pilot, with 54 deferred tools, it did so in 0 of 90 sessions. Neither run measured a token saving.
 
 ### Step 3: For Cursor Users
 
