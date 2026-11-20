@@ -14,7 +14,7 @@ use super::metrics::{
     hit_at_k, mean, ndcg_at_k, r_precision, recall_at_k, reciprocal_rank, RelevantSet,
 };
 use super::models::{stored_symbols, ModelIndex};
-use myceliums_core::HybridParams;
+use myceliums_core::{HybridParams, TestPolicy};
 use myceliums_storage::CodeSymbol;
 
 /// The cutoffs recall and hit rate are reported at.
@@ -237,6 +237,7 @@ impl SearchMode {
 /// Every product search path ranks `store.get_symbols()`, and BM25 and RRF
 /// break ties in that order. The lexical mode and the BM25 leg of hybrid
 /// therefore rank the stored symbols, not the parse order.
+#[derive(Clone)]
 pub struct Retrieval<'a> {
     symbols: Vec<CodeSymbol>,
     models: Option<&'a ModelIndex>,
@@ -266,9 +267,17 @@ impl<'a> Retrieval<'a> {
     }
 
     /// The same retrieval with other fusion parameters for the hybrid modes.
-    /// Lexical and semantic rankings do not depend on them.
+    /// Lexical and semantic rankings read only their test-code policy
+    /// (`params.tests`).
     pub fn with_hybrid_params(mut self, params: HybridParams) -> Self {
         self.hybrid = params;
+        self
+    }
+
+    /// The same retrieval placing test code by `tests` in every mode (#146),
+    /// instead of the shipped [`TestPolicy::default`].
+    pub fn with_test_policy(mut self, tests: TestPolicy) -> Self {
+        self.hybrid.tests = tests;
         self
     }
 
@@ -290,11 +299,16 @@ impl<'a> Retrieval<'a> {
     /// nothing — so the one thing this must never do is stay quiet.
     pub async fn rank(&self, mode: SearchMode, query: &str) -> Result<Vec<SymbolRef>> {
         let symbols = match mode {
-            SearchMode::Lexical => myceliums_core::search_symbols(&self.symbols, query)
-                .into_iter()
-                .take(RANKING_DEPTH)
-                .map(|hit| hit.symbol)
-                .collect(),
+            SearchMode::Lexical => myceliums_core::search_symbols_ranked(
+                &self.symbols,
+                query,
+                false,
+                &self.hybrid.tests,
+            )
+            .into_iter()
+            .take(RANKING_DEPTH)
+            .map(|hit| hit.symbol)
+            .collect(),
             _ => {
                 let Some(models) = self.models else {
                     bail!(

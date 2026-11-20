@@ -3,10 +3,22 @@
 use crate::repo::{graph_service, resolve_repo_or_latest};
 use anyhow::{Context, Result};
 use myceliums_core::{
-    attach_graph_edges, embedder_for_index, hybrid_search, hybrid_search_explain, rerank_results,
-    search_symbols, search_symbols_explain,
+    attach_graph_edges, embedder_for_index, hybrid_search_explain, hybrid_search_with,
+    rerank_results, search_symbols_ranked, semantic_search, HybridParams, TestPolicy,
 };
-use myceliums_storage::Store;
+use myceliums_storage::{RepoInfo, Store};
+
+/// A warning when the index predates the test/product classification (#146)
+/// and `tests` would reorder test code: it ranks like product code until the
+/// repository is re-analyzed.
+fn unclassified_warning(repo_info: &RepoInfo, tests: &TestPolicy) -> Option<&'static str> {
+    let stale =
+        repo_info.classification_version < myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION;
+    (stale && !tests.is_neutral()).then_some(
+        "This index was built before test code was classified, so tests rank like product \
+         code. Run `myc analyze` to rank them below it.",
+    )
+}
 
 /// The partial-index warning for a store, if the index is only partially
 /// embedded. Reads accounting recorded at index time — no per-query scan.
@@ -32,8 +44,12 @@ pub(crate) async fn cmd_search(
     use_hybrid: bool,
     use_rerank: bool,
     use_explain: bool,
+    tests: TestPolicy,
 ) -> Result<()> {
     let (_, repo_info) = resolve_repo_or_latest(repo)?;
+    if let Some(w) = unclassified_warning(&repo_info, &tests) {
+        eprintln!("⚠ {w}");
+    }
     let service = graph_service();
     let graph = service.graph(&repo_info.id).await?;
     let store = graph.store();
@@ -42,10 +58,11 @@ pub(crate) async fn cmd_search(
 
     if use_hybrid {
         let embedder = embedder_for_index(&store).await?;
+        let params = HybridParams::with_tests(tests);
         let mut results = if use_explain {
-            hybrid_search_explain(&embedder, &symbols, &*store, query, limit).await?
+            hybrid_search_explain(&embedder, &symbols, &*store, query, limit, &params).await?
         } else {
-            hybrid_search(&embedder, &symbols, &*store, query, limit).await?
+            hybrid_search_with(&embedder, &symbols, &*store, query, limit, &params).await?
         };
         // The vector search read the store directly: check that it saw the
         // index generation the symbol table came from.
@@ -54,7 +71,7 @@ pub(crate) async fn cmd_search(
         // Apply reranking if requested, using the reranker recorded at indexing time
         if use_rerank {
             let reranker_id = embedder.meta().reranker.clone();
-            results = rerank_results(query, results, reranker_id.as_deref()).await?;
+            results = rerank_results(query, results, reranker_id.as_deref(), &tests).await?;
         }
 
         // Attach graph edges for explain mode
@@ -118,11 +135,7 @@ pub(crate) async fn cmd_search(
             }
         }
     } else {
-        let results = if use_explain {
-            search_symbols_explain(&symbols, query)
-        } else {
-            search_symbols(&symbols, query)
-        };
+        let results = search_symbols_ranked(&symbols, query, use_explain, &tests);
 
         if results.is_empty() {
             println!("No results found for '{}'", query);
@@ -220,8 +233,12 @@ pub(crate) async fn cmd_semantic_search(
     query: &str,
     repo: Option<&str>,
     limit: usize,
+    tests: TestPolicy,
 ) -> Result<()> {
     let (_, ri) = resolve_repo_or_latest(repo)?;
+    if let Some(w) = unclassified_warning(&ri, &tests) {
+        eprintln!("⚠ {w}");
+    }
     // Only vector search: the store handle is enough, no graph snapshot.
     let store = graph_service().open_store(&ri.id).await?;
 
@@ -233,7 +250,7 @@ pub(crate) async fn cmd_semantic_search(
         .await
         .context("Failed to embed query")?;
 
-    let results = store.vector_search(&query_vector, limit).await?;
+    let results = semantic_search(&*store, &query_vector, limit, &tests).await?;
 
     if results.is_empty() {
         println!(

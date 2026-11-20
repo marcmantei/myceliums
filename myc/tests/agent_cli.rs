@@ -46,6 +46,7 @@ async fn data_dir() -> &'static Path {
             file_count: result.file_count as u32,
             analyzed_commit: None,
             vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION,
         });
         registry.save().unwrap();
         tmp
@@ -183,6 +184,7 @@ async fn read_commands_use_the_index_and_never_create_one() {
         file_count: 0,
         analyzed_commit: None,
         vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
+        classification_version: myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION,
     });
     registry.save().unwrap();
     for args in [

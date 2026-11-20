@@ -17,6 +17,8 @@
 //! - [`real_repos`] — the held-out real-repository query set (#95), its
 //!   dev/held-out split and the pinned checkouts it is scored on.
 //! - [`sweep`] — tuning hybrid search on dev and confirming on held-out.
+//! - [`demotion_sweep`] — tuning the test-code demotion weight the same way
+//!   (#146).
 //!
 //! Run it with `cargo run -p myceliums-benchmarks --bin retrieval-eval`; add
 //! `-- --allow-model-download` (or set `MYC_EVAL_MODELS=1`) to score the
@@ -29,6 +31,7 @@
 
 pub mod bootstrap;
 pub mod corpus;
+pub mod demotion_sweep;
 pub mod evaluator;
 pub mod exact_vs_ann;
 pub mod gate;

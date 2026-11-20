@@ -445,6 +445,7 @@ mod tests {
             file_count: 0,
             analyzed_commit: Some("abcdef0123".into()),
             vector_geometry_version: 0,
+            classification_version: 0,
         }
     }
 

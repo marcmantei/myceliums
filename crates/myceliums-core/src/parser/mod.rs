@@ -20,6 +20,7 @@ use tree_sitter::{Language, ParseOptions, ParseState, Parser, Tree};
 use uuid::Uuid;
 
 mod c;
+pub mod classify;
 mod common;
 mod cpp;
 mod dart;
@@ -874,10 +875,20 @@ fn tree_depth(tree: &Tree) -> usize {
 }
 
 /// Convert parsed symbols into storage-ready [`CodeSymbol`] records.
+///
+/// Every symbol of a test file ([`classify::is_test_path`]) is marked as test
+/// code in its metadata, on top of what the extractor marked inside the file
+/// (a Rust `#[cfg(test)]` module), so search can rank it below product code
+/// (#146).
 pub fn to_code_symbols(parsed: &[ParsedSymbol], file_path: &str, repo_id: &str) -> Vec<CodeSymbol> {
+    let test_file = classify::is_test_path(file_path);
     parsed
         .iter()
         .map(|p| {
+            let mut metadata = p.metadata.clone();
+            if test_file {
+                metadata.get_or_insert_with(SymbolMetadata::default).test = true;
+            }
             let qualified_name = match &p.parent_name {
                 Some(parent) => format!("{}.{}", parent, p.name),
                 None => p.name.clone(),
@@ -893,8 +904,7 @@ pub fn to_code_symbols(parsed: &[ParsedSymbol], file_path: &str, repo_id: &str) 
                 signature: p.signature.clone(),
                 content: p.content.clone(),
                 repo_id: repo_id.to_string(),
-                metadata: p
-                    .metadata
+                metadata: metadata
                     .as_ref()
                     .and_then(|m| serde_json::to_string(m).ok()),
             }
@@ -905,6 +915,28 @@ pub fn to_code_symbols(parsed: &[ParsedSymbol], file_path: &str, repo_id: &str) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every symbol of a test file is stored as test code, on top of what the
+    /// extractor marked; product files keep their metadata as it was (#146).
+    #[test]
+    fn test_files_are_stored_as_test_code() {
+        let mut parser = SourceParser::new(SourceLanguage::Python).unwrap();
+        let parsed = parser
+            .parse("def helper():\n    return 1\n\nclass Case:\n    def run(self):\n        pass\n")
+            .unwrap();
+        let in_tests = to_code_symbols(&parsed.symbols, "tests/test_api.py", "r");
+        assert!(!in_tests.is_empty());
+        assert!(in_tests.iter().all(|s| s.is_test()), "{in_tests:?}");
+
+        let in_src = to_code_symbols(&parsed.symbols, "src/api.py", "r");
+        assert!(in_src.iter().all(|s| !s.is_test()), "{in_src:?}");
+        // No metadata is invented for product code.
+        let helper = in_src.iter().find(|s| s.name == "helper").unwrap();
+        assert!(helper
+            .metadata
+            .as_deref()
+            .is_none_or(|m| !m.contains("test")));
+    }
 
     #[cfg(feature = "pdf")]
     #[test]

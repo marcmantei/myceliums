@@ -14,6 +14,16 @@ pub const DEFAULT_EMBEDDING_DIM: i32 = 384;
 /// trigger a rebuild rather than silently mixing geometries.
 pub const VECTOR_GEOMETRY_VERSION: u32 = 2;
 
+/// Version of the per-symbol classification written at index time.
+///
+/// `1`: symbols are classified as test or product code
+/// ([`crate::SymbolMetadata::test`], #146). An index recorded under an older
+/// version ([`crate::RepoInfo::classification_version`], `0` before #146) holds
+/// no classification, so search would rank its test code like product code;
+/// the cache check re-analyzes it instead of reusing it. Bump whenever the
+/// classification rules change what an existing index would hold.
+pub const SYMBOL_CLASSIFICATION_VERSION: u32 = 1;
+
 /// L2-normalize a vector in place to unit length.
 ///
 /// This is the function that *establishes* the geometry

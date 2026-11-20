@@ -7,6 +7,7 @@
 //! frequency and document length are token-exact: `"cat"` no longer matches
 //! `concatenate`, and `"user name"` matches `get_user_name`.
 
+use crate::demotion::TestPolicy;
 use crate::tokenize::tokenize;
 use myceliums_storage::CodeSymbol;
 use serde::Serialize;
@@ -59,6 +60,21 @@ pub fn search_symbols(symbols: &[CodeSymbol], query: &str) -> Vec<SearchResult> 
 /// BM25 search with explain traces showing per-term scoring breakdown.
 pub fn search_symbols_explain(symbols: &[CodeSymbol], query: &str) -> Vec<SearchResult> {
     search_symbols_impl(symbols, query, true)
+}
+
+/// BM25 search reordered by `tests` — test code ranked below product code
+/// by default ([`TestPolicy`], #146). This is the ranking `myc search` and
+/// keyword search return; [`search_symbols`] is the raw BM25 order, which
+/// hybrid search fuses before reordering the fused list.
+pub fn search_symbols_ranked(
+    symbols: &[CodeSymbol],
+    query: &str,
+    explain: bool,
+    tests: &TestPolicy,
+) -> Vec<SearchResult> {
+    tests.apply(search_symbols_impl(symbols, query, explain), |r| {
+        r.symbol.is_test()
+    })
 }
 
 fn search_symbols_impl(symbols: &[CodeSymbol], query: &str, explain: bool) -> Vec<SearchResult> {

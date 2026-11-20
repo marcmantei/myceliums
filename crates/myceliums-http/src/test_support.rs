@@ -45,6 +45,7 @@ pub(crate) fn register_repo(data_dir: &std::path::Path, repo_id: &str) {
         file_count: 1,
         analyzed_commit: None,
         vector_geometry_version: 0,
+        classification_version: 0,
     });
     registry.save().unwrap();
 }

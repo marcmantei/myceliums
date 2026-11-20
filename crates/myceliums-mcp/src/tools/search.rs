@@ -6,7 +6,7 @@
 //! another name) are deprecated aliases over the same implementation.
 
 use super::prelude::*;
-use myceliums_core::Embedder;
+use myceliums_core::{Embedder, HybridParams, TestPolicy};
 use std::sync::Arc;
 
 /// Most results a search tool returns per page.
@@ -19,6 +19,17 @@ const HYBRID_WINDOW: usize = 100;
 /// page: reranking a window that grew with `offset` would reorder it and make
 /// pages overlap.
 const RERANK_WINDOW: usize = 50;
+
+/// Said when the index predates the test/product classification (#146) and
+/// the caller asked for test code to be reordered: nothing is reordered.
+fn unclassified_notice(graph: &Graph<'_>, tests: &TestPolicy) -> Option<&'static str> {
+    let stale = graph.info().classification_version
+        < myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION;
+    (stale && !tests.is_neutral()).then_some(
+        "Note: this index was built before test code was classified, so tests rank like \
+         product code. Re-run analyze to rank them below it.",
+    )
+}
 
 /// The embedding model recorded for an index could not be loaded: that is
 /// fixable (keyword search still works; re-indexing picks a usable model).
@@ -67,7 +78,7 @@ async fn vector_embedder(store: &Store) -> Result<Arc<Embedder>, ToolError> {
 impl MyceliumsMcp {
     #[tool(
         name = "search_code",
-        description = "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings.",
+        description = "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings. Test code ranks below product code unless tests=include or tests=prefer.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -84,18 +95,22 @@ impl MyceliumsMcp {
         let page = Page::new(params.limit, params.offset, SEARCH);
         let explain = params.explain.unwrap_or(false);
         let rerank = params.rerank.unwrap_or(false);
+        let tests = TestPolicy::new(params.tests.unwrap_or_default().into());
         let query = params.query.as_str();
         let body = match params.mode.unwrap_or_default() {
-            SearchMode::Keyword => self.keyword_results(&graph, query, page, explain).await?,
+            SearchMode::Keyword => {
+                self.keyword_results(&graph, query, page, explain, tests)
+                    .await?
+            }
             SearchMode::Semantic => {
                 let store = graph.store();
                 let embedder = vector_embedder(&store).await?;
-                self.semantic_results(&graph, &embedder, query, page)
+                self.semantic_results(&graph, &embedder, query, page, tests)
                     .await?
             }
             SearchMode::Hybrid => {
                 let embedder = vector_embedder(&graph.store()).await?;
-                self.hybrid_results(&graph, &embedder, query, page, rerank, explain)
+                self.hybrid_results(&graph, &embedder, query, page, rerank, explain, tests)
                     .await?
             }
             SearchMode::Auto => {
@@ -107,17 +122,19 @@ impl MyceliumsMcp {
                 };
                 match embedder {
                     Some(embedder) => {
-                        self.hybrid_results(&graph, &embedder, query, page, rerank, explain)
+                        self.hybrid_results(&graph, &embedder, query, page, rerank, explain, tests)
                             .await?
                     }
                     None => format!(
                         "Keyword search (this index has no usable embeddings; re-run analyze \
                          without skip_embeddings for search by meaning).\n\n{}",
-                        self.keyword_results(&graph, query, page, explain).await?
+                        self.keyword_results(&graph, query, page, explain, tests)
+                            .await?
                     ),
                 }
             }
         };
+        let body = with_notice(body, unclassified_notice(&graph, &tests));
         self.graph_text(&graph, body).await
     }
 
@@ -139,7 +156,13 @@ impl MyceliumsMcp {
         let graph = self.graph_for(params.repo_id.as_deref()).await?;
         let page = Page::new(params.limit, params.offset, SEARCH);
         let body = self
-            .keyword_results(&graph, &params.query, page, params.explain.unwrap_or(false))
+            .keyword_results(
+                &graph,
+                &params.query,
+                page,
+                params.explain.unwrap_or(false),
+                TestPolicy::default(),
+            )
             .await?;
         self.graph_text(&graph, body).await
     }
@@ -184,6 +207,7 @@ impl MyceliumsMcp {
                 page,
                 params.rerank.unwrap_or(false),
                 params.explain.unwrap_or(false),
+                TestPolicy::default(),
             )
             .await?;
         self.graph_text(&graph, body).await
@@ -262,7 +286,13 @@ impl MyceliumsMcp {
         let embedder = vector_embedder(&store).await?;
         let page = Page::new(params.limit, params.offset, Budget::new(10, SEARCH.max));
         let body = self
-            .semantic_results(&graph, &embedder, &params.query, page)
+            .semantic_results(
+                &graph,
+                &embedder,
+                &params.query,
+                page,
+                TestPolicy::default(),
+            )
             .await?;
         self.graph_text(&graph, body).await
     }
@@ -271,20 +301,18 @@ impl MyceliumsMcp {
 /// The search rankings behind `search_code` and its deprecated aliases. Each
 /// returns one framed page of results, without the freshness line.
 impl MyceliumsMcp {
-    /// Keyword ranking over names, qualified names and signatures.
+    /// Keyword ranking over names, qualified names and signatures, test
+    /// code placed by `tests`.
     async fn keyword_results(
         &self,
         graph: &Graph<'_>,
         query: &str,
         page: Page,
         explain: bool,
+        tests: TestPolicy,
     ) -> Result<String, ToolError> {
         let symbols = graph.symbols().await?;
-        let results = if explain {
-            myceliums_core::search_symbols_explain(&symbols, query)
-        } else {
-            search_symbols(&symbols, query)
-        };
+        let results = myceliums_core::search_symbols_ranked(&symbols, query, explain, &tests);
         let page = page.take(results);
         let items: Vec<SearchResultItem> = page
             .items
@@ -307,23 +335,24 @@ impl MyceliumsMcp {
         ))
     }
 
-    /// Vector similarity only.
+    /// Vector similarity only, test code placed by `tests`.
     async fn semantic_results(
         &self,
         graph: &Graph<'_>,
         embedder: &Arc<Embedder>,
         query: &str,
         page: Page,
+        tests: TestPolicy,
     ) -> Result<String, ToolError> {
         let query_vector = embedder
             .embed_query(query)
             .await
             .map_err(|e| ToolError::internal("cannot embed the query", e))?;
         let store = &graph.store();
-        let results = store
-            .vector_search(&query_vector, page.fetch())
-            .await
-            .map_err(|e| ToolError::internal("vector search failed", e))?;
+        let results =
+            myceliums_core::semantic_search(store.as_ref(), &query_vector, page.fetch(), &tests)
+                .await
+                .map_err(|e| ToolError::internal("vector search failed", e))?;
         graph.verify()?;
         let page = page.take_open(results);
         let items: Vec<SearchResultItem> = page
@@ -337,7 +366,7 @@ impl MyceliumsMcp {
                 start_line: sym.start_line,
                 end_line: sym.end_line,
                 signature: sym.signature,
-                score: score as f64,
+                score,
                 explain: None,
             })
             .collect();
@@ -352,7 +381,7 @@ impl MyceliumsMcp {
     }
 
     /// Keyword and vector rankings fused (Reciprocal Rank Fusion), optionally
-    /// reranked by a cross-encoder.
+    /// reranked by a cross-encoder; test code placed by `tests` in both.
     #[allow(clippy::too_many_arguments)]
     async fn hybrid_results(
         &self,
@@ -362,6 +391,7 @@ impl MyceliumsMcp {
         page: Page,
         rerank: bool,
         explain: bool,
+        tests: TestPolicy,
     ) -> Result<String, ToolError> {
         let store = &graph.store();
         let symbols = graph.symbols().await?;
@@ -372,14 +402,22 @@ impl MyceliumsMcp {
         } else {
             page.fetch().min(HYBRID_WINDOW)
         };
+        let params = HybridParams::with_tests(tests);
         let mut results = if explain {
-            core_hybrid_search_explain(embedder, &symbols, store.as_ref(), query, fetch)
+            core_hybrid_search_explain(embedder, &symbols, store.as_ref(), query, fetch, &params)
                 .await
                 .map_err(|e| ToolError::internal("hybrid search failed", e))?
         } else {
-            core_hybrid_search(embedder, &symbols, store.as_ref(), query, fetch)
-                .await
-                .map_err(|e| ToolError::internal("hybrid search failed", e))?
+            myceliums_core::hybrid_search_with(
+                embedder,
+                &symbols,
+                store.as_ref(),
+                query,
+                fetch,
+                &params,
+            )
+            .await
+            .map_err(|e| ToolError::internal("hybrid search failed", e))?
         };
         // The vector half read the store directly.
         graph.verify()?;
@@ -387,7 +425,7 @@ impl MyceliumsMcp {
         // Apply reranking if requested, using the reranker recorded at indexing time
         if rerank {
             let reranker_id = embedder.meta().reranker.clone();
-            results = rerank_results(query, results, reranker_id.as_deref())
+            results = rerank_results(query, results, reranker_id.as_deref(), &tests)
                 .await
                 .map_err(|e| ToolError::internal("reranking failed", e))?;
         }

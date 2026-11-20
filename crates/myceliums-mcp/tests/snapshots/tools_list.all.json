@@ -3659,7 +3659,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings.",
+    "description": "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings. Test code ranks below product code unless tests=include or tests=prefer.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -3719,6 +3719,19 @@
           "description": "Rerank the top 50 hybrid results with a cross-encoder: slower, more precise (default: false)",
           "type": [
             "boolean",
+            "null"
+          ]
+        },
+        "tests": {
+          "description": "Test code (test files and directories such as *_test.go, *.test.ts, tests/, and #[cfg(test)] modules): demote (default) ranks it below product code, include ranks it like product code, prefer ranks it first. Use include or prefer to find tests",
+          "enum": [
+            "demote",
+            "include",
+            "prefer",
+            null
+          ],
+          "type": [
+            "string",
             "null"
           ]
         }

@@ -90,6 +90,21 @@ myc search "user authentication middleware" --hybrid --rerank
 
 The `--rerank` flag adds a cross-encoder pass that re-scores the top 20 results. It is meant to sharpen the ordering and takes noticeably longer; on the [fixture benchmark](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#recorded-results) its gain over plain hybrid was not distinguishable from zero.
 
+## Test Code Ranks Lower
+
+Every mode ranks test code — symbols in test files and directories by the
+language's convention, Rust `#[cfg(test)]` modules and `#[test]` functions —
+below product code by default. It is a down-weight, not a filter: a test that
+clearly matches better still shows, only later. Use `--tests include` to rank
+tests like everything else, or `--tests prefer` when you are looking for the
+tests:
+
+```bash
+myc search "cookie jar" --hybrid --tests prefer
+```
+
+The rules, the weight and how it was measured: [Test code](../reference/mcp-tools.md#test-code).
+
 ## Decision Guide
 
 | You want to... | Use | Needs embeddings? |
@@ -98,6 +113,7 @@ The `--rerank` flag adds a cross-encoder pass that re-scores the top 20 results.
 | Find code by description | `myc semantic-search "validates email"` | Yes |
 | Exact terms and meaning together | `myc search "query" --hybrid` | Yes |
 | Re-score the top results (slower) | `myc search "query" --hybrid --rerank` | Yes |
+| Find the tests for something | `myc search "query" --hybrid --tests prefer` | Yes |
 
 ## Do I Need Embeddings?
 
@@ -134,6 +150,7 @@ When using myceliums through MCP (e.g., in Claude Code or Cursor), the same sear
 - `mode=keyword` ranks by names, qualified names and signatures and needs no model
 - `mode=semantic` performs semantic search
 - `mode=hybrid` performs hybrid search, with optional reranking (`rerank=true`)
+- `tests=demote` (default), `include` or `prefer` places test code below, among or above product code
 
 The older `context_search`, `semantic_search`, `hybrid_search` and `search_documents` tools remain as deprecated aliases with `--toolsets all` for one release.
 

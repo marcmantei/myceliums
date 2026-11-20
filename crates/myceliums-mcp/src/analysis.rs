@@ -434,6 +434,7 @@ impl Rebuild {
             file_count: result.file_count as u32,
             analyzed_commit: analyzed_commit.clone(),
             vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION,
         });
         registry
             .save()

@@ -1,8 +1,8 @@
 //! Rust extraction.
 
 use super::{
-    BindingValue, CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, ParsedSymbol,
-    SourceParser, TypeBinding, FILE_SCOPE,
+    classify, BindingValue, CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo,
+    ParsedSymbol, SourceParser, TypeBinding, FILE_SCOPE,
 };
 use myceliums_storage::{SymbolKind, SymbolMetadata, Visibility};
 use tree_sitter::Node;
@@ -100,6 +100,13 @@ impl SourceParser {
                 }
             }
             "mod_item" => {
+                // A `#[cfg(test)]` module is test code, and so is everything
+                // in it (#146).
+                let cfg_test = self
+                    .rust_attributes(node, source)
+                    .iter()
+                    .any(|a| classify::is_rust_cfg_test(a));
+                let first = symbols.len();
                 if let Some(name_node) = node.child_by_field_name("name") {
                     symbols.push(ParsedSymbol {
                         name: self.node_text(name_node, source).to_string(),
@@ -111,6 +118,19 @@ impl SourceParser {
                         parent_name: parent.map(|s| s.to_string()),
                         metadata: None,
                     });
+                }
+                if cfg_test {
+                    let cursor = &mut node.walk();
+                    for child in node.children(cursor) {
+                        self.extract_rust_symbols(child, source, symbols, parent);
+                    }
+                    for symbol in &mut symbols[first..] {
+                        symbol
+                            .metadata
+                            .get_or_insert_with(SymbolMetadata::default)
+                            .test = true;
+                    }
+                    return;
                 }
             }
             "const_item" => {
@@ -909,6 +929,30 @@ impl SourceParser {
         }
     }
 
+    /// The attributes written directly above `node` (`#[...]`, comments
+    /// between them skipped), in source order.
+    fn rust_attributes(&self, node: Node, source: &[u8]) -> Vec<String> {
+        let mut attributes = Vec::new();
+        let Some(parent) = node.parent() else {
+            return attributes;
+        };
+        let cursor = &mut parent.walk();
+        let children: Vec<_> = parent.children(cursor).collect();
+        let idx = children
+            .iter()
+            .position(|child| child.id() == node.id())
+            .unwrap_or(children.len());
+        for child in children[..idx].iter().rev() {
+            if child.kind() == "attribute_item" {
+                attributes.push(self.node_text(*child, source).trim().to_string());
+            } else if child.kind() != "line_comment" && child.kind() != "block_comment" {
+                break;
+            }
+        }
+        attributes.reverse();
+        attributes
+    }
+
     /// Extract Rust metadata: visibility, attributes (decorators), return type.
     fn extract_rust_metadata(&self, node: Node, source: &[u8]) -> Option<SymbolMetadata> {
         let mut meta = SymbolMetadata::default();
@@ -930,27 +974,15 @@ impl SourceParser {
         }
 
         // Attributes (decorators): look at preceding siblings
-        if let Some(parent) = node.parent() {
-            let cursor2 = &mut parent.walk();
-            let children: Vec<_> = parent.children(cursor2).collect();
-            let mut idx = children.len();
-            for (i, child) in children.iter().enumerate() {
-                if child.id() == node.id() {
-                    idx = i;
-                    break;
-                }
-            }
-            for i in (0..idx).rev() {
-                if children[i].kind() == "attribute_item" {
-                    let text = self.node_text(children[i], source).trim().to_string();
-                    meta.decorators.push(text);
-                } else if children[i].kind() != "line_comment"
-                    && children[i].kind() != "block_comment"
-                {
-                    break;
-                }
-            }
-            meta.decorators.reverse();
+        meta.decorators = self.rust_attributes(node, source);
+        // A test function in a product file (#146); `#[cfg(test)]` modules
+        // are marked where they are extracted.
+        if meta
+            .decorators
+            .iter()
+            .any(|a| classify::is_rust_test_attribute(a))
+        {
+            meta.test = true;
         }
 
         // Return type
@@ -1006,6 +1038,65 @@ mod tests {
     use myceliums_storage::{SymbolKind, Visibility};
 
     // --- Rust tests ---
+
+    /// `#[cfg(test)]` modules and everything in them, and functions with a
+    /// test attribute, are test code (#146); the rest of the file is not.
+    #[test]
+    fn rust_test_code_is_marked() {
+        let mut parser = SourceParser::new(SourceLanguage::Rust).unwrap();
+        let result = parser
+            .parse(
+                r#"
+pub fn product() {}
+
+#[tokio::test]
+async fn async_check() {}
+
+#[cfg(not(test))]
+mod real {
+    pub fn shipped() {}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn helper() -> u32 { 1 }
+
+    struct Fixture;
+
+    impl Fixture {
+        fn build() -> Self { Fixture }
+    }
+
+    #[test]
+    fn checks() { assert_eq!(helper(), 1); }
+}
+"#,
+            )
+            .unwrap();
+        let is_test = |name: &str| {
+            let symbol = result
+                .symbols
+                .iter()
+                .find(|s| s.name == name)
+                .unwrap_or_else(|| panic!("no symbol {name}"));
+            symbol.metadata.as_ref().is_some_and(|m| m.test)
+        };
+        for name in [
+            "async_check",
+            "tests",
+            "helper",
+            "Fixture",
+            "build",
+            "checks",
+        ] {
+            assert!(is_test(name), "{name} should be test code");
+        }
+        for name in ["product", "real", "shipped"] {
+            assert!(!is_test(name), "{name} should be product code");
+        }
+    }
 
     #[test]
     fn test_parse_rust_function() {

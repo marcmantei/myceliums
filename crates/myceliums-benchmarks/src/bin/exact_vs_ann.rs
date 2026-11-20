@@ -47,7 +47,7 @@ use myceliums_benchmarks::eval::models::{
 };
 use myceliums_benchmarks::eval::real_repos::{repos_dir, verify_checkout, RealRepoSet};
 use myceliums_benchmarks::eval::report::{format_delta, platform, round, rounded};
-use myceliums_core::HybridParams;
+use myceliums_core::{HybridParams, TestPolicy};
 use myceliums_storage::{AnnIndexBuild, CodeSymbol};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -250,7 +250,8 @@ async fn main() -> Result<()> {
     let cosines: Vec<Cosines<'_>> = vectors.iter().map(|v| table.cosines(v)).collect();
 
     // Exact: the production store, checked against the oracle and against the
-    // ranking real-repo-eval scores.
+    // semantic ranking real-repo-eval scores with test code left in place
+    // (`TestPolicy::include`; the shipped default reorders it since #146).
     let mut exact_runs = Vec::with_capacity(queries.len());
     for ((query, vector), cos) in queries.iter().zip(&vectors).zip(&cosines) {
         let results = index.store().vector_search(vector, RANKING_DEPTH).await?;
@@ -260,7 +261,7 @@ async fn main() -> Result<()> {
                 SearchMode::Semantic,
                 &query.query,
                 RANKING_DEPTH,
-                &HybridParams::default(),
+                &HybridParams::with_tests(TestPolicy::include()),
             )
             .await?
             .iter()
