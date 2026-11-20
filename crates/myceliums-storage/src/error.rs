@@ -16,6 +16,11 @@ pub enum StorageError {
     #[error("no index at {}", .0.display())]
     NoIndex(PathBuf),
 
+    /// The database path is not valid UTF-8, which LanceDB's URI-based
+    /// `connect` cannot express.
+    #[error("the database path {} is not valid UTF-8", .0.display())]
+    NonUtf8Path(PathBuf),
+
     /// A repository id is malformed or not registered.
     #[error(transparent)]
     RepoId(#[from] RepoIdError),
@@ -69,6 +74,13 @@ pub enum StorageError {
 
 /// Convenience alias for results of this crate.
 pub type Result<T, E = StorageError> = std::result::Result<T, E>;
+
+/// `path` as the `&str` LanceDB's `connect` takes; a typed error instead of
+/// a panic when it is not UTF-8.
+pub(crate) fn db_uri(path: &std::path::Path) -> Result<&str> {
+    path.to_str()
+        .ok_or_else(|| StorageError::NonUtf8Path(path.to_path_buf()))
+}
 
 /// `"{context}: {source}"`, or just the source without a context.
 fn with_context(context: &str, source: &dyn fmt::Display) -> String {
@@ -148,6 +160,26 @@ mod tests {
 
         let bare = StorageError::from(std::io::Error::other("disk full"));
         assert_eq!(bare.to_string(), "disk full");
+    }
+
+    /// A non-UTF-8 database path is an error, not a panic (#101).
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn non_utf8_db_path_is_an_error_not_a_panic() {
+        use std::os::unix::ffi::OsStrExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(std::ffi::OsStr::from_bytes(b"repo-\xff"));
+        let err = crate::Store::open(&path, "r")
+            .await
+            .err()
+            .expect("must fail");
+        assert!(matches!(err, StorageError::NonUtf8Path(_)), "{err:?}");
+        let err = crate::TeamStore::open(&path)
+            .await
+            .err()
+            .expect("must fail");
+        assert!(matches!(err, StorageError::NonUtf8Path(_)), "{err:?}");
+        assert!(!path.exists(), "nothing is created");
     }
 
     #[test]

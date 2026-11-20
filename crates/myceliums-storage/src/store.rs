@@ -197,7 +197,7 @@ pub struct Store {
 impl Store {
     /// Opens (creating if needed) the LanceDB-backed store for a repository.
     pub async fn open(db_path: &Path, repo_id: &str) -> Result<Self> {
-        let db = connect(db_path.to_str().unwrap())
+        let db = connect(crate::error::db_uri(db_path)?)
             .execute()
             .await
             .context("Failed to open LanceDB")?;

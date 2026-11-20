@@ -55,6 +55,7 @@ pull requests.
 - `myc` is installed from crates.io; the unpublished Docker image is no longer advertised (#72, #73).
 
 ### Fixed
+- Opening a store or team store at a path that is not valid UTF-8 returns `StorageError::NonUtf8Path` instead of panicking (#101).
 - Reading a registered repository whose index is missing (never built, deleted, or mid-swap during a rebuild) no longer creates an empty database and answers with zero counts: CLI read commands fail with `no index at <path>` and the dashboard answers 404 (#101).
 - `myc diff` compares with the previous analysis, chosen like the MCP drift tool (`myceliums_core::previous_snapshot`), instead of the latest snapshot, which was the current analysis itself (#97).
 - Graph diffs never worked: every analysis overwrote the only snapshot, keyed by symbol uids that each analysis generates anew, and nothing wrote the versioned snapshots `snapshot_diff` compared. Each analysis now records a versioned snapshot (the newest 10 are kept) keyed by file, qualified name and kind, and `detect_architecture_drift` compares the previous analysis with the current graph by default (#97).

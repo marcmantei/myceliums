@@ -24,7 +24,7 @@ pub struct TeamStore {
 impl TeamStore {
     /// Opens (creating if needed) the shared team database at `db_path`.
     pub async fn open(db_path: &Path) -> Result<Self> {
-        let db = connect(db_path.to_str().unwrap())
+        let db = connect(crate::error::db_uri(db_path)?)
             .execute()
             .await
             .context("Failed to open TeamStore")?;
