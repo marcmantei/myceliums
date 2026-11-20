@@ -33,6 +33,10 @@ indexes one repository; vector search is exact at every size (#117), so hono's
 - `fetch.sh` — checks every repository out at its pinned commit into
   `$MYC_EVAL_REPOS_DIR` (default `~/.cache/myceliums-eval-repos`). The sources
   are fetched, never vendored. Needs `git` and `jq`.
+- `exact-vs-ann-hono.json` — the `exact-vs-ann` report behind the
+  methodology's "Exact search against the old IVF-PQ index on hono" (#141):
+  per query, both rankings' top 10, the labels' exact ranks and every score.
+  Generated; never edit it by hand.
 - `recorded-run.json` — the run the methodology's numbers come from: the JSON
   report of a `real-repo-eval` run (here the CI workflow's artifact; locally,
   `--record` writes it). Generated; never edit it by hand. It was measured on
