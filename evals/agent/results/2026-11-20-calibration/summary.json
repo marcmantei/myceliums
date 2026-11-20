@@ -1,0 +1,184 @@
+{
+  "analysis": {
+    "by_type": {
+      "ambiguous": {
+        "none": {
+          "cost_usd": 0.05286665,
+          "f1": 1.0,
+          "first_turn_input_tokens": 5306.0,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 6.5,
+          "output_tokens": 1630.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 5.5,
+          "total_input_tokens": 33955.5,
+          "wall_s": 13.455
+        }
+      },
+      "blast_radius": {
+        "none": {
+          "cost_usd": 0.056117799999999995,
+          "f1": 1.0,
+          "first_turn_input_tokens": 5287.0,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 10.5,
+          "output_tokens": 2232.5,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 9.5,
+          "total_input_tokens": 41338.0,
+          "wall_s": 18.045
+        }
+      },
+      "flow": {
+        "none": {
+          "cost_usd": 0.1234876,
+          "f1": 1.0,
+          "first_turn_input_tokens": 5351.5,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 12.0,
+          "output_tokens": 2844.5,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 11.0,
+          "total_input_tokens": 105887.5,
+          "wall_s": 23.4
+        }
+      },
+      "tests": {
+        "none": {
+          "cost_usd": 0.13727404999999998,
+          "f1": 1.0,
+          "first_turn_input_tokens": 5334.0,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 13.0,
+          "output_tokens": 3532.5,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 12.0,
+          "total_input_tokens": 136773.0,
+          "wall_s": 29.84
+        }
+      },
+      "transitive_callers": {
+        "none": {
+          "cost_usd": 0.09151219999999999,
+          "f1": 1.0,
+          "first_turn_input_tokens": 5325.0,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 10.0,
+          "output_tokens": 3233.5,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 9.0,
+          "total_input_tokens": 67677.0,
+          "wall_s": 23.84
+        }
+      }
+    },
+    "means": {
+      "none": {
+        "cost_usd": {
+          "hi": 0.12052510225,
+          "lo": 0.06631955825,
+          "mean": 0.09225165999999999,
+          "n_tasks": 10
+        },
+        "f1": {
+          "hi": 1.0,
+          "lo": 1.0,
+          "mean": 1.0,
+          "n_tasks": 10
+        },
+        "first_turn_input_tokens": {
+          "hi": 5344.0,
+          "lo": 5295.297500000001,
+          "mean": 5320.7,
+          "n_tasks": 10
+        },
+        "myc_calls": {
+          "hi": 0.0,
+          "lo": 0.0,
+          "mean": 0.0,
+          "n_tasks": 10
+        },
+        "myc_used": {
+          "hi": 0.0,
+          "lo": 0.0,
+          "mean": 0.0,
+          "n_tasks": 10
+        },
+        "num_turns": {
+          "hi": 12.1,
+          "lo": 8.6,
+          "mean": 10.4,
+          "n_tasks": 10
+        },
+        "output_tokens": {
+          "hi": 3194.2025,
+          "lo": 2175.095,
+          "mean": 2694.6,
+          "n_tasks": 10
+        },
+        "precision": {
+          "hi": 1.0,
+          "lo": 1.0,
+          "mean": 1.0,
+          "n_tasks": 10
+        },
+        "recall": {
+          "hi": 1.0,
+          "lo": 1.0,
+          "mean": 1.0,
+          "n_tasks": 10
+        },
+        "success": {
+          "hi": 1.0,
+          "lo": 1.0,
+          "mean": 1.0,
+          "n_tasks": 10
+        },
+        "tool_calls": {
+          "hi": 11.1,
+          "lo": 7.6,
+          "mean": 9.4,
+          "n_tasks": 10
+        },
+        "total_input_tokens": {
+          "hi": 109057.4225,
+          "lo": 50094.3725,
+          "mean": 77126.2,
+          "n_tasks": 10
+        },
+        "wall_s": {
+          "hi": 25.749025000000003,
+          "lo": 17.761925,
+          "mean": 21.716,
+          "n_tasks": 10
+        }
+      }
+    },
+    "vs_baseline": {}
+  },
+  "baseline": "none",
+  "conditions": [
+    "none"
+  ],
+  "label": "2026-11-20-calibration",
+  "n_rows": 10,
+  "statuses": {
+    "none/ok": 10
+  },
+  "threshold": 0.8
+}

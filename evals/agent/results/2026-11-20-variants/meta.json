@@ -1,0 +1,124 @@
+{
+  "attempts_total": 116,
+  "claude_version": "2.1.329",
+  "conditions": [
+    "A",
+    "C",
+    "E"
+  ],
+  "date": "2026-11-20",
+  "effort": "medium",
+  "index": {
+    "fastapi": {
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "communities": 617,
+      "embedded": 7370,
+      "files": 1066,
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_seconds": 949.0,
+      "indexed_at": "2026-11-20T14:37:07.506203+00:00",
+      "myc_sha256": "c911169eb3c7259c182f4b89631ed113bc92274bab01761218a3e576a22c557d",
+      "myc_version": "myc 0.3.2",
+      "processes": 2307,
+      "relationships": 12639,
+      "repo": "fastapi",
+      "repo_id": "fastapi-8999030f",
+      "symbols": 7370,
+      "work_path": "/private/tmp/aeval125/fastapi"
+    },
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "communities": 37,
+      "embedded": 2865,
+      "files": 112,
+      "index_exclude_extra": [],
+      "index_seconds": 476.2,
+      "indexed_at": "2026-11-20T13:55:30.083887+00:00",
+      "myc_sha256": "c911169eb3c7259c182f4b89631ed113bc92274bab01761218a3e576a22c557d",
+      "myc_version": "myc 0.3.2",
+      "processes": 685,
+      "relationships": 7854,
+      "repo": "fzf",
+      "repo_id": "fzf-60bac1ad",
+      "symbols": 2865,
+      "work_path": "/private/tmp/aeval125/fzf"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "communities": 278,
+      "embedded": 10588,
+      "files": 447,
+      "index_exclude_extra": [],
+      "index_seconds": 1547.3,
+      "indexed_at": "2026-11-20T14:21:17.635714+00:00",
+      "myc_sha256": "c911169eb3c7259c182f4b89631ed113bc92274bab01761218a3e576a22c557d",
+      "myc_version": "myc 0.3.2",
+      "processes": 438,
+      "relationships": 12482,
+      "repo": "hono",
+      "repo_id": "hono-5f36c69b",
+      "symbols": 10588,
+      "work_path": "/private/tmp/aeval125/hono"
+    }
+  },
+  "label": "2026-11-20-variants",
+  "max_turns": 40,
+  "mcp_tools_offered": 9,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "6661198e1ad3",
+  "myc_sha256": "c911169eb3c7259c182f4b89631ed113bc92274bab01761218a3e576a22c557d",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Task set: tasks/tasks-hard.json (v2). The first hard set (tasks/tasks-hard-v1.json) was calibrated with 10 sessions without myceliums (results/2026-11-20-calibration): all 10 scored F1 = 1.00, so it was at the ceiling. v2 asks the same question types one to two levels deeper or wider; with the calibration allowance spent, v2 was not calibrated before the matrix. Its A results (success 98 %, see above) show it is near the ceiling as well.",
+    "Sessions: 10 calibration (condition none) + 123 matrix launches = 133 Sonnet sessions; 3 more ran against a local mock API (agent_eval.py probe, no model call). Of the 123 matrix launches, 116 are graded; 7 were cut off without a result and are counted as retries: 3 when the benchmark machine went to sleep during the run, 4 when the run was stopped externally (twice hono-amb-ctx-header-d2__E__r2, once fastapi-flow-openapi-lenient__C__r2 and hono-tests-trydecode__C__r2). To stay near the budget of 120, 4 planned sessions were not run: hono-amb-ctx-header-d2 C and E, hono-tests-trydecode C and E, all repetition 2. Every task has at least one repetition in every condition; per-task means use the repetitions that ran.",
+    "All conditions ran the same model (claude-sonnet-5-5 via --model sonnet), effort, prompt, --max-turns 40 and 900 s timeout; one session per repository at a time, three repositories in parallel. Wall times include heavy, varying load from unrelated work on the machine (load average 50-290).",
+    "What the agent saw, checked with agent_eval.py probe against a mock API (Claude Code 2.1.329): the 9 core tools are sent with full schemas in A, C and E (none deferred; ToolSearch not needed); the project CLAUDE.md with the routing block reaches the context in C and E, ~/.claude/CLAUDE.md in no condition; the grep hook's hint reaches the context; the SessionStart hook's output is a systemMessage, shown to the user and not to the model; in E the Agent tool offers code-explorer only and the subagent gets the myceliums tools and Read.",
+    "The sessions have no shell (as in the pilot), so the CLI commands that the routing block and the grep hook name (myc callers X, myc impact X) cannot be run; the routing block also names the MCP tools, which the agent used.",
+    "In C and E the working copy holds the files myc setup-claude writes (CLAUDE.md, .claude/, .mcp.json) after the index was built, as in the documented order (myc analyze, then myc setup-claude). They are uncommitted and newer than the index, so the MCP analyze tool's freshness check calls the index stale and re-indexes: it timed out after 300 s in hono-amb-ctx-header-d2__C__r1 and re-indexed without embeddings in hono-blast-createresponse-d3__E__r1. In A, analyze calls were cache hits. The SessionStart hook, which uses the commit-based cache check, reported the same index as ready."
+  ],
+  "repos": {
+    "fastapi": {
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "display_name": "FastAPI",
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_note": "docs/ (1,709 Markdown files in 13 languages) is excluded from the index: with it, `myc analyze` produced 23,941 symbols and its community detection had not finished after 13 minutes on the benchmark machine, before any embedding. The agent still sees docs/.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "fastapi",
+      "ref": "0.162.5",
+      "url": "https://github.com/fastapi/fastapi.git"
+    },
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "display_name": "fzf",
+      "language": "go",
+      "language_name": "Go",
+      "name": "fzf",
+      "ref": "v0.75.0",
+      "url": "https://github.com/junegunn/fzf.git"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "display_name": "hono",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "hono",
+      "ref": "v4.13.18",
+      "url": "https://github.com/honojs/hono.git"
+    }
+  },
+  "reps": 2,
+  "retried_runs": [],
+  "runs_final": 116,
+  "sessions_launched_ledger": 123,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-hard.json",
+  "tasks_sha256": "4f0a25751b02439612eb1ad42897fc840902f73b3bcef02aa402e8e17765c3a3",
+  "timeout_s": 900,
+  "tool_search": null
+}

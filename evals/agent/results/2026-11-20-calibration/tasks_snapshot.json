@@ -1,0 +1,162 @@
+[
+ {
+  "id": "fzf-tc-matchitem",
+  "repo": "fzf",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 17,
+  "question": "Which functions or methods call `Pattern.MatchItem` (src/pattern.go) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files. Do not list `MatchItem` itself."
+ },
+ {
+  "id": "fzf-blast-istty",
+  "repo": "fzf",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 10,
+  "question": "Suppose the behaviour of `IsTty` (src/util/util.go) changes. Which Go files contain a call to `IsTty`, or a call to a function or method that calls `IsTty` directly (two levels)? Name the file that contains each such call. Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files."
+ },
+ {
+  "id": "fzf-blast-stringbytes",
+  "repo": "fzf",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 8,
+  "question": "Suppose the behaviour of `stringBytes` (src/functions.go) changes. Which Go files contain a call to `stringBytes`, or a call to a function or method that calls `stringBytes` directly (two levels)? Name the file that contains each such call. Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files."
+ },
+ {
+  "id": "fzf-amb-chars-length",
+  "repo": "fzf",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 15,
+  "question": "Several types in this repository have a method named `Length`. Which functions or methods call the `Length` method of the `Chars` type defined in src/util/chars.go (not `Merger.Length` or any other `Length`)? Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files."
+ },
+ {
+  "id": "fzf-amb-noseparatorline",
+  "repo": "fzf",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 7,
+  "question": "More than one function or method in src/ is named `noSeparatorLine`. Which functions or methods call the `noSeparatorLine` method whose receiver is `*Terminal` (src/terminal.go)? Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files."
+ },
+ {
+  "id": "fzf-tests-awktokenizer",
+  "repo": "fzf",
+  "type": "tests",
+  "answer_kind": "symbols",
+  "n_gold": 11,
+  "question": "Which `Test...` functions in the `*_test.go` files exercise `awkTokenizer` (src/tokenizer.go), that is, reach it through a chain of direct calls of any length (directly, or through test helpers and non-test functions)? Count only direct calls of named functions and methods, whatever the arguments or branches: a call made inside a closure counts for the named function that contains it; calls through interface values or function variables do not count. Consider every package's test files, platform-specific ones included."
+ },
+ {
+  "id": "fzf-tests-splitnth",
+  "repo": "fzf",
+  "type": "tests",
+  "answer_kind": "symbols",
+  "n_gold": 13,
+  "question": "Which `Test...` functions in the `*_test.go` files exercise `splitNth` (src/options.go), that is, reach it through a chain of direct calls of any length (directly, or through test helpers and non-test functions)? Count only direct calls of named functions and methods, whatever the arguments or branches: a call made inside a closure counts for the named function that contains it; calls through interface values or function variables do not count. Consider every package's test files, platform-specific ones included."
+ },
+ {
+  "id": "fzf-flow-ansi",
+  "repo": "fzf",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 9,
+  "question": "List every function or method that lies on at least one chain of direct calls from `NewTerminal` (src/terminal.go) to `matchControlSequence` (src/ansi.go), including both ends. Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files."
+ },
+ {
+  "id": "hono-tc-decodebase64",
+  "repo": "hono",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 13,
+  "question": "Which functions or methods call `decodeBase64` (src/utils/encode.ts) directly, or call one of its direct callers (two levels up the call chain)? Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`). Do not list `decodeBase64` itself."
+ },
+ {
+  "id": "hono-blast-newresponse",
+  "repo": "hono",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 10,
+  "question": "Suppose the public `newResponse` method of `Context` (src/context.ts; not the private `#newResponse`) changes its signature. Which non-test source files under src/ contain a call to it, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call. Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`)."
+ },
+ {
+  "id": "hono-blast-httpexception",
+  "repo": "hono",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 15,
+  "question": "Suppose the constructor of `HTTPException` (src/http-exception.ts) gains a required parameter. Which non-test source files under src/ contain code that constructs an `HTTPException` (`new HTTPException(...)`, inside a function or at module level), or a call to a function or method that does (two levels)? Name the file that contains each such call. Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`)."
+ },
+ {
+  "id": "hono-amb-req-header",
+  "repo": "hono",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 12,
+  "question": "Both `Context` (src/context.ts) and `HonoRequest` (src/request.ts) have a method named `header`. Which functions or methods outside src/adapter/ call the `header` method of `HonoRequest` (for example `c.req.header('X')`), as opposed to `Context.header`? Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`)."
+ },
+ {
+  "id": "hono-tests-buffertoformdata",
+  "repo": "hono",
+  "type": "tests",
+  "answer_kind": "files",
+  "n_gold": 10,
+  "question": "Which test files under src/ (`*.test.ts`, `*.test.tsx`) exercise `bufferToFormData` (src/utils/buffer.ts) through a chain of direct calls: code in the test file calls it, or calls a non-test function from which it is reachable through direct calls? Code anywhere in a test file counts, including inside `describe`/`it` callbacks and handlers the file defines. Count only direct calls (`new` included) that resolve to a declaration, following imports, re-exports and the static type of the receiver (so `c.req.parseBody()` calls `HonoRequest.parseBody`), whatever the arguments or branches; inside non-test code, a call in a nested function or callback counts for the outermost named function that contains it. Calls through callback parameters, interface-typed values or function values do not count, and sending a request to an app (`app.request(...)`, `fetch`) does not count as calling its handlers. Answer with file paths."
+ },
+ {
+  "id": "hono-tests-serialize",
+  "repo": "hono",
+  "type": "tests",
+  "answer_kind": "files",
+  "n_gold": 14,
+  "question": "Which test files under src/ (`*.test.ts`, `*.test.tsx`) exercise `_serialize` (src/utils/cookie.ts) through a chain of direct calls: code in the test file calls it, or calls a non-test function from which it is reachable through direct calls? Code anywhere in a test file counts, including inside `describe`/`it` callbacks and handlers the file defines. Count only direct calls (`new` included) that resolve to a declaration, following imports, re-exports and the static type of the receiver (so `c.req.parseBody()` calls `HonoRequest.parseBody`), whatever the arguments or branches; inside non-test code, a call in a nested function or callback counts for the outermost named function that contains it. Calls through callback parameters, interface-typed values or function values do not count, and sending a request to an app (`app.request(...)`, `fetch`) does not count as calling its handlers. Answer with file paths."
+ },
+ {
+  "id": "hono-flow-validator",
+  "repo": "hono",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 11,
+  "question": "List every function or method that lies on at least one chain of direct calls from `validator` (src/validator/validator.ts) to `tryDecodeURIComponent` (src/utils/url.ts), including both ends. Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`)."
+ },
+ {
+  "id": "fastapi-tc-oauth-scopes",
+  "repo": "fastapi",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 13,
+  "question": "Which functions or methods in the `fastapi/` package call `_get_oauth_scopes` (fastapi/dependencies/models.py) directly, call such a caller, or call one of those (every caller up to three levels up)? Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes or through function values do not count. Ignore docstrings and comments. Do not list `_get_oauth_scopes` itself."
+ },
+ {
+  "id": "fastapi-tc-annotation-sequence",
+  "repo": "fastapi",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 18,
+  "question": "Which functions or methods in the `fastapi/` package call `field_annotation_is_sequence` (fastapi/_compat/shared.py) directly, call such a caller, or call one of those (every caller up to three levels up)? Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes or through function values do not count. Ignore docstrings and comments. Do not list `field_annotation_is_sequence` itself."
+ },
+ {
+  "id": "fastapi-flow-openapi-path",
+  "repo": "fastapi",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 8,
+  "question": "List every function or method in the `fastapi/` package that lies on at least one chain of direct calls from `get_openapi_path` (fastapi/openapi/utils.py) to `lenient_issubclass` (fastapi/_compat/shared.py), including both ends. Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes or through function values do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "fastapi-flow-openapi-cache-key",
+  "repo": "fastapi",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 7,
+  "question": "List every function or method in the `fastapi/` package that lies on at least one chain of direct calls from the `openapi` method of `FastAPI` (fastapi/applications.py) to `_get_cache_key` (fastapi/dependencies/models.py), including both ends. Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes or through function values do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "fastapi-amb-httpexception",
+  "repo": "fastapi",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 9,
+  "question": "FastAPI defines its own `HTTPException` class in fastapi/exceptions.py, a subclass of Starlette's class of the same name, and modules of the package import one or the other. Which functions or methods in the `fastapi/` package construct an instance of FastAPI's `HTTPException` (fastapi/exceptions.py) - not Starlette's - either directly or by calling a method that constructs one? A call through `self` runs the implementation that the instance's class uses (inherited unless overridden). Ignore docstrings and comments."
+ }
+]

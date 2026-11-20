@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 import os
 import shutil
 import subprocess
@@ -12,12 +13,45 @@ from pathlib import Path
 
 EVAL_DIR = Path(__file__).resolve().parent.parent
 REPOS_FILE = EVAL_DIR / "repos.json"
-TASKS_FILE = EVAL_DIR / "tasks" / "tasks.json"
+TASKS_FILE = EVAL_DIR / "tasks" / "tasks.json"  # the pilot's set (#99)
+HARD_TASKS_FILE = EVAL_DIR / "tasks" / "tasks-hard.json"  # multi-hop set (#125)
 INTENTS_FILE = EVAL_DIR / "toolsel" / "intents.json"
 RUNS_DIR = EVAL_DIR / "runs"  # raw transcripts; git-ignored
 RESULTS_DIR = EVAL_DIR / "results"  # compact, committed results
 
-CONDITIONS = ("with", "without")
+# Conditions of a run. `with` / `without` are the pilot's (#99) two arms and
+# keep its exact setup. The variant matrix of #125 adds `none` (no MCP
+# server, used for calibration) and the integration variants `A`, `C`, `E`,
+# which all load project settings and CLAUDE.md files from the working copy
+# (`--setting-sources project`) and differ only in what `myc setup-claude`
+# put there; see VARIANTS.
+CONDITIONS = ("with", "without", "none", "A", "C", "E")
+
+
+@dataclass(frozen=True)
+class Variant:
+    """What a condition adds to the session."""
+
+    mcp: bool  # the myceliums MCP server (default core toolset)
+    setup_claude: bool = False  # `myc setup-claude --scope project` files in the working copy
+    agent: bool = False  # ... including the code-explorer subagent, and the Agent tool
+    legacy: bool = False  # the pilot's flags: no setting sources, CLAUDE.md disabled
+
+
+VARIANTS = {
+    "with": Variant(mcp=True, legacy=True),
+    "without": Variant(mcp=False, legacy=True),
+    "none": Variant(mcp=False),
+    "A": Variant(mcp=True),
+    "C": Variant(mcp=True, setup_claude=True),
+    "E": Variant(mcp=True, setup_claude=True, agent=True),
+}
+
+# Claude Code's built-in subagents (2.1.329). Variant E denies them, so the
+# Agent tool offers the code-explorer subagent only and E differs from C by
+# that one layer.
+BUILTIN_AGENTS = ("Explore", "general-purpose", "Plan", "claude", "statusline-setup", "web-fetch")
+EXPLORER_AGENT = "code-explorer"
 # Built-in tools of both conditions: read and search only, no shell, no writes.
 # ToolSearch is part of the default Claude Code tool set: with it, MCP tool
 # definitions are deferred (listed by name, loaded on demand), which is how a
@@ -53,8 +87,13 @@ def load_repos() -> dict[str, dict]:
     return {r["name"]: r for r in load_json(REPOS_FILE)["repos"]}
 
 
+def tasks_file() -> Path:
+    """The task set in use: ``$AEVAL_TASKS`` (a path) or the pilot's set."""
+    return Path(os.environ["AEVAL_TASKS"]) if os.environ.get("AEVAL_TASKS") else TASKS_FILE
+
+
 def load_tasks() -> list[dict]:
-    return load_json(TASKS_FILE)["tasks"]
+    return load_json(tasks_file())["tasks"]
 
 
 def sha256_file(path: Path) -> str:
@@ -107,10 +146,25 @@ ISOLATION_ENV = {
 }
 
 
-def session_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+
+def session_env(extra: dict[str, str] | None = None, legacy: bool = True,
+                bin_dir: Path | None = None) -> dict[str, str]:
+    """The session's environment.
+
+    ``legacy`` (the pilot's arms) disables every CLAUDE.md. The variants keep
+    CLAUDE.md files on: with ``--setting-sources project`` Claude Code then
+    reads the working copy's CLAUDE.md (where ``myc setup-claude`` writes the
+    routing block) but not ``~/.claude/CLAUDE.md`` (checked with ``probe``).
+    ``bin_dir`` goes first on PATH: it holds the ``myc`` wrapper the hooks
+    call.
+    """
     env = {k: os.environ[k] for k in PASSTHROUGH_ENV if k in os.environ}
-    env["PATH"] = "/usr/bin:/bin:/usr/sbin:/sbin"
+    env["PATH"] = f"{bin_dir}:{SYSTEM_PATH}" if bin_dir else SYSTEM_PATH
     env.update(ISOLATION_ENV)
+    if not legacy:
+        env.pop("CLAUDE_CODE_DISABLE_CLAUDE_MDS")
     if extra:
         env.update(extra)
     return env

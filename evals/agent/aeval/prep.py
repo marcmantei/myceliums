@@ -75,8 +75,8 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
                 patterns = DEFAULT_EXCLUDE + r["index_exclude_extra"]
                 (work / ".myceliums.toml").write_text(
                     "[analysis]\nexclude = [" + ", ".join(json.dumps(x) for x in patterns) + "]\n")
-            env = {"HOME": str(home), "FASTEMBED_CACHE_DIR": models_dir,
-                   "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
+            env = {"HOME": str(home), "MYCELIUMS_DATA_DIR": str(home / ".myceliums"),
+                   "FASTEMBED_CACHE_DIR": models_dir, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
             started = time.time()
             res = subprocess.run([myc, "analyze", str(work), "--strict-embeddings"],
                                  env=env, capture_output=True, text=True)
@@ -128,7 +128,9 @@ def index_meta() -> dict[str, dict]:
     return out
 
 
-TASK_TYPES = {"callers", "callees", "impact", "where", "dead_code", "flow"}
+TASK_TYPES = {"callers", "callees", "impact", "where", "dead_code", "flow",
+              # multi-hop types of the hard set (#125)
+              "transitive_callers", "blast_radius", "ambiguous", "tests"}
 
 
 def check_tasks(tasks: list[dict], repos: dict[str, dict], check_evidence: bool = True) -> list[str]:

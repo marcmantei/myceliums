@@ -3,33 +3,45 @@
 A code knowledge graph only helps an agent that uses it. The agent pilot
 ([#99](../../evals/agent/README.md), 12 November 2026) measured the weakest
 integration, the MCP server attached and nothing else: Claude Code called a
-myceliums tool in **0 of 90** sessions. Claude Code defers MCP tool schemas
-behind tool search, so the agent saw 54 tool names and never loaded one, and
-nothing in its context sent it from grep to the graph. (The pilot ran myc
-0.3.2; since #97 the server's default is a 9-tool core toolset loaded up
-front, layer 2 below.)
+myceliums tool in **0 of 90** sessions. Claude Code deferred the server's 54
+tool schemas behind tool search, so the agent saw tool names and never loaded
+one, and nothing in its context sent it from grep to the graph.
+
+The variant matrix ([#125](../../evals/agent/README.md#variant-matrix-125),
+20 November 2026, [report](../../evals/agent/results/2026-11-20-variants/REPORT.md))
+measured three integrations on 20 harder multi-hop tasks (transitive callers,
+blast radius, same-name symbols, tests that reach a function, call chains)
+with `claude-sonnet-5-5` in Claude Code 2.1.329, 116 graded sessions:
+
+| Variant | What the session has | Sessions with ≥ 1 myceliums call | First tool (most common) | Success / mean F1 | Input tokens, cost vs A |
+|---|---|---:|---|---:|---:|
+| A | MCP server only, 9 core tools loaded up front (layer 2) | 80 % (32 of 40) | `Grep` | 100 % / 0.984 | – |
+| C | A + what `myc setup-claude --no-agent` installs: routing block, grep hook, SessionStart and result-format hooks (layers 1-3) | 100 % (38 of 38) | `find_callers` | 98 % / 0.983 | 0.96×, 0.98× |
+| E | C + the `code-explorer` subagent (layer 4) | 97 % (37 of 38) | `find_callers` | 100 % / 0.989 | 0.96×, 0.93× |
+
+> **What the numbers say, and what they do not.** With the core tools loaded
+> up front the agent uses myceliums; the routing block and hooks push the rate
+> from 80 % to 100 % (+20 pp [+5, +38], paired over tasks) and make a graph
+> query the first step. On these tasks that did **not** change accuracy, tokens
+> or cost measurably: all variants were at or near the ceiling (F1 differences
+> within ±0.03), and the token and cost intervals span roughly ±25 %. The
+> subagent was never called. The matrix had no deferred-tools control, so it
+> does not show how much of the jump from 0 % to 80 % is layer 2's doing (the
+> task set and Claude Code version also changed since the pilot), and it did
+> not test routing without hooks (B) or hooks without up-front tools (D).
 
 This guide describes five ways to route an agent to myceliums, from soft to
 hard, and what `myc setup-claude` installs for each.
 
-> **What is measured and what is not.** The only measured result so far is the
-> pilot above (MCP server only: 0 % tool-call rate, +25 % input tokens, no
-> accuracy change on an easy task set). How much each layer below changes
-> tool use, accuracy and cost is being measured in
-> [#125](https://github.com/marcmantei/myceliums/issues/125) (variants A–E on a
-> harder task set). Until those numbers are in, treat the "effect" column as
-> the design intent, not a result. The recommended default will follow the
-> measurements.
-
 ## The five layers
 
-| Layer | What | Intended effect | Risk | Status |
+| Layer | What | Measured (#125, Claude Code 2.1.329) | Cost | Status |
 |---|---|---|---|---|
-| 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | cheap, only a hint | ignored under pressure | `myc setup-claude`, `myc setup-codex` |
-| 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | the model sees and understands them | each up-front schema costs context in every request | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
-| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | fires at the moment the agent reaches for grep | blocking grep would be wrong, so it never blocks | `myc setup-claude` |
-| 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | clean separation, good for teams | one extra hop | `myc setup-claude` |
-| 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | full control | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
+| 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | together with layer 3 (variant C): myceliums used in 100 % of sessions instead of 80 %, first call a graph query; not measured alone | +348 tokens per request | `myc setup-claude`, `myc setup-codex` |
+| 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | variant A: myceliums used in 80 % of sessions (pilot with 54 deferred tools: 0 %; not a controlled comparison) | the schemas are in every request (A's first prompt: 10,162 tokens) | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
+| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line is a `systemMessage` the model does not see | a few ms per Grep (400 ms cap) | `myc setup-claude` |
+| 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | never called (0 of 38 sessions): with the tools in the main context the agent queries them itself | about 1,860 tokens per request more than C (Agent tool and its agent list) | `myc setup-claude` |
+| 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | not measured | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
 
 Layers 1, 3 and 4 work through the same one-shot CLI commands, which any
 agent with a shell can call:
@@ -59,6 +71,14 @@ myc analyze .
 myc setup-claude                  # project scope: files to commit for the team
 myc setup-claude --scope user     # or: every project, for you only
 ```
+
+In this order the files `setup-claude` writes (`CLAUDE.md`, `.mcp.json`,
+`.claude/`) are uncommitted and newer than the index. The SessionStart hook
+still reports the index as ready (it compares commits), but the MCP `analyze`
+tool's freshness check counts them as edits and re-indexes when the agent
+calls it: in the #125 matrix that happened twice on hono, once running into
+the 300 s tool timeout and once dropping the embeddings. Committing the files
+(as for a team) or `myc analyze . --force` after `setup-claude` avoids it.
 
 What each layer writes:
 
@@ -172,8 +192,10 @@ search ([Claude Code docs](https://code.claude.com/docs/en/mcp)):
   myceliums tool deferred. A project's `.mcp.json` never gets the key (see
   Team mode).
 
-How much this changes tool use is measured in
-[#125](https://github.com/marcmantei/myceliums/issues/125) (variant C).
+In the #125 matrix all nine were sent with their full schemas in every
+session (none deferred), and the agent called a myceliums tool in 80 % of the
+sessions that had only the server; `find_callers`, `find_callees` and
+`trace_flow` took most of the calls.
 
 ## 5. Custom harness: prefetch a context pack
 

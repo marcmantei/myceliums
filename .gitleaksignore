@@ -1,0 +1,2 @@
+# False positive: a Go test name (TestFuzzyMatchV2TwoEquivalence) in an agent's answer, flagged as generic-api-key.
+evals/agent/results/2026-11-20-variants/results.jsonl:generic-api-key:76
