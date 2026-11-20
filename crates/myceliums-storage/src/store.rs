@@ -1291,6 +1291,11 @@ impl Store {
             let signatures = col_str(batch, "signature");
             let contents = col_str(batch, "content");
             let repo_ids = col_str(batch, "repo_id");
+            // Metadata carries the test-code classification search ranks by
+            // (#146), so a vector hit must keep it like any other read.
+            let metadata_col = batch
+                .column_by_name("metadata")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>().cloned());
 
             // LanceDB adds a _distance column for vector search results
             let distances = batch
@@ -1322,7 +1327,10 @@ impl Store {
                         signature: signatures.value(i).to_string(),
                         content: contents.value(i).to_string(),
                         repo_id: repo_ids.value(i).to_string(),
-                        metadata: None,
+                        metadata: metadata_col
+                            .as_ref()
+                            .filter(|col| !col.is_null(i) && !col.value(i).is_empty())
+                            .map(|col| col.value(i).to_string()),
                     },
                     score,
                 ));
@@ -1666,7 +1674,7 @@ mod tests {
 
         let symbols = vec![
             make_symbol("near", None),
-            make_symbol("mid", None),
+            make_symbol("mid", Some(r#"{"test":true}"#)),
             make_symbol("far", None),
         ];
         store.store_symbols(&symbols).await.unwrap();
@@ -1682,6 +1690,10 @@ mod tests {
         let query = mk(1.0, 0.0, 0.0);
         let results = store.vector_search(&query, 3).await.unwrap();
         assert_eq!(results.len(), 3);
+        // Hits keep their metadata: search ranks test code by it (#146).
+        for (sym, _) in &results {
+            assert_eq!(sym.is_test(), sym.uid == "mid", "{}", sym.uid);
+        }
 
         // Every exposed score is a cosine similarity within [-1, 1].
         for (sym, score) in &results {
