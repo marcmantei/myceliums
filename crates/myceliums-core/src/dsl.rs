@@ -92,7 +92,10 @@ pub enum ImportStrategy {
     PythonImport,
     /// Python-style: `from foo import bar, baz as qux`
     /// module_name field + named children.
-    PythonFromImport { module_field: &'static str },
+    PythonFromImport {
+        /// Name of the field that holds the module (`module_name`).
+        module_field: &'static str,
+    },
     /// Go-style: `import "fmt"` / `import (\n "fmt" \n "os" \n)`
     GoImport,
 }
@@ -107,6 +110,7 @@ pub struct DslEngine<'a> {
 }
 
 impl<'a> DslEngine<'a> {
+    /// An engine applying `rules` to the parsed `source`.
     pub fn new(rules: &'a LanguageRules, source: &'a [u8]) -> Self {
         Self { rules, source }
     }

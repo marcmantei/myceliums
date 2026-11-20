@@ -27,9 +27,17 @@ const STRUCTURAL_FILES: &[&str] = &[
 #[derive(Debug)]
 pub enum CacheDecision {
     /// Cached analysis is fresh enough to reuse.
-    UseCached { repo_id: String, reason: String },
+    UseCached {
+        /// The registered id of the cached analysis.
+        repo_id: String,
+        /// Why the cache is considered fresh.
+        reason: String,
+    },
     /// Re-analysis is needed.
-    ReanalyzeNeeded { reason: String },
+    ReanalyzeNeeded {
+        /// Why the cache cannot be used.
+        reason: String,
+    },
 }
 
 /// Configuration for cache freshness checks.

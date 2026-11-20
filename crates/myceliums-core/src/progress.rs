@@ -13,7 +13,12 @@ pub enum AnalysisPhase {
     /// Discovering source files in the repository.
     Discovering,
     /// Parsing source files. `current` and `total` track progress.
-    Parsing { current: usize, total: usize },
+    Parsing {
+        /// Files parsed so far.
+        current: usize,
+        /// Files to parse.
+        total: usize,
+    },
     /// Building the symbol relationship graph.
     BuildingRelationships,
     /// Running Leiden community detection.
@@ -21,14 +26,25 @@ pub enum AnalysisPhase {
     /// Tracing execution flows / processes.
     TracingProcesses,
     /// Generating vector embeddings for semantic search.
-    GeneratingEmbeddings { current: usize, total: usize },
+    GeneratingEmbeddings {
+        /// Symbols embedded so far.
+        current: usize,
+        /// Symbols to embed.
+        total: usize,
+    },
     /// Analysis finished successfully.
-    Complete { symbols: usize, files: usize },
+    Complete {
+        /// Symbols indexed.
+        symbols: usize,
+        /// Files indexed.
+        files: usize,
+    },
 }
 
 /// Trait for reporting analysis progress. Implementors must be thread-safe
 /// because the parsing phase runs on a rayon thread pool.
 pub trait ProgressReporter: Send + Sync {
+    /// Reports that the analysis entered `phase` (or made progress in it).
     fn report(&self, phase: AnalysisPhase);
 }
 
@@ -49,6 +65,7 @@ pub struct AtomicProgress {
 }
 
 impl AtomicProgress {
+    /// A counter at 0 of `total`.
     pub fn new(total: usize) -> Self {
         Self {
             counter: Arc::new(AtomicUsize::new(0)),
@@ -66,6 +83,7 @@ impl AtomicProgress {
         self.counter.load(Ordering::Relaxed)
     }
 
+    /// The total the counter counts towards.
     pub fn total(&self) -> usize {
         self.total
     }

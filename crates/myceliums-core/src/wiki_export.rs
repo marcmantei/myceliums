@@ -13,8 +13,11 @@ use crate::community::compute_uid_to_community_label;
 
 /// Result summary returned after exporting.
 pub struct WikiExportResult {
+    /// Communities written as pages.
     pub community_count: usize,
+    /// Symbols written.
     pub symbol_count: usize,
+    /// Relationships written.
     pub relationship_count: usize,
 }
 

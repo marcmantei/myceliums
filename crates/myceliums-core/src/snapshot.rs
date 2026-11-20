@@ -15,7 +15,9 @@ use std::path::{Path, PathBuf};
 /// A lightweight graph snapshot — stable keys and display-friendly names.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphSnapshot {
+    /// Registered id of the repository.
     pub repo_id: String,
+    /// When the snapshot was taken (RFC 3339).
     pub created_at: String,
     /// Map of symbol UID -> human label  (e.g. "Function  MyClass.foo")
     pub symbols: BTreeMap<String, String>,
@@ -26,18 +28,28 @@ pub struct GraphSnapshot {
 /// Result of comparing two snapshots.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphDiff {
+    /// Registered id of the repository.
     pub repo_id: String,
+    /// When the older snapshot was taken.
     pub previous_snapshot_at: String,
+    /// When the newer snapshot was taken.
     pub current_snapshot_at: String,
+    /// Symbols only in the newer snapshot.
     pub added_symbols: Vec<DiffEntry>,
+    /// Symbols only in the older snapshot.
     pub removed_symbols: Vec<DiffEntry>,
+    /// Relationships only in the newer snapshot.
     pub added_edges: Vec<DiffEntry>,
+    /// Relationships only in the older snapshot.
     pub removed_edges: Vec<DiffEntry>,
 }
 
+/// A symbol or relationship in a [`GraphDiff`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DiffEntry {
+    /// Stable key of the symbol or relationship.
     pub uid: String,
+    /// Human-readable label.
     pub label: String,
 }
 
@@ -230,10 +242,15 @@ pub fn diff_snapshots(previous: &GraphSnapshot, current: &GraphSnapshot) -> Grap
 /// Summary of a stored snapshot (lightweight, without full data).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SnapshotSummary {
+    /// Id of the stored snapshot.
     pub snapshot_id: String,
+    /// When it was taken (RFC 3339).
     pub created_at: String,
+    /// Commit the analysis ran on, if known.
     pub commit_sha: Option<String>,
+    /// Number of symbols in the snapshot.
     pub symbol_count: usize,
+    /// Number of relationships in the snapshot.
     pub edge_count: usize,
 }
 

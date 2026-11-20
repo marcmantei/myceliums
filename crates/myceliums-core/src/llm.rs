@@ -33,12 +33,15 @@ pub trait LlmProvider: Send + Sync {
 
 /// Provider that talks to a local [Ollama](https://ollama.com/) instance.
 pub struct OllamaProvider {
+    /// Base URL of the Ollama server.
     pub base_url: String,
+    /// Model name.
     pub model: String,
     client: reqwest::Client,
 }
 
 impl OllamaProvider {
+    /// A provider for `model` on the Ollama server at `base_url`.
     pub fn new(base_url: impl Into<String>, model: impl Into<String>) -> Self {
         Self {
             base_url: base_url.into(),
@@ -106,13 +109,17 @@ impl LlmProvider for OllamaProvider {
 
 /// Provider that talks to any OpenAI-compatible API endpoint.
 pub struct OpenAICompatibleProvider {
+    /// Base URL of the API.
     pub base_url: String,
+    /// Model name.
     pub model: String,
+    /// API key, sent as a bearer token.
     pub api_key: Option<String>,
     client: reqwest::Client,
 }
 
 impl OpenAICompatibleProvider {
+    /// A provider for `model` at `base_url`, authenticating with `api_key` if given.
     pub fn new(
         base_url: impl Into<String>,
         model: impl Into<String>,

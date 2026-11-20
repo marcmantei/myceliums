@@ -162,18 +162,24 @@ impl CallStats {
 /// A point-in-time copy of [`CallStats`] (the JSON of `--stats-file`).
 #[derive(Debug, Clone, Serialize)]
 pub struct StatsSnapshot {
+    /// Seconds since the server started.
     pub uptime_secs: u64,
+    /// Tool calls recorded, over every tool.
     pub total_calls: u64,
     /// Percentiles are over at most this many recent calls per tool.
     pub latency_window: usize,
+    /// One entry per tool of the catalog.
     pub tools: Vec<ToolSnapshot>,
 }
 
 /// The numbers of one tool.
 #[derive(Debug, Clone, Serialize)]
 pub struct ToolSnapshot {
+    /// The tool name.
     pub tool: String,
+    /// The toolset the tool belongs to, if it is in one.
     pub toolset: Option<&'static str>,
+    /// Calls recorded for this tool.
     pub calls: u64,
     /// Results with `isError: true`.
     pub is_errors: u64,
@@ -181,8 +187,11 @@ pub struct ToolSnapshot {
     pub protocol_errors: u64,
     /// Calls dropped before they answered.
     pub cancelled: u64,
+    /// Median latency in milliseconds over the latency window.
     pub p50_ms: f64,
+    /// 95th-percentile latency in milliseconds over the latency window.
     pub p95_ms: f64,
+    /// Slowest call in milliseconds over the latency window.
     pub max_ms: f64,
     /// Bytes of result text (what the agent reads), summed.
     pub result_bytes: u64,

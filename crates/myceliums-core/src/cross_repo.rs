@@ -20,8 +20,11 @@ use crate::search::search_symbols;
 /// A cluster of symbols from one repo that collectively implement an "intent."
 #[derive(Debug, Clone, Serialize)]
 pub struct IntentSlice {
+    /// Registered id of the repository.
     pub repo_id: String,
+    /// Display name of the repository.
     pub repo_name: String,
+    /// The intent the slice was isolated for.
     pub intent_query: String,
     /// Seed symbols found by search
     pub seed_symbols: Vec<SliceSymbol>,
@@ -40,13 +43,21 @@ pub struct IntentSlice {
 /// Lightweight symbol representation for cross-repo output.
 #[derive(Debug, Clone, Serialize)]
 pub struct SliceSymbol {
+    /// Symbol uid.
     pub uid: String,
+    /// Short name.
     pub name: String,
+    /// Qualified name.
     pub qualified_name: String,
+    /// Symbol kind.
     pub kind: String,
+    /// Repository-relative file path.
     pub file_path: String,
+    /// First line (1-based).
     pub start_line: u32,
+    /// Last line (1-based).
     pub end_line: u32,
+    /// Signature line.
     pub signature: String,
 }
 
@@ -68,70 +79,105 @@ impl From<&CodeSymbol> for SliceSymbol {
 /// Lightweight relationship for cross-repo output.
 #[derive(Debug, Clone, Serialize)]
 pub struct SliceRelationship {
+    /// Name of the source symbol.
     pub source_name: String,
+    /// Name of the target symbol.
     pub target_name: String,
+    /// Relationship kind.
     pub kind: String,
 }
 
 /// A pair of matched symbols across repos.
 #[derive(Debug, Clone, Serialize)]
 pub struct SymbolAlignment {
+    /// The symbol in the source repository.
     pub source_symbol: SliceSymbol,
+    /// The matching symbol in the target repository.
     pub target_symbol: SliceSymbol,
+    /// Similarity of the two, from 0.0 to 1.0.
     pub similarity_score: f64,
-    pub match_type: String, // "DirectMatch", "SemanticMatch"
+    /// How the match was found: `DirectMatch` or `SemanticMatch`.
+    pub match_type: String,
 }
 
 /// A symbol present in one slice but not the other.
 #[derive(Debug, Clone, Serialize)]
 pub struct UnmatchedSymbol {
+    /// The unmatched symbol.
     pub symbol: SliceSymbol,
-    pub side: String, // "source" or "target"
+    /// Which slice it belongs to: `source` or `target`.
+    pub side: String,
 }
 
 /// Structural difference along a specific dimension.
 #[derive(Debug, Clone, Serialize)]
 pub struct StructuralDiff {
+    /// What is compared (languages, size, communities, ...).
     pub dimension: String,
+    /// The value in the source slice.
     pub source_value: String,
+    /// The value in the target slice.
     pub target_value: String,
-    pub significance: String, // "critical", "notable", "minor"
+    /// How much the difference matters: `critical`, `notable` or `minor`.
+    pub significance: String,
 }
 
 /// Full differentiation report comparing two intent slices.
 #[derive(Debug, Clone, Serialize)]
 pub struct DifferentiationReport {
+    /// The intent both slices were isolated for.
     pub intent_query: String,
+    /// The slice of the source repository.
     pub source_slice: IntentSlice,
+    /// The slice of the target repository.
     pub target_slice: IntentSlice,
+    /// Symbols matched across the two slices.
     pub alignments: Vec<SymbolAlignment>,
+    /// Symbols without a counterpart.
     pub unmatched: Vec<UnmatchedSymbol>,
+    /// Differences in structure between the slices.
     pub structural_differences: Vec<StructuralDiff>,
 }
 
 /// A single step in an adaptation plan.
 #[derive(Debug, Clone, Serialize)]
 pub struct AdaptationStep {
+    /// Position of the step in the plan (1-based).
     pub order: u32,
+    /// What to do.
     pub action: String,
-    pub category: String, // "create", "adapt", "remove", "refactor"
+    /// Kind of step: `create`, `adapt`, `remove` or `refactor`.
+    pub category: String,
+    /// Names of the symbols the step touches.
     pub symbols_affected: Vec<String>,
+    /// Files the step touches.
     pub file_paths: Vec<String>,
+    /// Orders of the steps that must come first.
     pub prerequisite_steps: Vec<u32>,
 }
 
 /// Full adaptation plan for migrating between approaches.
 #[derive(Debug, Clone, Serialize)]
 pub struct AdaptationPlan {
+    /// The intent the plan migrates.
     pub intent_query: String,
-    pub direction: String, // "source_to_target" or "target_to_source"
+    /// Direction of the migration: `source_to_target` or `target_to_source`.
+    pub direction: String,
+    /// Repository migrated from.
     pub source_repo: String,
+    /// Repository migrated to.
     pub target_repo: String,
+    /// The steps, in order.
     pub steps: Vec<AdaptationStep>,
+    /// Symbols that have no counterpart yet and must be written.
     pub symbols_to_create: Vec<SliceSymbol>,
+    /// Matched symbols that need changes.
     pub symbols_to_adapt: Vec<SymbolAlignment>,
+    /// Symbols that become unnecessary.
     pub symbols_to_remove: Vec<SliceSymbol>,
-    pub effort_estimate: String, // "small", "medium", "large", "very_large"
+    /// Rough size of the work: `small`, `medium`, `large` or `very_large`.
+    pub effort_estimate: String,
+    /// What could go wrong.
     pub risks: Vec<String>,
 }
 
@@ -139,7 +185,9 @@ pub struct AdaptationPlan {
 
 /// Configuration for intent isolation.
 pub struct IsolateConfig {
+    /// Most symbols a slice may hold.
     pub max_symbols: usize,
+    /// How many call-graph hops the seed symbols are expanded by.
     pub expansion_depth: u32,
 }
 
@@ -517,6 +565,7 @@ pub async fn isolate_intent_hybrid(
 
 /// Configuration for differentiation.
 pub struct DifferentiateConfig {
+    /// Smallest similarity at which two symbols count as a match.
     pub similarity_threshold: f64,
 }
 

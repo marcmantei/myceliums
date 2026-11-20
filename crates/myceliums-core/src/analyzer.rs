@@ -361,6 +361,7 @@ impl Analyzer {
         merged.record(&self.store).await
     }
 
+    /// Runs a full analysis of the repository: discovers and parses the files, resolves relationships, writes everything to the store and generates embeddings unless they are skipped.
     pub async fn analyze(&self) -> Result<AnalysisResult> {
         let overall_timer = Timer::start();
 

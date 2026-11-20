@@ -9,14 +9,18 @@ use std::path::{Path, PathBuf};
 /// A single community-to-service mapping.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceEntry {
+    /// Label of the community.
     pub community_label: String,
+    /// Service name the community is mapped to.
     pub service_name: String,
 }
 
 /// All service mappings for a repository.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceMapping {
+    /// Registered id of the repository.
     pub repo_id: String,
+    /// One entry per mapped community.
     pub mappings: Vec<ServiceEntry>,
 }
 

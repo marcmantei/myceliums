@@ -77,21 +77,28 @@
 //! open an index built with embeddings, and must be able to read its accounting
 //! to warn that vectors are missing.
 
+#![warn(missing_docs)]
+
 // ── Public modules ───────────────────────────────────────────────────
 
 pub mod adr;
+/// File discovery, parsing and the full analysis pipeline ([`Analyzer`]).
 pub mod analyzer;
 pub mod arch_diagram;
 pub mod arch_lint;
 pub mod batch_writer;
 pub mod cache;
+/// Degree, betweenness, closeness and eigenvector centrality.
 pub mod centrality;
 pub mod codeowners;
+/// Leiden community detection and community labels.
 pub mod community;
 pub mod config;
 pub mod contracts;
 pub mod cross_repo;
+/// Dependency cycle detection.
 pub mod cycles;
+/// File dependencies and module coupling metrics.
 pub mod dependencies;
 pub mod drift;
 pub mod dsl;
@@ -112,6 +119,7 @@ pub mod file_guard;
 pub mod git_metadata;
 pub mod git_read;
 pub mod global_config;
+/// Symbols with an unusually high number of relationships.
 pub mod god_nodes;
 pub mod graphml_export;
 pub mod hotspot_score;
@@ -139,8 +147,10 @@ pub mod service;
 pub mod service_map;
 pub mod snapshot;
 pub mod staging;
+/// Relationships that cross between otherwise separate communities.
 pub mod surprising_connections;
 pub mod text;
+/// Timing of the analysis phases.
 pub mod timing;
 pub mod tokenize;
 pub mod watch;

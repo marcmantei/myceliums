@@ -24,7 +24,10 @@ pub enum LockOutcome {
     /// Lock acquired — caller should proceed with analysis.
     Acquired(AnalysisLock),
     /// Another live process already holds the lock.
-    AlreadyRunning { pid: u32 },
+    AlreadyRunning {
+        /// Process id of the holder (0 if the lock file could not be read).
+        pid: u32,
+    },
 }
 
 impl AnalysisLock {

@@ -10,22 +10,32 @@ use serde::Serialize;
 /// Classification of how a community changed.
 #[derive(Debug, Clone, Serialize)]
 pub struct CommunityChange {
+    /// Community label.
     pub label: String,
     /// One of: "added", "removed", "grown", "shrunk", "stable"
     pub change_type: String,
+    /// Member count before, if the community existed.
     pub old_count: Option<u32>,
+    /// Member count after, if the community still exists.
     pub new_count: Option<u32>,
 }
 
 /// Drift detection report.
 #[derive(Debug, Clone, Serialize)]
 pub struct DriftReport {
+    /// Overall amount of change, from 0.0 (none) to 1.0.
     pub drift_score: f64,
+    /// Symbols added since the previous snapshot.
     pub added_symbols: usize,
+    /// Symbols removed since the previous snapshot.
     pub removed_symbols: usize,
+    /// Relationships added since the previous snapshot.
     pub added_edges: usize,
+    /// Relationships removed since the previous snapshot.
     pub removed_edges: usize,
+    /// How each community changed.
     pub community_changes: Vec<CommunityChange>,
+    /// One-paragraph human-readable summary.
     pub summary: String,
 }
 

@@ -206,8 +206,10 @@ pub struct IndexEmbeddingMeta {
     pub model: String,
     /// Vector dimension.
     pub dim: usize,
+    /// Prefix prepended to queries before embedding (E5-style models).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query_prefix: Option<String>,
+    /// Prefix prepended to indexed passages before embedding (E5-style models).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub passage_prefix: Option<String>,
     /// Base URL of the embeddings API (remote only; not a secret).
@@ -623,7 +625,9 @@ pub fn truncate_content(s: &str, max_chars: usize) -> &str {
 /// without them).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EmbedInput {
+    /// A search query.
     Query,
+    /// An indexed document (symbol text).
     Passage,
 }
 

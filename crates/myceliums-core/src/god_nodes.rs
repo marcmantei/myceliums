@@ -2,15 +2,25 @@ use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind};
 use std::cmp::Reverse;
 use std::collections::HashMap;
 
+/// A symbol with an unusually high number of relationships.
 pub struct GodNodeItem {
+    /// Symbol uid.
     pub uid: String,
+    /// Short name.
     pub name: String,
+    /// Qualified name.
     pub qualified_name: String,
+    /// Symbol kind.
     pub kind: String,
+    /// Repository-relative file path.
     pub file_path: String,
+    /// Incoming plus outgoing relationships.
     pub degree: u32,
+    /// Incoming relationships.
     pub in_degree: u32,
+    /// Outgoing relationships.
     pub out_degree: u32,
+    /// Whether `degree` is above the coupling threshold.
     pub is_high_coupling: bool,
 }
 

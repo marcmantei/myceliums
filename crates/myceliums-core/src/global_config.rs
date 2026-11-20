@@ -14,14 +14,19 @@ use std::path::{Path, PathBuf};
 /// and [`GlobalConfig::save`] to persist changes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GlobalConfig {
+    /// The `[defaults]` section.
     #[serde(default = "DefaultsConfig::default")]
     pub defaults: DefaultsConfig,
+    /// The `[analysis]` section.
     #[serde(default = "AnalysisConfig::default")]
     pub analysis: AnalysisConfig,
+    /// The `[llm]` section.
     #[serde(default = "LlmConfig::default")]
     pub llm: LlmConfig,
+    /// The `[setup]` section.
     #[serde(default)]
     pub setup: SetupConfig,
+    /// The `[mcp]` section.
     #[serde(default)]
     pub mcp: McpConfig,
     #[serde(skip)]
@@ -161,8 +166,10 @@ impl Default for LlmConfig {
 /// Default settings section of the global config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DefaultsConfig {
+    /// Default number of results a search returns.
     #[serde(default = "default_max_results")]
     pub max_results: usize,
+    /// Default log level.
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
@@ -170,8 +177,10 @@ pub struct DefaultsConfig {
 /// Analysis defaults section of the global config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisConfig {
+    /// Glob patterns excluded from every analysis.
     #[serde(default = "default_exclude")]
     pub default_exclude: Vec<String>,
+    /// Largest file analyzed, in KB.
     #[serde(default = "default_max_file_size_kb")]
     pub max_file_size_kb: usize,
 }
@@ -231,10 +240,12 @@ impl Default for GlobalConfig {
 }
 
 impl GlobalConfig {
+    /// Path of the config file in `data_dir` (`config.toml`).
     pub fn config_path(data_dir: &Path) -> PathBuf {
         data_dir.join("config.toml")
     }
 
+    /// Loads `config.toml` from `data_dir`; defaults when the file does not exist.
     pub fn load(data_dir: &Path) -> Result<Self> {
         let path = Self::config_path(data_dir);
         if path.exists() {
@@ -257,6 +268,7 @@ impl GlobalConfig {
         self.path = path;
     }
 
+    /// Writes the config back to the file it was loaded from, creating the directory if needed.
     pub fn save(&self) -> Result<()> {
         if let Some(parent) = self.path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -390,12 +402,14 @@ impl GlobalConfig {
         Ok(())
     }
 
+    /// Resets every setting to its default, keeping the file path.
     pub fn reset(&mut self) {
         let path = self.path.clone();
         *self = GlobalConfig::default();
         self.path = path;
     }
 
+    /// The config as TOML, for display.
     pub fn display(&self) -> String {
         toml::to_string_pretty(self).unwrap_or_else(|_| format!("{:?}", self))
     }

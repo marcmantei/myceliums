@@ -11,27 +11,39 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 /// A service node in the architecture diagram (one per community).
 #[derive(Debug, Clone, Serialize)]
 pub struct ServiceNode {
+    /// Community id.
     pub id: String,
+    /// Community label shown in the diagram.
     pub label: String,
+    /// Number of symbols in the community.
     pub member_count: u32,
+    /// Names of the community's most central symbols.
     pub top_symbols: Vec<String>,
+    /// Symbols of the community that start a traced process.
     pub entry_points: Vec<String>,
 }
 
 /// A connection between two services.
 #[derive(Debug, Clone, Serialize)]
 pub struct ServiceConnection {
+    /// Id of the calling service.
     pub source: String,
+    /// Id of the called service.
     pub target: String,
+    /// Number of relationships between the two services.
     pub edge_count: u32,
+    /// Relationship kinds among those edges (`CALLS`, `IMPORTS`, ...).
     pub relationship_types: Vec<String>,
 }
 
 /// The complete architecture diagram output.
 #[derive(Debug, Clone, Serialize)]
 pub struct ArchDiagram {
+    /// One node per community.
     pub services: Vec<ServiceNode>,
+    /// Edges between communities.
     pub connections: Vec<ServiceConnection>,
+    /// The diagram as Mermaid source.
     pub mermaid: String,
 }
 

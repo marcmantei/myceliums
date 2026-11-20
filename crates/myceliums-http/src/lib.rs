@@ -1,3 +1,12 @@
+//! The `myc serve` dashboard: a loopback-only HTTP server with a
+//! single-page graph visualization and its JSON API.
+//!
+//! Every read of a repository's index goes through
+//! [`myceliums_core::GraphService`]; requests forged by web pages (DNS
+//! rebinding, cross-origin) are refused before any handler runs.
+
+#![warn(missing_docs)]
+
 use crate::routes::build_router;
 use crate::state::{data_dir, AppState};
 use anyhow::Result;

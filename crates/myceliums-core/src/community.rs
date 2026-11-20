@@ -80,6 +80,7 @@ impl CommunityDetector {
         )
     }
 
+    /// Detects communities in the symbol graph with the Leiden algorithm and labels each one from its members.
     pub fn detect(
         symbols: &[CodeSymbol],
         relationships: &[Relationship],
@@ -270,8 +271,11 @@ pub struct CommunityMetrics {
 /// Edge count between a pair of communities.
 #[derive(Debug, Clone)]
 pub struct CommunityCoupling {
+    /// Label of the first community.
     pub community_a: String,
+    /// Label of the second community.
     pub community_b: String,
+    /// Relationships between members of the two communities.
     pub edge_count: u32,
 }
 
