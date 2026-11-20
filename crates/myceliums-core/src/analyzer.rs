@@ -149,6 +149,19 @@ impl Analyzer {
         self
     }
 
+    /// An empty `__init__.py` is skipped like any empty file, but it still
+    /// makes its directory a Python package, which decides what an absolute
+    /// import names: the resolver gets its path (#139).
+    fn register_empty_package_marker(&self, resolver: &mut CallResolver, path: &Path) {
+        if path.file_name().is_some_and(|name| name == "__init__.py") {
+            let rel_path = path
+                .strip_prefix(&self.repo_path)
+                .unwrap_or(path)
+                .to_string_lossy();
+            resolver.register_file(&rel_path, &[], &[], &[], &[]);
+        }
+    }
+
     /// Run a full analysis of the repository.
     ///
     /// Walks all source files, parses them, builds the call graph, and
@@ -451,6 +464,7 @@ impl Analyzer {
             if raw_bytes.is_empty() {
                 warn!("Skipping {} — empty file", rel_path_display);
                 skipped_count += 1;
+                self.register_empty_package_marker(&mut resolver, path);
                 continue;
             }
 
@@ -1612,6 +1626,7 @@ impl Analyzer {
 
             if raw_bytes.is_empty() {
                 skipped_count += 1;
+                self.register_empty_package_marker(&mut resolver, path);
                 continue;
             }
 
@@ -2740,6 +2755,41 @@ mod tests {
             "took {:?}",
             start.elapsed()
         );
+    }
+
+    /// #139: an empty `__init__.py` makes `pkg` a package, so `import json`
+    /// in `pkg/api.py` is the standard library's `json`, not `pkg/json.py`
+    /// (Django's `django/utils/__init__.py` is empty).
+    #[tokio::test]
+    async fn an_empty_init_py_keeps_absolute_imports_off_package_modules() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        fs::create_dir_all(root.join("pkg")).unwrap();
+        fs::write(root.join("pkg/__init__.py"), "").unwrap();
+        fs::write(
+            root.join("pkg/json.py"),
+            "def dumps(value):\n    return repr(value)\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("pkg/api.py"),
+            "import json\n\n\ndef render():\n    return json.dumps({})\n",
+        )
+        .unwrap();
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::new(store, root).set_skip_embeddings(true);
+        analyzer.analyze().await.unwrap();
+        let calls: Vec<_> = analyzer
+            .store()
+            .get_relationships()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.kind == myceliums_storage::RelationshipKind::Calls)
+            .collect();
+        assert!(calls.is_empty(), "{calls:?}");
     }
 
     /// #127: the incremental path applies the same parse budget and records

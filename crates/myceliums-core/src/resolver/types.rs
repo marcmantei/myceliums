@@ -26,6 +26,30 @@ use super::imports::Bound;
 use super::{implicit_this, package_scope, CallResolver, Def, DefId, Site};
 use crate::parser::{BindingValue, ExpressionStep, TypeBinding};
 use myceliums_storage::SymbolKind;
+use std::cell::RefCell;
+use std::collections::HashMap;
+
+/// Memoised base classes and open hierarchies, per (class, depth). Every
+/// lookup they make goes deeper, so a memoised answer is the one the
+/// lookup would compute again; the resolver clears the memo whenever it
+/// re-prepares. Without it Django's library-member calls resolve the same
+/// bases tens of thousands of times.
+#[derive(Default)]
+pub(super) struct BaseMemo {
+    kinds: RefCell<HashMap<(DefId, u32), Vec<BaseKind>>>,
+    open: RefCell<HashMap<(DefId, u32), bool>>,
+}
+
+/// What a declared base class resolves to.
+#[derive(Clone, Copy)]
+enum BaseKind {
+    /// A project class, interface or trait.
+    Project(DefId),
+    /// Something outside the project.
+    Library,
+    /// A project name the resolver cannot pin down.
+    Unresolved,
+}
 
 /// How deep receiver typing follows bindings, return types and base
 /// classes.
@@ -88,15 +112,15 @@ impl CallResolver {
                 (Ty::Instance(class), ExpressionStep::Field(name)) => {
                     match self.field_ty(class, name, depth + 1) {
                         Some(ty) => ty,
-                        None => self.method_value(&self.methods_on(class, name, depth + 1)),
+                        None => self.member_value(class, name, depth + 1),
                     }
                 }
                 (Ty::Class(class), ExpressionStep::Field(name)) => {
                     match self.members_of(class, name).as_slice() {
                         [member] if self.defs[*member].is_class_like() => Ty::Class(*member),
-                        [] => self.field_ty(class, name, depth + 1).unwrap_or_else(|| {
-                            self.method_value(&self.methods_on(class, name, depth + 1))
-                        }),
+                        [] => self
+                            .field_ty(class, name, depth + 1)
+                            .unwrap_or_else(|| self.member_value(class, name, depth + 1)),
                         members => self.method_value(members),
                     }
                 }
@@ -117,6 +141,17 @@ impl CallResolver {
             };
         }
         ty
+    }
+
+    /// Member `name` of `class` as a value: its method; unknown when the
+    /// class does not declare it but may get it from a project base the
+    /// resolver cannot see; else a library member.
+    fn member_value(&self, class: DefId, name: &str, depth: u32) -> Ty {
+        let methods = self.methods_on(class, name, depth);
+        if methods.is_empty() && self.member_may_be_project(class, name, depth) {
+            return Ty::Unknown;
+        }
+        self.method_value(&methods)
     }
 
     /// A method used as a value (about to be called): the method, or for
@@ -374,6 +409,12 @@ impl CallResolver {
                         _ => Ty::Unknown,
                     },
                     Some(Bound::External) => Ty::External,
+                    // A module-level alias of a class (`Base = Model`,
+                    // `export { Hono as HonoBase }`).
+                    Some(value @ Bound::Value(..)) => match self.bound_ty(value, depth + 1) {
+                        Ty::Class(class) => Ty::Class(class),
+                        _ => Ty::Unknown,
+                    },
                     Some(_) => Ty::Unknown,
                     None if self.binds_names(site.family) => Ty::External,
                     None => Ty::Unknown,
@@ -401,7 +442,7 @@ impl CallResolver {
     /// The class a method belongs to: the class-like definition named like
     /// its container, in its file, its directory, or (Rust `impl` blocks)
     /// anywhere in its language family when only one has that name.
-    fn container_class(&self, member: DefId) -> Option<DefId> {
+    pub(super) fn container_class(&self, member: DefId) -> Option<DefId> {
         let def = &self.defs[member];
         let container = def.container.as_deref()?;
         let name = container.rsplit('.').next()?;
@@ -436,21 +477,135 @@ impl CallResolver {
     }
 
     /// The base classes of `class` that are project classes (Go: embedded
-    /// structs; Java: also implemented interfaces), resolved where the
-    /// class is declared.
+    /// structs; Java: also implemented interfaces; Rust: implemented traits),
+    /// each resolved where it is declared.
     pub(super) fn bases(&self, class: DefId, depth: u32) -> Vec<DefId> {
+        self.base_kinds(class, depth)
+            .into_iter()
+            .filter_map(|kind| match kind {
+                BaseKind::Project(base) => Some(base),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// What each declared base of `class` is.
+    fn base_kinds(&self, class: DefId, depth: u32) -> Vec<BaseKind> {
         if depth > MAX_DEPTH {
             return Vec::new();
         }
+        if let Some(kinds) = self.base_memo.kinds.borrow().get(&(class, depth)) {
+            return kinds.clone();
+        }
         let def = &self.defs[class];
-        let Some(site) = self.site_at(&def.file, def.start) else {
-            return Vec::new();
-        };
-        def.bases
+        let kinds: Vec<BaseKind> = def
+            .bases
             .iter()
-            .filter_map(|base| match self.type_ty(&site, base, depth + 1) {
-                Ty::Instance(base) if base != class => Some(base),
-                _ => None,
+            .map(|base| {
+                let (file, line) = match &base.at {
+                    Some((file, line)) => (file.as_str(), *line),
+                    None => (def.file.as_str(), def.start),
+                };
+                match self.site_at(file, line) {
+                    Some(site) => self.base_kind(&site, &base.text, class, depth),
+                    None => BaseKind::Unresolved,
+                }
+            })
+            .collect();
+        self.base_memo
+            .kinds
+            .borrow_mut()
+            .insert((class, depth), kinds.clone());
+        kinds
+    }
+
+    /// A base resolves to a project class, to something outside the
+    /// project (imported from a library, or a built-in / prelude name bound
+    /// nowhere: `Exception`, `Iterator`), or to neither: a project name the
+    /// resolver cannot pin down (a module-level value, a name a project
+    /// module exports invisibly, an ambiguous class name, a crate path it
+    /// cannot follow, a base computed by a call).
+    fn base_kind(&self, site: &Site, text: &str, class: DefId, depth: u32) -> BaseKind {
+        if text.contains('(') {
+            return BaseKind::Unresolved;
+        }
+        match self.type_ty(site, text, depth + 1) {
+            Ty::Instance(base) if base != class => return BaseKind::Project(base),
+            Ty::Instance(_) => return BaseKind::Library,
+            _ => {}
+        }
+        let Some(name) = type_name(site.family, text) else {
+            return BaseKind::Library;
+        };
+        if ["crate::", "self::", "super::"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+        {
+            return BaseKind::Unresolved;
+        }
+        let Some(first) = name
+            .split("::")
+            .flat_map(|s| s.split('.'))
+            .find(|s| !s.is_empty())
+        else {
+            return BaseKind::Unresolved;
+        };
+        if self.binding(site, first).is_some() || self.classes_in_scope(site, first).len() > 1 {
+            return BaseKind::Unresolved;
+        }
+        match self.imported(site, first) {
+            Some(Bound::External) | None => BaseKind::Library,
+            Some(_) => BaseKind::Unresolved,
+        }
+    }
+
+    /// Whether a member `name` that `class` and its project bases do not
+    /// declare may still be a project method: when a base in the hierarchy
+    /// is unresolved, or (Rust) a project trait declares a method of that
+    /// name — the type may implement it where the resolver did not look.
+    fn member_may_be_project(&self, class: DefId, name: &str, depth: u32) -> bool {
+        self.open_hierarchy(class, depth)
+            || (self.defs[class].family == "rs" && !self.trait_methods("rs", name).is_empty())
+    }
+
+    /// Whether `class` or one of its project bases has an unresolved base.
+    pub(super) fn open_hierarchy_of(&self, class: DefId) -> bool {
+        self.open_hierarchy(class, 0)
+    }
+
+    fn open_hierarchy(&self, class: DefId, depth: u32) -> bool {
+        if depth > MAX_DEPTH {
+            return false;
+        }
+        if let Some(&open) = self.base_memo.open.borrow().get(&(class, depth)) {
+            return open;
+        }
+        let open = self
+            .base_kinds(class, depth)
+            .into_iter()
+            .any(|kind| match kind {
+                BaseKind::Unresolved => true,
+                BaseKind::Project(base) => self.open_hierarchy(base, depth + 1),
+                BaseKind::Library => false,
+            });
+        self.base_memo
+            .open
+            .borrow_mut()
+            .insert((class, depth), open);
+        open
+    }
+
+    /// Methods named `name` that a trait (or interface) of `family`
+    /// declares.
+    pub(super) fn trait_methods(&self, family: &str, name: &str) -> Vec<DefId> {
+        self.named(name)
+            .filter(|&id| {
+                let def = &self.defs[id];
+                def.family == family
+                    && def.is_function_like()
+                    && self
+                        .container_class(id)
+                        .is_some_and(|c| self.defs[c].kind == SymbolKind::Interface)
             })
             .collect()
     }

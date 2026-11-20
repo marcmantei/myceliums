@@ -1,8 +1,8 @@
 //! Rust extraction.
 
 use super::{
-    BindingValue, CallForm, CallReference, ExpressionStep, ImportInfo, ParsedSymbol, SourceParser,
-    TypeBinding, FILE_SCOPE,
+    BindingValue, CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, ParsedSymbol,
+    SourceParser, TypeBinding, FILE_SCOPE,
 };
 use myceliums_storage::{SymbolKind, SymbolMetadata, Visibility};
 use tree_sitter::Node;
@@ -176,6 +176,41 @@ impl SourceParser {
         let cursor = &mut node.walk();
         for child in node.children(cursor) {
             self.extract_rust_symbols(child, source, symbols, parent);
+        }
+    }
+
+    /// `impl Trait for Type`: the trait is a base of `Type`, which may be
+    /// declared in another file (#139). A method a type gets from a trait
+    /// (a default method) is then found through it.
+    pub(super) fn extract_rust_trait_impls(
+        &self,
+        node: Node,
+        source: &[u8],
+        out: &mut Vec<DeclaredTypes>,
+    ) {
+        if node.kind() == "impl_item" {
+            let ty = self.extract_rust_impl_type_name(node, source);
+            let trait_node = node.child_by_field_name("trait");
+            if let (Some(ty), Some(trait_node)) = (ty, trait_node) {
+                let ty = ty
+                    .trim_start_matches('&')
+                    .rsplit("::")
+                    .next()
+                    .unwrap_or(&ty)
+                    .trim();
+                let base = self.node_text(trait_node, source);
+                out.push(DeclaredTypes {
+                    name: ty.to_string(),
+                    line: node.start_position().row as u32 + 1,
+                    return_type: None,
+                    bases: vec![base.split('<').next().unwrap_or(base).trim().to_string()],
+                    elsewhere: true,
+                });
+            }
+        }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            self.extract_rust_trait_impls(child, source, out);
         }
     }
 
@@ -1351,5 +1386,25 @@ impl Config {
         assert_eq!(registry.value, BindingValue::Type("Registry".into()));
         assert_eq!(registry.scope, crate::parser::FILE_SCOPE);
         assert!(result.bindings.iter().any(|b| b.name == "LIMIT"));
+    }
+
+    #[test]
+    fn a_trait_impl_records_the_trait_as_a_base_of_the_type() {
+        let result = SourceParser::new(SourceLanguage::Rust)
+            .unwrap()
+            .parse("impl Greeter for Bot {}\nimpl<T> fmt::Display for Wrapper<T> {}\nimpl Bot {}\n")
+            .unwrap();
+        let declared: Vec<(&str, u32, &[String], bool)> = result
+            .declared
+            .iter()
+            .map(|d| (d.name.as_str(), d.line, d.bases.as_slice(), d.elsewhere))
+            .collect();
+        assert_eq!(
+            declared,
+            [
+                ("Bot", 1, &["Greeter".to_string()][..], true),
+                ("Wrapper", 2, &["fmt::Display".to_string()][..], true),
+            ]
+        );
     }
 }

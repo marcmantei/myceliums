@@ -421,7 +421,8 @@ pub enum BindingValue {
 /// What the call resolver needs to know about a definition beyond its
 /// symbol (#139): its declared return type and base types. Kept apart from
 /// [`SymbolMetadata`], which is indexed for search, for languages whose
-/// extractors do not record these there (Go, Java).
+/// extractors do not record these there (Go, Java), and for Rust trait
+/// implementations, which are declared apart from their type.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct DeclaredTypes {
     /// The definition's name and first line, as in its [`ParsedSymbol`].
@@ -431,6 +432,10 @@ pub struct DeclaredTypes {
     pub return_type: Option<String>,
     /// Base classes, implemented interfaces, embedded structs.
     pub bases: Vec<String>,
+    /// The definition named `name` is declared elsewhere, maybe in another
+    /// file (a Rust `impl Trait for Type`): `bases` apply to it and are
+    /// resolved where `line` is, in this file.
+    pub elsewhere: bool,
 }
 
 /// The whole file, as a [`TypeBinding::scope`].
@@ -698,6 +703,7 @@ impl SourceParser {
                 self.extract_rust_calls(root, source_bytes, &mut calls, None);
                 self.extract_rust_imports(root, source_bytes, &mut imports);
                 self.extract_rust_bindings(root, source_bytes, &mut bindings, None);
+                self.extract_rust_trait_impls(root, source_bytes, &mut declared);
             }
             SourceLanguage::Java => {
                 self.extract_java_symbols(root, source_bytes, &mut symbols, None);

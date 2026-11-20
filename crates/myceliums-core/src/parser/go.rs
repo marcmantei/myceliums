@@ -200,6 +200,7 @@ impl SourceParser {
                         line: line(node),
                         return_type: Some(self.node_text(result, source).trim().to_string()),
                         bases: Vec::new(),
+                        elsewhere: false,
                     });
                 }
             }
@@ -217,6 +218,7 @@ impl SourceParser {
                             line: line(node),
                             return_type: None,
                             bases: embedded,
+                            elsewhere: false,
                         });
                     }
                 }

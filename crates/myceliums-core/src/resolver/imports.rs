@@ -141,6 +141,15 @@ impl PathIndex {
             .collect()
     }
 
+    /// Whether `dir` is a Python package: it holds an `__init__.py`.
+    fn is_python_package(&self, dir: &str) -> bool {
+        self.dir_files.get(dir).is_some_and(|files| {
+            files
+                .iter()
+                .any(|f| f.rsplit('/').next() == Some("__init__.py"))
+        })
+    }
+
     pub(super) fn files_in(&self, dir: &str, family: &str) -> Vec<String> {
         self.dir_files
             .get(dir)
@@ -291,10 +300,9 @@ impl CallResolver {
                 .imports
                 .iter()
                 .find(|i| i.local_name == name)?;
-            match self.bind(file, family, import, depth + 1)? {
-                Bound::External => None,
-                bound => Some(bound),
-            }
+            // A library name re-exported by a project module (requests'
+            // `compat.py` re-exporting `MutableMapping`) is a library name.
+            self.bind(file, family, import, depth + 1)
         });
         if reexported.is_some() {
             return reexported;
@@ -371,7 +379,28 @@ impl CallResolver {
                 .filter(|f| stem(f) == key || parent_dir(stem(f)) == key)
                 .collect()
         } else {
-            closest(importer, &path, self.index.modules(&path, "python"))
+            // An absolute import names a module at a source root, not one
+            // inside a package: `django/contrib/gis/geos/io.py` is
+            // `django.contrib.gis.geos.io`, never the standard library's `io`.
+            let top_level = self
+                .index
+                .modules(&path, "python")
+                .into_iter()
+                .filter(|f| {
+                    let stem = stem(f);
+                    let matched = if stem.ends_with(path.as_str()) {
+                        stem
+                    } else {
+                        parent_dir(stem)
+                    };
+                    let root = matched
+                        .strip_suffix(path.as_str())
+                        .unwrap_or_default()
+                        .trim_end_matches('/');
+                    root.is_empty() || !self.index.is_python_package(root)
+                })
+                .collect();
+            closest(importer, &path, top_level)
         };
         (!files.is_empty()).then_some(files)
     }

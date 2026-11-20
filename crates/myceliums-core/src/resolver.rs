@@ -286,8 +286,12 @@ struct Def {
     enclosing_fn: Option<(u32, u32)>,
     /// Declared return type, as written.
     return_type: Option<String>,
-    /// Base classes, implemented interfaces, embedded structs, as written.
-    bases: Vec<String>,
+    /// Base classes, implemented interfaces, embedded structs, Rust traits
+    /// it implements: as written, and where to resolve them.
+    bases: Vec<BaseRef>,
+    /// The bases its own symbol metadata names (the rest come from
+    /// declarations elsewhere, merged by `prepare`).
+    own_bases: Vec<BaseRef>,
     /// Number of parameters, where it selects among overloads (Java);
     /// `None` for varargs or elsewhere.
     params: Option<u32>,
@@ -327,6 +331,15 @@ impl Def {
     fn dir(&self) -> &str {
         parent_dir(&self.file)
     }
+}
+
+/// A base type as written, and where it is resolved: at the definition
+/// itself (`None`), or at a `file:line` elsewhere (a Rust `impl Trait for
+/// Type`, whose trait is in scope there).
+#[derive(Debug, Clone, PartialEq)]
+struct BaseRef {
+    text: String,
+    at: Option<(String, u32)>,
 }
 
 /// The directory part of a path (`""` for a file at the root).
@@ -371,6 +384,7 @@ pub struct CallResolver {
     files: HashMap<String, FileContext>,
     index: imports::PathIndex,
     prepared: bool,
+    base_memo: types::BaseMemo,
     stats: CallResolutionStats,
 }
 
@@ -410,7 +424,12 @@ impl CallResolver {
             container,
             enclosing_fn: None,
             return_type: metadata.return_type,
-            bases: metadata.superclasses,
+            bases: Vec::new(),
+            own_bases: metadata
+                .superclasses
+                .into_iter()
+                .map(|text| BaseRef { text, at: None })
+                .collect(),
             params,
         });
         self.by_name
@@ -471,26 +490,62 @@ impl CallResolver {
                 }
             }
         }
-        for (file, context) in &self.files {
-            let Some(ids) = self.by_file.get(file) else {
-                continue;
-            };
+        for def in &mut self.defs {
+            def.bases = def.own_bases.clone();
+        }
+        let mut files: Vec<&String> = self.files.keys().collect();
+        files.sort();
+        for file in files {
+            let context = &self.files[file];
             for declared in &context.declared {
-                let def = ids.iter().copied().find(|&id| {
-                    self.defs[id].name == declared.name && self.defs[id].start == declared.line
-                });
-                if let Some(id) = def {
-                    let def = &mut self.defs[id];
-                    if def.return_type.is_none() {
-                        def.return_type = declared.return_type.clone();
-                    }
-                    def.bases.extend(declared.bases.iter().cloned());
+                let target = if declared.elsewhere {
+                    self.declared_type(file, &declared.name)
+                } else {
+                    self.by_file.get(file).and_then(|ids| {
+                        ids.iter().copied().find(|&id| {
+                            self.defs[id].name == declared.name
+                                && self.defs[id].start == declared.line
+                        })
+                    })
+                };
+                let Some(id) = target else {
+                    continue;
+                };
+                let at = declared.elsewhere.then(|| (file.clone(), declared.line));
+                let def = &mut self.defs[id];
+                if def.return_type.is_none() {
+                    def.return_type = declared.return_type.clone();
                 }
+                def.bases.extend(declared.bases.iter().map(|text| BaseRef {
+                    text: text.clone(),
+                    at: at.clone(),
+                }));
             }
         }
         let paths = self.by_file.keys().chain(self.files.keys());
         self.index = imports::PathIndex::new(paths);
+        self.base_memo = types::BaseMemo::default();
         self.prepared = true;
+    }
+
+    /// The type a declaration in `file` names (`impl Trait for Type`): the
+    /// class-like definition named `name` in that file, else its directory,
+    /// else the only one in its language family.
+    fn declared_type(&self, file: &str, name: &str) -> Option<DefId> {
+        let family = language_family(file)?;
+        let types: Vec<DefId> = self
+            .named(name)
+            .filter(|&id| self.defs[id].is_class_like() && self.defs[id].family == family)
+            .collect();
+        let pick = |accept: &dyn Fn(&Def) -> bool| -> Option<DefId> {
+            types.iter().copied().find(|&id| accept(&self.defs[id]))
+        };
+        pick(&|d| d.file == file)
+            .or_else(|| pick(&|d| d.dir() == parent_dir(file)))
+            .or(match types.as_slice() {
+                [only] => Some(*only),
+                _ => None,
+            })
     }
 
     /// Pass 2: resolve call references to CALLS relationships.
@@ -769,9 +824,11 @@ impl CallResolver {
         classes
     }
 
-    /// Methods and nested definitions named `name` declared in `class`.
-    fn members_of(&self, class: DefId, name: &str) -> Vec<DefId> {
-        let class = &self.defs[class];
+    /// Methods and nested definitions named `name` declared in `class` — not
+    /// in another class of the same name in its directory (Hono's
+    /// `hono.ts` and `hono-base.ts` both declare `class Hono`).
+    fn members_of(&self, class_id: DefId, name: &str) -> Vec<DefId> {
+        let class = &self.defs[class_id];
         self.named(name)
             .filter(|&id| {
                 let def = &self.defs[id];
@@ -782,6 +839,7 @@ impl CallResolver {
                         .as_deref()
                         .is_some_and(|c| c.rsplit('.').next() == Some(class.name.as_str()))
                     && (def.file == class.file || def.dir() == class.dir())
+                    && self.container_class(id).is_none_or(|c| c == class_id)
             })
             .collect()
     }
@@ -916,11 +974,18 @@ impl CallResolver {
     /// nothing; on a receiver of unknown type any method of that name.
     fn resolve_member(&self, site: &Site, receiver: &[ExpressionStep], name: &str) -> Targets {
         match self.eval(site, receiver, 0) {
-            // A member the class does not declare comes from a library base
-            // class (or is dynamic).
+            // A member the class and its project bases do not declare: from
+            // a library base class — unless a base is unresolved (then the
+            // receiver is as good as untyped) or, in Rust, a project trait
+            // declares it (the type may implement that trait elsewhere).
             Ty::Instance(class) | Ty::Class(class) => match self.methods_on(class, name, 0) {
-                methods if methods.is_empty() => Err(Unlinked::Library),
-                methods => Ok(pick(methods, CallResolution::Exact)),
+                methods if !methods.is_empty() => Ok(pick(methods, CallResolution::Exact)),
+                _ if self.open_hierarchy_of(class) => self.methods_named(site, name),
+                _ if self.defs[class].family == "rs" => match self.trait_methods("rs", name) {
+                    methods if methods.is_empty() => Err(Unlinked::Library),
+                    methods => Ok(pick(methods, CallResolution::NameMatch)),
+                },
+                _ => Err(Unlinked::Library),
             },
             Ty::Module(files) => match self.module_member(&files, site.family, name) {
                 Some(Bound::Defs(defs)) => Ok(pick(
@@ -2054,6 +2119,7 @@ mod tests {
                 line: 1,
                 return_type: Some("(*Config, error)".to_string()),
                 bases: Vec::new(),
+                elsewhere: false,
             }],
         );
         resolver.register_file(
@@ -2403,6 +2469,329 @@ mod tests {
             "no project symbol is named print"
         );
         assert!(stats.summary().starts_with("1 call sites linked; 5 not"));
+    }
+
+    // --- re-check of #144: bases the resolver cannot see -------------------
+
+    fn rust_greeter(record_impl: bool) -> CallResolver {
+        let mut resolver = resolver(&[
+            symbol("src/greet.rs", "Greeter", SymbolKind::Interface, (1, 5)),
+            method("src/greet.rs", "Greeter.hello", (2, 4)),
+            class("src/bot.rs", "Bot", (2, 2)),
+            method("src/bot.rs", "Bot.run", (4, 6)),
+            method("src/other.rs", "Robot.hello", (1, 2)),
+        ]);
+        let declared = DeclaredTypes {
+            name: "Bot".to_string(),
+            line: 8,
+            return_type: None,
+            bases: vec!["Greeter".to_string()],
+            elsewhere: true,
+        };
+        resolver.register_file(
+            "src/bot.rs",
+            &[import("Greeter", "crate::greet::Greeter", None)],
+            &[],
+            &[],
+            if record_impl {
+                std::slice::from_ref(&declared)
+            } else {
+                &[]
+            },
+        );
+        resolver
+    }
+
+    /// `impl Greeter for Bot {}` makes the trait's default method
+    /// `Greeter::hello` Bot's: `self.hello()` in `impl Bot` reaches it.
+    #[test]
+    fn a_rust_trait_default_method_is_found_through_the_impl() {
+        let mut resolver = rust_greeter(true);
+        let calls = [member(
+            "src/bot.rs",
+            5,
+            "run",
+            vec![ExpressionStep::This],
+            "hello",
+        )];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "src/bot.rs::Bot.run",
+                "src/greet.rs::Greeter.hello",
+                "exact"
+            )]
+        );
+    }
+
+    /// Without the impl in view, a project trait declaring the method is
+    /// still a candidate (by name), never a library member.
+    #[test]
+    fn a_rust_method_a_project_trait_declares_is_not_a_library_member() {
+        let mut resolver = rust_greeter(false);
+        let calls = [
+            member("src/bot.rs", 5, "run", vec![ExpressionStep::This], "hello"),
+            member("src/bot.rs", 5, "run", vec![ExpressionStep::This], "clone"),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "src/bot.rs::Bot.run",
+                "src/greet.rs::Greeter.hello",
+                "name-match"
+            )]
+        );
+        assert_eq!(
+            resolver.stats().library,
+            1,
+            "clone: no project trait declares it"
+        );
+    }
+
+    /// `class Child(Base)` where `Base = declarative_base()` in a project
+    /// module: the base is unresolved, so `self.save()` falls back to the
+    /// method name instead of being dropped as a library call; a class
+    /// whose bases are all known (`Exception`) still drops it.
+    #[test]
+    fn a_python_class_with_an_unresolved_project_base_falls_back_to_the_name() {
+        let mut resolver = resolver(&[
+            with_metadata(
+                class("app/svc.py", "Child", (3, 9)),
+                SymbolMetadata {
+                    superclasses: vec!["Base".to_string()],
+                    ..SymbolMetadata::default()
+                },
+            ),
+            method("app/svc.py", "Child.run", (4, 6)),
+            with_metadata(
+                class("app/errors.py", "Failure", (1, 9)),
+                SymbolMetadata {
+                    superclasses: vec!["Exception".to_string()],
+                    ..SymbolMetadata::default()
+                },
+            ),
+            method("app/errors.py", "Failure.report", (2, 4)),
+            method("app/models.py", "Model.save", (1, 3)),
+        ]);
+        resolver.register_file(
+            "app/db.py",
+            &[],
+            &[],
+            &[binding(
+                "Base",
+                crate::parser::FILE_SCOPE,
+                BindingValue::Expr(vec![ident("declarative_base"), ExpressionStep::Call]),
+            )],
+            &[],
+        );
+        resolver.register_file(
+            "app/svc.py",
+            &[import("Base", "app.db", Some("Base"))],
+            &[],
+            &[],
+            &[],
+        );
+        resolver.register_file("app/errors.py", &[], &[], &[], &[]);
+        let calls = [
+            member("app/svc.py", 5, "run", vec![ExpressionStep::This], "save"),
+            member(
+                "app/errors.py",
+                3,
+                "report",
+                vec![ExpressionStep::This],
+                "save",
+            ),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [edge(
+                "app/svc.py::Child.run",
+                "app/models.py::Model.save",
+                "name-match"
+            )]
+        );
+        assert_eq!(resolver.stats().library, 1, "Failure's bases are all known");
+    }
+
+    /// Hono: `class Hono extends HonoBase`, where `hono-base.ts` declares
+    /// `class Hono` and exports it as `export { Hono as HonoBase }`. The
+    /// alias resolves to the project class, so the hierarchy is closed: a
+    /// method of the base is `exact`, and a member neither class declares
+    /// (a field holding an arrow function) is not name-matched to an
+    /// unrelated object-literal method elsewhere.
+    #[test]
+    fn a_base_exported_under_an_alias_is_a_project_base() {
+        let mut resolver = resolver(&[
+            class("src/hono-base.ts", "Hono", (1, 20)),
+            method("src/hono-base.ts", "Hono.route", (2, 4)),
+            method("src/hono-base.ts", "Hono.constructor", (5, 7)),
+            with_metadata(
+                class("src/hono.ts", "Hono", (3, 10)),
+                SymbolMetadata {
+                    superclasses: vec!["HonoBase<E, S>".to_string()],
+                    ..SymbolMetadata::default()
+                },
+            ),
+            method("src/hono.ts", "Hono.constructor", (4, 6)),
+            function("src/main.ts", "main", (1, 10)),
+            method("src/client.test.ts", "stub.fetch", (5, 7)),
+        ]);
+        resolver.register_file(
+            "src/hono-base.ts",
+            &[],
+            &[],
+            &[binding(
+                "HonoBase",
+                (21, u32::MAX),
+                BindingValue::Expr(vec![ident("Hono")]),
+            )],
+            &[],
+        );
+        resolver.register_file(
+            "src/hono.ts",
+            &[import("HonoBase", "./hono-base", Some("HonoBase"))],
+            &[],
+            &[],
+            &[],
+        );
+        resolver.register_file(
+            "src/main.ts",
+            &[import("Hono", "./hono", Some("Hono"))],
+            &[],
+            &[binding(
+                "app",
+                (2, 10),
+                BindingValue::Expr(vec![ExpressionStep::New("Hono".to_string())]),
+            )],
+            &[],
+        );
+        resolver.register_file("src/client.test.ts", &[], &[], &[], &[]);
+        let calls = [
+            member("src/main.ts", 3, "main", vec![ident("app")], "route"),
+            member("src/main.ts", 4, "main", vec![ident("app")], "fetch"),
+            // `super(options)`: the base's constructor, not the subclass's
+            // own, though both classes are `Hono` in one directory.
+            call(
+                "src/hono.ts",
+                5,
+                "constructor",
+                "super",
+                CallForm::SuperConstructor,
+            ),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(
+                    "src/hono.ts::Hono.constructor",
+                    "src/hono-base.ts::Hono.constructor",
+                    "exact"
+                ),
+                edge("src/main.ts::main", "src/hono-base.ts::Hono.route", "exact"),
+            ]
+        );
+        assert_eq!(resolver.stats().library, 1);
+    }
+
+    /// `from io import BytesIO` is the standard library's `io`, not the
+    /// project's `pkg/geo/io.py` (a module of package `pkg.geo`): the base
+    /// is a library base, and `self.seek()` stays unlinked instead of
+    /// falling back to the only project method named `seek` (Django's
+    /// `django/contrib/gis/geos/io.py`).
+    #[test]
+    fn an_absolute_import_does_not_bind_a_module_inside_a_package() {
+        let mut resolver = resolver(&[
+            with_metadata(
+                class("pkg/text.py", "Buffer", (3, 8)),
+                SymbolMetadata {
+                    superclasses: vec!["BytesIO".to_string()],
+                    ..SymbolMetadata::default()
+                },
+            ),
+            method("pkg/text.py", "Buffer.read", (4, 6)),
+            class("pkg/geo/io.py", "WKTReader", (1, 3)),
+            method("tests/test_file.py", "TestFile.seek", (2, 3)),
+        ]);
+        for file in ["pkg/__init__.py", "pkg/geo/__init__.py", "pkg/geo/io.py"] {
+            resolver.register_file(file, &[], &[], &[], &[]);
+        }
+        resolver.register_file("tests/test_file.py", &[], &[], &[], &[]);
+        resolver.register_file(
+            "pkg/text.py",
+            &[import("BytesIO", "io", Some("BytesIO"))],
+            &[],
+            &[],
+            &[],
+        );
+        let calls = [member(
+            "pkg/text.py",
+            5,
+            "read",
+            vec![ExpressionStep::This],
+            "seek",
+        )];
+        assert_eq!(edges(&mut resolver, &calls), []);
+        assert_eq!(resolver.stats().library, 1);
+    }
+
+    /// A library name a project module re-exports (`from .compat import
+    /// MutableMapping`, compat importing it from `collections.abc`) is a
+    /// library base: members the class does not declare stay unlinked.
+    #[test]
+    fn a_re_exported_library_base_is_a_library_base() {
+        let mut resolver = resolver(&[
+            with_metadata(
+                class("req/structures.py", "CaseInsensitiveDict", (3, 9)),
+                SymbolMetadata {
+                    superclasses: vec!["MutableMapping[str, _VT]".to_string()],
+                    ..SymbolMetadata::default()
+                },
+            ),
+            function("req/test.py", "test_keys", (1, 9)),
+            method("req/cookies.py", "Jar.keys", (1, 2)),
+        ]);
+        resolver.register_file(
+            "req/compat.py",
+            &[import(
+                "MutableMapping",
+                "collections.abc",
+                Some("MutableMapping"),
+            )],
+            &[],
+            &[],
+            &[],
+        );
+        resolver.register_file(
+            "req/structures.py",
+            &[import("MutableMapping", ".compat", Some("MutableMapping"))],
+            &[],
+            &[],
+            &[],
+        );
+        resolver.register_file(
+            "req/test.py",
+            &[import(
+                "CaseInsensitiveDict",
+                "req.structures",
+                Some("CaseInsensitiveDict"),
+            )],
+            &[],
+            &[binding(
+                "cid",
+                (2, 9),
+                BindingValue::Expr(vec![ident("CaseInsensitiveDict"), ExpressionStep::Call]),
+            )],
+            &[],
+        );
+        let calls = [member(
+            "req/test.py",
+            3,
+            "test_keys",
+            vec![ident("cid")],
+            "keys",
+        )];
+        assert!(edges(&mut resolver, &calls).is_empty());
+        assert_eq!(resolver.stats().library, 1);
     }
 
     #[test]

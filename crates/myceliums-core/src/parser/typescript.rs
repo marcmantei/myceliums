@@ -449,6 +449,34 @@ impl SourceParser {
                     });
                 }
             }
+            // `export { Hono as HonoBase }`: the module exports `Hono` under
+            // another name, as if by `const HonoBase = Hono`.
+            "export_statement" if node.child_by_field_name("source").is_none() => {
+                if let Some(clause) = self.find_child_by_kind(node, "export_clause") {
+                    let specs = &mut clause.walk();
+                    for spec in clause.children(specs) {
+                        let (Some(name), Some(alias)) = (
+                            spec.child_by_field_name("name"),
+                            spec.child_by_field_name("alias"),
+                        ) else {
+                            continue;
+                        };
+                        let (name, alias) =
+                            (self.node_text(name, source), self.node_text(alias, source));
+                        if spec.kind() != "export_specifier" || name == alias {
+                            continue;
+                        }
+                        out.push(TypeBinding {
+                            name: alias.to_string(),
+                            owner: None,
+                            scope: local_scope(node),
+                            value: BindingValue::Expr(vec![ExpressionStep::Ident(
+                                name.to_string(),
+                            )]),
+                        });
+                    }
+                }
+            }
             "for_in_statement" => {
                 if let Some(left) = node.child_by_field_name("left") {
                     self.ts_unknown_names(left, source, local_scope(node), out);
@@ -1397,6 +1425,27 @@ export class UserService extends Base {
                 ("*", "./util", None),
                 ("codec", "./codec", Some("*")),
             ]
+        );
+    }
+
+    #[test]
+    fn an_aliased_local_export_binds_the_alias_to_the_name() {
+        let result = SourceParser::new(SourceLanguage::TypeScript)
+            .unwrap()
+            .parse("class Hono {}\nexport { Hono as HonoBase, Hono }\n")
+            .unwrap();
+        let module_level: Vec<(&str, &BindingValue)> = result
+            .bindings
+            .iter()
+            .filter(|b| b.owner.is_none() && b.scope.1 == u32::MAX)
+            .map(|b| (b.name.as_str(), &b.value))
+            .collect();
+        assert_eq!(
+            module_level,
+            [(
+                "HonoBase",
+                &BindingValue::Expr(vec![ExpressionStep::Ident("Hono".to_string())])
+            )]
         );
     }
 }
