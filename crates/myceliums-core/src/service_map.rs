@@ -9,14 +9,18 @@ use std::path::{Path, PathBuf};
 /// A single community-to-service mapping.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceEntry {
+    /// Label of the community.
     pub community_label: String,
+    /// Service name the community is mapped to.
     pub service_name: String,
 }
 
 /// All service mappings for a repository.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServiceMapping {
+    /// Registered id of the repository.
     pub repo_id: String,
+    /// One entry per mapped community.
     pub mappings: Vec<ServiceEntry>,
 }
 
@@ -33,7 +37,7 @@ pub fn save_service_mapping(
     repo_id: &str,
     community_label: &str,
     service_name: &str,
-) -> anyhow::Result<()> {
+) -> crate::error::Result<()> {
     let mut mapping = load_service_mappings(data_dir, repo_id)?;
 
     // Upsert
@@ -60,7 +64,10 @@ pub fn save_service_mapping(
 }
 
 /// Load all service mappings for a repository.
-pub fn load_service_mappings(data_dir: &Path, repo_id: &str) -> anyhow::Result<ServiceMapping> {
+pub fn load_service_mappings(
+    data_dir: &Path,
+    repo_id: &str,
+) -> crate::error::Result<ServiceMapping> {
     let path = service_map_path(data_dir, repo_id);
     if !path.exists() {
         return Ok(ServiceMapping {

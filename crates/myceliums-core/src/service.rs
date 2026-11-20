@@ -38,7 +38,7 @@ use tokio::sync::OnceCell;
 
 use myceliums_storage::{
     CodeSymbol, Community, FileNode, Process, Relationship, RelationshipKind, RepoInfo,
-    RepoRegistry, Store,
+    RepoRegistry, StorageError, Store,
 };
 
 use crate::error::MyceliumError;
@@ -231,6 +231,14 @@ impl<T> GraphTable<T> {
     /// Whether two handles share the same cached rows.
     pub fn ptr_eq(a: &Self, b: &Self) -> bool {
         Arc::ptr_eq(&a.0, &b.0)
+    }
+}
+
+/// An empty table, for callers that fall back to "no rows" when a read
+/// fails.
+impl<T> Default for GraphTable<T> {
+    fn default() -> Self {
+        Self(Arc::new(Vec::new()))
     }
 }
 
@@ -638,7 +646,7 @@ impl RepoGraph<'_> {
     where
         T: HeapSize,
         F: Fn(Arc<Store>) -> Fut,
-        Fut: std::future::Future<Output = anyhow::Result<Vec<T>>>,
+        Fut: std::future::Future<Output = std::result::Result<Vec<T>, StorageError>>,
     {
         let mut repins = 0;
         loop {
@@ -656,8 +664,7 @@ impl RepoGraph<'_> {
                         // swap fails on files that are gone.
                         return Err(LoadError::Stale(now));
                     }
-                    let rows =
-                        read.map_err(|e| LoadError::Failed(MyceliumError::Storage(e.to_string())))?;
+                    let rows = read.map_err(|e| LoadError::Failed(e.into()))?;
                     graph.bytes.fetch_add(table_bytes(&rows), Ordering::Relaxed);
                     self.service.table_loads.fetch_add(1, Ordering::Relaxed);
                     loaded.store(true, Ordering::Relaxed);
@@ -773,7 +780,7 @@ impl GraphService {
 
     /// Loads the repository registry from disk.
     fn load_registry(&self) -> Result<RepoRegistry> {
-        RepoRegistry::load(&self.registry_path()).map_err(|e| MyceliumError::Storage(e.to_string()))
+        Ok(RepoRegistry::load(&self.registry_path())?)
     }
 
     /// Resolves an optional caller-supplied repository id to a concrete id.
@@ -875,9 +882,7 @@ impl GraphService {
         }
         // A registered repository's index exists; never create an empty one
         // here (a read during a rebuild's swap would otherwise leave one).
-        let store = Store::open_existing(db_path, repo_id)
-            .await
-            .map_err(|e| MyceliumError::Storage(e.to_string()))?;
+        let store = Store::open_existing(db_path, repo_id).await?;
         // Two callers can both miss the cache above and both open the
         // database, because `Store::open` is awaited outside the lock. The
         // first to re-lock publishes its handle; the other adopts it, so every
@@ -1122,7 +1127,9 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         // An empty registry file so `resolve_repo_id`/`repo_info` have a file
         // to load without any repositories.
-        std::fs::write(dir.path().join("repos.json"), "[]").expect("write registry");
+        RepoRegistry::load(&dir.path().join("repos.json"))
+            .and_then(|registry| registry.save())
+            .expect("write registry");
         (GraphService::new(dir.path()), dir)
     }
 
@@ -1721,14 +1728,15 @@ mod tests {
     #[tokio::test]
     async fn a_read_failing_across_a_swap_is_index_changed() {
         let (svc, dir) = service_with_symbols(&["alpha", "beta"]).await;
-        let failing = |_: Arc<Store>| async { anyhow::bail!("file not found") };
+        let failing =
+            |_: Arc<Store>| async { Err(StorageError::InvalidData("file not found".to_string())) };
 
         let graph = svc.graph("r").await.unwrap();
         let err = graph
             .table::<Relationship, _, _>(|g| &g.relationships, failing)
             .await
             .expect_err("the read fails");
-        assert!(matches!(err, MyceliumError::Storage(_)), "{err:?}");
+        assert!(matches!(err, MyceliumError::Store(_)), "{err:?}");
 
         graph.symbols().await.unwrap();
         rebuild(dir.path(), "r", &["gamma", "delta"]).await;

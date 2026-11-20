@@ -9,9 +9,13 @@ use std::path::{Path, PathBuf};
 /// Status of an ADR.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AdrStatus {
+    /// The decision is proposed and not yet agreed.
     Proposed,
+    /// The decision is agreed and in effect.
     Accepted,
+    /// The decision no longer applies.
     Deprecated,
+    /// The decision was replaced by a later record (see `superseded_by`).
     Superseded,
 }
 
@@ -29,15 +33,25 @@ impl std::fmt::Display for AdrStatus {
 /// An Architecture Decision Record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ArchDecisionRecord {
+    /// Record id (`ADR-0001`, ...).
     pub id: String,
+    /// Short title of the decision.
     pub title: String,
+    /// Lifecycle status.
     pub status: AdrStatus,
+    /// The situation that called for a decision.
     pub context: String,
+    /// What was decided.
     pub decision: String,
+    /// What follows from the decision, good and bad.
     pub consequences: String,
+    /// Uids or qualified names of the symbols the decision concerns.
     pub linked_symbols: Vec<String>,
+    /// The id of the record that replaced this one.
     pub superseded_by: Option<String>,
+    /// Creation time (RFC 3339).
     pub created_at: String,
+    /// Last update time (RFC 3339).
     pub updated_at: String,
 }
 
@@ -51,7 +65,7 @@ pub fn save_decision(
     data_dir: &Path,
     repo_id: &str,
     adr: &ArchDecisionRecord,
-) -> anyhow::Result<()> {
+) -> crate::error::Result<()> {
     let mut decisions = load_decisions(data_dir, repo_id)?;
 
     // Upsert by ID
@@ -71,7 +85,10 @@ pub fn save_decision(
 }
 
 /// Load all ADRs for a repository.
-pub fn load_decisions(data_dir: &Path, repo_id: &str) -> anyhow::Result<Vec<ArchDecisionRecord>> {
+pub fn load_decisions(
+    data_dir: &Path,
+    repo_id: &str,
+) -> crate::error::Result<Vec<ArchDecisionRecord>> {
     let path = adr_path(data_dir, repo_id);
     if !path.exists() {
         return Ok(Vec::new());
@@ -87,7 +104,7 @@ pub fn link_decision_to_symbol(
     repo_id: &str,
     decision_id: &str,
     symbol_name: &str,
-) -> anyhow::Result<()> {
+) -> crate::error::Result<()> {
     let mut decisions = load_decisions(data_dir, repo_id)?;
     let adr = decisions
         .iter_mut()

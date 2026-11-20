@@ -10,22 +10,29 @@ use std::collections::BTreeSet;
 /// A single CODEOWNERS rule.
 #[derive(Debug, Clone, Serialize)]
 pub struct OwnershipEntry {
+    /// The CODEOWNERS path pattern.
     pub pattern: String,
+    /// Owners named by the rule (`@user`, `@org/team`, emails).
     pub owners: Vec<String>,
 }
 
 /// Ownership for a specific file.
 #[derive(Debug, Clone, Serialize)]
 pub struct FileOwnership {
+    /// Repository-relative file path.
     pub file_path: String,
+    /// Owners of the file under the last matching rule.
     pub owners: Vec<String>,
 }
 
 /// Summary of ownership across the codebase.
 #[derive(Debug, Clone, Serialize)]
 pub struct OwnershipReport {
+    /// Files that some rule assigns owners to.
     pub owned_files: Vec<FileOwnership>,
+    /// Files no rule matches.
     pub unowned_files: Vec<String>,
+    /// Number of rules in the CODEOWNERS file.
     pub total_rules: usize,
 }
 

@@ -23,7 +23,7 @@
 //! use myceliums_storage::Store;
 //! use std::path::Path;
 //!
-//! # async fn run() -> anyhow::Result<()> {
+//! # async fn run() -> myceliums_storage::Result<()> {
 //! let store = Store::open(Path::new("/tmp/myceliums-data"), "my-repo-id").await?;
 //! let symbols = store.get_symbols().await?;
 //! println!("{} symbols indexed", symbols.len());
@@ -33,6 +33,8 @@
 
 #![warn(missing_docs)]
 
+/// The error type of this crate.
+pub mod error;
 /// Domain types persisted by the store (symbols, relationships, teams, ...).
 pub mod models;
 /// The registry of analyzed repositories.
@@ -44,6 +46,7 @@ pub mod store;
 /// The shared team-metadata store.
 pub mod team_store;
 
+pub use error::{Result, StorageError};
 pub use models::*;
 pub use registry::{RepoIdError, RepoRegistry};
 pub use store::{AnnIndexBuild, AnnIndexKind, AnnQuery, AnnSettings, Probes, Store};

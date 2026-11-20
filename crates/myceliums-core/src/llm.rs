@@ -5,7 +5,8 @@
 //! - [`OpenAICompatibleProvider`] — works with any OpenAI-compatible API
 //!   (vLLM, LiteLLM, Ollama OpenAI mode, etc.)
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -32,12 +33,15 @@ pub trait LlmProvider: Send + Sync {
 
 /// Provider that talks to a local [Ollama](https://ollama.com/) instance.
 pub struct OllamaProvider {
+    /// Base URL of the Ollama server.
     pub base_url: String,
+    /// Model name.
     pub model: String,
     client: reqwest::Client,
 }
 
 impl OllamaProvider {
+    /// A provider for `model` on the Ollama server at `base_url`.
     pub fn new(base_url: impl Into<String>, model: impl Into<String>) -> Self {
         Self {
             base_url: base_url.into(),
@@ -71,7 +75,7 @@ impl LlmProvider for OllamaProvider {
         let status = resp.status();
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
-            anyhow::bail!("Ollama returned HTTP {}: {}", status, text);
+            crate::error::bail!("Ollama returned HTTP {}: {}", status, text);
         }
 
         let json: Value = resp
@@ -79,10 +83,10 @@ impl LlmProvider for OllamaProvider {
             .await
             .context("Failed to parse Ollama response")?;
 
-        json["response"]
+        Ok(json["response"]
             .as_str()
             .map(|s| s.to_string())
-            .ok_or_else(|| anyhow::anyhow!("Ollama response missing 'response' field"))
+            .ok_or_else(|| anyhow::anyhow!("Ollama response missing 'response' field"))?)
     }
 
     async fn complete_json(&self, prompt: &str, max_tokens: u32) -> Result<Value> {
@@ -94,8 +98,8 @@ impl LlmProvider for OllamaProvider {
                 let retry_prompt =
                     format!("{prompt}\n\nIMPORTANT: Respond with valid JSON only, no other text.");
                 let text2 = self.complete(&retry_prompt, max_tokens).await?;
-                serde_json::from_str::<Value>(&text2)
-                    .context("Ollama response was not valid JSON after retry")
+                Ok(serde_json::from_str::<Value>(&text2)
+                    .context("Ollama response was not valid JSON after retry")?)
             }
         }
     }
@@ -105,13 +109,17 @@ impl LlmProvider for OllamaProvider {
 
 /// Provider that talks to any OpenAI-compatible API endpoint.
 pub struct OpenAICompatibleProvider {
+    /// Base URL of the API.
     pub base_url: String,
+    /// Model name.
     pub model: String,
+    /// API key, sent as a bearer token.
     pub api_key: Option<String>,
     client: reqwest::Client,
 }
 
 impl OpenAICompatibleProvider {
+    /// A provider for `model` at `base_url`, authenticating with `api_key` if given.
     pub fn new(
         base_url: impl Into<String>,
         model: impl Into<String>,
@@ -151,7 +159,7 @@ impl LlmProvider for OpenAICompatibleProvider {
         let status = resp.status();
         if !status.is_success() {
             let text = resp.text().await.unwrap_or_default();
-            anyhow::bail!(
+            crate::error::bail!(
                 "OpenAI-compatible endpoint returned HTTP {}: {}",
                 status,
                 text
@@ -163,12 +171,12 @@ impl LlmProvider for OpenAICompatibleProvider {
             .await
             .context("Failed to parse OpenAI-compatible response")?;
 
-        json["choices"][0]["message"]["content"]
+        Ok(json["choices"][0]["message"]["content"]
             .as_str()
             .map(|s| s.to_string())
             .ok_or_else(|| {
                 anyhow::anyhow!("OpenAI-compatible response missing choices[0].message.content")
-            })
+            })?)
     }
 
     async fn complete_json(&self, prompt: &str, max_tokens: u32) -> Result<Value> {
@@ -179,8 +187,8 @@ impl LlmProvider for OpenAICompatibleProvider {
                 let retry_prompt =
                     format!("{prompt}\n\nIMPORTANT: Respond with valid JSON only, no other text.");
                 let text2 = self.complete(&retry_prompt, max_tokens).await?;
-                serde_json::from_str::<Value>(&text2)
-                    .context("OpenAI-compatible response was not valid JSON after retry")
+                Ok(serde_json::from_str::<Value>(&text2)
+                    .context("OpenAI-compatible response was not valid JSON after retry")?)
             }
         }
     }
@@ -202,7 +210,7 @@ pub fn create_llm_provider(config: &GlobalConfig) -> Result<Box<dyn LlmProvider>
             &llm.model,
             llm.api_key.clone(),
         ))),
-        other => anyhow::bail!(
+        other => crate::error::bail!(
             "Unknown LLM provider '{}'. Supported: ollama, openai",
             other
         ),

@@ -1,4 +1,5 @@
-use anyhow::{anyhow, Result};
+use crate::error::Result;
+use anyhow::anyhow;
 use graphrs::algorithms::components::strongly_connected_components;
 use graphrs::{Edge, Graph, GraphSpecs, Node};
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind};

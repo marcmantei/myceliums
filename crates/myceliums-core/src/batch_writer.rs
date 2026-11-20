@@ -15,8 +15,11 @@ use tracing::info;
 
 /// Messages that the batch writer can receive.
 pub enum BatchMessage {
+    /// Symbols to append to the symbol table.
     Symbols(Vec<CodeSymbol>),
+    /// File nodes to append to the file table.
     Files(Vec<FileNode>),
+    /// Relationships to append to the relationship table.
     Relationships(Vec<Relationship>),
 }
 

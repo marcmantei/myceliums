@@ -10,7 +10,8 @@
 //! one language family to `SourceParser`, with its tests alongside; `common`
 //! holds the helpers they share.
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use myceliums_storage::{CodeSymbol, SymbolKind, SymbolMetadata};
 use std::borrow::Cow;
 use std::ops::ControlFlow;
@@ -38,40 +39,70 @@ mod zig;
 /// A supported source language for tree-sitter parsing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SourceLanguage {
+    /// TypeScript (`.ts`).
     TypeScript,
+    /// TypeScript with JSX (`.tsx`).
     Tsx,
+    /// JavaScript (`.js`, `.jsx`, `.mjs`, `.cjs`).
     JavaScript,
+    /// Python.
     Python,
+    /// Go.
     Go,
+    /// Rust.
     Rust,
+    /// Java.
     Java,
+    /// C#.
     CSharp,
+    /// C.
     C,
+    /// C++.
     Cpp,
+    /// Ruby.
     Ruby,
+    /// Kotlin.
     Kotlin,
+    /// Swift.
     Swift,
+    /// PHP.
     Php,
+    /// Lua.
     Lua,
+    /// Zig.
     Zig,
+    /// PowerShell.
     PowerShell,
+    /// Elixir.
     Elixir,
+    /// Scala.
     Scala,
+    /// Objective-C.
     ObjectiveC,
+    /// Dart.
     Dart,
+    /// Vue single-file components (the `<script>` block).
     Vue,
+    /// Svelte components (the `<script>` block).
     Svelte,
+    /// Markdown documents.
     Markdown,
+    /// MDX documents.
     Mdx,
+    /// Plain text documents.
     PlainText,
+    /// Jupyter notebooks.
     Jupyter,
     #[cfg(feature = "pdf")]
     Pdf,
+    /// Single e-mail messages (`.eml`).
     Email,
+    /// Mailbox files (`.mbox`).
     Mbox,
 }
 
 impl SourceLanguage {
+    /// The language of a file with extension `ext` (without the dot); `None` if unsupported.
     pub fn from_extension(ext: &str) -> Option<Self> {
         match ext {
             "ts" => Some(SourceLanguage::TypeScript),
@@ -109,6 +140,7 @@ impl SourceLanguage {
         }
     }
 
+    /// The language's lowercase name (`typescript`, `python`, ...).
     pub fn name(&self) -> &str {
         match self {
             SourceLanguage::TypeScript => "typescript",
@@ -427,6 +459,7 @@ pub enum BindingValue {
 pub struct DeclaredTypes {
     /// The definition's name and first line, as in its [`ParsedSymbol`].
     pub name: String,
+    /// First line of the definition (1-based).
     pub line: u32,
     /// Declared return type, as written (`(*Config, error)`, `Config`).
     pub return_type: Option<String>,
@@ -455,11 +488,17 @@ pub struct ImportInfo {
 /// The prefix tag on a rationale comment (e.g. NOTE, HACK, TODO).
 #[derive(Debug, Clone, PartialEq)]
 pub enum RationalePrefix {
+    /// `NOTE:`
     Note,
+    /// `HACK:`
     Hack,
+    /// `WHY:`
     Why,
+    /// `TODO:`
     Todo,
+    /// `FIXME:`
     Fixme,
+    /// `IMPORTANT:`
     Important,
 }
 
@@ -509,6 +548,7 @@ pub struct ParseResult {
 }
 
 impl SourceParser {
+    /// A parser for `lang`; fails if its tree-sitter grammar cannot be loaded.
     pub fn new(lang: SourceLanguage) -> Result<Self> {
         let mut parser = Parser::new();
         let language = lang.tree_sitter_language().with_context(|| {
@@ -551,10 +591,10 @@ impl SourceParser {
     /// Parse `source` into a tree, within the time budget.
     fn parse_tree(&mut self, source: &str) -> Result<Tree> {
         let Some(cap) = self.timeout else {
-            return self
+            return Ok(self
                 .parser
                 .parse(source, None)
-                .context("Failed to parse source");
+                .context("Failed to parse source")?);
         };
         let budget = parse_budget(source.len(), cap);
         let bytes = source.as_bytes();
@@ -581,7 +621,7 @@ impl SourceParser {
                 self.parser.reset();
                 Err(ParseAbort::Timeout(budget).into())
             }
-            None => anyhow::bail!("Failed to parse source"),
+            None => crate::error::bail!("Failed to parse source"),
         }
     }
 
@@ -654,6 +694,7 @@ impl SourceParser {
         })
     }
 
+    /// Parses `source` and extracts its symbols, calls, imports, comments and type information.
     pub fn parse(&mut self, source: &str) -> Result<ParseResult> {
         // For Vue/Svelte, extract the <script> block and parse as TypeScript
         let parse_source = self.effective_source(source);

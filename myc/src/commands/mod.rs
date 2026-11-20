@@ -1,18 +1,43 @@
-//! Subcommands that live outside `main.rs` (which #101 will split up).
+//! One module per `myc` subcommand (or family of closely related ones).
 //!
-//! The agent integration kit (#126): one-shot graph navigation for agents
-//! and hooks ([`nav`]), the Claude Code grep-redirect hook ([`hook_grep`]),
-//! the routing block for CLAUDE.md / AGENTS.md ([`routing`]) and the layered
-//! Claude Code installer ([`setup_claude`]).
+//! `main.rs` only parses the command line and dispatches here. The agent
+//! integration kit (#126) lives here too: one-shot graph navigation for
+//! agents and hooks ([`nav`]), the Claude Code grep-redirect hook
+//! ([`hook_grep`]), the routing block for CLAUDE.md / AGENTS.md
+//! ([`routing`]) and the layered Claude Code installer ([`setup_claude`]).
 
+pub mod analyze;
+pub mod communities;
+pub mod configure;
+pub mod diff;
+pub mod doctor;
+pub mod email;
+pub mod export;
+pub mod format_hook;
+pub mod git_hook;
 pub mod hook_grep;
+pub mod impact;
+pub mod init;
+pub mod knowledge;
 pub mod nav;
+pub mod path;
+pub mod processes;
+pub mod query;
+pub mod rename;
+pub mod report;
+pub mod repos;
 pub mod routing;
+pub mod search;
+pub mod serve;
+pub mod session;
 pub mod setup_claude;
+pub mod setup_editors;
+pub mod stats;
+pub mod wiki;
 
 #[cfg(test)]
 mod tests {
-    use crate::{Cli, Commands};
+    use crate::cli::{Cli, Commands};
     use clap::Parser;
 
     fn parse(args: &[&str]) -> Result<Commands, clap::Error> {

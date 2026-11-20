@@ -95,7 +95,7 @@ impl ToolLoading {
         if opt_out {
             return ToolLoading::Deferred;
         }
-        let names = myceliums_core::GlobalConfig::load(&crate::data_dir())
+        let names = myceliums_core::GlobalConfig::load(&crate::repo::data_dir())
             .map(|c| c.mcp.toolsets)
             .unwrap_or_else(|_| vec!["?".to_string()]);
         match myceliums_mcp::Toolsets::parse_names(names.iter().map(String::as_str)) {

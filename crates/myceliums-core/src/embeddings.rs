@@ -12,7 +12,9 @@
 //! the vectors were created with.
 
 use crate::config::EmbeddingSection;
-use anyhow::{anyhow, bail, Context, Result};
+use crate::error::bail;
+use crate::error::Result;
+use anyhow::{anyhow, Context};
 use fastembed::{
     EmbeddingModel, InitOptions, RerankInitOptions, RerankerModel, TextEmbedding, TextRerank,
 };
@@ -166,7 +168,7 @@ fn known_reranker_ids() -> String {
 
 /// fastembed's metadata (dimension, HF repo) for a curated local model.
 fn local_model_info(spec: &EmbeddingModelSpec) -> Result<fastembed::ModelInfo<EmbeddingModel>> {
-    TextEmbedding::list_supported_models()
+    Ok(TextEmbedding::list_supported_models()
         .into_iter()
         .find(|m| m.model == spec.model)
         .ok_or_else(|| {
@@ -174,7 +176,7 @@ fn local_model_info(spec: &EmbeddingModelSpec) -> Result<fastembed::ModelInfo<Em
                 "fastembed does not list model '{}' — registry and fastembed version out of sync",
                 spec.id
             )
-        })
+        })?)
 }
 
 /// The HuggingFace repo fastembed downloads a curated local model from.
@@ -204,8 +206,10 @@ pub struct IndexEmbeddingMeta {
     pub model: String,
     /// Vector dimension.
     pub dim: usize,
+    /// Prefix prepended to queries before embedding (E5-style models).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub query_prefix: Option<String>,
+    /// Prefix prepended to indexed passages before embedding (E5-style models).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub passage_prefix: Option<String>,
     /// Base URL of the embeddings API (remote only; not a secret).
@@ -621,7 +625,9 @@ pub fn truncate_content(s: &str, max_chars: usize) -> &str {
 /// without them).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EmbedInput {
+    /// A search query.
     Query,
+    /// An indexed document (symbol text).
     Passage,
 }
 
@@ -961,8 +967,8 @@ pub async fn get_embedder_for(meta: IndexEmbeddingMeta) -> Result<Arc<Embedder>>
 /// legacy model for indexes created before embedding configuration existed.
 pub async fn index_embedding_meta(store: &Store) -> Result<IndexEmbeddingMeta> {
     match store.get_index_meta(IndexEmbeddingMeta::META_KEY).await? {
-        Some(json) => serde_json::from_str(&json)
-            .context("Failed to parse embedding metadata stored in the index"),
+        Some(json) => Ok(serde_json::from_str(&json)
+            .context("Failed to parse embedding metadata stored in the index")?),
         None => {
             warn!(
                 "Index has no embedding metadata; assuming legacy model ({}). \

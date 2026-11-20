@@ -3,7 +3,8 @@
 //! A [`ProjectConfig`] controls which files are analyzed, how large they may
 //! be, and tuning parameters for community detection and process tracing.
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -13,14 +14,19 @@ pub const CONFIG_FILENAME: &str = ".myceliums.toml";
 /// Top-level project configuration, read from `.myceliums.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ProjectConfig {
+    /// The `[project]` section.
     #[serde(default)]
     pub project: ProjectSection,
+    /// The `[analysis]` section.
     #[serde(default)]
     pub analysis: AnalysisSection,
+    /// The `[process]` section.
     #[serde(default)]
     pub process: ProcessSection,
+    /// The `[community]` section.
     #[serde(default)]
     pub community: CommunitySection,
+    /// The `[embedding]` section.
     #[serde(default)]
     pub embedding: EmbeddingSection,
 }
@@ -101,6 +107,7 @@ impl EmbeddingSection {
     }
 }
 
+/// The `[project]` section of `.myceliums.toml`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ProjectSection {
     /// Human-readable project name (defaults to directory name).
@@ -111,6 +118,7 @@ pub struct ProjectSection {
     pub languages: Vec<String>,
 }
 
+/// The `[analysis]` section of `.myceliums.toml`: which files are analyzed and how.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AnalysisSection {
     /// Glob patterns for files/directories to include (empty = include all).
@@ -156,6 +164,7 @@ pub struct AnalysisSection {
     pub embedding_batch_size: usize,
 }
 
+/// The `[process]` section of `.myceliums.toml`: process tracing.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ProcessSection {
     /// Named entry points for process tracing.
@@ -163,6 +172,7 @@ pub struct ProcessSection {
     pub entry_points: Vec<String>,
 }
 
+/// The `[community]` section of `.myceliums.toml`: community detection.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CommunitySection {
     /// Minimum number of symbols for a community to be reported.

@@ -42,9 +42,15 @@ pub enum MyceliumError {
     #[error("the index of repository {0} changed during this call (a re-analysis finished)")]
     IndexChanged(String),
 
-    /// A storage operation (LanceDB / store) failed.
+    /// A storage condition described by a message (no repository
+    /// registered, repository not found).
     #[error("storage error: {0}")]
     Storage(String),
+
+    /// A storage-layer operation (registry, LanceDB store) failed; the
+    /// [`myceliums_storage::StorageError`] says how.
+    #[error(transparent)]
+    Store(myceliums_storage::StorageError),
 
     /// An embedding model operation failed (loading, inference).
     #[error("embedding error: {0}")]
@@ -54,15 +60,96 @@ pub enum MyceliumError {
     #[error("git error: {0}")]
     Git(String),
 
+    /// The parser abandoned a file on its time or nesting-depth budget.
+    #[error(transparent)]
+    ParseAborted(#[from] crate::parser::ParseAbort),
+
+    /// An analysis was cancelled through its [`crate::CancelCheck`].
+    #[error(transparent)]
+    Cancelled(#[from] crate::AnalysisCancelled),
+
+    /// JSON could not be encoded or decoded.
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+
     /// Catch-all for errors that don't fit other categories.
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }
 
 /// Convenience alias used throughout the crate.
-pub type Result<T> = std::result::Result<T, MyceliumError>;
+pub type Result<T, E = MyceliumError> = std::result::Result<T, E>;
+
+/// `anyhow::bail!` for functions returning [`Result`] (or `anyhow::Result`):
+/// returns early with the formatted message as [`MyceliumError::Other`].
+macro_rules! bail {
+    ($($arg:tt)*) => {
+        return Err(anyhow::anyhow!($($arg)*).into())
+    };
+}
+pub(crate) use bail;
 
 // ── Conversions ──────────────────────────────────────────────────────
+
+/// A repository-id error from the storage layer stays a
+/// [`MyceliumError::Repo`]; every other storage error becomes
+/// [`MyceliumError::Store`].
+impl From<myceliums_storage::StorageError> for MyceliumError {
+    fn from(e: myceliums_storage::StorageError) -> Self {
+        match e {
+            myceliums_storage::StorageError::RepoId(e) => MyceliumError::Repo(e),
+            other => MyceliumError::Store(other),
+        }
+    }
+}
+
+/// Command output (git) that is not UTF-8.
+impl From<std::string::FromUtf8Error> for MyceliumError {
+    fn from(e: std::string::FromUtf8Error) -> Self {
+        MyceliumError::Other(anyhow::Error::new(e))
+    }
+}
+
+/// A background task panicked or was aborted.
+impl From<tokio::task::JoinError> for MyceliumError {
+    fn from(e: tokio::task::JoinError) -> Self {
+        MyceliumError::Other(anyhow::Error::new(e).context("background task failed"))
+    }
+}
+
+impl MyceliumError {
+    /// The [`crate::parser::ParseAbort`] that ended a parse, if this error
+    /// is one or wraps one (under added context).
+    pub fn parse_abort(&self) -> Option<&crate::parser::ParseAbort> {
+        match self {
+            MyceliumError::ParseAborted(abort) => Some(abort),
+            MyceliumError::Other(e) => e.chain().find_map(|cause| {
+                cause
+                    .downcast_ref::<crate::parser::ParseAbort>()
+                    .or_else(|| {
+                        cause
+                            .downcast_ref::<MyceliumError>()
+                            .and_then(MyceliumError::parse_abort)
+                    })
+            }),
+            _ => None,
+        }
+    }
+
+    /// Whether this error is, or wraps, a cancelled analysis.
+    pub fn is_cancelled(&self) -> bool {
+        match self {
+            MyceliumError::Cancelled(_) => true,
+            MyceliumError::Other(e) => e.chain().any(|cause| {
+                cause.is::<crate::AnalysisCancelled>()
+                    || cause
+                        .downcast_ref::<MyceliumError>()
+                        .is_some_and(MyceliumError::is_cancelled)
+            }),
+            _ => false,
+        }
+    }
+}
 
 impl From<std::io::Error> for MyceliumError {
     fn from(e: std::io::Error) -> Self {

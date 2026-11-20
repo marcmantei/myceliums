@@ -1,5 +1,12 @@
 //! Structured tool output types, rendered to text by [`crate::format`], and
 //! the shared output budget ([`Page`]) every list-returning tool applies.
+//!
+//! Items here carry no doc comments on purpose: `schemars` turns doc comments
+//! into JSON-schema `description`s, so documenting a field or variant would
+//! change the published tool contract (`tests/snapshots/tools_list*.json`).
+//! The contract is documented in the tool descriptions instead.
+
+#![allow(missing_docs)]
 
 use rmcp::schemars;
 use serde::Serialize;

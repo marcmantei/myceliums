@@ -13,15 +13,25 @@ use std::collections::HashMap;
 /// A single hotspot entry with its composite score and contributing metrics.
 #[derive(Debug, Clone, Serialize)]
 pub struct HotspotItem {
+    /// Symbol uid.
     pub uid: String,
+    /// Short name.
     pub name: String,
+    /// Qualified name.
     pub qualified_name: String,
+    /// Symbol kind.
     pub kind: String,
+    /// Repository-relative file path.
     pub file_path: String,
+    /// Composite hotspot score; higher is more in need of attention.
     pub score: f64,
+    /// Degree centrality of the symbol.
     pub degree: f64,
+    /// Betweenness centrality of the symbol.
     pub betweenness: f64,
+    /// Commits that touched the symbol's file.
     pub commit_count: u32,
+    /// Instability (Ce / (Ca + Ce)) of the symbol's module.
     pub instability: f64,
 }
 

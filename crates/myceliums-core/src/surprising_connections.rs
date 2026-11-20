@@ -1,16 +1,25 @@
 use crate::community::compute_uid_to_community_label;
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind};
 use std::collections::HashMap;
 
+/// A relationship between two communities that are otherwise rarely connected.
 pub struct SurprisingConnectionItem {
+    /// Uid of the source symbol.
     pub source_uid: String,
+    /// Short name of the source symbol.
     pub source_name: String,
+    /// Qualified name of the source symbol.
     pub source_qualified_name: String,
+    /// Uid of the target symbol.
     pub target_uid: String,
+    /// Short name of the target symbol.
     pub target_name: String,
+    /// Qualified name of the target symbol.
     pub target_qualified_name: String,
+    /// Community of the source symbol.
     pub source_community: String,
+    /// Community of the target symbol.
     pub target_community: String,
     /// Score in [0.0, 1.0]: higher means fewer edges cross this community pair
     /// relative to all cross-community edges — i.e. a more isolated connection.

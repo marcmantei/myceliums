@@ -21,6 +21,8 @@
 //!   built beside the live index and swapped in, with progress
 //!   notifications.
 
+#![warn(missing_docs)]
+
 mod analysis;
 mod errors;
 mod format;
@@ -51,6 +53,9 @@ use myceliums_core::GraphService;
 use rmcp::handler::server::tool::ToolRouter;
 use std::sync::Arc;
 
+/// The myceliums MCP server: the tool router over a shared
+/// [`GraphService`] and the call statistics. One instance serves the stdio
+/// transport; the HTTP transport shares one across sessions.
 pub struct MyceliumsMcp {
     #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
@@ -70,6 +75,8 @@ impl Default for MyceliumsMcp {
 }
 
 impl MyceliumsMcp {
+    /// A server over the data home (`MYCELIUMS_DATA_DIR` or `~/.myceliums`),
+    /// its graph cache bounded by the `[mcp]` keys of `config.toml`.
     pub fn new() -> Self {
         Self::with_service(Arc::new(repo::graph_service()))
     }

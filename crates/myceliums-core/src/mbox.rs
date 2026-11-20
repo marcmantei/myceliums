@@ -5,7 +5,8 @@
 //! splits an MBOX file into individual messages and parses each one using
 //! [`crate::email::parse_eml`].
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 
 use crate::email::{self, ParsedEmail};
 

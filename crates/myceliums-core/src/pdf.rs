@@ -6,7 +6,9 @@
 
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use crate::error::bail;
+use crate::error::Result;
+use anyhow::Context;
 use tracing::debug;
 
 /// Check whether the `opendataloader-pdf` CLI is available on `$PATH`.

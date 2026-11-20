@@ -3,7 +3,7 @@
 //! Produces one markdown file per community with wikilinks for cross-references,
 //! plus an index page listing all communities.
 
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{CodeSymbol, Community, Relationship};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -13,8 +13,11 @@ use crate::community::compute_uid_to_community_label;
 
 /// Result summary returned after exporting.
 pub struct WikiExportResult {
+    /// Communities written as pages.
     pub community_count: usize,
+    /// Symbols written.
     pub symbol_count: usize,
+    /// Relationships written.
     pub relationship_count: usize,
 }
 

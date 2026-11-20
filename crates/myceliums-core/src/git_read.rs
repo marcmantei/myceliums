@@ -7,7 +7,8 @@
 //! leave the lock behind. `--no-optional-locks` turns that refresh off, which
 //! also makes the timeout kill safe.
 
-use anyhow::{bail, Result};
+use crate::error::bail;
+use crate::error::Result;
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};

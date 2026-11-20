@@ -4325,11 +4325,9 @@ dependencies = [
  "logos",
  "myceliums-core",
  "myceliums-storage",
- "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
- "tracing",
 ]
 
 [[package]]
@@ -4346,12 +4344,9 @@ dependencies = [
 name = "myceliums-storage"
 version = "0.3.2"
 dependencies = [
- "anyhow",
  "arrow-array",
  "arrow-data",
  "arrow-schema",
- "chrono",
- "dirs",
  "futures",
  "lancedb",
  "serde",
@@ -4359,7 +4354,6 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
- "uuid",
 ]
 
 [[package]]

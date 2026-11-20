@@ -3,7 +3,7 @@
 //! Uses the `notify` crate for cross-platform file watching with debouncing
 //! so that rapid saves don't trigger multiple re-indexes.
 
-use anyhow::Result;
+use crate::error::Result;
 use notify_debouncer_mini::{new_debouncer, DebouncedEventKind};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -48,12 +48,14 @@ pub fn start_watching(
     notify_debouncer_mini::Debouncer<notify::RecommendedWatcher>,
 )> {
     let (sync_tx, sync_rx) = mpsc::channel();
-    let mut debouncer = new_debouncer(Duration::from_millis(500), sync_tx)?;
+    let mut debouncer =
+        new_debouncer(Duration::from_millis(500), sync_tx).map_err(anyhow::Error::from)?;
 
     // Watch recursively
     debouncer
         .watcher()
-        .watch(root, notify::RecursiveMode::Recursive)?;
+        .watch(root, notify::RecursiveMode::Recursive)
+        .map_err(anyhow::Error::from)?;
 
     info!("Watching {} for file changes", root.display());
 
@@ -138,5 +140,5 @@ fn should_ignore(path: &Path) -> bool {
 /// Convenience: resolve a root path from a potentially relative path.
 pub fn resolve_watch_root(path: &Path) -> Result<PathBuf> {
     std::fs::canonicalize(path)
-        .map_err(|e| anyhow::anyhow!("Cannot resolve watch path {}: {}", path.display(), e))
+        .map_err(|e| anyhow::anyhow!("Cannot resolve watch path {}: {}", path.display(), e).into())
 }

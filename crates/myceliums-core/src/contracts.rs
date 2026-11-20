@@ -11,35 +11,50 @@ use std::path::{Path, PathBuf};
 /// A single API endpoint from a spec file.
 #[derive(Debug, Clone, Serialize)]
 pub struct ContractEndpoint {
+    /// HTTP method (`GET`, `POST`, ...).
     pub method: String,
+    /// Path template as written in the spec.
     pub path: String,
+    /// The spec's `operationId`, if any.
     pub operation_id: Option<String>,
 }
 
 /// A link between an endpoint and a handler symbol.
 #[derive(Debug, Clone, Serialize)]
 pub struct HandlerLink {
+    /// Path of the linked endpoint.
     pub endpoint_path: String,
+    /// Name of the handler symbol.
     pub handler_name: String,
+    /// File that defines the handler.
     pub handler_file: String,
+    /// How sure the link is, from 0.0 to 1.0.
     pub confidence: f64,
 }
 
 /// A detected API contract (one per spec file).
 #[derive(Debug, Clone, Serialize)]
 pub struct ApiContract {
+    /// Path of the spec file.
     pub spec_file: String,
+    /// Kind of spec (`openapi`, `swagger`, ...).
     pub spec_type: String,
+    /// Endpoints the spec declares.
     pub endpoints: Vec<ContractEndpoint>,
+    /// Endpoints linked to a handler.
     pub handler_links: Vec<HandlerLink>,
 }
 
 /// Summary of all detected contracts.
 #[derive(Debug, Clone, Serialize)]
 pub struct ContractsReport {
+    /// One entry per spec file.
     pub contracts: Vec<ApiContract>,
+    /// Endpoints over all specs.
     pub total_endpoints: usize,
+    /// Endpoints linked to a handler.
     pub linked_count: usize,
+    /// Endpoints without a handler.
     pub unlinked_endpoints: Vec<String>,
 }
 

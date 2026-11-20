@@ -4,7 +4,7 @@
 //! directly modified and then walks the call graph to find indirectly
 //! affected symbols up to a configurable depth.
 
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};

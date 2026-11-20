@@ -13,8 +13,11 @@ use serde::Serialize;
 /// Severity level for lint findings.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub enum LintSeverity {
+    /// A rule violation that should fail a check.
     Error,
+    /// A likely problem worth a look.
     Warning,
+    /// An observation, not a problem.
     Info,
 }
 
@@ -31,19 +34,28 @@ impl std::fmt::Display for LintSeverity {
 /// A single lint finding.
 #[derive(Debug, Clone, Serialize)]
 pub struct LintFinding {
+    /// Id of the rule that produced the finding.
     pub rule_id: String,
+    /// How serious the finding is.
     pub severity: LintSeverity,
+    /// Human-readable explanation.
     pub message: String,
+    /// Symbols, files or communities the finding is about.
     pub affected_entities: Vec<String>,
 }
 
 /// Summary of all lint findings.
 #[derive(Debug, Clone, Serialize)]
 pub struct LintReport {
+    /// Every finding, in rule order.
     pub findings: Vec<LintFinding>,
+    /// Ids of the rules that ran.
     pub rules_checked: Vec<String>,
+    /// Number of findings with [`LintSeverity::Error`].
     pub error_count: usize,
+    /// Number of findings with [`LintSeverity::Warning`].
     pub warning_count: usize,
+    /// Number of findings with [`LintSeverity::Info`].
     pub info_count: usize,
 }
 

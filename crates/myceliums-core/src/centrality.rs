@@ -1,4 +1,5 @@
-use anyhow::{anyhow, Result};
+use crate::error::Result;
+use anyhow::anyhow;
 use graphrs::algorithms::centrality::betweenness::betweenness_centrality;
 use graphrs::algorithms::centrality::closeness::closeness_centrality;
 use graphrs::algorithms::centrality::eigenvector::eigenvector_centrality;
@@ -10,10 +11,15 @@ use std::sync::Arc;
 /// Centrality scores for a single graph node.
 #[derive(Debug, Clone)]
 pub struct NodeCentrality {
+    /// Symbol uid.
     pub uid: String,
+    /// Normalized degree centrality.
     pub degree: f64,
+    /// Normalized betweenness centrality.
     pub betweenness: f64,
+    /// Closeness centrality.
     pub closeness: f64,
+    /// Eigenvector centrality.
     pub eigenvector: f64,
 }
 

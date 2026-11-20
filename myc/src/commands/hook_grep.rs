@@ -756,7 +756,7 @@ pub async fn cmd_hook_grep() -> anyhow::Result<()> {
         .ok()
         .and_then(|v| v.parse().ok())
         .map_or(LOOKUP_DEADLINE, Duration::from_millis);
-    match respond(&crate::data_dir(), &input, fallback_cwd, deadline).await {
+    match respond(&crate::repo::data_dir(), &input, fallback_cwd, deadline).await {
         Ok(out) => println!("{out}"),
         Err(reason) if debug => eprintln!("myc hook-grep: silent: {reason}"),
         Err(_) => {}

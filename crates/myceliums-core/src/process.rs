@@ -19,7 +19,7 @@
 //!
 //! These limits are configurable via [`ProcessTraceConfig`].
 
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{CodeSymbol, Process, Relationship, RelationshipKind};
 use std::collections::{HashMap, HashSet};
 use tracing::info;

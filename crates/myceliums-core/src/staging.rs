@@ -40,7 +40,8 @@
 //! renamed back. Everything else is deleted. Rebuilds still running are
 //! never touched.
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use std::collections::HashSet;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -234,10 +235,12 @@ impl StagedIndex {
             // Unmarked, recovery puts the previous index back: older, but
             // complete, and it matches the registry, which the caller only
             // updates after a successful commit.
-            return Err(anyhow::Error::from(e).context(
-                "the new index is in place but its swap could not be recorded as committed; \
+            return Err(anyhow::Error::from(e)
+                .context(
+                    "the new index is in place but its swap could not be recorded as committed; \
                  the previous index is kept and restored by the next recovery",
-            ));
+                )
+                .into());
         }
         // 4. Only now the previous index goes.
         if let Some(previous) = previous {
@@ -298,9 +301,9 @@ impl StagedIndex {
                     old.display()
                 );
             }
-            return Err(e).with_context(|| {
-                format!("cannot move the new index into {}", self.live.display())
-            });
+            return Err(e)
+                .with_context(|| format!("cannot move the new index into {}", self.live.display()))
+                .map_err(Into::into);
         }
         Ok(Some(old.to_path_buf()))
     }

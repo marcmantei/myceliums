@@ -66,7 +66,7 @@ impl EmbeddingStats {
     }
 
     /// Persist the record inside the index so query paths can read it back.
-    pub async fn record(&self, store: &Store) -> anyhow::Result<()> {
+    pub async fn record(&self, store: &Store) -> crate::error::Result<()> {
         let json = serde_json::to_string(self)?;
         store.set_index_meta(Self::META_KEY, &json).await?;
         Ok(())
@@ -74,7 +74,7 @@ impl EmbeddingStats {
 
     /// Read the record from an index, or `None` when it was never written
     /// (e.g. an index built before embedding accounting existed).
-    pub async fn load(store: &Store) -> anyhow::Result<Option<Self>> {
+    pub async fn load(store: &Store) -> crate::error::Result<Option<Self>> {
         match store.get_index_meta(Self::META_KEY).await? {
             Some(json) => Ok(Some(serde_json::from_str(&json)?)),
             None => Ok(None),

@@ -4,6 +4,13 @@
 //! `invalid_params` before the handler runs); numeric options carry their
 //! bounds in the schema, and handlers clamp into the same bounds. Every
 //! list-returning tool takes `limit` and `offset` (see `output::Page`).
+//!
+//! Items here carry no doc comments on purpose: `schemars` turns doc comments
+//! into JSON-schema `description`s, so documenting a field or variant would
+//! change the published tool contract (`tests/snapshots/tools_list*.json`).
+//! The contract is documented in the tool descriptions instead.
+
+#![allow(missing_docs)]
 
 use rmcp::schemars;
 use serde::de::{DeserializeOwned, Deserializer, Error as _};

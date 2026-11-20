@@ -4,15 +4,20 @@ use std::collections::{HashMap, HashSet, VecDeque};
 /// File-level dependency entry.
 #[derive(Debug, Clone)]
 pub struct FileDependency {
+    /// Repository-relative file path.
     pub file_path: String,
+    /// Files this file imports directly.
     pub direct_deps: Vec<String>,
+    /// Files this file depends on through other files.
     pub transitive_deps: Vec<String>,
+    /// Files that import this file.
     pub dependents: Vec<String>,
 }
 
 /// Module-level coupling metrics (Robert Martin's Ca/Ce/I).
 #[derive(Debug, Clone)]
 pub struct ModuleCoupling {
+    /// The module (directory) the metrics are for.
     pub module_path: String,
     /// Afferent coupling: number of other modules that depend on this one
     pub afferent: u32,

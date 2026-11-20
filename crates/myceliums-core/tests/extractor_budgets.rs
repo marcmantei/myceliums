@@ -157,7 +157,7 @@ fn issue_127_stalls_end_at_the_size_aware_budget() {
             // Should tree-sitter ever finish these, a fast success is fine too.
             if let Err(err) = result {
                 assert_eq!(
-                    err.downcast_ref::<ParseAbort>(),
+                    err.parse_abort(),
                     Some(&ParseAbort::Timeout(budget)),
                     "{name} (dsl: {dsl}): {err:#}"
                 );
@@ -189,7 +189,7 @@ fn parse_over_budget_is_aborted_and_parser_recovers() {
     parser.set_timeout(Some(Duration::ZERO));
     let err = parser.parse(&source).expect_err("zero budget must abort");
     assert_eq!(
-        err.downcast_ref::<ParseAbort>(),
+        err.parse_abort(),
         Some(&ParseAbort::Timeout(Duration::ZERO)),
         "{err:#}"
     );
@@ -197,10 +197,7 @@ fn parse_over_budget_is_aborted_and_parser_recovers() {
         .parse_with_dsl(&source)
         .expect_err("zero budget must abort the DSL path too");
     assert!(
-        matches!(
-            err.downcast_ref::<ParseAbort>(),
-            Some(ParseAbort::Timeout(_))
-        ),
+        matches!(err.parse_abort(), Some(ParseAbort::Timeout(_))),
         "{err:#}"
     );
 
@@ -278,7 +275,7 @@ fn deep_trees_do_not_overflow_a_2_mib_stack() {
                         if let Err(err) = result {
                             assert!(
                                 matches!(
-                                    err.downcast_ref::<ParseAbort>(),
+                                    err.parse_abort(),
                                     Some(ParseAbort::TooDeep { .. })
                                 ),
                                 "{}: {err:#}",
@@ -315,7 +312,7 @@ fn trees_deeper_than_the_limit_are_refused() {
     ] {
         let err = result.expect_err("too deep");
         assert_eq!(
-            err.downcast_ref::<ParseAbort>(),
+            err.parse_abort(),
             Some(&ParseAbort::TooDeep { depth }),
             "{err:#}"
         );

@@ -203,7 +203,7 @@ impl CallResolutionStats {
     }
 
     /// Persist the record inside the index.
-    pub async fn record(&self, store: &Store) -> anyhow::Result<()> {
+    pub async fn record(&self, store: &Store) -> crate::error::Result<()> {
         store
             .set_index_meta(Self::META_KEY, &serde_json::to_string(self)?)
             .await?;
@@ -212,7 +212,7 @@ impl CallResolutionStats {
 
     /// Read the record from an index; `None` for an index analyzed before
     /// it existed.
-    pub async fn load(store: &Store) -> anyhow::Result<Option<Self>> {
+    pub async fn load(store: &Store) -> crate::error::Result<Option<Self>> {
         match store.get_index_meta(Self::META_KEY).await? {
             Some(json) => Ok(Some(serde_json::from_str(&json)?)),
             None => Ok(None),
