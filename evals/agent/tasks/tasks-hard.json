@@ -1,0 +1,5241 @@
+{
+ "description": "Hard multi-hop tasks for the variant matrix (issue #125): transitive callers, blast radius, call-chain flows, same-name symbols and tests that reach a function. Gold sets were computed by evals/agent/groundtruth/hard_tasks.py from call graphs built with compiler tooling (Go: go/packages + SSA via gotool edges, three GOOS; TypeScript: the type checker via ts_edges.js; Python: import-aware AST resolution via py_edges.py, cross-checked against grep), never from myceliums output. Each gold item lists one evidence line (a call site on the chain or the definition of an end point) that check-tasks re-verifies; its note gives the level or the next hop.",
+ "tasks": [
+  {
+   "id": "fzf-tc-tochars-d4",
+   "repo": "fzf",
+   "type": "transitive_callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods call `ToChars` (src/util/chars.go) directly, or call a function that does, and so on up to four levels up the call chain? Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files. Do not list `ToChars` itself.",
+   "gold": [
+    {
+     "name": "Pattern.transformInput",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 480,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 1, via ToChars"
+    },
+    {
+     "name": "Run",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 90,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 1, via ToChars"
+    },
+    {
+     "name": "Terminal.parsePrompt",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1688,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 1, via ToChars"
+    },
+    {
+     "name": "Terminal.printFooter",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3796,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 1, via ToChars"
+    },
+    {
+     "name": "Terminal.printHeaderImpl",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3873,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 1, via ToChars"
+    },
+    {
+     "name": "Transform",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 275,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 1, via ToChars"
+    },
+    {
+     "name": "withPrefixLengths",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 142,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 1, via ToChars"
+    },
+    {
+     "name": "NewTerminal",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1246,
+       "contains": "parsePrompt"
+      }
+     ],
+     "note": "level 2, via Terminal.parsePrompt"
+    },
+    {
+     "name": "Pattern.basicMatch",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 408,
+       "contains": "transformInput"
+      }
+     ],
+     "note": "level 2, via Pattern.transformInput"
+    },
+    {
+     "name": "Pattern.extendedMatch",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 421,
+       "contains": "transformInput"
+      }
+     ],
+     "note": "level 2, via Pattern.transformInput"
+    },
+    {
+     "name": "Terminal.Loop",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 7283,
+       "contains": "parsePrompt"
+      }
+     ],
+     "note": "level 2, via Terminal.parsePrompt"
+    },
+    {
+     "name": "Terminal.printAll",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5364,
+       "contains": "printFooter"
+      }
+     ],
+     "note": "level 2, via Terminal.printFooter"
+    },
+    {
+     "name": "Terminal.printHeader",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3764,
+       "contains": "printHeaderImpl"
+      }
+     ],
+     "note": "level 2, via Terminal.printHeaderImpl"
+    },
+    {
+     "name": "Terminal.printHighlighted",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 4319,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 2, via Transform"
+    },
+    {
+     "name": "Terminal.trackKeyFor",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6104,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 2, via Transform"
+    },
+    {
+     "name": "Tokenize",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 197,
+       "contains": "withPrefixLengths"
+      }
+     ],
+     "note": "level 2, via withPrefixLengths"
+    },
+    {
+     "name": "main",
+     "evidence": [
+      {
+       "file": "main.go",
+       "line": 113,
+       "contains": "Run"
+      }
+     ],
+     "note": "level 2, via Run"
+    },
+    {
+     "name": "nthTransformer",
+     "evidence": [
+      {
+       "file": "src/options.go",
+       "line": 866,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 2, via Transform"
+    },
+    {
+     "name": "replacePlaceholder",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5613,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 2, via Transform"
+    },
+    {
+     "name": "Item.acceptNth",
+     "evidence": [
+      {
+       "file": "src/item.go",
+       "line": 56,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "Pattern.MatchItem",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 395,
+       "contains": "basicMatch"
+      }
+     ],
+     "note": "level 3, via Pattern.basicMatch"
+    },
+    {
+     "name": "Terminal.UpdateList",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 2094,
+       "contains": "trackKeyFor"
+      }
+     ],
+     "note": "level 3, via Terminal.trackKeyFor"
+    },
+    {
+     "name": "Terminal.addClickFooterWord",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6266,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "Terminal.addClickHeaderWord",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6218,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "Terminal.fullRedraw",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5715,
+       "contains": "printAll"
+      }
+     ],
+     "note": "level 3, via Terminal.printAll"
+    },
+    {
+     "name": "Terminal.printItem",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 4130,
+       "contains": "printHighlighted"
+      }
+     ],
+     "note": "level 3, via Terminal.printHighlighted"
+    },
+    {
+     "name": "Terminal.replacePlaceholder",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5536,
+       "contains": "replacePlaceholder"
+      }
+     ],
+     "note": "level 3, via replacePlaceholder"
+    },
+    {
+     "name": "Terminal.resizeIfNeeded",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3705,
+       "contains": "printAll"
+      }
+     ],
+     "note": "level 3, via Terminal.printAll"
+    },
+    {
+     "name": "Terminal.updateFocus",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6099,
+       "contains": "trackKeyFor"
+      }
+     ],
+     "note": "level 3, via Terminal.trackKeyFor"
+    },
+    {
+     "name": "parseOptions",
+     "evidence": [
+      {
+       "file": "src/options.go",
+       "line": 2843,
+       "contains": "nthTransformer"
+      }
+     ],
+     "note": "level 3, via nthTransformer"
+    },
+    {
+     "name": "ParseOptions",
+     "evidence": [
+      {
+       "file": "src/options.go",
+       "line": 3929,
+       "contains": "parseOptions"
+      }
+     ],
+     "note": "level 4, via parseOptions"
+    },
+    {
+     "name": "Pattern.matchChunk",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 363,
+       "contains": "MatchItem"
+      }
+     ],
+     "note": "level 4, via Pattern.MatchItem"
+    },
+    {
+     "name": "Terminal.captureAsync",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5728,
+       "contains": "replacePlaceholder"
+      }
+     ],
+     "note": "level 4, via Terminal.replacePlaceholder"
+    },
+    {
+     "name": "Terminal.dumpItem",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 8899,
+       "contains": "MatchItem"
+      }
+     ],
+     "note": "level 4, via Pattern.MatchItem"
+    },
+    {
+     "name": "Terminal.environImpl",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1495,
+       "contains": "addClickFooterWord"
+      }
+     ],
+     "note": "level 4, via Terminal.addClickFooterWord"
+    },
+    {
+     "name": "Terminal.evaluateScrollOffset",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5560,
+       "contains": "replacePlaceholder"
+      }
+     ],
+     "note": "level 4, via Terminal.replacePlaceholder"
+    },
+    {
+     "name": "Terminal.executeCommand",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5852,
+       "contains": "fullRedraw"
+      }
+     ],
+     "note": "level 4, via Terminal.fullRedraw"
+    },
+    {
+     "name": "Terminal.output",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 2269,
+       "contains": "acceptNth"
+      }
+     ],
+     "note": "level 4, via Item.acceptNth"
+    },
+    {
+     "name": "Terminal.printList",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3966,
+       "contains": "printItem"
+      }
+     ],
+     "note": "level 4, via Terminal.printItem"
+    },
+    {
+     "name": "Terminal.replacePlaceholderInInitialCommand",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5532,
+       "contains": "replacePlaceholder"
+      }
+     ],
+     "note": "level 4, via Terminal.replacePlaceholder"
+    },
+    {
+     "name": "buildItemTransformer",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 46,
+       "contains": "acceptNth"
+      }
+     ],
+     "note": "level 4, via Item.acceptNth"
+    }
+   ],
+   "rationale": "Computed as all callers up to 4 levels up the gotool edges (static edges, union of GOOS darwin, linux and windows) call graph; 41 functions. Each item's note gives its level and the function it calls on the way to the target.",
+   "verified_with": [
+    "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
+    "gotool refs (type-checked uses)"
+   ]
+  },
+  {
+   "id": "fzf-blast-istty-d3",
+   "repo": "fzf",
+   "type": "blast_radius",
+   "answer_kind": "files",
+   "question": "Suppose the behaviour of `IsTty` (src/util/util.go) changes. Which Go files contain a call to it, or a call to a function or method on a chain of at most three calls ending in it (three levels)? Name the file that contains each such call. Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files.",
+   "gold": [
+    {
+     "name": "src/options.go",
+     "evidence": [
+      {
+       "file": "src/options.go",
+       "line": 3964,
+       "contains": "IsTty"
+      }
+     ],
+     "note": "level 1, via ParseOptions -> IsTty"
+    },
+    {
+     "name": "src/proxy.go",
+     "evidence": [
+      {
+       "file": "src/proxy.go",
+       "line": 156,
+       "contains": "IsTty"
+      }
+     ],
+     "note": "level 1, via runProxy -> IsTty"
+    },
+    {
+     "name": "src/reader.go",
+     "evidence": [
+      {
+       "file": "src/reader.go",
+       "line": 138,
+       "contains": "IsTty"
+      }
+     ],
+     "note": "level 1, via Reader.ReadSource -> IsTty"
+    },
+    {
+     "name": "src/terminal.go",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5828,
+       "contains": "IsTty"
+      }
+     ],
+     "note": "level 1, via Terminal.executeCommand -> IsTty"
+    },
+    {
+     "name": "src/tui/light_unix.go",
+     "evidence": [
+      {
+       "file": "src/tui/light_unix.go",
+       "line": 52,
+       "contains": "IsTty"
+      }
+     ],
+     "note": "level 1, via openTty -> IsTty"
+    },
+    {
+     "name": "main.go",
+     "evidence": [
+      {
+       "file": "main.go",
+       "line": 60,
+       "contains": "ParseOptions"
+      }
+     ],
+     "note": "level 2, via main -> ParseOptions"
+    },
+    {
+     "name": "src/core.go",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 210,
+       "contains": "ReadSource"
+      }
+     ],
+     "note": "level 2, via Run -> Reader.ReadSource"
+    },
+    {
+     "name": "src/tmux.go",
+     "evidence": [
+      {
+       "file": "src/tmux.go",
+       "line": 267,
+       "contains": "runProxy"
+      }
+     ],
+     "note": "level 2, via runTmux -> runProxy"
+    },
+    {
+     "name": "src/winpty_windows.go",
+     "evidence": [
+      {
+       "file": "src/winpty_windows.go",
+       "line": 54,
+       "contains": "runProxy"
+      }
+     ],
+     "note": "level 2, via runWinpty -> runProxy"
+    },
+    {
+     "name": "src/zellij.go",
+     "evidence": [
+      {
+       "file": "src/zellij.go",
+       "line": 68,
+       "contains": "runProxy"
+      }
+     ],
+     "note": "level 2, via runZellij -> runProxy"
+    },
+    {
+     "name": "src/tui/light.go",
+     "evidence": [
+      {
+       "file": "src/tui/light.go",
+       "line": 222,
+       "contains": "openTtyOut"
+      }
+     ],
+     "note": "level 3, via NewLightRenderer -> openTtyOut"
+    },
+    {
+     "name": "src/tui/ttyname_unix.go",
+     "evidence": [
+      {
+       "file": "src/tui/ttyname_unix.go",
+       "line": 48,
+       "contains": "openTtyIn"
+      }
+     ],
+     "note": "level 3, via TtyIn -> openTtyIn"
+    }
+   ],
+   "rationale": "Computed from the gotool edges (static edges, union of GOOS darwin, linux and windows) call graph: the files holding a call to the target or to a function up to two levels above it; 12 files. Each note names the calling function and its callee.",
+   "verified_with": [
+    "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
+    "gotool refs (type-checked uses)"
+   ]
+  },
+  {
+   "id": "fzf-blast-mayfold-d4",
+   "repo": "fzf",
+   "type": "blast_radius",
+   "answer_kind": "files",
+   "question": "Suppose the behaviour of the function `MayFoldToAscii` in package util (src/util/chars.go; not the method `Chars.MayFoldToAscii`) changes. Which Go files contain a call to it, or a call to a function or method on a chain of at most four calls ending in it (four levels)? Name the file that contains each such call. Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files.",
+   "gold": [
+    {
+     "name": "src/algo/algo.go",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 308,
+       "contains": "MayFoldToAscii"
+      }
+     ],
+     "note": "level 1, via normalizeRune -> MayFoldToAscii"
+    },
+    {
+     "name": "src/util/chars.go",
+     "evidence": [
+      {
+       "file": "src/util/chars.go",
+       "line": 378,
+       "contains": "MayFoldToAscii"
+      }
+     ],
+     "note": "level 1, via Chars.Prepend -> MayFoldToAscii"
+    },
+    {
+     "name": "src/core.go",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 134,
+       "contains": "Prepend"
+      }
+     ],
+     "note": "level 2, via Run -> Chars.Prepend"
+    },
+    {
+     "name": "src/pattern.go",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 480,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 2, via Pattern.transformInput -> ToChars"
+    },
+    {
+     "name": "src/terminal.go",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1644,
+       "contains": "RunesToChars"
+      }
+     ],
+     "note": "level 2, via Terminal.ansiLabelPrinter -> RunesToChars"
+    },
+    {
+     "name": "src/tokenizer.go",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 275,
+       "contains": "ToChars"
+      }
+     ],
+     "note": "level 2, via Transform -> ToChars"
+    },
+    {
+     "name": "main.go",
+     "evidence": [
+      {
+       "file": "main.go",
+       "line": 113,
+       "contains": "Run"
+      }
+     ],
+     "note": "level 3, via main -> Run"
+    },
+    {
+     "name": "src/options.go",
+     "evidence": [
+      {
+       "file": "src/options.go",
+       "line": 866,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 3, via nthTransformer -> Transform"
+    },
+    {
+     "name": "src/item.go",
+     "evidence": [
+      {
+       "file": "src/item.go",
+       "line": 56,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 4, via Item.acceptNth -> Tokenize"
+    }
+   ],
+   "rationale": "Computed from the gotool edges (static edges, union of GOOS darwin, linux and windows) call graph: the files holding a call to the target or to a function up to three levels above it; 9 files. Each note names the calling function and its callee.",
+   "verified_with": [
+    "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
+    "gotool refs (type-checked uses)"
+   ]
+  },
+  {
+   "id": "fzf-amb-chars-length-d3",
+   "repo": "fzf",
+   "type": "ambiguous",
+   "answer_kind": "symbols",
+   "question": "Several types in this repository have a method named `Length`. Which functions or methods call the `Length` method of the `Chars` type defined in src/util/chars.go (not `Merger.Length` or any other `Length`) directly, call such a caller, or call one of those (every caller up to three levels up the call chain)? Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files. Do not list `Chars.Length` itself.",
+   "gold": [
+    {
+     "name": "Chars.LeadingWhitespaces",
+     "evidence": [
+      {
+       "file": "src/util/chars.go",
+       "line": 290,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "Chars.Lines",
+     "evidence": [
+      {
+       "file": "src/util/chars.go",
+       "line": 386,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "Chars.TrailingWhitespaces",
+     "evidence": [
+      {
+       "file": "src/util/chars.go",
+       "line": 302,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "Chars.TrimLength",
+     "evidence": [
+      {
+       "file": "src/util/chars.go",
+       "line": 265,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "EqualMatch",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 1312,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "FuzzyMatchV1",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 1035,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "FuzzyMatchV2",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 731,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "PrefixMatch",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 1238,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "SuffixMatch",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 1261,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "Terminal.itemLines",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1913,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "Terminal.printHighlighted",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 4324,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "asciiFuzzyIndex",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 423,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "buildResultFromBounds",
+     "evidence": [
+      {
+       "file": "src/result.go",
+       "line": 57,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "exactMatchNaive",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 1125,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "withPrefixLengths",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 144,
+       "contains": "Length"
+      }
+     ],
+     "note": "level 1, via Chars.Length"
+    },
+    {
+     "name": "Chars.TrimTrailingWhitespaces",
+     "evidence": [
+      {
+       "file": "src/util/chars.go",
+       "line": 313,
+       "contains": "TrailingWhitespaces"
+      }
+     ],
+     "note": "level 2, via Chars.TrailingWhitespaces"
+    },
+    {
+     "name": "ExactMatchBoundary",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 1117,
+       "contains": "exactMatchNaive"
+      }
+     ],
+     "note": "level 2, via exactMatchNaive"
+    },
+    {
+     "name": "ExactMatchNaive",
+     "evidence": [
+      {
+       "file": "src/algo/algo.go",
+       "line": 1113,
+       "contains": "exactMatchNaive"
+      }
+     ],
+     "note": "level 2, via exactMatchNaive"
+    },
+    {
+     "name": "Item.TrimLength",
+     "evidence": [
+      {
+       "file": "src/item.go",
+       "line": 32,
+       "contains": "TrimLength"
+      }
+     ],
+     "note": "level 2, via Chars.TrimLength"
+    },
+    {
+     "name": "Pattern.matchChunk",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 350,
+       "contains": "buildResultFromBounds"
+      }
+     ],
+     "note": "level 2, via buildResultFromBounds"
+    },
+    {
+     "name": "Terminal.numItemLines",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1901,
+       "contains": "Lines"
+      }
+     ],
+     "note": "level 2, via Chars.Lines"
+    },
+    {
+     "name": "Terminal.parsePrompt",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1715,
+       "contains": "printHighlighted"
+      }
+     ],
+     "note": "level 2, via Terminal.printHighlighted"
+    },
+    {
+     "name": "Terminal.printFooter",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3799,
+       "contains": "printHighlighted"
+      }
+     ],
+     "note": "level 2, via Terminal.printHighlighted"
+    },
+    {
+     "name": "Terminal.printHeaderImpl",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3880,
+       "contains": "printHighlighted"
+      }
+     ],
+     "note": "level 2, via Terminal.printHighlighted"
+    },
+    {
+     "name": "Terminal.printItem",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 4130,
+       "contains": "printHighlighted"
+      }
+     ],
+     "note": "level 2, via Terminal.printHighlighted"
+    },
+    {
+     "name": "Tokenize",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 197,
+       "contains": "withPrefixLengths"
+      }
+     ],
+     "note": "level 2, via withPrefixLengths"
+    },
+    {
+     "name": "buildResult",
+     "evidence": [
+      {
+       "file": "src/result.go",
+       "line": 51,
+       "contains": "buildResultFromBounds"
+      }
+     ],
+     "note": "level 2, via buildResultFromBounds"
+    },
+    {
+     "name": "replacePlaceholder",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5612,
+       "contains": "withPrefixLengths"
+      }
+     ],
+     "note": "level 2, via withPrefixLengths"
+    },
+    {
+     "name": "Item.acceptNth",
+     "evidence": [
+      {
+       "file": "src/item.go",
+       "line": 56,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "NewTerminal",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1246,
+       "contains": "parsePrompt"
+      }
+     ],
+     "note": "level 3, via Terminal.parsePrompt"
+    },
+    {
+     "name": "Pattern.Match",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 314,
+       "contains": "matchChunk"
+      }
+     ],
+     "note": "level 3, via Pattern.matchChunk"
+    },
+    {
+     "name": "Pattern.MatchItem",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 391,
+       "contains": "buildResult"
+      }
+     ],
+     "note": "level 3, via buildResult"
+    },
+    {
+     "name": "Pattern.transformInput",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 474,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "Run",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 123,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "Terminal.Loop",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 7868,
+       "contains": "numItemLines"
+      }
+     ],
+     "note": "level 3, via Terminal.numItemLines"
+    },
+    {
+     "name": "Terminal.addClickFooterWord",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6266,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "Terminal.addClickHeaderWord",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6218,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "Terminal.avgNumLines",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1934,
+       "contains": "numItemLines"
+      }
+     ],
+     "note": "level 3, via Terminal.numItemLines"
+    },
+    {
+     "name": "Terminal.constrain",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 8757,
+       "contains": "numItemLines"
+      }
+     ],
+     "note": "level 3, via Terminal.numItemLines"
+    },
+    {
+     "name": "Terminal.printAll",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5364,
+       "contains": "printFooter"
+      }
+     ],
+     "note": "level 3, via Terminal.printFooter"
+    },
+    {
+     "name": "Terminal.printHeader",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3764,
+       "contains": "printHeaderImpl"
+      }
+     ],
+     "note": "level 3, via Terminal.printHeaderImpl"
+    },
+    {
+     "name": "Terminal.printList",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3966,
+       "contains": "printItem"
+      }
+     ],
+     "note": "level 3, via Terminal.printItem"
+    },
+    {
+     "name": "Terminal.replacePlaceholder",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5536,
+       "contains": "replacePlaceholder"
+      }
+     ],
+     "note": "level 3, via replacePlaceholder"
+    },
+    {
+     "name": "Terminal.trackKeyFor",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6103,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    }
+   ],
+   "rationale": "Computed as all callers up to 3 levels up the gotool edges (static edges, union of GOOS darwin, linux and windows) call graph; 44 functions. Each item's note gives its level and the function it calls on the way to the target. `grep '.Length()'` finds 67 call sites outside tests, most of them on Merger.",
+   "verified_with": [
+    "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
+    "gotool refs (type-checked uses)"
+   ]
+  },
+  {
+   "id": "fzf-amb-merger-get-d3",
+   "repo": "fzf",
+   "type": "ambiguous",
+   "answer_kind": "symbols",
+   "question": "Several types in this repository have a method named `Get` (`Merger`, `Chars`, `AtomicBool`). Which functions or methods call the `Get` method of `Merger` (src/merger.go) directly, call such a caller, or call one of those (every caller up to three levels up the call chain)? Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files. Do not list `Merger.Get` itself.",
+   "gold": [
+    {
+     "name": "Merger.FindIndex",
+     "evidence": [
+      {
+       "file": "src/merger.go",
+       "line": 105,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Merger.First",
+     "evidence": [
+      {
+       "file": "src/merger.go",
+       "line": 90,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Merger.ToMap",
+     "evidence": [
+      {
+       "file": "src/merger.go",
+       "line": 145,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Run",
+     "evidence": [
+      {
+       "file": "src/core.go",
+       "line": 343,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.Loop",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 7589,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.UpdateList",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 2148,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.avgNumLines",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1933,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.buildPlusList",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5989,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.constrain",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 8757,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.currentItem",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5933,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.dumpStatus",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 8939,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.isCurrentItemMatch",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5944,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.printList",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3964,
+       "contains": "Get"
+      }
+     ],
+     "note": "level 1, via Merger.Get"
+    },
+    {
+     "name": "Terminal.captureAsync",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5727,
+       "contains": "buildPlusList"
+      }
+     ],
+     "note": "level 2, via Terminal.buildPlusList"
+    },
+    {
+     "name": "Terminal.currentFocus",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6083,
+       "contains": "currentItem"
+      }
+     ],
+     "note": "level 2, via Terminal.currentItem"
+    },
+    {
+     "name": "Terminal.currentIndex",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6076,
+       "contains": "currentItem"
+      }
+     ],
+     "note": "level 2, via Terminal.currentItem"
+    },
+    {
+     "name": "Terminal.environImpl",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1482,
+       "contains": "currentItem"
+      }
+     ],
+     "note": "level 2, via Terminal.currentItem"
+    },
+    {
+     "name": "Terminal.evaluateScrollOffset",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5556,
+       "contains": "currentItem"
+      }
+     ],
+     "note": "level 2, via Terminal.currentItem"
+    },
+    {
+     "name": "Terminal.executeCommand",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5805,
+       "contains": "buildPlusList"
+      }
+     ],
+     "note": "level 2, via Terminal.buildPlusList"
+    },
+    {
+     "name": "Terminal.getScrollbar",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1945,
+       "contains": "avgNumLines"
+      }
+     ],
+     "note": "level 2, via Terminal.avgNumLines"
+    },
+    {
+     "name": "Terminal.output",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 2274,
+       "contains": "currentItem"
+      }
+     ],
+     "note": "level 2, via Terminal.currentItem"
+    },
+    {
+     "name": "Terminal.printAll",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5360,
+       "contains": "printList"
+      }
+     ],
+     "note": "level 2, via Terminal.printList"
+    },
+    {
+     "name": "main",
+     "evidence": [
+      {
+       "file": "main.go",
+       "line": 113,
+       "contains": "Run"
+      }
+     ],
+     "note": "level 2, via Run"
+    },
+    {
+     "name": "Terminal.captureLine",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5719,
+       "contains": "executeCommand"
+      }
+     ],
+     "note": "level 3, via Terminal.executeCommand"
+    },
+    {
+     "name": "Terminal.captureLines",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5723,
+       "contains": "executeCommand"
+      }
+     ],
+     "note": "level 3, via Terminal.executeCommand"
+    },
+    {
+     "name": "Terminal.environ",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1415,
+       "contains": "environImpl"
+      }
+     ],
+     "note": "level 3, via Terminal.environImpl"
+    },
+    {
+     "name": "Terminal.environForPreview",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1419,
+       "contains": "environImpl"
+      }
+     ],
+     "note": "level 3, via Terminal.environImpl"
+    },
+    {
+     "name": "Terminal.fullRedraw",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 5715,
+       "contains": "printAll"
+      }
+     ],
+     "note": "level 3, via Terminal.printAll"
+    },
+    {
+     "name": "Terminal.printInfoImpl",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3592,
+       "contains": "executeCommand"
+      }
+     ],
+     "note": "level 3, via Terminal.executeCommand"
+    },
+    {
+     "name": "Terminal.resizeIfNeeded",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 3705,
+       "contains": "printAll"
+      }
+     ],
+     "note": "level 3, via Terminal.printAll"
+    },
+    {
+     "name": "Terminal.updateFocus",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 6090,
+       "contains": "currentFocus"
+      }
+     ],
+     "note": "level 3, via Terminal.currentFocus"
+    }
+   ],
+   "rationale": "Computed as all callers up to 3 levels up the gotool edges (static edges, union of GOOS darwin, linux and windows) call graph; 31 functions. Each item's note gives its level and the function it calls on the way to the target.",
+   "verified_with": [
+    "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
+    "gotool refs (type-checked uses)"
+   ]
+  },
+  {
+   "id": "fzf-tests-stringbytes",
+   "repo": "fzf",
+   "type": "tests",
+   "answer_kind": "symbols",
+   "question": "Which `Test...` functions in the `*_test.go` files exercise `stringBytes` (src/functions.go), that is, reach it through a chain of direct calls of any length (directly, or through test helpers and non-test functions)? Count only direct calls of named functions and methods, whatever the arguments or branches: a call made inside a closure counts for the named function that contains it; calls through interface values or function variables do not count. Consider every package's test files, platform-specific ones included.",
+   "gold": [
+    {
+     "name": "TestOrigTextAndTransformed",
+     "evidence": [
+      {
+       "file": "src/pattern_test.go",
+       "line": 131,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 2, via Transform"
+    },
+    {
+     "name": "TestParseAnsiCode",
+     "evidence": [
+      {
+       "file": "src/ansi_test.go",
+       "line": 431,
+       "contains": "parseAnsiCode"
+      }
+     ],
+     "note": "level 2, via parseAnsiCode"
+    },
+    {
+     "name": "TestTransform",
+     "evidence": [
+      {
+       "file": "src/tokenizer_test.go",
+       "line": 87,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 2, via Transform"
+    },
+    {
+     "name": "TestTransformIndexOutOfBounds",
+     "evidence": [
+      {
+       "file": "src/tokenizer_test.go",
+       "line": 124,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 2, via Transform"
+    },
+    {
+     "name": "TestAnsiCodeStringConversion",
+     "evidence": [
+      {
+       "file": "src/ansi_test.go",
+       "line": 364,
+       "contains": "interpretCode"
+      }
+     ],
+     "note": "level 3, via interpretCode"
+    },
+    {
+     "name": "TestDelimiterRegexRegex",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 63,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "TestDelimiterRegexRegexCaret",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 74,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "TestDelimiterRegexString",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 50,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "TestInterpretCodeUnderlineColor",
+     "evidence": [
+      {
+       "file": "src/ansi_test.go",
+       "line": 497,
+       "contains": "interpretCode"
+      }
+     ],
+     "note": "level 3, via interpretCode"
+    },
+    {
+     "name": "TestInterpretCodeUnderlineStyles",
+     "evidence": [
+      {
+       "file": "src/ansi_test.go",
+       "line": 441,
+       "contains": "interpretCode"
+      }
+     ],
+     "note": "level 3, via interpretCode"
+    },
+    {
+     "name": "TestReadFilesSkipsAncestorSymlinks",
+     "evidence": [
+      {
+       "file": "src/reader_test.go",
+       "line": 136,
+       "contains": "walkFiles"
+      }
+     ],
+     "note": "level 3, via walkFiles"
+    },
+    {
+     "name": "TestReadFilesSymlinkAcrossRoots",
+     "evidence": [
+      {
+       "file": "src/reader_test.go",
+       "line": 118,
+       "contains": "walkFiles"
+      }
+     ],
+     "note": "level 3, via walkFiles"
+    },
+    {
+     "name": "TestTokenize",
+     "evidence": [
+      {
+       "file": "src/tokenizer_test.go",
+       "line": 60,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "level 3, via Tokenize"
+    },
+    {
+     "name": "TestDefaultCtrlNP",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 387,
+       "contains": "parseOptions"
+      }
+     ],
+     "note": "level 4, via parseOptions"
+    },
+    {
+     "name": "TestExtractColor",
+     "evidence": [
+      {
+       "file": "src/ansi_test.go",
+       "line": 206,
+       "contains": "extractColor"
+      }
+     ],
+     "note": "level 4, via extractColor"
+    },
+    {
+     "name": "TestIrrelevantNth",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 117,
+       "contains": "parseOptions"
+      }
+     ],
+     "note": "level 4, via parseOptions"
+    },
+    {
+     "name": "TestNextAnsiEscapeSequence",
+     "evidence": [
+      {
+       "file": "src/ansi_test.go",
+       "line": 96,
+       "contains": "testParserReference"
+      }
+     ],
+     "note": "level 4, via testParserReference"
+    },
+    {
+     "name": "TestNextAnsiEscapeSequence_Fuzz_Modified",
+     "evidence": [
+      {
+       "file": "src/ansi_test.go",
+       "line": 155,
+       "contains": "testParserReference"
+      }
+     ],
+     "note": "level 4, via testParserReference"
+    },
+    {
+     "name": "TestNextAnsiEscapeSequence_Fuzz_Random",
+     "evidence": [
+      {
+       "file": "src/ansi_test.go",
+       "line": 186,
+       "contains": "testParserReference"
+      }
+     ],
+     "note": "level 4, via testParserReference"
+    },
+    {
+     "name": "TestReplacePlaceholder",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 74,
+       "contains": "replacePlaceholderTest"
+      }
+     ],
+     "note": "level 4, via replacePlaceholderTest"
+    },
+    {
+     "name": "TestWordWrapAnsiLine",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 796,
+       "contains": "wordWrapAnsiLine"
+      }
+     ],
+     "note": "level 4, via Terminal.wordWrapAnsiLine"
+    },
+    {
+     "name": "TestAdditiveExpect",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 545,
+       "contains": "optsFor"
+      }
+     ],
+     "note": "level 5, via optsFor"
+    },
+    {
+     "name": "TestPowershellCommands",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 455,
+       "contains": "testCommands"
+      }
+     ],
+     "note": "level 5, via testCommands"
+    },
+    {
+     "name": "TestPreviewOpts",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 438,
+       "contains": "optsFor"
+      }
+     ],
+     "note": "level 5, via optsFor"
+    },
+    {
+     "name": "TestPreviewWrapSign",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 502,
+       "contains": "optsFor"
+      }
+     ],
+     "note": "level 5, via optsFor"
+    },
+    {
+     "name": "TestStringPtr",
+     "evidence": [
+      {
+       "file": "src/item_test.go",
+       "line": 13,
+       "contains": "AsString"
+      }
+     ],
+     "note": "level 5, via Item.AsString"
+    },
+    {
+     "name": "TestToggle",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 421,
+       "contains": "optsFor"
+      }
+     ],
+     "note": "level 5, via optsFor"
+    },
+    {
+     "name": "TestUnixCommands",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 333,
+       "contains": "testCommands"
+      }
+     ],
+     "note": "level 5, via testCommands"
+    },
+    {
+     "name": "TestWindowsCommands",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 371,
+       "contains": "testCommands"
+      }
+     ],
+     "note": "level 5, via testCommands"
+    },
+    {
+     "name": "TestBitmapCacheBenefit",
+     "evidence": [
+      {
+       "file": "src/pattern_test.go",
+       "line": 245,
+       "contains": "Match"
+      }
+     ],
+     "note": "level 6, via Pattern.Match"
+    },
+    {
+     "name": "TestSplitOnIND",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 918,
+       "contains": "splitOnIND"
+      }
+     ],
+     "note": "level 6, via Terminal.splitOnIND"
+    }
+   ],
+   "rationale": "The Test functions among all transitive callers in the gotool edges (static edges with test packages, union of GOOS darwin, linux and windows); 31 tests, none of which calls it directly. Notes give the chain length (level) and the first call on the chain.",
+   "verified_with": [
+    "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
+    "gotool refs (type-checked uses)"
+   ]
+  },
+  {
+   "id": "fzf-tests-chars-tostring",
+   "repo": "fzf",
+   "type": "tests",
+   "answer_kind": "symbols",
+   "question": "Which `Test...` functions in the `*_test.go` files exercise the `ToString` method of `Chars` (src/util/chars.go), that is, reach it through a chain of direct calls of any length (directly, or through test helpers and non-test functions)? Count only direct calls of named functions and methods, whatever the arguments or branches: a call made inside a closure counts for the named function that contains it; calls through interface values or function variables do not count. Consider every package's test files, platform-specific ones included.",
+   "gold": [
+    {
+     "name": "TestFuzzyMatchV2TwoEquivalence",
+     "evidence": [
+      {
+       "file": "src/algo/algo_test.go",
+       "line": 292,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestChunkList",
+     "evidence": [
+      {
+       "file": "src/chunklist_test.go",
+       "line": 45,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestDelimiterRegexRegex",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 65,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestDelimiterRegexRegexCaret",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 77,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestDelimiterRegexString",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 52,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestOrigTextAndTransformed",
+     "evidence": [
+      {
+       "file": "src/pattern_test.go",
+       "line": 142,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestTokenize",
+     "evidence": [
+      {
+       "file": "src/tokenizer_test.go",
+       "line": 61,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestTransform",
+     "evidence": [
+      {
+       "file": "src/tokenizer_test.go",
+       "line": 97,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestCharsToString",
+     "evidence": [
+      {
+       "file": "src/util/chars_test.go",
+       "line": 112,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestRuneSlicesAliasTheText",
+     "evidence": [
+      {
+       "file": "src/util/chars_test.go",
+       "line": 270,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestToCharsAscii",
+     "evidence": [
+      {
+       "file": "src/util/chars_test.go",
+       "line": 97,
+       "contains": "ToString"
+      }
+     ],
+     "note": "level 1, via Chars.ToString"
+    },
+    {
+     "name": "TestStringPtr",
+     "evidence": [
+      {
+       "file": "src/item_test.go",
+       "line": 13,
+       "contains": "AsString"
+      }
+     ],
+     "note": "level 2, via Item.AsString"
+    },
+    {
+     "name": "TestTransformIndexOutOfBounds",
+     "evidence": [
+      {
+       "file": "src/tokenizer_test.go",
+       "line": 124,
+       "contains": "Transform"
+      }
+     ],
+     "note": "level 2, via Transform"
+    },
+    {
+     "name": "TestFuzzyMatchV2SingleExhaustive",
+     "evidence": [
+      {
+       "file": "src/algo/fastpath_equiv_test.go",
+       "line": 111,
+       "contains": "runExhaustive"
+      }
+     ],
+     "note": "level 3, via runExhaustive"
+    },
+    {
+     "name": "TestFuzzyMatchV2TwoExhaustive",
+     "evidence": [
+      {
+       "file": "src/algo/fastpath_equiv_test.go",
+       "line": 115,
+       "contains": "runExhaustive"
+      }
+     ],
+     "note": "level 3, via runExhaustive"
+    },
+    {
+     "name": "TestDefaultCtrlNP",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 387,
+       "contains": "parseOptions"
+      }
+     ],
+     "note": "level 4, via parseOptions"
+    },
+    {
+     "name": "TestIrrelevantNth",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 117,
+       "contains": "parseOptions"
+      }
+     ],
+     "note": "level 4, via parseOptions"
+    },
+    {
+     "name": "TestReplacePlaceholder",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 74,
+       "contains": "replacePlaceholderTest"
+      }
+     ],
+     "note": "level 4, via replacePlaceholderTest"
+    },
+    {
+     "name": "TestAdditiveExpect",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 545,
+       "contains": "optsFor"
+      }
+     ],
+     "note": "level 5, via optsFor"
+    },
+    {
+     "name": "TestPowershellCommands",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 455,
+       "contains": "testCommands"
+      }
+     ],
+     "note": "level 5, via testCommands"
+    },
+    {
+     "name": "TestPreviewOpts",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 438,
+       "contains": "optsFor"
+      }
+     ],
+     "note": "level 5, via optsFor"
+    },
+    {
+     "name": "TestPreviewWrapSign",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 502,
+       "contains": "optsFor"
+      }
+     ],
+     "note": "level 5, via optsFor"
+    },
+    {
+     "name": "TestToggle",
+     "evidence": [
+      {
+       "file": "src/options_test.go",
+       "line": 421,
+       "contains": "optsFor"
+      }
+     ],
+     "note": "level 5, via optsFor"
+    },
+    {
+     "name": "TestUnixCommands",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 333,
+       "contains": "testCommands"
+      }
+     ],
+     "note": "level 5, via testCommands"
+    },
+    {
+     "name": "TestWindowsCommands",
+     "evidence": [
+      {
+       "file": "src/terminal_test.go",
+       "line": 371,
+       "contains": "testCommands"
+      }
+     ],
+     "note": "level 5, via testCommands"
+    },
+    {
+     "name": "TestBitmapCacheBenefit",
+     "evidence": [
+      {
+       "file": "src/pattern_test.go",
+       "line": 245,
+       "contains": "Match"
+      }
+     ],
+     "note": "level 6, via Pattern.Match"
+    }
+   ],
+   "rationale": "The Test functions among all transitive callers in the gotool edges (static edges with test packages, union of GOOS darwin, linux and windows); 26 tests. Notes give the chain length (level) and the first call on the chain.",
+   "verified_with": [
+    "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
+    "gotool refs (type-checked uses)"
+   ]
+  },
+  {
+   "id": "fzf-flow-newterminal-stringbytes",
+   "repo": "fzf",
+   "type": "flow",
+   "answer_kind": "symbols",
+   "question": "List every function or method that lies on at least one chain of direct calls from `NewTerminal` (src/terminal.go) to `stringBytes` (src/functions.go), including both ends. Count only direct calls of named functions and methods: a call made inside a closure or function literal counts for the named function that contains it; calls through interface values or function variables do not count. Include platform-specific files (such as `*_windows.go`) and exclude `*_test.go` files.",
+   "gold": [
+    {
+     "name": "NewTerminal",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1258,
+       "contains": "ansiLabelPrinter"
+      }
+     ],
+     "note": "on the chain, via Terminal.ansiLabelPrinter"
+    },
+    {
+     "name": "Pattern.MatchItem",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 395,
+       "contains": "basicMatch"
+      }
+     ],
+     "note": "on the chain, via Pattern.basicMatch"
+    },
+    {
+     "name": "Pattern.basicMatch",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 408,
+       "contains": "transformInput"
+      }
+     ],
+     "note": "on the chain, via Pattern.transformInput"
+    },
+    {
+     "name": "Pattern.extendedMatch",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 421,
+       "contains": "transformInput"
+      }
+     ],
+     "note": "on the chain, via Pattern.transformInput"
+    },
+    {
+     "name": "Pattern.transformInput",
+     "evidence": [
+      {
+       "file": "src/pattern.go",
+       "line": 474,
+       "contains": "Tokenize"
+      }
+     ],
+     "note": "on the chain, via Tokenize"
+    },
+    {
+     "name": "Terminal.ansiLabelPrinter",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1616,
+       "contains": "extractColor"
+      }
+     ],
+     "note": "on the chain, via extractColor"
+    },
+    {
+     "name": "Terminal.parsePrompt",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 1715,
+       "contains": "printHighlighted"
+      }
+     ],
+     "note": "on the chain, via Terminal.printHighlighted"
+    },
+    {
+     "name": "Terminal.printHighlighted",
+     "evidence": [
+      {
+       "file": "src/terminal.go",
+       "line": 4275,
+       "contains": "MatchItem"
+      }
+     ],
+     "note": "on the chain, via Pattern.MatchItem"
+    },
+    {
+     "name": "Tokenize",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 197,
+       "contains": "withPrefixLengths"
+      }
+     ],
+     "note": "on the chain, via withPrefixLengths"
+    },
+    {
+     "name": "Transform",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 275,
+       "contains": "stringBytes"
+      }
+     ],
+     "note": "on the chain, via stringBytes"
+    },
+    {
+     "name": "extractColor",
+     "evidence": [
+      {
+       "file": "src/ansi.go",
+       "line": 302,
+       "contains": "interpretCode"
+      }
+     ],
+     "note": "on the chain, via interpretCode"
+    },
+    {
+     "name": "interpretCode",
+     "evidence": [
+      {
+       "file": "src/ansi.go",
+       "line": 459,
+       "contains": "parseAnsiCode"
+      }
+     ],
+     "note": "on the chain, via parseAnsiCode"
+    },
+    {
+     "name": "matchOperatingSystemCommand",
+     "evidence": [
+      {
+       "file": "src/ansi.go",
+       "line": 134,
+       "contains": "stringBytes"
+      }
+     ],
+     "note": "on the chain, via stringBytes"
+    },
+    {
+     "name": "nativeLabelSetter",
+     "evidence": [
+      {
+       "file": "src/proxy.go",
+       "line": 82,
+       "contains": "setTmuxBorderLabel"
+      }
+     ],
+     "note": "on the chain, via setTmuxBorderLabel"
+    },
+    {
+     "name": "nextAnsiEscapeSequence",
+     "evidence": [
+      {
+       "file": "src/ansi.go",
+       "line": 238,
+       "contains": "matchOperatingSystemCommand"
+      }
+     ],
+     "note": "on the chain, via matchOperatingSystemCommand"
+    },
+    {
+     "name": "parseAnsiCode",
+     "evidence": [
+      {
+       "file": "src/ansi.go",
+       "line": 392,
+       "contains": "stringBytes"
+      }
+     ],
+     "note": "on the chain, via stringBytes"
+    },
+    {
+     "name": "setTmuxBorderLabel",
+     "evidence": [
+      {
+       "file": "src/tmux.go",
+       "line": 78,
+       "contains": "extractColor"
+      }
+     ],
+     "note": "on the chain, via extractColor"
+    },
+    {
+     "name": "setZellijBorderLabel",
+     "evidence": [
+      {
+       "file": "src/zellij.go",
+       "line": 13,
+       "contains": "extractColor"
+      }
+     ],
+     "note": "on the chain, via extractColor"
+    },
+    {
+     "name": "stringBytes",
+     "evidence": [
+      {
+       "file": "src/functions.go",
+       "line": 29,
+       "contains": "stringBytes"
+      }
+     ],
+     "note": "on the chain"
+    },
+    {
+     "name": "withPrefixLengths",
+     "evidence": [
+      {
+       "file": "src/tokenizer.go",
+       "line": 142,
+       "contains": "stringBytes"
+      }
+     ],
+     "note": "on the chain, via stringBytes"
+    }
+   ],
+   "rationale": "Computed as the functions reachable from the start and reaching the end in the gotool edges (static edges, union of GOOS darwin, linux and windows) call graph (every function on some chain, both ends included); 20 functions. Branches run through the prompt and label parsers (extractColor, ANSI sequence parsing), the tmux/zellij border-label setters and printHighlighted -> MatchItem -> transformInput -> Tokenize/Transform.",
+   "verified_with": [
+    "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
+    "gotool refs (type-checked uses)"
+   ]
+  },
+  {
+   "id": "hono-tc-trydecode-d3",
+   "repo": "hono",
+   "type": "transitive_callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods call `tryDecode` (src/utils/url.ts) directly, call such a caller, or call one of those (every caller up to three levels up the call chain)? Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`). Do not list `tryDecode` itself.",
+   "gold": [
+    {
+     "name": "createMountedRequest",
+     "evidence": [
+      {
+       "file": "src/utils/mount.ts",
+       "line": 97,
+       "contains": "tryDecode"
+      }
+     ],
+     "note": "level 1, via tryDecode"
+    },
+    {
+     "name": "getPath",
+     "evidence": [
+      {
+       "file": "src/utils/url.ts",
+       "line": 130,
+       "contains": "tryDecode"
+      }
+     ],
+     "note": "level 1, via tryDecode"
+    },
+    {
+     "name": "tryDecodeURI",
+     "evidence": [
+      {
+       "file": "src/utils/url.ts",
+       "line": 104,
+       "contains": "tryDecode"
+      }
+     ],
+     "note": "level 1, via tryDecode"
+    },
+    {
+     "name": "tryDecodeURIComponent",
+     "evidence": [
+      {
+       "file": "src/utils/url.ts",
+       "line": 238,
+       "contains": "tryDecode"
+      }
+     ],
+     "note": "level 1, via tryDecode"
+    },
+    {
+     "name": "Hono.mount",
+     "evidence": [
+      {
+       "file": "src/hono-base.ts",
+       "line": 388,
+       "contains": "createMountedRequest"
+      }
+     ],
+     "note": "level 2, via createMountedRequest"
+    },
+    {
+     "name": "HonoRequest.#getAllDecodedParams",
+     "evidence": [
+      {
+       "file": "src/request.ts",
+       "line": 116,
+       "contains": "tryDecodeURIComponent"
+      }
+     ],
+     "note": "level 2, via tryDecodeURIComponent"
+    },
+    {
+     "name": "HonoRequest.#getDecodedParam",
+     "evidence": [
+      {
+       "file": "src/request.ts",
+       "line": 106,
+       "contains": "tryDecodeURIComponent"
+      }
+     ],
+     "note": "level 2, via tryDecodeURIComponent"
+    },
+    {
+     "name": "_decodeURI",
+     "evidence": [
+      {
+       "file": "src/utils/url.ts",
+       "line": 245,
+       "contains": "tryDecodeURIComponent"
+      }
+     ],
+     "note": "level 2, via tryDecodeURIComponent"
+    },
+    {
+     "name": "defaultReplaceRequest",
+     "evidence": [
+      {
+       "file": "src/middleware/mount/index.ts",
+       "line": 25,
+       "contains": "createMountedRequest"
+      }
+     ],
+     "note": "level 2, via createMountedRequest"
+    },
+    {
+     "name": "getPathNoStrict",
+     "evidence": [
+      {
+       "file": "src/utils/url.ts",
+       "line": 171,
+       "contains": "getPath"
+      }
+     ],
+     "note": "level 2, via getPath"
+    },
+    {
+     "name": "parse",
+     "evidence": [
+      {
+       "file": "src/utils/cookie.ts",
+       "line": 137,
+       "contains": "tryDecodeURIComponent"
+      }
+     ],
+     "note": "level 2, via tryDecodeURIComponent"
+    },
+    {
+     "name": "serveStatic",
+     "evidence": [
+      {
+       "file": "src/middleware/serve-static/index.ts",
+       "line": 73,
+       "contains": "tryDecodeURI"
+      }
+     ],
+     "note": "level 2, via tryDecodeURI"
+    },
+    {
+     "name": "HonoRequest.param",
+     "evidence": [
+      {
+       "file": "src/request.ts",
+       "line": 100,
+       "contains": "getAllDecodedParams"
+      }
+     ],
+     "note": "level 3, via HonoRequest.#getAllDecodedParams"
+    },
+    {
+     "name": "_getQueryParam",
+     "evidence": [
+      {
+       "file": "src/utils/url.ts",
+       "line": 284,
+       "contains": "_decodeURI"
+      }
+     ],
+     "note": "level 3, via _decodeURI"
+    },
+    {
+     "name": "getCookie",
+     "evidence": [
+      {
+       "file": "src/helper/cookie/index.ts",
+       "line": 39,
+       "contains": "parse"
+      }
+     ],
+     "note": "level 3, via parse"
+    },
+    {
+     "name": "mount",
+     "evidence": [
+      {
+       "file": "src/middleware/mount/index.ts",
+       "line": 99,
+       "contains": "defaultReplaceRequest"
+      }
+     ],
+     "note": "level 3, via defaultReplaceRequest"
+    },
+    {
+     "name": "parseSigned",
+     "evidence": [
+      {
+       "file": "src/utils/cookie.ts",
+       "line": 155,
+       "contains": "parse"
+      }
+     ],
+     "note": "level 3, via parse"
+    }
+   ],
+   "rationale": "Computed as all callers up to 3 levels up the ts_edges.js (type-checker resolved, `direct` edges) call graph; 17 functions. Each item's note gives its level and the function it calls on the way to the target. Same-named functions in different files (the adapters' `serveStatic`) are one answer item.",
+   "verified_with": [
+    "ts_edges.js (TypeScript 5.9 type checker)",
+    "grep"
+   ]
+  },
+  {
+   "id": "hono-blast-createresponse-d3",
+   "repo": "hono",
+   "type": "blast_radius",
+   "answer_kind": "files",
+   "question": "Suppose the function `createResponseInstance` (src/context.ts) changes its signature. Which non-test source files contain a call to it, or a call to a function or method on a chain of at most three calls ending in it (three levels)? Name the file that contains each such call. Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`).",
+   "gold": [
+    {
+     "name": "src/context.ts",
+     "evidence": [
+      {
+       "file": "src/context.ts",
+       "line": 653,
+       "contains": "createResponseInstance"
+      }
+     ],
+     "note": "level 1, via Context.#newResponse -> createResponseInstance"
+    },
+    {
+     "name": "src/adapter/cloudflare-pages/handler.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/cloudflare-pages/handler.ts",
+       "line": 129,
+       "contains": "notFound"
+      }
+     ],
+     "note": "level 2, via serveStatic -> Context.notFound"
+    },
+    {
+     "name": "src/helper/cookie/index.ts",
+     "evidence": [
+      {
+       "file": "src/helper/cookie/index.ts",
+       "line": 101,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via setCookie -> Context.header"
+    },
+    {
+     "name": "src/helper/ssg/middleware.ts",
+     "evidence": [
+      {
+       "file": "src/helper/ssg/middleware.ts",
+       "line": 66,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via disableSSG -> Context.header"
+    },
+    {
+     "name": "src/helper/streaming/sse.ts",
+     "evidence": [
+      {
+       "file": "src/helper/streaming/sse.ts",
+       "line": 93,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via streamSSE -> Context.header"
+    },
+    {
+     "name": "src/helper/streaming/text.ts",
+     "evidence": [
+      {
+       "file": "src/helper/streaming/text.ts",
+       "line": 11,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via streamText -> Context.header"
+    },
+    {
+     "name": "src/middleware/cache/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/cache/index.ts",
+       "line": 244,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via cache -> Context.header"
+    },
+    {
+     "name": "src/middleware/compress/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/compress/index.ts",
+       "line": 115,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via compress -> Context.header"
+    },
+    {
+     "name": "src/middleware/cors/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/cors/index.ts",
+       "line": 161,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via cors -> Context.header"
+    },
+    {
+     "name": "src/middleware/jsx-renderer/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/jsx-renderer/index.ts",
+       "line": 66,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via createRenderer -> Context.header"
+    },
+    {
+     "name": "src/middleware/request-id/request-id.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/request-id/request-id.ts",
+       "line": 55,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via requestId -> Context.header"
+    },
+    {
+     "name": "src/middleware/serve-static/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/serve-static/index.ts",
+       "line": 107,
+       "contains": "header"
+      }
+     ],
+     "note": "level 2, via serveStatic -> Context.header"
+    },
+    {
+     "name": "src/adapter/bun/serve-static.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/bun/serve-static.ts",
+       "line": 28,
+       "contains": "return baseServeStatic({"
+      }
+     ],
+     "note": "level 3, via serveStatic -> serveStatic"
+    },
+    {
+     "name": "src/adapter/cloudflare-workers/serve-static.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/cloudflare-workers/serve-static.ts",
+       "line": 40,
+       "contains": "return baseServeStatic({"
+      }
+     ],
+     "note": "level 3, via serveStatic -> serveStatic"
+    },
+    {
+     "name": "src/adapter/deno/serve-static.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/deno/serve-static.ts",
+       "line": 38,
+       "contains": "return baseServeStatic({"
+      }
+     ],
+     "note": "level 3, via serveStatic -> serveStatic"
+    },
+    {
+     "name": "src/helper/streaming/stream.ts",
+     "evidence": [
+      {
+       "file": "src/helper/streaming/stream.ts",
+       "line": 44,
+       "contains": "newResponse"
+      }
+     ],
+     "note": "level 3, via stream -> Context.newResponse"
+    },
+    {
+     "name": "src/hono-base.ts",
+     "evidence": [
+      {
+       "file": "src/hono-base.ts",
+       "line": 40,
+       "contains": "newResponse"
+      }
+     ],
+     "note": "level 3, via errorHandler -> Context.newResponse"
+    },
+    {
+     "name": "src/middleware/ip-restriction/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/ip-restriction/index.ts",
+       "line": 233,
+       "contains": "text"
+      }
+     ],
+     "note": "level 3, via ipRestriction -> Context.text"
+    },
+    {
+     "name": "src/middleware/language/language.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/language/language.ts",
+       "line": 232,
+       "contains": "setCookie"
+      }
+     ],
+     "note": "level 3, via cacheLanguage -> setCookie"
+    },
+    {
+     "name": "src/middleware/method-not-allowed/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/method-not-allowed/index.ts",
+       "line": 139,
+       "contains": "text"
+      }
+     ],
+     "note": "level 3, via methodNotAllowed -> Context.text"
+    },
+    {
+     "name": "src/middleware/trailing-slash/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/trailing-slash/index.ts",
+       "line": 139,
+       "contains": "redirect"
+      }
+     ],
+     "note": "level 3, via appendTrailingSlash -> Context.redirect"
+    }
+   ],
+   "rationale": "Computed from the ts_edges.js (type-checker resolved, `direct` edges) call graph: the files holding a call to the target or to a function up to two levels above it; 21 files. Each note names the calling function and its callee.",
+   "verified_with": [
+    "ts_edges.js (TypeScript 5.9 type checker)",
+    "grep"
+   ]
+  },
+  {
+   "id": "hono-blast-httpexception-d3",
+   "repo": "hono",
+   "type": "blast_radius",
+   "answer_kind": "files",
+   "question": "Suppose the constructor of `HTTPException` (src/http-exception.ts) gains a required parameter (code that constructs one, `new HTTPException(...)`, inside a function or at module level, counts as a call). Which non-test source files contain a call to it, or a call to a function or method on a chain of at most three calls ending in it (three levels)? Name the file that contains each such call. Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`).",
+   "gold": [
+    {
+     "name": "src/helper/proxy/index.ts",
+     "evidence": [
+      {
+       "file": "src/helper/proxy/index.ts",
+       "line": 70,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via buildRequestInitFromRequest -> HTTPException.constructor"
+    },
+    {
+     "name": "src/middleware/basic-auth/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/basic-auth/index.ts",
+       "line": 151,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via basicAuth -> HTTPException.constructor"
+    },
+    {
+     "name": "src/middleware/bearer-auth/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/bearer-auth/index.ts",
+       "line": 149,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via bearerAuth -> HTTPException.constructor"
+    },
+    {
+     "name": "src/middleware/body-limit/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/body-limit/index.ts",
+       "line": 57,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via bodyLimit -> HTTPException.constructor"
+    },
+    {
+     "name": "src/middleware/csrf/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/csrf/index.ts",
+       "line": 146,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via csrf -> HTTPException.constructor"
+    },
+    {
+     "name": "src/middleware/ip-restriction/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/ip-restriction/index.ts",
+       "line": 232,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via ipRestriction -> HTTPException.constructor"
+    },
+    {
+     "name": "src/middleware/jwk/jwk.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/jwk/jwk.ts",
+       "line": 87,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via jwk -> HTTPException.constructor"
+    },
+    {
+     "name": "src/middleware/jwt/jwt.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/jwt/jwt.ts",
+       "line": 87,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via jwt -> HTTPException.constructor"
+    },
+    {
+     "name": "src/middleware/timeout/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/timeout/index.ts",
+       "line": 12,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via <module> -> HTTPException.constructor"
+    },
+    {
+     "name": "src/request.ts",
+     "evidence": [
+      {
+       "file": "src/request.ts",
+       "line": 488,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via cloneRawRequest -> HTTPException.constructor"
+    },
+    {
+     "name": "src/utils/mount.ts",
+     "evidence": [
+      {
+       "file": "src/utils/mount.ts",
+       "line": 69,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via createMountedRequest -> HTTPException.constructor"
+    },
+    {
+     "name": "src/validator/validator.ts",
+     "evidence": [
+      {
+       "file": "src/validator/validator.ts",
+       "line": 103,
+       "contains": "HTTPException"
+      }
+     ],
+     "note": "level 1, via validator -> HTTPException.constructor"
+    },
+    {
+     "name": "src/hono-base.ts",
+     "evidence": [
+      {
+       "file": "src/hono-base.ts",
+       "line": 388,
+       "contains": "createMountedRequest"
+      }
+     ],
+     "note": "level 2, via Hono.mount -> createMountedRequest"
+    },
+    {
+     "name": "src/middleware/cache/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/cache/index.ts",
+       "line": 118,
+       "contains": "cloneRawRequest"
+      }
+     ],
+     "note": "level 2, via createQueryDigest -> cloneRawRequest"
+    },
+    {
+     "name": "src/middleware/mount/index.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/mount/index.ts",
+       "line": 25,
+       "contains": "createMountedRequest"
+      }
+     ],
+     "note": "level 2, via defaultReplaceRequest -> createMountedRequest"
+    }
+   ],
+   "rationale": "Computed from the ts_edges.js (type-checker resolved, `direct` edges) call graph: the files holding a call to the target or to a function up to two levels above it; 15 files. Each note names the calling function and its callee. src/http-exception.ts itself only mentions the constructor in a doc comment.",
+   "verified_with": [
+    "ts_edges.js (TypeScript 5.9 type checker)",
+    "grep"
+   ]
+  },
+  {
+   "id": "hono-amb-ctx-header-d2",
+   "repo": "hono",
+   "type": "ambiguous",
+   "answer_kind": "symbols",
+   "question": "Both `Context` (src/context.ts) and `HonoRequest` (src/request.ts) have a method named `header`. Which functions or methods call the `header` method of `Context` (for example `c.header('X', 'v')`, as opposed to `c.req.header(...)`) directly, or call one of its direct callers (two levels up the call chain)? Count only direct calls (`new` included) that resolve to the declaration, following imports, re-exports and the static type of the receiver; a call inside a nested function, arrow function or callback counts for the outermost named function, method or `const`-bound function that contains it (for example a middleware factory such as `cors`). Calls through callback parameters, interface-typed values or function values do not count. Only non-test files under `src/` (exclude `*.test.ts` and `*.test.tsx`). Do not list `Context.header` itself.",
+   "gold": [
+    {
+     "name": "Context.redirect",
+     "evidence": [
+      {
+       "file": "src/context.ts",
+       "line": 773,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "cache",
+     "evidence": [
+      {
+       "file": "src/middleware/cache/index.ts",
+       "line": 244,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "compress",
+     "evidence": [
+      {
+       "file": "src/middleware/compress/index.ts",
+       "line": 115,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "cors",
+     "evidence": [
+      {
+       "file": "src/middleware/cors/index.ts",
+       "line": 161,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "createRenderer",
+     "evidence": [
+      {
+       "file": "src/middleware/jsx-renderer/index.ts",
+       "line": 66,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "disableSSG",
+     "evidence": [
+      {
+       "file": "src/helper/ssg/middleware.ts",
+       "line": 66,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "requestId",
+     "evidence": [
+      {
+       "file": "src/middleware/request-id/request-id.ts",
+       "line": 55,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "serveStatic",
+     "evidence": [
+      {
+       "file": "src/middleware/serve-static/index.ts",
+       "line": 107,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "setCookie",
+     "evidence": [
+      {
+       "file": "src/helper/cookie/index.ts",
+       "line": 101,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "setSignedCookie",
+     "evidence": [
+      {
+       "file": "src/helper/cookie/index.ts",
+       "line": 138,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "streamSSE",
+     "evidence": [
+      {
+       "file": "src/helper/streaming/sse.ts",
+       "line": 93,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "streamText",
+     "evidence": [
+      {
+       "file": "src/helper/streaming/text.ts",
+       "line": 11,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via Context.header"
+    },
+    {
+     "name": "appendTrailingSlash",
+     "evidence": [
+      {
+       "file": "src/middleware/trailing-slash/index.ts",
+       "line": 139,
+       "contains": "redirect"
+      }
+     ],
+     "note": "level 2, via Context.redirect"
+    },
+    {
+     "name": "cacheLanguage",
+     "evidence": [
+      {
+       "file": "src/middleware/language/language.ts",
+       "line": 232,
+       "contains": "setCookie"
+      }
+     ],
+     "note": "level 2, via setCookie"
+    },
+    {
+     "name": "deleteCookie",
+     "evidence": [
+      {
+       "file": "src/helper/cookie/index.ts",
+       "line": 143,
+       "contains": "setCookie"
+      }
+     ],
+     "note": "level 2, via setCookie"
+    },
+    {
+     "name": "jsxRenderer",
+     "evidence": [
+      {
+       "file": "src/middleware/jsx-renderer/index.ts",
+       "line": 125,
+       "contains": "createRenderer"
+      }
+     ],
+     "note": "level 2, via createRenderer"
+    },
+    {
+     "name": "trimTrailingSlash",
+     "evidence": [
+      {
+       "file": "src/middleware/trailing-slash/index.ts",
+       "line": 55,
+       "contains": "redirect"
+      }
+     ],
+     "note": "level 2, via Context.redirect"
+    }
+   ],
+   "rationale": "Computed as all callers up to 2 levels up the ts_edges.js (type-checker resolved, `direct` edges) call graph; 17 functions. Each item's note gives its level and the function it calls on the way to the target. Same-named functions in different files (the adapters' `serveStatic`) are one answer item.",
+   "verified_with": [
+    "ts_edges.js (TypeScript 5.9 type checker)",
+    "grep"
+   ]
+  },
+  {
+   "id": "hono-tests-req-header",
+   "repo": "hono",
+   "type": "tests",
+   "answer_kind": "files",
+   "question": "Which test files under src/ (`*.test.ts`, `*.test.tsx`) exercise the `header` method of `HonoRequest` (src/request.ts; not `Context.header`) through a chain of direct calls: code in the test file calls it, or calls a non-test function from which it is reachable through direct calls? Code anywhere in a test file counts, including inside `describe`/`it` callbacks and handlers the file defines. Count only direct calls (`new` included) that resolve to a declaration, following imports, re-exports and the static type of the receiver (so `c.req.parseBody()` calls `HonoRequest.parseBody`), whatever the arguments or branches; inside non-test code, a call in a nested function or callback counts for the outermost named function that contains it. Calls through callback parameters, interface-typed values or function values do not count, and sending a request to an app (`app.request(...)`, `fetch`) does not count as calling its handlers. Answer with file paths.",
+   "gold": [
+    {
+     "name": "src/adapter/lambda-edge/handler.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/lambda-edge/handler.test.ts",
+       "line": 108,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/client/client.test.ts",
+     "evidence": [
+      {
+       "file": "src/client/client.test.ts",
+       "line": 573,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/compose.test.ts",
+     "evidence": [
+      {
+       "file": "src/compose.test.ts",
+       "line": 102,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/helper/proxy/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/helper/proxy/index.test.ts",
+       "line": 133,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/helper/testing/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/helper/testing/index.test.ts",
+       "line": 22,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/hono.test.ts",
+     "evidence": [
+      {
+       "file": "src/hono.test.ts",
+       "line": 893,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/middleware/cache/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/cache/index.test.ts",
+       "line": 577,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/middleware/csrf/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/csrf/index.test.ts",
+       "line": 6,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/middleware/method-override/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/method-override/index.test.ts",
+       "line": 14,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/middleware/request-id/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/request-id/index.test.ts",
+       "line": 63,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/middleware/timing/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/timing/index.test.ts",
+       "line": 231,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/request.test.ts",
+     "evidence": [
+      {
+       "file": "src/request.test.ts",
+       "line": 237,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/types.test.ts",
+     "evidence": [
+      {
+       "file": "src/types.test.ts",
+       "line": 2573,
+       "contains": "header"
+      }
+     ],
+     "note": "level 1, via HonoRequest.header"
+    },
+    {
+     "name": "src/adapter/aws-lambda/conninfo.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/aws-lambda/conninfo.test.ts",
+       "line": 33,
+       "contains": "getConnInfo"
+      }
+     ],
+     "note": "level 2, via getConnInfo"
+    },
+    {
+     "name": "src/adapter/cloudflare-pages/conninfo.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/cloudflare-pages/conninfo.test.ts",
+       "line": 14,
+       "contains": "getConnInfo"
+      }
+     ],
+     "note": "level 2, via getConnInfo"
+    },
+    {
+     "name": "src/adapter/cloudflare-workers/conninfo.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/cloudflare-workers/conninfo.test.ts",
+       "line": 14,
+       "contains": "getConnInfo"
+      }
+     ],
+     "note": "level 2, via getConnInfo"
+    },
+    {
+     "name": "src/adapter/vercel/conninfo.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/vercel/conninfo.test.ts",
+       "line": 14,
+       "contains": "getConnInfo"
+      }
+     ],
+     "note": "level 2, via getConnInfo"
+    },
+    {
+     "name": "src/helper/accepts/accepts.test.ts",
+     "evidence": [
+      {
+       "file": "src/helper/accepts/accepts.test.ts",
+       "line": 54,
+       "contains": "accepts"
+      }
+     ],
+     "note": "level 2, via accepts"
+    },
+    {
+     "name": "src/helper/factory/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/helper/factory/index.test.ts",
+       "line": 136,
+       "contains": "validator"
+      }
+     ],
+     "note": "level 2, via validator"
+    },
+    {
+     "name": "src/middleware/bearer-auth/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/bearer-auth/index.test.ts",
+       "line": 18,
+       "contains": "bearerAuth"
+      }
+     ],
+     "note": "level 2, via bearerAuth"
+    },
+    {
+     "name": "src/middleware/compress/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/compress/index.test.ts",
+       "line": 9,
+       "contains": "compress"
+      }
+     ],
+     "note": "level 2, via compress"
+    },
+    {
+     "name": "src/middleware/cors/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/cors/index.test.ts",
+       "line": 7,
+       "contains": "cors"
+      }
+     ],
+     "note": "level 2, via cors"
+    },
+    {
+     "name": "src/middleware/etag/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/etag/index.test.ts",
+       "line": 15,
+       "contains": "etag"
+      }
+     ],
+     "note": "level 2, via etag"
+    },
+    {
+     "name": "src/middleware/serve-static/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/serve-static/index.test.ts",
+       "line": 28,
+       "contains": "serveStatic"
+      }
+     ],
+     "note": "level 2, via serveStatic"
+    },
+    {
+     "name": "src/validator/validator.test.ts",
+     "evidence": [
+      {
+       "file": "src/validator/validator.test.ts",
+       "line": 1475,
+       "contains": "cloneRawRequest"
+      }
+     ],
+     "note": "level 2, via cloneRawRequest"
+    },
+    {
+     "name": "src/adapter/cloudflare-workers/serve-static.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/cloudflare-workers/serve-static.test.ts",
+       "line": 40,
+       "contains": "serveStatic"
+      }
+     ],
+     "note": "level 3, via serveStatic"
+    }
+   ],
+   "rationale": "The test files among all transitive callers in the ts_edges.js (type-checker resolved, `direct` edges, test files included); 26 files.",
+   "verified_with": [
+    "ts_edges.js (TypeScript 5.9 type checker)",
+    "grep"
+   ]
+  },
+  {
+   "id": "hono-tests-trydecode",
+   "repo": "hono",
+   "type": "tests",
+   "answer_kind": "files",
+   "question": "Which test files under src/ (`*.test.ts`, `*.test.tsx`) exercise `tryDecode` (src/utils/url.ts) through a chain of direct calls: code in the test file calls it, or calls a non-test function from which it is reachable through direct calls? Code anywhere in a test file counts, including inside `describe`/`it` callbacks and handlers the file defines. Count only direct calls (`new` included) that resolve to a declaration, following imports, re-exports and the static type of the receiver (so `c.req.parseBody()` calls `HonoRequest.parseBody`), whatever the arguments or branches; inside non-test code, a call in a nested function or callback counts for the outermost named function that contains it. Calls through callback parameters, interface-typed values or function values do not count, and sending a request to an app (`app.request(...)`, `fetch`) does not count as calling its handlers. Answer with file paths.",
+   "gold": [
+    {
+     "name": "src/hono.test.ts",
+     "evidence": [
+      {
+       "file": "src/hono.test.ts",
+       "line": 2641,
+       "contains": "getPath"
+      }
+     ],
+     "note": "level 2, via getPath"
+    },
+    {
+     "name": "src/middleware/mount/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/mount/index.test.ts",
+       "line": 322,
+       "contains": "getPath"
+      }
+     ],
+     "note": "level 2, via getPath"
+    },
+    {
+     "name": "src/utils/mount.test.ts",
+     "evidence": [
+      {
+       "file": "src/utils/mount.test.ts",
+       "line": 58,
+       "contains": "getPath"
+      }
+     ],
+     "note": "level 2, via getPath"
+    },
+    {
+     "name": "src/utils/url.test.ts",
+     "evidence": [
+      {
+       "file": "src/utils/url.test.ts",
+       "line": 97,
+       "contains": "getPath"
+      }
+     ],
+     "note": "level 2, via getPath"
+    },
+    {
+     "name": "src/client/client.test.ts",
+     "evidence": [
+      {
+       "file": "src/client/client.test.ts",
+       "line": 575,
+       "contains": "parse"
+      }
+     ],
+     "note": "level 3, via parse"
+    },
+    {
+     "name": "src/middleware/serve-static/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/serve-static/index.test.ts",
+       "line": 28,
+       "contains": "serveStatic"
+      }
+     ],
+     "note": "level 3, via serveStatic"
+    },
+    {
+     "name": "src/utils/cookie.test.ts",
+     "evidence": [
+      {
+       "file": "src/utils/cookie.test.ts",
+       "line": 7,
+       "contains": "parse"
+      }
+     ],
+     "note": "level 3, via parse"
+    },
+    {
+     "name": "src/adapter/cloudflare-pages/handler.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/cloudflare-pages/handler.test.ts",
+       "line": 97,
+       "contains": "getCookie"
+      }
+     ],
+     "note": "level 4, via getCookie"
+    },
+    {
+     "name": "src/adapter/cloudflare-workers/serve-static.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/cloudflare-workers/serve-static.test.ts",
+       "line": 40,
+       "contains": "serveStatic"
+      }
+     ],
+     "note": "level 4, via serveStatic"
+    },
+    {
+     "name": "src/adapter/vercel/handler.test.ts",
+     "evidence": [
+      {
+       "file": "src/adapter/vercel/handler.test.ts",
+       "line": 8,
+       "contains": "param"
+      }
+     ],
+     "note": "level 4, via HonoRequest.param"
+    },
+    {
+     "name": "src/helper/cookie/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/helper/cookie/index.test.ts",
+       "line": 19,
+       "contains": "getCookie"
+      }
+     ],
+     "note": "level 4, via getCookie"
+    },
+    {
+     "name": "src/helper/proxy/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/helper/proxy/index.test.ts",
+       "line": 80,
+       "contains": "param"
+      }
+     ],
+     "note": "level 4, via HonoRequest.param"
+    },
+    {
+     "name": "src/helper/ssg/ssg.test.tsx",
+     "evidence": [
+      {
+       "file": "src/helper/ssg/ssg.test.tsx",
+       "line": 80,
+       "contains": "param"
+      }
+     ],
+     "note": "level 4, via HonoRequest.param"
+    },
+    {
+     "name": "src/middleware/cache/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/cache/index.test.ts",
+       "line": 216,
+       "contains": "param"
+      }
+     ],
+     "note": "level 4, via HonoRequest.param"
+    },
+    {
+     "name": "src/middleware/combine/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/combine/index.test.ts",
+       "line": 288,
+       "contains": "param"
+      }
+     ],
+     "note": "level 4, via HonoRequest.param"
+    },
+    {
+     "name": "src/middleware/method-not-allowed/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/method-not-allowed/index.test.ts",
+       "line": 61,
+       "contains": "param"
+      }
+     ],
+     "note": "level 4, via HonoRequest.param"
+    },
+    {
+     "name": "src/request.test.ts",
+     "evidence": [
+      {
+       "file": "src/request.test.ts",
+       "line": 53,
+       "contains": "param"
+      }
+     ],
+     "note": "level 4, via HonoRequest.param"
+    },
+    {
+     "name": "src/types.test.ts",
+     "evidence": [
+      {
+       "file": "src/types.test.ts",
+       "line": 614,
+       "contains": "param"
+      }
+     ],
+     "note": "level 4, via HonoRequest.param"
+    },
+    {
+     "name": "src/helper/factory/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/helper/factory/index.test.ts",
+       "line": 136,
+       "contains": "validator"
+      }
+     ],
+     "note": "level 5, via validator"
+    },
+    {
+     "name": "src/middleware/jwk/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/jwk/index.test.ts",
+       "line": 55,
+       "contains": "jwk"
+      }
+     ],
+     "note": "level 5, via jwk"
+    },
+    {
+     "name": "src/middleware/jwt/index.test.ts",
+     "evidence": [
+      {
+       "file": "src/middleware/jwt/index.test.ts",
+       "line": 17,
+       "contains": "jwt"
+      }
+     ],
+     "note": "level 5, via jwt"
+    },
+    {
+     "name": "src/validator/validator.test.ts",
+     "evidence": [
+      {
+       "file": "src/validator/validator.test.ts",
+       "line": 71,
+       "contains": "validator"
+      }
+     ],
+     "note": "level 5, via validator"
+    }
+   ],
+   "rationale": "The test files among all transitive callers in the ts_edges.js (type-checker resolved, `direct` edges, test files included); 22 files, none of which calls it directly.",
+   "verified_with": [
+    "ts_edges.js (TypeScript 5.9 type checker)",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-tc-oauth-scopes-d5",
+   "repo": "fastapi",
+   "type": "transitive_callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods call `_get_oauth_scopes` (fastapi/dependencies/models.py) directly, or call a function that does, and so on up to five levels up the call chain? Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation by the class's name; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `route.handle(...)`, `self.router.add_api_route(...)`, `original_route.get_route_handler()`), instantiation through a variable (`route_class(...)`) and calls through function values do not count. Ignore docstrings and comments. Do not list `_get_oauth_scopes` itself.",
+   "gold": [
+    {
+     "name": "_get_cache_key",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/models.py",
+       "line": 88,
+       "contains": "_get_oauth_scopes"
+      }
+     ],
+     "note": "level 1, via _get_oauth_scopes"
+    },
+    {
+     "name": "_get_openapi_dependency_data",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 118,
+       "contains": "_get_oauth_scopes"
+      }
+     ],
+     "note": "level 1, via _get_oauth_scopes"
+    },
+    {
+     "name": "solve_dependencies",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 693,
+       "contains": "_get_oauth_scopes"
+      }
+     ],
+     "note": "level 1, via _get_oauth_scopes"
+    },
+    {
+     "name": "_FrontendRouteGroup._solve_dependencies",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2306,
+       "contains": "solve_dependencies"
+      }
+     ],
+     "note": "level 2, via solve_dependencies"
+    },
+    {
+     "name": "get_flat_params",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 208,
+       "contains": "_get_cache_key"
+      }
+     ],
+     "note": "level 2, via _get_cache_key"
+    },
+    {
+     "name": "get_openapi_path",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 324,
+       "contains": "_get_openapi_dependency_data"
+      }
+     ],
+     "note": "level 2, via _get_openapi_dependency_data"
+    },
+    {
+     "name": "get_request_handler",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 511,
+       "contains": "solve_dependencies"
+      }
+     ],
+     "note": "level 2, via solve_dependencies"
+    },
+    {
+     "name": "get_websocket_app",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 830,
+       "contains": "solve_dependencies"
+      }
+     ],
+     "note": "level 2, via solve_dependencies"
+    },
+    {
+     "name": "APIRoute.get_route_handler",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1285,
+       "contains": "get_request_handler"
+      }
+     ],
+     "note": "level 3, via get_request_handler"
+    },
+    {
+     "name": "APIWebSocketRoute.__init__",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 879,
+       "contains": "get_websocket_app"
+      }
+     ],
+     "note": "level 3, via get_websocket_app"
+    },
+    {
+     "name": "_FrontendRouteGroup.handle",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2265,
+       "contains": "_solve_dependencies"
+      }
+     ],
+     "note": "level 3, via _FrontendRouteGroup._solve_dependencies"
+    },
+    {
+     "name": "get_fields_from_routes",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 568,
+       "contains": "get_flat_params"
+      }
+     ],
+     "note": "level 3, via get_flat_params"
+    },
+    {
+     "name": "get_openapi",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 623,
+       "contains": "get_openapi_path"
+      }
+     ],
+     "note": "level 3, via get_openapi_path"
+    },
+    {
+     "name": "APIRoute.__init__",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1276,
+       "contains": "get_route_handler"
+      }
+     ],
+     "note": "level 4, via APIRoute.get_route_handler"
+    },
+    {
+     "name": "APIRouter.add_api_websocket_route",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 3152,
+       "contains": "APIWebSocketRoute"
+      }
+     ],
+     "note": "level 4, via APIWebSocketRoute.__init__"
+    },
+    {
+     "name": "FastAPI.openapi",
+     "evidence": [
+      {
+       "file": "fastapi/applications.py",
+       "line": 1101,
+       "contains": "get_openapi"
+      }
+     ],
+     "note": "level 4, via get_openapi"
+    },
+    {
+     "name": "_IncludedRouter._build_effective_context",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1738,
+       "contains": "APIWebSocketRoute"
+      }
+     ],
+     "note": "level 4, via APIWebSocketRoute.__init__"
+    },
+    {
+     "name": "APIRouter.websocket",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 3222,
+       "contains": "add_api_websocket_route"
+      }
+     ],
+     "note": "level 5, via APIRouter.add_api_websocket_route"
+    },
+    {
+     "name": "FastAPI.setup",
+     "evidence": [
+      {
+       "file": "fastapi/applications.py",
+       "line": 1125,
+       "contains": "openapi"
+      }
+     ],
+     "note": "level 5, via FastAPI.openapi"
+    },
+    {
+     "name": "_IncludedRouter.effective_candidates",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1678,
+       "contains": "_build_effective_context"
+      }
+     ],
+     "note": "level 5, via _IncludedRouter._build_effective_context"
+    },
+    {
+     "name": "_IncludedRouter.effective_low_priority_routes",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1695,
+       "contains": "_build_effective_context"
+      }
+     ],
+     "note": "level 5, via _IncludedRouter._build_effective_context"
+    }
+   ],
+   "rationale": "Computed as all callers up to 5 levels up the py_edges.py (`direct` edges), every name grepped for missed callers call graph; 21 functions. Each item's note gives its level and the function it calls on the way to the target.",
+   "verified_with": [
+    "py_edges.py (import-aware AST)",
+    "py_refs.py",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-tc-annotation-sequence-d5",
+   "repo": "fastapi",
+   "type": "transitive_callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods call `field_annotation_is_sequence` (fastapi/_compat/shared.py) directly, or call a function that does, and so on up to five levels up the call chain? Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation by the class's name; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `route.handle(...)`, `self.router.add_api_route(...)`, `original_route.get_route_handler()`), instantiation through a variable (`route_class(...)`) and calls through function values do not count. Ignore docstrings and comments. Do not list `field_annotation_is_sequence` itself.",
+   "gold": [
+    {
+     "name": "_get_multidict_value",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 820,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "level 1, via field_annotation_is_sequence"
+    },
+    {
+     "name": "annotation_is_pydantic_v1",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 218,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "level 1, via field_annotation_is_sequence"
+    },
+    {
+     "name": "field_annotation_is_scalar_sequence",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 128,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "level 1, via field_annotation_is_sequence"
+    },
+    {
+     "name": "is_bytes_sequence_annotation",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 165,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "level 1, via field_annotation_is_sequence"
+    },
+    {
+     "name": "is_uploadfile_sequence_annotation",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 180,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "level 1, via field_annotation_is_sequence"
+    },
+    {
+     "name": "_extract_form_body",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1109,
+       "contains": "is_bytes_sequence_annotation"
+      }
+     ],
+     "note": "level 2, via is_bytes_sequence_annotation"
+    },
+    {
+     "name": "_extract_form_items",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1076,
+       "contains": "_get_multidict_value"
+      }
+     ],
+     "note": "level 2, via _get_multidict_value"
+    },
+    {
+     "name": "_request_param_model_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 875,
+       "contains": "_get_multidict_value"
+      }
+     ],
+     "note": "level 2, via _get_multidict_value"
+    },
+    {
+     "name": "analyze_param",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 600,
+       "contains": "field_annotation_is_scalar_sequence"
+      }
+     ],
+     "note": "level 2, via field_annotation_is_scalar_sequence"
+    },
+    {
+     "name": "create_model_field",
+     "evidence": [
+      {
+       "file": "fastapi/utils.py",
+       "line": 66,
+       "contains": "annotation_is_pydantic_v1"
+      }
+     ],
+     "note": "level 2, via annotation_is_pydantic_v1"
+    },
+    {
+     "name": "request_params_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 942,
+       "contains": "_get_multidict_value"
+      }
+     ],
+     "note": "level 2, via _get_multidict_value"
+    },
+    {
+     "name": "_extract_form_model",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1152,
+       "contains": "_extract_form_body"
+      }
+     ],
+     "note": "level 3, via _extract_form_body"
+    },
+    {
+     "name": "_get_body_field",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1418,
+       "contains": "create_model_field"
+      }
+     ],
+     "note": "level 3, via create_model_field"
+    },
+    {
+     "name": "_normalize_form_model",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1006,
+       "contains": "_extract_form_items"
+      }
+     ],
+     "note": "level 3, via _extract_form_items"
+    },
+    {
+     "name": "_populate_api_route_state",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1100,
+       "contains": "create_model_field"
+      }
+     ],
+     "note": "level 3, via create_model_field"
+    },
+    {
+     "name": "get_dependant",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 324,
+       "contains": "analyze_param"
+      }
+     ],
+     "note": "level 3, via analyze_param"
+    },
+    {
+     "name": "request_body_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1179,
+       "contains": "_extract_form_body"
+      }
+     ],
+     "note": "level 3, via _extract_form_body"
+    },
+    {
+     "name": "solve_dependencies",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 738,
+       "contains": "request_params_to_args"
+      }
+     ],
+     "note": "level 3, via request_params_to_args"
+    },
+    {
+     "name": "APIRoute.__init__",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1246,
+       "contains": "_populate_api_route_state"
+      }
+     ],
+     "note": "level 4, via _populate_api_route_state"
+    },
+    {
+     "name": "_EffectiveRouteContext.from_api_route",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1484,
+       "contains": "_populate_api_route_state"
+      }
+     ],
+     "note": "level 4, via _populate_api_route_state"
+    },
+    {
+     "name": "_FrontendRouteGroup._solve_dependencies",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2306,
+       "contains": "solve_dependencies"
+      }
+     ],
+     "note": "level 4, via solve_dependencies"
+    },
+    {
+     "name": "_build_dependant_with_parameterless_dependencies",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 914,
+       "contains": "get_dependant"
+      }
+     ],
+     "note": "level 4, via get_dependant"
+    },
+    {
+     "name": "get_parameterless_sub_dependant",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 151,
+       "contains": "get_dependant"
+      }
+     ],
+     "note": "level 4, via get_dependant"
+    },
+    {
+     "name": "get_request_handler",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 511,
+       "contains": "solve_dependencies"
+      }
+     ],
+     "note": "level 4, via solve_dependencies"
+    },
+    {
+     "name": "get_websocket_app",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 830,
+       "contains": "solve_dependencies"
+      }
+     ],
+     "note": "level 4, via solve_dependencies"
+    },
+    {
+     "name": "APIRoute.get_route_handler",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1285,
+       "contains": "get_request_handler"
+      }
+     ],
+     "note": "level 5, via get_request_handler"
+    },
+    {
+     "name": "APIWebSocketRoute.__init__",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 873,
+       "contains": "_build_dependant_with_parameterless_dependencies"
+      }
+     ],
+     "note": "level 5, via _build_dependant_with_parameterless_dependencies"
+    },
+    {
+     "name": "_EffectiveRouteContext.from_frontend_route_group",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1555,
+       "contains": "_build_dependant_with_parameterless_dependencies"
+      }
+     ],
+     "note": "level 5, via _build_dependant_with_parameterless_dependencies"
+    },
+    {
+     "name": "_FrontendRouteGroup.__init__",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2185,
+       "contains": "_build_dependant_with_parameterless_dependencies"
+      }
+     ],
+     "note": "level 5, via _build_dependant_with_parameterless_dependencies"
+    },
+    {
+     "name": "_FrontendRouteGroup.handle",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2265,
+       "contains": "_solve_dependencies"
+      }
+     ],
+     "note": "level 5, via _FrontendRouteGroup._solve_dependencies"
+    },
+    {
+     "name": "_IncludedRouter._build_effective_context",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1716,
+       "contains": "from_api_route"
+      }
+     ],
+     "note": "level 5, via _EffectiveRouteContext.from_api_route"
+    }
+   ],
+   "rationale": "Computed as all callers up to 5 levels up the py_edges.py (`direct` edges), every name grepped for missed callers call graph; 31 functions. Each item's note gives its level and the function it calls on the way to the target. Callers import it through the fastapi._compat re-export.",
+   "verified_with": [
+    "py_edges.py (import-aware AST)",
+    "py_refs.py",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-flow-openapi-lenient",
+   "repo": "fastapi",
+   "type": "flow",
+   "answer_kind": "symbols",
+   "question": "List every function or method in the `fastapi/` package that lies on at least one chain of direct calls from the `openapi` method of `FastAPI` (fastapi/applications.py) to `lenient_issubclass` (fastapi/_compat/shared.py), including both ends. Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation by the class's name; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `route.handle(...)`, `self.router.add_api_route(...)`, `original_route.get_route_handler()`), instantiation through a variable (`route_class(...)`) and calls through function values do not count. Ignore docstrings and comments.",
+   "gold": [
+    {
+     "name": "FastAPI.openapi",
+     "evidence": [
+      {
+       "file": "fastapi/applications.py",
+       "line": 1101,
+       "contains": "get_openapi"
+      }
+     ],
+     "note": "on the chain, via get_openapi"
+    },
+    {
+     "name": "_get_flat_fields_from_params",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 192,
+       "contains": "get_cached_model_fields"
+      }
+     ],
+     "note": "on the chain, via get_cached_model_fields"
+    },
+    {
+     "name": "_get_model_type",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 174,
+       "contains": "lenient_issubclass"
+      }
+     ],
+     "note": "on the chain, via lenient_issubclass"
+    },
+    {
+     "name": "_get_openapi_operation_parameters",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 185,
+       "contains": "_get_flat_fields_from_params"
+      }
+     ],
+     "note": "on the chain, via _get_flat_fields_from_params"
+    },
+    {
+     "name": "_get_param_model",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 183,
+       "contains": "lenient_issubclass"
+      }
+     ],
+     "note": "on the chain, via lenient_issubclass"
+    },
+    {
+     "name": "get_cached_model_fields",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 422,
+       "contains": "get_model_fields"
+      }
+     ],
+     "note": "on the chain, via get_model_fields"
+    },
+    {
+     "name": "get_definitions",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 299,
+       "contains": "get_flat_models_from_fields"
+      }
+     ],
+     "note": "on the chain, via get_flat_models_from_fields"
+    },
+    {
+     "name": "get_fields_from_routes",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 568,
+       "contains": "get_flat_params"
+      }
+     ],
+     "note": "on the chain, via get_flat_params"
+    },
+    {
+     "name": "get_flat_models_from_annotation",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 459,
+       "contains": "lenient_issubclass"
+      }
+     ],
+     "note": "on the chain, via lenient_issubclass"
+    },
+    {
+     "name": "get_flat_models_from_field",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 473,
+       "contains": "lenient_issubclass"
+      }
+     ],
+     "note": "on the chain, via lenient_issubclass"
+    },
+    {
+     "name": "get_flat_models_from_fields",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 489,
+       "contains": "get_flat_models_from_field"
+      }
+     ],
+     "note": "on the chain, via get_flat_models_from_field"
+    },
+    {
+     "name": "get_flat_models_from_model",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 449,
+       "contains": "get_flat_models_from_fields"
+      }
+     ],
+     "note": "on the chain, via get_flat_models_from_fields"
+    },
+    {
+     "name": "get_flat_params",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 220,
+       "contains": "_get_flat_fields_from_params"
+      }
+     ],
+     "note": "on the chain, via _get_flat_fields_from_params"
+    },
+    {
+     "name": "get_model_fields",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 406,
+       "contains": "lenient_issubclass"
+      }
+     ],
+     "note": "on the chain, via lenient_issubclass"
+    },
+    {
+     "name": "get_openapi",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 615,
+       "contains": "get_definitions"
+      }
+     ],
+     "note": "on the chain, via get_definitions"
+    },
+    {
+     "name": "get_openapi_path",
+     "evidence": [
+      {
+       "file": "fastapi/openapi/utils.py",
+       "line": 450,
+       "contains": "lenient_issubclass"
+      }
+     ],
+     "note": "on the chain, via lenient_issubclass"
+    },
+    {
+     "name": "lenient_issubclass",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 47,
+       "contains": "lenient_issubclass"
+      }
+     ],
+     "note": "on the chain"
+    }
+   ],
+   "rationale": "Computed as the functions reachable from the start and reaching the end in the py_edges.py (`direct` edges), every name grepped for missed callers call graph (every function on some chain, both ends included); 17 functions.",
+   "verified_with": [
+    "py_edges.py (import-aware AST)",
+    "py_refs.py",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-flow-route-state",
+   "repo": "fastapi",
+   "type": "flow",
+   "answer_kind": "symbols",
+   "question": "List every function or method in the `fastapi/` package that lies on at least one chain of direct calls from `_populate_api_route_state` (fastapi/routing.py) to `_annotation_is_sequence` (fastapi/_compat/shared.py), including both ends. Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation by the class's name; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `route.handle(...)`, `self.router.add_api_route(...)`, `original_route.get_route_handler()`), instantiation through a variable (`route_class(...)`) and calls through function values do not count. Ignore docstrings and comments.",
+   "gold": [
+    {
+     "name": "_annotation_is_complex",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 87,
+       "contains": "_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via _annotation_is_sequence"
+    },
+    {
+     "name": "_annotation_is_sequence",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 58,
+       "contains": "_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain"
+    },
+    {
+     "name": "_build_dependant_with_parameterless_dependencies",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 914,
+       "contains": "get_dependant"
+      }
+     ],
+     "note": "on the chain, via get_dependant"
+    },
+    {
+     "name": "_get_body_field",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1418,
+       "contains": "create_model_field"
+      }
+     ],
+     "note": "on the chain, via create_model_field"
+    },
+    {
+     "name": "_populate_api_route_state",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1119,
+       "contains": "_get_body_field"
+      }
+     ],
+     "note": "on the chain, via _get_body_field"
+    },
+    {
+     "name": "analyze_param",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 531,
+       "contains": "field_annotation_is_scalar"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_scalar"
+    },
+    {
+     "name": "annotation_is_pydantic_v1",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 218,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_sequence"
+    },
+    {
+     "name": "create_model_field",
+     "evidence": [
+      {
+       "file": "fastapi/utils.py",
+       "line": 66,
+       "contains": "annotation_is_pydantic_v1"
+      }
+     ],
+     "note": "on the chain, via annotation_is_pydantic_v1"
+    },
+    {
+     "name": "field_annotation_is_complex",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 101,
+       "contains": "_annotation_is_complex"
+      }
+     ],
+     "note": "on the chain, via _annotation_is_complex"
+    },
+    {
+     "name": "field_annotation_is_scalar",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 110,
+       "contains": "field_annotation_is_complex"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_complex"
+    },
+    {
+     "name": "field_annotation_is_scalar_sequence",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 125,
+       "contains": "field_annotation_is_scalar"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_scalar"
+    },
+    {
+     "name": "field_annotation_is_sequence",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 75,
+       "contains": "_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via _annotation_is_sequence"
+    },
+    {
+     "name": "get_dependant",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 324,
+       "contains": "analyze_param"
+      }
+     ],
+     "note": "on the chain, via analyze_param"
+    },
+    {
+     "name": "get_parameterless_sub_dependant",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 151,
+       "contains": "get_dependant"
+      }
+     ],
+     "note": "on the chain, via get_dependant"
+    },
+    {
+     "name": "is_scalar_field",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/v2.py",
+       "line": 354,
+       "contains": "field_annotation_is_scalar"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_scalar"
+    },
+    {
+     "name": "is_uploadfile_sequence_annotation",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 180,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_sequence"
+    }
+   ],
+   "rationale": "Computed as the functions reachable from the start and reaching the end in the py_edges.py (`direct` edges), every name grepped for missed callers call graph (every function on some chain, both ends included); 16 functions.",
+   "verified_with": [
+    "py_edges.py (import-aware AST)",
+    "py_refs.py",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-flow-websocket-app",
+   "repo": "fastapi",
+   "type": "flow",
+   "answer_kind": "symbols",
+   "question": "List every function or method in the `fastapi/` package that lies on at least one chain of direct calls from `get_websocket_app` (fastapi/routing.py) to `field_annotation_is_sequence` (fastapi/_compat/shared.py), including both ends. Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation by the class's name; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `route.handle(...)`, `self.router.add_api_route(...)`, `original_route.get_route_handler()`), instantiation through a variable (`route_class(...)`) and calls through function values do not count. Ignore docstrings and comments.",
+   "gold": [
+    {
+     "name": "_extract_form_body",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1109,
+       "contains": "is_bytes_sequence_annotation"
+      }
+     ],
+     "note": "on the chain, via is_bytes_sequence_annotation"
+    },
+    {
+     "name": "_extract_form_items",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1076,
+       "contains": "_get_multidict_value"
+      }
+     ],
+     "note": "on the chain, via _get_multidict_value"
+    },
+    {
+     "name": "_extract_form_model",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1152,
+       "contains": "_extract_form_body"
+      }
+     ],
+     "note": "on the chain, via _extract_form_body"
+    },
+    {
+     "name": "_get_multidict_value",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 820,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_sequence"
+    },
+    {
+     "name": "_request_param_model_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 875,
+       "contains": "_get_multidict_value"
+      }
+     ],
+     "note": "on the chain, via _get_multidict_value"
+    },
+    {
+     "name": "analyze_param",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 600,
+       "contains": "field_annotation_is_scalar_sequence"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_scalar_sequence"
+    },
+    {
+     "name": "annotation_is_pydantic_v1",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 218,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_sequence"
+    },
+    {
+     "name": "create_model_field",
+     "evidence": [
+      {
+       "file": "fastapi/utils.py",
+       "line": 66,
+       "contains": "annotation_is_pydantic_v1"
+      }
+     ],
+     "note": "on the chain, via annotation_is_pydantic_v1"
+    },
+    {
+     "name": "field_annotation_is_scalar_sequence",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 128,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_sequence"
+    },
+    {
+     "name": "field_annotation_is_sequence",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 64,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain"
+    },
+    {
+     "name": "get_dependant",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 324,
+       "contains": "analyze_param"
+      }
+     ],
+     "note": "on the chain, via analyze_param"
+    },
+    {
+     "name": "get_websocket_app",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 830,
+       "contains": "solve_dependencies"
+      }
+     ],
+     "note": "on the chain, via solve_dependencies"
+    },
+    {
+     "name": "is_bytes_sequence_annotation",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 165,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_sequence"
+    },
+    {
+     "name": "is_uploadfile_sequence_annotation",
+     "evidence": [
+      {
+       "file": "fastapi/_compat/shared.py",
+       "line": 180,
+       "contains": "field_annotation_is_sequence"
+      }
+     ],
+     "note": "on the chain, via field_annotation_is_sequence"
+    },
+    {
+     "name": "request_body_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 1179,
+       "contains": "_extract_form_body"
+      }
+     ],
+     "note": "on the chain, via _extract_form_body"
+    },
+    {
+     "name": "request_params_to_args",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 942,
+       "contains": "_get_multidict_value"
+      }
+     ],
+     "note": "on the chain, via _get_multidict_value"
+    },
+    {
+     "name": "solve_dependencies",
+     "evidence": [
+      {
+       "file": "fastapi/dependencies/utils.py",
+       "line": 689,
+       "contains": "get_dependant"
+      }
+     ],
+     "note": "on the chain, via get_dependant"
+    }
+   ],
+   "rationale": "Computed as the functions reachable from the start and reaching the end in the py_edges.py (`direct` edges), every name grepped for missed callers call graph (every function on some chain, both ends included); 17 functions.",
+   "verified_with": [
+    "py_edges.py (import-aware AST)",
+    "py_refs.py",
+    "grep"
+   ]
+  },
+  {
+   "id": "fastapi-amb-starlette-httpexception",
+   "repo": "fastapi",
+   "type": "ambiguous",
+   "answer_kind": "symbols",
+   "question": "Starlette's `HTTPException` (starlette.exceptions) and FastAPI's subclass of the same name (fastapi/exceptions.py) are both imported by modules of the package. Which functions or methods in the `fastapi/` package call Starlette's `HTTPException` class itself (imported from starlette.exceptions; calls of FastAPI's subclass do not count), directly or through at most two intermediate calls (three levels)? Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation by the class's name; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `route.handle(...)`, `self.router.add_api_route(...)`, `original_route.get_route_handler()`), instantiation through a variable (`route_class(...)`) and calls through function values do not count. Ignore docstrings and comments.",
+   "gold": [
+    {
+     "name": "APIRoute.handle",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1321,
+       "contains": "HTTPException("
+      }
+     ],
+     "note": "level 1, via starlette HTTPException"
+    },
+    {
+     "name": "_FrontendRouteGroup.handle",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2258,
+       "contains": "HTTPException("
+      }
+     ],
+     "note": "level 1, via starlette HTTPException"
+    },
+    {
+     "name": "_FrontendStaticFiles._lookup_path",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2046,
+       "contains": "HTTPException("
+      }
+     ],
+     "note": "level 1, via starlette HTTPException"
+    },
+    {
+     "name": "_FrontendStaticFiles.get_response",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2014,
+       "contains": "HTTPException("
+      }
+     ],
+     "note": "level 1, via starlette HTTPException"
+    },
+    {
+     "name": "get_request_handler",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 496,
+       "contains": "HTTPException("
+      }
+     ],
+     "note": "level 1, via starlette HTTPException"
+    },
+    {
+     "name": "APIKeyBase.make_not_authenticated_error",
+     "evidence": [
+      {
+       "file": "fastapi/security/api_key.py",
+       "line": 41,
+       "contains": "HTTPException("
+      }
+     ],
+     "note": "level 1, via starlette HTTPException"
+    },
+    {
+     "name": "OpenIdConnect.make_not_authenticated_error",
+     "evidence": [
+      {
+       "file": "fastapi/security/open_id_connect_url.py",
+       "line": 81,
+       "contains": "HTTPException("
+      }
+     ],
+     "note": "level 1, via starlette HTTPException"
+    },
+    {
+     "name": "APIRoute.get_route_handler",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1285,
+       "contains": "get_request_handler"
+      }
+     ],
+     "note": "level 2, via get_request_handler"
+    },
+    {
+     "name": "_FrontendStaticFiles._lookup_static_resource",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2057,
+       "contains": "_lookup_path"
+      }
+     ],
+     "note": "level 2, via _FrontendStaticFiles._lookup_path"
+    },
+    {
+     "name": "_FrontendStaticFiles.get_response_for_scope",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 2009,
+       "contains": "get_response"
+      }
+     ],
+     "note": "level 2, via _FrontendStaticFiles.get_response"
+    },
+    {
+     "name": "APIKeyBase.check_api_key",
+     "evidence": [
+      {
+       "file": "fastapi/security/api_key.py",
+       "line": 50,
+       "contains": "make_not_authenticated_error"
+      }
+     ],
+     "note": "level 2, via APIKeyBase.make_not_authenticated_error"
+    },
+    {
+     "name": "OpenIdConnect.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/open_id_connect_url.py",
+       "line": 91,
+       "contains": "make_not_authenticated_error"
+      }
+     ],
+     "note": "level 2, via OpenIdConnect.make_not_authenticated_error"
+    },
+    {
+     "name": "APIRoute.__init__",
+     "evidence": [
+      {
+       "file": "fastapi/routing.py",
+       "line": 1276,
+       "contains": "get_route_handler"
+      }
+     ],
+     "note": "level 3, via APIRoute.get_route_handler"
+    },
+    {
+     "name": "APIKeyCookie.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/api_key.py",
+       "line": 320,
+       "contains": "check_api_key"
+      }
+     ],
+     "note": "level 3, via APIKeyBase.check_api_key"
+    },
+    {
+     "name": "APIKeyHeader.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/api_key.py",
+       "line": 232,
+       "contains": "check_api_key"
+      }
+     ],
+     "note": "level 3, via APIKeyBase.check_api_key"
+    },
+    {
+     "name": "APIKeyQuery.__call__",
+     "evidence": [
+      {
+       "file": "fastapi/security/api_key.py",
+       "line": 144,
+       "contains": "check_api_key"
+      }
+     ],
+     "note": "level 3, via APIKeyBase.check_api_key"
+    }
+   ],
+   "rationale": "Level 1: every `HTTPException(...)` call in a module that imports the name from starlette.exceptions (fastapi/routing.py, fastapi/security/api_key.py, fastapi/security/open_id_connect_url.py); fastapi/security/http.py and oauth2.py construct FastAPI's subclass. Levels 2-3 follow py_edges.py (`direct` edges), every name grepped for missed callers; 16 functions.",
+   "verified_with": [
+    "py_edges.py (import-aware AST)",
+    "py_refs.py",
+    "grep"
+   ]
+  }
+ ]
+}

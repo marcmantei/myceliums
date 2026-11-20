@@ -5,6 +5,8 @@
 //	gotool <moduleDir> callees <funcSuffix>
 //	gotool <moduleDir> refs <objName>         // identifier uses by file:line and enclosing function
 //	gotool <moduleDir> unused                  // funcs/methods with zero uses (ALL=1: exported too)
+//	gotool <moduleDir> edges                   // every call edge between functions of the module:
+//	                                           // caller<TAB>callee<TAB>file:line<TAB>static|iface
 //
 // WITH_TESTS=1 loads test packages too; set GOOS to check other platforms' files.
 package main
@@ -71,6 +73,63 @@ func main() {
 				}
 				pos := prog.Fset.Position(e.Pos())
 				out[fmt.Sprintf("%s\t%s:%d", other.String(), rel(pos.Filename), pos.Line)] = true
+			}
+		}
+		keys := make([]string, 0, len(out))
+		for k := range out {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Println(k)
+		}
+	case "edges":
+		// Every call edge between functions declared in the module's own
+		// files, for transitive questions (#125). Unlike static.CallGraph,
+		// which only follows static calls from package members, this visits
+		// every function (closures included) and labels each edge: "static"
+		// for a call with a static callee, "iface" for an interface method
+		// call resolved to each implementation (class-hierarchy analysis).
+		// Calls through function values are not resolved.
+		prog, _ := ssautil.AllPackages(pkgs, ssa.InstantiateGenerics)
+		prog.Build()
+		chaGraph := cha.CallGraph(prog)
+		inModule := func(fn *ssa.Function) bool {
+			if fn == nil {
+				return false
+			}
+			f := prog.Fset.Position(fn.Pos()).Filename
+			return f != "" && strings.HasPrefix(f, abs+string(filepath.Separator))
+		}
+		out := map[string]bool{}
+		for fn := range ssautil.AllFunctions(prog) {
+			if !inModule(fn) {
+				continue
+			}
+			for _, b := range fn.Blocks {
+				for _, instr := range b.Instrs {
+					site, ok := instr.(ssa.CallInstruction)
+					if !ok {
+						continue
+					}
+					pos := prog.Fset.Position(site.Pos())
+					emit := func(callee *ssa.Function, kind string) {
+						if inModule(callee) {
+							out[fmt.Sprintf("%s\t%s\t%s:%d\t%s", fn.String(), callee.String(), rel(pos.Filename), pos.Line, kind)] = true
+						}
+					}
+					if g := site.Common().StaticCallee(); g != nil {
+						emit(g, "static")
+					} else if site.Common().IsInvoke() {
+						if node := chaGraph.Nodes[fn]; node != nil {
+							for _, e := range node.Out {
+								if e.Site == site {
+									emit(e.Callee.Func, "iface")
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 		keys := make([]string, 0, len(out))
