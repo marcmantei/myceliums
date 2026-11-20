@@ -30,6 +30,7 @@ pub mod routing;
 pub mod search;
 pub mod serve;
 pub mod session;
+pub mod session_hook;
 pub mod setup_claude;
 pub mod setup_editors;
 pub mod stats;

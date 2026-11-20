@@ -687,7 +687,7 @@ If an analysis is interrupted (e.g., timeout, crash, `Ctrl+C`), the data directo
 `myc setup-claude` (project scope; `--scope user` writes the same into `~/.claude.json` and `~/.claude/`) configures:
 
 1. **MCP server** — Registered in `.mcp.json`. Claude Code spawns `myc mcp` as a background process for each session. Lightweight and idle when not queried.
-2. **SessionStart hook** — Added to `.claude/settings.json`. Runs `myc session . --yes --timeout 300` when a Claude Code session starts, ensuring the knowledge graph is fresh. Aborts after 5 minutes to prevent runaway analyses.
+2. **SessionStart hook** — Added to `.claude/settings.json`. Runs `myc session . --yes --timeout 300` when a Claude Code session starts, ensuring the knowledge graph is fresh, and adds one line to the model's context: repository id, index freshness and the core tools. Claude Code waits for it; a re-analysis aborts after 5 minutes.
 3. **PreToolUse grep hook** — `myc hook-grep` runs before Grep and grep/rg calls; it reads the index, never blocks, and stays silent unless the pattern names a known symbol.
 4. **Routing block and subagent** — Text files only: `CLAUDE.md` and `.claude/agents/code-explorer.md`.
 

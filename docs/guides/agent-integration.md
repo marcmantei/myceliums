@@ -39,7 +39,7 @@ hard, and what `myc setup-claude` installs for each.
 |---|---|---|---|---|
 | 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | together with layer 3 (variant C): myceliums used in 100 % of sessions instead of 80 %, first call a graph query; not measured alone | +348 tokens per request | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | variant A: myceliums used in 80 % of sessions (pilot with 54 deferred tools: 0 %; not a controlled comparison) | the schemas are in every request (A's first prompt: 10,162 tokens) | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
-| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line is a `systemMessage` the model does not see | a few ms per Grep (400 ms cap) | `myc setup-claude` |
+| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see (it adds a context line since #152) | a few ms per Grep (400 ms cap) | `myc setup-claude` |
 | 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | never called (0 of 38 sessions): with the tools in the main context the agent queries them itself | about 1,860 tokens per request more than C (Agent tool and its agent list) | `myc setup-claude` |
 | 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | not measured | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
 
@@ -87,7 +87,7 @@ What each layer writes:
 | Layer | Project scope (default) | User scope | Opt out |
 |---|---|---|---|
 | MCP server (2. core tools loaded up front) | `.mcp.json` (core tools through their `_meta`) | `claude mcp add-json -s user` (fallback: `~/.claude.json`), with `alwaysLoad` | `--no-always-load` (user scope) |
-| SessionStart hook: refresh the index, print a status line | `.claude/settings.json` | `~/.claude/settings.json` | – |
+| SessionStart hook: refresh the index, one context line for the model, a status line for you | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PostToolUse hook: format myceliums tool results | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | 1. Routing block | `CLAUDE.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
 | 3. Grep redirect hook (PreToolUse) | `.claude/settings.json` | `~/.claude/settings.json` | `--no-redirect-hook` |
@@ -108,6 +108,42 @@ What each layer writes:
   installed, the hooks run twice; remove one with
   `myc setup-claude --scope user --uninstall`.
 - `myc setup` (the wizard) installs at user scope.
+
+### SessionStart hook
+
+`myc session . --yes --timeout 300 2>/dev/null; exit 0` runs when a session
+starts, resumes, or restarts after `/clear` or compaction. It prints one JSON
+object on stdout in the shape the
+[hooks reference](https://code.claude.com/docs/en/hooks#sessionstart)
+documents:
+
+```json
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"myceliums code graph of repo flask-3735c01f (index: 22d9247 = HEAD). MCP tools find_callers, impact_of_change and search_code answer structural questions (callers, blast radius, where code lives)."},"systemMessage":"[myceliums] flask ready | 93 files · 1592 symbols"}
+```
+
+- `additionalContext` goes into the model's context before the first prompt:
+  the repository id, the index freshness (`index: <commit> = HEAD`, or a
+  stale warning when HEAD has moved) and the core tools. It is one line of at
+  most 280 characters (about 60 tokens), because every session pays for it.
+  The tools sentence is left out when you declined AI instructions in the
+  `myc setup` wizard.
+- `systemMessage` is the status line Claude Code shows you, not the model.
+  The same line goes to stderr for a run by hand.
+- On a skip (no git repository, home directory, no supported files), an error
+  or a timeout the hook adds no context, only the status line. It always
+  exits 0; `; exit 0` covers a crash or an older `myc`.
+
+**Runtime.** Claude Code waits for a SessionStart hook before the session
+starts. With a current index the hook reads the registry, checks the cache
+and runs `git rev-parse HEAD` (0.1 s on flask with a debug build). With no
+index or a stale one it re-analyzes without embeddings in a child process
+whose output goes to stderr, so it cannot reach the model; the session waits
+for that, up to `--timeout` seconds (300). After the timeout the analysis is
+killed, the session starts without the context line, and the next session
+tries again. A repository whose analysis takes longer than that (a debug
+build did not finish hono in 300 s) never gets indexed by the hook: run
+`myc analyze .` once by hand. The handler also carries `"timeout": 330`, so
+Claude Code stops a hook that hangs anywhere else.
 
 ### 1. Routing block
 
