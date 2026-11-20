@@ -11,12 +11,7 @@ pub(crate) fn test_data_dir(name: &str) -> PathBuf {
 }
 
 pub(crate) fn app_state(data_dir: PathBuf) -> Arc<AppState> {
-    let registry_path = data_dir.join("registry.json");
-    Arc::new(AppState {
-        data_dir,
-        registry_path,
-        default_repo_id: None,
-    })
+    Arc::new(AppState::new(data_dir, None))
 }
 
 pub(crate) fn sample_symbol(uid: &str, repo_id: &str) -> CodeSymbol {
@@ -38,9 +33,9 @@ pub(crate) fn sample_symbol(uid: &str, repo_id: &str) -> CodeSymbol {
 /// Seed a real store with one embedded symbol so `graph_v1_node` reaches the
 /// semantic-neighbor vector search on a healthy backend.
 /// Registers `repo_id` in the registry `app_state` points at, as
-/// `analyze` would; unregistered ids are rejected by `open_store`.
+/// `analyze` would; unregistered ids are rejected by the graph service.
 pub(crate) fn register_repo(data_dir: &std::path::Path, repo_id: &str) {
-    let mut registry = RepoRegistry::load(&data_dir.join("registry.json")).unwrap();
+    let mut registry = RepoRegistry::load(&data_dir.join("repos.json")).unwrap();
     registry.register(myceliums_storage::RepoInfo {
         id: repo_id.to_string(),
         name: repo_id.to_string(),

@@ -234,6 +234,14 @@ impl<T> GraphTable<T> {
     }
 }
 
+/// An empty table, for callers that fall back to "no rows" when a read
+/// fails.
+impl<T> Default for GraphTable<T> {
+    fn default() -> Self {
+        Self(Arc::new(Vec::new()))
+    }
+}
+
 impl<T> Clone for GraphTable<T> {
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))

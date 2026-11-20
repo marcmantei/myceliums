@@ -358,7 +358,7 @@ pub(crate) async fn cmd_analyze(
 /// record; that is unverifiable rather than clean, so strict mode rejects it and
 /// points at the re-analysis that would produce a verdict.
 pub(crate) async fn enforce_strict_embeddings(db_path: &Path, repo_id: &str) -> Result<()> {
-    let store = Store::open(db_path, repo_id).await?;
+    let store = Store::open_existing(db_path, repo_id).await?;
     match myceliums_core::EmbeddingStats::load(&store).await? {
         // Reuse the canonical wording rather than restating it: this message
         // and EmbeddingStats::partial_index_warning had already drifted apart

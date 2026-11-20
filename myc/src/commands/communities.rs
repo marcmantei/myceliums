@@ -1,15 +1,14 @@
 //! `myc communities`.
 
-use crate::repo::{data_dir, resolve_repo};
+use crate::repo::{graph_service, resolve_repo};
 use anyhow::Result;
-use myceliums_storage::{RepoRegistry, Store};
 
 pub(crate) async fn cmd_communities(repo: &str) -> Result<()> {
     let (_, repo_info) = resolve_repo(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
-    let store = Store::open(&db_path, &repo_info.id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_info.id).await?;
 
-    let communities = store.get_communities().await?;
+    let communities = graph.communities().await?;
 
     if communities.is_empty() {
         println!("No communities detected. Try re-analyzing with: myc analyze <path>");

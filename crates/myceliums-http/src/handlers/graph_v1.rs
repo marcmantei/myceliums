@@ -3,7 +3,7 @@
 use crate::handlers::graph::{
     build_community_map, calculate_depths, color_for_kind, symbol_kind_display,
 };
-use crate::state::{open_store, AppState};
+use crate::state::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -253,7 +253,7 @@ pub(crate) async fn graph_v1_overview(
     Path(repo_id): Path<String>,
     Query(params): Query<GraphOverviewParams>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -270,11 +270,12 @@ pub(crate) async fn graph_v1_overview(
             );
         }
     };
+    let store = graph.store();
 
     let symbols_with_vecs = store.get_symbols_with_vectors().await.unwrap_or_default();
     let symbols: Vec<_> = symbols_with_vecs.iter().map(|(s, _)| s.clone()).collect();
-    let relationships = store.get_relationships().await.unwrap_or_default();
-    let community_map = build_community_map(&store, &symbols, &relationships).await;
+    let relationships = graph.relationships().await.unwrap_or_default();
+    let community_map = build_community_map(&graph, &symbols, &relationships).await;
 
     // Group symbols by community
     type SymbolWithVec = (myceliums_storage::CodeSymbol, Option<Vec<f32>>);
@@ -444,7 +445,7 @@ pub(crate) async fn graph_v1_node(
     State(state): State<Arc<AppState>>,
     Path((repo_id, node_id)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -454,10 +455,11 @@ pub(crate) async fn graph_v1_node(
             );
         }
     };
+    let store = graph.store();
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let relationships = store.get_relationships().await.unwrap_or_default();
-    let community_map = build_community_map(&store, &symbols, &relationships).await;
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let relationships = graph.relationships().await.unwrap_or_default();
+    let community_map = build_community_map(&graph, &symbols, &relationships).await;
     let depths = calculate_depths(&symbols, &relationships).await;
 
     let symbol = match symbols.iter().find(|s| s.uid == node_id) {
@@ -579,7 +581,7 @@ pub(crate) async fn graph_v1_search(
     Path(repo_id): Path<String>,
     Query(params): Query<GraphSearchParams>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -592,6 +594,7 @@ pub(crate) async fn graph_v1_search(
             );
         }
     };
+    let store = graph.store();
 
     let top_k = params.top_k.unwrap_or(20).clamp(1, 100);
 

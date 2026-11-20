@@ -1,9 +1,8 @@
 //! `myc rename`.
 
-use crate::repo::{data_dir, resolve_repo_or_latest};
+use crate::repo::{graph_service, resolve_repo_or_latest};
 use anyhow::Result;
 use myceliums_core::RenamePlan;
-use myceliums_storage::{RepoRegistry, Store};
 
 pub(crate) async fn cmd_rename(
     symbol_name: &str,
@@ -12,11 +11,11 @@ pub(crate) async fn cmd_rename(
     apply: bool,
 ) -> Result<()> {
     let (_, repo_info) = resolve_repo_or_latest(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
-    let store = Store::open(&db_path, &repo_info.id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_info.id).await?;
 
-    let symbols = store.get_symbols().await?;
-    let relationships = store.get_relationships().await?;
+    let symbols = graph.symbols().await?;
+    let relationships = graph.relationships().await?;
 
     let plan = RenamePlan::create(&symbols, &relationships, symbol_name, new_name)?;
 

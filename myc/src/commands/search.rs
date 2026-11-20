@@ -1,12 +1,12 @@
 //! `myc search`.
 
-use crate::repo::{data_dir, resolve_repo_or_latest};
+use crate::repo::{graph_service, resolve_repo_or_latest};
 use anyhow::{Context, Result};
 use myceliums_core::{
     attach_graph_edges, embedder_for_index, hybrid_search, hybrid_search_explain, rerank_results,
     search_symbols, search_symbols_explain,
 };
-use myceliums_storage::{RepoRegistry, Store};
+use myceliums_storage::Store;
 
 /// The partial-index warning for a store, if the index is only partially
 /// embedded. Reads accounting recorded at index time — no per-query scan.
@@ -34,18 +34,22 @@ pub(crate) async fn cmd_search(
     use_explain: bool,
 ) -> Result<()> {
     let (_, repo_info) = resolve_repo_or_latest(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
-    let store = Store::open(&db_path, &repo_info.id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_info.id).await?;
+    let store = graph.store();
 
-    let symbols = store.get_symbols().await?;
+    let symbols = graph.symbols().await?;
 
     if use_hybrid {
         let embedder = embedder_for_index(&store).await?;
         let mut results = if use_explain {
-            hybrid_search_explain(&embedder, &symbols, &store, query, limit).await?
+            hybrid_search_explain(&embedder, &symbols, &*store, query, limit).await?
         } else {
-            hybrid_search(&embedder, &symbols, &store, query, limit).await?
+            hybrid_search(&embedder, &symbols, &*store, query, limit).await?
         };
+        // The vector search read the store directly: check that it saw the
+        // index generation the symbol table came from.
+        graph.verify()?;
 
         // Apply reranking if requested, using the reranker recorded at indexing time
         if use_rerank {
@@ -55,7 +59,7 @@ pub(crate) async fn cmd_search(
 
         // Attach graph edges for explain mode
         if use_explain {
-            let relationships = store.get_relationships().await?;
+            let relationships = graph.relationships().await?;
             let uid_to_name: std::collections::HashMap<&str, &str> = symbols
                 .iter()
                 .map(|s| (s.uid.as_str(), s.name.as_str()))
@@ -218,8 +222,8 @@ pub(crate) async fn cmd_semantic_search(
     limit: usize,
 ) -> Result<()> {
     let (_, ri) = resolve_repo_or_latest(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &ri.id);
-    let store = Store::open(&db_path, &ri.id).await?;
+    // Only vector search: the store handle is enough, no graph snapshot.
+    let store = graph_service().open_store(&ri.id).await?;
 
     let embedder = embedder_for_index(&store)
         .await

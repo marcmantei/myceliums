@@ -1,18 +1,17 @@
 //! `myc knowledge`.
 
-use crate::repo::{data_dir, resolve_repo_or_latest};
+use crate::repo::{graph_service, resolve_repo_or_latest};
 use anyhow::Result;
 use myceliums_core::search_symbols;
-use myceliums_storage::{RepoRegistry, Store};
 use std::collections::HashMap;
 
 pub(crate) async fn cmd_knowledge(query: &str, repo: Option<&str>, limit: usize) -> Result<()> {
     let (_, repo_info) = resolve_repo_or_latest(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
-    let store = Store::open(&db_path, &repo_info.id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_info.id).await?;
 
-    let symbols = store.get_symbols().await?;
-    let relationships = store.get_relationships().await?;
+    let symbols = graph.symbols().await?;
+    let relationships = graph.relationships().await?;
 
     // Search for matching code symbols
     let search_results = search_symbols(&symbols, query);

@@ -1,8 +1,7 @@
 //! `myc path`.
 
-use crate::repo::{data_dir, resolve_repo_or_latest};
+use crate::repo::{graph_service, resolve_repo_or_latest};
 use anyhow::Result;
-use myceliums_storage::{RepoRegistry, Store};
 
 pub(crate) async fn cmd_path(
     from: &str,
@@ -11,11 +10,11 @@ pub(crate) async fn cmd_path(
     max_depth: u32,
 ) -> Result<()> {
     let (repo_id, _info) = resolve_repo_or_latest(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
-    let store = Store::open(&db_path, &repo_id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_id).await?;
 
-    let symbols = store.get_symbols().await?;
-    let relationships = store.get_relationships().await?;
+    let symbols = graph.symbols().await?;
+    let relationships = graph.relationships().await?;
 
     // Resolve symbols using same pattern as MCP tool
     let from_symbol = resolve_symbol_cli(&symbols, from)?;

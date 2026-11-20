@@ -1,17 +1,16 @@
 //! `myc diff`.
 
-use crate::repo::{data_dir, resolve_repo};
+use crate::repo::{data_dir, graph_service, resolve_repo};
 use anyhow::Result;
-use myceliums_storage::{RepoRegistry, Store};
 
 pub(crate) async fn cmd_diff(repo: &str) -> Result<()> {
     let (repo_id, _repo_info) = resolve_repo(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
 
     // Build a snapshot from the current graph state
-    let store = Store::open(&db_path, &repo_id).await?;
-    let symbols = store.get_symbols().await?;
-    let relationships = store.get_relationships().await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_id).await?;
+    let symbols = graph.symbols().await?;
+    let relationships = graph.relationships().await?;
     let current = myceliums_core::build_snapshot(&repo_id, &symbols, &relationships);
 
     // The previous analysis, as the MCP drift tool picks it.

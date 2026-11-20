@@ -1,6 +1,6 @@
 //! Repository listing, the 2D schematic graph, symbol details, stats and processes.
 
-use crate::state::{open_store, AppState};
+use crate::state::AppState;
 use anyhow::Result;
 use axum::{
     extract::{Path, State},
@@ -8,7 +8,8 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use myceliums_storage::{RepoRegistry, Store};
+use myceliums_core::RepoGraph;
+use myceliums_storage::RepoRegistry;
 use serde::Serialize;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -285,12 +286,12 @@ fn count_cross_community_edges(
 
 /// Build community membership map: symbol uid -> community label
 pub(crate) async fn build_community_map(
-    store: &Store,
+    graph: &RepoGraph<'_>,
     symbols: &[myceliums_storage::CodeSymbol],
     relationships: &[myceliums_storage::Relationship],
 ) -> HashMap<String, String> {
     // Try stored communities first
-    if let Ok(communities) = store.get_communities().await {
+    if let Ok(communities) = graph.communities().await {
         if !communities.is_empty() {
             let mut map = HashMap::new();
             for community in &communities {
@@ -338,10 +339,10 @@ pub(crate) async fn build_community_map(
 /// Extract process clusters from the stored processes.
 /// Resolves step names from the description chain into symbol UIDs.
 async fn extract_processes(
-    store: &Store,
+    graph: &RepoGraph<'_>,
     symbols: &[myceliums_storage::CodeSymbol],
 ) -> Result<Vec<ProcessCluster>> {
-    let processes = store.get_processes().await.unwrap_or_default();
+    let processes = graph.processes().await.unwrap_or_default();
 
     // Build name→uid lookup (first match wins; entry_point is already a name)
     let name_to_uid: HashMap<&str, &str> = symbols
@@ -351,7 +352,7 @@ async fn extract_processes(
 
     let mut clusters = Vec::new();
 
-    for process in processes {
+    for process in &processes {
         // Parse description chain: "1. foo → 2. bar → 3. baz"
         let step_names: Vec<&str> = process
             .description
@@ -436,7 +437,7 @@ pub(crate) async fn get_graph(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -452,10 +453,10 @@ pub(crate) async fn get_graph(
         }
     };
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let relationships = store.get_relationships().await.unwrap_or_default();
-    let communities_raw = store.get_communities().await.unwrap_or_default();
-    let community_map = build_community_map(&store, &symbols, &relationships).await;
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let relationships = graph.relationships().await.unwrap_or_default();
+    let communities_raw = graph.communities().await.unwrap_or_default();
+    let community_map = build_community_map(&graph, &symbols, &relationships).await;
 
     // Phase 1: Calculate depths
     let depths = calculate_depths(&symbols, &relationships).await;
@@ -572,7 +573,7 @@ pub(crate) async fn get_graph(
     };
 
     // Phase 1: Extract processes with resolved step UIDs
-    let processes = extract_processes(&store, &symbols)
+    let processes = extract_processes(&graph, &symbols)
         .await
         .unwrap_or_default();
 
@@ -591,7 +592,7 @@ pub(crate) async fn get_symbol(
     State(state): State<Arc<AppState>>,
     Path((repo_id, uid)): Path<(String, String)>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -599,8 +600,8 @@ pub(crate) async fn get_symbol(
         }
     };
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let relationships = store.get_relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let relationships = graph.relationships().await.unwrap_or_default();
 
     let symbol = match symbols.iter().find(|s| s.uid == uid) {
         Some(s) => s,
@@ -656,7 +657,7 @@ pub(crate) async fn get_stats(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -671,11 +672,12 @@ pub(crate) async fn get_stats(
             );
         }
     };
+    let store = graph.store();
 
     let symbols = store.symbol_count().await.unwrap_or(0);
     let files = store.file_count().await.unwrap_or(0);
     let relationships = store.relationship_count().await.unwrap_or(0);
-    let communities = store.get_communities().await.map(|c| c.len()).unwrap_or(0);
+    let communities = graph.communities().await.map(|c| c.len()).unwrap_or(0);
 
     (
         StatusCode::OK,
@@ -693,7 +695,7 @@ pub(crate) async fn get_processes(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -701,8 +703,8 @@ pub(crate) async fn get_processes(
         }
     };
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let processes = extract_processes(&store, &symbols)
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let processes = extract_processes(&graph, &symbols)
         .await
         .unwrap_or_default();
 
@@ -715,7 +717,7 @@ mod tests {
     use axum::response::IntoResponse;
     use std::collections::HashMap;
 
-    use crate::test_support::{app_state, register_repo, test_data_dir};
+    use crate::test_support::{app_state, register_repo, seed_healthy_store, test_data_dir};
 
     #[test]
     fn test_symbol_kind_display() {
@@ -859,6 +861,56 @@ mod tests {
 
         assert_eq!(edge.weight, 1.0);
         assert_eq!(edge.edge_type_display, "Calls");
+    }
+
+    /// A registered repository whose index is missing (never built, or
+    /// mid-swap) is a 404: the read goes through the graph service, which
+    /// opens the index with `Store::open_existing` and never creates it.
+    #[tokio::test]
+    async fn registered_repo_without_index_is_404_and_creates_nothing() {
+        let dir = test_data_dir("no_index");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        register_repo(&dir, "known-1");
+        let state = app_state(dir.clone());
+
+        let stats = get_stats(State(state.clone()), Path("known-1".to_string()))
+            .await
+            .into_response();
+        assert_eq!(stats.status(), StatusCode::NOT_FOUND);
+        let graph = get_graph(State(state), Path("known-1".to_string()))
+            .await
+            .into_response();
+        assert_eq!(graph.status(), StatusCode::NOT_FOUND);
+        assert!(
+            !RepoRegistry::repo_db_path(&dir, "known-1").exists(),
+            "a read must never create the index directory"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Requests share the server's graph cache: a second request against an
+    /// unchanged index reads no table from disk.
+    #[tokio::test]
+    async fn repeated_requests_are_served_from_the_graph_cache() {
+        let dir = test_data_dir("graph_cache");
+        let _ = std::fs::remove_dir_all(&dir);
+        seed_healthy_store(&dir, "repo-cached", "cached_node").await;
+        let state = app_state(dir.clone());
+
+        let first = get_graph(State(state.clone()), Path("repo-cached".to_string()))
+            .await
+            .into_response();
+        assert_eq!(first.status(), StatusCode::OK);
+        let loads = state.graph.table_loads();
+        assert!(loads > 0, "the first request reads the tables");
+
+        let second = get_graph(State(state.clone()), Path("repo-cached".to_string()))
+            .await
+            .into_response();
+        assert_eq!(second.status(), StatusCode::OK);
+        assert_eq!(state.graph.table_loads(), loads, "served from the cache");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

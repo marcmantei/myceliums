@@ -1,9 +1,9 @@
 //! `myc export`.
 
-use crate::repo::{data_dir, resolve_repo};
+use crate::repo::{graph_service, resolve_repo};
 use anyhow::{Context, Result};
 use myceliums_core::{compute_uid_to_community_label, export_graphml, export_neo4j_cypher};
-use myceliums_storage::{RepoInfo, RepoRegistry, Store};
+use myceliums_storage::RepoInfo;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -15,12 +15,12 @@ pub(crate) async fn cmd_export(
     height: u32,
 ) -> Result<()> {
     let (_, repo_info) = resolve_repo(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
-    let store = Store::open(&db_path, &repo_info.id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_info.id).await?;
 
-    let symbols = store.get_symbols().await?;
-    let rels = store.get_relationships().await?;
-    let communities = store.get_communities().await?;
+    let symbols = graph.symbols().await?;
+    let rels = graph.relationships().await?;
+    let communities = graph.communities().await?;
 
     match format {
         "json" => export_json(&repo_info, &symbols, &rels, &communities, output),

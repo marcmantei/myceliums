@@ -18,8 +18,10 @@ use myceliums_core::navigation::{
     resolve_symbol, similar_names, symbols_in_file, walk_calls, CallDirection, ContextOptions,
     GraphHit, IndexFreshness, SymbolMatch, SymbolRef,
 };
+use myceliums_core::GraphTable;
 use myceliums_storage::{CodeSymbol, Relationship, RepoInfo, RepoRegistry, Store};
 use serde_json::json;
+use std::sync::Arc;
 
 /// Default output budget, in estimated tokens, for every navigation command.
 pub const DEFAULT_BUDGET: usize = 2000;
@@ -56,19 +58,22 @@ fn resolve_repo(repo: Option<&str>) -> Result<RepoInfo> {
 /// A repository's symbols and relationships, loaded once per command.
 struct Graph {
     info: RepoInfo,
-    store: Store,
-    symbols: Vec<CodeSymbol>,
-    relationships: Vec<Relationship>,
+    store: Arc<Store>,
+    symbols: GraphTable<CodeSymbol>,
+    relationships: GraphTable<Relationship>,
 }
 
+/// Reads both tables from one [`myceliums_core::GraphService`] snapshot, so they come from
+/// the same index generation and a missing index is an error rather than a
+/// freshly created empty database.
 async fn load_graph(repo: Option<&str>) -> Result<Graph> {
     let info = resolve_repo(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&crate::repo::data_dir(), &info.id);
-    let store = Store::open(&db_path, &info.id).await?;
+    let service = crate::repo::graph_service();
+    let graph = service.graph(&info.id).await?;
     Ok(Graph {
-        symbols: store.get_symbols().await?,
-        relationships: store.get_relationships().await?,
-        store,
+        symbols: graph.symbols().await?,
+        relationships: graph.relationships().await?,
+        store: graph.store(),
         info,
     })
 }
@@ -388,7 +393,7 @@ pub async fn cmd_context(
         let results = myceliums_core::hybrid_search(
             &embedder,
             &graph.symbols,
-            &graph.store,
+            &*graph.store,
             query,
             options.max_symbols * 2,
         )

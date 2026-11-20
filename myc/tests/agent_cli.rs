@@ -151,6 +151,53 @@ async fn unknown_symbols_exit_1_and_unindexed_directories_are_refused() {
     );
 }
 
+/// The read commands take their tables from a `GraphService` snapshot (#101):
+/// they answer from a real index, and a registered repository whose index is
+/// missing is an error, never a freshly created empty database.
+#[tokio::test]
+async fn read_commands_use_the_index_and_never_create_one() {
+    let data = data_dir().await;
+    for args in [
+        &["stats", REPO_ID][..],
+        &["communities", REPO_ID],
+        &[
+            "query",
+            "MATCH (n:CodeSymbol) RETURN n.name LIMIT 1",
+            "--repo",
+            REPO_ID,
+        ],
+    ] {
+        let out = myc(data, &fixture(), args, None);
+        assert!(out.status.success(), "{args:?}: {out:?}");
+    }
+    assert!(stdout(&myc(data, &fixture(), &["stats", REPO_ID], None)).contains("Symbols:"));
+
+    let empty = tempfile::tempdir().unwrap();
+    let mut registry = RepoRegistry::load(&empty.path().join("repos.json")).unwrap();
+    registry.register(RepoInfo {
+        id: "ghost".into(),
+        name: "ghost".into(),
+        path: empty.path().to_string_lossy().into_owned(),
+        analyzed_at: String::new(),
+        symbol_count: 0,
+        file_count: 0,
+        analyzed_commit: None,
+        vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
+    });
+    registry.save().unwrap();
+    for args in [
+        &["stats", "ghost"][..],
+        &["export", "ghost", "--format", "json"],
+    ] {
+        let out = myc(empty.path(), empty.path(), args, None);
+        assert!(!out.status.success(), "{args:?}: {out:?}");
+    }
+    assert!(
+        !RepoRegistry::repo_db_path(empty.path(), "ghost").exists(),
+        "a read must never create the index directory"
+    );
+}
+
 #[tokio::test]
 async fn impact_of_a_file_lists_dependents_and_files() {
     let data = data_dir().await;

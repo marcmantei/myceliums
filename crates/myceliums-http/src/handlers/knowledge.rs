@@ -1,6 +1,6 @@
 //! `POST /api/repos/{repo_id}/knowledge`: knowledge-base search.
 
-use crate::state::{open_store, AppState};
+use crate::state::AppState;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -48,7 +48,7 @@ pub(crate) async fn query_knowledge(
     Path(repo_id): Path<String>,
     Json(body): Json<KnowledgeRequest>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -64,8 +64,8 @@ pub(crate) async fn query_knowledge(
         }
     };
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let relationships = store.get_relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let relationships = graph.relationships().await.unwrap_or_default();
 
     let limit = body.limit.unwrap_or(20);
     let search_results = search_symbols(&symbols, &body.query);

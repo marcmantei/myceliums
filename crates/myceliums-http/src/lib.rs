@@ -1,5 +1,5 @@
 use crate::routes::build_router;
-use crate::state::{data_dir, registry_path, AppState};
+use crate::state::{data_dir, AppState};
 use anyhow::Result;
 use std::sync::Arc;
 
@@ -14,11 +14,7 @@ mod test_support;
 ///
 /// If `repo_id` is provided, it will be pre-selected in the UI.
 pub async fn start_server(port: u16, repo_id: Option<String>) -> Result<()> {
-    let state = Arc::new(AppState {
-        data_dir: data_dir(),
-        registry_path: registry_path(),
-        default_repo_id: repo_id,
-    });
+    let state = Arc::new(AppState::new(data_dir(), repo_id));
     let app = build_router(state);
 
     // Served on loopback only; the SPA is same-origin so no CORS layer is added.

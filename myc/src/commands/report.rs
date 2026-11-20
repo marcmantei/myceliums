@@ -1,21 +1,20 @@
 //! `myc report`.
 
-use crate::repo::{data_dir, resolve_repo};
+use crate::repo::{graph_service, resolve_repo};
 use anyhow::{Context, Result};
 use myceliums_core::{compute_god_nodes, compute_surprising_connections};
-use myceliums_storage::{RepoRegistry, Store};
 use std::path::{Path, PathBuf};
 
 pub(crate) async fn cmd_report(repo: &str, output: Option<&Path>) -> Result<()> {
     let (_, repo_info) = resolve_repo(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
-    let store = Store::open(&db_path, &repo_info.id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_info.id).await?;
 
-    let symbols = store.get_symbols().await?;
-    let relationships = store.get_relationships().await?;
-    let communities = store.get_communities().await?;
-    let processes = store.get_processes().await?;
-    let files = store.get_files().await?;
+    let symbols = graph.symbols().await?;
+    let relationships = graph.relationships().await?;
+    let communities = graph.communities().await?;
+    let processes = graph.processes().await?;
+    let files = graph.files().await?;
 
     let god_nodes = compute_god_nodes(&symbols, &relationships, 10, 20);
     let surprising = compute_surprising_connections(&symbols, &relationships, 0.1, 50)?;

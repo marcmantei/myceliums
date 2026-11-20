@@ -1,9 +1,8 @@
 //! `myc processes`.
 
-use crate::repo::{data_dir, resolve_repo};
+use crate::repo::{graph_service, resolve_repo};
 use anyhow::Result;
 use myceliums_core::ProcessFilter;
-use myceliums_storage::{RepoRegistry, Store};
 
 pub(crate) async fn cmd_processes(
     repo: &str,
@@ -13,10 +12,10 @@ pub(crate) async fn cmd_processes(
     min_steps: Option<u32>,
 ) -> Result<()> {
     let (_, repo_info) = resolve_repo(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
-    let store = Store::open(&db_path, &repo_info.id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_info.id).await?;
 
-    let processes = store.get_processes().await?;
+    let processes = graph.processes().await?;
 
     if processes.is_empty() {
         println!("No processes detected. Try re-analyzing with: myc analyze <path>");

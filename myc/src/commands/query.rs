@@ -1,15 +1,18 @@
 //! `myc query`.
 
-use crate::repo::{data_dir, resolve_repo_or_latest};
+use crate::repo::{graph_service, resolve_repo_or_latest};
 use anyhow::Result;
-use myceliums_storage::{RepoRegistry, Store};
 
 pub(crate) async fn cmd_query(query: &str, repo: Option<&str>) -> Result<()> {
     let (_, repo_info) = resolve_repo_or_latest(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_info.id);
-    let store = Store::open(&db_path, &repo_info.id).await?;
+    let service = graph_service();
+    let graph = service.graph(&repo_info.id).await?;
 
-    let executor = myceliums_cypher::CypherExecutor::from_store(&store).await?;
+    let executor = myceliums_cypher::CypherExecutor::from_shared(
+        graph.symbols().await?.shared(),
+        graph.files().await?.shared(),
+        graph.relationships().await?.shared(),
+    );
     let results = executor.execute(query)?;
 
     if results.is_empty() {

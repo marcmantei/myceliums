@@ -16,6 +16,15 @@ pub(crate) fn data_dir() -> PathBuf {
         .join(".myceliums")
 }
 
+/// The read side of the CLI: commands that read an index take a
+/// [`myceliums_core::RepoGraph`] snapshot from this service instead of
+/// opening the store themselves. The service checks the id against the
+/// registry and opens the index with `Store::open_existing`, so a read never
+/// creates a database directory.
+pub(crate) fn graph_service() -> myceliums_core::GraphService {
+    myceliums_core::GraphService::new(data_dir())
+}
+
 pub(crate) fn registry_path() -> PathBuf {
     data_dir().join("repos.json")
 }

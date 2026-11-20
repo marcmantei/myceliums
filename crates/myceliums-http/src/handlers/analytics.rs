@@ -1,6 +1,6 @@
 //! Graph analytics: centrality, community metrics, module coupling and cycles.
 
-use crate::state::{open_store, AppState};
+use crate::state::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -36,7 +36,7 @@ pub(crate) async fn get_centrality(
     Path(repo_id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -51,8 +51,8 @@ pub(crate) async fn get_centrality(
         }
     };
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let relationships = store.get_relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let relationships = graph.relationships().await.unwrap_or_default();
 
     let centrality = match myceliums_core::compute_centrality(&relationships) {
         Ok(c) => c,
@@ -160,7 +160,7 @@ pub(crate) async fn get_community_metrics(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -176,8 +176,8 @@ pub(crate) async fn get_community_metrics(
         }
     };
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let relationships = store.get_relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let relationships = graph.relationships().await.unwrap_or_default();
 
     let metrics = match myceliums_core::compute_community_metrics(&symbols, &relationships) {
         Ok(m) => m,
@@ -253,7 +253,7 @@ pub(crate) async fn get_module_coupling(
     Path(repo_id): Path<String>,
     Query(params): Query<ModuleCouplingParams>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -267,8 +267,8 @@ pub(crate) async fn get_module_coupling(
         }
     };
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let relationships = store.get_relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let relationships = graph.relationships().await.unwrap_or_default();
     let group_by_dir = params.group_by_dir.unwrap_or(true);
 
     let coupling_data =
@@ -311,7 +311,7 @@ pub(crate) async fn get_cycles(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
 ) -> impl IntoResponse {
-    let store = match open_store(&state, &repo_id).await {
+    let graph = match state.graph.graph(&repo_id).await {
         Ok(s) => s,
         Err(e) => {
             error!("Failed to open store for {}: {}", repo_id, e);
@@ -325,8 +325,8 @@ pub(crate) async fn get_cycles(
         }
     };
 
-    let symbols = store.get_symbols().await.unwrap_or_default();
-    let relationships = store.get_relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.unwrap_or_default();
+    let relationships = graph.relationships().await.unwrap_or_default();
 
     let cycles = match myceliums_core::detect_cycles(&symbols, &relationships, true, true, 2) {
         Ok(c) => c,
