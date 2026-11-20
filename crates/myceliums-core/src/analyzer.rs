@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use myceliums_storage::{
     CodeSymbol, FileNode, GitMetadataEntry, Relationship, RelationshipKind, Store, SymbolKind,
@@ -2404,8 +2405,8 @@ fn parse_timeout(config: &crate::config::AnalysisSection) -> Option<std::time::D
 
 /// The skip reason for a parse that [`SourceParser`] abandoned on a budget
 /// (time or nesting depth); `None` for any other parse failure.
-fn budget_skip_reason(err: &anyhow::Error) -> Option<FileSkipReason> {
-    match err.downcast_ref::<parser::ParseAbort>()? {
+fn budget_skip_reason(err: &crate::MyceliumError) -> Option<FileSkipReason> {
+    match err.parse_abort()? {
         parser::ParseAbort::Timeout(_) => Some(FileSkipReason::ParseTimeout),
         parser::ParseAbort::TooDeep { .. } => Some(FileSkipReason::TooDeeplyNested),
     }
@@ -2456,7 +2457,7 @@ fn refuse_incremental_template_mix(
             .to_string(),
         version => format!("embedding-text template version {version}"),
     };
-    anyhow::bail!(
+    crate::error::bail!(
         "Incremental re-index refused: the index's vectors were built from {recorded}, but \
          this build embeds with version {EMBEDDING_TEXT_VERSION}. Embedding the changed files \
          now would mix two templates in one vector space. Run a full analysis (`myc analyze`) \
@@ -2690,21 +2691,32 @@ mod tests {
 
     #[test]
     fn parse_budget_errors_map_to_skip_reasons() {
-        let timeout = anyhow::Error::new(parser::ParseAbort::Timeout(
+        let timeout = crate::MyceliumError::from(parser::ParseAbort::Timeout(
             std::time::Duration::from_secs(1),
         ));
         assert_eq!(
             budget_skip_reason(&timeout),
             Some(FileSkipReason::ParseTimeout)
         );
-        let deep = anyhow::Error::new(parser::ParseAbort::TooDeep { depth: 20_000 });
+        let deep = crate::MyceliumError::from(parser::ParseAbort::TooDeep { depth: 20_000 });
         assert_eq!(
             budget_skip_reason(&deep),
             Some(FileSkipReason::TooDeeplyNested)
         );
         assert_eq!(
-            budget_skip_reason(&anyhow::anyhow!("Failed to parse source")),
+            budget_skip_reason(&anyhow::anyhow!("Failed to parse source").into()),
             None
+        );
+        // Under added context the abort is still found.
+        let wrapped: crate::MyceliumError =
+            anyhow::Error::new(crate::MyceliumError::from(parser::ParseAbort::TooDeep {
+                depth: 1,
+            }))
+            .context("src/deep.rs")
+            .into();
+        assert_eq!(
+            budget_skip_reason(&wrapped),
+            Some(FileSkipReason::TooDeeplyNested)
         );
     }
 

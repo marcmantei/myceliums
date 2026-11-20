@@ -51,7 +51,7 @@ pub fn save_decision(
     data_dir: &Path,
     repo_id: &str,
     adr: &ArchDecisionRecord,
-) -> anyhow::Result<()> {
+) -> crate::error::Result<()> {
     let mut decisions = load_decisions(data_dir, repo_id)?;
 
     // Upsert by ID
@@ -71,7 +71,10 @@ pub fn save_decision(
 }
 
 /// Load all ADRs for a repository.
-pub fn load_decisions(data_dir: &Path, repo_id: &str) -> anyhow::Result<Vec<ArchDecisionRecord>> {
+pub fn load_decisions(
+    data_dir: &Path,
+    repo_id: &str,
+) -> crate::error::Result<Vec<ArchDecisionRecord>> {
     let path = adr_path(data_dir, repo_id);
     if !path.exists() {
         return Ok(Vec::new());
@@ -87,7 +90,7 @@ pub fn link_decision_to_symbol(
     repo_id: &str,
     decision_id: &str,
     symbol_name: &str,
-) -> anyhow::Result<()> {
+) -> crate::error::Result<()> {
     let mut decisions = load_decisions(data_dir, repo_id)?;
     let adr = decisions
         .iter_mut()

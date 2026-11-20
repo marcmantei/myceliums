@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::error::Result;
 use graphrs::algorithms::centrality::degree::degree_centrality;
 use graphrs::algorithms::community::leiden::{leiden, QualityFunction};
 use graphrs::{Edge, Graph, GraphSpecs, Node};
@@ -491,7 +491,7 @@ pub fn compute_community_metrics(
 pub fn compute_uid_to_community_label(
     symbols: &[CodeSymbol],
     relationships: &[Relationship],
-) -> anyhow::Result<HashMap<String, String>> {
+) -> crate::error::Result<HashMap<String, String>> {
     // Use same structural relationships as detect(): CALLS + IMPORTS + CONTAINED_BY
     let structural_rels: Vec<(&Relationship, f64)> = relationships
         .iter()

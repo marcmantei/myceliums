@@ -226,7 +226,7 @@ pub(crate) async fn cmd_doctor(download: bool) -> Result<()> {
                 println!(
                     "\u{2717} tree-sitter grammar: {} — {}",
                     name,
-                    e.root_cause()
+                    anyhow::Error::from(e).root_cause()
                 );
                 issues += 1;
             }

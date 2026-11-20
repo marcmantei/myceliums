@@ -4,7 +4,8 @@
 //! associating each symbol with last author, modification date, commit count,
 //! and age information.
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

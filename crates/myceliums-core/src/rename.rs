@@ -9,7 +9,7 @@
 //! - Skips occurrences in comments and string literals using tree-sitter node kinds.
 //! - Same-named symbols in other scopes are left untouched.
 
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::models::{CodeSymbol, Relationship, RelationshipKind};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -198,7 +198,7 @@ impl RenamePlan {
     ) -> Result<Self> {
         let short_name = &target.name;
         let pattern = format!(r"\b{}\b", regex::escape(short_name));
-        let re = Regex::new(&pattern)?;
+        let re = Regex::new(&pattern).map_err(anyhow::Error::from)?;
 
         let uid_to_symbol: HashMap<&str, &CodeSymbol> =
             symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
@@ -281,7 +281,7 @@ impl RenamePlan {
             .next()
             .unwrap_or(&self.symbol_name);
         let pattern = format!(r"\b{}\b", regex::escape(old_name));
-        let re = Regex::new(&pattern)?;
+        let re = Regex::new(&pattern).map_err(anyhow::Error::from)?;
 
         let mut by_file: HashMap<&str, Vec<&RenameEdit>> = HashMap::new();
         for edit in &self.edits {

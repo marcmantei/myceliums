@@ -6,7 +6,7 @@
 //!
 //! Requires the `cross_repo` feature flag.
 
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{CodeSymbol, Community, Relationship, RelationshipKind, SymbolKind};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet, VecDeque};

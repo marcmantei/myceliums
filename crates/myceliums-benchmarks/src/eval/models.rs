@@ -400,7 +400,7 @@ impl ModelIndex {
     /// Embed `query` with the query-side embedder resolved from the index —
     /// the first step of every semantic and hybrid search.
     pub async fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
-        self.embedder.embed_query(query).await
+        Ok(self.embedder.embed_query(query).await?)
     }
 
     /// A second handle on the same on-disk table under another ANN policy —
@@ -482,6 +482,7 @@ impl ModelIndex {
             params,
         )
         .await
+        .map_err(Into::into)
     }
 
     /// The two inputs of hybrid fusion for `query`, computed once so that many

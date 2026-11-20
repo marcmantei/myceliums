@@ -10,7 +10,8 @@
 //! one language family to `SourceParser`, with its tests alongside; `common`
 //! holds the helpers they share.
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use myceliums_storage::{CodeSymbol, SymbolKind, SymbolMetadata};
 use std::borrow::Cow;
 use std::ops::ControlFlow;
@@ -551,10 +552,10 @@ impl SourceParser {
     /// Parse `source` into a tree, within the time budget.
     fn parse_tree(&mut self, source: &str) -> Result<Tree> {
         let Some(cap) = self.timeout else {
-            return self
+            return Ok(self
                 .parser
                 .parse(source, None)
-                .context("Failed to parse source");
+                .context("Failed to parse source")?);
         };
         let budget = parse_budget(source.len(), cap);
         let bytes = source.as_bytes();
@@ -581,7 +582,7 @@ impl SourceParser {
                 self.parser.reset();
                 Err(ParseAbort::Timeout(budget).into())
             }
-            None => anyhow::bail!("Failed to parse source"),
+            None => crate::error::bail!("Failed to parse source"),
         }
     }
 

@@ -60,7 +60,7 @@ pub struct ParsedEmail {
 ///
 /// # Errors
 /// Returns an error if the email is malformed and cannot be parsed.
-pub fn parse_eml(content: &[u8]) -> anyhow::Result<ParsedEmail> {
+pub fn parse_eml(content: &[u8]) -> crate::error::Result<ParsedEmail> {
     let message = mail_parser::MessageParser::default()
         .parse(content)
         .ok_or_else(|| anyhow::anyhow!("Failed to parse email from bytes"))?;
@@ -110,7 +110,7 @@ pub fn parse_eml(content: &[u8]) -> anyhow::Result<ParsedEmail> {
 ///
 /// # Errors
 /// Returns an error if the file cannot be read or the email is malformed.
-pub fn parse_eml_file(path: &Path) -> anyhow::Result<ParsedEmail> {
+pub fn parse_eml_file(path: &Path) -> crate::error::Result<ParsedEmail> {
     let content = std::fs::read(path)
         .with_context(|| format!("Failed to read email file: {}", path.display()))?;
     parse_eml(&content)

@@ -23,8 +23,8 @@ use crate::output::AnalyzeOutput;
 use myceliums_core::analyzer::Analyzer;
 use myceliums_core::config::ProjectConfig;
 use myceliums_core::{
-    build_snapshot, AnalysisCancelled, AnalysisLock, AnalysisPhase, CommunityDetector,
-    GraphService, LockOutcome, ProcessTracer, ProgressReporter, StagedIndex,
+    build_snapshot, AnalysisLock, AnalysisPhase, CommunityDetector, GraphService, LockOutcome,
+    ProcessTracer, ProgressReporter, StagedIndex,
 };
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
 use rmcp::model::{ProgressNotificationParam, ProgressToken};
@@ -355,9 +355,7 @@ impl Rebuild {
         drop(analyzer);
         let result = match result {
             Ok(result) => result,
-            Err(e) if e.downcast_ref::<AnalysisCancelled>().is_some() => {
-                return Err(cancelled().expect("cancelled"))
-            }
+            Err(e) if e.is_cancelled() => return Err(cancelled().expect("cancelled")),
             Err(e) => return Err(ToolError::internal("analysis failed", e)),
         };
         if let Some(e) = cancelled() {

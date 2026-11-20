@@ -3,7 +3,8 @@
 //! Stored in `<data_dir>/config.toml` and provides defaults that apply
 //! across all repositories.
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -280,7 +281,7 @@ impl GlobalConfig {
             "defaults.log_level" => {
                 let valid = ["trace", "debug", "info", "warn", "error"];
                 if !valid.contains(&value) {
-                    anyhow::bail!(
+                    crate::error::bail!(
                         "Invalid log_level '{}'. Must be one of: {}",
                         value,
                         valid.join(", ")
@@ -304,7 +305,7 @@ impl GlobalConfig {
             "llm.provider" => {
                 let valid = ["ollama", "openai"];
                 if !valid.contains(&value) {
-                    anyhow::bail!(
+                    crate::error::bail!(
                         "Invalid llm.provider '{}'. Must be one of: {}",
                         value,
                         valid.join(", ")
@@ -345,7 +346,7 @@ impl GlobalConfig {
                     .parse()
                     .context("llm.mentions_min_confidence must be a number between 0.0 and 1.0")?;
                 if !(0.0..=1.0).contains(&conf) {
-                    anyhow::bail!("llm.mentions_min_confidence must be between 0.0 and 1.0");
+                    crate::error::bail!("llm.mentions_min_confidence must be between 0.0 and 1.0");
                 }
                 self.llm.mentions_min_confidence = conf;
             }
@@ -366,7 +367,7 @@ impl GlobalConfig {
                     .parse()
                     .context("mcp.graph_cache_max_repos must be a positive integer")?;
                 if repos == 0 {
-                    anyhow::bail!("mcp.graph_cache_max_repos must be at least 1");
+                    crate::error::bail!("mcp.graph_cache_max_repos must be at least 1");
                 }
                 self.mcp.graph_cache_max_repos = repos;
             }
@@ -376,7 +377,7 @@ impl GlobalConfig {
                 )?;
             }
             _ => {
-                anyhow::bail!(
+                crate::error::bail!(
                     "Unknown config key '{}'. Valid keys: defaults.max_results, \
                      defaults.log_level, analysis.max_file_size_kb, analysis.default_exclude, \
                      llm.provider, llm.model, llm.base_url, llm.api_key, llm.enable_mentions, \

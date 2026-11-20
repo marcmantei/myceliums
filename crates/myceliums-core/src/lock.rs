@@ -8,7 +8,8 @@
 //! rebuild replaces that directory as a whole (see [`crate::staging`]), and
 //! taking the lock never creates it.
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -87,7 +88,9 @@ impl AnalysisLock {
                 // Unreadable lock from the race winner — treat as locked
                 Ok(LockOutcome::AlreadyRunning { pid: 0 })
             }
-            Err(e) => Err(e).context("Failed to create analysis lock file"),
+            Err(e) => Err(e)
+                .context("Failed to create analysis lock file")
+                .map_err(Into::into),
         }
     }
 

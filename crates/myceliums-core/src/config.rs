@@ -3,7 +3,8 @@
 //! A [`ProjectConfig`] controls which files are analyzed, how large they may
 //! be, and tuning parameters for community detection and process tracing.
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 

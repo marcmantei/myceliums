@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Context, Result};
 use arrow_array::{RecordBatch, RecordBatchIterator, StringArray, UInt32Array};
 use futures::TryStreamExt;
 use lancedb::query::{ExecutableQuery, QueryBase};

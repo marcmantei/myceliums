@@ -4,7 +4,7 @@
 //! reused or needs to be re-run, based on age, git changes, and structural
 //! file modifications.
 
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{schema, RepoInfo};
 use std::path::Path;
 use std::process::Command;
@@ -251,7 +251,7 @@ pub fn get_head_commit(repo_path: &Path) -> Result<String> {
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!(
+        crate::error::bail!(
             "git rev-parse HEAD failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
@@ -268,7 +268,7 @@ fn get_changed_files(repo_path: &Path, since_commit: &str) -> Result<Vec<String>
         .output()?;
 
     if !output.status.success() {
-        anyhow::bail!(
+        crate::error::bail!(
             "git diff --name-only failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );

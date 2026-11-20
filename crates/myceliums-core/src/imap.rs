@@ -8,7 +8,8 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::email::{parse_eml, ParsedEmail};
@@ -91,8 +92,8 @@ pub fn load_sync_state(data_dir: &Path, account_id: &str) -> Result<ImapSyncStat
     }
     let data = std::fs::read_to_string(&path)
         .with_context(|| format!("failed to read sync state from {}", path.display()))?;
-    serde_json::from_str(&data)
-        .with_context(|| format!("failed to parse sync state from {}", path.display()))
+    Ok(serde_json::from_str(&data)
+        .with_context(|| format!("failed to parse sync state from {}", path.display()))?)
 }
 
 /// Persist sync state to `<data_dir>/imap_state/<account_id>.json`.

@@ -1,5 +1,5 @@
 use crate::community::compute_uid_to_community_label;
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind};
 use std::collections::HashMap;
 

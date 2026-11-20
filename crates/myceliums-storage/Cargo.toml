@@ -20,12 +20,8 @@ arrow-schema = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
-chrono = { workspace = true }
-dirs = { workspace = true }
 futures = "0.3"
 
 [dev-dependencies]

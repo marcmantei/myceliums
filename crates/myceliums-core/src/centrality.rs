@@ -1,4 +1,5 @@
-use anyhow::{anyhow, Result};
+use crate::error::Result;
+use anyhow::anyhow;
 use graphrs::algorithms::centrality::betweenness::betweenness_centrality;
 use graphrs::algorithms::centrality::closeness::closeness_centrality;
 use graphrs::algorithms::centrality::eigenvector::eigenvector_centrality;

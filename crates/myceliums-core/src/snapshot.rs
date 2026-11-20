@@ -110,7 +110,7 @@ pub fn snapshot_path(data_dir: &Path, repo_id: &str) -> PathBuf {
 }
 
 /// Save a snapshot to disk, overwriting any previous one.
-pub fn save_snapshot(data_dir: &Path, snapshot: &GraphSnapshot) -> anyhow::Result<()> {
+pub fn save_snapshot(data_dir: &Path, snapshot: &GraphSnapshot) -> crate::error::Result<()> {
     let path = snapshot_path(data_dir, &snapshot.repo_id);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -121,7 +121,10 @@ pub fn save_snapshot(data_dir: &Path, snapshot: &GraphSnapshot) -> anyhow::Resul
 }
 
 /// Load a previously saved snapshot (returns None if no snapshot exists).
-pub fn load_snapshot(data_dir: &Path, repo_id: &str) -> anyhow::Result<Option<GraphSnapshot>> {
+pub fn load_snapshot(
+    data_dir: &Path,
+    repo_id: &str,
+) -> crate::error::Result<Option<GraphSnapshot>> {
     let path = snapshot_path(data_dir, repo_id);
     if !path.exists() {
         return Ok(None);
@@ -152,7 +155,7 @@ pub fn previous_snapshot(
     data_dir: &Path,
     repo_id: &str,
     current: &GraphSnapshot,
-) -> anyhow::Result<Option<(String, GraphSnapshot)>> {
+) -> crate::error::Result<Option<(String, GraphSnapshot)>> {
     let load = |id: &str| load_snapshot_by_id(data_dir, repo_id, id);
     let mut recorded = list_snapshots(data_dir, repo_id)?.into_iter();
     let Some(newest) = recorded.next() else {
@@ -244,7 +247,7 @@ pub fn save_versioned_snapshot(
     data_dir: &Path,
     snapshot: &GraphSnapshot,
     commit_sha: Option<&str>,
-) -> anyhow::Result<String> {
+) -> crate::error::Result<String> {
     let dir = snapshot_dir(data_dir, &snapshot.repo_id);
     std::fs::create_dir_all(&dir)?;
 
@@ -278,7 +281,7 @@ pub fn record_snapshot(
     data_dir: &Path,
     snapshot: &GraphSnapshot,
     commit_sha: Option<&str>,
-) -> anyhow::Result<String> {
+) -> crate::error::Result<String> {
     let id = save_versioned_snapshot(data_dir, snapshot, commit_sha)?;
     prune_snapshots(data_dir, &snapshot.repo_id, SNAPSHOTS_KEPT)?;
     Ok(id)
@@ -286,7 +289,7 @@ pub fn record_snapshot(
 
 /// Deletes all but the `keep` newest versioned snapshots of `repo_id`.
 /// Returns how many were deleted.
-pub fn prune_snapshots(data_dir: &Path, repo_id: &str, keep: usize) -> anyhow::Result<usize> {
+pub fn prune_snapshots(data_dir: &Path, repo_id: &str, keep: usize) -> crate::error::Result<usize> {
     let dir = snapshot_dir(data_dir, repo_id);
     let mut removed = 0;
     for old in list_snapshots(data_dir, repo_id)?.iter().skip(keep) {
@@ -297,7 +300,10 @@ pub fn prune_snapshots(data_dir: &Path, repo_id: &str, keep: usize) -> anyhow::R
 }
 
 /// List all snapshots for a repo, sorted newest first.
-pub fn list_snapshots(data_dir: &Path, repo_id: &str) -> anyhow::Result<Vec<SnapshotSummary>> {
+pub fn list_snapshots(
+    data_dir: &Path,
+    repo_id: &str,
+) -> crate::error::Result<Vec<SnapshotSummary>> {
     let dir = snapshot_dir(data_dir, repo_id);
     if !dir.exists() {
         return Ok(Vec::new());
@@ -336,14 +342,14 @@ pub fn load_snapshot_by_id(
     data_dir: &Path,
     repo_id: &str,
     snapshot_id: &str,
-) -> anyhow::Result<Option<GraphSnapshot>> {
+) -> crate::error::Result<Option<GraphSnapshot>> {
     // The id becomes a file name; it must not be able to leave the
     // snapshot directory.
     if snapshot_id.is_empty()
         || snapshot_id.contains(['/', '\\', ':'])
         || snapshot_id.starts_with("..")
     {
-        anyhow::bail!(
+        crate::error::bail!(
             "invalid snapshot id {snapshot_id:?}: it must be a plain snapshot name, not a path"
         );
     }

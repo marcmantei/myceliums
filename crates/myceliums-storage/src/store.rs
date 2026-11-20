@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use crate::error::{Context, Result, StorageError};
 use arrow_array::{
     Array, FixedSizeListArray, Float32Array, RecordBatch, RecordBatchIterator, StringArray,
     UInt32Array,
@@ -214,7 +214,7 @@ impl Store {
     /// the index is missing (for example while a rebuild swaps it in).
     pub async fn open_existing(db_path: &Path, repo_id: &str) -> Result<Self> {
         if !db_path.is_dir() {
-            anyhow::bail!("no index at {}", db_path.display());
+            return Err(StorageError::NoIndex(db_path.to_path_buf()));
         }
         Self::open(db_path, repo_id).await
     }

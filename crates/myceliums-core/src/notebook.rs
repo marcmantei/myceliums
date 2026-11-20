@@ -10,7 +10,8 @@
 
 use std::time::Duration;
 
-use anyhow::{Context, Result};
+use crate::error::Result;
+use anyhow::Context;
 use myceliums_storage::SymbolKind;
 use serde::Deserialize;
 use tracing::warn;

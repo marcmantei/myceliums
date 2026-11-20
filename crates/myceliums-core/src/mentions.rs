@@ -722,7 +722,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl crate::llm::LlmProvider for MockLlmProvider {
-        async fn complete(&self, _prompt: &str, _max_tokens: u32) -> anyhow::Result<String> {
+        async fn complete(&self, _prompt: &str, _max_tokens: u32) -> crate::error::Result<String> {
             Ok(self.response.clone())
         }
 
@@ -730,8 +730,8 @@ mod tests {
             &self,
             _prompt: &str,
             _max_tokens: u32,
-        ) -> anyhow::Result<serde_json::Value> {
-            serde_json::from_str(&self.response).context("Failed to parse mock response")
+        ) -> crate::error::Result<serde_json::Value> {
+            Ok(serde_json::from_str(&self.response).context("Failed to parse mock response")?)
         }
     }
 

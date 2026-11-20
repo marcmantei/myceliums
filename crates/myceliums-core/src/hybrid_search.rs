@@ -3,7 +3,7 @@
 //! Results from both ranking strategies are fused using Reciprocal Rank
 //! Fusion (RRF), and optionally reranked with a cross-encoder model.
 
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{CodeSymbol, Relationship};
 use serde::Serialize;
 use std::collections::HashMap;

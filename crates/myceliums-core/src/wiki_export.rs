@@ -3,7 +3,7 @@
 //! Produces one markdown file per community with wikilinks for cross-references,
 //! plus an index page listing all communities.
 
-use anyhow::Result;
+use crate::error::Result;
 use myceliums_storage::{CodeSymbol, Community, Relationship};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
