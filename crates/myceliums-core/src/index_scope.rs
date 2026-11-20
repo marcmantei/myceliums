@@ -115,8 +115,11 @@ impl IndexScope {
             }
         }
         let language = self.discovers(rel)?;
-        // Discovered, then skipped as minified or bundled before parsing.
-        if crate::file_guard::matches_skip_pattern(rel, &self.skip_patterns) {
+        // Discovered, then skipped as minified or bundled before parsing —
+        // only on the text path, as in the analyzer.
+        if reads_as_text(language)
+            && crate::file_guard::matches_skip_pattern(rel, &self.skip_patterns)
+        {
             return None;
         }
         Some(language)
@@ -159,6 +162,68 @@ impl IndexScope {
             Err(_) => true,
         }
     }
+}
+
+/// Whether the analysis reads files of `lang` as text through the
+/// `[analysis]` skip rules (size, line length, `skip_patterns`, UTF-8).
+/// E-mail, mailbox, PDF and notebook files take their own paths and are not
+/// subject to them. The analyzer routes files by this, and [`IndexScope`]
+/// applies `skip_patterns` by it.
+pub fn reads_as_text(lang: SourceLanguage) -> bool {
+    #[cfg(feature = "pdf")]
+    if lang == SourceLanguage::Pdf {
+        return false;
+    }
+    !matches!(
+        lang,
+        SourceLanguage::Email | SourceLanguage::Mbox | SourceLanguage::Jupyter
+    )
+}
+
+/// Whether the analysis blanks managed blocks in files of `lang` before
+/// indexing them (Markdown and MDX — where `myc setup-claude` and `myc
+/// setup-codex` write them). Every other file is indexed as it is, markers
+/// and all, so a change between its markers is a change.
+pub fn blanks_managed_blocks(lang: SourceLanguage) -> bool {
+    matches!(lang, SourceLanguage::Markdown | SourceLanguage::Mdx)
+}
+
+/// The text the analysis indexes for a file of `lang` whose content is
+/// `source`: managed blocks blanked where [`blanks_managed_blocks`] says so.
+pub fn indexed_text(lang: SourceLanguage, source: &str) -> Cow<'_, str> {
+    if blanks_managed_blocks(lang) {
+        blank_managed_blocks(source)
+    } else {
+        Cow::Borrowed(source)
+    }
+}
+
+/// File names myceliums writes a managed block into.
+pub const MEMORY_FILE_NAMES: &[&str] = &["CLAUDE.md", "AGENTS.md"];
+
+/// `index_meta` key of the fingerprints of the text the analysis indexed for
+/// files that hold, or may get, a managed block: a JSON object from path
+/// (relative to the analyzed directory) to [`text_fingerprint`].
+pub const INDEXED_TEXT_META_KEY: &str = "indexed_text_fingerprints";
+
+/// Whether the analysis records the fingerprint of the text it indexes for
+/// `rel`: a file whose managed blocks it blanks that is named like a memory
+/// file or holds a block. Freshness compares against it, so a block added to
+/// an uncommitted CLAUDE.md is no change either.
+pub fn records_fingerprint(rel: &Path, lang: SourceLanguage, source: &str) -> bool {
+    blanks_managed_blocks(lang)
+        && (rel
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| MEMORY_FILE_NAMES.contains(&n))
+            || source.contains(MANAGED_BLOCK_BEGIN))
+}
+
+/// Hex SHA-256 of indexed text, trailing whitespace ignored (installing a
+/// block adds a blank line before it).
+pub fn text_fingerprint(indexed: &str) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(indexed.trim_end().as_bytes()))
 }
 
 /// `text` with every line of each managed block (markers included) emptied,
@@ -290,6 +355,46 @@ mod tests {
         // Quoted in prose: not a marker line.
         let quoted = "use `<!-- BEGIN myceliums -->` markers\n";
         assert_eq!(blank_managed_blocks(quoted), quoted);
+    }
+
+    #[test]
+    fn only_markdown_blanks_blocks_and_skip_patterns_follow_the_text_path() {
+        let text = "a\n<!-- BEGIN myceliums -->\nx\n<!-- END myceliums -->\n";
+        assert_eq!(indexed_text(SourceLanguage::Markdown, text), "a\n\n\n\n");
+        for lang in [
+            SourceLanguage::PlainText,
+            SourceLanguage::TypeScript,
+            SourceLanguage::Vue,
+        ] {
+            assert_eq!(indexed_text(lang, text), text, "{lang:?}");
+        }
+        // The analyzer indexes a notebook or mailbox whatever its name.
+        let mut config = ProjectConfig::default();
+        config.analysis.skip_patterns = vec!["min.js".into(), "ipynb".into(), "eml".into()];
+        let scope = IndexScope::new(Some(&config)).unwrap();
+        assert!(scope.language(Path::new("analysis.ipynb")).is_some());
+        assert!(scope.language(Path::new("mail/hello.eml")).is_some());
+        assert!(scope.language(Path::new("src/vendor.min.js")).is_none());
+    }
+
+    #[test]
+    fn memory_files_and_files_with_a_block_record_a_fingerprint() {
+        let md = SourceLanguage::Markdown;
+        assert!(records_fingerprint(Path::new("CLAUDE.md"), md, "notes"));
+        assert!(records_fingerprint(Path::new("sub/AGENTS.md"), md, ""));
+        assert!(records_fingerprint(
+            Path::new("docs/x.md"),
+            md,
+            "<!-- BEGIN myceliums -->"
+        ));
+        assert!(!records_fingerprint(Path::new("docs/x.md"), md, "notes"));
+        assert!(!records_fingerprint(
+            Path::new("x.txt"),
+            SourceLanguage::PlainText,
+            "<!-- BEGIN myceliums -->"
+        ));
+        assert_eq!(text_fingerprint("a\n\n"), text_fingerprint("a"));
+        assert_ne!(text_fingerprint("a"), text_fingerprint("b"));
     }
 
     #[test]

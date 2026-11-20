@@ -130,6 +130,14 @@ fn index_line_and_analyze(data: &Path, project: &Path) -> (String, String) {
 
 #[test]
 fn setup_claude_after_analyze_leaves_the_index_up_to_date() {
+    // CLAUDE.md committed (compared with HEAD) or not yet (compared with
+    // the fingerprint of the text the analysis indexed).
+    for committed in [true, false] {
+        analyze_then_setup_claude(committed);
+    }
+}
+
+fn analyze_then_setup_claude(commit_memory: bool) {
     let data = tempfile::tempdir().unwrap();
     let projects = tempfile::tempdir().unwrap();
     let project = projects.path().join("setup-project");
@@ -140,10 +148,14 @@ fn setup_claude_after_analyze_leaves_the_index_up_to_date() {
          export function start(): number {\n    return helper();\n}\n",
     )
     .unwrap();
-    std::fs::write(project.join("CLAUDE.md"), "# Project\n\nTeam notes.\n").unwrap();
     git(&project, &["init", "-q"]);
     git(&project, &["add", "."]);
     git(&project, &["commit", "-q", "-m", "init"]);
+    std::fs::write(project.join("CLAUDE.md"), "# Project\n\nTeam notes.\n").unwrap();
+    if commit_memory {
+        git(&project, &["add", "CLAUDE.md"]);
+        git(&project, &["commit", "-q", "-m", "notes"]);
+    }
     let project = project.canonicalize().unwrap();
 
     let out = myc(
@@ -169,7 +181,10 @@ fn setup_claude_after_analyze_leaves_the_index_up_to_date() {
     assert!(memory.contains("<!-- BEGIN myceliums -->"), "{memory}");
 
     let (line, analyze) = index_line_and_analyze(data.path(), &project);
-    assert!(line.ends_with("= HEAD, up to date."), "{line}");
+    assert!(
+        line.ends_with("= HEAD, up to date."),
+        "committed: {commit_memory}: {line}"
+    );
     assert!(analyze.contains("(cached)"), "{analyze}");
 
     // CLAUDE.md is indexed: an edit outside the block is a change, and
@@ -180,6 +195,9 @@ fn setup_claude_after_analyze_leaves_the_index_up_to_date() {
     )
     .unwrap();
     let (line, analyze) = index_line_and_analyze(data.path(), &project);
-    assert!(line.contains("1 file changed since indexing"), "{line}");
+    assert!(
+        line.contains("1 file changed since indexing"),
+        "committed: {commit_memory}: {line}"
+    );
     assert!(analyze.contains("(fresh)"), "{analyze}");
 }

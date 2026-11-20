@@ -18,7 +18,7 @@ use crate::content::parse_content;
 use crate::email::{self, ParsedEmail};
 use crate::file_guard::{should_skip_file, FileSkipReason};
 use crate::git_metadata::GitMetadataExtractor;
-use crate::index_scope::IndexScope;
+use crate::index_scope::{self, IndexScope};
 use crate::mbox;
 use crate::notebook;
 use crate::parser::ParsedRationale;
@@ -59,7 +59,8 @@ pub struct Analyzer {
     cancel: Option<CancelCheck>,
     /// Vectors of the index this analysis replaces (#151).
     #[cfg(feature = "embeddings")]
-    previous_vectors: Option<crate::embeddings::PreviousVectors>,
+    /// Taken once, by the embedding step of a full run.
+    previous_vectors: std::sync::Mutex<Option<crate::embeddings::PreviousVectors>>,
 }
 
 /// Asked between steps of an analysis: `true` stops it with
@@ -100,7 +101,7 @@ impl Analyzer {
             progress: None,
             cancel: None,
             #[cfg(feature = "embeddings")]
-            previous_vectors: None,
+            previous_vectors: std::sync::Mutex::new(None),
         }
     }
 
@@ -115,7 +116,7 @@ impl Analyzer {
             progress: None,
             cancel: None,
             #[cfg(feature = "embeddings")]
-            previous_vectors: None,
+            previous_vectors: std::sync::Mutex::new(None),
         }
     }
 
@@ -132,7 +133,7 @@ impl Analyzer {
         mut self,
         previous: Option<crate::embeddings::PreviousVectors>,
     ) -> Self {
-        self.previous_vectors = previous;
+        self.previous_vectors = std::sync::Mutex::new(previous);
         self
     }
 
@@ -216,12 +217,17 @@ impl Analyzer {
             let previous = if incremental {
                 None
             } else {
-                self.previous_vectors.as_ref()
+                self.previous_vectors
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .as_ref()
+                    .map(|previous| previous.meta().clone())
             };
-            let Some(previous) = previous else {
+            // `PreviousVectors::load` only yields vectors of this build's
+            // template and geometry.
+            let Some(meta) = previous else {
                 return Ok(None);
             };
-            let meta = previous.meta().clone();
             self.store.set_embedding_dim(meta.dim as i32);
             self.store.ensure_symbols_dim().await?;
             return Ok(Some(meta));
@@ -396,6 +402,39 @@ impl Analyzer {
         merged.record(&self.store).await
     }
 
+    /// Records the fingerprints of the text indexed for memory files
+    /// ([`index_scope::INDEXED_TEXT_META_KEY`]). Best effort: without them
+    /// freshness compares with the committed version.
+    async fn record_fingerprints(&self, fingerprints: &std::collections::BTreeMap<String, String>) {
+        let json = match serde_json::to_string(fingerprints) {
+            Ok(json) => json,
+            Err(e) => {
+                warn!("Failed to serialize indexed-text fingerprints: {}", e);
+                return;
+            }
+        };
+        if let Err(e) = self
+            .store
+            .set_index_meta(index_scope::INDEXED_TEXT_META_KEY, &json)
+            .await
+        {
+            warn!("Failed to record indexed-text fingerprints: {}", e);
+        }
+    }
+
+    /// The recorded fingerprints of indexed memory files (empty when none
+    /// or unreadable).
+    async fn load_fingerprints(&self) -> std::collections::BTreeMap<String, String> {
+        match self
+            .store
+            .get_index_meta(index_scope::INDEXED_TEXT_META_KEY)
+            .await
+        {
+            Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
+            _ => Default::default(),
+        }
+    }
+
     /// Embeds and stores the vectors of a full run's `symbols` under `meta`;
     /// returns `(stored, failures, reused)`.
     ///
@@ -413,13 +452,16 @@ impl Analyzer {
         let total = symbols.len();
         let mut pairs: Vec<(String, Vec<f32>)> = Vec::with_capacity(total);
         let mut missing: Vec<&CodeSymbol> = Vec::new();
-        for symbol in symbols {
-            match self
-                .previous_vectors
-                .as_ref()
-                .and_then(|previous| previous.get(symbol, meta))
-            {
-                Some(vector) => pairs.push((symbol.uid.clone(), vector.clone())),
+        let previous = self
+            .previous_vectors
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+            .map(|previous| previous.take_for(symbols, meta))
+            .unwrap_or_else(|| vec![None; total]);
+        for (symbol, vector) in symbols.iter().zip(previous) {
+            match vector {
+                Some(vector) => pairs.push((symbol.uid.clone(), vector)),
                 None => missing.push(symbol),
             }
         }
@@ -551,6 +593,8 @@ impl Analyzer {
             .map(|c| &c.analysis)
             .unwrap_or(&default_config);
 
+        // What freshness compares memory files with (#151).
+        let mut fingerprints: std::collections::BTreeMap<String, String> = Default::default();
         // Files ready for parallel parsing: (rel_path, language, source_text)
         let mut code_files: Vec<(String, SourceLanguage, String)> = Vec::new();
         // Special files handled sequentially: (path, language)
@@ -566,21 +610,16 @@ impl Analyzer {
                 .display()
                 .to_string();
 
-            // Email, MBOX, PDF — handle sequentially due to shared state or binary I/O
-            if *lang == SourceLanguage::Email || *lang == SourceLanguage::Mbox {
-                special_files.push((path.clone(), *lang));
-                continue;
-            }
-
-            #[cfg(feature = "pdf")]
-            if *lang == SourceLanguage::Pdf {
-                special_files.push((path.clone(), *lang));
-                continue;
-            }
-
-            // Jupyter notebooks — sequential (custom parser)
-            if *lang == SourceLanguage::Jupyter {
-                notebook_files.push((path.clone(), *lang));
+            // Not read as text, so not subject to the skip rules below — the
+            // same split `IndexScope` uses for freshness.
+            if !index_scope::reads_as_text(*lang) {
+                if *lang == SourceLanguage::Jupyter {
+                    // Jupyter notebooks — sequential (custom parser)
+                    notebook_files.push((path.clone(), *lang));
+                } else {
+                    // Email, MBOX, PDF — sequential due to shared state or binary I/O
+                    special_files.push((path.clone(), *lang));
+                }
                 continue;
             }
 
@@ -634,6 +673,12 @@ impl Analyzer {
                 .to_string_lossy()
                 .to_string();
 
+            if index_scope::records_fingerprint(Path::new(&rel_path), *lang, &source) {
+                fingerprints.insert(
+                    rel_path.clone(),
+                    index_scope::text_fingerprint(&index_scope::indexed_text(*lang, &source)),
+                );
+            }
             code_files.push((rel_path, *lang, source));
         }
 
@@ -1295,6 +1340,8 @@ impl Analyzer {
         #[cfg(not(feature = "embeddings"))]
         let embeddings_reused: usize = 0;
 
+        self.record_fingerprints(&fingerprints).await;
+
         // Persist the embedding accounting inside the index so query paths can
         // warn about partial indexes without scanning vectors.
         #[cfg(feature = "embeddings")]
@@ -1485,12 +1532,15 @@ impl Analyzer {
         // predicate, so a no-match is a successful no-op. Any `Err` here is a
         // genuine store failure — do not swallow it, or we risk leaving stale
         // graph rows behind an apparently-successful re-index.
+        // The changed files' indexed-text fingerprints are replaced below.
+        let mut fingerprints = self.load_fingerprints().await;
         for (path, _) in &source_files {
             let rel_path = path
                 .strip_prefix(&self.repo_path)
                 .unwrap_or(path)
                 .to_string_lossy()
                 .to_string();
+            fingerprints.remove(&rel_path);
             self.store
                 .delete_file_data(&rel_path)
                 .await
@@ -1719,6 +1769,17 @@ impl Analyzer {
                     continue;
                 }
             };
+            let rel_path = path
+                .strip_prefix(&self.repo_path)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .to_string();
+            if index_scope::records_fingerprint(Path::new(&rel_path), *lang, &source) {
+                fingerprints.insert(
+                    rel_path,
+                    index_scope::text_fingerprint(&index_scope::indexed_text(*lang, &source)),
+                );
+            }
 
             let result = if lang.is_content() {
                 parse_content(&source, *lang)
@@ -1960,6 +2021,13 @@ impl Analyzer {
             {
                 warn!("Failed to update embedding accounting in index: {}", e);
             }
+        }
+
+        if source_files
+            .iter()
+            .any(|(_, lang)| index_scope::blanks_managed_blocks(*lang))
+        {
+            self.record_fingerprints(&fingerprints).await;
         }
 
         #[cfg(feature = "embeddings")]
@@ -3519,7 +3587,9 @@ mod tests {
             assert!(before.values().all(Option::is_some), "{before:?}");
             let previous = || async {
                 let store = Store::open(&first, "test-repo").await.unwrap();
-                PreviousVectors::load(&store).await.unwrap()
+                PreviousVectors::load(&store, myceliums_storage::schema::VECTOR_GEOMETRY_VERSION)
+                    .await
+                    .unwrap()
             };
 
             // skip_embeddings: nothing changed, every vector is kept.
@@ -3590,6 +3660,43 @@ mod tests {
             .unwrap();
             assert_eq!(result.symbols_embedded, 0);
             assert_eq!(result.embedding_failures, result.symbols_total);
+
+            // Vectors that cannot be carried into a new index are not
+            // offered: an older vector geometry (#29) ...
+            let store = Store::open(&first, "test-repo").await.unwrap();
+            let geometry = myceliums_storage::schema::VECTOR_GEOMETRY_VERSION;
+            assert!(PreviousVectors::load(&store, geometry - 1)
+                .await
+                .unwrap()
+                .is_none());
+            // ... or an older embedding-text template: keys are built from
+            // the current one, so they would pair vectors with other texts.
+            let mut older = meta.clone();
+            older.text_version = crate::embeddings::EMBEDDING_TEXT_VERSION - 1;
+            store
+                .set_index_meta(
+                    IndexEmbeddingMeta::META_KEY,
+                    &serde_json::to_string(&older).unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(PreviousVectors::load(&store, geometry)
+                .await
+                .unwrap()
+                .is_none());
+            let stale = dir.path().join("stale");
+            let result = Analyzer::with_config(
+                Store::open(&stale, "test-repo").await.unwrap(),
+                root.clone(),
+                ProjectConfig::default(),
+            )
+            .set_skip_embeddings(true)
+            .with_previous_vectors(previous().await)
+            .analyze()
+            .await
+            .unwrap();
+            assert_eq!(result.symbols_embedded, 0);
+            assert_eq!(result.embeddings_reused, 0);
         }
     }
 }

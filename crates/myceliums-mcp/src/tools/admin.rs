@@ -172,7 +172,8 @@ impl MyceliumsMcp {
                         let graph = self.graph(&repo_id).await?;
                         let indexed = graph.files().await?.shared();
                         let freshness =
-                            crate::index_status::freshness(repo_info, indexed, true).await;
+                            crate::index_status::freshness(repo_info, indexed, graph.store(), true)
+                                .await;
                         (!freshness.is_stale()).then_some((repo_id, reason, graph))
                     }
                     CacheDecision::ReanalyzeNeeded { .. } => None,

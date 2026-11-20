@@ -233,6 +233,12 @@ impl IndexEmbeddingMeta {
     /// Key under which this record is stored in the `index_meta` table.
     pub const META_KEY: &'static str = "embedding";
 
+    /// Whether this record is from this build's schema and embedding-text
+    /// template, so its vectors match documents built now.
+    pub fn is_current(&self) -> bool {
+        self.meta_version == Self::META_VERSION && self.text_version == EMBEDDING_TEXT_VERSION
+    }
+
     /// Current schema version of the embedding meta record.
     ///
     /// Bump this whenever a change alters which fields shape stored vectors or
@@ -956,15 +962,29 @@ pub struct PreviousVectors {
 }
 
 impl PreviousVectors {
-    /// Reads the vectors of the index in `store`; `None` when it holds none
-    /// (built with `skip_embeddings`, or without embedding metadata).
-    pub async fn load(store: &Store) -> Result<Option<Self>> {
+    /// Reads the vectors of the index in `store`, whose registry entry
+    /// records `geometry_version` ([`myceliums_storage::RepoInfo::vector_geometry_version`]).
+    ///
+    /// `None` when it holds none (built with `skip_embeddings`, or without
+    /// embedding metadata), and when they cannot be carried into a new index:
+    /// a stored geometry other than the current one (an index from before
+    /// L2 normalization, which must be re-embedded, #29), or metadata from an
+    /// older schema or embedding-text template than this build's — keys are
+    /// built from the current template, so they would pair a vector with a
+    /// text it was not computed from.
+    pub async fn load(store: &Store, geometry_version: u32) -> Result<Option<Self>> {
+        if geometry_version != myceliums_storage::schema::VECTOR_GEOMETRY_VERSION {
+            return Ok(None);
+        }
         let Some(json) = store.get_index_meta(IndexEmbeddingMeta::META_KEY).await? else {
             return Ok(None);
         };
         let Ok(meta) = serde_json::from_str::<IndexEmbeddingMeta>(&json) else {
             return Ok(None);
         };
+        if !meta.is_current() {
+            return Ok(None);
+        }
         let by_text: HashMap<_, _> = store
             .get_symbols_with_vectors()
             .await?
@@ -992,13 +1012,36 @@ impl PreviousVectors {
         self.by_text.is_empty()
     }
 
-    /// The vector of `symbol`'s document, when the previous index embedded
-    /// the same document with the model `meta` describes.
-    pub fn get(&self, symbol: &CodeSymbol, meta: &IndexEmbeddingMeta) -> Option<&Vec<f32>> {
+    /// The previous vector of each of `symbols` (in order), where the previous
+    /// index embedded the same document with the model `meta` describes —
+    /// none at all for another model. Consumes the vectors: each is moved
+    /// out, copied only for documents several symbols share, so the previous
+    /// vectors are not held twice.
+    pub fn take_for(
+        self,
+        symbols: &[CodeSymbol],
+        meta: &IndexEmbeddingMeta,
+    ) -> Vec<Option<Vec<f32>>> {
         if self.meta.fingerprint() != meta.fingerprint() {
-            return None;
+            return vec![None; symbols.len()];
         }
-        self.by_text.get(&document_key(symbol))
+        let mut by_text = self.by_text;
+        let keys: Vec<[u8; 32]> = symbols.iter().map(document_key).collect();
+        let mut uses: HashMap<[u8; 32], usize> = HashMap::new();
+        for key in &keys {
+            *uses.entry(*key).or_default() += 1;
+        }
+        keys.iter()
+            .map(|key| {
+                let left = uses.get_mut(key).expect("counted above");
+                *left -= 1;
+                if *left == 0 {
+                    by_text.remove(key)
+                } else {
+                    by_text.get(key).cloned()
+                }
+            })
+            .collect()
     }
 }
 

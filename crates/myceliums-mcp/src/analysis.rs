@@ -337,14 +337,20 @@ impl Rebuild {
         let live = RepoRegistry::repo_db_path(&data_dir, &repo_id);
         // The vectors of the index being replaced: unchanged symbols keep
         // them, so a run that does not embed (skip_embeddings, or a model
-        // that fails) does not drop the embeddings (#151). Unreadable: the
+        // that fails) does not drop the embeddings (#151). Only an index the
+        // registry knows, at the current vector geometry. Unreadable: the
         // run embeds what it can, as without a previous index.
-        let previous = match Store::open_existing(&live, &repo_id).await {
-            Ok(store) => PreviousVectors::load(&store).await.unwrap_or_else(|e| {
-                tracing::warn!("cannot read the previous index's vectors: {e}");
-                None
-            }),
-            Err(_) => None,
+        let geometry = crate::repo::registry()?
+            .get(&repo_id)
+            .map(|info| info.vector_geometry_version);
+        let previous = match (geometry, Store::open_existing(&live, &repo_id).await) {
+            (Some(geometry), Ok(store)) => PreviousVectors::load(&store, geometry)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("cannot read the previous index's vectors: {e}");
+                    None
+                }),
+            _ => None,
         };
         let staged = StagedIndex::create(&live)
             .map_err(|e| ToolError::internal("cannot create the staging directory", e))?;

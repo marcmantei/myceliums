@@ -255,12 +255,19 @@ pub(crate) async fn cmd_analyze(
     // Unchanged symbols keep their vectors: a run that does not embed
     // (--skip-embeddings, the session default, or a model that fails) must
     // not drop the embeddings of the index it replaces (#151).
-    let previous = myceliums_core::PreviousVectors::load(&store)
-        .await
-        .unwrap_or_else(|e| {
-            eprintln!("Warning: cannot read the previous index's vectors: {e}");
-            None
-        });
+    // Only at the current vector geometry, as the registry records it.
+    let geometry = RepoRegistry::load(&registry_path())?
+        .get(&repo_id)
+        .map(|info| info.vector_geometry_version);
+    let previous = match geometry {
+        Some(geometry) => myceliums_core::PreviousVectors::load(&store, geometry)
+            .await
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: cannot read the previous index's vectors: {e}");
+                None
+            }),
+        None => None,
+    };
     store.delete_repo_data().await?;
 
     let analyzer = if let Some(cfg) = project_config {

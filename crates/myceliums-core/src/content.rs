@@ -199,7 +199,7 @@ fn parse_plain_text(source: &str) -> ParseResult {
 pub fn parse_content(source: &str, lang: SourceLanguage) -> ParseResult {
     match lang {
         SourceLanguage::Markdown | SourceLanguage::Mdx => {
-            parse_markdown(&crate::index_scope::blank_managed_blocks(source))
+            parse_markdown(&crate::index_scope::indexed_text(lang, source))
         }
         SourceLanguage::PlainText => parse_plain_text(source),
         // PDF content is pre-converted to markdown by the pdf module.

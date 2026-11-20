@@ -80,7 +80,7 @@ impl MyceliumsMcp {
     /// [`crate::index_status::freshness_line`]).
     pub(crate) async fn index_status(&self, graph: &Graph<'_>) -> Result<String, ToolError> {
         let indexed = graph.files().await?.shared();
-        Ok(crate::index_status::freshness_line(graph.info(), indexed).await)
+        Ok(crate::index_status::freshness_line(graph.info(), indexed, graph.store()).await)
     }
 
     /// A text graph result: freshness line, then `body`.

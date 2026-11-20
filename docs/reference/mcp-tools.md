@@ -106,15 +106,20 @@ and a footer explains it.
 `Index:` line comparing the analyzed commit with the current `HEAD` and
 counting files changed since indexing (modified or new untracked files newer
 than the analysis start, and deleted files the index still holds). Only files
-the analysis would index count — the same selection as `analyze`: no hidden
-files or directories (`.mcp.json`, `.claude/`), no `node_modules`, `target`,
-`dist`, `build`, `venv`, only extensions it parses, `.myceliums.toml`'s
-`include`/`exclude`/`skip_patterns` and size limit applied — plus
-`.myceliums.toml` itself. The routing block `myc setup-claude` / `myc
-setup-codex` keep in CLAUDE.md / AGENTS.md is not indexed, so a file whose
-only difference from its committed version is that block is no change either:
-`myc analyze` followed by `myc setup-claude` leaves an index that is up to
-date. It names
+the analysis would index or holds count — the same selection as `analyze`: no
+hidden files or directories (`.mcp.json`, `.claude/`), no `node_modules`,
+`target`, `dist`, `build`, `venv`, only extensions it parses,
+`.myceliums.toml`'s `include`/`exclude`/`skip_patterns` and size limit applied
+(an indexed file that grew past the limit counts: the next analysis drops it) —
+plus `.myceliums.toml` itself. The routing block `myc setup-claude` / `myc
+setup-codex` keep in a Markdown file (CLAUDE.md / AGENTS.md) is not indexed, so
+a Markdown file whose text outside the block is what the analysis indexed is no
+change either: `myc analyze` followed by `myc setup-claude` leaves an index
+that is up to date. The comparison uses a fingerprint of the indexed text that
+the analysis records for CLAUDE.md, AGENTS.md and files holding a block; for an
+index without one it compares with the committed version (an uncommitted file
+then counts as changed once a block is added). In any other file the markers
+are plain text and every edit counts. It names
 the repository it describes, e.g. `Index: my-app, commit 1a2b3c4 = HEAD, up
 to date.` or `Index: my-app, commit 1a2b3c4, HEAD is now 9f8e7d6 — stale; run
 analyze to refresh.` Structured results carry it as `index_status`. Whenever the line
@@ -310,7 +315,10 @@ changed symbols, and it means a run that does not embed never drops the
 embeddings it replaces: with `skip_embeddings`, unchanged symbols keep their
 vectors and only new or changed ones are left without, reported as
 `⚠ 3 of 1243 symbols have no vector (embeddings skipped) …`; when the model
-fails to load or embed, only the symbols it had to embed are failures. A cached
+fails to load or embed, only the symbols it had to embed are failures. Vectors
+are carried over only from an index at the current vector geometry and
+embedding-text template (otherwise the run embeds, or with `skip_embeddings`
+leaves every symbol without a vector). A cached
 answer for an index built with `skip_embeddings` reports `0/N` symbols and the
 same warning instead of claiming a complete index.
 
