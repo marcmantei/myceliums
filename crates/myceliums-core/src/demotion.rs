@@ -26,11 +26,10 @@ use serde::{Deserialize, Serialize};
 ///
 /// The smallest weight that keeps the best-ranked test on the first page of
 /// ten results — the smallest default page of any search surface — so a test
-/// that matches best is always still shown. On the real-repository
-/// development split every mode scored higher the smaller the weight
-/// (its labels name the code under test, almost never a test), so the
-/// sweep over {1, 0.5, 0.33, 0.25, 0.2, 0.1} picked this bound; the held-out
-/// split confirmed it (#146).
+/// that matches best is always still shown. The real-repository labels name
+/// the code under test and almost never a test, so the dev-split sweep over
+/// {1, 0.5, 0.33, 0.25, 0.2, 0.1} (`real-repo-eval`) can only favour this
+/// bound; the held-out split confirms the gain over no demotion (#146).
 pub const DEFAULT_TEST_WEIGHT: f64 = 0.1;
 
 /// The furthest a ranking is fetched past the requested length to make room
