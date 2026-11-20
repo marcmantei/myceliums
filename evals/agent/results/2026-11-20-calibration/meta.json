@@ -1,0 +1,98 @@
+{
+  "attempts_total": 10,
+  "claude_version": "2.1.329",
+  "conditions": [
+    "none"
+  ],
+  "date": "2026-11-20",
+  "effort": "medium",
+  "index": {
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "communities": 37,
+      "embedded": 2865,
+      "files": 112,
+      "index_exclude_extra": [],
+      "index_seconds": 476.2,
+      "indexed_at": "2026-11-20T13:55:30.083887+00:00",
+      "myc_sha256": "c911169eb3c7259c182f4b89631ed113bc92274bab01761218a3e576a22c557d",
+      "myc_version": "myc 0.3.2",
+      "processes": 685,
+      "relationships": 7854,
+      "repo": "fzf",
+      "repo_id": "fzf-60bac1ad",
+      "symbols": 2865,
+      "work_path": "/private/tmp/aeval125/fzf"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "communities": 278,
+      "embedded": 10588,
+      "files": 447,
+      "index_exclude_extra": [],
+      "index_seconds": 1547.3,
+      "indexed_at": "2026-11-20T14:21:17.635714+00:00",
+      "myc_sha256": "c911169eb3c7259c182f4b89631ed113bc92274bab01761218a3e576a22c557d",
+      "myc_version": "myc 0.3.2",
+      "processes": 438,
+      "relationships": 12482,
+      "repo": "hono",
+      "repo_id": "hono-5f36c69b",
+      "symbols": 10588,
+      "work_path": "/private/tmp/aeval125/hono"
+    }
+  },
+  "label": "2026-11-20-calibration",
+  "max_turns": 40,
+  "mcp_tools_offered": null,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "6661198e1ad3",
+  "myc_sha256": "c911169eb3c7259c182f4b89631ed113bc92274bab01761218a3e576a22c557d",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Calibration of the first hard set (tasks/tasks-hard-v1.json) before the matrix: one session per task for 10 of its 20 tasks (two per type), condition none (no MCP server). All ten scored F1 = 1.00, so the set was at the ceiling; the allowance of 10 calibration sessions was then spent, and the matrix ran on the harder revision tasks/tasks-hard.json without further calibration."
+  ],
+  "repos": {
+    "fastapi": {
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "display_name": "FastAPI",
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_note": "docs/ (1,709 Markdown files in 13 languages) is excluded from the index: with it, `myc analyze` produced 23,941 symbols and its community detection had not finished after 13 minutes on the benchmark machine, before any embedding. The agent still sees docs/.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "fastapi",
+      "ref": "0.162.5",
+      "url": "https://github.com/fastapi/fastapi.git"
+    },
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "display_name": "fzf",
+      "language": "go",
+      "language_name": "Go",
+      "name": "fzf",
+      "ref": "v0.75.0",
+      "url": "https://github.com/junegunn/fzf.git"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "display_name": "hono",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "hono",
+      "ref": "v4.13.18",
+      "url": "https://github.com/honojs/hono.git"
+    }
+  },
+  "reps": 1,
+  "retried_runs": [],
+  "runs_final": 10,
+  "sessions_launched_ledger": 10,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-hard-v1.json",
+  "tasks_sha256": "0ffd63eb4101431f0fbf630c1497cf17cb5b1b7c3f5b86d42813d220a9f113fa",
+  "timeout_s": 900,
+  "tool_search": null
+}
