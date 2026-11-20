@@ -41,9 +41,9 @@ pub struct OutputOptions {
 /// unindexed directory must not get answers about a different codebase.
 fn resolve_repo(repo: Option<&str>) -> Result<RepoInfo> {
     if let Some(r) = repo {
-        return Ok(crate::resolve_repo(r)?.1);
+        return Ok(crate::repo::resolve_repo(r)?.1);
     }
-    let registry = RepoRegistry::load(&crate::registry_path())?;
+    let registry = RepoRegistry::load(&crate::repo::registry_path())?;
     let cwd = std::env::current_dir().context("Cannot read the working directory")?;
     registry.find_containing(&cwd).cloned().with_context(|| {
         format!(
@@ -63,7 +63,7 @@ struct Graph {
 
 async fn load_graph(repo: Option<&str>) -> Result<Graph> {
     let info = resolve_repo(repo)?;
-    let db_path = RepoRegistry::repo_db_path(&crate::data_dir(), &info.id);
+    let db_path = RepoRegistry::repo_db_path(&crate::repo::data_dir(), &info.id);
     let store = Store::open(&db_path, &info.id).await?;
     Ok(Graph {
         symbols: store.get_symbols().await?,
