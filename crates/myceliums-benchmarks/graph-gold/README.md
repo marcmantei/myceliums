@@ -7,14 +7,53 @@ scores what it extracts against these labels.
 
 ```sh
 cargo run -p myceliums-benchmarks --bin graph-eval                      # report
+cargo run -p myceliums-benchmarks --bin graph-eval -- --check-baseline  # gate, as CI runs it
 cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline # re-record
 ```
 
 The run is offline and needs no model weights. It prints Markdown tables
 (per language, per resolution label, per tag, every false positive and
-negative) and writes `report.json` here (git-ignored). `baseline.json` is the
-committed reference. CI runs it as a **report-only** step of the Retrieval
-Quality workflow: it never fails a build.
+negative; precision and recall with 95% Wilson intervals) and writes
+`report.json` here (git-ignored). `baseline.json` is the committed
+reference.
+
+## The CI gate
+
+The Retrieval Quality workflow runs `graph-eval --check-baseline` on every
+push and pull request (since #139). It fails the build when
+
+- overall CALLS precision or recall, in either setup, drops by at least
+  **0.02** (about five of the 249 gold edges) **and** the paired bootstrap 95%
+  interval of the drop lies wholly below zero — the retrieval gate's rule
+  (`benchmarks/METHODOLOGY.md`, "The CI gate"); recall pairs the gold edges,
+  precision the union of the edges either run extracted
+  (`src/graph_eval/gate.rs`);
+- any CALLS edge in the `polyglot` run connects two languages: the resolver
+  never links across language families, so one such edge is a bug;
+- the baseline was recorded against other labels or fixtures, or lacks a
+  setup.
+
+Per-language and per-label numbers are reported, not gated: 43–59 edges per
+language are too few. An intended drop is accepted by re-recording the
+baseline in the same PR and saying why.
+
+## Held-out real-repository set
+
+`held-out/real-repos.json` is the outside check on the fixtures, which the
+resolver's rules were developed against (#139): 52 call sites drawn at random
+from flask, requests, gin and hono at the pinned commits of the real-repository
+retrieval set (`../real-repos/`), 13 per repository, each traced to its target
+by reading the code. `held-out/sample_sites.py` draws them (a seeded regex over
+`git ls-files`, no myceliums); the set's `rules` say which drawn sites were
+skipped and how a target is labelled. 22 pairs call a project symbol; 30 call a
+built-in, a library method or a value, so any edge from them is wrong.
+
+`graph-eval` scores the set whenever the checkouts are present
+(`../real-repos/fetch.sh`, `$MYC_EVAL_REPOS_DIR`), per (caller, callee name)
+pair — recall over the pairs with a project target, precision over the edges
+from those callers to symbols of that name — and prints it after the gate.
+**It is never gated**: the pairs are few, and an agent labelled them (not yet
+reviewed). Numbers: `docs/guides/call-resolution-limitations.md`.
 
 ## Review status
 
@@ -129,7 +168,6 @@ their interpretation. In short: per-label precision says how far to trust an
 edge carrying that label; `recall_share` is the part of all gold edges found
 with that label (the shares add up to the overall recall).
 
-The analyzer walks files in name order, and that order decides which of
-several same-named symbols a bare-name call resolves to, so a run is
-deterministic. The report still records the platform, and the comparison
-flags a mismatch.
+The analyzer walks files in name order, and the resolver no longer lets that
+order pick among same-named symbols (#139): a run is deterministic. The report
+still records the platform, and the comparison flags a mismatch.

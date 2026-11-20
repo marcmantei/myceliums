@@ -187,6 +187,30 @@ pub fn platform() -> String {
     format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
 }
 
+/// The Wilson score interval (95%) for `successes` of `n`, `None` for
+/// `n == 0`. Unlike the normal approximation it stays inside [0, 1] and is
+/// sensible at 0 or `n` successes, which these small, often perfect counts
+/// need.
+pub fn wilson(successes: usize, n: usize) -> Option<(f64, f64)> {
+    if n == 0 {
+        return None;
+    }
+    const Z: f64 = 1.959_963_984_540_054;
+    let (n, p) = (n as f64, successes as f64 / n as f64);
+    let denominator = 1.0 + Z * Z / n;
+    let centre = (p + Z * Z / (2.0 * n)) / denominator;
+    let half = Z * (p * (1.0 - p) / n + Z * Z / (4.0 * n * n)).sqrt() / denominator;
+    Some(((centre - half).max(0.0), (centre + half).min(1.0)))
+}
+
+/// `0.9512 (0.91–0.98)`: a rate with its Wilson interval.
+fn rate_with_interval(successes: usize, n: usize) -> String {
+    match wilson(successes, n) {
+        Some((low, high)) => format!("{:.4} ({low:.2}–{high:.2})", successes as f64 / n as f64),
+        None => "n/a".to_string(),
+    }
+}
+
 /// `0.8571` style, or `n/a`.
 fn pct(value: Option<f64>) -> String {
     value.map_or_else(|| "n/a".to_string(), |v| format!("{v:.4}"))
@@ -208,7 +232,7 @@ pub fn markdown(report: &RunReport) -> String {
         let _ = writeln!(out, "### {setup}\n");
         let _ = writeln!(
             out,
-            "| language | symbol P | symbol R | gold edges | extracted | TP | FP | of which wrong caller | FN | call P | call R | call F1 |"
+            "| language | symbol P | symbol R | gold edges | extracted | TP | FP | of which wrong caller | FN | call P (95% CI) | call R (95% CI) | call F1 |"
         );
         let _ = writeln!(
             out,
@@ -231,14 +255,14 @@ pub fn markdown(report: &RunReport) -> String {
                 s.calls.false_positives,
                 s.wrong_caller,
                 s.calls.false_negatives,
-                pct(s.call_rates.precision),
-                pct(s.call_rates.recall),
+                rate_with_interval(s.calls.true_positives, s.calls.predicted),
+                rate_with_interval(s.calls.true_positives, s.calls.gold),
                 pct(s.call_rates.f1),
             );
         }
         let _ = writeln!(
             out,
-            "\nCALLS edges by resolution label (precision; TP/extracted):\n"
+            "\nCALLS edges by resolution label (precision with 95% Wilson interval; TP/extracted):\n"
         );
         let labels: Vec<&String> = result.by_label.keys().collect();
         let _ = writeln!(
@@ -253,8 +277,8 @@ pub fn markdown(report: &RunReport) -> String {
         let _ = writeln!(out, "|---|{}", "---:|".repeat(labels.len()));
         let cell = |l: Option<&LabelSummary>| match l {
             Some(l) => format!(
-                "{} ({}/{})",
-                pct(l.precision),
+                "{} {}/{}",
+                rate_with_interval(l.counts.true_positives, l.counts.predicted),
                 l.counts.true_positives,
                 l.counts.predicted
             ),
@@ -345,13 +369,11 @@ fn code_list(items: &[String]) -> String {
         .join(", ")
 }
 
-/// Current vs baseline headline rates, as Markdown. Informational only.
+/// Current vs baseline headline rates per language, as Markdown. Only the
+/// overall rates are gated ([`super::gate`]); these are for reading.
 pub fn markdown_comparison(current: &RunReport, baseline: &RunReport) -> String {
     let mut out = String::new();
-    let _ = writeln!(
-        out,
-        "### Against the recorded baseline (report only, not a gate)\n"
-    );
+    let _ = writeln!(out, "### Against the recorded baseline, per language\n");
     if current.dataset_digest != baseline.dataset_digest {
         let _ = writeln!(
             out,
@@ -442,6 +464,20 @@ mod tests {
             platform: platform(),
             setups: BTreeMap::from([(ISOLATED.to_string(), setup)]),
         }
+    }
+
+    #[test]
+    fn wilson_intervals_match_known_values() {
+        // 139 of 245: the #94 baseline's call precision, 0.50–0.63.
+        let (low, high) = wilson(139, 245).unwrap();
+        assert!(
+            (low - 0.505).abs() < 0.002 && (high - 0.629).abs() < 0.002,
+            "{low} {high}"
+        );
+        // A perfect small count is not certain: 2 of 2 is 0.34–1.00.
+        let (low, high) = wilson(2, 2).unwrap();
+        assert!((low - 0.342).abs() < 0.002 && high == 1.0, "{low} {high}");
+        assert_eq!(wilson(0, 0), None);
     }
 
     #[test]

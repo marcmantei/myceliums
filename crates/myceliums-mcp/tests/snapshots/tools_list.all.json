@@ -911,6 +911,13 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "unlinked_call_sites": {
+          "description": "Call sites with this symbol's name that got no CALLS edge (more\ncandidates than the resolver links, or nothing in scope): callers\nthat may exist but are not counted above.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -1407,6 +1414,13 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "unlinked_call_sites": {
+          "description": "Call sites with this symbol's name that got no CALLS edge (more\ncandidates than the resolver links, or nothing in scope): callers\nthat may exist but are not counted above.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [

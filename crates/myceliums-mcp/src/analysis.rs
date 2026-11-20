@@ -449,6 +449,7 @@ impl Rebuild {
             symbols_embedded: embedding_stats.symbols_embedded,
             symbols_total: embedding_stats.symbols_total,
             embedding_failures: embedding_stats.embedding_failures,
+            calls: Some(result.call_resolution.summary()),
             cached: false,
         })
     }

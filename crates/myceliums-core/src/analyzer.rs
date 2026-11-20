@@ -19,7 +19,6 @@ use crate::email::{self, ParsedEmail};
 use crate::file_guard::{should_skip_file, FileSkipReason};
 use crate::git_metadata::GitMetadataExtractor;
 use crate::mbox;
-use crate::module_graph::ModuleGraph;
 use crate::notebook;
 use crate::parser::ParsedRationale;
 use crate::parser::{self, SourceLanguage, SourceParser};
@@ -148,6 +147,19 @@ impl Analyzer {
     pub fn set_skip_embeddings(mut self, skip: bool) -> Self {
         self.skip_embeddings = skip;
         self
+    }
+
+    /// An empty `__init__.py` is skipped like any empty file, but it still
+    /// makes its directory a Python package, which decides what an absolute
+    /// import names: the resolver gets its path (#139).
+    fn register_empty_package_marker(&self, resolver: &mut CallResolver, path: &Path) {
+        if path.file_name().is_some_and(|name| name == "__init__.py") {
+            let rel_path = path
+                .strip_prefix(&self.repo_path)
+                .unwrap_or(path)
+                .to_string_lossy();
+            resolver.register_file(&rel_path, &[], &[], &[], &[]);
+        }
     }
 
     /// Run a full analysis of the repository.
@@ -362,9 +374,6 @@ impl Analyzer {
         let mut all_rationales: Vec<(String, Vec<ParsedRationale>)> = Vec::new();
         let mut resolver = CallResolver::new();
         let mut skipped_count: usize = 0;
-        // Per-file tracking for module graph construction
-        let mut file_symbols: Vec<(String, Vec<(String, String)>)> = Vec::new();
-        let mut file_imports: Vec<(String, Vec<crate::parser::ImportInfo>)> = Vec::new();
         let mut skip_reasons: HashMap<FileSkipReason, usize> = HashMap::new();
 
         // Batched-write cursors — track how many symbols/files have already
@@ -455,6 +464,7 @@ impl Analyzer {
             if raw_bytes.is_empty() {
                 warn!("Skipping {} — empty file", rel_path_display);
                 skipped_count += 1;
+                self.register_empty_package_marker(&mut resolver, path);
                 continue;
             }
 
@@ -620,15 +630,8 @@ impl Analyzer {
                 &repo_id,
             );
 
-            // Track per-file symbols for module graph
-            let sym_pairs: Vec<(String, String)> = symbols
-                .iter()
-                .map(|s| (s.name.clone(), s.uid.clone()))
-                .collect();
-            file_symbols.push((file_result.rel_path.clone(), sym_pairs));
-
             for sym in &symbols {
-                resolver.register_symbol(&sym.name, &sym.qualified_name, &sym.uid);
+                resolver.register_symbol(sym);
             }
 
             let file_node = FileNode {
@@ -653,21 +656,15 @@ impl Analyzer {
                 ));
             }
 
-            // Track per-file imports for module graph
-            if !file_result.parse_result.imports.is_empty() {
-                file_imports.push((
-                    file_result.rel_path.clone(),
-                    file_result.parse_result.imports.clone(),
-                ));
-            }
-
-            resolver.register_imports(&file_result.parse_result.imports);
+            // Imports and SSA aliases scope the file's calls.
+            resolver.register_file(
+                &file_result.rel_path,
+                &file_result.parse_result.imports,
+                &file_result.parse_result.aliases,
+                &file_result.parse_result.bindings,
+                &file_result.parse_result.declared,
+            );
             all_imports.extend(file_result.parse_result.imports);
-
-            // Feed SSA-discovered aliases to the resolver
-            for (local, target) in &file_result.parse_result.aliases {
-                resolver.register_alias(local, target);
-            }
 
             // Flush symbols and files in batches during parsing
             if config.batch_size > 0 && all_symbols.len() - symbols_written >= config.batch_size {
@@ -724,7 +721,7 @@ impl Analyzer {
                 .to_string();
             let symbols = parser::to_code_symbols(&result.symbols, &rel_path, self.store.repo_id());
             for sym in &symbols {
-                resolver.register_symbol(&sym.name, &sym.qualified_name, &sym.uid);
+                resolver.register_symbol(sym);
             }
             let file_node = FileNode {
                 uid: Uuid::new_v4().to_string(),
@@ -735,11 +732,21 @@ impl Analyzer {
             };
             all_files.push(file_node);
             all_symbols.extend(symbols);
-            all_calls.extend(result.calls);
+            // Calls carry their file: the resolver finds the caller by position.
+            all_calls.extend(result.calls.into_iter().map(|mut call| {
+                call.file = Some(rel_path.clone());
+                call
+            }));
+            resolver.register_file(
+                &rel_path,
+                &result.imports,
+                &result.aliases,
+                &result.bindings,
+                &result.declared,
+            );
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
             }
-            resolver.register_imports(&result.imports);
             all_imports.extend(result.imports);
 
             // Flush notebook symbols and files in batches
@@ -945,23 +952,21 @@ impl Analyzer {
         all_symbols.extend(conversation_syms);
         email_rels.extend(conversation_rels);
 
-        // Build module graph for cross-file import resolution
-        let mut module_graph = ModuleGraph::new();
-        for (path, syms) in &file_symbols {
-            module_graph.register_module(path, syms);
-        }
-        for (path, imports) in &file_imports {
-            for import in imports {
-                module_graph.register_import(path, import);
-            }
-        }
-        resolver.set_module_graph(module_graph);
-
         // Pass 2: Resolve calls to relationships
         self.check_cancelled()?;
         let graph_construction_timer = Timer::start();
         let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
-        info!("Resolved {} call relationships", call_rels.len());
+        let call_resolution = resolver.stats().clone();
+        info!(
+            "Resolved {} call relationships ({})",
+            call_rels.len(),
+            call_resolution.summary()
+        );
+        // Kept in the index: the caller tools say how many call sites of a
+        // name got no edge. A failed write costs that note, not the index.
+        if let Err(e) = call_resolution.record(&self.store).await {
+            warn!("cannot record the call resolution statistics: {e}");
+        }
 
         // Build CONTAINED_BY relationships (symbol -> file)
         let mut contained_by_rels: Vec<Relationship> = Vec::new();
@@ -1266,6 +1271,7 @@ impl Analyzer {
             mentions_count,
             timing: Some(timing),
             skip_reasons,
+            call_resolution,
         };
 
         info!(
@@ -1388,6 +1394,7 @@ impl Analyzer {
                 mentions_count: 0,
                 timing: None,
                 skip_reasons: HashMap::new(),
+                call_resolution: Default::default(),
             });
         }
 
@@ -1493,7 +1500,7 @@ impl Analyzer {
                 let symbols =
                     parser::to_code_symbols(&result.symbols, &rel_path, self.store.repo_id());
                 for sym in &symbols {
-                    resolver.register_symbol(&sym.name, &sym.qualified_name, &sym.uid);
+                    resolver.register_symbol(sym);
                 }
                 let file_node = FileNode {
                     uid: Uuid::new_v4().to_string(),
@@ -1504,11 +1511,21 @@ impl Analyzer {
                 };
                 all_files.push(file_node);
                 all_symbols.extend(symbols);
-                all_calls.extend(result.calls);
+                // Calls carry their file: the resolver finds the caller by position.
+                all_calls.extend(result.calls.into_iter().map(|mut call| {
+                    call.file = Some(rel_path.clone());
+                    call
+                }));
+                resolver.register_file(
+                    &rel_path,
+                    &result.imports,
+                    &result.aliases,
+                    &result.bindings,
+                    &result.declared,
+                );
                 if !result.rationales.is_empty() {
                     all_rationales.push((rel_path, result.rationales));
                 }
-                resolver.register_imports(&result.imports);
                 all_imports.extend(result.imports);
                 continue;
             }
@@ -1609,6 +1626,7 @@ impl Analyzer {
 
             if raw_bytes.is_empty() {
                 skipped_count += 1;
+                self.register_empty_package_marker(&mut resolver, path);
                 continue;
             }
 
@@ -1658,7 +1676,7 @@ impl Analyzer {
             let symbols = parser::to_code_symbols(&result.symbols, &rel_path, self.store.repo_id());
 
             for sym in &symbols {
-                resolver.register_symbol(&sym.name, &sym.qualified_name, &sym.uid);
+                resolver.register_symbol(sym);
             }
 
             let file_node = FileNode {
@@ -1671,12 +1689,21 @@ impl Analyzer {
 
             all_files.push(file_node);
             all_symbols.extend(symbols);
-            all_calls.extend(result.calls);
+            // Calls carry their file: the resolver finds the caller by position.
+            all_calls.extend(result.calls.into_iter().map(|mut call| {
+                call.file = Some(rel_path.clone());
+                call
+            }));
+            resolver.register_file(
+                &rel_path,
+                &result.imports,
+                &result.aliases,
+                &result.bindings,
+                &result.declared,
+            );
             if !result.rationales.is_empty() {
                 all_rationales.push((rel_path, result.rationales));
             }
-
-            resolver.register_imports(&result.imports);
             all_imports.extend(result.imports);
         }
 
@@ -1704,8 +1731,10 @@ impl Analyzer {
         all_symbols.extend(conversation_syms);
         email_rels.extend(conversation_rels);
 
-        // Resolve calls
+        // Resolve calls. The statistics cover only the changed files, so
+        // they are reported but not recorded over the full run's.
         let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
+        let call_resolution = resolver.stats().clone();
 
         // Build CONTAINED_BY relationships
         let mut contained_by_rels: Vec<Relationship> = Vec::new();
@@ -1871,6 +1900,7 @@ impl Analyzer {
             mentions_count,
             timing: None,
             skip_reasons,
+            call_resolution,
         };
 
         info!(
@@ -2460,6 +2490,9 @@ pub struct AnalysisResult {
     /// parse time budget, nesting depth, ...), counted per reason. Files that
     /// failed for other reasons (unreadable, parser errors) are not included.
     pub skip_reasons: HashMap<FileSkipReason, usize>,
+    /// How many call sites got a CALLS edge, and why the others did not.
+    /// For an incremental run, only the changed files' calls.
+    pub call_resolution: crate::resolver::CallResolutionStats,
 }
 
 impl AnalysisResult {
@@ -2724,6 +2757,41 @@ mod tests {
         );
     }
 
+    /// #139: an empty `__init__.py` makes `pkg` a package, so `import json`
+    /// in `pkg/api.py` is the standard library's `json`, not `pkg/json.py`
+    /// (Django's `django/utils/__init__.py` is empty).
+    #[tokio::test]
+    async fn an_empty_init_py_keeps_absolute_imports_off_package_modules() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        fs::create_dir_all(root.join("pkg")).unwrap();
+        fs::write(root.join("pkg/__init__.py"), "").unwrap();
+        fs::write(
+            root.join("pkg/json.py"),
+            "def dumps(value):\n    return repr(value)\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("pkg/api.py"),
+            "import json\n\n\ndef render():\n    return json.dumps({})\n",
+        )
+        .unwrap();
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::new(store, root).set_skip_embeddings(true);
+        analyzer.analyze().await.unwrap();
+        let calls: Vec<_> = analyzer
+            .store()
+            .get_relationships()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.kind == myceliums_storage::RelationshipKind::Calls)
+            .collect();
+        assert!(calls.is_empty(), "{calls:?}");
+    }
+
     /// #127: the incremental path applies the same parse budget and records
     /// why a file was left out.
     #[tokio::test]
@@ -2773,6 +2841,7 @@ mod tests {
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),
+            call_resolution: Default::default(),
         };
 
         assert!(result.has_embedding_failures());
@@ -2801,6 +2870,7 @@ mod tests {
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),
+            call_resolution: Default::default(),
         };
 
         assert!(!result.has_embedding_failures());

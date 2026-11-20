@@ -32,6 +32,9 @@ pub fn format_analyze(o: &AnalyzeOutput) -> String {
         embedded = o.symbols_embedded,
         total = o.symbols_total,
     );
+    if let Some(calls) = &o.calls {
+        out.push_str(&format!("\nCalls:       {calls}"));
+    }
     if o.embedding_failures > 0 {
         out.push_str(&format!(
             "\n⚠ Embedding failures: {} — {} of {} symbols have no vector and are \

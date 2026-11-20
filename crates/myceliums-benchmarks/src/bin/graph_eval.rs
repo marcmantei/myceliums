@@ -2,16 +2,22 @@
 //!
 //! ```text
 //! cargo run -p myceliums-benchmarks --bin graph-eval
-//! cargo run -p myceliums-benchmarks --bin graph-eval -- --summary "$GITHUB_STEP_SUMMARY"
+//! cargo run -p myceliums-benchmarks --bin graph-eval -- --check-baseline --summary "$GITHUB_STEP_SUMMARY"
 //! cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline
 //! ```
 //!
-//! Prints per-language and per-resolution-label tables, the comparison with
-//! `graph-gold/baseline.json`, and every false positive and negative; writes
-//! the full detail to `graph-gold/report.json`.
+//! Prints per-language and per-resolution-label tables (with 95% Wilson
+//! intervals), the comparison with `graph-gold/baseline.json`, and every
+//! false positive and negative; writes the full detail to
+//! `graph-gold/report.json`. Then scores the held-out real-repository set
+//! (`graph-gold/held-out/`) when the pinned checkouts are present
+//! (`real-repos/fetch.sh`, `$MYC_EVAL_REPOS_DIR`): reported, never gated.
 //!
-//! Report only: the comparison with the baseline never fails the run. The
-//! exit status is non-zero only when the evaluation itself cannot run.
+//! Without `--check-baseline` the run is a report: the exit status is
+//! non-zero only when the evaluation itself cannot run. With it, the run
+//! also fails when CALLS precision or recall regresses against the baseline
+//! (see `myceliums_benchmarks::graph_eval::gate` for the rule) or a CALLS edge
+//! connects two languages.
 //!
 //! `graph-gold/baseline.json` is generated output. Re-record it with
 //! `--update-baseline` in the same change as an intended label, fixture or
@@ -19,7 +25,9 @@
 
 use anyhow::{Context, Result};
 use myceliums_benchmarks::eval::corpus::fixtures_root;
+use myceliums_benchmarks::graph_eval::gate;
 use myceliums_benchmarks::graph_eval::gold::GoldSet;
+use myceliums_benchmarks::graph_eval::held_out::{self, HeldOutSet};
 use myceliums_benchmarks::graph_eval::report::{
     markdown, markdown_comparison, RunReport, REGENERATE_BASELINE,
 };
@@ -32,6 +40,7 @@ const BASELINE: &str = "graph-gold/baseline.json";
 
 struct Options {
     update_baseline: bool,
+    check_baseline: bool,
     report_path: PathBuf,
     summary_path: Option<PathBuf>,
 }
@@ -41,6 +50,7 @@ impl Options {
         let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let mut options = Self {
             update_baseline: false,
+            check_baseline: false,
             report_path: crate_dir.join(DEFAULT_REPORT),
             summary_path: None,
         };
@@ -48,6 +58,7 @@ impl Options {
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 "--update-baseline" => options.update_baseline = true,
+                "--check-baseline" => options.check_baseline = true,
                 "--out" => {
                     options.report_path =
                         PathBuf::from(args.next().context("--out requires a path")?)
@@ -60,6 +71,7 @@ impl Options {
                 "--help" | "-h" => {
                     println!(
                         "graph-eval [options]\n\n  \
+                         --check-baseline    fail on a regression against {BASELINE}\n  \
                          --update-baseline   rewrite {BASELINE}\n  \
                          --out <path>        write the JSON report here (default {DEFAULT_REPORT})\n  \
                          --summary <path>    append the Markdown report (e.g. $GITHUB_STEP_SUMMARY)"
@@ -90,9 +102,34 @@ async fn main() -> Result<()> {
 
     let mut text = markdown(&report);
     let baseline_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(BASELINE);
+    let mut failed = false;
     match RunReport::read(&baseline_path) {
-        Ok(baseline) => text.push_str(&markdown_comparison(&report, &baseline)),
-        Err(error) => text.push_str(&format!("\nNo baseline to compare with: {error:#}\n")),
+        Ok(baseline) => {
+            text.push_str(&markdown_comparison(&report, &baseline));
+            if options.check_baseline {
+                let outcome = gate::compare(&report, &baseline, &gold)?;
+                text.push('\n');
+                text.push_str(&gate::markdown(&outcome));
+                failed = outcome.failed();
+            }
+        }
+        Err(error) => {
+            text.push_str(&format!("\nNo baseline to compare with: {error:#}\n"));
+            failed = options.check_baseline;
+        }
+    }
+    // The held-out real-repository set: an outside check, never gated. It
+    // needs the pinned checkouts (`real-repos/fetch.sh`); without them the
+    // section says so.
+    let held_out_set = HeldOutSet::embedded()?;
+    match held_out::repos_dir() {
+        Some(dir) => {
+            let held_out_report = held_out::run(&held_out_set, &dir).await?;
+            text.push_str(&held_out::markdown(&held_out_set, &held_out_report));
+        }
+        None => text.push_str(
+            "\nHeld-out real repositories: no cache directory (set MYC_EVAL_REPOS_DIR).\n",
+        ),
     }
     println!("{text}");
 
@@ -116,6 +153,9 @@ async fn main() -> Result<()> {
         baseline.commit_sha = Some(commit_sha());
         baseline.write(&baseline_path)?;
         eprintln!("baseline written to {}", baseline_path.display());
+    }
+    if failed {
+        anyhow::bail!("graph accuracy regressed against {BASELINE} (see the gate table above)");
     }
     Ok(())
 }

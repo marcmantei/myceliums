@@ -125,7 +125,7 @@ impl SsaResolver {
     }
 
     /// Collect all alias mappings as `(local_name, target_name)` pairs
-    /// suitable for feeding into [`crate::resolver::CallResolver::register_alias`].
+    /// suitable for the `aliases` of [`crate::resolver::CallResolver::register_file`].
     pub fn collect_aliases(&self) -> Vec<(String, String)> {
         let mut aliases = Vec::new();
         for block in &self.blocks {

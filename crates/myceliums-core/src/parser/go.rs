@@ -1,6 +1,9 @@
 //! Go extraction.
 
-use super::{CallReference, ImportInfo, ParsedSymbol, SourceParser};
+use super::{
+    BindingValue, CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, ParsedSymbol,
+    SourceParser, TypeBinding, FILE_SCOPE,
+};
 use myceliums_storage::SymbolKind;
 use tree_sitter::Node;
 
@@ -41,10 +44,8 @@ impl SourceParser {
                         for child in recv.children(cursor) {
                             if child.kind() == "parameter_declaration" {
                                 if let Some(type_node) = child.child_by_field_name("type") {
-                                    let type_text = self.node_text(type_node, source);
-                                    // Strip pointer prefix
-                                    let cleaned = type_text.trim_start_matches('*');
-                                    return Some(cleaned.to_string());
+                                    // `*Repo[T]` → `Repo`
+                                    return Some(go_type_name(self.node_text(type_node, source)));
                                 }
                             }
                         }
@@ -77,7 +78,7 @@ impl SourceParser {
                                 _ => SymbolKind::TypeAlias,
                             };
                             symbols.push(ParsedSymbol {
-                                name,
+                                name: name.clone(),
                                 kind: sym_kind,
                                 start_line: child.start_position().row as u32 + 1,
                                 end_line: child.end_position().row as u32 + 1,
@@ -86,6 +87,30 @@ impl SourceParser {
                                 parent_name: parent.map(|s| s.to_string()),
                                 metadata: None,
                             });
+                            // An interface's method set.
+                            if let Some(interface) =
+                                type_node.filter(|t| t.kind() == "interface_type")
+                            {
+                                let cursor = &mut interface.walk();
+                                for elem in interface.children(cursor) {
+                                    let Some(method) = (elem.kind() == "method_elem")
+                                        .then(|| elem.child_by_field_name("name"))
+                                        .flatten()
+                                    else {
+                                        continue;
+                                    };
+                                    symbols.push(ParsedSymbol {
+                                        name: self.node_text(method, source).to_string(),
+                                        kind: SymbolKind::Method,
+                                        start_line: elem.start_position().row as u32 + 1,
+                                        end_line: elem.end_position().row as u32 + 1,
+                                        signature: self.node_text(elem, source).trim().to_string(),
+                                        content: self.node_text(elem, source).to_string(),
+                                        parent_name: Some(name.clone()),
+                                        metadata: None,
+                                    });
+                                }
+                            }
                         }
                     }
                 }
@@ -155,6 +180,74 @@ impl SourceParser {
         }
     }
 
+    /// Return types of functions, methods and interface methods, and the
+    /// types structs embed (their methods are promoted), for the call
+    /// resolver (#139).
+    pub(super) fn extract_go_declared_types(
+        &self,
+        node: Node,
+        source: &[u8],
+        out: &mut Vec<DeclaredTypes>,
+    ) {
+        let line = |n: Node| n.start_position().row as u32 + 1;
+        match node.kind() {
+            "function_declaration" | "method_declaration" | "method_elem" => {
+                let name = node.child_by_field_name("name");
+                let result = node.child_by_field_name("result");
+                if let (Some(name), Some(result)) = (name, result) {
+                    out.push(DeclaredTypes {
+                        name: self.node_text(name, source).to_string(),
+                        line: line(node),
+                        return_type: Some(self.node_text(result, source).trim().to_string()),
+                        bases: Vec::new(),
+                        elsewhere: false,
+                    });
+                }
+            }
+            "type_spec" => {
+                let struct_type = node
+                    .child_by_field_name("type")
+                    .filter(|t| t.kind() == "struct_type");
+                if let (Some(name), Some(struct_type)) =
+                    (node.child_by_field_name("name"), struct_type)
+                {
+                    let embedded = self.go_embedded_types(struct_type, source);
+                    if !embedded.is_empty() {
+                        out.push(DeclaredTypes {
+                            name: self.node_text(name, source).to_string(),
+                            line: line(node),
+                            return_type: None,
+                            bases: embedded,
+                            elsewhere: false,
+                        });
+                    }
+                }
+            }
+            _ => {}
+        }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            self.extract_go_declared_types(child, source, out);
+        }
+    }
+
+    /// The types a struct embeds (`struct { *Report; ... }`).
+    fn go_embedded_types(&self, struct_type: Node, source: &[u8]) -> Vec<String> {
+        let mut embedded = Vec::new();
+        let Some(list) = self.find_child_by_kind(struct_type, "field_declaration_list") else {
+            return embedded;
+        };
+        let cursor = &mut list.walk();
+        for field in list.children(cursor) {
+            if field.kind() == "field_declaration" && field.child_by_field_name("name").is_none() {
+                if let Some(ty) = field.child_by_field_name("type") {
+                    embedded.push(go_type_name(self.node_text(ty, source)));
+                }
+            }
+        }
+        embedded
+    }
+
     fn extract_go_signature(&self, node: Node, source: &[u8]) -> String {
         let start = node.start_byte();
         let text = &source[start..];
@@ -178,10 +271,7 @@ impl SourceParser {
 
         // Track current function scope
         let fn_name = match kind {
-            "function_declaration" => node
-                .child_by_field_name("name")
-                .map(|n| self.node_text(n, source).to_string()),
-            "method_declaration" => node
+            "function_declaration" | "method_declaration" => node
                 .child_by_field_name("name")
                 .map(|n| self.node_text(n, source).to_string()),
             _ => None,
@@ -189,99 +279,266 @@ impl SourceParser {
 
         let scope = fn_name.as_deref().or(current_fn);
 
-        match kind {
-            "call_expression" => {
-                if let Some(func_node) = node.child_by_field_name("function") {
-                    let callee = match func_node.kind() {
-                        "identifier" => self.node_text(func_node, source).to_string(),
-                        "selector_expression" => {
-                            if let Some(field) = func_node.child_by_field_name("field") {
-                                self.node_text(field, source).to_string()
-                            } else {
-                                self.node_text(func_node, source).to_string()
-                            }
+        // Calls in `go f()` and `defer f()` are ordinary call_expressions
+        // below those statements.
+        if kind == "call_expression" {
+            if let (Some(func_node), Some(caller)) = (node.child_by_field_name("function"), scope) {
+                let (callee, chain, form) = match func_node.kind() {
+                    "identifier" => (
+                        self.node_text(func_node, source).to_string(),
+                        None,
+                        CallForm::Bare,
+                    ),
+                    // `pkg.F()`, `value.Method()`
+                    "selector_expression" => {
+                        let name = func_node
+                            .child_by_field_name("field")
+                            .map(|f| self.node_text(f, source).to_string())
+                            .unwrap_or_else(|| self.node_text(func_node, source).to_string());
+                        let mut steps = Vec::new();
+                        if let Some(operand) = func_node.child_by_field_name("operand") {
+                            self.collect_go_chain_steps(operand, source, &mut steps);
                         }
-                        _ => self.node_text(func_node, source).to_string(),
-                    };
-                    if let Some(caller) = scope {
-                        calls.push(CallReference {
-                            caller_name: caller.to_string(),
-                            callee_name: callee,
-                            line: node.start_position().row as u32 + 1,
-                            chain: None,
-                            file: None,
-                        });
+                        steps.push(ExpressionStep::Field(name.clone()));
+                        steps.push(ExpressionStep::Call);
+                        (name, Some(steps), CallForm::Member)
                     }
-                }
+                    _ => (
+                        self.node_text(func_node, source).to_string(),
+                        None,
+                        CallForm::Unknown,
+                    ),
+                };
+                calls.push(CallReference {
+                    caller_name: caller.to_string(),
+                    callee_name: callee,
+                    line: node.start_position().row as u32 + 1,
+                    chain,
+                    file: None,
+                    form,
+                    arg_count: node
+                        .child_by_field_name("arguments")
+                        .map(|args| args.named_child_count() as u32),
+                });
             }
-            "go_statement" => {
-                // go handleRequest(conn) — extract the call inside
-                let cursor = &mut node.walk();
-                for child in node.children(cursor) {
-                    if child.kind() == "call_expression" {
-                        if let Some(func_node) = child.child_by_field_name("function") {
-                            let callee = match func_node.kind() {
-                                "identifier" => self.node_text(func_node, source).to_string(),
-                                "selector_expression" => {
-                                    if let Some(field) = func_node.child_by_field_name("field") {
-                                        self.node_text(field, source).to_string()
-                                    } else {
-                                        self.node_text(func_node, source).to_string()
-                                    }
-                                }
-                                _ => self.node_text(func_node, source).to_string(),
-                            };
-                            if let Some(caller) = scope {
-                                calls.push(CallReference {
-                                    caller_name: caller.to_string(),
-                                    callee_name: callee,
-                                    line: child.start_position().row as u32 + 1,
-                                    chain: None,
-                                    file: None,
-                                });
-                            }
-                        }
-                    }
-                }
-                return; // Don't recurse further (already handled the call)
-            }
-            "defer_statement" => {
-                // defer file.Close() — extract the call inside
-                let cursor = &mut node.walk();
-                for child in node.children(cursor) {
-                    if child.kind() == "call_expression" {
-                        if let Some(func_node) = child.child_by_field_name("function") {
-                            let callee = match func_node.kind() {
-                                "identifier" => self.node_text(func_node, source).to_string(),
-                                "selector_expression" => {
-                                    if let Some(field) = func_node.child_by_field_name("field") {
-                                        self.node_text(field, source).to_string()
-                                    } else {
-                                        self.node_text(func_node, source).to_string()
-                                    }
-                                }
-                                _ => self.node_text(func_node, source).to_string(),
-                            };
-                            if let Some(caller) = scope {
-                                calls.push(CallReference {
-                                    caller_name: caller.to_string(),
-                                    callee_name: callee,
-                                    line: child.start_position().row as u32 + 1,
-                                    chain: None,
-                                    file: None,
-                                });
-                            }
-                        }
-                    }
-                }
-                return; // Don't recurse further
-            }
-            _ => {}
         }
 
         let cursor = &mut node.walk();
         for child in node.children(cursor) {
             self.extract_go_calls(child, source, calls, scope);
+        }
+    }
+
+    /// Receivers, parameters, variables and struct fields with their
+    /// declared types or initialisers (#139).
+    pub(super) fn extract_go_bindings(
+        &self,
+        node: Node,
+        source: &[u8],
+        out: &mut Vec<TypeBinding>,
+        function: Option<(u32, u32)>,
+    ) {
+        let lines = |n: Node| {
+            (
+                n.start_position().row as u32 + 1,
+                n.end_position().row as u32 + 1,
+            )
+        };
+        let local_scope = |n: Node| match function {
+            Some((_, end)) => (lines(n).0, end),
+            None => FILE_SCOPE,
+        };
+        let text = |n: Node| self.node_text(n, source).to_string();
+        let mut push =
+            |name: String, owner: Option<String>, scope: (u32, u32), value: BindingValue| {
+                if name != "_" {
+                    out.push(TypeBinding {
+                        name,
+                        owner,
+                        scope,
+                        value,
+                    });
+                }
+            };
+        match node.kind() {
+            "type_spec" => {
+                let name = node.child_by_field_name("name").map(text);
+                let fields = node
+                    .child_by_field_name("type")
+                    .filter(|t| t.kind() == "struct_type")
+                    .and_then(|t| self.find_child_by_kind(t, "field_declaration_list"));
+                if let (Some(name), Some(fields)) = (name, fields) {
+                    let cursor = &mut fields.walk();
+                    for field in fields.named_children(cursor) {
+                        let Some(ty) = field.child_by_field_name("type") else {
+                            continue;
+                        };
+                        let cursor = &mut field.walk();
+                        for field_name in field.children_by_field_name("name", cursor) {
+                            push(
+                                text(field_name),
+                                Some(name.clone()),
+                                FILE_SCOPE,
+                                BindingValue::Type(text(ty)),
+                            );
+                        }
+                    }
+                }
+                return;
+            }
+            "function_declaration" | "method_declaration" | "func_literal" => {
+                let span = lines(node);
+                for list in ["receiver", "parameters"] {
+                    let Some(params) = node.child_by_field_name(list) else {
+                        continue;
+                    };
+                    let cursor = &mut params.walk();
+                    for param in params.named_children(cursor) {
+                        let ty = param.child_by_field_name("type").map(text);
+                        let variadic = param.kind() == "variadic_parameter_declaration";
+                        let cursor = &mut param.walk();
+                        for name in param.children_by_field_name("name", cursor) {
+                            let value = match (&ty, variadic) {
+                                (Some(ty), false) => BindingValue::Type(ty.clone()),
+                                _ => BindingValue::Unknown,
+                            };
+                            push(text(name), None, span, value);
+                        }
+                    }
+                }
+                if let Some(body) = node.child_by_field_name("body") {
+                    self.extract_go_bindings(body, source, out, Some(span));
+                }
+                return;
+            }
+            "short_var_declaration" | "var_spec" | "range_clause" => {
+                let names: Vec<Node> = match node.kind() {
+                    "var_spec" => {
+                        let cursor = &mut node.walk();
+                        node.children_by_field_name("name", cursor).collect()
+                    }
+                    _ => node
+                        .child_by_field_name("left")
+                        .map(|left| {
+                            let cursor = &mut left.walk();
+                            left.named_children(cursor)
+                                .filter(|n| n.kind() == "identifier")
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                };
+                let values: Vec<Node> = match node.kind() {
+                    "range_clause" => Vec::new(),
+                    _ => node
+                        .child_by_field_name(if node.kind() == "var_spec" {
+                            "value"
+                        } else {
+                            "right"
+                        })
+                        .map(|right| {
+                            let cursor = &mut right.walk();
+                            right.named_children(cursor).collect()
+                        })
+                        .unwrap_or_default(),
+                };
+                let declared = node.child_by_field_name("type").map(text);
+                for (i, name) in names.iter().enumerate() {
+                    // `a, err := f()`: the first name gets the call's
+                    // (first) result.
+                    let value = match (&declared, values.get(i), values.len()) {
+                        (Some(ty), _, _) => BindingValue::Type(ty.clone()),
+                        (None, Some(value), n) if n == names.len() => {
+                            self.go_binding_value(*value, source)
+                        }
+                        (None, _, 1) if i == 0 => self.go_binding_value(values[0], source),
+                        _ => BindingValue::Unknown,
+                    };
+                    push(text(*name), None, local_scope(node), value);
+                }
+            }
+            _ => {}
+        }
+        let cursor = &mut node.walk();
+        for child in node.children(cursor) {
+            self.extract_go_bindings(child, source, out, function);
+        }
+    }
+
+    /// What an initialiser is, for a binding.
+    fn go_binding_value(&self, value: Node, source: &[u8]) -> BindingValue {
+        match value.kind() {
+            "func_literal" => BindingValue::Unknown,
+            _ => {
+                let mut steps = Vec::new();
+                self.collect_go_chain_steps(value, source, &mut steps);
+                BindingValue::Expr(steps)
+            }
+        }
+    }
+
+    /// Chain steps of a Go expression used as a receiver.
+    pub(super) fn collect_go_chain_steps(
+        &self,
+        node: Node,
+        source: &[u8],
+        steps: &mut Vec<ExpressionStep>,
+    ) {
+        match node.kind() {
+            "selector_expression" => {
+                if let Some(operand) = node.child_by_field_name("operand") {
+                    self.collect_go_chain_steps(operand, source, steps);
+                }
+                if let Some(field) = node.child_by_field_name("field") {
+                    steps.push(ExpressionStep::Field(
+                        self.node_text(field, source).to_string(),
+                    ));
+                }
+            }
+            "call_expression" => {
+                if let Some(function) = node.child_by_field_name("function") {
+                    self.collect_go_chain_steps(function, source, steps);
+                }
+                steps.push(ExpressionStep::Call);
+            }
+            "identifier" => steps.push(ExpressionStep::Ident(
+                self.node_text(node, source).to_string(),
+            )),
+            "unary_expression" | "parenthesized_expression" => {
+                match node
+                    .child_by_field_name("operand")
+                    .or_else(|| node.named_child(0))
+                {
+                    Some(inner) => self.collect_go_chain_steps(inner, source, steps),
+                    None => steps.push(ExpressionStep::Literal),
+                }
+            }
+            "index_expression" => {
+                if let Some(operand) = node.child_by_field_name("operand") {
+                    self.collect_go_chain_steps(operand, source, steps);
+                }
+                steps.push(ExpressionStep::Index);
+            }
+            // `T{...}` and `x.(T)` are values of type T.
+            "composite_literal" | "type_assertion_expression" => {
+                let ty = node.child_by_field_name("type");
+                match ty.map(|t| go_type_name(self.node_text(t, source))) {
+                    Some(name) => steps.push(ExpressionStep::New(name)),
+                    None => steps.push(ExpressionStep::Literal),
+                }
+            }
+            "interpreted_string_literal"
+            | "raw_string_literal"
+            | "int_literal"
+            | "float_literal"
+            | "imaginary_literal"
+            | "rune_literal"
+            | "true"
+            | "false"
+            | "nil"
+            | "func_literal" => steps.push(ExpressionStep::Literal),
+            _ => steps.push(ExpressionStep::Ident(
+                self.node_text(node, source).to_string(),
+            )),
         }
     }
 
@@ -344,6 +601,22 @@ impl SourceParser {
             });
         }
     }
+}
+
+/// The type a Go type expression names, without pointers, slices of
+/// pointers or generic arguments: `*store.Repo[*model.User]` → `store.Repo`.
+/// A slice, array, map, channel or function type keeps its full text, so it
+/// never matches a project type.
+pub(super) fn go_type_name(text: &str) -> String {
+    let text = text.trim().trim_start_matches('*').trim();
+    if text.starts_with('[')
+        || text.starts_with("map[")
+        || text.starts_with("chan ")
+        || text.starts_with("func")
+    {
+        return text.to_string();
+    }
+    text.split('[').next().unwrap_or(text).trim().to_string()
 }
 
 #[cfg(test)]
@@ -426,9 +699,13 @@ type Handler interface {
 "#,
             )
             .unwrap();
-        assert_eq!(result.symbols.len(), 1);
+        assert_eq!(result.symbols.len(), 2);
         assert_eq!(result.symbols[0].name, "Handler");
         assert_eq!(result.symbols[0].kind, SymbolKind::Interface);
+        // The interface's method set is extracted too (#139).
+        assert_eq!(result.symbols[1].name, "ServeHTTP");
+        assert_eq!(result.symbols[1].kind, SymbolKind::Method);
+        assert_eq!(result.symbols[1].parent_name.as_deref(), Some("Handler"));
     }
 
     #[test]
@@ -564,5 +841,105 @@ import "fmt"
         assert_eq!(result.imports.len(), 1);
         assert_eq!(result.imports[0].local_name, "fmt");
         assert_eq!(result.imports[0].source_module, "fmt");
+    }
+}
+
+/// What the resolver needs from Go (#139).
+#[cfg(test)]
+mod resolution_facts {
+    use crate::parser::{BindingValue, CallForm, ExpressionStep, SourceLanguage, SourceParser};
+    use myceliums_storage::SymbolKind;
+
+    const SOURCE: &str = r#"
+package report
+
+type Sink interface {
+	Write(text string)
+}
+
+type OrderReport struct {
+	*Report
+	repo *store.Repo[*model.User]
+}
+
+func (r *Repo[T]) Add(row T) int { return 0 }
+
+func Load(text string) (*Config, error) {
+	cfg, err := config.Load(text)
+	user := &model.User{Name: text}
+	handler := func(q string) string { return q }
+	return cfg.Get("a"), err
+}
+"#;
+
+    fn parse() -> crate::parser::ParseResult {
+        SourceParser::new(SourceLanguage::Go)
+            .unwrap()
+            .parse(SOURCE)
+            .unwrap()
+    }
+
+    fn declared(result: &crate::parser::ParseResult, name: &str) -> crate::parser::DeclaredTypes {
+        result
+            .declared
+            .iter()
+            .find(|d| d.name == name)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn symbols_carry_what_receiver_typing_needs() {
+        let result = parse();
+        let write = result.symbols.iter().find(|s| s.name == "Write").unwrap();
+        assert_eq!(
+            (write.kind.clone(), write.parent_name.as_deref()),
+            (SymbolKind::Method, Some("Sink"))
+        );
+        let add = result.symbols.iter().find(|s| s.name == "Add").unwrap();
+        assert_eq!(add.parent_name.as_deref(), Some("Repo"), "generic receiver");
+        assert_eq!(declared(&result, "OrderReport").bases, ["Report"]);
+        assert_eq!(
+            declared(&result, "Load").return_type.as_deref(),
+            Some("(*Config, error)")
+        );
+        // Search does not see them: symbol metadata is unchanged.
+        assert!(result.symbols.iter().all(|s| s.metadata.is_none()));
+    }
+
+    #[test]
+    fn calls_and_bindings() {
+        let result = parse();
+        let load = result
+            .calls
+            .iter()
+            .find(|c| c.callee_name == "Load")
+            .unwrap();
+        assert_eq!(load.form, CallForm::Member);
+        assert_eq!(
+            load.chain.as_deref().unwrap()[0],
+            ExpressionStep::Ident("config".into())
+        );
+        let find = |name: &str, owner: Option<&str>| {
+            result
+                .bindings
+                .iter()
+                .find(|b| b.name == name && b.owner.as_deref() == owner)
+                .unwrap_or_else(|| panic!("{name} not bound: {:?}", result.bindings))
+                .value
+                .clone()
+        };
+        assert_eq!(find("r", None), BindingValue::Type("*Repo[T]".into()));
+        assert_eq!(
+            find("repo", Some("OrderReport")),
+            BindingValue::Type("*store.Repo[*model.User]".into())
+        );
+        assert!(matches!(find("cfg", None), BindingValue::Expr(_)));
+        assert_eq!(find("err", None), BindingValue::Unknown);
+        assert_eq!(
+            find("user", None),
+            BindingValue::Expr(vec![ExpressionStep::New("model.User".into())])
+        );
+        assert_eq!(find("handler", None), BindingValue::Unknown);
     }
 }

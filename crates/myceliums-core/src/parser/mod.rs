@@ -328,8 +328,31 @@ pub enum ExpressionStep {
     This,
     /// `super` keyword.
     Super,
-    /// Constructor call (e.g. `new Foo`).
+    /// Constructor call (e.g. `new Foo`), or a struct/composite literal
+    /// (`Foo { .. }`, `&Foo{}`): an instance of the named type.
     New(String),
+    /// A literal (string, number, list, map, ...): a value of a built-in
+    /// type, never an instance of a project class.
+    Literal,
+}
+
+/// How a call site names its target, as far as the extractor records it
+/// (#139). The resolver uses it to tell a call of a free function from a
+/// method call: `f()` never calls a method in Python, TypeScript, Go or Rust,
+/// and `x.f()` never calls a free function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CallForm {
+    /// The extractor does not say; the resolver matches by name alone.
+    #[default]
+    Unknown,
+    /// `f(...)`: a bare name, with no receiver or qualifier.
+    Bare,
+    /// `x.f(...)`, `X::f(...)`, `pkg.F(...)`: the receiver is in the chain.
+    Member,
+    /// `new X(...)`: the callee is the class.
+    New,
+    /// `super(...)`: the base class's constructor.
+    SuperConstructor,
 }
 
 /// A full expression chain with source location.
@@ -342,7 +365,7 @@ pub struct CallChain {
 }
 
 /// A detected function call from caller to callee.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CallReference {
     /// Name of the calling function.
     pub caller_name: String,
@@ -354,7 +377,69 @@ pub struct CallReference {
     pub chain: Option<Vec<ExpressionStep>>,
     /// File path where the call occurs (set during analysis accumulation).
     pub file: Option<String>,
+    /// How the call site names its target.
+    pub form: CallForm,
+    /// Number of arguments, where the extractor counts them (selects among
+    /// overloads).
+    pub arg_count: Option<u32>,
 }
+
+/// What a name in the code is bound to, for typing call receivers (#139): a
+/// parameter, a local variable or a field, with its declared type or the
+/// expression it was initialised from. No type inference: just what the
+/// declaration says.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TypeBinding {
+    /// The parameter, variable or field name.
+    pub name: String,
+    /// For a field (`self.repo`, `this.repo`, a Java, Rust or Go field): the
+    /// class or struct it belongs to. `None` for a parameter or a variable.
+    pub owner: Option<String>,
+    /// Lines the binding is visible in (1-based, inclusive): the function
+    /// for a parameter or local, the class for a declared field, the
+    /// assigning method for a field set by assignment, the whole file for a
+    /// module-level name.
+    pub scope: (u32, u32),
+    /// What it is bound to.
+    pub value: BindingValue,
+}
+
+/// The value side of a [`TypeBinding`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum BindingValue {
+    /// A declared type, as written (`Repository<User>`, `*store.Repo[*User]`,
+    /// `&mut Repo<User>`).
+    Type(String),
+    /// The expression it was assigned from, as chain steps (`User(...)` is
+    /// `[Ident(User), Call]`).
+    Expr(Vec<ExpressionStep>),
+    /// Bound, of unknown type: an untyped parameter, a closure, a loop
+    /// variable. It still shadows outer names.
+    Unknown,
+}
+
+/// What the call resolver needs to know about a definition beyond its
+/// symbol (#139): its declared return type and base types. Kept apart from
+/// [`SymbolMetadata`], which is indexed for search, for languages whose
+/// extractors do not record these there (Go, Java), and for Rust trait
+/// implementations, which are declared apart from their type.
+#[derive(Debug, Clone, PartialEq, Default)]
+pub struct DeclaredTypes {
+    /// The definition's name and first line, as in its [`ParsedSymbol`].
+    pub name: String,
+    pub line: u32,
+    /// Declared return type, as written (`(*Config, error)`, `Config`).
+    pub return_type: Option<String>,
+    /// Base classes, implemented interfaces, embedded structs.
+    pub bases: Vec<String>,
+    /// The definition named `name` is declared elsewhere, maybe in another
+    /// file (a Rust `impl Trait for Type`): `bases` apply to it and are
+    /// resolved where `line` is, in this file.
+    pub elsewhere: bool,
+}
+
+/// The whole file, as a [`TypeBinding::scope`].
+pub const FILE_SCOPE: (u32, u32) = (0, u32::MAX);
 
 /// An import statement linking a local name to a source module.
 #[derive(Debug, Clone)]
@@ -416,6 +501,11 @@ pub struct ParseResult {
     /// Variable aliases discovered during parsing (local_name, target_name).
     /// Used by the SSA resolver to track assignments like `handler = authenticate`.
     pub aliases: Vec<(String, String)>,
+    /// Parameters, locals and fields with what they are bound to (Python,
+    /// TypeScript/JavaScript, Go, Rust and Java).
+    pub bindings: Vec<TypeBinding>,
+    /// Return and base types of definitions (Go, Java).
+    pub declared: Vec<DeclaredTypes>,
 }
 
 impl SourceParser {
@@ -546,6 +636,7 @@ impl SourceParser {
                     line: c.line,
                     chain: c.chain,
                     file: None,
+                    ..Default::default()
                 })
                 .collect();
 
@@ -557,6 +648,8 @@ impl SourceParser {
                 imports,
                 rationales,
                 aliases: vec![],
+                bindings: vec![],
+                declared: vec![],
             }
         })
     }
@@ -576,6 +669,8 @@ impl SourceParser {
         let mut calls = Vec::new();
         let mut imports = Vec::new();
         let mut aliases = Vec::new();
+        let mut bindings = Vec::new();
+        let mut declared = Vec::new();
 
         match self.lang {
             SourceLanguage::TypeScript
@@ -587,27 +682,35 @@ impl SourceParser {
                 self.extract_ts_calls(root, source_bytes, &mut calls, None);
                 self.extract_ts_imports(root, source_bytes, &mut imports);
                 self.extract_ts_aliases(root, source_bytes, &mut aliases);
+                self.extract_ts_bindings(root, source_bytes, &mut bindings, None, None);
             }
             SourceLanguage::Python => {
                 self.extract_py_symbols(root, source_bytes, &mut symbols, None);
                 self.extract_py_calls(root, source_bytes, &mut calls, None);
                 self.extract_py_imports(root, source_bytes, &mut imports);
                 self.extract_py_aliases(root, source_bytes, &mut aliases);
+                self.extract_py_bindings(root, source_bytes, &mut bindings, None, None);
             }
             SourceLanguage::Go => {
                 self.extract_go_symbols(root, source_bytes, &mut symbols, None);
                 self.extract_go_calls(root, source_bytes, &mut calls, None);
                 self.extract_go_imports(root, source_bytes, &mut imports);
+                self.extract_go_bindings(root, source_bytes, &mut bindings, None);
+                self.extract_go_declared_types(root, source_bytes, &mut declared);
             }
             SourceLanguage::Rust => {
                 self.extract_rust_symbols(root, source_bytes, &mut symbols, None);
                 self.extract_rust_calls(root, source_bytes, &mut calls, None);
                 self.extract_rust_imports(root, source_bytes, &mut imports);
+                self.extract_rust_bindings(root, source_bytes, &mut bindings, None);
+                self.extract_rust_trait_impls(root, source_bytes, &mut declared);
             }
             SourceLanguage::Java => {
                 self.extract_java_symbols(root, source_bytes, &mut symbols, None);
                 self.extract_java_calls(root, source_bytes, &mut calls, None);
                 self.extract_java_imports(root, source_bytes, &mut imports);
+                self.extract_java_bindings(root, source_bytes, &mut bindings, None, None);
+                self.extract_java_declared_types(root, source_bytes, &mut declared);
             }
             SourceLanguage::CSharp => {
                 self.extract_csharp_symbols(root, source_bytes, &mut symbols, None);
@@ -704,6 +807,8 @@ impl SourceParser {
             imports,
             rationales,
             aliases,
+            bindings,
+            declared,
         }
     }
 }
