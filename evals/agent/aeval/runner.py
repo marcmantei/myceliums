@@ -23,6 +23,7 @@ import json
 import os
 import random
 import re
+import shlex
 import signal
 import subprocess
 import tempfile
@@ -97,12 +98,25 @@ class RunConfig:
     claude: str = "claude"
     myc: str = ""
     models_dir: str = ""
+    conditions: tuple[str, ...] = ("with", "without")
+    tasks_file: str = ""  # empty: the pilot's set (kept out of old configs)
+    extra_env: dict = field(default_factory=dict)  # `probe` only: the mock API
+    stop_after_s: int | None = None  # start no session after this many seconds
 
     def comparable(self) -> dict:
         """Fields that must not change when a run is resumed."""
         d = asdict(self)
-        for k in ("concurrency", "max_retries", "max_utilization", "max_sessions", "claude"):
+        for k in ("concurrency", "max_retries", "max_utilization", "max_sessions", "claude", "extra_env",
+                  "stop_after_s"):
             d.pop(k)
+        # Fields added after the pilot stay out of its config when unset, so
+        # the pilot's config.json still compares equal.
+        if tuple(d["conditions"]) == ("with", "without"):
+            d.pop("conditions")
+        else:
+            d["conditions"] = list(d["conditions"])
+        if not d["tasks_file"]:
+            d.pop("tasks_file")
         return d
 
 
@@ -209,7 +223,7 @@ class Runner:
             order = list(self.tasks)
             rng.shuffle(order)
             for task in order:
-                conds = list(config.CONDITIONS)
+                conds = list(self.cfg.conditions)
                 rng.shuffle(conds)
                 items.extend(WorkItem(task, c, rep) for c in conds)
         return items
@@ -226,14 +240,11 @@ class Runner:
             raise StopRun(f"{repo}: checkout HEAD {head} != pinned {self.repos[repo]['commit']}")
         return dst
 
-    def _prepare_mcp(self, item: WorkItem, tmp: Path) -> Path:
-        mcp_path = tmp / "mcp.json"
-        if item.condition == "without":
-            mcp_path.write_text(json.dumps({"mcpServers": {}}))
-            return mcp_path
-        template = self.cache / "index" / item.repo / "home" / ".myceliums"
+    def _copy_index(self, repo: str, tmp: Path) -> tuple[Path, Path]:
+        """A fresh copy of the prebuilt index: (data dir, home dir)."""
+        template = self.cache / "index" / repo / "home" / ".myceliums"
         if not (template / "repos.json").exists():
-            raise StopRun(f"no index for {item.repo}; run `agent_eval.py index` first")
+            raise StopRun(f"no index for {repo}; run `agent_eval.py index` first")
         data = tmp / "data"
         home = tmp / "home"
         config.copy_tree(template, data)
@@ -243,40 +254,121 @@ class Runner:
         for info in registry["repos"].values():
             # The index content is unchanged since indexing (same commit, fresh
             # copy); refreshing the timestamp keeps a cache-aware `analyze` call
-            # from re-indexing just because the index is older than an hour.
+            # (or the SessionStart hook) from re-indexing just because the
+            # index is older than an hour.
             info["analyzed_at"] = now
         (data / "repos.json").write_text(json.dumps(registry, indent=2))
-        server = {
-            "type": "stdio",
-            "command": self.cfg.myc,
-            "args": ["mcp"],
-            "env": {
-                "MYCELIUMS_DATA_DIR": str(data),
-                "HOME": str(home),
-                "FASTEMBED_CACHE_DIR": self.cfg.models_dir,
-                "RUST_LOG": "warn",
-            },
-        }
+        return data, home
+
+    def _myc_env(self, data: Path, home: Path) -> dict[str, str]:
+        return {"MYCELIUMS_DATA_DIR": str(data), "HOME": str(home),
+                "FASTEMBED_CACHE_DIR": self.cfg.models_dir, "RUST_LOG": "warn"}
+
+    def _write_wrapper(self, bin_dir: Path, env: dict[str, str], log_dir: Path) -> Path:
+        """``bin_dir/myc``: the real binary with the session's index.
+
+        The hooks that ``myc setup-claude`` installs call ``myc`` from PATH;
+        the session's PATH starts with ``bin_dir``, so they reach this script,
+        which pins ``MYCELIUMS_DATA_DIR`` and ``HOME`` to the per-session copy.
+        For the hook subcommands it also keeps the hook's input, output and
+        reason for silence (``MYC_HOOK_DEBUG``) in ``log_dir``; the agent sees
+        exactly what it would see without the log.
+        """
+        bin_dir.mkdir(parents=True, exist_ok=True)
+        log_dir.mkdir(parents=True, exist_ok=True)
+        exports = " ".join(f"{k}={shlex.quote(v)}" for k, v in env.items())
+        script = f"""#!/bin/sh
+export {exports}
+case "$1" in
+  hook-grep|session|format-hook)
+    f={shlex.quote(str(log_dir))}/"$1-$$"
+    cat > "$f.in"
+    MYC_HOOK_DEBUG=1 {shlex.quote(self.cfg.myc)} "$@" < "$f.in" > "$f.out" 2> "$f.err"
+    rc=$?
+    cat "$f.out"
+    exit $rc
+    ;;
+esac
+exec {shlex.quote(self.cfg.myc)} "$@"
+"""
+        wrapper = bin_dir / "myc"
+        wrapper.write_text(script)
+        wrapper.chmod(0o755)
+        return wrapper
+
+    def _setup_claude(self, item: WorkItem, workdir: Path, bin_dir: Path, env: dict[str, str],
+                      out_dir: Path) -> None:
+        """Run ``myc setup-claude --scope project`` in the working copy."""
+        variant = config.VARIANTS[item.condition]
+        cmd = [str(bin_dir / "myc"), "setup-claude", "--scope", "project", "--project", str(workdir)]
+        if not variant.agent:
+            cmd.append("--no-agent")
+        res = subprocess.run(cmd, env={**env, "PATH": f"{bin_dir}:{config.SYSTEM_PATH}"},
+                             capture_output=True, text=True, timeout=120)
+        (out_dir / "setup-claude.txt").write_text(res.stdout + res.stderr)
+        if res.returncode != 0:
+            raise StopRun(f"{item.run_id}: myc setup-claude failed: {res.stderr.strip()[:300]}")
+        # Keep what the agent will load, for the record.
+        snap = out_dir / "setup-files"
+        for rel in ("CLAUDE.md", ".mcp.json", ".claude/settings.json", f".claude/agents/{config.EXPLORER_AGENT}.md"):
+            src = workdir / rel
+            if src.exists():
+                (snap / rel).parent.mkdir(parents=True, exist_ok=True)
+                (snap / rel).write_text(src.read_text())
+        if not (workdir / "CLAUDE.md").exists() or not (workdir / ".claude" / "settings.json").exists():
+            raise StopRun(f"{item.run_id}: setup-claude did not write CLAUDE.md and .claude/settings.json")
+        if variant.agent != (workdir / ".claude" / "agents" / f"{config.EXPLORER_AGENT}.md").exists():
+            raise StopRun(f"{item.run_id}: code-explorer subagent file does not match variant {item.condition}")
+
+    def _prepare_mcp(self, item: WorkItem, tmp: Path, workdir: Path | None = None,
+                     out_dir: Path | None = None) -> tuple[Path, Path | None]:
+        """MCP config for the session, and the bin dir to put first on PATH."""
+        variant = config.VARIANTS[item.condition]
+        mcp_path = tmp / "mcp.json"
+        if not variant.mcp:
+            mcp_path.write_text(json.dumps({"mcpServers": {}}))
+            return mcp_path, None
+        data, home = self._copy_index(item.repo, tmp)
+        env = self._myc_env(data, home)
+        if variant.legacy:
+            command, bin_dir = self.cfg.myc, None
+        else:
+            bin_dir = tmp / "bin"
+            command = str(self._write_wrapper(bin_dir, env, (out_dir or tmp) / "hooks"))
+            if variant.setup_claude:
+                self._setup_claude(item, workdir, bin_dir, env, out_dir or tmp)
+        server = {"type": "stdio", "command": command, "args": ["mcp"], "env": env}
         mcp_path.write_text(json.dumps({"mcpServers": {config.MCP_SERVER_NAME: server}}, indent=2))
-        return mcp_path
+        return mcp_path, bin_dir
 
     def _command(self, item: WorkItem, mcp_path: Path) -> list[str]:
+        variant = config.VARIANTS[item.condition]
+        tools = list(config.BUILTIN_TOOLS)
         allowed = list(config.BUILTIN_TOOLS)
-        if item.condition == "with":
+        if variant.mcp:
             allowed.append(f"mcp__{config.MCP_SERVER_NAME}")
+        if variant.agent:
+            tools.append("Agent")
+            allowed.append(f"Agent({config.EXPLORER_AGENT})")
         cmd = [
             self.cfg.claude, "-p",
             "--output-format", "stream-json", "--verbose",
             "--model", self.cfg.model,
             "--max-turns", str(self.cfg.max_turns),
-            "--tools", ",".join(config.BUILTIN_TOOLS),
+            "--tools", ",".join(tools),
             "--allowedTools", ",".join(allowed),
+        ]
+        if variant.agent:
+            cmd += ["--disallowedTools", ",".join(f"Agent({a})" for a in config.BUILTIN_AGENTS)]
+        cmd += [
             "--permission-mode", "dontAsk",
             "--strict-mcp-config", "--mcp-config", str(mcp_path),
-            "--setting-sources", "",
+            "--setting-sources", "" if variant.legacy else "project",
             "--disable-slash-commands",
             "--no-session-persistence",
         ]
+        if not variant.legacy:
+            cmd.append("--include-hook-events")
         if self.cfg.effort:
             cmd += ["--effort", self.cfg.effort]
         return cmd
@@ -298,17 +390,19 @@ class Runner:
         self._append(self.ledger_path, {
             "label": self.cfg.label, "run_id": item.run_id, "attempt": attempt,
             "model": self.cfg.model, "started": dt.datetime.now(dt.timezone.utc).isoformat(),
+            **({"probe": True} if self.cfg.extra_env else {}),
         })
 
         tmp = Path(tempfile.mkdtemp(prefix="aeval-run-", dir=self.cache / "tmp"))
+        variant = config.VARIANTS[item.condition]
         try:
             workdir = self._prepare_workspace(item.repo)
-            mcp_path = self._prepare_mcp(item, tmp)
+            mcp_path, bin_dir = self._prepare_mcp(item, tmp, workdir, out_dir)
             (out_dir / "mcp.json").write_text(mcp_path.read_text())
-            extra = {}
+            extra = dict(self.cfg.extra_env)
             if self.cfg.tool_search is not None:
                 extra["ENABLE_TOOL_SEARCH"] = self.cfg.tool_search
-            env = config.session_env(extra)
+            env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
             cmd = self._command(item, mcp_path)
             (out_dir / "command.json").write_text(json.dumps(cmd, indent=1))
             started = time.time()
@@ -335,8 +429,16 @@ class Runner:
                    timed_out: bool, returncode: int | None) -> dict:
         t = parse_transcript(str(transcript))
         res = t.result or {}
-        problems = check_isolation(t.init, set(config.REQUIRED_TOOLS), item.condition == "with",
+        variant = config.VARIANTS[item.condition]
+        required = set(config.REQUIRED_TOOLS) | ({"Agent"} if variant.agent else set())
+        init = dict(t.init) if t.init else None
+        if init:  # the init event names the Agent tool by its old name, Task
+            init["tools"] = ["Agent" if x == "Task" else x for x in init.get("tools") or []]
+        problems = check_isolation(init, required, variant.mcp,
                                    set(config.BUILTIN_TOOLS) - set(config.REQUIRED_TOOLS))
+        if variant.agent and t.init and config.EXPLORER_AGENT not in (t.init.get("agents") or []):
+            problems.append(f"{config.EXPLORER_AGENT} subagent not loaded: {t.init.get('agents')}")
+        hooks = hook_stats(transcript.parent / "hooks")
         text = t.final_text
         answer = extract_answer(text) or extract_answer("\n".join(t.texts[-3:]))
         g = grade(item.task, answer, self.cfg.success_threshold)
@@ -390,6 +492,14 @@ class Runner:
             "mcp_tools_used": sorted(mcp_calls),
             "tool_errors": dict(t.tool_errors),
             "first_tool": t.tool_calls[0]["name"] if t.tool_calls else None,
+            # Variant matrix (#125): who made the calls, and what the hooks did.
+            "agent_calls": counts.get("Agent", 0),
+            "subagent_tool_calls": sum(1 for c in t.tool_calls if c.get("parent")),
+            "subagent_mcp_tool_calls": sum(1 for c in t.tool_calls
+                                           if c.get("parent") and c["name"].startswith(MCP_PREFIX)),
+            "first_mcp_call_index": next((i for i, c in enumerate(t.tool_calls)
+                                          if c["name"].startswith(MCP_PREFIX)), None),
+            **hooks,
             **usage,
             "first_turn_input_tokens": t.first_turn_input_tokens,
             "cost_usd": res.get("total_cost_usd"),
@@ -410,6 +520,12 @@ class Runner:
     # ---- loop ------------------------------------------------------------
     def _worker(self, sched: Scheduler) -> None:
         while True:
+            if self.cfg.stop_after_s is not None and time.time() - self.started_at > self.cfg.stop_after_s:
+                sched.stop(f"--stop-after {self.cfg.stop_after_s} s reached")
+            if (self.run_dir / "STOP").exists():
+                # `touch runs/<label>/STOP` ends a run cleanly: running sessions
+                # finish and are recorded, no new one starts.
+                sched.stop("STOP file present")
             item = sched.next()
             if item is None:
                 return
@@ -449,6 +565,7 @@ class Runner:
     def run(self, only_tasks: set[str] | None = None, reps: list[int] | None = None,
             conditions: list[str] | None = None) -> str | None:
         self._check_config()
+        self.started_at = time.time()
         (self.cache / "tmp").mkdir(parents=True, exist_ok=True)
         done = self.completed()
         items = [it for it in self.plan()
@@ -468,6 +585,36 @@ class Runner:
         if sched.stop_reason:
             print(f"STOPPED: {sched.stop_reason}", flush=True)
         return sched.stop_reason
+
+
+def hook_stats(log_dir: Path) -> dict:
+    """What the setup-claude hooks did in a session, from the wrapper's logs.
+
+    ``hook_grep_calls`` counts PreToolUse runs of ``myc hook-grep`` (one per
+    Grep call), ``hook_grep_hints`` the runs that added a hint to the agent's
+    context; ``hook_grep_silent_reasons`` tallies why the others stayed silent
+    (``MYC_HOOK_DEBUG``). ``session_hook`` is the SessionStart hook's output.
+    """
+    out = {"hook_grep_calls": 0, "hook_grep_hints": 0, "hook_grep_silent_reasons": {},
+           "session_hook": None, "format_hook_calls": 0}
+    if not log_dir.is_dir():
+        return out
+    reasons: dict[str, int] = {}
+    for f in sorted(log_dir.glob("hook-grep-*.out")):
+        out["hook_grep_calls"] += 1
+        if f.read_text().strip():
+            out["hook_grep_hints"] += 1
+        else:
+            err = f.with_suffix(".err")
+            why = err.read_text().strip() if err.exists() else ""
+            why = re.sub(r'".*?"|\[.*?\]|/\S+', "…", why.replace("myc hook-grep: silent: ", ""))[:80] or "?"
+            reasons[why] = reasons.get(why, 0) + 1
+    out["hook_grep_silent_reasons"] = dict(sorted(reasons.items()))
+    sessions = sorted(log_dir.glob("session-*.out"))
+    if sessions:
+        out["session_hook"] = sessions[0].read_text().strip()[:200]
+    out["format_hook_calls"] = len(list(log_dir.glob("format-hook-*.out")))
+    return out
 
 
 def _kill_group(proc: subprocess.Popen) -> None:

@@ -27,7 +27,8 @@ class Transcript:
     init: dict | None = None
     result: dict | None = None
     texts: list[str] = field(default_factory=list)
-    tool_calls: list[dict] = field(default_factory=list)  # {"id", "name", "input"}
+    tool_calls: list[dict] = field(default_factory=list)  # {"id", "name", "input", "parent"}
+    hook_events: list[dict] = field(default_factory=list)  # `--include-hook-events` lifecycle events
     tool_errors: Counter = field(default_factory=Counter)
     rate_limits: list[dict] = field(default_factory=list)
     first_turn_input_tokens: int | None = None  # prompt size of the first model call
@@ -105,6 +106,8 @@ def parse_transcript(path: str) -> Transcript:
             typ = ev.get("type")
             if typ == "system" and ev.get("subtype") == "init":
                 t.init = ev
+            elif typ == "system" and "hook" in str(ev.get("subtype", "")):
+                t.hook_events.append(ev)
             elif typ == "assistant":
                 usage = (ev.get("message") or {}).get("usage") or {}
                 if t.first_turn_input_tokens is None and usage:
@@ -114,8 +117,10 @@ def parse_transcript(path: str) -> Transcript:
                     if block.get("type") == "text" and block.get("text"):
                         t.texts.append(block["text"])
                     elif block.get("type") == "tool_use":
+                        # parent_tool_use_id is set on a subagent's messages:
+                        # the Agent call that started it.
                         call = {"id": block.get("id"), "name": block.get("name"),
-                                "input": block.get("input")}
+                                "input": block.get("input"), "parent": ev.get("parent_tool_use_id")}
                         t.tool_calls.append(call)
                         by_id[call["id"]] = call["name"]
             elif typ == "user":

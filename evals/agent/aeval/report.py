@@ -29,6 +29,9 @@ COMPACT_FIELDS = [
     "total_input_tokens", "first_turn_input_tokens", "output_tokens", "cost_usd", "duration_ms",
     "duration_api_ms",
     "wall_s", "model", "models_used", "claude_version", "finished_at",
+    # variant matrix (#125)
+    "agent_calls", "subagent_tool_calls", "subagent_mcp_tool_calls", "first_mcp_call_index",
+    "hook_grep_calls", "hook_grep_hints", "hook_grep_silent_reasons", "session_hook", "format_hook_calls",
 ]
 
 METRICS = [
@@ -88,7 +91,7 @@ def export(label: str, extra_meta: dict) -> Path:
                  "n_gold": len(t["gold"]), "question": t["question"]} for t in config.load_tasks()]
     (out_dir / "tasks_snapshot.json").write_text(json.dumps(snapshot, indent=1, ensure_ascii=False) + "\n")
     meta = dict(extra_meta)
-    meta["tasks_sha256"] = config.sha256_file(config.TASKS_FILE)
+    meta["tasks_sha256"] = config.sha256_file(config.tasks_file())
     meta["attempts_total"] = sum(attempts.values())
     meta["runs_final"] = len(rows)
     meta["retried_runs"] = sorted(k for k, v in attempts.items() if v > 1)
@@ -321,7 +324,12 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
 
 
 def write_report(label: str, check: bool = False) -> bool:
-    text, summary = render(label)
+    meta = config.load_json(config.RESULTS_DIR / label / "meta.json")
+    if meta.get("conditions") and set(meta["conditions"]) != {"with", "without"}:
+        from .report_variants import render as render_variants
+        text, summary = render_variants(label)
+    else:
+        text, summary = render(label)
     res_dir = config.RESULTS_DIR / label
     report_path = res_dir / "REPORT.md"
     summary_text = json.dumps(summary, indent=2, sort_keys=True) + "\n"
