@@ -7,10 +7,54 @@ use super::{
 use myceliums_storage::{SymbolKind, SymbolMetadata, Visibility};
 use tree_sitter::Node;
 
+/// Item kinds an attribute such as `#[cfg(test)]` can be written on.
+const RUST_ITEMS: [&str; 12] = [
+    "function_item",
+    "function_signature_item",
+    "struct_item",
+    "enum_item",
+    "trait_item",
+    "impl_item",
+    "mod_item",
+    "const_item",
+    "static_item",
+    "type_item",
+    "macro_definition",
+    "union_item",
+];
+
 impl SourceParser {
     // --- Rust ---
 
     pub(super) fn extract_rust_symbols(
+        &self,
+        node: Node,
+        source: &[u8],
+        symbols: &mut Vec<ParsedSymbol>,
+        parent: Option<&str>,
+    ) {
+        // An item compiled for tests only — `#[cfg(test)]` on a module,
+        // function, `impl`, type or constant — is test code, and so is
+        // everything extracted from inside it (#146).
+        let first = symbols.len();
+        self.extract_rust_item(node, source, symbols, parent);
+        if RUST_ITEMS.contains(&node.kind())
+            && symbols.len() > first
+            && self
+                .rust_attributes(node, source)
+                .iter()
+                .any(|a| classify::is_rust_cfg_test(a))
+        {
+            for symbol in &mut symbols[first..] {
+                symbol
+                    .metadata
+                    .get_or_insert_with(SymbolMetadata::default)
+                    .test = true;
+            }
+        }
+    }
+
+    fn extract_rust_item(
         &self,
         node: Node,
         source: &[u8],
@@ -100,13 +144,6 @@ impl SourceParser {
                 }
             }
             "mod_item" => {
-                // A `#[cfg(test)]` module is test code, and so is everything
-                // in it (#146).
-                let cfg_test = self
-                    .rust_attributes(node, source)
-                    .iter()
-                    .any(|a| classify::is_rust_cfg_test(a));
-                let first = symbols.len();
                 if let Some(name_node) = node.child_by_field_name("name") {
                     symbols.push(ParsedSymbol {
                         name: self.node_text(name_node, source).to_string(),
@@ -118,19 +155,6 @@ impl SourceParser {
                         parent_name: parent.map(|s| s.to_string()),
                         metadata: None,
                     });
-                }
-                if cfg_test {
-                    let cursor = &mut node.walk();
-                    for child in node.children(cursor) {
-                        self.extract_rust_symbols(child, source, symbols, parent);
-                    }
-                    for symbol in &mut symbols[first..] {
-                        symbol
-                            .metadata
-                            .get_or_insert_with(SymbolMetadata::default)
-                            .test = true;
-                    }
-                    return;
                 }
             }
             "const_item" => {
@@ -1057,6 +1081,20 @@ mod real {
     pub fn shipped() {}
 }
 
+pub struct Server;
+
+#[cfg(test)]
+fn test_only_helper() {}
+
+#[cfg(test)]
+impl Server {
+    fn for_tests() -> Self { Server }
+}
+
+impl Server {
+    pub fn start(&self) {}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1090,10 +1128,12 @@ mod tests {
             "Fixture",
             "build",
             "checks",
+            "test_only_helper",
+            "for_tests",
         ] {
             assert!(is_test(name), "{name} should be test code");
         }
-        for name in ["product", "real", "shipped"] {
+        for name in ["product", "real", "shipped", "Server", "start"] {
             assert!(!is_test(name), "{name} should be product code");
         }
     }

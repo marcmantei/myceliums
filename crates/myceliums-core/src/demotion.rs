@@ -11,8 +11,8 @@
 //! the same in every mode — BM25 scores, cosine similarities, fusion scores
 //! and cross-encoder logits live on unrelated scales. A demoted symbol at
 //! position `p` (1-based) is placed as if it were at `p / weight`: with weight
-//! 0.1 a test at position 1 is placed at 10: it stays on the first page of
-//! ten results, behind the nine best product symbols.
+//! 0.25 a test at position 2 is placed at 8: product symbols ranked 3 to 7
+//! move ahead of it, the one ranked 8 and everything below stay behind.
 //! Nothing is removed: a test that clearly beats the product code still
 //! shows, only later, and `TestRanking::Include` turns the reordering off.
 //! The weight was tuned on the development split of the real-repository set
@@ -22,15 +22,15 @@
 use serde::{Deserialize, Serialize};
 
 /// Rank weight of a demoted symbol by default: a test at position `p` is
-/// placed as if at `p / DEFAULT_TEST_WEIGHT`.
+/// placed as if at `p / DEFAULT_TEST_WEIGHT` = `4p`, so it lands no lower
+/// than position `4p` — a test ranked 1st at 4th at worst, 2nd at 8th, 3rd at
+/// 12th.
 ///
-/// The smallest weight that keeps the best-ranked test on the first page of
-/// ten results — the smallest default page of any search surface — so a test
-/// that matches best is always still shown. The real-repository labels name
-/// the code under test and almost never a test, so the dev-split sweep over
-/// {1, 0.5, 0.33, 0.25, 0.2, 0.1} (`real-repo-eval`) can only favour this
-/// bound; the held-out split confirms the gain over no demotion (#146).
-pub const DEFAULT_TEST_WEIGHT: f64 = 0.1;
+/// Chosen on the real-repository set as the strongest weight that keeps the
+/// test-seeking queries' hit@10 at 80% of no demotion while improving the
+/// regular queries (`real-repo-eval`, #146; numbers in
+/// `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`).
+pub const DEFAULT_TEST_WEIGHT: f64 = 0.25;
 
 /// The furthest a ranking is fetched past the requested length to make room
 /// for demoted symbols: `limit / weight`, at most this many times `limit`.
@@ -146,6 +146,12 @@ impl TestPolicy {
         }
         let depth = (limit as f64 / self.weight()).ceil() as usize;
         depth.clamp(limit, limit.saturating_mul(MAX_DEPTH_FACTOR))
+    }
+
+    /// Whether this policy moves a symbol down — a test under `demote`,
+    /// product code under `prefer` — for explain output.
+    pub fn demotes(&self, is_test: bool) -> bool {
+        !self.is_neutral() && self.moves(is_test)
     }
 
     /// Whether this policy moves a symbol of the given class down.

@@ -31,6 +31,35 @@ fn unclassified_notice(graph: &Graph<'_>, tests: &TestPolicy) -> Option<&'static
     )
 }
 
+/// With `explain`, the line naming the rows of a page that `tests` moved down
+/// (#146), if any.
+fn demoted_rows<'a>(
+    explain: bool,
+    tests: &TestPolicy,
+    page: impl Iterator<Item = &'a myceliums_storage::CodeSymbol>,
+) -> Option<String> {
+    if !explain {
+        return None;
+    }
+    let rows: Vec<String> = page
+        .enumerate()
+        .filter(|(_, symbol)| tests.demotes(symbol.is_test()))
+        .map(|(i, _)| (i + 1).to_string())
+        .collect();
+    let class = match tests.ranking {
+        myceliums_core::TestRanking::Prefer => "product code",
+        _ => "test code",
+    };
+    (!rows.is_empty()).then(|| {
+        format!(
+            "Demoted as {class} (tests={}, a symbol at position p placed at p / {}): rows {}.",
+            tests.ranking.as_str(),
+            tests.weight,
+            rows.join(", ")
+        )
+    })
+}
+
 /// The embedding model recorded for an index could not be loaded: that is
 /// fixable (keyword search still works; re-indexing picks a usable model).
 fn embedder_error(e: impl std::fmt::Display) -> ToolError {
@@ -314,6 +343,7 @@ impl MyceliumsMcp {
         let symbols = graph.symbols().await?;
         let results = myceliums_core::search_symbols_ranked(&symbols, query, explain, &tests);
         let page = page.take(results);
+        let demoted = demoted_rows(explain, &tests, page.items.iter().map(|r| &r.symbol));
         let items: Vec<SearchResultItem> = page
             .items
             .into_iter()
@@ -330,7 +360,10 @@ impl MyceliumsMcp {
             })
             .collect();
         Ok(with_notice(
-            format::framed_results(query, &items, format::format_search_results),
+            with_notice(
+                format::framed_results(query, &items, format::format_search_results),
+                demoted.as_deref(),
+            ),
             page.notice.as_deref(),
         ))
     }
@@ -441,6 +474,7 @@ impl MyceliumsMcp {
         }
 
         let page = page.take_open(results);
+        let demoted = demoted_rows(explain, &tests, page.items.iter().map(|r| &r.symbol));
         let items: Vec<HybridSearchResultItem> = page
             .items
             .into_iter()
@@ -465,7 +499,10 @@ impl MyceliumsMcp {
         Ok(format::with_index_warning(
             warning,
             with_notice(
-                format::framed_results(query, &items, format::format_hybrid_results),
+                with_notice(
+                    format::framed_results(query, &items, format::format_hybrid_results),
+                    demoted.as_deref(),
+                ),
                 page.notice.as_deref(),
             ),
         ))

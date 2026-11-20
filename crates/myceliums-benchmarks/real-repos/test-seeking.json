@@ -1,0 +1,605 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "2026-11-20",
+  "repos": [
+    {
+      "name": "requests",
+      "url": "https://github.com/psf/requests",
+      "tag": "v2.34.2",
+      "commit": "6e83187b8feb273ed4c6cdab5efd8d54901dfab3",
+      "language": "Python",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "flask",
+      "url": "https://github.com/pallets/flask",
+      "tag": "3.1.3",
+      "commit": "22d924701a6ae2e4cd01e9a15bbaf3946094af65",
+      "language": "Python",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "gin",
+      "url": "https://github.com/gin-gonic/gin",
+      "tag": "v1.12.0",
+      "commit": "73726dc606796a025971fe451f0aa6f1b9b847f6",
+      "language": "Go",
+      "license": "MIT"
+    },
+    {
+      "name": "hono",
+      "url": "https://github.com/honojs/hono",
+      "tag": "v4.13.18",
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "language": "TypeScript",
+      "license": "MIT"
+    }
+  ],
+  "queries": [
+    {
+      "id": "requests-conceptual-tests-should-bypass-proxies",
+      "repo": "requests",
+      "query": "which tests cover should_bypass_proxies and no_proxy handling",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "test_should_bypass_proxies",
+          "why": "Parametrised over URLs and no_proxy values; asserts should_bypass_proxies's answer for each."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "test_should_bypass_proxies_pass_only_hostname",
+          "why": "Checks that only the hostname reaches proxy_bypass."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "test_should_bypass_proxies_no_proxy",
+          "why": "Passes no_proxy explicitly and checks the bypass decision."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "test_should_bypass_proxies_no_proxy_domain_boundary",
+          "why": "Checks that a no_proxy domain matches only on a domain boundary."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "test_should_bypass_proxies_win_registry",
+          "why": "Checks the Windows registry proxy override path."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "test_should_bypass_proxies_win_registry_bad_values",
+          "why": "Checks malformed Windows registry values."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "test_should_bypass_proxies_win_registry_ProxyOverride_value",
+          "why": "Checks the ProxyOverride registry value parsing."
+        }
+      ],
+      "rationale": "Every test function named for should_bypass_proxies in tests/test_utils.py. TestUtils' bypass-keyword tests exercise no_proxy too but test get_environ_proxies; left out.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-tests-rewind-body",
+      "repo": "requests",
+      "query": "tests for rewinding a request body before a redirect",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_rewind_body",
+          "why": "Reads the prepared body, calls rewind_body and checks the data can be read again."
+        },
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_rewind_partially_read_body",
+          "why": "Rewinds a body that was read part-way before preparing."
+        },
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_rewind_body_no_seek",
+          "why": "Expects UnrewindableBodyError for a body without seek."
+        },
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_rewind_body_failed_seek",
+          "why": "Expects UnrewindableBodyError when seek raises."
+        },
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_rewind_body_failed_tell",
+          "why": "Expects UnrewindableBodyError when tell failed at prepare time."
+        }
+      ],
+      "rationale": "The five TestRequests methods that call requests.utils.rewind_body.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-tests-cookies-on-redirect",
+      "repo": "requests",
+      "query": "test that cookies are sent along when a session follows a redirect",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_cookie_sent_on_redirect",
+          "why": "Sets a cookie, follows redirect/1 and asserts the Cookie header reached the target."
+        },
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_cookielib_cookiejar_on_redirect",
+          "why": "Checks resolve_redirects merges a plain cookielib jar on redirect (GH #3579)."
+        }
+      ],
+      "rationale": "The two tests whose subject is cookies across a redirect hop.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-tests-netrc",
+      "repo": "requests",
+      "query": "tests for reading credentials from a netrc file",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestGetNetrcAuth.test_works",
+          "why": "Writes a netrc file and checks get_netrc_auth returns its login."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestGetNetrcAuth.test_not_vulnerable_to_bad_url_parsing",
+          "why": "Checks a crafted URL does not pick another host's credentials."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestGetNetrcAuth.test_empty_default_credentials_ignored",
+          "why": "Checks an empty default entry yields no auth."
+        },
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_basicauth_with_netrc",
+          "why": "Checks a request picks up netrc credentials and explicit auth overrides them."
+        },
+        {
+          "file": "tests/test_requests.py",
+          "symbol": "TestRequests.test_basicauth_with_netrc_leak",
+          "why": "Checks netrc credentials are not sent to a host smuggled in the URL."
+        }
+      ],
+      "rationale": "The TestGetNetrcAuth tests and the two TestRequests netrc tests. get_netrc_auth_mock is a fixture helper, not a test; left out.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "requests-conceptual-tests-super-len",
+      "repo": "requests",
+      "query": "tests for super_len computing the length of a request body",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_io_streams",
+          "why": "Checks super_len on StringIO/BytesIO streams, empty and filled."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_super_len_correctly_calculates_len_of_partially_read_file",
+          "why": "Checks the remaining length of a partly read file."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_super_len_handles_files_raising_weird_errors_in_tell",
+          "why": "Checks super_len survives tell() raising."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_super_len_tell_ioerror",
+          "why": "Checks an IOError from tell yields 0."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_super_len_with__len__",
+          "why": "Checks objects with __len__."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_super_len_with_no__len__",
+          "why": "Checks objects with a len attribute instead."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_super_len_with_tell",
+          "why": "Checks the tell-based path."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_super_len_with_fileno",
+          "why": "Checks the fileno/fstat path."
+        },
+        {
+          "file": "tests/test_utils.py",
+          "symbol": "TestSuperLen.test_super_len_with_no_matches",
+          "why": "Checks an object super_len cannot measure."
+        }
+      ],
+      "rationale": "Every method of TestSuperLen.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-tests-url-for",
+      "repo": "flask",
+      "query": "tests for url_for with anchors and URL schemes",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_helpers.py",
+          "symbol": "TestUrlFor.test_url_for_with_anchor",
+          "why": "Checks _anchor is appended."
+        },
+        {
+          "file": "tests/test_helpers.py",
+          "symbol": "TestUrlFor.test_url_for_with_scheme",
+          "why": "Checks _scheme with _external."
+        },
+        {
+          "file": "tests/test_helpers.py",
+          "symbol": "TestUrlFor.test_url_for_with_scheme_not_external",
+          "why": "Checks _scheme without _external raises or builds external."
+        },
+        {
+          "file": "tests/test_helpers.py",
+          "symbol": "TestUrlFor.test_url_for_with_alternating_schemes",
+          "why": "Checks schemes do not leak between calls."
+        },
+        {
+          "file": "tests/test_helpers.py",
+          "symbol": "TestUrlFor.test_url_for_with_self",
+          "why": "Checks a view argument named self."
+        }
+      ],
+      "rationale": "The TestUrlFor methods about anchors, schemes and arguments.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-tests-nested-blueprints",
+      "repo": "flask",
+      "query": "tests for nested blueprints and their URL prefixes",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_blueprints.py",
+          "symbol": "test_nested_blueprint",
+          "why": "Registers blueprints inside blueprints and checks routes and error handlers."
+        },
+        {
+          "file": "tests/test_blueprints.py",
+          "symbol": "test_nested_callback_order",
+          "why": "Checks before/after/teardown callback order across nesting levels."
+        },
+        {
+          "file": "tests/test_blueprints.py",
+          "symbol": "test_nesting_url_prefixes",
+          "why": "Checks url_prefix composition of parent and child."
+        },
+        {
+          "file": "tests/test_blueprints.py",
+          "symbol": "test_nesting_subdomains",
+          "why": "Checks subdomain composition of nested blueprints."
+        }
+      ],
+      "rationale": "The four tests in test_blueprints.py about nesting.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-tests-teardown-request",
+      "repo": "flask",
+      "query": "tests that teardown_request handlers run, also after errors",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_basic.py",
+          "symbol": "test_teardown_request_handler",
+          "why": "Checks a teardown_request callback runs."
+        },
+        {
+          "file": "tests/test_basic.py",
+          "symbol": "test_teardown_request_handler_debug_mode",
+          "why": "Same in debug mode."
+        },
+        {
+          "file": "tests/test_basic.py",
+          "symbol": "test_teardown_request_handler_error",
+          "why": "Checks teardown callbacks receive the exception."
+        },
+        {
+          "file": "tests/test_reqctx.py",
+          "symbol": "test_teardown_on_pop",
+          "why": "Checks teardown runs when the request context is popped."
+        },
+        {
+          "file": "tests/test_reqctx.py",
+          "symbol": "test_teardown_with_previous_exception",
+          "why": "Checks teardown with an exception raised earlier."
+        },
+        {
+          "file": "tests/test_reqctx.py",
+          "symbol": "test_teardown_with_handled_exception",
+          "why": "Checks teardown after a handled exception."
+        }
+      ],
+      "rationale": "Test functions about request teardown. The nested teardown_request callbacks they define are fixtures, not tests; left out.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-tests-session-cookie-attributes",
+      "repo": "flask",
+      "query": "tests for session cookie attributes such as domain, Secure and SameSite",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_basic.py",
+          "symbol": "test_session_using_session_settings",
+          "why": "Sets SESSION_COOKIE_DOMAIN/HTTPONLY/SECURE/PATH and checks the Set-Cookie header."
+        },
+        {
+          "file": "tests/test_basic.py",
+          "symbol": "test_session_using_samesite_attribute",
+          "why": "Checks invalid, None, Strict and Lax SameSite values."
+        }
+      ],
+      "rationale": "The two tests that assert the session cookie's attributes.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "flask-conceptual-tests-json-key-sorting",
+      "repo": "flask",
+      "query": "test that JSON responses sort their keys",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "tests/test_json.py",
+          "symbol": "test_json_key_sorting",
+          "why": "Checks jsonify output key order with sort_keys."
+        }
+      ],
+      "rationale": "One test is about key sorting.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-tests-basic-auth-proxy",
+      "repo": "gin",
+      "query": "tests for basic auth on a proxy returning 407",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "auth_test.go",
+          "symbol": "TestBasicAuthForProxySucceed",
+          "why": "Checks BasicAuthForProxy accepts valid Proxy-Authorization."
+        },
+        {
+          "file": "auth_test.go",
+          "symbol": "TestBasicAuthForProxy407",
+          "why": "Checks a 407 with Proxy-Authenticate on bad credentials."
+        }
+      ],
+      "rationale": "The two tests of BasicAuthForProxy.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-tests-client-ip",
+      "repo": "gin",
+      "query": "which tests cover ClientIP with forwarded headers",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextClientIP",
+          "why": "Walks X-Forwarded-For, X-Real-IP, trusted proxies and platform headers through ClientIP."
+        },
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextClientIPWithMultipleHeaders",
+          "why": "Checks several forwarded headers."
+        },
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextClientIPWithSingleHeader",
+          "why": "Checks a single forwarded header."
+        }
+      ],
+      "rationale": "The three TestContextClientIP* tests.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-tests-cookies",
+      "repo": "gin",
+      "query": "tests for setting and reading cookies on the context",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextSetCookie",
+          "why": "Checks the Set-Cookie header written by SetCookie."
+        },
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextSetCookiePathEmpty",
+          "why": "Checks an empty path defaults to /."
+        },
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextGetCookie",
+          "why": "Checks Cookie reads a request cookie."
+        },
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextSetCookieData",
+          "why": "Checks SetCookieData with http.Cookie fields."
+        }
+      ],
+      "rationale": "The cookie tests in context_test.go.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-tests-custom-recovery",
+      "repo": "gin",
+      "query": "tests for a custom recovery handler after a panic",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "recovery_test.go",
+          "symbol": "TestCustomRecoveryWithWriter",
+          "why": "Checks CustomRecoveryWithWriter calls the handler and writes the log."
+        },
+        {
+          "file": "recovery_test.go",
+          "symbol": "TestCustomRecovery",
+          "why": "Checks CustomRecovery's handler sets the status."
+        },
+        {
+          "file": "recovery_test.go",
+          "symbol": "TestRecoveryWithWriterWithCustomRecovery",
+          "why": "Checks RecoveryWithWriter with a custom handler."
+        }
+      ],
+      "rationale": "The three tests of the custom-recovery entry points; the plain panic tests use the default handler.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "gin-conceptual-tests-abort-with-status",
+      "repo": "gin",
+      "query": "tests for aborting a request with a status and a JSON body",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextAbortWithStatus",
+          "why": "Checks AbortWithStatus sets the code and aborts."
+        },
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextAbortWithStatusJSON",
+          "why": "Checks AbortWithStatusJSON writes JSON."
+        },
+        {
+          "file": "context_test.go",
+          "symbol": "TestContextAbortWithStatusPureJSON",
+          "why": "Checks AbortWithStatusPureJSON writes unescaped JSON."
+        }
+      ],
+      "rationale": "The AbortWithStatus* tests.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-tests-basic-auth",
+      "repo": "hono",
+      "query": "tests for the basic auth middleware",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/middleware/basic-auth/index.test.ts",
+          "symbol": "app",
+          "why": "The Hono app the test file mounts the middleware on; the file's tests drive it."
+        }
+      ],
+      "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/basic-auth/index.test.ts.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-tests-cors",
+      "repo": "hono",
+      "query": "tests for the CORS middleware",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/middleware/cors/index.test.ts",
+          "symbol": "app",
+          "why": "The Hono app the test file mounts the middleware on; the file's tests drive it."
+        }
+      ],
+      "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/cors/index.test.ts.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-tests-jwt",
+      "repo": "hono",
+      "query": "tests for the JWT middleware",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/middleware/jwt/index.test.ts",
+          "symbol": "app",
+          "why": "The Hono app the test file mounts the middleware on; the file's tests drive it."
+        }
+      ],
+      "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/jwt/index.test.ts.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-tests-cache",
+      "repo": "hono",
+      "query": "tests for the cache middleware",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/middleware/cache/index.test.ts",
+          "symbol": "app",
+          "why": "The Hono app the test file mounts the middleware on; the file's tests drive it."
+        },
+        {
+          "file": "src/middleware/cache/index.test.ts",
+          "symbol": "MockCache",
+          "why": "The test double for the Cache API the cache middleware tests run against."
+        }
+      ],
+      "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/cache/index.test.ts.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    },
+    {
+      "id": "hono-conceptual-tests-csrf",
+      "repo": "hono",
+      "query": "tests for the CSRF protection middleware",
+      "intent": "conceptual",
+      "relevant": [
+        {
+          "file": "src/middleware/csrf/index.test.ts",
+          "symbol": "app",
+          "why": "The Hono app the test file mounts the middleware on; the file's tests drive it."
+        },
+        {
+          "file": "src/middleware/csrf/index.test.ts",
+          "symbol": "simplePostHandler",
+          "why": "The handler the CSRF tests post to."
+        },
+        {
+          "file": "src/middleware/csrf/index.test.ts",
+          "symbol": "buildSimplePostRequestData",
+          "why": "Builds the cross-origin requests the CSRF tests send."
+        }
+      ],
+      "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/csrf/index.test.ts.",
+      "labelled_by": "agent:claude",
+      "reviewed_by": null
+    }
+  ]
+}

@@ -693,6 +693,8 @@ myc serve --port 3000 --repo my-project
 The server listens on `127.0.0.1` only and rejects requests whose `Host` is
 not loopback (DNS rebinding) or whose `Origin` is a foreign site, so other web
 pages cannot call its API (for example `POST /api/llm/config`).
+Its search endpoints still rank test code like product code; unlike
+`myc search` and `search_code` they do not demote it yet (#150).
 
 ### `myc email`
 

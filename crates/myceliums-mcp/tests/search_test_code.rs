@@ -227,3 +227,52 @@ async fn an_unclassified_index_says_tests_rank_like_product_code() {
         "{included}"
     );
 }
+
+/// The symbol names of the result rows, best first.
+fn names(text: &str) -> Vec<String> {
+    text.lines()
+        .filter(|line| line.contains(".py"))
+        .filter_map(|line| line.split_whitespace().nth(1).map(str::to_string))
+        .collect()
+}
+
+/// Pages of a demoted ranking partition it: every symbol once, in order.
+#[tokio::test]
+async fn pages_partition_the_demoted_ranking() {
+    let client = connect().await;
+    let page = |limit: usize, offset: usize| {
+        json!({
+            "query": "parse_cookie_header",
+            "mode": "keyword",
+            "repo_id": "ranking",
+            "limit": limit,
+            "offset": offset,
+        })
+    };
+    let all = names(&search(&client, page(20, 0)).await);
+    assert!(all.len() >= 5, "{all:?}");
+    let mut paged = Vec::new();
+    for offset in (0..all.len()).step_by(2) {
+        paged.extend(names(&search(&client, page(2, offset)).await));
+    }
+    assert_eq!(paged, all);
+}
+
+/// With `explain`, the rows test code was moved down from are named.
+#[tokio::test]
+async fn explain_names_the_demoted_rows() {
+    let client = connect().await;
+    let args = |tests: &str| {
+        json!({
+            "query": "parse_cookie_header",
+            "mode": "keyword",
+            "repo_id": "ranking",
+            "explain": true,
+            "tests": tests,
+        })
+    };
+    let demoted = search(&client, args("demote")).await;
+    assert!(demoted.contains("Demoted as test code"), "{demoted}");
+    let included = search(&client, args("include")).await;
+    assert!(!included.contains("Demoted as"), "{included}");
+}

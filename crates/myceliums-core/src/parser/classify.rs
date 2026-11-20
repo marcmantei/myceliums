@@ -6,92 +6,126 @@
 //!
 //! - **The file's path**, by the conventions of the languages the parser
 //!   reads ([`is_test_path`]) — applied to every symbol of the file.
-//! - **Markers inside a file** that is not a test file by path: in Rust, a
-//!   `#[cfg(test)]` module and everything in it, and a function carrying a
-//!   test attribute (`#[test]`, `#[tokio::test]`, …). The Rust extractor sets
+//! - **Markers inside a Rust file** that is not a test file by path: an item
+//!   compiled for tests only (`#[cfg(test)]` on a module, function, `impl` or
+//!   type — with everything inside it) and a function carrying a test
+//!   attribute (`#[test]`, `#[tokio::test]`, …). The Rust extractor sets
 //!   those ([`is_rust_test_attribute`], [`is_rust_cfg_test`]).
 //!
-//! Benchmarks, examples and test *helpers* shipped with the product (a
-//! `testing` module, Flask's `testing.py`, hono's `src/helper/testing/`) are
-//! not tests: they are part of what a user imports.
+//! **The rule is conservative: only unambiguous test conventions count.** A
+//! name that is a test in one ecosystem and product code in another is left
+//! as product code unless its position settles it: `test/` only at the
+//! repository root or directly under `src/` (Maven/Gradle), so Django's
+//! `django/test/` package stays product code; `spec/` only at the root and
+//! `*_spec` only for Ruby; camel-case source sets only directly under `src/`
+//! (`src/androidTest/`). Test *helpers* that ship with the product — a
+//! `testing` module, Flask's `testing.py`, hono's `src/helper/testing/`, a
+//! `test-utils` package, `test_utils.py` — and benchmarks and examples are
+//! product code: they are part of what a user imports or runs.
 
-/// Directory names that hold tests, compared case-insensitively.
-const TEST_DIRS: [&str; 9] = [
-    "test",
+/// Directory names that hold tests wherever they appear, compared
+/// case-insensitively (`Tests/` is SwiftPM's).
+const TEST_DIRS: [&str; 6] = [
     "tests",
     "__tests__",
     "__test__",
     "__mocks__",
     "testdata",
-    "spec",
-    "specs",
     "e2e",
+];
+
+/// Python files named `test_*` that by convention hold helpers, not tests.
+const PYTHON_HELPERS: [&str; 6] = [
+    "test_utils",
+    "test_util",
+    "test_helpers",
+    "test_helper",
+    "test_support",
+    "test_settings",
 ];
 
 /// Whether a file at `path` (repository-relative, `/`- or `\`-separated)
 /// holds test code by its language's convention:
 ///
-/// - **a test directory** anywhere on the path: `test/`, `tests/`,
-///   `__tests__/`, `__mocks__/`, `testdata/`, `spec/`, `e2e/`, a name ending
-///   in `-tests`/`_tests`/`-test`/`_test` or starting with `test-`/`test_`
-///   (`runtime-tests/`, `integration_tests/`), or a camel-case source set or
-///   test target (`androidTest/`, `commonTest/`, `MyAppTests/`) — which also
-///   covers Maven/Gradle's `src/test/java`;
-/// - **a test file name**: `*.test.*`, `*.spec.*`, `*-test.*` and
-///   `*-spec.*` (JavaScript, TypeScript), `*_test.*` (Go, Python, Dart, C++, Elixir),
-///   `*_unittest.*`, `*_spec.*` (Ruby), `test_*.*` (pytest, C),
-///   `conftest.py`, and for the JVM, .NET, Swift and PHP a class file named
-///   `*Test`, `*Tests` or `*Spec` (`UserServiceTest.java`).
+/// - **a test directory**: `tests/`, `__tests__/`, `__mocks__/`,
+///   `testdata/` or `e2e/` anywhere; a name ending in `-tests` or `_tests`
+///   (`runtime-tests/`, `integration_tests/`); `test/` at the root or directly
+///   under `src/` (`src/test/java`); `spec/` at the root; a Gradle/Kotlin
+///   test source set directly under `src/` (`src/androidTest/`,
+///   `src/commonTest/`, `src/testFixtures/`); a .NET test project
+///   (`MyApp.Tests/`, `MyApp.UnitTests/`);
+/// - **a test file name**: `*.test.*`, `*.spec.*`, `*.test-d.ts`,
+///   `*.e2e-spec.*` (JavaScript, TypeScript); `*_test.*` (Go, Python, Dart,
+///   Elixir, Ruby, C++) and `*_unittest.*`; Python's `test_*.py` (except
+///   helper modules such as `test_utils.py`), `tests.py` (Django) and
+///   `conftest.py`; Ruby's `*_spec.rb`; Rust's `tests.rs` (an out-of-line
+///   `mod tests;`); and for Java, Kotlin, Scala, Groovy, C#, Swift, PHP and
+///   Objective-C a class file named `*Test` or `*Tests` (`*Spec` for Scala,
+///   Groovy and Kotlin).
 pub fn is_test_path(path: &str) -> bool {
     let normalized = path.replace('\\', "/");
     let mut parts: Vec<&str> = normalized.split('/').filter(|p| !p.is_empty()).collect();
     let Some(name) = parts.pop() else {
         return false;
     };
-    parts.iter().any(|dir| is_test_dir(dir)) || is_test_file_name(name)
+    parts
+        .iter()
+        .enumerate()
+        .any(|(i, dir)| is_test_dir(dir, i, i.checked_sub(1).map(|p| parts[p])))
+        || is_test_file_name(name)
 }
 
-fn is_test_dir(dir: &str) -> bool {
+/// `dir` at depth `depth` (0 = repository root), below `parent`.
+fn is_test_dir(dir: &str, depth: usize, parent: Option<&str>) -> bool {
     let lower = dir.to_ascii_lowercase();
+    let at_root = depth == 0;
+    let under_src = parent == Some("src");
     TEST_DIRS.contains(&lower.as_str())
-        || ["-tests", "_tests", "-test", "_test"]
-            .iter()
-            .any(|suffix| lower.ends_with(suffix))
-        || ["test-", "test_"]
-            .iter()
-            .any(|prefix| lower.starts_with(prefix))
-        || ends_with_camel_word(dir, "Test")
-        || ends_with_camel_word(dir, "Tests")
+        || lower.ends_with("-tests")
+        || lower.ends_with("_tests")
+        || ((at_root || under_src) && lower == "test")
+        || (at_root && lower == "spec")
+        || (under_src && (dir == "testFixtures" || ends_with_camel_word(dir, "Test")))
+        || dir
+            .rsplit_once('.')
+            .is_some_and(|(_, last)| last == "Test" || last.ends_with("Tests"))
 }
 
 fn is_test_file_name(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
-    if [
-        ".test.",
-        ".spec.",
-        "-test.",
-        "-spec.",
-        "_test.",
-        "_unittest.",
-        "_spec.",
-    ]
-    .iter()
-    .any(|marker| lower.contains(marker))
-        || lower.starts_with("test_")
-        || lower == "conftest.py"
-    {
-        return true;
-    }
     let Some((stem, extension)) = name.split_once('.') else {
         return false;
     };
-    const CLASS_PER_FILE: [&str; 9] = [
-        "java", "kt", "kts", "scala", "groovy", "cs", "swift", "php", "m",
-    ];
-    CLASS_PER_FILE.contains(&extension.to_ascii_lowercase().as_str())
-        && ["Test", "Tests", "Spec"]
+    let extension = extension.to_ascii_lowercase();
+    if [
+        ".test.",
+        ".spec.",
+        ".test-d.",
+        ".e2e-spec.",
+        "_test.",
+        "_unittest.",
+    ]
+    .iter()
+    .any(|marker| lower.contains(marker))
+    {
+        return true;
+    }
+    match extension.as_str() {
+        "py" => {
+            (lower.starts_with("test_") && !PYTHON_HELPERS.contains(&stem))
+                || lower == "tests.py"
+                || lower == "conftest.py"
+        }
+        "rb" => lower.ends_with("_spec.rb"),
+        "rs" => lower == "tests.rs",
+        "java" | "cs" | "swift" | "php" | "m" => {
+            ends_with_camel_word(stem, "Test") || ends_with_camel_word(stem, "Tests")
+        }
+        "kt" | "kts" | "scala" | "groovy" => ["Test", "Tests", "Spec"]
             .iter()
-            .any(|word| ends_with_camel_word(stem, word))
+            .any(|word| ends_with_camel_word(stem, word)),
+        _ => false,
+    }
 }
 
 /// `name` is `<something>Word` where `<something>` ends in a lower-case
@@ -169,25 +203,35 @@ mod tests {
             "src/__tests__/a.ts",
             "src/__mocks__/fs.ts",
             "testdata/protoexample/test.pb.go",
+            "binding/testdata/a.go",
             "spec/models/user_spec.rb",
-            "runtime-tests/deno/hono.test.ts",
+            "spec/support/helpers.rb",
+            "runtime-tests/deno/hono.ts",
             "integration_tests/api.rs",
             "src/test/java/com/acme/UserService.java",
             "src/androidTest/kotlin/A.kt",
             "src/commonTest/kotlin/A.kt",
-            "MyAppTests/LoginTests.swift",
+            "src/testFixtures/java/A.java",
             "Tests/MyLibTests/A.swift",
+            "MyApp.Tests/UserServiceFacts.cs",
+            "src/MyApp.UnitTests/A.cs",
             "e2e/login.ts",
+            "crates/core/tests/cli.rs",
             // File names
             "src/hono.test.ts",
             "src/utils/url.spec.ts",
             "src/app.e2e-spec.ts",
+            "src/types.test-d.ts",
             "context_test.go",
             "pkg/foo_test.py",
             "lib/user_test.dart",
+            "test/user_test.rb",
             "base/strings_unittest.cc",
-            "test_utils.py",
+            "pkg/test_api.py",
+            "polls/tests.py",
             "src/flask/conftest.py",
+            "lib/models/user_spec.rb",
+            "src/parser/tests.rs",
             "src/main/java/com/acme/UserServiceTest.java",
             "App/LoginTests.swift",
             "app/UserSpec.scala",
@@ -218,6 +262,18 @@ mod tests {
             "docs/testing.md",
             "README.md",
             "",
+            // Ambiguous names: product code unless their position settles it.
+            "django/test/client.py",
+            "django/test/utils.py",
+            "packages/test-utils/src/index.ts",
+            "src/test_utils.py",
+            "pkg/test_helpers.py",
+            "api/spec/openapi.ts",
+            "lib/openapi_spec.ts",
+            "src/features/abTest/variant.ts",
+            "MyAppTests/Login.swift",
+            "src/test_vectors.c",
+            "lib/my-test.js",
         ] {
             assert!(!is_test_path(path), "{path} should be product code");
         }

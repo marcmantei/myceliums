@@ -394,37 +394,51 @@ How `search_code` ranks, and the opt-in email and knowledge search tools.
 Every mode ranks **test code below product code** by default (#146). On a real
 repository much of what matches a query is test code — on hono, two thirds of
 the exact semantic top 10 — while the question is usually about the code under
-test. The index records which symbols are tests, by each language's
-convention:
+test. The index records which symbols are tests. Only unambiguous
+conventions count; a name that means a test in one ecosystem and product code
+in another stays product code unless its position settles it:
 
-* the file's path: a `test/`, `tests/`, `__tests__/`, `__mocks__/`,
-  `testdata/`, `spec/` or `e2e/` directory, a directory named `*-tests`,
-  `*_tests`, `test-*`, `test_*` (`runtime-tests/`, `integration_tests/`) or a
-  camel-case test source set (`src/test/java`, `androidTest/`,
-  `MyAppTests/`); a file named `*.test.*`, `*.spec.*`, `*_test.*` (Go,
-  Python, Dart, C++), `*_spec.rb`, `test_*.py`, `conftest.py`, or for Java,
-  Kotlin, Scala, C#, Swift and PHP `*Test`/`*Tests`/`*Spec`;
-* inside a Rust file: a `#[cfg(test)]` module with everything in it, and a
+* directories: `tests/`, `__tests__/`, `__mocks__/`, `testdata/` and `e2e/`
+  anywhere; names ending in `-tests` or `_tests` (`runtime-tests/`,
+  `integration_tests/`); `test/` only at the repository root or directly
+  under `src/` (`src/test/java`, but not Django's `django/test/` package);
+  `spec/` only at the root; a Gradle/Kotlin test source set directly under
+  `src/` (`src/androidTest/`, `src/commonTest/`, `src/testFixtures/`); a .NET
+  test project (`MyApp.Tests/`, `MyApp.UnitTests/`);
+* file names: `*.test.*`, `*.spec.*`, `*.test-d.ts`, `*.e2e-spec.*`;
+  `*_test.*` (Go, Python, Dart, Elixir, Ruby, C++) and `*_unittest.*`;
+  Python's `test_*.py` (but not helper modules such as `test_utils.py`),
+  `tests.py` (Django) and `conftest.py`; Ruby's `*_spec.rb`; Rust's
+  `tests.rs`; a `*Test`/`*Tests` class file in Java, Kotlin, Scala, Groovy,
+  C#, Swift, PHP and Objective-C (`*Spec` in Scala, Groovy and Kotlin);
+* inside a Rust file: an item compiled for tests only (`#[cfg(test)]` on a
+  module, function, `impl` or type, with everything inside it) and a
   function with a test attribute (`#[test]`, `#[tokio::test]`).
 
 Test helpers that ship with the product (Flask's `testing.py`, a
-`src/helper/testing/` module), benchmarks and examples are product code.
+`src/helper/testing/` module, a `test-utils` package, `test_utils.py`),
+benchmarks and examples are product code.
 
 Demotion is a down-weight, never a filter, and it works on rank positions so
 it means the same in every mode: a test symbol at position `p` of the
-ranking is placed as if it were at `p / 0.1` (`DEFAULT_TEST_WEIGHT`): the
-best-matching test is never pushed below position 10, so it stays on the
-first page. In `hybrid` the
+ranking is placed as if it were at `p / 0.25` = `4p` (`DEFAULT_TEST_WEIGHT`), so
+it lands no lower than position `4p`: a test ranked 1st ends up 4th at worst,
+one ranked 2nd 8th, one ranked 3rd 12th. In `hybrid` the
 fused list is reordered before it is cut to the page; with `rerank` the
 cross-encoder's order is reordered again. Displayed scores are unchanged, so
-a page is ordered by placement, not strictly by score. The weight was tuned on
-the development split of the real-repository set and confirmed on its
-held-out split ([measurements](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#test-code-demotion-146)).
+a page is ordered by placement, not strictly by score; with `explain=true` a
+line names the rows that were moved down. The weight is the strongest one
+that, on the real-repository set, keeps searches *for* tests finding them
+(hit@10 at least 80% of no demotion) while improving the rest
+([measurements](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#test-code-demotion-146)).
 
 Pass `tests=include` to rank tests like product code, or `tests=prefer` to
-rank them first when the question is about the tests themselves. Graph tools
-(`find_callers`, `impact_of_change`, `trace_flow`, …) are unaffected: tests
-keep their edges and still show up as callers. An index built before #146
+rank them first when the question is about the tests themselves. Only search
+reorders: graph tools (`find_callers`, `impact_of_change`, `trace_flow`, …)
+are unaffected — tests keep their edges and still show up as callers — and so
+are the cross-repository tools (`isolate_intent` and the rest seed with test
+code in place), `myc context` and the HTTP API's search endpoints
+(follow-up: #150). An index built before #146
 carries no classification: search then ranks tests like product code and says
 so, and the next `analyze` re-indexes it even if nothing changed. The
 deprecated aliases (`context_search`, `semantic_search`, `hybrid_search`)

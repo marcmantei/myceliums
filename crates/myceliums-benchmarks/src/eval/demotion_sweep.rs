@@ -6,10 +6,16 @@
 //! looked at:
 //!
 //! 1. Score every weight of [`WEIGHT_GRID`] — `1` is no demotion — in every
-//!    available mode on the **dev** queries.
-//! 2. Pick the weight with the highest [`OBJECTIVE`]: dev nDCG@10 averaged
-//!    over the modes, each mode counting once, because one weight serves all
-//!    of them ([`select`]). On a tie the milder weight (closer to `1`) wins.
+//!    available mode on the **dev** queries, and on the **test-seeking**
+//!    queries (`real-repos/test-seeking.json`), whose labels are tests.
+//! 2. Pick the strongest weight (the smallest) that keeps the test-seeking
+//!    queries' hit@10 at no less than [`TEST_SEEKING_FLOOR`] of what it is
+//!    without demotion and raises the [`OBJECTIVE`] — dev nDCG@10 averaged
+//!    over the modes, each mode counting once — above no demotion
+//!    ([`select`]). Both averages are over the modes because one weight
+//!    serves all of them. The regular labels almost never name a test, so on
+//!    them alone more demotion always looks better; the test-seeking queries
+//!    are what a stronger weight costs.
 //! 3. Score the pick and no demotion on the **held-out** queries through the
 //!    production search paths and take the paired bootstrap difference of the
 //!    objective, and of each mode's metrics.
@@ -187,6 +193,16 @@ pub fn objective(
     by_mode: &BTreeMap<SearchMode, Vec<QueryScore>>,
     modes: &[SearchMode],
 ) -> Vec<f64> {
+    mean_over_modes(by_mode, modes, OBJECTIVE)
+}
+
+/// Per query, `metric` averaged over `modes`. Every mode must hold the same
+/// queries in the same order.
+pub fn mean_over_modes(
+    by_mode: &BTreeMap<SearchMode, Vec<QueryScore>>,
+    modes: &[SearchMode],
+    metric: Metric,
+) -> Vec<f64> {
     let Some(first) = modes.first().and_then(|m| by_mode.get(m)) else {
         return Vec::new();
     };
@@ -194,7 +210,7 @@ pub fn objective(
         .map(|q| {
             modes
                 .iter()
-                .map(|m| by_mode[m][q].values.get(OBJECTIVE))
+                .map(|m| by_mode[m][q].values.get(metric))
                 .sum::<f64>()
                 / modes.len() as f64
         })
@@ -209,19 +225,37 @@ fn mean(values: &[f64]) -> f64 {
     }
 }
 
-/// The weight with the highest mean objective. A weight replaces a milder
-/// one (closer to `1`, earlier in [`WEIGHT_GRID`]) only by scoring strictly
-/// higher, so a tie keeps the milder demotion.
-pub fn select(weights: &[f64], objectives: &[Vec<f64>]) -> f64 {
-    let mut order: Vec<usize> = (0..weights.len()).collect();
-    order.sort_by(|&a, &b| weights[b].total_cmp(&weights[a]));
-    let mut best = order[0];
-    for &i in &order[1..] {
-        if mean(&objectives[i]) > mean(&objectives[best]) + 1e-12 {
-            best = i;
+/// Share of the no-demotion test-seeking hit@10 a weight must keep.
+pub const TEST_SEEKING_FLOOR: f64 = 0.8;
+
+/// The metric the test-seeking floor is set on.
+pub const TEST_SEEKING_METRIC: Metric = Metric::HitAt10;
+
+/// Mean of a per-query vector; `0` when empty.
+pub fn mean_of(values: &[f64]) -> f64 {
+    mean(values)
+}
+
+/// The strongest weight (the smallest) whose mean test-seeking hit@10 is at
+/// least [`TEST_SEEKING_FLOOR`] × that at weight `1` and whose mean dev
+/// objective is higher than at weight `1`; `1` (no demotion) when none is.
+/// `weights` must contain `1`; `objectives` and `seeking` are per weight, in
+/// `weights` order.
+pub fn select(weights: &[f64], objectives: &[Vec<f64>], seeking: &[Vec<f64>]) -> f64 {
+    let Some(none) = weights.iter().position(|&w| (w - 1.0).abs() < 1e-12) else {
+        return 1.0;
+    };
+    let floor = TEST_SEEKING_FLOOR * mean(&seeking[none]);
+    let baseline = mean(&objectives[none]);
+    let mut best = 1.0;
+    for (i, &weight) in weights.iter().enumerate() {
+        let keeps_tests = mean(&seeking[i]) + 1e-12 >= floor;
+        let improves = mean(&objectives[i]) > baseline + 1e-12;
+        if keeps_tests && improves && weight < best {
+            best = weight;
         }
     }
-    weights[best]
+    best
 }
 
 /// Paired bootstrap `treatment − control` on the reported metrics.
@@ -318,11 +352,40 @@ mod tests {
     }
 
     #[test]
-    fn select_prefers_the_milder_weight_on_a_tie() {
-        let weights = [1.0, 0.5, 0.25];
-        assert_eq!(select(&weights, &[vec![0.4], vec![0.5], vec![0.5]]), 0.5);
-        assert_eq!(select(&weights, &[vec![0.4], vec![0.5], vec![0.6]]), 0.25);
-        assert_eq!(select(&weights, &[vec![0.6], vec![0.5], vec![0.6]]), 1.0);
+    fn select_takes_the_strongest_weight_that_keeps_tests_findable() {
+        let weights = [1.0, 0.5, 0.25, 0.1];
+        let objectives = [vec![0.40], vec![0.45], vec![0.50], vec![0.55]];
+        // Test-seeking hit@10: 0.25 keeps 0.8 of 1.0's, 0.1 does not.
+        let seeking = [vec![1.0], vec![0.9], vec![0.8], vec![0.5]];
+        assert_eq!(select(&weights, &objectives, &seeking), 0.25);
+        // A weight that does not improve the regular queries is not chosen.
+        let flat = [vec![0.40], vec![0.45], vec![0.40], vec![0.30]];
+        assert_eq!(select(&weights, &flat, &seeking), 0.5);
+        // Nothing qualifies: no demotion.
+        let worse = [vec![0.40], vec![0.30], vec![0.30], vec![0.30]];
+        assert_eq!(select(&weights, &worse, &seeking), 1.0);
+    }
+
+    /// The test-seeking set loads, pins the regular set's repositories, and
+    /// labels only files the index classifies as test code.
+    #[test]
+    fn the_test_seeking_set_labels_test_files() {
+        use super::super::real_repos::RealRepoSet;
+        let path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("real-repos/test-seeking.json");
+        let seeking = RealRepoSet::from_path(&path).unwrap();
+        assert_eq!(seeking.repos, RealRepoSet::load().unwrap().repos);
+        assert_eq!(seeking.queries.len(), 20);
+        for query in &seeking.queries {
+            for label in &query.relevant {
+                assert!(
+                    myceliums_core::parser::classify::is_test_path(&label.file),
+                    "{}: {}",
+                    query.id,
+                    label.file
+                );
+            }
+        }
     }
 
     #[test]

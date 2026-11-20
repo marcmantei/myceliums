@@ -288,6 +288,11 @@ pub fn attach_graph_edges(
 /// 5. Ranks test code below product code in the fused list
 ///    ([`TestPolicy::default`], #146) and keeps the top `limit`
 ///
+/// This is the ranking of the search surfaces (`myc search --hybrid`,
+/// `search_code`). Callers that use hybrid search as a building block —
+/// context packs, cross-repository seeds — pass
+/// `HybridParams::with_tests(TestPolicy::include())` to [`hybrid_search_with`].
+///
 /// `vectors` is typically a [`myceliums_storage::Store`]; the BM25 leg keeps
 /// using the in-memory `symbols` slice.
 ///
@@ -375,15 +380,26 @@ async fn hybrid_search_impl(
     let vector_results =
         vector_leg(vectors, &query_embedding, limit, params.vector_candidates).await?;
 
-    // Fuse as deep as the test-code reordering reads, reorder, then cut: the
-    // candidate pools above depend on `limit` only, never on the policy.
+    Ok(fuse_ranked(bm25_results, vector_results, params, limit))
+}
+
+/// RRF fusion followed by the test-code policy: fuse as deep as the policy
+/// reads, reorder, then cut to `limit`. The candidate pools depend on `limit`
+/// only, never on the policy.
+#[cfg(feature = "embeddings")]
+fn fuse_ranked(
+    bm25_results: Vec<(CodeSymbol, f64, Option<SearchExplain>)>,
+    vector_results: Vec<(CodeSymbol, f64)>,
+    params: &HybridParams,
+    limit: usize,
+) -> Vec<HybridSearchResult> {
     let fused = reciprocal_rank_fusion(
         bm25_results,
         vector_results,
         params.rrf_k,
         params.tests.depth_for(limit),
     );
-    Ok(params.tests.top(fused, limit, |r| r.symbol.is_test()))
+    params.tests.top(fused, limit, |r| r.symbol.is_test())
 }
 
 /// Semantic search: the `limit` persisted vectors nearest to `query_vector`
@@ -457,7 +473,17 @@ pub async fn rerank_results(
 
     // Rerank with cross-encoder - returns (index, score) pairs sorted by score
     let reranked_indices = reranker.rerank(query, &documents)?;
+    Ok(reranked_order(&results, reranked_indices, tests))
+}
 
+/// The results in the cross-encoder's order, each with its rerank score,
+/// then reordered by the test-code policy.
+#[cfg(feature = "embeddings")]
+fn reranked_order(
+    results: &[HybridSearchResult],
+    reranked_indices: Vec<(usize, f32)>,
+    tests: &TestPolicy,
+) -> Vec<HybridSearchResult> {
     // Rebuild results in reranked order. Keep the RRF fusion score in
     // `combined_score` and record the cross-encoder score in `rerank_score`
     // instead of overwriting it (issue #29): the two live on different scales,
@@ -471,7 +497,7 @@ pub async fn rerank_results(
         })
         .collect();
 
-    Ok(tests.apply(reranked_results, |r| r.symbol.is_test()))
+    tests.apply(reranked_results, |r| r.symbol.is_test())
 }
 
 #[cfg(test)]
@@ -854,6 +880,63 @@ mod persisted_vector_tests {
             metadata: Some(r#"{"test":true}"#.to_string()),
             ..make_symbol(uid, uid)
         }
+    }
+
+    /// Hybrid search reorders the fused list before cutting it: a test that
+    /// fuses first is placed at `1 / weight`, and `include` keeps RRF order.
+    #[test]
+    fn hybrid_fusion_ranks_test_code_lower() {
+        let bm25 = vec![
+            (test_symbol("t1"), 9.0, None),
+            (test_symbol("t2"), 8.0, None),
+            (make_symbol("p1", "p1"), 7.0, None),
+            (test_symbol("t3"), 6.0, None),
+            (make_symbol("p2", "p2"), 5.0, None),
+        ];
+        let vector = vec![(test_symbol("t1"), 0.9), (make_symbol("p3", "p3"), 0.8)];
+        let uids = |results: &[HybridSearchResult]| -> Vec<String> {
+            results.iter().map(|r| r.symbol.uid.clone()).collect()
+        };
+        let included = fuse_ranked(
+            bm25.clone(),
+            vector.clone(),
+            &HybridParams::with_tests(TestPolicy::include()),
+            4,
+        );
+        // RRF: t1 (both legs), then t2 and p3 tied at 1/62 (BM25 first), p1.
+        assert_eq!(uids(&included), ["t1", "t2", "p3", "p1"]);
+
+        let params = HybridParams::with_tests(TestPolicy::demote(0.25));
+        let demoted = fuse_ranked(bm25, vector, &params, 4);
+        // Fused order t1 t2 p3 p1 t3 p2; placed: t1 1 → 4 (ahead of p1 at
+        // 4, which ranked lower before), t2 2 → 8, t3 5 → 20.
+        assert_eq!(uids(&demoted), ["p3", "t1", "p1", "p2"]);
+        // Fusion scores are kept, only the order changes.
+        assert!(demoted[1].combined_score > demoted[0].combined_score);
+    }
+
+    /// The cross-encoder's order is reordered by the policy again, with the
+    /// rerank scores kept.
+    #[test]
+    fn rerank_order_ranks_test_code_lower() {
+        let results: Vec<HybridSearchResult> = reciprocal_rank_fusion(
+            vec![
+                (make_symbol("p1", "p1"), 3.0, None),
+                (test_symbol("t1"), 2.0, None),
+                (make_symbol("p2", "p2"), 1.0, None),
+            ],
+            Vec::new(),
+            60.0,
+            10,
+        );
+        // The cross-encoder puts the test first.
+        let order = vec![(1usize, 0.9f32), (0, 0.5), (2, 0.1)];
+        let included = reranked_order(&results, order.clone(), &TestPolicy::include());
+        assert_eq!(included[0].symbol.uid, "t1");
+        let demoted = reranked_order(&results, order, &TestPolicy::demote(0.25));
+        let uids: Vec<&str> = demoted.iter().map(|r| r.symbol.uid.as_str()).collect();
+        assert_eq!(uids, ["p1", "p2", "t1"]);
+        assert_eq!(demoted[2].rerank_score, Some(0.9f32 as f64));
     }
 
     /// Semantic search reads `limit / weight` candidates and ranks the test

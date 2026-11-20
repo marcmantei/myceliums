@@ -132,6 +132,7 @@ pub(crate) async fn cmd_search(
             }
             if use_explain {
                 print_explain_trace(&result.explain);
+                print_demoted(&tests, sym);
             }
         }
     } else {
@@ -166,6 +167,7 @@ pub(crate) async fn cmd_search(
                 }
             }
             if use_explain {
+                print_demoted(&tests, sym);
                 if let Some(ref explain) = result.explain {
                     println!("     --- explain ---");
                     println!(
@@ -195,6 +197,22 @@ pub(crate) async fn cmd_search(
     }
 
     Ok(())
+}
+
+/// With `--explain`, says that `--tests` moved this result down (#146).
+fn print_demoted(tests: &TestPolicy, symbol: &myceliums_storage::CodeSymbol) {
+    if tests.demotes(symbol.is_test()) {
+        let class = if symbol.is_test() {
+            "test code"
+        } else {
+            "product code"
+        };
+        println!(
+            "     demoted: {class} (--tests {}), placed at position / {}",
+            tests.ranking.as_str(),
+            tests.weight
+        );
+    }
 }
 
 fn print_explain_trace(explain: &Option<myceliums_core::HybridExplain>) {

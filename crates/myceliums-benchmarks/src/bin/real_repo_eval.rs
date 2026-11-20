@@ -35,7 +35,8 @@ use anyhow::{bail, Context, Result};
 use myceliums_benchmarks::eval::bootstrap::{paired_bootstrap_default, DeltaEstimate};
 use myceliums_benchmarks::eval::corpus::{symbol_ref, Corpus};
 use myceliums_benchmarks::eval::demotion_sweep::{
-    self, objective, objective_delta, WeightSweepInput, OBJECTIVE, WEIGHT_GRID,
+    self, mean_over_modes, objective, objective_delta, WeightSweepInput, OBJECTIVE,
+    TEST_SEEKING_FLOOR, TEST_SEEKING_METRIC, WEIGHT_GRID,
 };
 use myceliums_benchmarks::eval::evaluator::{
     evaluate_queries, Metric, MetricValues, ModeScore, QueryScore, Retrieval, SearchMode,
@@ -62,6 +63,12 @@ use std::time::Instant;
 
 /// Where the report lands unless `--out` says otherwise (git-ignored).
 const DEFAULT_REPORT: &str = "real-repos/report.json";
+
+/// Per mode, query scores in a fixed order.
+type Scores = BTreeMap<SearchMode, Vec<QueryScore>>;
+
+/// The test-seeking queries (#146), relative to the crate.
+const TEST_SEEKING: &str = "real-repos/test-seeking.json";
 
 /// The committed record of a run, written by `--record`.
 const RECORDED_RUN: &str = "real-repos/recorded-run.json";
@@ -171,10 +178,19 @@ struct WeightRow {
 }
 
 #[derive(Serialize)]
+struct SeekingRow {
+    weight: f64,
+    by_mode: BTreeMap<String, MetricValues>,
+    /// hit@10 and nDCG@10 averaged over the modes.
+    hit_at_10: f64,
+    ndcg_at_10: f64,
+}
+
+#[derive(Serialize)]
 struct ModeComparison {
     /// Test code left in place (`--tests include`).
     include: MetricValues,
-    /// The shipped default (`--tests demote`).
+    /// Demoted at the chosen weight.
     demote: MetricValues,
     /// demote − include, paired bootstrap, per reported metric.
     delta: BTreeMap<String, DeltaEstimate>,
@@ -192,15 +208,23 @@ struct DemotionReport {
     /// How the dev sweep was checked against the production search paths.
     sweep_check: String,
     rows: Vec<WeightRow>,
+    /// Test-seeking queries (labels are tests) and the share of their
+    /// no-demotion hit@10 the chosen weight must keep.
+    test_seeking_queries: usize,
+    test_seeking_floor: f64,
+    /// Test-seeking means per weight.
+    seeking_rows: Vec<SeekingRow>,
     chosen: f64,
     /// Chosen − no demotion on held-out through the production paths: the
     /// objective, then per mode; `null` when the chosen weight is 1.
     held_out_objective: Option<DeltaEstimate>,
     held_out: Option<BTreeMap<String, BTreeMap<String, DeltaEstimate>>>,
-    /// Shipped default vs test code left in place, by scope (`all`,
+    /// Chosen weight vs test code left in place, by scope (`all`,
     /// `held-out`) and mode.
-    shipped_vs_include: BTreeMap<String, BTreeMap<String, ModeComparison>>,
-    /// Shipped default vs test code left in place, by repository and mode.
+    chosen_vs_include: BTreeMap<String, BTreeMap<String, ModeComparison>>,
+    /// Chosen weight vs test code left in place on the test-seeking queries.
+    test_seeking: BTreeMap<String, ModeComparison>,
+    /// Chosen weight vs test code left in place, by repository and mode.
     by_repo: BTreeMap<String, BTreeMap<String, ModeComparison>>,
     decision: demotion_sweep::Decision,
 }
@@ -431,8 +455,37 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Test-seeking queries (#146): their labels are tests, the cost of
+    // demotion the regular labels cannot show.
+    let seeking =
+        RealRepoSet::from_path(&Path::new(env!("CARGO_MANIFEST_DIR")).join(TEST_SEEKING))?;
+    if seeking.repos != set.repos {
+        bail!("{TEST_SEEKING} must pin the same repositories as queries.json");
+    }
+    for corpus in &corpora {
+        let tests: BTreeSet<_> = corpus
+            .symbols()
+            .iter()
+            .filter(|s| s.is_test())
+            .map(symbol_ref)
+            .collect();
+        for query in seeking.queries_in(None, Some(corpus.repo_id())) {
+            for label in &query.relevant {
+                if !tests.contains(&label.symbol_ref()) {
+                    bail!(
+                        "test-seeking query {} labels {}, which is not test code in the corpus",
+                        query.id,
+                        label.symbol_ref()
+                    );
+                }
+            }
+        }
+    }
+
     // Test code left in place (#146): the control for the demotion.
     let mut include_scores: BTreeMap<SearchMode, Vec<QueryScore>> = BTreeMap::new();
+    let mut seeking_shipped: BTreeMap<SearchMode, Vec<QueryScore>> = BTreeMap::new();
+    let mut seeking_include: BTreeMap<SearchMode, Vec<QueryScore>> = BTreeMap::new();
     let mut retrievals = Vec::new();
     for (i, corpus) in corpora.iter().enumerate() {
         let retrieval = match indices.get(i) {
@@ -461,6 +514,23 @@ async fn main() -> Result<()> {
                 .or_default()
                 .extend(score.queries);
         }
+        let seeking_golden: Vec<GoldenQuery> = seeking
+            .queries_in(None, Some(corpus.repo_id()))
+            .iter()
+            .map(|q| q.golden())
+            .collect();
+        for &mode in &modes {
+            let shipped = evaluate_queries(mode, &retrieval, &seeking_golden).await?;
+            seeking_shipped
+                .entry(mode)
+                .or_default()
+                .extend(shipped.queries);
+            let included = evaluate_queries(mode, &include, &seeking_golden).await?;
+            seeking_include
+                .entry(mode)
+                .or_default()
+                .extend(included.queries);
+        }
         retrievals.push(retrieval);
     }
 
@@ -468,6 +538,8 @@ async fn main() -> Result<()> {
         Some(
             tune_demotion(
                 &set,
+                &seeking,
+                (&seeking_shipped, &seeking_include),
                 &corpora,
                 &retrievals,
                 &indices,
@@ -678,6 +750,8 @@ async fn tune(
 #[allow(clippy::too_many_arguments)]
 async fn tune_demotion(
     set: &RealRepoSet,
+    seeking: &RealRepoSet,
+    (seeking_shipped, seeking_include): (&Scores, &Scores),
     corpora: &[Corpus],
     retrievals: &[Retrieval<'_>],
     indices: &[ModelIndex],
@@ -774,43 +848,121 @@ async fn tune_demotion(
             vs_no_demotion: objective_delta(values, none)?,
         });
     }
-    let chosen = demotion_sweep::select(&WEIGHT_GRID, &objectives);
+    // Test-seeking queries: what each weight costs a search for tests.
+    let seeking_ids: Vec<&str> = seeking.queries.iter().map(|q| q.id.as_str()).collect();
+    let seeking_inputs: Vec<WeightSweepInput> = corpora
+        .iter()
+        .zip(retrievals)
+        .enumerate()
+        .map(|(i, (corpus, retrieval))| WeightSweepInput {
+            retrieval,
+            index: indices.get(i),
+            queries: seeking
+                .queries_in(None, Some(corpus.repo_id()))
+                .iter()
+                .map(|q| q.golden())
+                .collect(),
+        })
+        .collect();
+    let seeking_swept: Vec<BTreeMap<SearchMode, Vec<QueryScore>>> =
+        demotion_sweep::sweep(&seeking_inputs, modes, &WEIGHT_GRID)
+            .await?
+            .into_iter()
+            .map(|by_mode| {
+                by_mode
+                    .into_iter()
+                    .map(|(mode, scores)| (mode, restrict(mode, &scores, &seeking_ids).queries))
+                    .collect()
+            })
+            .collect();
+    for (weight, production) in [(shipped_weight, seeking_shipped), (1.0, seeking_include)] {
+        let i = position(weight)?;
+        for &mode in modes {
+            let product = restrict(mode, &production[&mode], &seeking_ids);
+            for (swept_query, product_query) in seeking_swept[i][&mode].iter().zip(&product.queries)
+            {
+                if swept_query.values != product_query.values {
+                    bail!(
+                        "the demotion sweep at weight {weight} scored test-seeking query '{}' in \
+                         mode {} differently from the production search",
+                        swept_query.id,
+                        mode.id()
+                    );
+                }
+            }
+        }
+    }
+    let seeking_hits: Vec<Vec<f64>> = seeking_swept
+        .iter()
+        .map(|by_mode| mean_over_modes(by_mode, modes, TEST_SEEKING_METRIC))
+        .collect();
+    let seeking_rows: Vec<SeekingRow> = WEIGHT_GRID
+        .iter()
+        .zip(&seeking_swept)
+        .zip(&seeking_hits)
+        .map(|((&weight, by_mode), hits)| SeekingRow {
+            weight,
+            by_mode: by_mode
+                .iter()
+                .map(|(mode, scores)| {
+                    (
+                        mode.id().to_string(),
+                        ModeScore::from_queries(*mode, scores.clone())
+                            .mean
+                            .map(round),
+                    )
+                })
+                .collect(),
+            hit_at_10: round(demotion_sweep::mean_of(hits)),
+            ndcg_at_10: round(demotion_sweep::mean_of(&mean_over_modes(
+                by_mode,
+                modes,
+                Metric::NdcgAt10,
+            ))),
+        })
+        .collect();
+    let chosen = demotion_sweep::select(&WEIGHT_GRID, &objectives, &seeking_hits);
 
-    // Held-out: chosen vs no demotion, through the production paths.
+    // The chosen weight on every query, through the production paths.
+    let same = |a: f64, b: f64| (a - b).abs() < 1e-12;
+    let (chosen_all, chosen_seeking) = if same(chosen, shipped_weight) {
+        (shipped_scores.clone(), seeking_shipped.clone())
+    } else if same(chosen, 1.0) {
+        (include_scores.clone(), seeking_include.clone())
+    } else {
+        let mut all: BTreeMap<SearchMode, Vec<QueryScore>> = BTreeMap::new();
+        let mut tests: BTreeMap<SearchMode, Vec<QueryScore>> = BTreeMap::new();
+        for (corpus, retrieval) in corpora.iter().zip(retrievals) {
+            let chosen_retrieval = retrieval
+                .clone()
+                .with_test_policy(demotion_sweep::policy(chosen));
+            for (queries, out) in [(set, &mut all), (seeking, &mut tests)] {
+                let golden: Vec<GoldenQuery> = queries
+                    .queries_in(None, Some(corpus.repo_id()))
+                    .iter()
+                    .map(|q| q.golden())
+                    .collect();
+                for &mode in modes {
+                    let score = evaluate_queries(mode, &chosen_retrieval, &golden).await?;
+                    out.entry(mode).or_default().extend(score.queries);
+                }
+            }
+        }
+        (all, tests)
+    };
+
+    // Held-out: chosen vs no demotion.
     let include_held: BTreeMap<SearchMode, Vec<QueryScore>> = modes
         .iter()
         .map(|&m| (m, restrict(m, &include_scores[&m], held_ids).queries))
         .collect();
-    let (held_out_objective, held_out) = if (chosen - 1.0).abs() < 1e-12 {
+    let (held_out_objective, held_out) = if same(chosen, 1.0) {
         (None, None)
     } else {
-        let chosen_held: BTreeMap<SearchMode, Vec<QueryScore>> =
-            if (chosen - shipped_weight).abs() < 1e-12 {
-                modes
-                    .iter()
-                    .map(|&m| (m, restrict(m, &shipped_scores[&m], held_ids).queries))
-                    .collect()
-            } else {
-                let mut scores: BTreeMap<SearchMode, Vec<QueryScore>> = BTreeMap::new();
-                for (corpus, retrieval) in corpora.iter().zip(retrievals) {
-                    let golden: Vec<GoldenQuery> = set
-                        .queries_in(Some(Split::HeldOut), Some(corpus.repo_id()))
-                        .iter()
-                        .map(|q| q.golden())
-                        .collect();
-                    let chosen_retrieval = retrieval
-                        .clone()
-                        .with_test_policy(demotion_sweep::policy(chosen));
-                    for &mode in modes {
-                        let score = evaluate_queries(mode, &chosen_retrieval, &golden).await?;
-                        scores.entry(mode).or_default().extend(score.queries);
-                    }
-                }
-                scores
-                    .into_iter()
-                    .map(|(m, q)| (m, restrict(m, &q, held_ids).queries))
-                    .collect()
-            };
+        let chosen_held: BTreeMap<SearchMode, Vec<QueryScore>> = modes
+            .iter()
+            .map(|&m| (m, restrict(m, &chosen_all[&m], held_ids).queries))
+            .collect();
         let objective_estimate = objective_delta(
             &objective(&chosen_held, modes),
             &objective(&include_held, modes),
@@ -825,11 +977,14 @@ async fn tune_demotion(
         (Some(objective_estimate), Some(per_mode))
     };
 
-    let compare = |ids: &[&str]| -> Result<BTreeMap<String, ModeComparison>> {
+    let compare = |chosen: &BTreeMap<SearchMode, Vec<QueryScore>>,
+                   include: &BTreeMap<SearchMode, Vec<QueryScore>>,
+                   ids: &[&str]|
+     -> Result<BTreeMap<String, ModeComparison>> {
         let mut out = BTreeMap::new();
         for &mode in modes {
-            let demote = restrict(mode, &shipped_scores[&mode], ids);
-            let include = restrict(mode, &include_scores[&mode], ids);
+            let demote = restrict(mode, &chosen[&mode], ids);
+            let include = restrict(mode, &include[&mode], ids);
             out.insert(
                 mode.id().to_string(),
                 ModeComparison {
@@ -841,9 +996,16 @@ async fn tune_demotion(
         }
         Ok(out)
     };
-    let mut shipped_vs_include = BTreeMap::new();
-    shipped_vs_include.insert("all".to_string(), compare(all_ids)?);
-    shipped_vs_include.insert("held-out".to_string(), compare(held_ids)?);
+    let mut chosen_vs_include = BTreeMap::new();
+    chosen_vs_include.insert(
+        "all".to_string(),
+        compare(&chosen_all, include_scores, all_ids)?,
+    );
+    chosen_vs_include.insert(
+        "held-out".to_string(),
+        compare(&chosen_all, include_scores, held_ids)?,
+    );
+    let test_seeking = compare(&chosen_seeking, seeking_include, &seeking_ids)?;
     let mut by_repo = BTreeMap::new();
     for pin in &set.repos {
         let ids: Vec<&str> = set
@@ -851,7 +1013,10 @@ async fn tune_demotion(
             .iter()
             .map(|q| q.id.as_str())
             .collect();
-        by_repo.insert(pin.name.clone(), compare(&ids)?);
+        by_repo.insert(
+            pin.name.clone(),
+            compare(&chosen_all, include_scores, &ids)?,
+        );
     }
 
     let test_refs: BTreeSet<_> = corpora
@@ -878,10 +1043,14 @@ async fn tune_demotion(
         labels_in_test_code,
         sweep_check,
         rows,
+        test_seeking_queries: seeking_ids.len(),
+        test_seeking_floor: TEST_SEEKING_FLOOR,
+        seeking_rows,
         chosen,
         held_out_objective,
         held_out,
-        shipped_vs_include,
+        chosen_vs_include,
+        test_seeking,
         by_repo,
         decision: demotion_sweep::decide(chosen, held_out_objective),
     })
@@ -1099,6 +1268,31 @@ fn render_demotion(d: &DemotionReport) -> String {
             format_delta(&row.vs_no_demotion)
         ));
     }
+    out.push_str(&format!(
+        "\n**Test-seeking queries ({}; labels are tests), means over the modes.** A weight \
+         qualifies when it keeps hit@10 at no less than {} × the value at weight 1 and raises \
+         the dev objective.\n\n| Weight | hit@10 | nDCG@10 |",
+        d.test_seeking_queries, d.test_seeking_floor
+    ));
+    for mode in &d.modes {
+        out.push_str(&format!(" `{mode}` hit@10 / nDCG@10 |"));
+    }
+    out.push_str("\n| ---: | ---: | ---: |");
+    for _ in &d.modes {
+        out.push_str(" ---: |");
+    }
+    out.push('\n');
+    for row in &d.seeking_rows {
+        out.push_str(&format!(
+            "| {} | {:.4} | {:.4} |",
+            row.weight, row.hit_at_10, row.ndcg_at_10
+        ));
+        for mode in &d.modes {
+            let v = &row.by_mode[mode];
+            out.push_str(&format!(" {:.3} / {:.3} |", v.hit_at_10, v.ndcg_at_10));
+        }
+        out.push('\n');
+    }
     if let (Some(objective), Some(per_mode)) = (&d.held_out_objective, &d.held_out) {
         out.push_str(&format!(
             "\n**Held-out confirmation ({} queries): weight {} − no demotion**\n\n\
@@ -1123,7 +1317,7 @@ fn render_demotion(d: &DemotionReport) -> String {
         let mut t = format!(
             "\n**{title}: nDCG@10 / MRR@10, tests included → demoted (weight {})**\n\n\
              | Mode | included | demoted | Δ nDCG@10 [95% CI] |\n| --- | ---: | ---: | ---: |\n",
-            d.shipped_weight
+            d.chosen
         );
         for mode in &d.modes {
             let c = &rows[mode];
@@ -1138,9 +1332,24 @@ fn render_demotion(d: &DemotionReport) -> String {
         }
         t
     };
-    for (scope, rows) in &d.shipped_vs_include {
-        out.push_str(&table(format!("Shipped vs tests included, {scope}"), rows));
+    for (scope, rows) in &d.chosen_vs_include {
+        out.push_str(&table(format!("Demoted vs tests included, {scope}"), rows));
     }
+    out.push_str(&table("Test-seeking queries".to_string(), &d.test_seeking));
+    out.push_str("\nTest-seeking hit@10, tests included → demoted: ");
+    let hits: Vec<String> = d
+        .modes
+        .iter()
+        .map(|mode| {
+            let c = &d.test_seeking[mode];
+            format!(
+                "`{mode}` {:.3} → {:.3}",
+                c.include.hit_at_10, c.demote.hit_at_10
+            )
+        })
+        .collect();
+    out.push_str(&hits.join(", "));
+    out.push('\n');
     for (repo, rows) in &d.by_repo {
         out.push_str(&table(repo.clone(), rows));
     }

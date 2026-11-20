@@ -399,10 +399,14 @@ pub async fn isolate_intent_hybrid(
     communities: &[Community],
     config: &IsolateConfig,
 ) -> Result<IntentSlice> {
-    use crate::hybrid_search::hybrid_search;
+    use crate::hybrid_search::{hybrid_search_with, HybridParams};
 
     let seed_limit = config.max_symbols.min(10);
-    let search_results = hybrid_search(embedder, symbols, vectors, intent, seed_limit).await?;
+    // Seeds keep test code where the ranking puts it, like the keyword path
+    // above: only search itself demotes tests (#146).
+    let params = HybridParams::with_tests(crate::demotion::TestPolicy::include());
+    let search_results =
+        hybrid_search_with(embedder, symbols, vectors, intent, seed_limit, &params).await?;
 
     let seed_uids: HashSet<String> = search_results
         .iter()
