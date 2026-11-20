@@ -30,6 +30,7 @@
 pub mod bootstrap;
 pub mod corpus;
 pub mod evaluator;
+pub mod exact_vs_ann;
 pub mod gate;
 pub mod golden_set;
 pub mod metrics;

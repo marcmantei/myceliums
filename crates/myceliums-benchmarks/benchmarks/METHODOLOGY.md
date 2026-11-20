@@ -727,12 +727,117 @@ indistinguishable from zero in both directions.
   0.15–0.36 nDCG@10 there against 0.48–0.65 on the Python repositories. An
   exploratory run before #135, when hono's vectors still went through the
   IVF-PQ index, gave semantic 0.314 nDCG@10 on hono against 0.254 with today's
-  exact scan — 42 queries, unreviewed labels, one run each. Tracked in #141;
-  not a finding.
+  exact scan. That gap is not a bug in the exact path and not a reliable
+  advantage of the index: see the next section.
 - **Scores are lower than on the golden set across the board** (hybrid
   nDCG@10 0.48 vs 0.74). Real identifiers are numerous and repetitive, and
   tests and examples compete with the definitions. The golden-set numbers are
   a regression guard, not an estimate of real-repository quality.
+
+### Exact search against the old IVF-PQ index on hono (#141)
+
+The question: is semantic search on hono worse with the exact scan (0.254
+nDCG@10) than with the pre-#117 IVF-PQ index (0.314) because the exact path
+is wrong — metric, normalisation, filter or limit, the stale-index bypass,
+query/passage prefixes, distance-to-score conversion — or because the index's
+errors happened to suit these labels? Only hono is affected: the old index
+was built from 5,000 rows, and the other three repositories are smaller, so
+their numbers in the two CI runs are identical query for query.
+
+`exact-vs-ann` indexes hono once and embeds each query once, then searches the
+same query vector through the production store and through the pre-#117
+index (IVF-PQ, 16 sub-vectors, √n = 102 partitions, LanceDB's default 20
+probes, no refine) built over the same table:
+
+```bash
+crates/myceliums-benchmarks/real-repos/fetch.sh
+cargo run -p myceliums-benchmarks --bin exact-vs-ann -- --repo hono --builds 5 \
+    --out crates/myceliums-benchmarks/real-repos/exact-vs-ann-hono.json
+```
+
+The run fails if the production results are not the brute-force top 20 by
+cosine over every stored vector, in order, with the cosine as score, or if
+they differ from the ranking `real-repo-eval` scores. The index is rebuilt
+five times because its k-means training is not deterministic. A third
+ranking, brute-force cosine over the symbols outside test files
+(`is_test_file`: `*.test.*`, `*.spec.*`, `test/`, `runtime-tests/`,
+`benchmarks/`, `perf-measures/`, …), shows what test code costs. Recorded
+2026-11-20 on macOS (aarch64, debug build), embedding batch 32, on main after
+#144 (hono now parses to 10,470 symbols; the labels are unchanged), dataset
+`2026-11-19`; the full per-query report is
+[`real-repos/exact-vs-ann-hono.json`](../real-repos/exact-vs-ann-hono.json).
+
+**The exact path is exact.** Over 42 queries × 20 results, the largest
+difference between the score production exposes and the brute-force cosine
+was 1.3 × 10⁻⁷ and every result was the next-best cosine (rank error 0). The
+exact ranking is the one `real-repo-eval` scored, and its nDCG@10, 0.2538,
+matches the CI record to four decimals on another platform. Normalisation
+(both sides unit length), metric (L2 on unit vectors = cosine order), the
+`1 − d²/2` score, the repository filter and the limit are therefore all
+consistent; a pre-#117 index present on the table does not change a single
+production result. `production_search_returns_the_brute_force_top_k` pins
+this on every `cargo test`: 2,000 clustered vectors with exact duplicates,
+a stale IVF-PQ index on the table, k = 20 and 100.
+
+**The index's advantage is noise.** All 42 hono queries, Δ = IVF-PQ − exact,
+paired bootstrap (10,000 resamples, 95%):
+
+| Ranking | nDCG@10 | MRR@10 | recall@10 | true top 10 returned | top 10 in test files | Δ nDCG@10 [95% CI] | better / worse / same |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| exact (production) | 0.2538 | 0.2779 | 0.3333 | 1.000 | 0.676 | — | — |
+| IVF-PQ build 1 | 0.2871 | 0.3453 | 0.3618 | 0.302 | 0.395 | +0.033 [−0.022, +0.089] | 14 / 6 / 22 |
+| IVF-PQ build 2 | 0.2651 | 0.2765 | 0.3885 | 0.312 | 0.462 | +0.011 [−0.066, +0.090] | 14 / 10 / 18 |
+| IVF-PQ build 3 | 0.2934 | 0.3361 | 0.3611 | 0.286 | 0.343 | +0.040 [−0.045, +0.119] | 14 / 8 / 20 |
+| IVF-PQ build 4 | 0.2345 | 0.2562 | 0.3351 | 0.288 | 0.312 | −0.019 [−0.095, +0.055] | 9 / 12 / 21 |
+| IVF-PQ build 5 | 0.2878 | 0.2853 | 0.4093 | 0.295 | 0.381 | +0.034 [−0.043, +0.115] | 13 / 10 / 19 |
+| IVF-PQ, mean of the 5 builds | — | — | — | — | — | +0.020 [−0.033, +0.073] | — |
+| exact, test files excluded | 0.4703 | 0.4731 | 0.6036 | — | 0 | **+0.217 [+0.139, +0.301]** | — |
+
+The CI pair behind the issue — the exploratory IVF-PQ run (`b9edb94`) and the
+recorded exact run, both `linux-x86_64` — differs on 25 of 42 queries, 19
+for the index and 6 against, Δ +0.060 [−0.031, +0.141] (10,000 paired
+resamples over the per-query scores in the two reports). One build drawn on another machine; the five
+here range from 0.235 to 0.293, every interval includes zero, and the mean
+of the five is +0.020.
+
+- **It is a different ranking each build, not a better one.** The index
+  returns only 29–31% of the true top 10 (the 0.4 measured on Django in the
+  ANN section). Which neighbours it drops changes with the k-means
+  initialisation: on 33 of 42 queries the five builds disagree with each
+  other (mean spread 0.35 nDCG@10, up to 1.0), and on 9 queries one build
+  beats exact while another loses to it. `hono-exact-name-errorboundary-component`
+  scores 0.31, 0.00, 0.00, 0.22 and 0.61 over the five builds against exact
+  0.26.
+- **Why it can look better on hono: test code.** Two thirds of the exact top
+  10 (0.676) are symbols in test files, which no label names — `App` in
+  `dom.test.tsx` outranks `ErrorBoundary` in `components.ts`, and the
+  query's other `ErrorBoundary` copy sits at rank 56. The index's errors
+  displace whatever is in the top 10, and since most of it is test code, they
+  displace mostly test code (0.31–0.46 of its top 10). That frees slots that
+  a labelled symbol from ranks 11–100 sometimes fills — 49 of the 129 labels
+  sit there, 28 in the exact top 10, 52 below rank 100. It also loses true
+  answers: `exact-name` queries, where the label is usually in the exact top
+  10, drop from 0.585 to 0.485 averaged over builds, while the queries whose
+  labels are deep (`paraphrase` 0.072 → 0.138, `conceptual` 0.122 → 0.229)
+  gain.
+- **The real lever is test code, not the index.** Dropping test files from
+  the exact ranking lifts hono semantic search from 0.254 to 0.470 nDCG@10,
+  +0.217 [+0.139, +0.301], in every intent (`exact-name` 0.831). This is an
+  upper bound under these labels — they never name test code, and a user who
+  searches for a test would lose it — but it says where hono's low scores
+  come from. Ranking test files lower is a product question for its own
+  issue, not a reason to bring back an index that is wrong 70% of the time.
+
+**Verdict for #141:** (c), approximation noise, with a corpus-specific
+reason it skews positive here — not (a), a bug in the exact path, which
+agrees with brute force to 10⁻⁷, and not (b), a scoring artefact: the same
+scorer, labels and query vectors score both paths. Nothing changes in the
+product. Limits: 42 queries with unreviewed agent-drafted labels; one
+repository; five builds; the hybrid and hybrid+rerank differences between
+the two CI runs (+0.095 and +0.059 nDCG@10 on hono) were not re-measured
+here — the vector leg of hybrid search is the same exact scan this section
+checks, so the same reading applies to its candidates, but the size of the
+effect on fused rankings is not measured.
 
 ### Limits of this set
 

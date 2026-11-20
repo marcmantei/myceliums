@@ -30,7 +30,7 @@ use myceliums_core::{
     check_model_cache, embedder_for_index, get_embedder_for, get_reranker, hybrid_search_with,
     local_model_code, rerank_results, reranker_spec, Embedder, HybridParams, IndexEmbeddingMeta,
 };
-use myceliums_storage::{CodeSymbol, Store};
+use myceliums_storage::{AnnSettings, CodeSymbol, Store};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -310,7 +310,7 @@ pub struct ModelProvenance {
 /// The corpus indexed with real embeddings in a throwaway LanceDB store.
 pub struct ModelIndex {
     /// Keeps the on-disk store alive for as long as the index is used.
-    _dir: tempfile::TempDir,
+    dir: tempfile::TempDir,
     store: Store,
     /// `store.get_symbols()` after indexing — the slice, in the order, that
     /// `myc search` and `myc search --hybrid` hand to BM25 for this index.
@@ -377,7 +377,7 @@ impl ModelIndex {
             .await
             .context("reading the indexed symbols back")?;
         Ok(Self {
-            _dir: dir,
+            dir,
             store,
             symbols,
             embedder,
@@ -390,6 +390,29 @@ impl ModelIndex {
     /// them (`store.get_symbols()`).
     pub fn symbols(&self) -> &[CodeSymbol] {
         &self.symbols
+    }
+
+    /// The store the corpus is indexed in, with the production ANN policy.
+    pub fn store(&self) -> &Store {
+        &self.store
+    }
+
+    /// Embed `query` with the query-side embedder resolved from the index —
+    /// the first step of every semantic and hybrid search.
+    pub async fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
+        self.embedder.embed_query(query).await
+    }
+
+    /// A second handle on the same on-disk table under another ANN policy —
+    /// to build and search an index the product no longer builds (#141)
+    /// without re-embedding the corpus. The production handle keeps bypassing
+    /// any index such a handle builds.
+    pub async fn reopen_with(&self, settings: AnnSettings) -> Result<Store> {
+        let store = Store::open(self.dir.path(), self.store.repo_id())
+            .await
+            .context("reopening the scratch LanceDB store")?;
+        store.set_embedding_dim(self.store.embedding_dim());
+        Ok(store.with_ann_settings(settings))
     }
 
     /// Rank corpus symbols for `query` under a model-backed `mode`, best first,

@@ -27,6 +27,7 @@ cargo run -p myceliums-benchmarks --release --bin ann-recall                    
 cargo run -p myceliums-benchmarks --release --bin ann-recall -- --sweep --sizes 5000,20000,50000
 cargo run -p myceliums-benchmarks --release --bin ann-recall -- --sweep \
     --repo /path/to/checkout --cache /path/to/vectors.bin --sizes 5000,20000   # real embeddings
+cargo run -p myceliums-benchmarks --bin exact-vs-ann -- --repo hono              # exact vs old IVF-PQ, per query (#141)
 ```
 
 The Criterion suite has no agent in the loop and makes no claim about agent
