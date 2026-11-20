@@ -24,7 +24,7 @@ use myceliums_core::analyzer::Analyzer;
 use myceliums_core::config::ProjectConfig;
 use myceliums_core::{
     build_snapshot, AnalysisLock, AnalysisPhase, CommunityDetector, GraphService, LockOutcome,
-    ProcessTracer, ProgressReporter, StagedIndex,
+    PreviousVectors, ProcessTracer, ProgressReporter, StagedIndex,
 };
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
 use rmcp::model::{ProgressNotificationParam, ProgressToken};
@@ -335,6 +335,23 @@ impl Rebuild {
         let step = |phase: AnalysisPhase| reporters.report(phase);
 
         let live = RepoRegistry::repo_db_path(&data_dir, &repo_id);
+        // The vectors of the index being replaced: unchanged symbols keep
+        // them, so a run that does not embed (skip_embeddings, or a model
+        // that fails) does not drop the embeddings (#151). Only an index the
+        // registry knows, at the current vector geometry. Unreadable: the
+        // run embeds what it can, as without a previous index.
+        let geometry = crate::repo::registry()?
+            .get(&repo_id)
+            .map(|info| info.vector_geometry_version);
+        let previous = match (geometry, Store::open_existing(&live, &repo_id).await) {
+            (Some(geometry), Ok(store)) => PreviousVectors::load(&store, geometry)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!("cannot read the previous index's vectors: {e}");
+                    None
+                }),
+            _ => None,
+        };
         let staged = StagedIndex::create(&live)
             .map_err(|e| ToolError::internal("cannot create the staging directory", e))?;
 
@@ -346,6 +363,7 @@ impl Rebuild {
             None => Analyzer::new(store, project.clone()),
         }
         .set_skip_embeddings(skip_embeddings)
+        .with_previous_vectors(previous)
         .with_progress(reporters.clone())
         .with_cancel({
             let ct = ct.clone();
@@ -447,6 +465,7 @@ impl Rebuild {
             symbols_embedded: embedding_stats.symbols_embedded,
             symbols_total: embedding_stats.symbols_total,
             embedding_failures: embedding_stats.embedding_failures,
+            embeddings_reused: result.embeddings_reused,
             calls: Some(result.call_resolution.summary()),
             cached: false,
         })

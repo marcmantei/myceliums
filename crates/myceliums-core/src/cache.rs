@@ -189,49 +189,46 @@ fn check_cache_by_mtime(
 
     let analyzed_system_time: std::time::SystemTime = analyzed_at.into();
     let mut changed_count = 0usize;
+    let newer = |path: &Path| {
+        std::fs::metadata(path)
+            .and_then(|meta| meta.modified())
+            .is_ok_and(|mtime| mtime > analyzed_system_time)
+    };
 
-    let skip_dirs: &[&str] = &[
-        ".git",
-        "node_modules",
-        "__pycache__",
-        "target",
-        "dist",
-        "build",
-        ".venv",
-        "venv",
-    ];
+    // Only files the analysis would index count (#151): the same selection
+    // as the analyzer's walk, so files it never reads — `.mcp.json`,
+    // `.claude/`, build output — cannot force a re-analysis. The project
+    // config decides that selection, so it counts too.
+    let scope = crate::index_scope::IndexScope::for_project(repo_path).unwrap_or_default();
+    if newer(&repo_path.join(crate::config::CONFIG_FILENAME)) {
+        changed_count += 1;
+    }
 
     for entry in walkdir::WalkDir::new(repo_path)
         .into_iter()
         .filter_entry(|e| {
-            // Skip hidden dirs and known noise dirs, but always allow the root
-            if e.depth() == 0 {
-                return true;
-            }
-            if e.file_type().is_dir() {
-                let name = e.file_name().to_string_lossy();
-                return !skip_dirs.iter().any(|d| name == *d) && !name.starts_with('.');
-            }
-            true
+            // Always allow the root
+            e.depth() == 0
+                || !crate::index_scope::IndexScope::skips_name(&e.file_name().to_string_lossy())
         })
         .filter_map(|e| e.ok())
     {
         if !entry.file_type().is_file() {
             continue;
         }
-        if let Ok(meta) = entry.metadata() {
-            if let Ok(mtime) = meta.modified() {
-                if mtime > analyzed_system_time {
-                    changed_count += 1;
-                    if changed_count > config.max_changed_files {
-                        return CacheDecision::ReanalyzeNeeded {
-                            reason: format!(
-                                "{} files modified since last analysis (timestamp-based)",
-                                changed_count
-                            ),
-                        };
-                    }
-                }
+        let rel = entry.path().strip_prefix(repo_path).unwrap_or(entry.path());
+        if !scope.affects_index(repo_path, rel) {
+            continue;
+        }
+        if newer(entry.path()) {
+            changed_count += 1;
+            if changed_count > config.max_changed_files {
+                return CacheDecision::ReanalyzeNeeded {
+                    reason: format!(
+                        "{} files modified since last analysis (timestamp-based)",
+                        changed_count
+                    ),
+                };
             }
         }
     }
@@ -487,6 +484,49 @@ mod tests {
             matches!(decision, CacheDecision::ReanalyzeNeeded { .. }),
             "Expected ReanalyzeNeeded, got: {:?}",
             decision
+        );
+    }
+
+    /// Files the analysis does not index — what `myc setup-claude` writes,
+    /// build output — never force a re-analysis (#151).
+    #[test]
+    fn test_cache_mtime_ignores_files_the_analysis_does_not_index() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join(".claude/agents")).unwrap();
+        std::fs::create_dir_all(root.join("target")).unwrap();
+        std::fs::write(root.join(".mcp.json"), "{}").unwrap();
+        std::fs::write(root.join(".claude/settings.json"), "{}").unwrap();
+        std::fs::write(root.join(".claude/agents/code-explorer.md"), "x").unwrap();
+        std::fs::write(root.join("target/gen.rs"), "fn f() {}").unwrap();
+        std::fs::write(root.join("notes.bin"), "x").unwrap();
+        let past = chrono::Utc::now() - chrono::Duration::hours(1);
+        let repo_info = RepoInfo {
+            id: "test-scope".to_string(),
+            name: "test".to_string(),
+            path: root.to_string_lossy().to_string(),
+            analyzed_at: past.to_rfc3339(),
+            symbol_count: 0,
+            file_count: 0,
+            analyzed_commit: None,
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+        };
+        let config = CacheCheckConfig {
+            max_age_minutes: 120,
+            ..Default::default()
+        };
+        let decision = check_cache_by_mtime(&repo_info, root, &config);
+        assert!(
+            matches!(decision, CacheDecision::UseCached { .. }),
+            "{decision:?}"
+        );
+
+        // The project config decides what is indexed: it counts.
+        std::fs::write(root.join(crate::config::CONFIG_FILENAME), "").unwrap();
+        let decision = check_cache_by_mtime(&repo_info, root, &config);
+        assert!(
+            matches!(decision, CacheDecision::ReanalyzeNeeded { .. }),
+            "{decision:?}"
         );
     }
 

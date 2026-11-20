@@ -252,6 +252,22 @@ pub(crate) async fn cmd_analyze(
     }
 
     let store = Store::open(&db_path, &repo_id).await?;
+    // Unchanged symbols keep their vectors: a run that does not embed
+    // (--skip-embeddings, the session default, or a model that fails) must
+    // not drop the embeddings of the index it replaces (#151).
+    // Only at the current vector geometry, as the registry records it.
+    let geometry = RepoRegistry::load(&registry_path())?
+        .get(&repo_id)
+        .map(|info| info.vector_geometry_version);
+    let previous = match geometry {
+        Some(geometry) => myceliums_core::PreviousVectors::load(&store, geometry)
+            .await
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: cannot read the previous index's vectors: {e}");
+                None
+            }),
+        None => None,
+    };
     store.delete_repo_data().await?;
 
     let analyzer = if let Some(cfg) = project_config {
@@ -260,6 +276,7 @@ pub(crate) async fn cmd_analyze(
         Analyzer::new(store, abs_path.clone())
     }
     .set_skip_embeddings(skip_embeddings)
+    .with_previous_vectors(previous)
     .with_progress(progress_reporter);
     let result = analyzer.analyze().await?;
 
@@ -268,11 +285,22 @@ pub(crate) async fn cmd_analyze(
     println!("  Relationships: {}", result.relationship_count);
     // How many call sites got an edge, and why the others did not (#139).
     println!("  Calls:         {}", result.call_resolution.summary());
+    let kept = if result.embeddings_reused > 0 {
+        format!(
+            ", {} kept from the previous index",
+            result.embeddings_reused
+        )
+    } else {
+        String::new()
+    };
     if skip_embeddings {
-        println!("  Embeddings:    {} (skipped)", result.embedding_count);
+        println!(
+            "  Embeddings:    {} (skipped{kept}; {}/{} symbols have a vector)",
+            result.embedding_count, result.symbols_embedded, result.symbols_total
+        );
     } else {
         println!(
-            "  Embeddings:    {} ({}/{} symbols)",
+            "  Embeddings:    {} ({}/{} symbols{kept})",
             result.embedding_count, result.symbols_embedded, result.symbols_total
         );
         if result.embedding_failures > 0 {

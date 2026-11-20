@@ -32,14 +32,30 @@ pub fn format_analyze(o: &AnalyzeOutput) -> String {
         embedded = o.symbols_embedded,
         total = o.symbols_total,
     );
+    if o.embeddings_reused > 0 {
+        out.push_str(&format!(
+            " ({} kept from the previous index)",
+            o.embeddings_reused
+        ));
+    }
     if let Some(calls) = &o.calls {
         out.push_str(&format!("\nCalls:       {calls}"));
     }
+    let missing = o.symbols_total.saturating_sub(o.symbols_embedded);
     if o.embedding_failures > 0 {
         out.push_str(&format!(
             "\n⚠ Embedding failures: {} — {} of {} symbols have no vector and are \
              invisible to semantic/hybrid search",
             o.embedding_failures, o.symbols_embedded, o.symbols_total
+        ));
+    } else if missing > 0 {
+        // Not embedded on purpose (skip_embeddings): say so, or "0/N" reads
+        // like a complete index.
+        out.push_str(&format!(
+            "\n⚠ {missing} of {} symbols have no vector (embeddings skipped) and are \
+             invisible to semantic/hybrid search; call analyze without skip_embeddings \
+             to embed them",
+            o.symbols_total
         ));
     }
     out

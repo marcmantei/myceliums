@@ -3,7 +3,12 @@
 
 use crate::errors::ToolError;
 use myceliums_core::git_read::git_read;
+use myceliums_core::index_scope::{
+    blanks_managed_blocks, indexed_text, same_outside_managed_blocks, text_fingerprint, IndexScope,
+    INDEXED_TEXT_META_KEY, MANAGED_BLOCK_BEGIN,
+};
 use myceliums_storage::{FileNode, RepoInfo, Store};
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -93,12 +98,17 @@ pub(crate) fn unlinked_impact_note<'a>(
 /// Load the embedding accounting for a store, for reporting in the `analyze`
 /// response's cached path.
 ///
-/// A genuine load error propagates. A *missing* record means a legacy index
-/// built before accounting existed: treat it as fully embedded (using
-/// `symbol_count` as the total) rather than "0 of N", which would falsely
-/// imply a total embedding failure. Centralized so the cached and non-cached
-/// query paths derive the reported counts the same way — the non-cached path
-/// gets the equivalent record straight from `AnalysisResult::embedding_stats`.
+/// A genuine load error propagates. A *missing* record means one of two
+/// things. With embedding metadata, a legacy index built before accounting
+/// existed: treated as fully embedded (using `symbol_count` as the total)
+/// rather than "0 of N", which would falsely imply a total embedding failure.
+/// Without it, an index built with `skip_embeddings`: no vectors, and no
+/// failures — reported as "0 of N", as a fresh run reports it, so a cached
+/// answer does not claim embeddings the index lacks (#151). Search treats
+/// such an index as having no vectors as well. Centralized so the cached and
+/// non-cached query paths derive the reported counts the same way — the
+/// non-cached path gets the equivalent record straight from
+/// `AnalysisResult::embedding_stats`.
 pub(crate) async fn load_embedding_stats(
     store: &Store,
     symbol_count: usize,
@@ -106,8 +116,23 @@ pub(crate) async fn load_embedding_stats(
     let loaded = myceliums_core::EmbeddingStats::load(store)
         .await
         .map_err(|e| ToolError::internal("cannot read embedding accounting", e))?;
-    Ok(loaded
-        .unwrap_or_else(|| myceliums_core::EmbeddingStats::complete(symbol_count, symbol_count)))
+    if let Some(stats) = loaded {
+        return Ok(stats);
+    }
+    let has_meta = store
+        .get_index_meta(myceliums_core::IndexEmbeddingMeta::META_KEY)
+        .await
+        .map_err(|e| ToolError::internal("cannot read embedding metadata", e))?
+        .is_some();
+    Ok(if has_meta {
+        myceliums_core::EmbeddingStats::complete(symbol_count, symbol_count)
+    } else {
+        myceliums_core::EmbeddingStats {
+            symbols_total: symbol_count,
+            symbols_embedded: 0,
+            embedding_failures: 0,
+        }
+    })
 }
 
 // ── Freshness ────────────────────────────────────────────────────────────
@@ -205,30 +230,97 @@ impl Freshness {
 pub(crate) async fn freshness(
     info: &RepoInfo,
     indexed: Arc<Vec<FileNode>>,
+    store: Arc<Store>,
     recheck: bool,
 ) -> Freshness {
-    let info = info.clone();
-    tokio::task::spawn_blocking(move || {
-        let repo = Path::new(&info.path);
+    let unknown = || Freshness::NotRecorded {
+        built: "at an unknown time".to_string(),
+    };
+    let repo = PathBuf::from(&info.path);
+    let Ok((git, scope)) = tokio::task::spawn_blocking(move || {
         let git = if recheck {
-            let state = read_git_state(repo);
-            remember_git_state(repo, state.clone());
+            let state = read_git_state(&repo);
+            remember_git_state(&repo, state.clone());
             state
         } else {
-            cached_git_state(repo)
+            cached_git_state(&repo)
         };
-        let is_indexed = |rel: &Path| indexed.iter().any(|f| Path::new(&f.path) == rel);
-        assess(&info, git.as_ref(), &is_indexed)
+        // The analysis' own file selection (#151). An unreadable
+        // `.myceliums.toml` fails the next analysis anyway; until then the
+        // default selection decides.
+        let scope = IndexScope::for_project(&repo).unwrap_or_else(|e| {
+            tracing::debug!("freshness: cannot read the project config: {e}");
+            IndexScope::default()
+        });
+        (git, scope)
     })
     .await
-    .unwrap_or_else(|_| Freshness::NotRecorded {
-        built: "at an unknown time".to_string(),
+    else {
+        return unknown();
+    };
+    // The indexed-text fingerprints matter only for a changed file whose
+    // managed blocks the analysis blanks; read them only then.
+    let blanked_change = git
+        .as_ref()
+        .and_then(|git| git.changed.as_ref())
+        .is_some_and(|changed| {
+            changed
+                .iter()
+                .any(|rel| scope.language(rel).is_some_and(blanks_managed_blocks))
+        });
+    let fingerprints: BTreeMap<String, String> = if blanked_change {
+        match store.get_index_meta(INDEXED_TEXT_META_KEY).await {
+            Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
+            _ => BTreeMap::new(),
+        }
+    } else {
+        BTreeMap::new()
+    };
+    let info = info.clone();
+    tokio::task::spawn_blocking(move || {
+        let holds = |rel: &Path| indexed.iter().any(|f| Path::new(&f.path) == rel);
+        let index = Indexed {
+            holds: &holds,
+            scope: &scope,
+            fingerprints: &fingerprints,
+        };
+        assess(&info, git.as_ref(), &index)
     })
+    .await
+    .unwrap_or_else(|_| unknown())
 }
 
 /// The freshness line for the top of a graph result.
-pub(crate) async fn freshness_line(info: &RepoInfo, indexed: Arc<Vec<FileNode>>) -> String {
-    named(&info.id, &freshness(info, indexed, false).await.line())
+pub(crate) async fn freshness_line(
+    info: &RepoInfo,
+    indexed: Arc<Vec<FileNode>>,
+    store: Arc<Store>,
+) -> String {
+    named(
+        &info.id,
+        &freshness(info, indexed, store, false).await.line(),
+    )
+}
+
+/// What freshness needs to know about the index.
+struct Indexed<'a> {
+    /// Whether the index holds a file (path relative to the indexed
+    /// directory).
+    holds: &'a dyn Fn(&Path) -> bool,
+    /// The analysis' file selection.
+    scope: &'a IndexScope,
+    /// Fingerprints of the text indexed for memory files
+    /// ([`INDEXED_TEXT_META_KEY`]); empty for an index from before them.
+    fingerprints: &'a BTreeMap<String, String>,
+}
+
+impl Indexed<'_> {
+    /// Whether a change to `rel` can change the index: the analysis would
+    /// index it, or the index holds it (a file grown past the size limit,
+    /// or now excluded, is dropped by the next analysis).
+    fn concerns(&self, root: &Path, rel: &Path) -> bool {
+        (self.holds)(rel) || self.scope.affects_index(root, rel)
+    }
 }
 
 /// `Index: <repo_id>, <rest>`: the line names the repository it describes,
@@ -240,25 +332,29 @@ fn named(repo_id: &str, line: &str) -> String {
     }
 }
 
-/// `is_indexed` says whether the index holds a file (path relative to the
-/// indexed directory).
-fn assess(
-    info: &RepoInfo,
-    git: Option<&GitState>,
-    is_indexed: &dyn Fn(&Path) -> bool,
-) -> Freshness {
+/// How current the index `index` describes is, given `git`.
+///
+/// Only changes that can change the index count ([`Indexed::concerns`]):
+/// files the analysis selects (its own rules — not `.mcp.json`, `.claude/`,
+/// build output or files in languages it does not read) or holds, and not a
+/// change confined to the block `myc setup-claude` manages in CLAUDE.md,
+/// which the analysis leaves out.
+fn assess(info: &RepoInfo, git: Option<&GitState>, index: &Indexed<'_>) -> Freshness {
     let built = chrono::DateTime::parse_from_rfc3339(&info.analyzed_at).ok();
+    let root = Path::new(&info.path);
     match (info.analyzed_commit.clone(), git) {
         (Some(commit), Some(git)) if git.head == commit => {
             let edited = match (&git.changed, built) {
-                (Some(changed), Some(built)) => Some(edited_since(
-                    Path::new(&info.path),
-                    changed,
-                    built.into(),
-                    is_indexed,
-                )),
+                (Some(changed), Some(built)) => {
+                    Some(edited_since(root, changed, built.into(), index))
+                }
                 // An unreadable timestamp: every change may postdate it.
-                (Some(changed), None) => Some(changed.len()),
+                (Some(changed), None) => Some(
+                    changed
+                        .iter()
+                        .filter(|rel| index.concerns(root, rel))
+                        .count(),
+                ),
                 (None, _) => None,
             };
             Freshness::AtHead { commit, edited }
@@ -285,23 +381,62 @@ fn short(commit: &str) -> &str {
 }
 
 /// How many of the `changed` files the index has not seen: existing files
-/// modified after `built`, and deleted files the index still holds. (A file
-/// deleted before indexing stays in `git status` until it is committed, but
-/// the index no longer has it — that is not a change.)
-fn edited_since(
-    root: &Path,
-    changed: &[PathBuf],
-    built: SystemTime,
-    is_indexed: &dyn Fn(&Path) -> bool,
-) -> usize {
+/// it concerns modified after `built` (unless the analysis indexes the same
+/// text for them as before), and deleted files the index still holds. (A
+/// file deleted before indexing stays in `git status` until it is
+/// committed, but the index no longer has it — that is not a change.)
+fn edited_since(root: &Path, changed: &[PathBuf], built: SystemTime, index: &Indexed<'_>) -> usize {
     changed
         .iter()
+        .filter(|rel| index.concerns(root, rel))
         .take(MAX_CHANGED_CHECKED)
         .filter(|rel| match std::fs::metadata(root.join(rel)) {
-            Ok(meta) => meta.modified().map(|mtime| mtime > built).unwrap_or(true),
-            Err(_) => is_indexed(rel),
+            Ok(meta) => {
+                meta.modified().map(|mtime| mtime > built).unwrap_or(true)
+                    && !only_managed_block_changed(root, rel, index)
+            }
+            Err(_) => (index.holds)(rel),
         })
         .count()
+}
+
+/// Whether the analysis would index the same text for `rel` as it did: the
+/// file is one whose managed blocks it blanks ([`blanks_managed_blocks`] —
+/// in any other file the markers are plain text and every edit counts), and
+/// its text with the blocks blanked equals
+///
+/// * the fingerprint recorded when the file was indexed, when there is one
+///   (memory files and files holding a block, since #151); or else
+/// * its committed version (`git show HEAD:./path`) with the blocks blanked
+///   — nothing, when it is not committed. This fallback misses an index
+///   built from uncommitted text that a later edit reverted to the committed
+///   text, and calls an uncommitted file with notes plus an added block
+///   changed.
+///
+/// Reads the file only for such a language, and runs git only when the file
+/// holds a block and no fingerprint was recorded.
+fn only_managed_block_changed(root: &Path, rel: &Path, index: &Indexed<'_>) -> bool {
+    let Some(lang) = index.scope.language(rel) else {
+        return false;
+    };
+    if !blanks_managed_blocks(lang) {
+        return false;
+    }
+    let Ok(current) = std::fs::read_to_string(root.join(rel)) else {
+        return false;
+    };
+    let key = rel.to_string_lossy();
+    if let Some(recorded) = index.fingerprints.get(key.as_ref()) {
+        return text_fingerprint(&indexed_text(lang, &current)) == *recorded;
+    }
+    if !current.contains(MANAGED_BLOCK_BEGIN) {
+        return false;
+    }
+    // `HEAD:./path` is relative to the indexed directory, which need not be
+    // the repository root.
+    let spec = format!("HEAD:./{}", key.replace('\\', "/"));
+    let committed = git_read(root, &["show", &spec], GIT_TIMEOUT).unwrap_or_default();
+    same_outside_managed_blocks(&current, &committed)
 }
 
 /// Git state per checkout, with the time it was read.
@@ -401,6 +536,22 @@ mod tests {
 
     const HEAD: &str = "0123456789abcdef";
 
+    /// `assess` without recorded fingerprints.
+    fn assess_with(
+        info: &RepoInfo,
+        git: Option<&GitState>,
+        holds: &dyn Fn(&Path) -> bool,
+        scope: &IndexScope,
+    ) -> Freshness {
+        let fingerprints = BTreeMap::new();
+        let index = Indexed {
+            holds,
+            scope,
+            fingerprints: &fingerprints,
+        };
+        assess(info, git, &index)
+    }
+
     fn nothing_indexed(_: &Path) -> bool {
         false
     }
@@ -408,18 +559,20 @@ mod tests {
 
     #[test]
     fn freshness_states_are_one_line_each() {
-        let current = assess(
+        let current = assess_with(
             &info(Some(HEAD), AT, "/nowhere"),
             Some(&at_head(Some(vec![]))),
             &nothing_indexed,
+            &IndexScope::default(),
         );
         assert_eq!(current.line(), "Index: commit 0123456 = HEAD, up to date.");
         assert!(!current.is_stale());
 
-        let moved = assess(
+        let moved = assess_with(
             &info(Some("fedcba9876"), AT, "/nowhere"),
             Some(&at_head(Some(vec![]))),
             &nothing_indexed,
+            &IndexScope::default(),
         );
         assert!(
             moved.line().contains("HEAD is now 0123456 — stale"),
@@ -427,15 +580,21 @@ mod tests {
         );
         assert!(moved.is_stale());
 
-        let not_recorded = assess(
+        let not_recorded = assess_with(
             &info(None, AT, "/nowhere"),
             Some(&at_head(Some(vec![]))),
             &nothing_indexed,
+            &IndexScope::default(),
         );
         assert!(not_recorded.line().contains("built 2026-01-01 00:00 UTC"));
         assert!(!not_recorded.is_stale());
 
-        let no_git = assess(&info(Some(HEAD), AT, "/nowhere"), None, &nothing_indexed);
+        let no_git = assess_with(
+            &info(Some(HEAD), AT, "/nowhere"),
+            None,
+            &nothing_indexed,
+            &IndexScope::default(),
+        );
         assert!(no_git.line().contains("current HEAD unknown"));
 
         for state in [current, moved, not_recorded, no_git] {
@@ -449,10 +608,11 @@ mod tests {
 
     #[test]
     fn a_failed_or_timed_out_status_is_unknown_not_up_to_date() {
-        let unknown = assess(
+        let unknown = assess_with(
             &info(Some(HEAD), AT, "/nowhere"),
             Some(&at_head(None)),
             &nothing_indexed,
+            &IndexScope::default(),
         );
         assert_eq!(
             unknown,
@@ -480,10 +640,11 @@ mod tests {
         let git = at_head(Some(vec!["a.rs".into(), "gone.rs".into(), "old.rs".into()]));
         let indexed = |rel: &Path| rel == Path::new("gone.rs");
         let path = dir.path().to_string_lossy();
-        let state = assess(
+        let state = assess_with(
             &info(Some(HEAD), "2001-01-01T00:00:00Z", &path),
             Some(&git),
             &indexed,
+            &IndexScope::default(),
         );
         assert!(
             state.line().contains("2 files changed since indexing"),
@@ -492,10 +653,11 @@ mod tests {
         assert!(state.is_stale());
 
         // Indexed after the edit: only the deletion the index has not seen.
-        let state = assess(
+        let state = assess_with(
             &info(Some(HEAD), "2999-01-01T00:00:00Z", &path),
             Some(&git),
             &indexed,
+            &IndexScope::default(),
         );
         assert!(
             state.line().contains("1 file changed since indexing"),
@@ -504,13 +666,74 @@ mod tests {
 
         // Re-indexed after the deletion: nothing left, though git still
         // lists both deletions until they are committed.
-        let state = assess(
+        let state = assess_with(
             &info(Some(HEAD), "2999-01-01T00:00:00Z", &path),
             Some(&git),
             &nothing_indexed,
+            &IndexScope::default(),
         );
         assert!(state.line().ends_with("up to date."), "{state:?}");
         assert!(!state.is_stale());
+    }
+
+    /// What `myc setup-claude --scope project` writes after an analysis, and
+    /// files the analysis never reads, are no change to the index (#151).
+    #[test]
+    fn files_the_analysis_does_not_index_are_not_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join(".claude/agents")).unwrap();
+        std::fs::create_dir_all(root.join("target")).unwrap();
+        let block = "<!-- BEGIN myceliums -->\n## Code navigation\n<!-- END myceliums -->\n";
+        for (rel, text) in [
+            (".mcp.json", "{}"),
+            (".claude/settings.json", "{}"),
+            (".claude/agents/code-explorer.md", "---\n---\n"),
+            ("CLAUDE.md", block),
+            ("Cargo.lock", "x"),
+            ("target/gen.rs", "fn f() {}"),
+        ] {
+            std::fs::write(root.join(rel), text).unwrap();
+        }
+        let changed: Vec<PathBuf> = [
+            ".mcp.json",
+            ".claude/settings.json",
+            ".claude/agents/code-explorer.md",
+            "CLAUDE.md",
+            "Cargo.lock",
+            "target/gen.rs",
+        ]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+        let git = at_head(Some(changed.clone()));
+        let path = root.to_string_lossy();
+        let built = "2001-01-01T00:00:00Z";
+        let state = assess_with(
+            &info(Some(HEAD), built, &path),
+            Some(&git),
+            &nothing_indexed,
+            &IndexScope::default(),
+        );
+        assert!(state.line().ends_with("up to date."), "{state:?}");
+        assert!(!state.is_stale());
+
+        // CLAUDE.md is indexed: text outside the block is a change.
+        std::fs::write(root.join("CLAUDE.md"), format!("# Notes\n\n{block}")).unwrap();
+        // And so is `.myceliums.toml`, which decides what is indexed.
+        std::fs::write(root.join(".myceliums.toml"), "").unwrap();
+        let mut changed = changed;
+        changed.push(PathBuf::from(".myceliums.toml"));
+        let state = assess_with(
+            &info(Some(HEAD), built, &path),
+            Some(&at_head(Some(changed))),
+            &nothing_indexed,
+            &IndexScope::default(),
+        );
+        assert!(
+            state.line().contains("2 files changed since indexing"),
+            "{state:?}"
+        );
     }
 
     /// Runs git in `dir` for test setup; panics on failure.
@@ -533,6 +756,166 @@ mod tests {
             .status()
             .expect("git runs");
         assert!(status.success(), "git {args:?}");
+    }
+
+    const BLOCK_V1: &str = "<!-- BEGIN myceliums -->\nrouting v1\n<!-- END myceliums -->\n";
+    const BLOCK_V2: &str =
+        "<!-- BEGIN myceliums -->\nrouting v2\nmore routing\n<!-- END myceliums -->\n";
+
+    /// A committed checkout whose files were indexed in 2001 (so every
+    /// edit postdates the index), as `assess` sees it after `edit`.
+    fn after_edit(repo: &Path, edit: impl FnOnce(&Path)) -> Freshness {
+        sh_git(repo, &["add", "."]);
+        sh_git(repo, &["commit", "-q", "-m", "init"]);
+        edit(repo);
+        let git = read_git_state(repo).expect("a git checkout");
+        let path = repo.to_string_lossy();
+        let all = |_: &Path| true;
+        assess_with(
+            &info(Some(&git.head), "2001-01-01T00:00:00Z", &path),
+            Some(&git),
+            &all,
+            &IndexScope::default(),
+        )
+    }
+
+    /// Re-running `setup-claude` rewrites the block of a committed CLAUDE.md
+    /// (a new block version): no change. An edit outside it is one.
+    #[test]
+    fn a_committed_claude_md_edited_inside_the_block_is_no_change() {
+        let notes = "# Notes\n\nTeam notes.\n\n";
+        // The block at the end, where `setup-claude` puts it.
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        sh_git(repo, &["init", "-q"]);
+        std::fs::write(repo.join("CLAUDE.md"), format!("{notes}{BLOCK_V1}")).unwrap();
+        let state = after_edit(repo, |repo| {
+            std::fs::write(repo.join("CLAUDE.md"), format!("{notes}{BLOCK_V2}")).unwrap();
+        });
+        assert!(!state.is_stale(), "{state:?}");
+
+        // Text after the block: an edit that keeps the block's length is
+        // no change; a longer block moves that text to other lines than
+        // the index has, which is one.
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        sh_git(repo, &["init", "-q"]);
+        std::fs::write(repo.join("CLAUDE.md"), format!("{notes}{BLOCK_V1}after\n")).unwrap();
+        let state = after_edit(repo, |repo| {
+            let same_length = BLOCK_V1.replace("routing v1", "routing v1, edited");
+            std::fs::write(
+                repo.join("CLAUDE.md"),
+                format!("{notes}{same_length}after\n"),
+            )
+            .unwrap();
+        });
+        assert!(!state.is_stale(), "{state:?}");
+        std::fs::write(repo.join("CLAUDE.md"), format!("{notes}{BLOCK_V2}after\n")).unwrap();
+        let git = read_git_state(repo).unwrap();
+        let all = |_: &Path| true;
+        let state = assess_with(
+            &info(
+                Some(&git.head),
+                "2001-01-01T00:00:00Z",
+                &repo.to_string_lossy(),
+            ),
+            Some(&git),
+            &all,
+            &IndexScope::default(),
+        );
+        assert!(state.is_stale(), "{state:?}");
+    }
+
+    #[test]
+    fn a_committed_claude_md_edited_outside_the_block_is_a_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        sh_git(repo, &["init", "-q"]);
+        std::fs::write(repo.join("CLAUDE.md"), format!("# Notes\n\n{BLOCK_V1}")).unwrap();
+        let state = after_edit(repo, |repo| {
+            let text = format!("# Notes\n\nNew notes.\n\n{BLOCK_V2}");
+            std::fs::write(repo.join("CLAUDE.md"), text).unwrap();
+        });
+        assert!(state.is_stale(), "{state:?}");
+    }
+
+    /// Only Markdown/MDX files are indexed with the block blanked: in any
+    /// other file, an edit between the markers is an edit.
+    #[test]
+    fn markers_in_other_files_do_not_hide_edits() {
+        for name in ["notes.txt", "app.ts", "Comp.vue"] {
+            let dir = tempfile::tempdir().unwrap();
+            let repo = dir.path();
+            sh_git(repo, &["init", "-q"]);
+            std::fs::write(repo.join(name), format!("start\n{BLOCK_V1}")).unwrap();
+            let state = after_edit(repo, |repo| {
+                std::fs::write(repo.join(name), format!("start\n{BLOCK_V2}")).unwrap();
+            });
+            assert!(state.is_stale(), "{name}: {state:?}");
+        }
+    }
+
+    /// An uncommitted CLAUDE.md with notes, indexed, then given a block: the
+    /// recorded fingerprint of the indexed text decides, not HEAD.
+    #[test]
+    fn an_uncommitted_claude_md_compares_with_the_indexed_text() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let notes = "# Notes\n\nTeam notes.\n";
+        let mut fingerprints = BTreeMap::new();
+        fingerprints.insert("CLAUDE.md".to_string(), text_fingerprint(notes));
+        let path = root.to_string_lossy();
+        let all = |_: &Path| true;
+        let scope = IndexScope::default();
+        let index = Indexed {
+            holds: &all,
+            scope: &scope,
+            fingerprints: &fingerprints,
+        };
+        let git = at_head(Some(vec![PathBuf::from("CLAUDE.md")]));
+        let built = "2001-01-01T00:00:00Z";
+
+        std::fs::write(root.join("CLAUDE.md"), format!("{notes}\n{BLOCK_V1}")).unwrap();
+        let state = assess(&info(Some(HEAD), built, &path), Some(&git), &index);
+        assert!(!state.is_stale(), "{state:?}");
+
+        std::fs::write(
+            root.join("CLAUDE.md"),
+            format!("{notes}More.\n\n{BLOCK_V1}"),
+        )
+        .unwrap();
+        let state = assess(&info(Some(HEAD), built, &path), Some(&git), &index);
+        assert!(state.is_stale(), "{state:?}");
+    }
+
+    /// A file the index holds that grew past the size limit is a change:
+    /// the next analysis drops it.
+    #[test]
+    fn an_indexed_file_grown_past_the_size_limit_is_a_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::write(root.join("big.ts"), vec![b'a'; 600 * 1024]).unwrap();
+        let path = root.to_string_lossy();
+        let git = at_head(Some(vec![PathBuf::from("big.ts")]));
+        let holds = |rel: &Path| rel == Path::new("big.ts");
+        let built = "2001-01-01T00:00:00Z";
+        let state = assess_with(
+            &info(Some(HEAD), built, &path),
+            Some(&git),
+            &holds,
+            &IndexScope::default(),
+        );
+        assert!(state.is_stale(), "{state:?}");
+        let state = assess_with(
+            &info(Some(HEAD), built, &path),
+            Some(&git),
+            &nothing_indexed,
+            &IndexScope::default(),
+        );
+        assert!(
+            !state.is_stale(),
+            "never indexed, still too large: {state:?}"
+        );
     }
 
     #[test]

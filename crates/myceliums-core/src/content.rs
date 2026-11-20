@@ -191,9 +191,16 @@ fn parse_plain_text(source: &str) -> ParseResult {
 ///
 /// Dispatches to the Markdown/MDX line parser or the plain-text emitter based on `lang`.
 /// Must only be called with a content language (`lang.is_content() == true`).
+///
+/// The block `myc setup-claude` / `myc setup-codex` manage in a Markdown file
+/// (CLAUDE.md, AGENTS.md) is myceliums' own routing text: it is blanked out
+/// before parsing (#151), so installing or updating it changes nothing in the
+/// index.
 pub fn parse_content(source: &str, lang: SourceLanguage) -> ParseResult {
     match lang {
-        SourceLanguage::Markdown | SourceLanguage::Mdx => parse_markdown(source),
+        SourceLanguage::Markdown | SourceLanguage::Mdx => {
+            parse_markdown(&crate::index_scope::indexed_text(lang, source))
+        }
         SourceLanguage::PlainText => parse_plain_text(source),
         // PDF content is pre-converted to markdown by the pdf module.
         #[cfg(feature = "pdf")]
@@ -209,6 +216,20 @@ mod tests {
 
     fn md(src: &str) -> ParseResult {
         parse_content(src, SourceLanguage::Markdown)
+    }
+
+    #[test]
+    fn the_managed_routing_block_is_not_indexed() {
+        let src = "# Project\n\nNotes.\n\n<!-- BEGIN myceliums -->\n## Code navigation: myceliums\nUse the graph.\n<!-- END myceliums -->\n\n## After\n\nMore.\n";
+        let result = md(src);
+        let names: Vec<&str> = result.symbols.iter().map(|s| s.name.as_str()).collect();
+        assert!(
+            !names.iter().any(|n| n.contains("Code navigation")),
+            "{names:?}"
+        );
+        let after = result.symbols.iter().find(|s| s.name == "After").unwrap();
+        // Lines after the block keep their numbers.
+        assert_eq!(after.start_line, 10, "{:?}", result.symbols);
     }
 
     #[test]
