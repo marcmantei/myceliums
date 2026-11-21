@@ -825,7 +825,7 @@ impl GraphService {
             .list()
             .last()
             .map(|r| r.id.clone())
-            .ok_or_else(|| MyceliumError::Storage("No repositories analyzed yet".to_string()))
+            .ok_or_else(|| MyceliumError::NotAnalyzed("No repositories analyzed yet".to_string()))
     }
 
     /// Looks up a registered repository's metadata by id.
@@ -833,7 +833,7 @@ impl GraphService {
         self.load_registry()?
             .get(repo_id)
             .cloned()
-            .ok_or_else(|| MyceliumError::Storage(format!("Repository not found: {repo_id}")))
+            .ok_or_else(|| MyceliumError::NotAnalyzed(format!("Repository not found: {repo_id}")))
     }
 
     /// On-disk database path for a registered repository.
@@ -858,10 +858,9 @@ impl GraphService {
             .slots
             .retain(|id, _| registry.get(id).is_some());
         let db_path = registry.registered_db_path(&self.data_dir, repo_id)?;
-        let info = registry
-            .get(repo_id)
-            .cloned()
-            .ok_or_else(|| MyceliumError::Storage(format!("Repository not found: {repo_id}")))?;
+        let info = registry.get(repo_id).cloned().ok_or_else(|| {
+            MyceliumError::NotAnalyzed(format!("Repository not found: {repo_id}"))
+        })?;
         Ok((db_path, info))
     }
 
@@ -1560,7 +1559,7 @@ mod tests {
     fn resolve_repo_id_errors_when_registry_empty() {
         let (svc, _dir) = service_with_empty_registry();
         let err = svc.resolve_repo_id(None).unwrap_err();
-        assert!(matches!(err, MyceliumError::Storage(_)));
+        assert!(matches!(err, MyceliumError::NotAnalyzed(_)));
     }
 
     #[tokio::test]
