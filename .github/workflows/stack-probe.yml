@@ -1,0 +1,76 @@
+name: Stack Probe
+
+# Measures how much stack the recursive tree-sitter extractors use per tree
+# level, in debug and release builds, on Linux and macOS (#159). The probe
+# (crates/myceliums-core/src/parser/stack_probe.rs) binary-searches the
+# smallest thread stack each language's extraction survives on deeply nested
+# input, writes the table to the job summary, and fails when
+# STACK_BYTES_PER_LEVEL keeps less than a 2x margin over the worst language
+# in that build profile.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "crates/myceliums-core/src/parser/**"
+      - "crates/myceliums-core/src/dsl.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/stack-probe.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "crates/myceliums-core/src/parser/**"
+      - "crates/myceliums-core/src/dsl.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/stack-probe.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stack-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
+# Third-party actions are pinned to a full commit SHA with the release in a
+# comment, like ci.yml; Dependabot keeps the pins current.
+
+jobs:
+  probe:
+    name: Stack Probe (${{ matrix.os }}, ${{ matrix.profile }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        profile: [debug, release]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install protoc (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install protoc (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: stack-probe-${{ matrix.profile }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # The parser does not depend on the embeddings feature; leaving it out
+      # keeps ONNX Runtime out of the build.
+      - name: Measure stack per tree level
+        run: |
+          flags=()
+          if [ "${{ matrix.profile }}" = release ]; then flags=(--release); fi
+          cargo test -p myceliums-core --no-default-features --lib --locked "${flags[@]}" \
+            parser::stack_probe::measure_stack_per_tree_level -- --ignored --exact --nocapture

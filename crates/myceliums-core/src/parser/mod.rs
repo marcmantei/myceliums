@@ -37,6 +37,9 @@ mod swift;
 mod typescript;
 mod zig;
 
+#[cfg(test)]
+mod stack_probe;
+
 /// A supported source language for tree-sitter parsing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SourceLanguage {
@@ -669,35 +672,43 @@ impl SourceParser {
         let source_bytes = parse_source.as_bytes();
 
         Self::with_stack_for(&tree, || {
-            let root = tree.root_node();
-            let engine = crate::dsl::DslEngine::new(&rules, source_bytes);
-            let (symbols, calls, imports) = engine.extract(root);
-
-            // Add chain: None and file: None to DSL-produced calls
-            let calls = calls
-                .into_iter()
-                .map(|c| CallReference {
-                    caller_name: c.caller_name,
-                    callee_name: c.callee_name,
-                    line: c.line,
-                    chain: c.chain,
-                    file: None,
-                    ..Default::default()
-                })
-                .collect();
-
-            let rationales = Self::extract_rationales(root, source_bytes);
-
-            ParseResult {
-                symbols,
-                calls,
-                imports,
-                rationales,
-                aliases: vec![],
-                bindings: vec![],
-                declared: vec![],
-            }
+            Self::extract_with_dsl(&rules, tree.root_node(), source_bytes)
         })
+    }
+
+    /// Run the DSL engine with `rules` over a parsed tree.
+    fn extract_with_dsl(
+        rules: &crate::dsl::LanguageRules,
+        root: tree_sitter::Node,
+        source_bytes: &[u8],
+    ) -> ParseResult {
+        let engine = crate::dsl::DslEngine::new(rules, source_bytes);
+        let (symbols, calls, imports) = engine.extract(root);
+
+        // Add chain: None and file: None to DSL-produced calls
+        let calls = calls
+            .into_iter()
+            .map(|c| CallReference {
+                caller_name: c.caller_name,
+                callee_name: c.callee_name,
+                line: c.line,
+                chain: c.chain,
+                file: None,
+                ..Default::default()
+            })
+            .collect();
+
+        let rationales = Self::extract_rationales(root, source_bytes);
+
+        ParseResult {
+            symbols,
+            calls,
+            imports,
+            rationales,
+            aliases: vec![],
+            bindings: vec![],
+            declared: vec![],
+        }
     }
 
     /// Parses `source` and extracts its symbols, calls, imports, comments and type information.
