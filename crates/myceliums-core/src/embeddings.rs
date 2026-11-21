@@ -795,16 +795,20 @@ pub fn content_byte_budget(max_input_tokens: usize) -> usize {
     (content_tokens * BYTES_PER_TOKEN).max(256)
 }
 
-/// Byte budget for the default local embedding model, used by
-/// [`build_embedding_text`] when no model context is supplied.
+/// Tokens the template-1 document of [`build_embedding_text`] is sized for:
+/// the reranker's input window (and `multilingual-e5-small`'s, the default
+/// model that sized it until #157). Fixed, so the reranker reads the same
+/// documents whichever embedding model is the default.
+const DEFAULT_DOCUMENT_TOKENS: usize = 512;
+
+/// Byte budget of [`build_embedding_text`]: [`content_byte_budget`] of
+/// [`DEFAULT_DOCUMENT_TOKENS`].
 fn default_content_byte_budget() -> usize {
-    embedding_model_spec(DEFAULT_LOCAL_EMBEDDING_MODEL)
-        .map(|s| content_byte_budget(s.max_input_tokens))
-        .unwrap_or(256)
+    content_byte_budget(DEFAULT_DOCUMENT_TOKENS)
 }
 
-/// Build the embedding document text for a single [`CodeSymbol`], truncating
-/// content to the default model's [`content_byte_budget`].
+/// Build the template-1 document text for a single [`CodeSymbol`], content
+/// cut to the budget of a 512-token window — what the reranker scores.
 ///
 /// Prefer [`build_embedding_text_for`] when the target model is known so the
 /// budget matches the model that will actually tokenize the text.
