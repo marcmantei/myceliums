@@ -448,6 +448,27 @@ pub struct SymbolMetadata {
     /// Never read by BM25 or the embedding text, so it changes no score.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub test: bool,
+    /// The doc comment written directly above the symbol (`///`, `/** */`,
+    /// `//`, `#` lines), markers stripped (#157). Embedded first in the
+    /// structured document template; not read by BM25.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
+}
+
+/// The vector of one body chunk of a long symbol (#157). The header chunk is
+/// the symbol's own vector; these are chunks 1 and up.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ChunkVector {
+    /// The symbol the chunk belongs to.
+    pub symbol_uid: String,
+    /// The symbol's file, so re-indexing a file removes its chunks.
+    pub file_path: String,
+    /// 1-based position of the chunk within the symbol.
+    pub chunk_index: u32,
+    /// Hex SHA-256 of the chunk text the vector was computed from.
+    pub text_hash: String,
+    /// The unit-length vector.
+    pub vector: Vec<f32>,
 }
 
 /// Declared visibility of a symbol.

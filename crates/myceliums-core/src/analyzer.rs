@@ -439,27 +439,44 @@ impl Analyzer {
     /// returns `(stored, failures, reused)`.
     ///
     /// Symbols whose document the previous index embedded with the same
-    /// model take that vector over; only the others are embedded — and not
-    /// at all with `skip_embeddings`, which leaves them without a vector
-    /// without counting a failure. A model that fails to load or embed
-    /// leaves only the symbols it had to embed without a vector, as failures.
+    /// model take that vector over — with their body chunks, for a chunked
+    /// index (#157); only the others are embedded — and not at all with
+    /// `skip_embeddings`, which leaves them without a vector without counting
+    /// a failure. Body chunks of changed symbols whose text is unchanged are
+    /// reused too. A model that fails to load or embed leaves only the
+    /// symbols it had to embed without a vector, as failures.
     #[cfg(feature = "embeddings")]
     async fn embed_all(
         &self,
         symbols: &[CodeSymbol],
         meta: &crate::embeddings::IndexEmbeddingMeta,
     ) -> (usize, usize, usize) {
+        use crate::embeddings::TakenVectors;
         let total = symbols.len();
         let mut pairs: Vec<(String, Vec<f32>)> = Vec::with_capacity(total);
+        let mut chunk_rows: Vec<myceliums_storage::ChunkVector> = Vec::new();
         let mut missing: Vec<&CodeSymbol> = Vec::new();
-        let previous = self
+        let taken = self
             .previous_vectors
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .take()
-            .map(|previous| previous.take_for(symbols, meta))
-            .unwrap_or_else(|| vec![None; total]);
-        for (symbol, vector) in symbols.iter().zip(previous) {
+            .map(|previous| previous.take_all(symbols, meta))
+            .unwrap_or_else(|| TakenVectors {
+                primary: vec![None; total],
+                ..Default::default()
+            });
+        for chunk in taken.chunks {
+            let symbol = &symbols[chunk.symbol];
+            chunk_rows.push(myceliums_storage::ChunkVector {
+                symbol_uid: symbol.uid.clone(),
+                file_path: symbol.file_path.clone(),
+                chunk_index: chunk.index,
+                text_hash: chunk.text_hash,
+                vector: chunk.vector,
+            });
+        }
+        for (symbol, vector) in symbols.iter().zip(taken.primary) {
             match vector {
                 Some(vector) => pairs.push((symbol.uid.clone(), vector)),
                 None => missing.push(symbol),
@@ -475,24 +492,27 @@ impl Analyzer {
         }
 
         if !self.skip_embeddings && !missing.is_empty() {
-            let batch_sz = self
-                .config
-                .as_ref()
-                .map(|c| c.analysis.embedding_batch_size)
-                .unwrap_or(256);
             match crate::embeddings::get_embedder_for(meta.clone()).await {
                 Ok(embedder) => {
-                    // All of them (the common case without previous vectors)
-                    // without copying.
-                    let generated = if reused == 0 {
-                        embedder.embed_symbols(symbols, batch_sz).await
-                    } else {
-                        let owned: Vec<CodeSymbol> = missing.iter().map(|s| (*s).clone()).collect();
-                        embedder.embed_symbols(&owned, batch_sz).await
-                    };
+                    let progress = self.embedding_progress();
+                    let generated = embedder
+                        .embed_index(
+                            &missing,
+                            self.embed_options(),
+                            Some(&taken.by_hash),
+                            progress.as_deref(),
+                        )
+                        .await;
                     match generated {
-                        Ok(vectors) => pairs
-                            .extend(missing.iter().zip(vectors).map(|(s, v)| (s.uid.clone(), v))),
+                        Ok(vectors) => {
+                            chunk_rows.extend(vectors.chunk_rows(&missing));
+                            pairs.extend(
+                                missing
+                                    .iter()
+                                    .zip(vectors.primary)
+                                    .map(|(s, v)| (s.uid.clone(), v)),
+                            );
+                        }
                         Err(e) => warn!(
                             "Failed to generate embeddings: {} ({} symbols left un-embedded)",
                             e,
@@ -525,6 +545,11 @@ impl Analyzer {
                 0
             }
         };
+        if stored > 0 {
+            if let Err(e) = self.store.store_chunk_vectors(chunk_rows).await {
+                warn!("Failed to store chunk vectors: {e} (long symbols keep their first window)");
+            }
+        }
         let reused = reused.min(stored);
         // Not embedding on purpose is no failure.
         let failures = if self.skip_embeddings {
@@ -533,6 +558,27 @@ impl Analyzer {
             total - stored
         };
         (stored, failures, reused)
+    }
+
+    /// Batch limits for embedding, from `[analysis]`.
+    #[cfg(feature = "embeddings")]
+    fn embed_options(&self) -> crate::embeddings::EmbedOptions {
+        let analysis = self.config.as_ref().map(|c| &c.analysis);
+        crate::embeddings::EmbedOptions::new(
+            analysis.map(|a| a.embedding_batch_size).unwrap_or(0),
+            analysis.map(|a| a.embedding_batch_tokens).unwrap_or(0),
+        )
+    }
+
+    /// Forwards embedding progress to the reporter as
+    /// [`AnalysisPhase::GeneratingEmbeddings`], when there is one.
+    #[cfg(feature = "embeddings")]
+    #[allow(clippy::type_complexity)]
+    fn embedding_progress(&self) -> Option<Box<dyn Fn(usize, usize) + Send + Sync>> {
+        let reporter = self.progress.clone()?;
+        Some(Box::new(move |current, total| {
+            reporter.report(AnalysisPhase::GeneratingEmbeddings { current, total })
+        }))
     }
 
     /// Runs a full analysis of the repository: discovers and parses the files, resolves relationships, writes everything to the store and generates embeddings unless they are skipped.
@@ -1978,22 +2024,31 @@ impl Analyzer {
             None => (0, 0),
             Some(meta) => match crate::embeddings::get_embedder_for(meta.clone()).await {
                 Ok(embedder) => {
-                    let batch_sz = self
-                        .config
-                        .as_ref()
-                        .map(|c| c.analysis.embedding_batch_size)
-                        .unwrap_or(256);
-                    match embedder.embed_symbols(&all_symbols, batch_sz).await {
+                    let candidates: Vec<&CodeSymbol> = all_symbols.iter().collect();
+                    let progress = self.embedding_progress();
+                    match embedder
+                        .embed_index(&candidates, self.embed_options(), None, progress.as_deref())
+                        .await
+                    {
                         Ok(vectors) => {
+                            let chunk_rows = vectors.chunk_rows(&candidates);
                             let pairs: Vec<(String, Vec<f32>)> = all_symbols
                                 .iter()
-                                .zip(vectors)
+                                .zip(vectors.primary)
                                 .map(|(s, v)| (s.uid.clone(), v))
                                 .collect();
                             match self.store.store_embeddings(pairs).await {
                                 Ok(n) => {
                                     if n > 0 {
                                         self.record_embedding_meta(meta).await;
+                                        if let Err(e) =
+                                            self.store.store_chunk_vectors(chunk_rows).await
+                                        {
+                                            warn!(
+                                                "Failed to store chunk vectors: {e} (long \
+                                                 symbols keep their first window)"
+                                            );
+                                        }
                                     }
                                     // `n` counts stored vectors, one per candidate
                                     // symbol, so it never exceeds `symbols_total`.
@@ -2498,14 +2553,16 @@ struct EmailSymbolMeta {
 /// Refuse an incremental run whose vectors would not share a space with the
 /// index's existing ones.
 ///
-/// The model recorded in the index can be kept for an incremental run, but the
-/// embedding-text template cannot: it is this build's code. When the index was
-/// embedded from a different template version — or from one that was never
-/// recorded (`text_version` 0, indexes written before issue #92) — embedding the
-/// changed files now would put two document templates into one vector space,
-/// and nothing would ever detect it. The refusal happens before the run touches
-/// the store, so the index stays consistent, only stale, until a full analysis
-/// re-embeds everything.
+/// An incremental run embeds the changed files with the index's own model
+/// *and* template: this build still builds every template it knows
+/// ([`crate::embeddings::TextTemplate`]), so an index from an earlier release
+/// stays consistent until the next full analysis moves it to the current one
+/// (#157). What cannot be reproduced is refused — a template this build does
+/// not know, or one that was never recorded (`text_version` 0, indexes written
+/// before issue #92): embedding the changed files would put two document
+/// templates into one vector space, and nothing would ever detect it. The
+/// refusal happens before the run touches the store, so the index stays
+/// consistent, only stale, until a full analysis re-embeds everything.
 #[cfg(feature = "embeddings")]
 fn refuse_incremental_template_mix(
     existing: Option<&crate::embeddings::IndexEmbeddingMeta>,
@@ -2514,13 +2571,15 @@ fn refuse_incremental_template_mix(
     let Some(existing) = existing else {
         return Ok(());
     };
-    if existing.text_version == EMBEDDING_TEXT_VERSION {
+    if existing.template().is_some() {
         return Ok(());
     }
     let recorded = match existing.text_version {
         0 => "an unrecorded embedding-text template (the index predates template versioning)"
             .to_string(),
-        version => format!("embedding-text template version {version}"),
+        version => {
+            format!("embedding-text template version {version}, which this build does not know")
+        }
     };
     crate::error::bail!(
         "Incremental re-index refused: the index's vectors were built from {recorded}, but \
@@ -3579,17 +3638,20 @@ mod tests {
             assert_eq!(chosen.meta_version, IndexEmbeddingMeta::META_VERSION);
         }
 
-        /// An index embedded from another template version must not be extended
-        /// incrementally, and the refusal comes before the run touches the
-        /// store: the changed file's existing rows survive (issue #92).
+        /// An index embedded from a template this build does not know must not
+        /// be extended incrementally, and the refusal comes before the run
+        /// touches the store: the changed file's existing rows survive (issue
+        /// #92).
         #[tokio::test]
-        async fn incremental_refuses_a_text_version_change_before_touching_the_store() {
+        async fn incremental_refuses_an_unknown_text_version_before_touching_the_store() {
             let (analyzer, dir) =
                 analyzer_with_embedding(openai_section("https://host.example/v1")).await;
             let mut recorded =
                 IndexEmbeddingMeta::from_config(&openai_section("https://host.example/v1"))
                     .unwrap();
-            recorded.text_version = crate::embeddings::EMBEDDING_TEXT_VERSION + 1;
+            let unknown = 99;
+            assert!(crate::embeddings::TextTemplate::from_version(unknown).is_none());
+            recorded.text_version = unknown;
             analyzer.store.set_embedding_dim(recorded.dim as i32);
             analyzer
                 .store
@@ -3606,10 +3668,7 @@ mod tests {
                 .await
                 .expect_err("a template change must not be mixed into the index");
             assert!(
-                error.to_string().contains(&format!(
-                    "version {}",
-                    crate::embeddings::EMBEDDING_TEXT_VERSION + 1
-                )),
+                error.to_string().contains(&format!("version {unknown}")),
                 "{error}"
             );
             assert_eq!(
@@ -3617,6 +3676,26 @@ mod tests {
                 1,
                 "the refused run must leave the index as it was"
             );
+        }
+
+        /// An index embedded from an older template this build still knows is
+        /// extended with *that* template until a full analysis moves it to the
+        /// current one (#157): the incremental run keeps the recorded meta.
+        #[tokio::test]
+        async fn incremental_keeps_an_older_known_template() {
+            use crate::embeddings::TextTemplate;
+            let (analyzer, _dir) =
+                analyzer_with_embedding(openai_section("https://host.example/v1")).await;
+            for template in TextTemplate::ALL {
+                let mut recorded =
+                    IndexEmbeddingMeta::from_config(&openai_section("https://host.example/v1"))
+                        .unwrap();
+                recorded.text_version = template.version();
+                record(&analyzer, &recorded).await;
+                let chosen = analyzer.prepare_embeddings(true).await.unwrap().unwrap();
+                assert_eq!(chosen.text_version, template.version());
+                assert_eq!(chosen.fingerprint(), recorded.fingerprint());
+            }
         }
 
         /// The common case is unaffected: an index embedded from this build's

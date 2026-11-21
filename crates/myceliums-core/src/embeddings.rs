@@ -1,8 +1,8 @@
 //! Embedding and reranking support.
 //!
 //! Two providers are supported:
-//! - `local`: curated ONNX models run via fastembed (downloaded on first
-//!   use, cached locally). See [`EMBEDDING_MODELS`] for the registry.
+//! - `local`: curated ONNX models run in-process (see [`EMBEDDING_MODELS`]),
+//!   downloaded once from a pinned HuggingFace revision and cached.
 //! - `openai-compatible`: any server speaking the OpenAI embeddings API
 //!   (Ollama, LM Studio, TEI, vLLM, cloud providers).
 //!
@@ -10,15 +10,25 @@
 //! [`IndexEmbeddingMeta`]); query paths resolve their embedder from that
 //! record via [`embedder_for_index`], so queries always use the same model
 //! the vectors were created with.
+//!
+//! What a symbol is embedded *as* — the document template and, for long
+//! symbols, the chunks — lives in [`text`] and [`chunking`]; how the local
+//! models run in [`onnx`] (#157).
+
+mod chunking;
+mod onnx;
+mod text;
+
+pub use chunking::{text_hash, Chunking};
+pub use onnx::{session_threads, BatchLimits, THREADS_ENV};
+pub use text::{is_container, Document, TextTemplate};
 
 use crate::config::EmbeddingSection;
 use crate::error::bail;
 use crate::error::Result;
 use anyhow::{anyhow, Context};
-use fastembed::{
-    EmbeddingModel, InitOptions, RerankInitOptions, RerankerModel, TextEmbedding, TextRerank,
-};
-use myceliums_storage::{CodeSymbol, Store, SymbolMetadata};
+use fastembed::{RerankInitOptions, RerankerModel, TextRerank};
+use myceliums_storage::{ChunkVector, CodeSymbol, Store, SymbolMetadata};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -31,71 +41,274 @@ const DEFAULT_CACHE_DIR: &str = ".fastembed_cache";
 
 // ── Model registry ────────────────────────────────────────────────────
 
-/// A curated local embedding model. Dimension and HuggingFace repo are
-/// derived from fastembed's own model list, so they cannot drift.
+/// How a model's token embeddings become one vector — the pooling its
+/// sentence-transformers configuration (`1_Pooling/config.json`) declares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Pooling {
+    /// Mean over the non-padding tokens.
+    Mean,
+    /// The first (`[CLS]`) token.
+    Cls,
+}
+
+/// A weights file of a model, with the size and SHA-256 it must have.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WeightsFile {
+    /// Path inside the repository.
+    pub path: &'static str,
+    /// Size in bytes.
+    pub bytes: u64,
+    /// SHA-256 of the content (the Git LFS object id).
+    pub sha256: &'static str,
+}
+
+/// A curated local embedding model.
+///
+/// Every entry is bound to one revision of one repository: an index records
+/// the registry id, so a change of weights must come with a new id (or a
+/// bumped embedding-text version), never with a new `revision` under the
+/// old id — `registry_ids_are_bound_to_their_weights` enforces it.
+#[derive(Debug, Clone, Copy)]
 pub struct EmbeddingModelSpec {
     /// Stable identifier used in `.myceliums.toml` and index metadata.
     pub id: &'static str,
-    /// The fastembed model backing this entry.
-    pub model: EmbeddingModel,
-    /// Prefix prepended to search queries (E5-style models need this).
+    /// HuggingFace repository the files come from.
+    pub repo: &'static str,
+    /// Pinned commit of `repo`.
+    pub revision: &'static str,
+    /// The ONNX graph.
+    pub onnx: WeightsFile,
+    /// External-data files the graph loads its weights from, if any.
+    pub onnx_data: &'static [WeightsFile],
+    /// Vector dimension.
+    pub dim: usize,
+    /// Pooling of the token embeddings.
+    pub pooling: Pooling,
+    /// Prefix prepended to search queries.
     pub query_prefix: Option<&'static str>,
     /// Prefix prepended to indexed documents.
     pub passage_prefix: Option<&'static str>,
     /// Whether the model handles non-English queries well.
     pub multilingual: bool,
-    /// Maximum input sequence length in tokens the model accepts. Text longer
-    /// than this is silently truncated by the tokenizer, so index-time text is
-    /// bounded to fit (see [`content_byte_budget`]). This is a fixed property
-    /// of the model architecture, taken from its published config.
+    /// Whether the model was trained for code retrieval.
+    pub code: bool,
+    /// Maximum input sequence length in tokens the architecture accepts.
     pub max_input_tokens: usize,
+    /// Tokens per embedded text: every model embeds 512-token windows (fewer
+    /// when the architecture is shorter), long-context models included —
+    /// a long symbol is chunked rather than embedded as one long sequence,
+    /// whose cost grows quadratically (#157).
+    pub window_tokens: usize,
+    /// SPDX id of the weights' license.
+    pub license: &'static str,
+    /// Parameters, in millions.
+    pub params_millions: u32,
+    /// Everything a first use downloads (graph, weights, tokenizer), in MB.
+    pub download_mb: u32,
+}
+
+impl EmbeddingModelSpec {
+    /// Every weights file, the graph first.
+    pub fn weights(&self) -> impl Iterator<Item = &WeightsFile> {
+        std::iter::once(&self.onnx).chain(self.onnx_data.iter())
+    }
 }
 
 /// Curated local embedding models.
 ///
-/// Adding a model: it must be supported by the pinned fastembed version;
-/// add one entry here with the correct prefixes and include benchmark
-/// evidence in the PR (see CONTRIBUTING).
+/// Adding a model: pin a revision, list the weights with their sizes and
+/// SHA-256 (from `https://huggingface.co/api/models/<repo>?blobs=true`), take
+/// the pooling and prefixes from the model card, and include benchmark
+/// evidence in the PR (see CONTRIBUTING and #157's protocol in
+/// `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`).
 pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
     EmbeddingModelSpec {
         id: "multilingual-e5-small",
-        model: EmbeddingModel::MultilingualE5Small,
+        repo: "intfloat/multilingual-e5-small",
+        revision: "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+        onnx: WeightsFile {
+            path: "onnx/model.onnx",
+            bytes: 470_268_510,
+            sha256: "ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665",
+        },
+        onnx_data: &[],
+        dim: 384,
+        pooling: Pooling::Mean,
         query_prefix: Some("query: "),
         passage_prefix: Some("passage: "),
         multilingual: true,
+        code: false,
         max_input_tokens: 512,
+        window_tokens: 512,
+        license: "MIT",
+        params_millions: 118,
+        download_mb: 487,
     },
     EmbeddingModelSpec {
         id: "multilingual-e5-base",
-        model: EmbeddingModel::MultilingualE5Base,
+        repo: "intfloat/multilingual-e5-base",
+        revision: "d128750597153bb5987e10b1c3493a34e5a4502a",
+        onnx: WeightsFile {
+            path: "onnx/model.onnx",
+            bytes: 1_110_059_084,
+            sha256: "84a4d426f7e87a6bf5bf195f0bae2c4a7d15f675b23ca96f42fab8326d7a77aa",
+        },
+        onnx_data: &[],
+        dim: 768,
+        pooling: Pooling::Mean,
         query_prefix: Some("query: "),
         passage_prefix: Some("passage: "),
         multilingual: true,
+        code: false,
         max_input_tokens: 512,
+        window_tokens: 512,
+        license: "MIT",
+        params_millions: 278,
+        download_mb: 1_127,
     },
     EmbeddingModelSpec {
         id: "multilingual-e5-large",
-        model: EmbeddingModel::MultilingualE5Large,
+        repo: "Qdrant/multilingual-e5-large-onnx",
+        revision: "ac6781cd1cf88b8306a536d7c9d18a5bd57cc14b",
+        onnx: WeightsFile {
+            path: "model.onnx",
+            bytes: 545_851,
+            sha256: "1c09780c907c8a91a77a6ab1fd231f79e090d2907ca431223703dfebeed3d36c",
+        },
+        onnx_data: &[WeightsFile {
+            path: "model.onnx_data",
+            bytes: 2_235_363_328,
+            sha256: "0cf1883fee81c63819a44e2ba0efa51d4043d9759685a4ebebbde97e0623d15c",
+        }],
+        dim: 1024,
+        pooling: Pooling::Mean,
         query_prefix: Some("query: "),
         passage_prefix: Some("passage: "),
         multilingual: true,
+        code: false,
         max_input_tokens: 512,
+        window_tokens: 512,
+        license: "MIT",
+        params_millions: 560,
+        download_mb: 2_253,
     },
     EmbeddingModelSpec {
         id: "jina-embeddings-v2-base-code",
-        model: EmbeddingModel::JinaEmbeddingsV2BaseCode,
+        repo: "jinaai/jina-embeddings-v2-base-code",
+        revision: "516f4baf13dec4ddddda8631e019b5737c8bc250",
+        onnx: WeightsFile {
+            path: "onnx/model.onnx",
+            bytes: 641_517_466,
+            sha256: "63363fc178428b74620c6f3780cbc7191883fa5c7f84c0945c45eb5c4256733b",
+        },
+        onnx_data: &[],
+        dim: 768,
+        pooling: Pooling::Mean,
         query_prefix: None,
         passage_prefix: None,
         multilingual: false,
+        code: true,
         max_input_tokens: 8192,
+        window_tokens: 512,
+        license: "Apache-2.0",
+        params_millions: 161,
+        download_mb: 644,
+    },
+    EmbeddingModelSpec {
+        id: "granite-embedding-small-english-r2",
+        repo: "onnx-community/granite-embedding-small-english-r2-ONNX",
+        revision: "1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8",
+        onnx: WeightsFile {
+            path: "onnx/model.onnx",
+            bytes: 182_504,
+            sha256: "cddb145cd1147ec24a3908b2ca2602b98b20a3d198365cff270b7cb26c98179e",
+        },
+        onnx_data: &[WeightsFile {
+            path: "onnx/model.onnx_data",
+            bytes: 194_844_160,
+            sha256: "86a3a705d4598615894d89540ea71a3d9bbdb17a315e79edcd5dfc737222834b",
+        }],
+        dim: 384,
+        pooling: Pooling::Cls,
+        query_prefix: None,
+        passage_prefix: None,
+        multilingual: false,
+        code: true,
+        max_input_tokens: 8192,
+        window_tokens: 512,
+        license: "Apache-2.0",
+        params_millions: 47,
+        download_mb: 197,
+    },
+    EmbeddingModelSpec {
+        id: "coderankembed",
+        // nomic-ai/CodeRankEmbed publishes no ONNX graph; this is an fp32
+        // export of its weights, pinned and hash-checked. Pooling and query
+        // prefix follow the upstream sentence-transformers configuration.
+        repo: "jamie8johnson/CodeRankEmbed-onnx",
+        revision: "151669b173750250e611e1be00c812f112ea6020",
+        onnx: WeightsFile {
+            path: "onnx/model.onnx",
+            bytes: 547_715_715,
+            sha256: "a5454ae55b5ee6888b8f59f30c645c9da1c6ac887627b84dc62b30064bce9546",
+        },
+        onnx_data: &[],
+        dim: 768,
+        pooling: Pooling::Cls,
+        query_prefix: Some("Represent this query for searching relevant code: "),
+        passage_prefix: None,
+        multilingual: false,
+        code: true,
+        max_input_tokens: 8192,
+        window_tokens: 512,
+        license: "MIT",
+        params_millions: 137,
+        download_mb: 548,
+    },
+    EmbeddingModelSpec {
+        id: "gte-modernbert-base",
+        repo: "Alibaba-NLP/gte-modernbert-base",
+        revision: "e7f32e3c00f91d699e8c43b53106206bcc72bb22",
+        onnx: WeightsFile {
+            path: "onnx/model.onnx",
+            bytes: 596_392_315,
+            sha256: "947f31df7effaeec4edb57c50e4ed7e0f2034d9336063f92615b92e3e0d24d78",
+        },
+        onnx_data: &[],
+        dim: 768,
+        pooling: Pooling::Cls,
+        query_prefix: None,
+        passage_prefix: None,
+        multilingual: false,
+        code: false,
+        max_input_tokens: 8192,
+        window_tokens: 512,
+        license: "Apache-2.0",
+        params_millions: 149,
+        download_mb: 600,
     },
     EmbeddingModelSpec {
         id: "all-minilm-l6-v2",
-        model: EmbeddingModel::AllMiniLML6V2,
+        repo: "Qdrant/all-MiniLM-L6-v2-onnx",
+        revision: "d13954661f83248295ba75c1ed411eef3b7b936e",
+        onnx: WeightsFile {
+            path: "model.onnx",
+            bytes: 90_387_630,
+            sha256: "bbd7b466f6d58e646fdc2bd5fd67b2f5e93c0b687011bd4548c420f7bd46f0c5",
+        },
+        onnx_data: &[],
+        dim: 384,
+        pooling: Pooling::Mean,
         query_prefix: None,
         passage_prefix: None,
         multilingual: false,
+        code: false,
         max_input_tokens: 256,
+        window_tokens: 256,
+        license: "Apache-2.0",
+        params_millions: 23,
+        download_mb: 91,
     },
 ];
 
@@ -166,24 +379,17 @@ fn known_reranker_ids() -> String {
         .join(", ")
 }
 
-/// fastembed's metadata (dimension, HF repo) for a curated local model.
-fn local_model_info(spec: &EmbeddingModelSpec) -> Result<fastembed::ModelInfo<EmbeddingModel>> {
-    Ok(TextEmbedding::list_supported_models()
-        .into_iter()
-        .find(|m| m.model == spec.model)
-        .ok_or_else(|| {
-            anyhow!(
-                "fastembed does not list model '{}' — registry and fastembed version out of sync",
-                spec.id
-            )
-        })?)
-}
-
-/// The HuggingFace repo fastembed downloads a curated local model from.
+/// The HuggingFace repository a curated local model is downloaded from.
 pub fn local_model_code(id: &str) -> Result<String> {
     let spec =
         embedding_model_spec(id).ok_or_else(|| anyhow!("Unknown embedding model '{}'", id))?;
-    Ok(local_model_info(spec)?.model_code)
+    Ok(spec.repo.to_string())
+}
+
+/// Whether every file the curated model `id` needs is in the model cache at
+/// its pinned revision — what decides whether loading it downloads.
+pub fn local_model_cached(id: &str) -> bool {
+    embedding_model_spec(id).is_some_and(|spec| onnx::is_cached(spec, &get_cache_dir()))
 }
 
 // ── Index metadata ────────────────────────────────────────────────────
@@ -227,6 +433,11 @@ pub struct IndexEmbeddingMeta {
     /// a current configuration and the next full analysis re-embeds.
     #[serde(default)]
     pub text_version: u32,
+    /// How long symbols were split into chunks (#157); `None`: one vector per
+    /// symbol. Records written before chunking existed read back as `None`,
+    /// which is what built them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunking: Option<Chunking>,
 }
 
 impl IndexEmbeddingMeta {
@@ -237,6 +448,12 @@ impl IndexEmbeddingMeta {
     /// template, so its vectors match documents built now.
     pub fn is_current(&self) -> bool {
         self.meta_version == Self::META_VERSION && self.text_version == EMBEDDING_TEXT_VERSION
+    }
+
+    /// The document template the vectors were built with, or `None` when
+    /// this build does not know it (`0`: written before #92).
+    pub fn template(&self) -> Option<TextTemplate> {
+        TextTemplate::from_version(self.text_version)
     }
 
     /// Current schema version of the embedding meta record.
@@ -253,7 +470,9 @@ impl IndexEmbeddingMeta {
     ///   query/passage prefixes (issue #35).
     /// - `3`: fingerprint extended with `text_version`, the version of the
     ///   embedding-document template and its budget constants (issue #92).
-    pub const META_VERSION: u32 = 3;
+    /// - `4`: `chunking` recorded and, when set, part of the fingerprint
+    ///   (issue #157).
+    pub const META_VERSION: u32 = 4;
 
     /// serde default for records written before `meta_version` existed: they
     /// predate the extended fingerprint, so they read back as version `1`.
@@ -279,18 +498,22 @@ impl IndexEmbeddingMeta {
                         known_embedding_model_ids()
                     )
                 })?;
-                let info = local_model_info(spec)?;
+                let template = DEFAULT_TEXT_TEMPLATE;
+                let chunking = (cfg.chunking.unwrap_or(DEFAULT_CHUNKING)
+                    && template.supports_chunking())
+                .then(|| Chunking::for_window(spec.window_tokens));
                 Ok(Self {
                     meta_version: Self::META_VERSION,
                     provider: "local".to_string(),
                     model: spec.id.to_string(),
-                    dim: info.dim,
+                    dim: spec.dim,
                     query_prefix: spec.query_prefix.map(str::to_string),
                     passage_prefix: spec.passage_prefix.map(str::to_string),
                     base_url: None,
                     api_key_env: None,
                     reranker: Some(cfg.reranker.clone()),
-                    text_version: EMBEDDING_TEXT_VERSION,
+                    text_version: template.version(),
+                    chunking,
                 })
             }
             "openai-compatible" => {
@@ -314,6 +537,9 @@ impl IndexEmbeddingMeta {
                     api_key_env: Some(cfg.api_key_env.clone()),
                     reranker: Some(cfg.reranker.clone()),
                     text_version: EMBEDDING_TEXT_VERSION,
+                    // Chunk boundaries are counted in the model's tokens, and
+                    // a remote model's tokenizer is not available here.
+                    chunking: None,
                 })
             }
             other => bail!(
@@ -341,6 +567,7 @@ impl IndexEmbeddingMeta {
             reranker: None,
             // Which template built a legacy index is unknown.
             text_version: 0,
+            chunking: None,
         }
     }
 
@@ -360,9 +587,11 @@ impl IndexEmbeddingMeta {
     /// so this doubles as the embedder-instance cache key.
     ///
     /// Included: provider, model, dim, host-normalized `base_url`, the
-    /// query/passage prefixes, and `text_version` (the document template and
-    /// its budget constants) — a change to any of these produces different
-    /// vectors, so it must invalidate the index.
+    /// query/passage prefixes, `text_version` (the document template and
+    /// its budget constants) and, when set, the chunking parameters — a
+    /// change to any of these produces different vectors, so it must
+    /// invalidate the index. Without chunking nothing is appended, so a
+    /// record written before chunking existed keeps its fingerprint.
     ///
     /// Excluded on purpose:
     /// - `api_key_env` — only the env-var *name* is stored, never the key.
@@ -373,8 +602,12 @@ impl IndexEmbeddingMeta {
     ///   (see the analyzer); folding it in here would conflate "incompatible
     ///   config" with "stale schema" in the same signal.
     pub fn fingerprint(&self) -> String {
+        let chunking = self
+            .chunking
+            .map(|c| format!("|chunking={}", c.label()))
+            .unwrap_or_default();
         format!(
-            "{}:{}:{}|base_url={}|query_prefix={}|passage_prefix={}|text_version={}",
+            "{}:{}:{}|base_url={}|query_prefix={}|passage_prefix={}|text_version={}{}",
             self.provider,
             self.model,
             self.dim,
@@ -385,6 +618,7 @@ impl IndexEmbeddingMeta {
             self.query_prefix.as_deref().unwrap_or_default(),
             self.passage_prefix.as_deref().unwrap_or_default(),
             self.text_version,
+            chunking,
         )
     }
 }
@@ -497,20 +731,30 @@ pub fn embedding_cache_info() -> ModelCacheInfo {
 
 // ── Embedding text construction ───────────────────────────────────────
 
-/// Version of the embedding-document template.
+/// Version of the embedding-document template new indexes are built with —
+/// [`DEFAULT_TEXT_TEMPLATE`]'s version.
 ///
 /// What a stored vector encodes is decided by the text it was computed from:
-/// the field order and separators of [`build_embedding_text_for`], the
-/// header/content split, and the budget constants [`BYTES_PER_TOKEN`] and
-/// [`HEADER_TOKEN_RESERVE`]. Change any of them and new vectors no longer share
-/// a space with old ones, even under the same model. The version is recorded in
-/// each index ([`IndexEmbeddingMeta::text_version`]) and folded into the
-/// fingerprint, so bumping it makes the next full analysis re-embed instead of
-/// silently mixing two templates in one index.
+/// for template 1 the field order and separators of
+/// [`build_embedding_text_for`], the header/content split, and the budget
+/// constants [`BYTES_PER_TOKEN`] and [`HEADER_TOKEN_RESERVE`]; for template 2
+/// the layout in [`text`]. Change any of them and new vectors no longer share
+/// a space with old ones, even under the same model. The version is recorded
+/// in each index ([`IndexEmbeddingMeta::text_version`]) and folded into the
+/// fingerprint, so a new version makes the next full analysis re-embed
+/// instead of silently mixing two templates in one index.
 ///
-/// Bump on *any* change to the template or those constants;
-/// `embedding_text_template_is_pinned_to_its_version` fails until you do.
+/// Changing a template means a new [`TextTemplate`] variant (the old one stays
+/// for indexes built with it); `embedding_text_template_is_pinned_to_its_version`
+/// pins both layouts.
 pub const EMBEDDING_TEXT_VERSION: u32 = 1;
+
+/// The template new indexes are built with.
+pub const DEFAULT_TEXT_TEMPLATE: TextTemplate = TextTemplate::Flat;
+
+/// Whether new indexes of a local model chunk long symbols when the project
+/// does not say (`[embedding] chunking`).
+pub const DEFAULT_CHUNKING: bool = false;
 
 /// Truncate a byte-oriented slice to at most `max` bytes, ensuring the cut
 /// lands on a valid UTF-8 character boundary.
@@ -638,7 +882,7 @@ pub enum EmbedInput {
 }
 
 enum EmbedderKind {
-    Local(Box<TextEmbedding>),
+    Local(Box<onnx::LocalModel>),
     Remote(RemoteEmbedder),
 }
 
@@ -706,6 +950,87 @@ impl RemoteEmbedder {
     }
 }
 
+/// How the vectors of an index are computed (#157).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct EmbedOptions {
+    /// Batch limits for local models; remote providers get `max_texts`
+    /// texts per request.
+    pub batch: BatchLimits,
+}
+
+impl EmbedOptions {
+    /// Options from the `[analysis]` batch settings (`0` = default).
+    pub fn new(max_texts: usize, max_tokens: usize) -> Self {
+        Self {
+            batch: BatchLimits::new(max_texts, max_tokens),
+        }
+    }
+}
+
+/// A body chunk's vector (#157): chunk `index` (1-based; the header chunk is
+/// the symbol's own vector) of the symbol at position `symbol` of the input.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolChunk {
+    /// Position of the symbol in the embedded slice.
+    pub symbol: usize,
+    /// 1-based chunk number.
+    pub index: u32,
+    /// [`text_hash`] of the chunk text.
+    pub text_hash: String,
+    /// The unit-length vector.
+    pub vector: Vec<f32>,
+}
+
+/// What embedding a slice of symbols produced and what it cost.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct EmbedStats {
+    /// Symbols embedded.
+    pub symbols: usize,
+    /// Texts the symbols were embedded as (header chunks plus body chunks).
+    pub texts: usize,
+    /// Of those, texts taken over from a previous index instead of computed.
+    pub reused_texts: usize,
+    /// Symbols with at least one body chunk.
+    pub chunked_symbols: usize,
+    /// Texts the window cut: their tail is in no vector.
+    pub truncated_texts: usize,
+    /// Tokens the model processed (special tokens included, padding not).
+    pub tokens: usize,
+    /// Wall time of the whole embedding step, in seconds.
+    pub seconds: f64,
+}
+
+/// The vectors of a slice of symbols: one per symbol (its header chunk) and
+/// the body chunks of the long ones.
+#[derive(Debug, Clone, Default)]
+pub struct IndexVectors {
+    /// Per input symbol, in order.
+    pub primary: Vec<Vec<f32>>,
+    /// Body chunks of chunked symbols, by symbol then chunk number.
+    pub chunks: Vec<SymbolChunk>,
+    /// Counts and timing.
+    pub stats: EmbedStats,
+}
+
+impl IndexVectors {
+    /// The chunk rows for the store, given the embedded symbols in order.
+    pub fn chunk_rows(&self, symbols: &[&CodeSymbol]) -> Vec<ChunkVector> {
+        self.chunks
+            .iter()
+            .map(|c| ChunkVector {
+                symbol_uid: symbols[c.symbol].uid.clone(),
+                file_path: symbols[c.symbol].file_path.clone(),
+                chunk_index: c.index,
+                text_hash: c.text_hash.clone(),
+                vector: c.vector.clone(),
+            })
+            .collect()
+    }
+}
+
+/// Called with `(done, total)` texts as embedding proceeds.
+pub type EmbedProgress<'a> = &'a (dyn Fn(usize, usize) + Send + Sync);
+
 /// Generates vector embeddings for code symbols and queries.
 ///
 /// Construct via [`Embedder::new`] with resolved [`IndexEmbeddingMeta`], or
@@ -718,8 +1043,8 @@ pub struct Embedder {
 
 impl Embedder {
     /// Create an embedder for the given resolved metadata. For local models
-    /// this loads the ONNX model, downloading it on first use (with a notice
-    /// on stderr).
+    /// this loads the ONNX model, downloading its pinned files on first use
+    /// (with a notice on stderr).
     pub fn new(meta: IndexEmbeddingMeta) -> Result<Self> {
         let kind = match meta.provider.as_str() {
             "local" => {
@@ -732,41 +1057,35 @@ impl Embedder {
                         known_embedding_model_ids()
                     )
                 })?;
-                let info = local_model_info(spec)?;
-                if info.dim != meta.dim {
+                if spec.dim != meta.dim {
                     bail!(
                         "Embedding model '{}' has dimension {} but the index expects {}. \
                          Re-run analysis to rebuild the index.",
                         meta.model,
-                        info.dim,
+                        spec.dim,
                         meta.dim
                     );
                 }
-                let cache_info = check_model_cache(&info.model_code);
-                if !cache_info.is_cached {
+                let cached = onnx::is_cached(spec, &get_cache_dir());
+                if !cached {
                     eprintln!(
-                        "Downloading embedding model {} (one-time)... this may take a while.",
-                        info.model_code,
+                        "Downloading embedding model {} ({}@{}, about {} MB, one-time)...",
+                        spec.id,
+                        spec.repo,
+                        &spec.revision[..10],
+                        spec.download_mb
                     );
                 }
-
-                info!("Loading embedding model ({})...", spec.id);
-                let model = TextEmbedding::try_new(
-                    InitOptions::new(spec.model.clone())
-                        .with_cache_dir(get_cache_dir())
-                        .with_show_download_progress(true),
-                )
-                .with_context(|| format!("Failed to initialize embedding model '{}'", spec.id))?;
-
-                if !cache_info.is_cached {
-                    let updated = check_model_cache(&info.model_code);
-                    eprintln!(
-                        "Model downloaded to {} ({:.0} MB)",
-                        updated.cache_dir.display(),
-                        updated.size_bytes as f64 / 1_000_000.0,
-                    );
+                let window = meta
+                    .chunking
+                    .map(|c| c.window_tokens as usize)
+                    .unwrap_or(spec.window_tokens);
+                let model = onnx::LocalModel::load(spec, window).with_context(|| {
+                    format!("Failed to initialize embedding model '{}'", spec.id)
+                })?;
+                if !cached {
+                    eprintln!("Model downloaded to {}", get_cache_dir().display());
                 }
-
                 info!("Embedding model loaded.");
                 EmbedderKind::Local(Box::new(model))
             }
@@ -820,18 +1139,25 @@ impl Embedder {
     }
 
     /// Embed a batch of texts, applying the model's query/passage prefix.
+    /// Local models return unit-length vectors.
     pub async fn embed_texts(&self, texts: &[String], input: EmbedInput) -> Result<Vec<Vec<f32>>> {
         if texts.is_empty() {
             return Ok(vec![]);
         }
         let prefixed: Vec<String> = texts.iter().map(|t| self.apply_prefix(t, input)).collect();
         let vectors = match &self.kind {
-            EmbedderKind::Local(model) => model
-                .embed(prefixed, None)
-                .context("Failed to generate embeddings")?,
+            EmbedderKind::Local(model) => {
+                let encoded = model.encode(&prefixed)?;
+                model.embed_encoded(&encoded, BatchLimits::default(), &mut |_| {})?
+            }
             EmbedderKind::Remote(remote) => remote.embed(&prefixed).await?,
         };
-        for v in &vectors {
+        self.check_dims(&vectors)?;
+        Ok(vectors)
+    }
+
+    fn check_dims(&self, vectors: &[Vec<f32>]) -> Result<()> {
+        for v in vectors {
             if v.len() != self.meta.dim {
                 bail!(
                     "Embedding model returned dimension {} but {} was expected — \
@@ -841,7 +1167,7 @@ impl Embedder {
                 );
             }
         }
-        Ok(vectors)
+        Ok(())
     }
 
     /// Generate an embedding for a single query string.
@@ -860,59 +1186,214 @@ impl Embedder {
         Ok(vector)
     }
 
-    /// Generate embeddings for a batch of symbols, processing in chunks to
-    /// avoid OOM on large repositories.
+    /// One vector per symbol — its header chunk under the index's template —
+    /// in batches of at most `batch_size` texts (`0`: the default).
     ///
-    /// Each symbol's text is enriched with metadata (kind, decorators,
-    /// return type, superclasses) and content truncated to the model's
-    /// principled content budget (see [`content_byte_budget`]).
+    /// For callers that store no chunk rows; [`Embedder::embed_index`] is what
+    /// indexing uses.
     pub async fn embed_symbols(
         &self,
         symbols: &[CodeSymbol],
         batch_size: usize,
     ) -> Result<Vec<Vec<f32>>> {
+        let refs: Vec<&CodeSymbol> = symbols.iter().collect();
+        let mut meta_without_chunks = self.meta.clone();
+        meta_without_chunks.chunking = None;
+        let vectors = self
+            .embed_with(
+                &refs,
+                &meta_without_chunks,
+                EmbedOptions::new(batch_size, 0),
+                None,
+                None,
+            )
+            .await?;
+        Ok(vectors.primary)
+    }
+
+    /// Embed `symbols` the way the index records: each symbol's document
+    /// under the index's template, long symbols split into chunks when the
+    /// index chunks (#157). Chunk texts whose [`text_hash`] is in `reuse` take
+    /// that vector instead of being embedded again (#151). `progress` hears
+    /// `(done, total)` texts after every batch.
+    pub async fn embed_index(
+        &self,
+        symbols: &[&CodeSymbol],
+        options: EmbedOptions,
+        reuse: Option<&HashMap<String, Vec<f32>>>,
+        progress: Option<EmbedProgress<'_>>,
+    ) -> Result<IndexVectors> {
+        let meta = self.meta.clone();
+        self.embed_with(symbols, &meta, options, reuse, progress)
+            .await
+    }
+
+    async fn embed_with(
+        &self,
+        symbols: &[&CodeSymbol],
+        meta: &IndexEmbeddingMeta,
+        options: EmbedOptions,
+        reuse: Option<&HashMap<String, Vec<f32>>>,
+        progress: Option<EmbedProgress<'_>>,
+    ) -> Result<IndexVectors> {
+        let started = std::time::Instant::now();
+        let template = meta.template().ok_or_else(|| {
+            anyhow!(
+                "the index records embedding-text template version {}, which this build \
+                 does not know — run a full analysis (`myc analyze`)",
+                meta.text_version
+            )
+        })?;
         if symbols.is_empty() {
-            return Ok(vec![]);
+            return Ok(IndexVectors::default());
         }
-
-        let batch_size = if batch_size == 0 { 256 } else { batch_size };
-        let total_batches = symbols.len().div_ceil(batch_size);
-        let mut all_embeddings: Vec<Vec<f32>> = Vec::with_capacity(symbols.len());
-
         info!(
-            "Generating embeddings for {} symbols in {} batches of {} ({})...",
+            "Embedding {} symbols ({}, template {}, chunking {})...",
             symbols.len(),
-            total_batches,
-            batch_size,
-            self.meta.identity(),
+            meta.identity(),
+            template.version(),
+            meta.chunking
+                .map(|c| c.label())
+                .unwrap_or_else(|| "off".to_string())
         );
 
-        for (i, chunk) in symbols.chunks(batch_size).enumerate() {
-            info!(
-                "Embedding batch {}/{} ({} symbols)...",
-                i + 1,
-                total_batches,
-                chunk.len(),
-            );
-
-            let budget_tokens = self.max_input_tokens();
-            let documents: Vec<String> = chunk
+        // The texts each symbol is embedded as: its header chunk, then its
+        // body chunks.
+        let per_symbol: Vec<Vec<String>> = match (&self.kind, template) {
+            (_, TextTemplate::Flat) => symbols
                 .iter()
-                .map(|s| build_embedding_text_for(s, budget_tokens))
-                .collect();
-            let embeddings = self.embed_texts(&documents, EmbedInput::Passage).await?;
-            all_embeddings.extend(embeddings);
+                .map(|s| vec![build_embedding_text_for(s, self.max_input_tokens())])
+                .collect(),
+            (EmbedderKind::Local(model), TextTemplate::Structured) => {
+                let window = chunking::Window {
+                    tokens: model.window(),
+                    special_tokens: model.special_tokens(),
+                    prefix_tokens: match meta.passage_prefix.as_deref() {
+                        Some(prefix) => model.count_tokens(prefix)?,
+                        None => 0,
+                    },
+                };
+                symbols
+                    .iter()
+                    .map(|s| {
+                        chunking::chunk_texts(
+                            &text::structured(s),
+                            meta.chunking,
+                            model.splitter(),
+                            window,
+                        )
+                    })
+                    .collect::<anyhow::Result<_>>()?
+            }
+            (EmbedderKind::Remote(_), TextTemplate::Structured) => symbols
+                .iter()
+                .map(|s| {
+                    let doc = text::structured(s).text();
+                    let budget = content_byte_budget(self.max_input_tokens());
+                    vec![text::cut(&doc, budget).to_string()]
+                })
+                .collect(),
+        };
+
+        // Flatten; body chunks already embedded by a previous index are reused.
+        let mut texts: Vec<String> = Vec::new();
+        let mut slots: Vec<(usize, u32, String)> = Vec::new(); // (symbol, chunk, hash)
+        let mut chunks: Vec<SymbolChunk> = Vec::new();
+        let mut stats = EmbedStats {
+            symbols: symbols.len(),
+            ..Default::default()
+        };
+        for (i, symbol_texts) in per_symbol.into_iter().enumerate() {
+            if symbol_texts.len() > 1 {
+                stats.chunked_symbols += 1;
+            }
+            stats.texts += symbol_texts.len();
+            for (c, text) in symbol_texts.into_iter().enumerate() {
+                let hash = if c == 0 {
+                    String::new()
+                } else {
+                    text_hash(&text)
+                };
+                if let Some(vector) = reuse
+                    .filter(|_| c > 0)
+                    .and_then(|r| r.get(&hash))
+                    .filter(|v| v.len() == meta.dim)
+                {
+                    stats.reused_texts += 1;
+                    chunks.push(SymbolChunk {
+                        symbol: i,
+                        index: c as u32,
+                        text_hash: hash,
+                        vector: vector.clone(),
+                    });
+                    continue;
+                }
+                slots.push((i, c as u32, hash));
+                texts.push(text);
+            }
         }
 
-        // L2-normalize every stored vector so persisted geometry is cosine
-        // (issue #29): the LanceDB L2 path and the brute-force cosine path then
-        // rank identically.
-        for emb in all_embeddings.iter_mut() {
-            l2_normalize(emb);
-        }
+        let total = texts.len();
+        let vectors = match &self.kind {
+            EmbedderKind::Local(model) => {
+                let prefixed: Vec<String> = texts
+                    .iter()
+                    .map(|t| self.apply_prefix(t, EmbedInput::Passage))
+                    .collect();
+                let encoded = model.encode(&prefixed)?;
+                stats.tokens = encoded.iter().map(|e| e.len()).sum();
+                stats.truncated_texts =
+                    encoded.iter().filter(|e| e.len() >= model.window()).count();
+                drop(prefixed);
+                model.embed_encoded(&encoded, options.batch, &mut |done| {
+                    if let Some(report) = progress {
+                        report(done, total);
+                    }
+                })?
+            }
+            EmbedderKind::Remote(_) => {
+                let mut out = Vec::with_capacity(total);
+                for batch in texts.chunks(options.batch.max_texts.max(1)) {
+                    out.extend(self.embed_texts(batch, EmbedInput::Passage).await?);
+                    if let Some(report) = progress {
+                        report(out.len(), total);
+                    }
+                }
+                out
+            }
+        };
+        self.check_dims(&vectors)?;
 
-        info!("Generated {} embeddings.", all_embeddings.len());
-        Ok(all_embeddings)
+        let mut primary: Vec<Option<Vec<f32>>> = vec![None; symbols.len()];
+        for ((symbol, index, hash), mut vector) in slots.into_iter().zip(vectors) {
+            // Persisted geometry is cosine (issue #29).
+            l2_normalize(&mut vector);
+            if index == 0 {
+                primary[symbol] = Some(vector);
+            } else {
+                chunks.push(SymbolChunk {
+                    symbol,
+                    index,
+                    text_hash: hash,
+                    vector,
+                });
+            }
+        }
+        chunks.sort_by_key(|c| (c.symbol, c.index));
+        let primary = primary
+            .into_iter()
+            .map(|v| v.ok_or_else(|| anyhow!("a symbol's header chunk was not embedded")))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        stats.seconds = started.elapsed().as_secs_f64();
+        info!(
+            "Embedded {} symbols as {} texts ({} reused, {} symbols chunked) in {:.1}s",
+            stats.symbols, stats.texts, stats.reused_texts, stats.chunked_symbols, stats.seconds
+        );
+        Ok(IndexVectors {
+            primary,
+            chunks,
+            stats,
+        })
     }
 
     /// The model's maximum input length in tokens. Local models report their
@@ -948,17 +1429,42 @@ impl Embedder {
 
 // ── Vectors of a previous index ──────────────────────────────────────
 
-/// The vectors of an earlier index of the same repository, keyed by each
-/// symbol's embedding document (#151).
+/// The vectors of an earlier index of the same repository (#151), keyed by
+/// what they were computed from.
 ///
-/// A vector is a function of the model and the document text alone, so a
-/// symbol whose text is unchanged can take its vector over from the previous
-/// index instead of being embedded again. A full re-analysis uses this to
-/// keep existing embeddings when it does not (or cannot) embed: with
-/// `skip_embeddings`, and when the model fails to load or to embed.
+/// A vector is a function of the model and the text alone, so a symbol whose
+/// document is unchanged can take its vectors over from the previous index
+/// instead of being embedded again — its own vector and, for a chunked symbol,
+/// every body chunk (#157). A full re-analysis uses this to keep existing
+/// embeddings when it does not (or cannot) embed: with `skip_embeddings`, and
+/// when the model fails to load or to embed. A changed long symbol still
+/// reuses the body chunks whose text did not change, by [`text_hash`].
 pub struct PreviousVectors {
     meta: IndexEmbeddingMeta,
+    /// Symbol vectors by document key.
     by_text: HashMap<[u8; 32], Vec<f32>>,
+    /// Per document key, the symbol's body chunks in order.
+    chunks_by_document: HashMap<[u8; 32], Vec<PreviousChunk>>,
+}
+
+/// A body chunk of a previous index.
+#[derive(Debug, Clone)]
+struct PreviousChunk {
+    index: u32,
+    text_hash: String,
+    vector: Vec<f32>,
+}
+
+/// What a previous index contributes to the symbols of a new one.
+#[derive(Debug, Default)]
+pub struct TakenVectors {
+    /// Per symbol, in order: its previous vector, when its document is
+    /// unchanged.
+    pub primary: Vec<Option<Vec<f32>>>,
+    /// The previous body chunks of those symbols, by position.
+    pub chunks: Vec<SymbolChunk>,
+    /// Every previous body chunk by [`text_hash`], for symbols that changed.
+    pub by_hash: HashMap<String, Vec<f32>>,
 }
 
 impl PreviousVectors {
@@ -985,16 +1491,45 @@ impl PreviousVectors {
         if !meta.is_current() {
             return Ok(None);
         }
-        let by_text: HashMap<_, _> = store
-            .get_symbols_with_vectors()
-            .await?
-            .into_iter()
-            .filter_map(|(symbol, vector)| {
-                let vector = vector.filter(|v| v.len() == meta.dim)?;
-                Some((document_key(&symbol), vector))
-            })
-            .collect();
-        Ok((!by_text.is_empty()).then_some(Self { meta, by_text }))
+        let Some(template) = meta.template() else {
+            return Ok(None);
+        };
+        let mut key_of_uid: HashMap<String, [u8; 32]> = HashMap::new();
+        let mut by_text: HashMap<[u8; 32], Vec<f32>> = HashMap::new();
+        for (symbol, vector) in store.get_symbols_with_vectors().await? {
+            let key = document_key(&symbol, template);
+            key_of_uid.insert(symbol.uid.clone(), key);
+            if let Some(vector) = vector.filter(|v| v.len() == meta.dim) {
+                by_text.insert(key, vector);
+            }
+        }
+        let mut chunks_by_document: HashMap<[u8; 32], Vec<PreviousChunk>> = HashMap::new();
+        if meta.chunking.is_some() {
+            for chunk in store.get_chunk_vectors().await? {
+                if chunk.vector.len() != meta.dim {
+                    continue;
+                }
+                if let Some(key) = key_of_uid.get(&chunk.symbol_uid) {
+                    chunks_by_document
+                        .entry(*key)
+                        .or_default()
+                        .push(PreviousChunk {
+                            index: chunk.chunk_index,
+                            text_hash: chunk.text_hash,
+                            vector: chunk.vector,
+                        });
+                }
+            }
+            for chunks in chunks_by_document.values_mut() {
+                chunks.sort_by_key(|c| c.index);
+                chunks.dedup_by_key(|c| c.index);
+            }
+        }
+        Ok((!by_text.is_empty()).then_some(Self {
+            meta,
+            by_text,
+            chunks_by_document,
+        }))
     }
 
     /// The embedding model the vectors come from.
@@ -1022,35 +1557,82 @@ impl PreviousVectors {
         symbols: &[CodeSymbol],
         meta: &IndexEmbeddingMeta,
     ) -> Vec<Option<Vec<f32>>> {
+        self.take_all(symbols, meta).primary
+    }
+
+    /// [`PreviousVectors::take_for`] with the body chunks: an unchanged
+    /// symbol takes its own vector and all its chunks; the chunks of every
+    /// other previous symbol stay available by [`text_hash`], for the parts of
+    /// changed long symbols that did not change.
+    pub fn take_all(self, symbols: &[CodeSymbol], meta: &IndexEmbeddingMeta) -> TakenVectors {
         if self.meta.fingerprint() != meta.fingerprint() {
-            return vec![None; symbols.len()];
+            return TakenVectors {
+                primary: vec![None; symbols.len()],
+                ..Default::default()
+            };
         }
+        let Some(template) = meta.template() else {
+            return TakenVectors {
+                primary: vec![None; symbols.len()],
+                ..Default::default()
+            };
+        };
         let mut by_text = self.by_text;
-        let keys: Vec<[u8; 32]> = symbols.iter().map(document_key).collect();
+        let mut chunks_by_document = self.chunks_by_document;
+        let keys: Vec<[u8; 32]> = symbols.iter().map(|s| document_key(s, template)).collect();
         let mut uses: HashMap<[u8; 32], usize> = HashMap::new();
         for key in &keys {
             *uses.entry(*key).or_default() += 1;
         }
-        keys.iter()
-            .map(|key| {
-                let left = uses.get_mut(key).expect("counted above");
-                *left -= 1;
-                if *left == 0 {
-                    by_text.remove(key)
+        let mut chunks = Vec::new();
+        let mut primary = Vec::with_capacity(symbols.len());
+        for (position, key) in keys.iter().enumerate() {
+            let left = uses.get_mut(key).expect("counted above");
+            *left -= 1;
+            let last_use = *left == 0;
+            let vector = if last_use {
+                by_text.remove(key)
+            } else {
+                by_text.get(key).cloned()
+            };
+            if vector.is_some() {
+                let previous = if last_use {
+                    chunks_by_document.remove(key)
                 } else {
-                    by_text.get(key).cloned()
-                }
-            })
-            .collect()
+                    chunks_by_document.get(key).cloned()
+                };
+                chunks.extend(previous.into_iter().flatten().map(|c| SymbolChunk {
+                    symbol: position,
+                    index: c.index,
+                    text_hash: c.text_hash,
+                    vector: c.vector,
+                }));
+            }
+            primary.push(vector);
+        }
+        let by_hash = chunks_by_document
+            .into_values()
+            .flatten()
+            .map(|c| (c.text_hash, c.vector))
+            .collect();
+        TakenVectors {
+            primary,
+            chunks,
+            by_hash,
+        }
     }
 }
 
-/// SHA-256 of the symbol's untruncated embedding document. Untruncated, so
-/// the key does not depend on the model's content budget; equal keys under
-/// the same model mean equal (truncated) documents.
-fn document_key(symbol: &CodeSymbol) -> [u8; 32] {
+/// SHA-256 of the symbol's untruncated embedding document under `template`.
+/// Untruncated, so the key does not depend on the model's window; equal keys
+/// under the same fingerprint mean equal documents, hence equal chunks.
+fn document_key(symbol: &CodeSymbol, template: TextTemplate) -> [u8; 32] {
     use sha2::{Digest, Sha256};
-    Sha256::digest(build_embedding_text_with_budget(symbol, usize::MAX).as_bytes()).into()
+    let text = match template {
+        TextTemplate::Flat => build_embedding_text_with_budget(symbol, usize::MAX),
+        TextTemplate::Structured => text::structured(symbol).text(),
+    };
+    Sha256::digest(text.as_bytes()).into()
 }
 
 // ── Cached instances ──────────────────────────────────────────────────
@@ -1199,10 +1781,76 @@ mod tests {
     }
 
     #[test]
-    fn registry_entries_exist_in_fastembed() {
+    fn registry_entries_are_complete() {
+        let mut ids = std::collections::HashSet::new();
         for spec in EMBEDDING_MODELS {
-            let info = local_model_info(spec).expect(spec.id);
-            assert!(info.dim > 0, "{} has no dimension", spec.id);
+            assert!(ids.insert(spec.id), "{} is listed twice", spec.id);
+            assert!(spec.dim > 0, "{} has no dimension", spec.id);
+            assert_eq!(spec.revision.len(), 40, "{} pins no commit", spec.id);
+            assert!(spec.revision.chars().all(|c| c.is_ascii_hexdigit()));
+            for weights in spec.weights() {
+                assert_eq!(weights.sha256.len(), 64, "{} {}", spec.id, weights.path);
+                assert!(weights.bytes > 0);
+            }
+            assert!(spec.window_tokens <= spec.max_input_tokens, "{}", spec.id);
+            assert!(
+                ["MIT", "Apache-2.0", "BSD-3-Clause"].contains(&spec.license),
+                "{} is not permissively licensed",
+                spec.id
+            );
+            let weights_mb: u64 = spec.weights().map(|w| w.bytes).sum::<u64>() / 1_000_000;
+            assert!(
+                spec.download_mb as u64 >= weights_mb,
+                "{} downloads at least its weights",
+                spec.id
+            );
+        }
+    }
+
+    /// An index records the registry id, not the weights: pointing an id at
+    /// other weights would put two models' vectors under one fingerprint.
+    /// Give new weights a new id (or bump the embedding-text version).
+    #[test]
+    fn registry_ids_are_bound_to_their_weights() {
+        let bound = [
+            (
+                "multilingual-e5-small",
+                "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+            ),
+            (
+                "multilingual-e5-base",
+                "d128750597153bb5987e10b1c3493a34e5a4502a",
+            ),
+            (
+                "multilingual-e5-large",
+                "ac6781cd1cf88b8306a536d7c9d18a5bd57cc14b",
+            ),
+            (
+                "jina-embeddings-v2-base-code",
+                "516f4baf13dec4ddddda8631e019b5737c8bc250",
+            ),
+            (
+                "granite-embedding-small-english-r2",
+                "1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8",
+            ),
+            ("coderankembed", "151669b173750250e611e1be00c812f112ea6020"),
+            (
+                "gte-modernbert-base",
+                "e7f32e3c00f91d699e8c43b53106206bcc72bb22",
+            ),
+            (
+                "all-minilm-l6-v2",
+                "d13954661f83248295ba75c1ed411eef3b7b936e",
+            ),
+        ];
+        assert_eq!(
+            bound.len(),
+            EMBEDDING_MODELS.len(),
+            "pin every new entry here"
+        );
+        for (id, revision) in bound {
+            let spec = embedding_model_spec(id).unwrap_or_else(|| panic!("{id} left the registry"));
+            assert_eq!(spec.revision, revision, "{id} now points at other weights");
         }
     }
 
@@ -1239,6 +1887,72 @@ mod tests {
         assert_eq!(meta.query_prefix.as_deref(), Some("query: "));
         assert_eq!(meta.passage_prefix.as_deref(), Some("passage: "));
         assert_eq!(meta.reranker.as_deref(), Some("bge-reranker-v2-m3"));
+        assert_eq!(meta.text_version, DEFAULT_TEXT_TEMPLATE.version());
+        assert_eq!(meta.chunking.is_some(), DEFAULT_CHUNKING);
+    }
+
+    #[test]
+    fn default_text_version_names_the_default_template() {
+        assert_eq!(EMBEDDING_TEXT_VERSION, DEFAULT_TEXT_TEMPLATE.version());
+        // Chunking needs a template that supports it.
+        assert!(!DEFAULT_CHUNKING || DEFAULT_TEXT_TEMPLATE.supports_chunking());
+    }
+
+    #[test]
+    fn chunking_follows_the_config_and_the_model_window() {
+        let on = EmbeddingSection {
+            model: "granite-embedding-small-english-r2".to_string(),
+            chunking: Some(true),
+            ..Default::default()
+        };
+        let meta = IndexEmbeddingMeta::from_config(&on).unwrap();
+        // Template 1 cannot chunk, so chunking follows the default template.
+        if DEFAULT_TEXT_TEMPLATE.supports_chunking() {
+            assert_eq!(meta.chunking, Some(Chunking::for_window(512)));
+        } else {
+            assert_eq!(meta.chunking, None);
+        }
+        let off = EmbeddingSection {
+            chunking: Some(false),
+            ..on
+        };
+        assert_eq!(
+            IndexEmbeddingMeta::from_config(&off).unwrap().chunking,
+            None
+        );
+        // Remote models never chunk: their tokenizer is not available here.
+        let remote = EmbeddingSection {
+            provider: "openai-compatible".to_string(),
+            model: "nomic-embed-text".to_string(),
+            base_url: Some("http://localhost:11434/v1".to_string()),
+            dim: Some(768),
+            chunking: Some(true),
+            ..Default::default()
+        };
+        assert_eq!(
+            IndexEmbeddingMeta::from_config(&remote).unwrap().chunking,
+            None
+        );
+    }
+
+    #[test]
+    fn fingerprint_covers_chunking_only_when_set() {
+        let plain = openai_meta();
+        let mut chunked = openai_meta();
+        chunked.chunking = Some(Chunking::for_window(512));
+        assert_ne!(plain.fingerprint(), chunked.fingerprint());
+        let mut other = chunked.clone();
+        other.chunking = Some(Chunking {
+            overlap_tokens: 32,
+            ..Chunking::for_window(512)
+        });
+        assert_ne!(chunked.fingerprint(), other.fingerprint());
+        // A record from before chunking existed keeps its fingerprint.
+        assert!(!plain.fingerprint().contains("chunking"));
+        let json = r#"{"meta_version":3,"provider":"local","model":"multilingual-e5-small","dim":384,"query_prefix":"query: ","passage_prefix":"passage: ","text_version":1}"#;
+        let recorded: IndexEmbeddingMeta = serde_json::from_str(json).unwrap();
+        assert_eq!(recorded.chunking, None);
+        assert_eq!(recorded.template(), Some(TextTemplate::Flat));
     }
 
     #[test]
@@ -1416,15 +2130,36 @@ mod tests {
 
     #[test]
     fn embedding_text_template_is_pinned_to_its_version() {
-        // If this fails you changed what every stored vector encodes. Bump
-        // EMBEDDING_TEXT_VERSION, then update the pins below to the new output
-        // — the bump is what makes existing indexes re-embed instead of mixing
-        // two templates in one vector space.
-        assert_eq!(
-            EMBEDDING_TEXT_VERSION, 1,
-            "pins below belong to template version 1"
-        );
+        // If this fails you changed what stored vectors encode. Do not edit a
+        // template: add a new `TextTemplate` variant with a new version (the
+        // old one keeps serving the indexes built with it) and pin it here —
+        // the new version is what makes existing indexes re-embed instead of
+        // mixing two templates in one vector space.
+        assert_eq!(TextTemplate::Flat.version(), 1);
+        assert_eq!(TextTemplate::Structured.version(), 2);
         assert_eq!((BYTES_PER_TOKEN, HEADER_TOKEN_RESERVE), (4, 64));
+        assert_eq!((text::DOC_BYTES, text::SIGNATURE_BYTES), (1_000, 512));
+        let structured = CodeSymbol {
+            file_path: "services/user_service.py".to_string(),
+            qualified_name: "UserService.get_user".to_string(),
+            content: "def get_user(self, user_id):\n    \"\"\"Find one.\"\"\"\n    return  self.db.find(user_id)\n".to_string(),
+            metadata: Some(r#"{"decorators":["@cached"],"doc":"Look up a user."}"#.to_string()),
+            ..make_symbol(
+                "get_user",
+                SymbolKind::Method,
+                "def get_user(self, user_id)",
+                "",
+                None,
+            )
+        };
+        assert_eq!(
+            text::structured(&structured).text(),
+            "python method services/user_service.py::UserService.get_user\n\
+             user service get user\n\
+             @cached def get_user(self, user_id)\n\
+             Look up a user. Find one.\n\
+             return self.db.find(user_id)"
+        );
         let meta = r#"{"decorators":["@cached"],"return_type":"User","superclasses":["Base"]}"#;
         let sym = make_symbol(
             "get_user",
@@ -1453,6 +2188,58 @@ mod tests {
             build_embedding_text_for(&long, 64).len(),
             "Function big  fn big()   ".len() + 256
         );
+    }
+
+    /// Every registry model that is in the local model cache loads, embeds
+    /// to its declared dimension at unit length, and ranks a matching code
+    /// snippet above an unrelated one — a check of pooling and prefixes, which
+    /// fail silently otherwise. Needs the weights, so it runs on request:
+    /// `FASTEMBED_CACHE_DIR=... cargo test -p myceliums-core cached_models -- --ignored --nocapture`.
+    #[tokio::test]
+    #[ignore = "needs model weights in the cache"]
+    async fn cached_models_rank_a_matching_snippet_first() {
+        let cache = get_cache_dir();
+        let mut checked = 0;
+        for spec in EMBEDDING_MODELS {
+            if !onnx::is_cached(spec, &cache) {
+                eprintln!("{}: not cached, skipped", spec.id);
+                continue;
+            }
+            let model = onnx::LocalModel::load(spec, spec.window_tokens).unwrap();
+            eprintln!("{}: {}", spec.id, model.signature());
+            let meta = IndexEmbeddingMeta::from_config(&EmbeddingSection {
+                model: spec.id.to_string(),
+                ..Default::default()
+            })
+            .unwrap();
+            let embedder = Embedder::new(meta).unwrap();
+            let query = embedder
+                .embed_query("parse a json request body")
+                .await
+                .unwrap();
+            let passages = embedder
+                .embed_texts(
+                    &[
+                        "def parse_json_body(request):\n    return json.loads(request.body)"
+                            .to_string(),
+                        "def resize_image(img, width):\n    return img.resize(width)".to_string(),
+                    ],
+                    EmbedInput::Passage,
+                )
+                .await
+                .unwrap();
+            assert_eq!(query.len(), spec.dim, "{}", spec.id);
+            let norm: f32 = passages[0].iter().map(|x| x * x).sum::<f32>().sqrt();
+            assert!((norm - 1.0).abs() < 1e-4, "{}: norm {norm}", spec.id);
+            let (hit, miss) = (
+                Embedder::cosine_similarity(&query, &passages[0]),
+                Embedder::cosine_similarity(&query, &passages[1]),
+            );
+            eprintln!("{}: matching {hit:.4}, unrelated {miss:.4}", spec.id);
+            assert!(hit > miss, "{}: {hit} <= {miss}", spec.id);
+            checked += 1;
+        }
+        eprintln!("checked {checked} cached models");
     }
 
     #[test]

@@ -73,6 +73,29 @@ pub fn symbols_schema(embedding_dim: i32) -> Schema {
     ])
 }
 
+/// Arrow schema for the `chunks` table (#157): the vectors of a long symbol's
+/// body chunks. Chunk 0, the header chunk, is the symbol's own vector on its
+/// `symbols` row; these rows hold chunks 1 and up, keyed back to the symbol by
+/// `symbol_uid`, with the file for deletion on re-index and the SHA-256 of
+/// the chunk text for reuse.
+pub fn chunks_schema(embedding_dim: i32) -> Schema {
+    Schema::new(vec![
+        Field::new("symbol_uid", DataType::Utf8, false),
+        Field::new("file_path", DataType::Utf8, false),
+        Field::new("repo_id", DataType::Utf8, false),
+        Field::new("chunk_index", DataType::UInt32, false),
+        Field::new("text_hash", DataType::Utf8, false),
+        Field::new(
+            "vector",
+            DataType::FixedSizeList(
+                Arc::new(Field::new("item", DataType::Float32, true)),
+                embedding_dim,
+            ),
+            true,
+        ),
+    ])
+}
+
 /// Key-value metadata about the index itself (e.g. which embedding model
 /// built the vectors). Kept separate from symbol data so it survives
 /// incremental updates and can be read without scanning symbols.
