@@ -29,7 +29,8 @@ Created with `myc init`. All fields are optional. Omitted fields use their defau
 | `channel_buffer_size` | integer | `8` | Capacity of the async channel between producers and the batch writer |
 | `use_dsl` | bool | `false` | Use DSL-driven parsing for supported languages (Python, Go). When false, uses hand-coded extractors |
 | `ann_threshold` | integer | unset | **Deprecated, ignored.** Vector search is exact at every repository size and no ANN index is built (#117). Still accepted so existing files parse; `myc` logs a deprecation warning when it is set. Remove the line |
-| `embedding_batch_size` | integer | `256` | Number of symbols to embed in a single batch. Smaller values reduce peak memory for large repositories |
+| `embedding_batch_size` | integer | `256` | Most texts embedded in one batch. An upper bound: the token budget below usually binds first |
+| `embedding_batch_tokens` | integer | `16384` | Most tokens in one embedding batch, counted as texts × padded length — the memory knob for local models (activations grow with it). Texts are sorted by length before batching, so short symbols share large batches and long ones small ones (#157). `0` or unset means the default, 32 full 512-token windows, measured safe on a 16 GB machine for every registry model |
 
 **Default `exclude` patterns:**
 
@@ -81,6 +82,14 @@ the project (shared by the team) rather than kept as per-user state.
 | `api_key_env` | string | `"MYCELIUMS_EMBEDDING_API_KEY"` | Name of the environment variable holding the API key. The key itself never goes into this file |
 | `query_prefix` | string | — | Prefix prepended to search queries (e.g. `"query: "` for E5-style models). Ignored for `local` — the registry value wins |
 | `passage_prefix` | string | — | Prefix prepended to indexed documents (e.g. `"passage: "`). Ignored for `local` — the registry value wins |
+| `chunking` | bool | shipped default | Split long symbols into overlapping 512-token chunks with a vector each, so the end of a long function is searchable too; search still returns one row per symbol, scored by its best chunk (#157). Local models only (chunk boundaries are counted in the model's tokens); ignored for `openai-compatible` |
+
+Local models run in-process on ONNX Runtime. Their files are downloaded once
+from a pinned HuggingFace revision into the model cache (`FASTEMBED_CACHE_DIR`,
+else `HF_HOME`, else `.fastembed_cache/`) and checked against a pinned SHA-256.
+The environment variable `MYCELIUMS_EMBEDDING_THREADS` sets how many CPU
+threads an embedding session uses (default: all logical cores) — a machine
+setting, so it is not part of this file.
 
 #### Which fields invalidate an existing index
 
@@ -99,7 +108,8 @@ rebuilt with a full analysis (`myc analyze`) before the change takes effect.
 | `dim` | Different vector length; the stored table is physically rebuilt |
 | `base_url` (host-normalized) | The same model name behind a different endpoint can be a different model. Cosmetic differences — trailing slash, host case, an explicit default port (`:80`/`:443`) — are folded and do **not** invalidate |
 | `query_prefix` / `passage_prefix` | E5-style prefixes change the text sent to the model, so they change the vectors |
-| _embedding-text version_ (not a config field) | Each symbol is embedded from a document built by a fixed template (kind, name, decorators, signature, return type, superclasses, then content cut to the model's token budget). The template and its budget constants carry a version that is recorded in the index; a release that changes them bumps it, and the next full analysis re-embeds. Indexes written before this version was recorded (before `meta_version` 3) cannot say which template built them and are re-embedded on the next full analysis. Until then an incremental run with embeddings (`myc watch`, re-indexing changed files) is refused with a message naming `myc analyze`, instead of adding vectors from a second template to the index |
+| `chunking` | Chunk vectors exist only in a chunked index, and their parameters (window, overlap, most chunks per symbol) are recorded and fingerprinted; an index without chunking keeps the fingerprint it had before chunking existed |
+| _embedding-text version_ (not a config field) | Each symbol is embedded from a document built by a versioned template — version 1: kind, name, decorators, signature, return type, superclasses, then content cut to the model's token budget; version 2 (#157): language, kind and `file::qualified.name`, the name split into words, the signature, the doc comment, then the normalised body. The version is recorded in the index; a release that changes the default template makes the next full analysis re-embed. Until then incremental runs (`myc watch`, re-indexing changed files) keep embedding with the index's own template, which this build still produces, so the index never mixes two. Indexes written before the version was recorded (before `meta_version` 3) cannot say which template built them: an incremental run with embeddings is refused with a message naming `myc analyze` |
 
 **Fields *not* in the fingerprint — a change does not invalidate the index:**
 

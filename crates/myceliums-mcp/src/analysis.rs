@@ -192,7 +192,7 @@ impl SinkInner {
             }
             AnalysisPhase::GeneratingEmbeddings { current, total } => self.send(
                 62 + share(*current, *total, 16),
-                format!("embedding symbols: {current}/{total}"),
+                format!("embedding: {current}/{total} texts"),
             ),
             AnalysisPhase::Complete { symbols, files } => self.send(
                 80,
