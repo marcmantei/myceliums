@@ -412,6 +412,7 @@ mod tests {
             file_count: 1,
             analyzed_commit: None,
             vector_geometry_version: 0,
+            classification_version: 0,
         }
     }
 

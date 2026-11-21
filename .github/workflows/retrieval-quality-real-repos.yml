@@ -2,8 +2,10 @@ name: Retrieval Quality (real repositories)
 
 # Scores lexical, semantic, hybrid and hybrid+rerank on the held-out
 # real-repository query set (#95), sweeps the hybrid fusion parameters on its
-# development split and confirms the dev winner on the held-out split. Writes
-# the tables to the job summary and the full report as an artifact.
+# development split and confirms the dev winner on the held-out split; scores
+# every mode again with test code left in place and sweeps the test-code
+# demotion weight the same way (#146). Writes the tables to the job summary
+# and the full report as an artifact.
 #
 # Report-only. Indexing four real repositories with the embedding model and
 # reranking 168 queries takes far longer than a pull request should wait, so it
@@ -35,7 +37,7 @@ jobs:
   real-repos:
     name: Real-repo retrieval and parameter sweep
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Free runner disk space

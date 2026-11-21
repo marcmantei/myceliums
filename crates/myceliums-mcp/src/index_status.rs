@@ -524,6 +524,7 @@ mod tests {
             file_count: 0,
             analyzed_commit: commit.map(str::to_string),
             vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION,
         }
     }
 

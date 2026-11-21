@@ -150,7 +150,19 @@ async fn run(cli: Cli) -> Result<()> {
             hybrid,
             rerank,
             explain,
-        } => cmd_search(&query, repo.as_deref(), limit, hybrid, rerank, explain).await,
+            tests,
+        } => {
+            cmd_search(
+                &query,
+                repo.as_deref(),
+                limit,
+                hybrid,
+                rerank,
+                explain,
+                tests.into(),
+            )
+            .await
+        }
         Commands::Communities { repo } => cmd_communities(&repo).await,
         Commands::Processes {
             repo,
@@ -212,9 +224,12 @@ async fn run(cli: Cli) -> Result<()> {
             let opts = commands::nav::OutputOptions { json, budget };
             commands::nav::cmd_context(&query.join(" "), repo.as_deref(), hybrid, opts).await
         }
-        Commands::SemanticSearch { query, repo, limit } => {
-            cmd_semantic_search(&query, repo.as_deref(), limit).await
-        }
+        Commands::SemanticSearch {
+            query,
+            repo,
+            limit,
+            tests,
+        } => cmd_semantic_search(&query, repo.as_deref(), limit, tests.into()).await,
         Commands::Session {
             path,
             yes,

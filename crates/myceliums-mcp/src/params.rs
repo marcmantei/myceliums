@@ -189,6 +189,31 @@ impl SearchMode {
     }
 }
 
+/// How `search_code` ranks test code (#146).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(inline)]
+pub enum TestsParam {
+    // Test code ranks below product code. (Plain comments: doc comments on
+    // variants would turn the schema's `enum` into `oneOf`.)
+    #[default]
+    Demote,
+    // Test code ranks like product code.
+    Include,
+    // Test code ranks above product code.
+    Prefer,
+}
+
+impl From<TestsParam> for myceliums_core::TestRanking {
+    fn from(tests: TestsParam) -> Self {
+        match tests {
+            TestsParam::Demote => myceliums_core::TestRanking::Demote,
+            TestsParam::Include => myceliums_core::TestRanking::Include,
+            TestsParam::Prefer => myceliums_core::TestRanking::Prefer,
+        }
+    }
+}
+
 // ── Core tool parameters ─────────────────────────────────────────────────
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
@@ -209,6 +234,8 @@ pub struct SearchCodeParams {
     pub rerank: Option<bool>,
     /// Show the scoring breakdown of each result (default: false)
     pub explain: Option<bool>,
+    /// Test code (test files and directories such as *_test.go, *.test.ts, tests/, and #[cfg(test)] modules): demote (default) ranks it below product code, include ranks it like product code, prefer ranks it first. Use include or prefer to find tests
+    pub tests: Option<TestsParam>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]

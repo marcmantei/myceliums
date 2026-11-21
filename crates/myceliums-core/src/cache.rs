@@ -80,6 +80,20 @@ pub fn check_cache(
         };
     }
 
+    // An index written before symbols were classified as test or product code
+    // (#146) ranks its tests like product code; re-analyze it rather than
+    // reuse it, however fresh it is otherwise.
+    if repo_info.classification_version != schema::SYMBOL_CLASSIFICATION_VERSION {
+        return CacheDecision::ReanalyzeNeeded {
+            reason: format!(
+                "Symbol classification version {} is stale (current: {}) — test code must be \
+                 re-classified so search can rank it below product code",
+                repo_info.classification_version,
+                schema::SYMBOL_CLASSIFICATION_VERSION
+            ),
+        };
+    }
+
     // Check age
     let analyzed_at = match chrono::DateTime::parse_from_rfc3339(&repo_info.analyzed_at) {
         Ok(dt) => dt,
@@ -409,6 +423,7 @@ mod tests {
             file_count: 5,
             analyzed_commit: Some("abc123".to_string()),
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
         };
         let config = CacheCheckConfig::default();
         let decision = check_cache(&repo_info, Path::new("/tmp/test"), &config);
@@ -429,6 +444,7 @@ mod tests {
             file_count: 5,
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
         };
         let config = CacheCheckConfig::default();
         // Empty dir + recent analysis → cache is fresh
@@ -465,6 +481,7 @@ mod tests {
             file_count: 0,
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
         };
         let config = CacheCheckConfig {
             max_age_minutes: 120,
@@ -510,6 +527,7 @@ mod tests {
             file_count: 0,
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
         };
         let config = CacheCheckConfig {
             max_age_minutes: 120,
@@ -548,6 +566,7 @@ mod tests {
             analyzed_commit: None,
             // Legacy index: written before embeddings were L2-normalized.
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION - 1,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
         };
         let config = CacheCheckConfig::default();
 
@@ -576,12 +595,37 @@ mod tests {
             file_count: 5,
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
         };
         let config = CacheCheckConfig::default();
         assert!(matches!(
             check_cache(&repo_info, tmp.path(), &config),
             CacheDecision::UseCached { .. }
         ));
+    }
+
+    #[test]
+    fn stale_symbol_classification_forces_reanalysis() {
+        // An index from before #146 carries no test/product classification:
+        // it must be rebuilt even when every other signal says it is fresh.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo_info = RepoInfo {
+            id: "test-classification".to_string(),
+            name: "test".to_string(),
+            path: tmp.path().to_string_lossy().to_string(),
+            analyzed_at: chrono::Utc::now().to_rfc3339(),
+            symbol_count: 10,
+            file_count: 5,
+            analyzed_commit: None,
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: 0,
+        };
+        match check_cache(&repo_info, tmp.path(), &CacheCheckConfig::default()) {
+            CacheDecision::ReanalyzeNeeded { reason } => {
+                assert!(reason.contains("classification"), "{reason}");
+            }
+            other => panic!("a stale classification must force re-analysis, got: {other:?}"),
+        }
     }
 
     // ── QueryCache tests ────────────────────────────────────────────

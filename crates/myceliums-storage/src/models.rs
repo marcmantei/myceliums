@@ -119,6 +119,28 @@ pub struct CodeSymbol {
     pub metadata: Option<String>,
 }
 
+impl CodeSymbol {
+    /// Whether the index classified this symbol as test code
+    /// ([`SymbolMetadata::test`]). False for a symbol without metadata, with
+    /// unreadable metadata, or from an index built before the classification
+    /// existed.
+    pub fn is_test(&self) -> bool {
+        /// Only the flag; serde skips every other field without building it.
+        #[derive(Deserialize)]
+        struct TestFlag {
+            #[serde(default)]
+            test: bool,
+        }
+        match self.metadata.as_deref() {
+            // Most symbols are not tests; skip the parse when the key is absent.
+            Some(json) if json.contains("\"test\"") => serde_json::from_str::<TestFlag>(json)
+                .map(|flag| flag.test)
+                .unwrap_or(false),
+            _ => false,
+        }
+    }
+}
+
 /// Where a symbol is defined: the columns needed to point at it, without its
 /// signature, body or vector. Returned by `Store::find_symbols_named`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -373,6 +395,12 @@ pub struct RepoInfo {
     /// rebuilt before its vectors can be trusted for cosine ranking (issue #29).
     #[serde(default)]
     pub vector_geometry_version: u32,
+    /// Version of the per-symbol classification the index was built with
+    /// (see [`crate::schema::SYMBOL_CLASSIFICATION_VERSION`]). `0` means an
+    /// index written before symbols were classified as test or product code
+    /// (#146): search cannot rank its test code lower until it is re-analyzed.
+    #[serde(default)]
+    pub classification_version: u32,
 }
 
 // --- Symbol Metadata ---
@@ -414,6 +442,12 @@ pub struct SymbolMetadata {
     /// Git SDLC metadata (author, date, commit count, age)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub git: Option<GitMetadataEntry>,
+    /// The symbol is test code — it lives in a test file or directory, or in
+    /// a test module, by its language's convention — rather than product code.
+    /// Set at index time (#146); search ranks such symbols lower by default.
+    /// Never read by BM25 or the embedding text, so it changes no score.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub test: bool,
 }
 
 /// Declared visibility of a symbol.

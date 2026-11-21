@@ -78,6 +78,7 @@ impl Config {
         HybridParams {
             rrf_k: self.rrf_k,
             vector_candidates: self.vector_candidates,
+            ..HybridParams::default()
         }
     }
 

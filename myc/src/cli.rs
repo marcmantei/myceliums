@@ -73,6 +73,10 @@ pub(crate) enum Commands {
         /// Show scoring breakdown and graph paths for each result
         #[arg(long)]
         explain: bool,
+        /// How to rank test code (test files and directories, #[cfg(test)]
+        /// modules): below product code, like it, or above it
+        #[arg(long, value_enum, default_value_t = TestsArg::Demote)]
+        tests: TestsArg,
     },
     /// Show detected communities for a repository
     Communities {
@@ -222,6 +226,10 @@ pub(crate) enum Commands {
         /// Maximum results to show
         #[arg(short, long, default_value = "10")]
         limit: usize,
+        /// How to rank test code (test files and directories, #[cfg(test)]
+        /// modules): below product code, like it, or above it
+        #[arg(long, value_enum, default_value_t = TestsArg::Demote)]
+        tests: TestsArg,
     },
     /// Interactive session setup: checks cache, prompts for analysis if needed
     Session {
@@ -567,4 +575,25 @@ pub(crate) enum EmailCommands {
 pub(crate) enum LogFormat {
     Text,
     Json,
+}
+
+/// How `myc search` and `myc semantic-search` rank test code (`--tests`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub(crate) enum TestsArg {
+    /// Rank test code below product code (default)
+    Demote,
+    /// Rank test code like product code
+    Include,
+    /// Rank test code above product code
+    Prefer,
+}
+
+impl From<TestsArg> for myceliums_core::TestPolicy {
+    fn from(tests: TestsArg) -> Self {
+        myceliums_core::TestPolicy::new(match tests {
+            TestsArg::Demote => myceliums_core::TestRanking::Demote,
+            TestsArg::Include => myceliums_core::TestRanking::Include,
+            TestsArg::Prefer => myceliums_core::TestRanking::Prefer,
+        })
+    }
 }

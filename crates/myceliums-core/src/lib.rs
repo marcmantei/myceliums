@@ -98,6 +98,8 @@ pub mod contracts;
 pub mod cross_repo;
 /// Dependency cycle detection.
 pub mod cycles;
+/// Ranking test code below product code in search (#146).
+pub mod demotion;
 /// File dependencies and module coupling metrics.
 pub mod dependencies;
 pub mod drift;
@@ -189,6 +191,7 @@ pub use community::{
 pub use config::ProjectConfig;
 pub use contracts::{detect_contracts, ContractsReport};
 pub use cycles::{detect_cycles, DependencyCycle};
+pub use demotion::{TestPolicy, TestRanking, DEFAULT_TEST_WEIGHT};
 pub use dependencies::{
     compute_file_dependencies, compute_module_coupling, FileDependency, ModuleCoupling,
 };
@@ -216,7 +219,8 @@ pub use hybrid_search::{
 };
 #[cfg(feature = "embeddings")]
 pub use hybrid_search::{
-    hybrid_search, hybrid_search_explain, hybrid_search_with, rerank_results, VectorSearcher,
+    hybrid_search, hybrid_search_explain, hybrid_search_with, rerank_results, semantic_search,
+    VectorSearcher,
 };
 pub use impact::{detect_impact, run_git_diff, ImpactReport};
 pub use lock::{AnalysisLock, LockOutcome};
@@ -228,7 +232,9 @@ pub use ontology::{EdgeType, EntityType, Ontology, Property};
 pub use process::{ProcessFilter, ProcessTracer};
 pub use progress::{AnalysisPhase, ProgressReporter, SilentReporter};
 pub use rename::RenamePlan;
-pub use search::{search_symbols, search_symbols_explain, SearchExplain, TermScore};
+pub use search::{
+    search_symbols, search_symbols_explain, search_symbols_ranked, SearchExplain, TermScore,
+};
 /// Service layer: store lifecycle, repo resolution, and graph assembly for
 /// transport adapters. See the crate-level "Service Layer" section.
 pub use service::{

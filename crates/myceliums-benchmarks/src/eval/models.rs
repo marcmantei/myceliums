@@ -7,7 +7,7 @@
 //! queried the way `myc semantic-search`, `myc search --hybrid [--rerank]` and
 //! the MCP `semantic_search` / `hybrid_search` tools query it: the embedder is
 //! resolved from the index with [`embedder_for_index`], semantic search is
-//! [`Store::vector_search`], hybrid is [`hybrid_search`], and reranking is
+//! [`semantic_search`] over [`Store`], hybrid is [`hybrid_search`], and reranking is
 //! [`rerank_results`] with the reranker the index recorded. The model
 //! configuration is the shipped default ([`EmbeddingSection::default`]), so the
 //! numbers describe what a user gets without touching `.myceliums.toml`.
@@ -26,14 +26,17 @@ use anyhow::{anyhow, bail, Context, Result};
 use myceliums_core::config::EmbeddingSection;
 use myceliums_core::embeddings::EMBEDDING_TEXT_VERSION;
 use myceliums_core::search::SearchResult;
+use myceliums_core::HybridSearchResult;
 use myceliums_core::{
     check_model_cache, embedder_for_index, get_embedder_for, get_reranker, hybrid_search_with,
-    local_model_code, rerank_results, reranker_spec, Embedder, HybridParams, IndexEmbeddingMeta,
+    local_model_code, rerank_results, reranker_spec, semantic_search, Embedder, HybridParams,
+    IndexEmbeddingMeta, TestPolicy,
 };
 use myceliums_storage::{AnnSettings, CodeSymbol, Store};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use super::corpus::Corpus;
 use super::evaluator::SearchMode;
@@ -307,6 +310,9 @@ pub struct ModelProvenance {
     pub rrf_k: u32,
 }
 
+/// Reranked pools by `(query, pool uids in order)`.
+type RerankMemo = HashMap<(String, Vec<String>), Vec<HybridSearchResult>>;
+
 /// The corpus indexed with real embeddings in a throwaway LanceDB store.
 pub struct ModelIndex {
     /// Keeps the on-disk store alive for as long as the index is used.
@@ -318,6 +324,9 @@ pub struct ModelIndex {
     embedder: Arc<Embedder>,
     setup: ModelSetup,
     policy: ModelPolicy,
+    /// Reranked pools, keyed by query and the pool's uids in order: the
+    /// reranker's output before any test-code policy reorders it.
+    reranked: Mutex<RerankMemo>,
 }
 
 impl ModelIndex {
@@ -383,6 +392,7 @@ impl ModelIndex {
             embedder,
             setup: setup.clone(),
             policy,
+            reranked: Mutex::new(HashMap::new()),
         })
     }
 
@@ -417,7 +427,8 @@ impl ModelIndex {
 
     /// Rank corpus symbols for `query` under a model-backed `mode`, best first,
     /// at most `depth` deep. `params` are the fusion parameters of the hybrid
-    /// modes; semantic search does not read them.
+    /// modes, and `params.tests` places test code in every mode (#146);
+    /// semantic search reads only the latter.
     pub async fn rank(
         &self,
         mode: SearchMode,
@@ -434,13 +445,13 @@ impl ModelIndex {
             }
             SearchMode::Semantic => {
                 let query_vector = self.embedder.embed_query(query).await?;
-                Ok(self
-                    .store
-                    .vector_search(&query_vector, depth)
-                    .await?
-                    .into_iter()
-                    .map(|(symbol, _)| symbol)
-                    .collect())
+                Ok(
+                    semantic_search(&self.store, &query_vector, depth, &params.tests)
+                        .await?
+                        .into_iter()
+                        .map(|(symbol, _)| symbol)
+                        .collect(),
+                )
             }
             SearchMode::Hybrid => Ok(self
                 .hybrid(query, depth.max(SHIPPED_HYBRID_LIMIT), params)
@@ -450,11 +461,13 @@ impl ModelIndex {
                 .map(|result| result.symbol)
                 .collect()),
             SearchMode::HybridRerank => {
-                // Rerank the pool `--rerank` reorders by default, then cut.
+                // Rerank the pool `--rerank` reorders by default, then place
+                // test code — `rerank_results` with `params.tests`, in two
+                // steps so that a pool reranked before is not reranked again.
                 let pool = self.hybrid(query, SHIPPED_HYBRID_LIMIT, params).await?;
-                let reranker = self.embedder.meta().reranker.clone();
-                Ok(rerank_results(query, pool, reranker.as_deref())
-                    .await?
+                Ok(params
+                    .tests
+                    .apply(self.rerank(query, pool).await?, |r| r.symbol.is_test())
                     .into_iter()
                     .take(depth)
                     .map(|result| result.symbol)
@@ -483,6 +496,43 @@ impl ModelIndex {
         )
         .await
         .map_err(Into::into)
+    }
+
+    /// Rerank `pool` with the reranker the index recorded, leaving test code
+    /// where the cross-encoder puts it: the production [`rerank_results`]
+    /// with [`TestPolicy::include`]. `rerank_results` with any other policy
+    /// is this order reordered by [`TestPolicy::apply`], which callers do
+    /// themselves.
+    ///
+    /// Reranking is most of a real-repository run, and the runs with and
+    /// without test-code demotion and the weight sweep hand it many identical
+    /// pools, so each `(query, pool)` is reranked once and remembered: the
+    /// same input gives the same output.
+    pub async fn rerank(
+        &self,
+        query: &str,
+        pool: Vec<HybridSearchResult>,
+    ) -> Result<Vec<HybridSearchResult>> {
+        let key = (
+            query.to_string(),
+            pool.iter()
+                .map(|r| r.symbol.uid.clone())
+                .collect::<Vec<_>>(),
+        );
+        if let Some(done) = self.lock_reranked().get(&key) {
+            return Ok(done.clone());
+        }
+        let reranker = self.embedder.meta().reranker.clone();
+        let order =
+            rerank_results(query, pool, reranker.as_deref(), &TestPolicy::include()).await?;
+        self.lock_reranked().insert(key, order.clone());
+        Ok(order)
+    }
+
+    fn lock_reranked(&self) -> std::sync::MutexGuard<'_, RerankMemo> {
+        self.reranked
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// The two inputs of hybrid fusion for `query`, computed once so that many
@@ -529,8 +579,30 @@ pub struct FusionInputs {
 }
 
 impl FusionInputs {
+    /// The whole fused list for the first fetched candidate count at RRF
+    /// constant `rrf_k`, before any test-code policy reorders it — what
+    /// [`hybrid_search_with`] reorders and cuts.
+    pub fn fuse_undemoted(&self, rrf_k: f64) -> Result<Vec<myceliums_core::HybridSearchResult>> {
+        let (_, vector) = self
+            .vector
+            .first()
+            .ok_or_else(|| anyhow!("no vector candidates fetched"))?;
+        let bm25 = self
+            .bm25
+            .iter()
+            .map(|hit| (hit.symbol.clone(), hit.score, None))
+            .collect();
+        Ok(myceliums_core::reciprocal_rank_fusion(
+            bm25,
+            vector.clone(),
+            rrf_k,
+            usize::MAX,
+        ))
+    }
+
     /// Fuse the inputs under `params`, keeping the top `limit` — the ranking
-    /// [`hybrid_search_with`] returns for the same query, limit and params.
+    /// [`hybrid_search_with`] returns for the same query, limit and params,
+    /// test-code policy included.
     pub fn fuse(&self, params: &HybridParams, limit: usize) -> Result<Vec<CodeSymbol>> {
         let vector = self
             .vector
@@ -548,12 +620,20 @@ impl FusionInputs {
             .iter()
             .map(|hit| (hit.symbol.clone(), hit.score, None))
             .collect();
-        Ok(
-            myceliums_core::reciprocal_rank_fusion(bm25, vector, params.rrf_k, limit)
-                .into_iter()
-                .map(|result| result.symbol)
-                .collect(),
-        )
+        // As `hybrid_search_with`: fuse as deep as the test-code policy
+        // reads, reorder, cut.
+        let fused = myceliums_core::reciprocal_rank_fusion(
+            bm25,
+            vector,
+            params.rrf_k,
+            params.tests.depth_for(limit),
+        );
+        Ok(params
+            .tests
+            .top(fused, limit, |result| result.symbol.is_test())
+            .into_iter()
+            .map(|result| result.symbol)
+            .collect())
     }
 }
 

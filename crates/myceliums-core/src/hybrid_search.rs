@@ -8,6 +8,7 @@ use myceliums_storage::{CodeSymbol, Relationship};
 use serde::Serialize;
 use std::collections::HashMap;
 
+use crate::demotion::TestPolicy;
 #[cfg(feature = "embeddings")]
 use crate::embeddings::get_reranker;
 #[cfg(feature = "embeddings")]
@@ -92,6 +93,8 @@ pub struct HybridParams {
     pub rrf_k: f64,
     /// Minimum number of nearest-vector candidates fetched for fusion.
     pub vector_candidates: usize,
+    /// How the fused ranking places test code (#146): demoted by default.
+    pub tests: TestPolicy,
 }
 
 impl Default for HybridParams {
@@ -99,6 +102,17 @@ impl Default for HybridParams {
         Self {
             rrf_k: DEFAULT_RRF_K,
             vector_candidates: DEFAULT_VECTOR_CANDIDATES,
+            tests: TestPolicy::default(),
+        }
+    }
+}
+
+impl HybridParams {
+    /// The shipped fusion parameters with `tests` as the test-code policy.
+    pub fn with_tests(tests: impl Into<TestPolicy>) -> Self {
+        Self {
+            tests: tests.into(),
+            ..Self::default()
         }
     }
 }
@@ -271,6 +285,13 @@ pub fn attach_graph_edges(
 ///    corpus is never re-embedded per query
 /// 4. Combines results using Reciprocal Rank Fusion with the shipped
 ///    [`HybridParams::default`] (k = 60, at least 100 vector candidates)
+/// 5. Ranks test code below product code in the fused list
+///    ([`TestPolicy::default`], #146) and keeps the top `limit`
+///
+/// This is the ranking of the search surfaces (`myc search --hybrid`,
+/// `search_code`). Callers that use hybrid search as a building block —
+/// context packs, cross-repository seeds — pass
+/// `HybridParams::with_tests(TestPolicy::include())` to [`hybrid_search_with`].
 ///
 /// `vectors` is typically a [`myceliums_storage::Store`]; the BM25 leg keeps
 /// using the in-memory `symbols` slice.
@@ -313,7 +334,8 @@ pub async fn hybrid_search_with(
     hybrid_search_impl(embedder, symbols, vectors, query, limit, false, params).await
 }
 
-/// Hybrid search with explain traces showing scoring breakdown and graph paths.
+/// [`hybrid_search_with`] with explain traces showing the scoring breakdown
+/// and graph paths.
 ///
 /// Requires the `embeddings` feature.
 #[cfg(feature = "embeddings")]
@@ -323,17 +345,9 @@ pub async fn hybrid_search_explain(
     vectors: &impl VectorSearcher,
     query: &str,
     limit: usize,
+    params: &HybridParams,
 ) -> Result<Vec<HybridSearchResult>> {
-    hybrid_search_impl(
-        embedder,
-        symbols,
-        vectors,
-        query,
-        limit,
-        true,
-        &HybridParams::default(),
-    )
-    .await
+    hybrid_search_impl(embedder, symbols, vectors, query, limit, true, params).await
 }
 
 #[cfg(feature = "embeddings")]
@@ -366,12 +380,45 @@ async fn hybrid_search_impl(
     let vector_results =
         vector_leg(vectors, &query_embedding, limit, params.vector_candidates).await?;
 
-    Ok(reciprocal_rank_fusion(
+    Ok(fuse_ranked(bm25_results, vector_results, params, limit))
+}
+
+/// RRF fusion followed by the test-code policy: fuse as deep as the policy
+/// reads, reorder, then cut to `limit`. The candidate pools depend on `limit`
+/// only, never on the policy.
+#[cfg(feature = "embeddings")]
+fn fuse_ranked(
+    bm25_results: Vec<(CodeSymbol, f64, Option<SearchExplain>)>,
+    vector_results: Vec<(CodeSymbol, f64)>,
+    params: &HybridParams,
+    limit: usize,
+) -> Vec<HybridSearchResult> {
+    let fused = reciprocal_rank_fusion(
         bm25_results,
         vector_results,
         params.rrf_k,
-        limit,
-    ))
+        params.tests.depth_for(limit),
+    );
+    params.tests.top(fused, limit, |r| r.symbol.is_test())
+}
+
+/// Semantic search: the `limit` persisted vectors nearest to `query_vector`
+/// — the query embedded with the index's embedder — with test code reordered
+/// by `tests` (#146). What `myc semantic-search` and semantic `search_code`
+/// return; scores are the cosine similarities.
+///
+/// Requires the `embeddings` feature.
+#[cfg(feature = "embeddings")]
+pub async fn semantic_search(
+    vectors: &impl VectorSearcher,
+    query_vector: &[f32],
+    limit: usize,
+    tests: &TestPolicy,
+) -> Result<Vec<(CodeSymbol, f64)>> {
+    let nearest = vectors
+        .nearest(query_vector, tests.depth_for(limit))
+        .await?;
+    Ok(tests.top(nearest, limit, |(symbol, _)| symbol.is_test()))
 }
 
 /// Vector leg of hybrid search: fetch nearest persisted-vector candidates for a
@@ -393,6 +440,8 @@ async fn vector_leg(
 ///
 /// Takes the results from hybrid_search and reranks them using a cross-encoder model.
 /// This improves relevance by scoring each (query, document) pair jointly.
+/// The cross-encoder has no notion of test code, so the reranked order is
+/// reordered by `tests` again (#146); pass the policy the hybrid search used.
 ///
 /// The reranking is expensive (O(n) forward passes through the model), so it's
 /// typically applied only to the top-k results from the initial hybrid search.
@@ -403,6 +452,7 @@ pub async fn rerank_results(
     query: &str,
     results: Vec<HybridSearchResult>,
     reranker_id: Option<&str>,
+    tests: &TestPolicy,
 ) -> Result<Vec<HybridSearchResult>> {
     if results.is_empty() {
         return Ok(results);
@@ -423,7 +473,17 @@ pub async fn rerank_results(
 
     // Rerank with cross-encoder - returns (index, score) pairs sorted by score
     let reranked_indices = reranker.rerank(query, &documents)?;
+    Ok(reranked_order(&results, reranked_indices, tests))
+}
 
+/// The results in the cross-encoder's order, each with its rerank score,
+/// then reordered by the test-code policy.
+#[cfg(feature = "embeddings")]
+fn reranked_order(
+    results: &[HybridSearchResult],
+    reranked_indices: Vec<(usize, f32)>,
+    tests: &TestPolicy,
+) -> Vec<HybridSearchResult> {
     // Rebuild results in reranked order. Keep the RRF fusion score in
     // `combined_score` and record the cross-encoder score in `rerank_score`
     // instead of overwriting it (issue #29): the two live on different scales,
@@ -437,7 +497,7 @@ pub async fn rerank_results(
         })
         .collect();
 
-    Ok(reranked_results)
+    tests.apply(reranked_results, |r| r.symbol.is_test())
 }
 
 #[cfg(test)]
@@ -812,5 +872,102 @@ mod persisted_vector_tests {
 
         // Store queried exactly once for the whole fusion.
         assert_eq!(searcher.calls.load(Ordering::SeqCst), 1);
+    }
+
+    fn test_symbol(uid: &str) -> CodeSymbol {
+        CodeSymbol {
+            file_path: format!("tests/{uid}_test.rs"),
+            metadata: Some(r#"{"test":true}"#.to_string()),
+            ..make_symbol(uid, uid)
+        }
+    }
+
+    /// Hybrid search reorders the fused list before cutting it: a test that
+    /// fuses first is placed at `1 / weight`, and `include` keeps RRF order.
+    #[test]
+    fn hybrid_fusion_ranks_test_code_lower() {
+        let bm25 = vec![
+            (test_symbol("t1"), 9.0, None),
+            (test_symbol("t2"), 8.0, None),
+            (make_symbol("p1", "p1"), 7.0, None),
+            (test_symbol("t3"), 6.0, None),
+            (make_symbol("p2", "p2"), 5.0, None),
+        ];
+        let vector = vec![(test_symbol("t1"), 0.9), (make_symbol("p3", "p3"), 0.8)];
+        let uids = |results: &[HybridSearchResult]| -> Vec<String> {
+            results.iter().map(|r| r.symbol.uid.clone()).collect()
+        };
+        let included = fuse_ranked(
+            bm25.clone(),
+            vector.clone(),
+            &HybridParams::with_tests(TestPolicy::include()),
+            4,
+        );
+        // RRF: t1 (both legs), then t2 and p3 tied at 1/62 (BM25 first), p1.
+        assert_eq!(uids(&included), ["t1", "t2", "p3", "p1"]);
+
+        let params = HybridParams::with_tests(TestPolicy::demote(0.25));
+        let demoted = fuse_ranked(bm25, vector, &params, 4);
+        // Fused order t1 t2 p3 p1 t3 p2; placed: t1 1 → 4 (ahead of p1 at
+        // 4, which ranked lower before), t2 2 → 8, t3 5 → 20.
+        assert_eq!(uids(&demoted), ["p3", "t1", "p1", "p2"]);
+        // Fusion scores are kept, only the order changes.
+        assert!(demoted[1].combined_score > demoted[0].combined_score);
+    }
+
+    /// The cross-encoder's order is reordered by the policy again, with the
+    /// rerank scores kept.
+    #[test]
+    fn rerank_order_ranks_test_code_lower() {
+        let results: Vec<HybridSearchResult> = reciprocal_rank_fusion(
+            vec![
+                (make_symbol("p1", "p1"), 3.0, None),
+                (test_symbol("t1"), 2.0, None),
+                (make_symbol("p2", "p2"), 1.0, None),
+            ],
+            Vec::new(),
+            60.0,
+            10,
+        );
+        // The cross-encoder puts the test first.
+        let order = vec![(1usize, 0.9f32), (0, 0.5), (2, 0.1)];
+        let included = reranked_order(&results, order.clone(), &TestPolicy::include());
+        assert_eq!(included[0].symbol.uid, "t1");
+        let demoted = reranked_order(&results, order, &TestPolicy::demote(0.25));
+        let uids: Vec<&str> = demoted.iter().map(|r| r.symbol.uid.as_str()).collect();
+        assert_eq!(uids, ["p1", "p2", "t1"]);
+        assert_eq!(demoted[2].rerank_score, Some(0.9f32 as f64));
+    }
+
+    /// Semantic search reads `limit / weight` candidates and ranks the test
+    /// symbols below the product ones (#146); `include` keeps the vector order.
+    #[tokio::test]
+    async fn semantic_search_ranks_test_code_lower() {
+        let searcher = CountingSearcher::new(vec![
+            (test_symbol("t1"), 0.95),
+            (test_symbol("t2"), 0.94),
+            (make_symbol("p1", "p1"), 0.90),
+            (test_symbol("t3"), 0.89),
+            (make_symbol("p2", "p2"), 0.80),
+        ]);
+        let query = vec![0.0f32; 8];
+        let policy = TestPolicy::demote(0.25);
+        let demoted = semantic_search(&searcher, &query, 3, &policy)
+            .await
+            .unwrap();
+        assert_eq!(searcher.last_limit.load(Ordering::SeqCst), 12);
+        // Placed at position / 0.25: t1 1 → 4, t2 2 → 8, p1 3, t3 4 → 16,
+        // p2 5. A test still beats product code far enough below it.
+        let uids: Vec<&str> = demoted.iter().map(|(s, _)| s.uid.as_str()).collect();
+        assert_eq!(uids, ["p1", "t1", "p2"]);
+        // Scores stay the cosine similarities.
+        assert_eq!(demoted[0].1, 0.90);
+
+        let included = semantic_search(&searcher, &query, 2, &TestPolicy::include())
+            .await
+            .unwrap();
+        let uids: Vec<&str> = included.iter().map(|(s, _)| s.uid.as_str()).collect();
+        assert_eq!(uids, ["t1", "t2"]);
+        assert_eq!(searcher.last_limit.load(Ordering::SeqCst), 2);
     }
 }

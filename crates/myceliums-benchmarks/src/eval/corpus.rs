@@ -378,6 +378,43 @@ mod tests {
         );
     }
 
+    /// The golden corpus holds no test code, so test-code demotion (#146)
+    /// cannot move a golden ranking: the gate's numbers stay comparable
+    /// with the baseline recorded before it.
+    #[test]
+    fn the_golden_corpus_holds_no_test_code() {
+        let corpus = Corpus::load(&fixtures_root().unwrap()).unwrap();
+        let tests: Vec<_> = corpus
+            .symbols()
+            .iter()
+            .filter(|s| s.is_test())
+            .map(|s| format!("{}:{}", s.file_path, s.qualified_name))
+            .collect();
+        assert!(tests.is_empty(), "{tests:?}");
+    }
+
+    /// A real repository's test files are classified as test code.
+    #[test]
+    fn repository_test_files_are_test_code() {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join("tests")).unwrap();
+        std::fs::write(root.path().join("lib.py"), "def f():\n    pass\n").unwrap();
+        std::fs::write(
+            root.path().join("tests/test_lib.py"),
+            "def test_f():\n    pass\n",
+        )
+        .unwrap();
+        let corpus = Corpus::load_repository(root.path(), "demo").unwrap();
+        for symbol in corpus.symbols() {
+            assert_eq!(
+                symbol.is_test(),
+                symbol.file_path.starts_with("tests/"),
+                "{}",
+                symbol.file_path
+            );
+        }
+    }
+
     #[test]
     fn a_project_contributing_nothing_is_an_error() {
         // A fixture root with the right directory names but no source files is

@@ -390,12 +390,15 @@ pub async fn cmd_context(
     };
     let pack = if hybrid {
         let embedder = myceliums_core::embedder_for_index(&graph.store).await?;
-        let results = myceliums_core::hybrid_search(
+        // Context packs keep test code where the ranking puts it, like the
+        // keyword path: only `myc search` demotes tests (#146).
+        let results = myceliums_core::hybrid_search_with(
             &embedder,
             &graph.symbols,
             &*graph.store,
             query,
             options.max_symbols * 2,
+            &myceliums_core::HybridParams::with_tests(myceliums_core::TestPolicy::include()),
         )
         .await?;
         let ranked: Vec<&str> = results.iter().map(|r| r.symbol.uid.as_str()).collect();
@@ -445,6 +448,7 @@ mod tests {
             file_count: 0,
             analyzed_commit: Some("abcdef0123".into()),
             vector_geometry_version: 0,
+            classification_version: 0,
         }
     }
 
