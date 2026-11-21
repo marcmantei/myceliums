@@ -190,6 +190,9 @@ impl MyceliumsMcp {
                     let calls = crate::index_status::call_resolution(&store)
                         .await
                         .map(|stats| stats.summary());
+                    // The two reads above bypassed the tables: check they
+                    // come from the generation the counts do.
+                    graph.verify()?;
                     let output = AnalyzeOutput {
                         repo_id,
                         symbols: symbols.len(),

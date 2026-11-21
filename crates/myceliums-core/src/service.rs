@@ -590,6 +590,15 @@ impl RepoGraph<'_> {
     /// Call after reading through [`RepoGraph::store`]: if the check passes,
     /// those results and every table this snapshot hands out come from one
     /// generation. Errors with [`MyceliumError::IndexChanged`] otherwise.
+    ///
+    /// Call it before the next table read, not later. It compares the index
+    /// on disk with the snapshot's generation *now*, so it cannot tell which
+    /// generation an earlier store read saw: a store read at generation 0,
+    /// then a first table read that moves the still unpinned snapshot to
+    /// generation 1, then `verify()` passes although the store read came
+    /// from generation 0. Read the tables first (or call `verify()` right
+    /// after the store reads), and make every store read before `verify()`
+    /// — a store read after it is not covered.
     pub fn verify(&self) -> Result<()> {
         let mut state = lock(&self.state);
         if self.service.read_fingerprint(&self.db_path) == state.graph.fingerprint {
