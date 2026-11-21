@@ -429,7 +429,8 @@ cross-encoder's order is reordered again. Displayed scores are unchanged, so
 a page is ordered by placement, not strictly by score; with `explain=true` a
 line names the rows that were moved down. The weight is the strongest one
 that, on the real-repository set, keeps searches *for* tests finding them
-(hit@10 at least 80% of no demotion) while improving the rest
+(hit@10, averaged over the four modes, at least 80% of no demotion; keyword
+search alone keeps 0.73× of it) while improving the rest
 ([measurements](../../crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#test-code-demotion-146)).
 
 Pass `tests=include` to rank tests like product code, or `tests=prefer` to
@@ -437,8 +438,9 @@ rank them first when the question is about the tests themselves. Only search
 reorders: graph tools (`find_callers`, `impact_of_change`, `trace_flow`, …)
 are unaffected — tests keep their edges and still show up as callers — and so
 are the cross-repository tools (`isolate_intent` and the rest seed with test
-code in place), `myc context` and the HTTP API's search endpoints
-(follow-up: #150). An index built before #146
+code in place) and `myc context`. The `myc serve` HTTP API's search
+endpoints demote like `search_code` and take the same `tests` parameter
+(#150). An index built before #146
 carries no classification: search then ranks tests like product code and says
 so, and the next `analyze` re-indexes it even if nothing changed. The
 deprecated aliases (`context_search`, `semantic_search`, `hybrid_search`)
