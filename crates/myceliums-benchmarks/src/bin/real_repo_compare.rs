@@ -241,6 +241,9 @@ struct Comparison {
     long_symbol_slice: Vec<SliceRow>,
     selected: String,
     held_out_confirmation: Option<DeltaEstimate>,
+    /// The selected variant against the baseline on held-out, per mode and
+    /// metric (`nDCG@10`, `hit@10`) — the objective's components.
+    held_out_by_mode: BTreeMap<String, BTreeMap<String, DeltaEstimate>>,
     decision: String,
 }
 
@@ -487,7 +490,31 @@ fn main() -> Result<()> {
             format_delta(&d)
         ),
     };
+    let mut held_out_by_mode = BTreeMap::new();
+    if selected > 0 {
+        let run = &runs[selected - 1];
+        let ids = baseline.ids("held-out");
+        for mode in ["lexical", "semantic", "hybrid", "hybrid+rerank"] {
+            let mut by_metric = BTreeMap::new();
+            for (metric, which) in [("ndcg_at_10", 0), ("hit_at_10", 1)] {
+                let values = |r: &Run| -> Option<Vec<f64>> {
+                    let q = r.per_query.get(mode)?;
+                    ids.iter().map(|id| q.get(id).map(|v| v[which])).collect()
+                };
+                if let (Some(t), Some(c)) = (values(run), values(&baseline)) {
+                    by_metric.insert(
+                        metric.to_string(),
+                        rounded(paired_bootstrap_default(&t, &c)?),
+                    );
+                }
+            }
+            if !by_metric.is_empty() {
+                held_out_by_mode.insert(mode.to_string(), by_metric);
+            }
+        }
+    }
     let comparison = Comparison {
+        held_out_by_mode,
         dataset_digest: baseline.digest.clone(),
         baseline: rows[0].label.clone(),
         selected: rows[selected].label.clone(),
@@ -633,5 +660,24 @@ fn render(c: &Comparison) -> String {
         "\n**Selected on dev (in budget):** {}.\n\n**Decision:** {}.\n",
         c.selected, c.decision
     ));
+    if !c.held_out_by_mode.is_empty() {
+        out.push_str(&format!(
+            "\n**{} − baseline on held-out, by mode**\n\n| Mode | Δ nDCG@10 | Δ hit@10 |\n| --- | ---: | ---: |\n",
+            c.selected
+        ));
+        for (mode, by_metric) in &c.held_out_by_mode {
+            let d = |m: &str| {
+                by_metric
+                    .get(m)
+                    .map(format_delta)
+                    .unwrap_or_else(|| "—".to_string())
+            };
+            out.push_str(&format!(
+                "| `{mode}` | {} | {} |\n",
+                d("ndcg_at_10"),
+                d("hit_at_10")
+            ));
+        }
+    }
     out
 }
