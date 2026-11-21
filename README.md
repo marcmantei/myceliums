@@ -382,7 +382,10 @@ token-budgeted form. Measured in [#125](evals/agent/README.md#variant-matrix-125
 myceliums in 80 % of sessions; layers 1-3 together raised that to 100 % and
 made a graph query its first step; the subagent (layer 4) was never called.
 None of the variants changed accuracy, tokens or cost measurably on these
-tasks, where all of them were near the ceiling. Guide:
+tasks, where all of them were near the ceiling. On Django tasks under a budget
+of three rounds of tool calls ([#153](evals/agent/README.md#outcome-eval-153),
+a pilot over 11 tasks), layers 1-3 raised success from 36 % to 100 % (+64 pp
+[+36, +91]) at 35 % lower cost. Guide:
 [docs/guides/agent-integration.md](docs/guides/agent-integration.md).
 
 ---
@@ -454,6 +457,36 @@ change, and it has no run without myceliums on the same questions (the
 calibration of an earlier version of the set without myceliums: 10 of 10 at
 F1 = 1.00). [Report](evals/agent/results/2026-11-20-variants/REPORT.md),
 [method](evals/agent/README.md#variant-matrix-125).
+
+**Outcome eval, 21 November 2026 (#153):** does myceliums change the result,
+not just the tool use? A headless Claude Code agent (2.1.330,
+`claude-sonnet-5-5`, `--effort medium`) answered 11 multi-hop questions about
+Django 5.1.4 — callers three levels up, blast radius over 16 to 24 files,
+callers of one of several same-named functions — with a budget of three
+rounds of tool calls (`--max-turns 4`, stated in the prompt), once without
+any myceliums and once with what `myc setup-claude --no-agent` installs
+(MCP server, routing block, hooks). The index was fully embedded before the
+run. Brackets: 95 % paired bootstrap intervals over the 11 tasks.
+
+| Per session | without myceliums | with `setup-claude` | difference |
+|---|---:|---:|---:|
+| Sessions with ≥ 1 myceliums call | 0 % | 100 % | |
+| Success (F1 ≥ 0.8) | 36 % (4 of 11) | 100 % (11 of 11) | +64 pp [+36, +91] |
+| Mean F1 | 0.362 | 0.988 | +0.626 [+0.352, +0.897] |
+| Input tokens | 36,557 | 34,127 | 0.93× [0.74×, 1.17×] |
+| Cost, USD (CLI estimate) | 0.076 | 0.049 | 0.65× [0.54×, 0.76×] |
+| Wall time, s | 24.0 | 12.6 | 0.52× [0.43×, 0.62×] |
+
+With myceliums the agent answered each question with one `find_callers` call
+(`depth` 2 or 3). Without it, every transitive-caller and same-name question
+took a fourth round of greps, ran past the budget and ended without an answer;
+the blast-radius questions it solved either way. This is an efficiency gain
+that a budget turns into success: with seven rounds the agent without
+myceliums had solved 5 of 6 of these questions. A pilot — one repetition,
+one repository, one model, gold sets that follow static call rules a call
+graph computes by construction, labels from Python's `ast` module checked by
+an agent, not a person. [Report](evals/agent/results/2026-11-21-outcome/REPORT.md),
+[method](evals/agent/README.md#outcome-eval-153).
 
 ---
 
