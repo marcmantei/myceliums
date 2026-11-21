@@ -80,7 +80,7 @@ Claude Code asks each user once to approve a project's MCP server.
 {
   "hooks": {
     "SessionStart": [
-      { "matcher": "", "hooks": [{ "type": "command",
+      { "matcher": "", "hooks": [{ "type": "command", "timeout": 15,
         "command": "myc session . --yes --timeout 300 2>/dev/null; exit 0" }] }
     ],
     "PostToolUse": [
@@ -100,8 +100,11 @@ Claude Code asks each user once to approve a project's MCP server.
 ```
 
 - **SessionStart** checks whether the project has a fresh index; if not, it
-  re-analyzes (skipping embeddings, at most 5 minutes) and prints a status
-  line such as `[myceliums] my-project ready | 312 files · 1,247 symbols`.
+  starts a re-index in the background and returns at once.
+  It adds one line to the model's context (`additionalContext`: repository
+  id, index freshness, the core tools) and shows you a status line such as
+  `[myceliums] my-project ready | 312 files · 1,247 symbols`. Details in the
+  [guide](../guides/agent-integration.md#sessionstart-hook).
 - **PostToolUse** formats myceliums tool results. Its matcher is the regex
   `mcp__myceliums__.*`: Claude Code compares a matcher made only of letters,
   digits and `_` as an exact tool name, so the bare `mcp__myceliums__` that
@@ -120,11 +123,11 @@ myceliums and keep grep for literals, config and logs. The subagent file
 defines `code-explorer` with the myceliums MCP tools, Read and ToolSearch.
 Both are described in the [guide](../guides/agent-integration.md).
 
-### Instructions in the status line
+### Tools in the session context
 
-When enabled in the setup wizard (`setup.instructions_enabled`), the
-SessionStart status line also suggests the myceliums tools for code-structure
-questions.
+The SessionStart context line names `find_callers`, `impact_of_change` and
+`search_code` for structural questions, unless you declined AI instructions
+in the setup wizard (`setup.instructions_enabled = false`).
 
 ## Uninstall
 
@@ -147,7 +150,7 @@ Myceliums reduces token consumption by replacing multi-step file-reading workflo
 
 ### "Hook causes high CPU on session start"
 
-The SessionStart hook has a 5-minute timeout (`--timeout 300`). For very large codebases, the initial analysis can take significant time and resources. Run `myc status` to check the size of the indexed project. If analysis consistently takes too long, consider using `--skip-embeddings` in your project's `.myceliums.toml` to speed things up.
+The SessionStart hook returns at once and re-indexes in the background (`myc analyze`, log in `~/.myceliums/logs/session-<repo id>.log`), one run at a time per repository. For very large codebases, the initial analysis can take significant time and resources. Run `myc status` to check the size of the indexed project. If analysis consistently takes too long, consider using `--skip-embeddings` in your project's `.myceliums.toml` to speed things up.
 
 ### "I want only the MCP server"
 

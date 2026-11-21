@@ -679,7 +679,7 @@ If an analysis is interrupted (e.g., timeout, crash, `Ctrl+C`), the data directo
 | **Home directory** | Refuses to analyze `~/` — would index hundreds of thousands of files |
 | **Git repository** | Requires `.git/` directory (override with `--no-git-check`) |
 | **Lock file** | Prevents two analyses of the same repo from running simultaneously |
-| **Timeout** | `--timeout 300` (5 minutes) in auto mode — aborts gracefully on timeout |
+| **Background** | The SessionStart hook (`myc session --yes`) never analyzes in the foreground: it starts `myc analyze` detached and returns at once |
 
 
 ### Claude Code integration
@@ -687,7 +687,7 @@ If an analysis is interrupted (e.g., timeout, crash, `Ctrl+C`), the data directo
 `myc setup-claude` (project scope; `--scope user` writes the same into `~/.claude.json` and `~/.claude/`) configures:
 
 1. **MCP server** — Registered in `.mcp.json`. Claude Code spawns `myc mcp` as a background process for each session. Lightweight and idle when not queried.
-2. **SessionStart hook** — Added to `.claude/settings.json`. Runs `myc session . --yes --timeout 300` when a Claude Code session starts, ensuring the knowledge graph is fresh. Aborts after 5 minutes to prevent runaway analyses.
+2. **SessionStart hook** — Added to `.claude/settings.json`. Runs `myc session . --yes --timeout 300` when a Claude Code session starts, ensuring the knowledge graph is fresh, and adds one line to the model's context: repository id, index freshness and the core tools. It returns at once; a missing or stale index is rebuilt in the background.
 3. **PreToolUse grep hook** — `myc hook-grep` runs before Grep and grep/rg calls; it reads the index, never blocks, and stays silent unless the pattern names a known symbol.
 4. **Routing block and subagent** — Text files only: `CLAUDE.md` and `.claude/agents/code-explorer.md`.
 

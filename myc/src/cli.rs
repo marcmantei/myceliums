@@ -238,7 +238,9 @@ pub(crate) enum Commands {
         /// Skip interactive prompt and auto-analyze if needed
         #[arg(long)]
         yes: bool,
-        /// Maximum runtime in seconds for auto mode (default: 300, 0 = no limit)
+        /// Ignored. Auto mode used to re-analyze in the foreground for at most
+        /// this many seconds; since #152 it re-indexes in the background and
+        /// returns at once. Kept so installed hooks that pass it keep working.
         #[arg(long, default_value = "300")]
         timeout: u64,
         /// Generate embeddings during session bootstrap and fail if the index

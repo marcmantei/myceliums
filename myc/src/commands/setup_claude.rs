@@ -295,15 +295,28 @@ fn handler(command: String, extra: &[(&str, Value)]) -> Value {
     Value::Object(h)
 }
 
+/// Claude Code's timeout for the SessionStart hook. The hook itself returns
+/// in well under a second (the re-index runs detached).
+const SESSION_HOOK_TIMEOUT_SECS: u64 = 15;
+
 /// Hook groups to install, per event, for the `myc` invocation `myc`.
 pub fn hook_groups(myc: &str, layers: Layers) -> Vec<(&'static str, Value)> {
     let myc = shell_quote(myc);
     let mut groups = vec![
         (
+            // stdout is one JSON object whose `additionalContext` reaches the
+            // model (#152); `; exit 0` keeps the session safe from a crash or
+            // an older `myc`. Claude Code waits for this hook, so `myc` only
+            // checks the index and starts a re-index in the background; the
+            // `timeout` stops anything that hangs anyway. `--timeout 300` is
+            // ignored by current `myc` and bounds an older one.
             "SessionStart",
             json!({
                 "matcher": "",
-                "hooks": [handler(format!("{myc} session . --yes --timeout 300 2>/dev/null; exit 0"), &[])],
+                "hooks": [handler(
+                    format!("{myc} session . --yes --timeout 300 2>/dev/null; exit 0"),
+                    &[("timeout", json!(SESSION_HOOK_TIMEOUT_SECS))],
+                )],
             }),
         ),
         (
@@ -954,6 +967,15 @@ mod tests {
             },
         );
         assert!(without.iter().all(|(e, _)| *e != "PreToolUse"));
+
+        let start = groups.iter().find(|(e, _)| *e == "SessionStart").unwrap();
+        let h = &start.1["hooks"][0];
+        assert_eq!(
+            h["command"],
+            "myc session . --yes --timeout 300 2>/dev/null; exit 0"
+        );
+        assert_eq!(h["timeout"], 15);
+        assert!(is_myceliums_hook_command(h["command"].as_str().unwrap()));
     }
 
     /// Exit code 2 from a PreToolUse hook blocks the tool call. Whatever the
@@ -990,7 +1012,9 @@ mod tests {
 
         for myc in &fakes {
             for (event, group) in hook_groups(myc, Layers::ALL) {
-                if event != "PreToolUse" {
+                // PreToolUse exit 2 blocks the tool call; SessionStart must
+                // never put a hook error into the session (#152).
+                if event != "PreToolUse" && event != "SessionStart" {
                     continue;
                 }
                 for h in group["hooks"].as_array().unwrap() {

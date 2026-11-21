@@ -39,7 +39,7 @@ hard, and what `myc setup-claude` installs for each.
 |---|---|---|---|---|
 | 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | together with layer 3 (variant C): myceliums used in 100 % of sessions instead of 80 %, first call a graph query; not measured alone | +348 tokens per request | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | variant A: myceliums used in 80 % of sessions (pilot with 54 deferred tools: 0 %; not a controlled comparison) | the schemas are in every request (A's first prompt: 10,162 tokens) | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
-| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line is a `systemMessage` the model does not see | a few ms per Grep (400 ms cap) | `myc setup-claude` |
+| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see (it adds a context line since #152) | a few ms per Grep (400 ms cap) | `myc setup-claude` |
 | 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | never called (0 of 38 sessions): with the tools in the main context the agent queries them itself | about 1,860 tokens per request more than C (Agent tool and its agent list) | `myc setup-claude` |
 | 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | not measured | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
 
@@ -87,7 +87,7 @@ What each layer writes:
 | Layer | Project scope (default) | User scope | Opt out |
 |---|---|---|---|
 | MCP server (2. core tools loaded up front) | `.mcp.json` (core tools through their `_meta`) | `claude mcp add-json -s user` (fallback: `~/.claude.json`), with `alwaysLoad` | `--no-always-load` (user scope) |
-| SessionStart hook: refresh the index, print a status line | `.claude/settings.json` | `~/.claude/settings.json` | – |
+| SessionStart hook: refresh the index, one context line for the model, a status line for you | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PostToolUse hook: format myceliums tool results | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | 1. Routing block | `CLAUDE.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
 | 3. Grep redirect hook (PreToolUse) | `.claude/settings.json` | `~/.claude/settings.json` | `--no-redirect-hook` |
@@ -108,6 +108,57 @@ What each layer writes:
   installed, the hooks run twice; remove one with
   `myc setup-claude --scope user --uninstall`.
 - `myc setup` (the wizard) installs at user scope.
+
+### SessionStart hook
+
+`myc session . --yes --timeout 300 2>/dev/null; exit 0` runs when a session
+starts, resumes, or restarts after `/clear` or compaction. It prints one JSON
+object on stdout in the shape the
+[hooks reference](https://code.claude.com/docs/en/hooks#sessionstart)
+documents:
+
+```json
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"myceliums code graph of repo flask-3735c01f (index: 22d9247 = HEAD). MCP tools find_callers, impact_of_change and search_code answer structural questions."},"systemMessage":"[myceliums] flask ready | 93 files · 1592 symbols"}
+```
+
+- `additionalContext` goes into the model's context before the first prompt:
+  the repository id, the index state and the core tools. It is one line of at
+  most 280 characters (about 60 tokens), because every session pays for it.
+  The index state is one of:
+  - the freshness (`index: <commit> = HEAD`, or a stale warning when HEAD
+    has moved);
+  - `stale, re-indexing in the background; results may lag until done, and
+    new symbols lack embeddings until a full myc analyze`;
+  - `no index of repo … yet, building in the background; … without
+    embeddings until a full myc analyze` (the embeddings note is left out
+    with `--strict-embeddings`);
+  - `… already running`, when another process holds the analysis lock.
+
+  The tools sentence is left out when you declined AI instructions in the
+  `myc setup` wizard.
+- `systemMessage` is the status line Claude Code shows you, not the model.
+  The same line goes to stderr for a run by hand.
+- On a skip (no git repository, home directory, no supported files) or an
+  error, the hook adds no context, only the status line. It always exits 0;
+  `; exit 0` covers a crash or an older `myc`.
+
+**Runtime.** Claude Code waits for SessionStart hooks before the first model
+response, so the hook never analyzes in the foreground. It reads the
+registry, runs the cache check and `git rev-parse HEAD` (bounded to 1.5 s),
+then returns: 0.05 to 0.11 s on flask with a debug build, whatever the index
+state. A missing or stale index is rebuilt by a detached `myc analyze .
+--force --skip-embeddings` (`--strict-embeddings` when the hook got it). It
+runs in its own session (`setsid`), so it is not tied to the hook's process
+group or terminal, and appends its output to
+`<data dir>/logs/session-<repo id>.log` (cut at 1 MB). It takes the analysis
+lock that MCP `analyze` and `myc analyze` share. If the lock is already held,
+the hook starts nothing and reports the run in progress. A second session
+racing the first loses at the lock and exits. The re-index has no time limit:
+on flask it took 26 s with a debug build. Until it finishes, the graph tools
+answer from the previous index, or fail if there is none. `--timeout` is
+ignored since #152; installed hooks still pass it, which bounds an older
+`myc`. The handler carries `"timeout": 15`, so Claude Code stops a hook that
+hangs anyway.
 
 ### 1. Routing block
 

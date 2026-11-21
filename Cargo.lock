@@ -4618,6 +4618,7 @@ dependencies = [
  "dialoguer",
  "dirs",
  "indicatif",
+ "libc",
  "myceliums-core",
  "myceliums-cypher",
  "myceliums-http",
