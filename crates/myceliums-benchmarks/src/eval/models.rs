@@ -893,7 +893,10 @@ mod tests {
         );
         assert_eq!(setup.reranker_id, myceliums_core::DEFAULT_RERANKER_MODEL);
         let key = setup.cache_key();
-        assert!(key.contains("intfloat--multilingual-e5-small"), "{key}");
+        assert!(
+            key.contains("jinaai--jina-embeddings-v2-base-code"),
+            "{key}"
+        );
         assert!(key.contains(&setup.embedding_spec.revision[..12]), "{key}");
         assert!(key.contains("rozgo--bge-reranker-v2-m3"), "{key}");
         assert!(key.contains(FASTEMBED_VERSION), "{key}");

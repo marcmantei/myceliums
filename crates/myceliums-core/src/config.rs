@@ -102,7 +102,9 @@ impl EmbeddingSection {
     }
 
     fn default_model() -> String {
-        "multilingual-e5-small".to_string()
+        // `embeddings::DEFAULT_LOCAL_EMBEDDING_MODEL`, which a build without
+        // the `embeddings` feature does not have (#157).
+        "jina-embeddings-v2-base-code".to_string()
     }
 
     fn default_reranker() -> String {
@@ -390,7 +392,7 @@ max_file_size_kb = 1024
     fn test_embedding_defaults() {
         let cfg: ProjectConfig = toml::from_str("").unwrap();
         assert_eq!(cfg.embedding.provider, "local");
-        assert_eq!(cfg.embedding.model, "multilingual-e5-small");
+        assert_eq!(cfg.embedding.model, "jina-embeddings-v2-base-code");
         assert_eq!(cfg.embedding.reranker, "bge-reranker-v2-m3");
         assert_eq!(cfg.embedding.api_key_env, "MYCELIUMS_EMBEDDING_API_KEY");
         assert!(cfg.embedding.base_url.is_none());

@@ -192,7 +192,10 @@ impl SinkInner {
             }
             AnalysisPhase::GeneratingEmbeddings { current, total } => self.send(
                 62 + share(*current, *total, 16),
-                format!("embedding: {current}/{total} texts"),
+                format!(
+                    "embedding: {current}/{total} texts (a first index embeds every symbol and \
+                     takes the longest; re-indexing reuses unchanged vectors)"
+                ),
             ),
             AnalysisPhase::Complete { symbols, files } => self.send(
                 80,

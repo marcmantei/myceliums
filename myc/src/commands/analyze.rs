@@ -160,6 +160,49 @@ impl EmbeddingPolicy {
     }
 }
 
+/// What to tell the user before a run embeds every symbol from scratch — no
+/// previous index of this embedder to take vectors from: the model, that a
+/// first index takes the longest (and later runs reuse unchanged vectors),
+/// the one-time download when the weights are not cached, and the fast
+/// option (#157). `None` when the previous vectors carry over.
+fn first_index_notice(
+    section: &myceliums_core::config::EmbeddingSection,
+    previous: Option<&myceliums_core::PreviousVectors>,
+) -> Option<String> {
+    use myceliums_core::{embedding_model_spec, local_model_cached, IndexEmbeddingMeta};
+    let configured = IndexEmbeddingMeta::from_config(section).ok()?;
+    if previous.is_some_and(|p| p.meta().fingerprint() == configured.fingerprint()) {
+        return None;
+    }
+    let mut notice = format!(
+        "Embedding every symbol with {}{}: a first index takes the longest; later runs \
+         reuse the vectors of unchanged symbols.",
+        configured.model,
+        if configured.chunking.is_some() {
+            " (long symbols in several chunks)"
+        } else {
+            ""
+        }
+    );
+    if configured.provider == "local" {
+        if let Some(spec) = embedding_model_spec(&configured.model) {
+            if !local_model_cached(spec.id) {
+                notice.push_str(&format!(
+                    " The model is downloaded once (about {} MB).",
+                    spec.download_mb
+                ));
+            }
+        }
+        if configured.model != "multilingual-e5-small" {
+            notice.push_str(
+                " For a faster first index, set `[embedding] model = \"multilingual-e5-small\"` \
+                 in .myceliums.toml.",
+            );
+        }
+    }
+    Some(notice)
+}
+
 /// Why the index at `db_path` must be re-embedded for the embedding
 /// configuration of the project at `root`, or `None` when its vectors already
 /// match (or embeddings are skipped, or the index records no embedder: a run
@@ -320,6 +363,15 @@ pub(crate) async fn cmd_analyze(
             }),
         None => None,
     };
+    if !skip_embeddings {
+        let section = project_config
+            .as_ref()
+            .map(|c| c.embedding.clone())
+            .unwrap_or_default();
+        if let Some(notice) = first_index_notice(&section, previous.as_ref()) {
+            println!("{notice}");
+        }
+    }
     store.delete_repo_data().await?;
 
     let analyzer = if let Some(cfg) = project_config {
@@ -583,6 +635,24 @@ mod tests {
     use clap::Parser;
     use myceliums_storage::Store;
     use tempfile::TempDir;
+
+    /// A run that embeds from scratch says so — model, longer first index,
+    /// the fast option — and a run whose previous vectors carry over is quiet.
+    #[test]
+    fn the_first_index_notice_names_the_model_and_the_fast_option() {
+        let section = myceliums_core::config::EmbeddingSection::default();
+        let notice = first_index_notice(&section, None).expect("nothing to reuse");
+        assert!(notice.contains("jina-embeddings-v2-base-code"), "{notice}");
+        assert!(notice.contains("reuse the vectors"), "{notice}");
+        assert!(notice.contains("multilingual-e5-small"), "{notice}");
+        let fast = myceliums_core::config::EmbeddingSection {
+            model: "multilingual-e5-small".to_string(),
+            chunking: Some(false),
+            ..Default::default()
+        };
+        let notice = first_index_notice(&fast, None).unwrap();
+        assert!(!notice.contains("faster first index"), "{notice}");
+    }
 
     /// An index embedded with another model or template than the project
     /// now configures is re-analyzed instead of reused (#157); the same

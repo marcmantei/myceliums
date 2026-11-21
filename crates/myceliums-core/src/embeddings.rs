@@ -323,10 +323,15 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
     },
 ];
 
-/// Default local embedding model for new indexes: multilingual, and at
-/// 384 dimensions cheap enough for a good first-run experience. Configure
-/// `multilingual-e5-large` in `.myceliums.toml` for maximum quality.
-pub const DEFAULT_LOCAL_EMBEDDING_MODEL: &str = "multilingual-e5-small";
+/// Default local embedding model for new indexes: the only candidate of the
+/// #157 evaluation whose gain over `multilingual-e5-small` held on the
+/// held-out split (+0.070 nDCG@10 objective). Chosen by the project owner
+/// over the pre-registered index-time budget: the first index takes about
+/// 4.4× as long as with e5-small; re-indexing reuses unchanged vectors.
+/// English queries — configure `multilingual-e5-small` for other languages
+/// or a fast first index. Protocol and numbers:
+/// `crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`.
+pub const DEFAULT_LOCAL_EMBEDDING_MODEL: &str = "jina-embeddings-v2-base-code";
 
 /// The model all indexes were built with before embedding configuration
 /// existed. Used as fallback when an index carries no embedding metadata.
@@ -552,7 +557,7 @@ impl IndexEmbeddingMeta {
                     base_url: Some(base_url),
                     api_key_env: Some(cfg.api_key_env.clone()),
                     reranker: Some(cfg.reranker.clone()),
-                    text_version: EMBEDDING_TEXT_VERSION,
+                    text_version: REMOTE_TEXT_TEMPLATE.version(),
                     // Chunk boundaries are counted in the model's tokens, and
                     // a remote model's tokenizer is not available here.
                     chunking: None,
@@ -763,18 +768,24 @@ pub fn embedding_cache_info() -> ModelCacheInfo {
 /// Changing a template means a new [`TextTemplate`] variant (the old one stays
 /// for indexes built with it); `embedding_text_template_is_pinned_to_its_version`
 /// pins both layouts.
-pub const EMBEDDING_TEXT_VERSION: u32 = 1;
+pub const EMBEDDING_TEXT_VERSION: u32 = 2;
 
 /// The template of the default model's indexes ([`EmbeddingModelSpec::template`]
-/// of [`DEFAULT_LOCAL_EMBEDDING_MODEL`]), and of remote models'. Template 2
-/// did not beat it for `multilingual-e5-small` on the held-out split (#157).
-pub const DEFAULT_TEXT_TEMPLATE: TextTemplate = TextTemplate::Flat;
+/// of [`DEFAULT_LOCAL_EMBEDDING_MODEL`]): the structured document it was
+/// measured with (#157).
+pub const DEFAULT_TEXT_TEMPLATE: TextTemplate = TextTemplate::Structured;
+
+/// The template of remote (`openai-compatible`) indexes. Template 2 was never
+/// measured with a remote model, and re-embedding through an API costs calls,
+/// so they keep template 1.
+pub const REMOTE_TEXT_TEMPLATE: TextTemplate = TextTemplate::Flat;
 
 /// Whether new indexes of a local model chunk long symbols when the project
-/// does not say (`[embedding] chunking`). Off: chunking helped the long-symbol
-/// slice, but the default model with chunking did not beat it on the held-out
-/// split as a whole (#157). Turning it on embeds with template 2.
-pub const DEFAULT_CHUNKING: bool = false;
+/// does not say (`[embedding] chunking`). On: chunking raised the objective on
+/// the long-symbol slice for four of five models (+0.028 [+0.011, +0.047] for
+/// the default) at 2% more vectors (#157). Chunking embeds with template 2;
+/// `chunking = false` gives a model its one-vector template.
+pub const DEFAULT_CHUNKING: bool = true;
 
 /// Truncate a byte-oriented slice to at most `max` bytes, ensuring the cut
 /// lands on a valid UTF-8 character boundary.
@@ -1799,6 +1810,12 @@ mod tests {
     #[test]
     fn registry_defaults_resolve() {
         assert!(embedding_model_spec(DEFAULT_LOCAL_EMBEDDING_MODEL).is_some());
+        // The config default spells the same model (the config cannot name
+        // the constant: it exists without the `embeddings` feature).
+        assert_eq!(
+            EmbeddingSection::default().model,
+            DEFAULT_LOCAL_EMBEDDING_MODEL
+        );
         assert!(embedding_model_spec(LEGACY_LOCAL_EMBEDDING_MODEL).is_some());
         assert!(reranker_spec(DEFAULT_RERANKER_MODEL).is_some());
     }
@@ -1902,16 +1919,34 @@ mod tests {
     }
 
     #[test]
-    fn meta_from_default_config_is_multilingual() {
+    fn meta_from_default_config_is_the_shipped_configuration() {
         let meta = IndexEmbeddingMeta::from_config(&EmbeddingSection::default()).unwrap();
         assert_eq!(meta.provider, "local");
-        assert_eq!(meta.model, "multilingual-e5-small");
-        assert_eq!(meta.dim, 384);
-        assert_eq!(meta.query_prefix.as_deref(), Some("query: "));
-        assert_eq!(meta.passage_prefix.as_deref(), Some("passage: "));
+        assert_eq!(meta.model, "jina-embeddings-v2-base-code");
+        assert_eq!(meta.dim, 768);
+        assert_eq!(meta.query_prefix, None);
+        assert_eq!(meta.passage_prefix, None);
         assert_eq!(meta.reranker.as_deref(), Some("bge-reranker-v2-m3"));
-        assert_eq!(meta.text_version, DEFAULT_TEXT_TEMPLATE.version());
-        assert_eq!(meta.chunking.is_some(), DEFAULT_CHUNKING);
+        assert_eq!(meta.text_version, TextTemplate::Structured.version());
+        assert_eq!(meta.chunking, Some(Chunking::for_window(512)));
+        // The previous default, configured explicitly, keeps its fingerprint:
+        // an index built before #157 is not re-embedded.
+        let previous = IndexEmbeddingMeta::from_config(&EmbeddingSection {
+            model: "multilingual-e5-small".to_string(),
+            chunking: Some(false),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(
+            previous.fingerprint(),
+            "local:multilingual-e5-small:384|base_url=|query_prefix=query: |passage_prefix=passage: |text_version=1"
+        );
+    }
+
+    #[test]
+    fn remote_models_keep_template_1() {
+        assert_eq!(openai_meta().text_version, REMOTE_TEXT_TEMPLATE.version());
+        assert_eq!(REMOTE_TEXT_TEMPLATE, TextTemplate::Flat);
     }
 
     #[test]

@@ -3634,11 +3634,11 @@ mod tests {
             assert!(message.contains("unrecorded"), "{message}");
             assert!(message.contains("myc analyze"), "{message}");
 
-            // A full analysis is the way out: it adopts the current template.
+            // A full analysis is the way out: it adopts the configured template.
             let chosen = analyzer.prepare_embeddings(false).await.unwrap().unwrap();
             assert_eq!(
                 chosen.text_version,
-                crate::embeddings::EMBEDDING_TEXT_VERSION
+                crate::embeddings::REMOTE_TEXT_TEMPLATE.version()
             );
             assert_eq!(chosen.meta_version, IndexEmbeddingMeta::META_VERSION);
         }

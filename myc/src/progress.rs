@@ -131,7 +131,7 @@ impl myceliums_core::progress::ProgressReporter for IndicatifReporter {
                         .progress_chars("=>-")
                         .tick_chars("\u{25d0}\u{25d3}\u{25d1}\u{25d2}\u{2714}"),
                     )
-                    .with_message("Generating embeddings...");
+                    .with_message("Generating embeddings (a first index takes the longest)...");
                 bar.set_draw_target(ProgressDrawTarget::stderr());
                 bar.enable_steady_tick(std::time::Duration::from_millis(120));
                 bar.set_position(current as u64);
