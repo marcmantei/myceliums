@@ -1,6 +1,6 @@
 # Cypher Query Guide
 
-Myceliums supports a subset of the Cypher query language for querying the code knowledge graph. You can use Cypher to explore relationships between functions, classes, modules, and other code structures.
+Myceliums supports a subset of the Cypher query language for querying the code knowledge graph. You can use Cypher to explore relationships between functions, classes, modules, and other code structures. Every example in this guide is run against a test graph by the `myceliums-cypher` test suite, so it stays valid.
 
 ## Supported Syntax
 
@@ -8,66 +8,69 @@ The following Cypher clauses and operators are supported:
 
 - `MATCH` / `RETURN` / `WHERE`
 - `ORDER BY` / `LIMIT` / `SKIP`
-- `CONTAINS` / `starts_with` / `ends_with`
+- `CONTAINS` / `=` / `<>` / `<` / `>` / `<=` / `>=`
 - `IS NULL` / `IS NOT NULL`
 - `AND` / `OR` / `NOT`
+- Aggregations `count`, `sum`, `avg`, `min`, `max`, `collect`; `toLower` / `toUpper`
+- Path functions `shortestPath`, `allPaths`, `anyPath` (`MATCH (a), (b), p = shortestPath((a)-[*..5]->(b))`). Their endpoints come from other patterns, and comma-separated patterns are cross-joined, which exceeds the 10,000-row limit on all but tiny graphs: for call chains use the `trace_flow` MCP tool or `myc impact`.
+
+Not supported: `WITH`, `DISTINCT`, inline property maps in patterns (`(n {name: "x"})` — use `WHERE`), and pattern predicates in `WHERE`. A query with text the lexer cannot read (an unterminated string, a character such as `$` or `|`) fails with its position instead of being cut short; a single trailing `;` is accepted.
 
 **Write operations are blocked.** You cannot use `CREATE`, `DELETE`, `SET`, or `MERGE`. The graph is read-only through Cypher queries.
 
 **Limits.** An expression may contain at most 64 nested `NOT`s, function calls, or aggregations (counted together, e.g. `NOT f(count(x))` uses 3); a 65th level fails with a parse error. `AND`/`OR` chains may be any length. `ORDER BY` sorts a column that mixes value types by type first, in openCypher order — maps < lists < strings < booleans < numbers < `null` — then by value within each type, so `null` comes last ascending and first with `DESC`.
 
-## Node Types
+## Node Labels
 
-These are the types of nodes in the knowledge graph:
+The graph has two node labels. Any other label (`:Function`, `:Class`, ...)
+is rejected with `Unknown label`.
 
-| Node type | Description |
-|-----------|-------------|
+| Label | What it matches | Properties |
+|-------|-----------------|------------|
+| `CodeSymbol` | Every extracted symbol: functions, methods, classes, documents, e-mails, ... A node pattern without a label, `(s)`, matches symbols too. | `uid`, `name`, `qualified_name`, `kind`, `file_path`, `start_line`, `end_line`, `signature`, `metadata` |
+| `File` | Indexed files. Only in a node pattern of its own: relationships connect symbols, so `(f:File)-[...]->(x)` matches nothing. | `uid`, `path`, `language`, `num_symbols` |
+
+The kind of symbol is the `kind` property, filtered with `WHERE`:
+
+| `kind` value | Meaning |
+|--------------|---------|
 | `Function` | Standalone functions |
-| `Class` | Class definitions |
-| `Interface` | Interface definitions |
 | `Method` | Methods within classes |
-| `Variable` | Variables and constants |
-| `Module` | Module-level entities |
-| `File` | Source files |
-| `Community` | Detected architectural clusters |
-| `Process` | Detected workflows/processes |
-| `Enum` | Enum definitions |
-| `Struct` | Struct definitions |
-| `Trait` | Trait definitions |
-| `Type` | Type aliases and definitions |
-| `Constant` | Named constants |
-| `Property` | Object properties |
-| `Namespace` | Namespace declarations |
-| `Section` | Document sections |
-| `Reference` | External references |
-| `Person` | People (from email/communication analysis) |
-| `EmailThread` | Email threads |
-| `Rationale` | Design rationale entries |
+| `Class` | Classes, structs and traits |
+| `Interface` | Interfaces |
+| `TypeAlias` | Type aliases |
+| `Enum` | Enums |
+| `Variable` / `Constant` | Module-level variables and constants |
+| `Module` | Modules and namespaces |
+| `Import` | Import statements |
+| `Section` / `Document` | Sections and documents of Markdown and other text files |
+| `Rationale` | Design rationale comments (`WHY:`, `NOTE:`, ...) |
+| `Email` / `Conversation` / `Person` / `Attachment` | E-mail analysis |
 
 ## Relationship Types
 
 | Relationship | Meaning |
 |-------------|---------|
 | `CALLS` | Function/method calls another |
-| `IMPORTS` | File/module imports another |
-| `CONTAINED_BY` | Symbol is contained within a file or class |
-| `MEMBER_OF` | Symbol is a member of a class/module |
-| `IMPLEMENTS` | Class implements an interface |
-| `EXTENDS` | Class extends another class |
-| `REFERENCES` | Symbol references another symbol |
-| `BELONGS_TO_COMMUNITY` | Symbol belongs to an architectural community |
-| `RATIONALE_FOR` | Rationale is associated with a symbol |
-| `SENT` | Person sent an email |
-| `IN_THREAD` | Email belongs to a thread |
-| `REPLY_TO` | Email replies to another |
-| `MENTIONS` | Entity mentions another |
+| `IMPORTS` | A symbol imports another |
+| `CONTAINED_BY` | Symbol is contained by another (a method in its class) |
+| `MEMBER_OF` | Symbol is a member of a container |
+| `STEP_IN_PROCESS` | Symbol is a step of a traced process |
+| `REFERENCES` | A document links to another document or code file |
+| `RATIONALE_FOR` | A rationale comment explains a symbol |
+| `REPLY_TO` / `SENT_BY` / `RECEIVED_BY` / `HAS_ATTACHMENT` / `PART_OF_CONVERSATION` | E-mail structure |
+| `MENTIONS` | An e-mail body mentions a symbol or person |
+
+Communities and processes are not graph nodes; use `myc communities` /
+`myc processes` or the MCP tools for them.
 
 ## Common Query Patterns
 
 ### 1. Find all functions
 
 ```cypher
-MATCH (f:Function)
+MATCH (f:CodeSymbol)
+WHERE f.kind = "Function"
 RETURN f.name, f.file_path
 LIMIT 20
 ```
@@ -92,24 +95,23 @@ WHERE source.name = "handleRequest"
 RETURN target.name
 ```
 
-### 4. Find imports in a file
-
-What does a file containing "handler" in its path import?
+### 4. Find files by language
 
 ```cypher
-MATCH (f:File)-[:IMPORTS]->(target)
-WHERE f.file_path CONTAINS "handler"
-RETURN target.name
+MATCH (f:File)
+WHERE f.language = "rust"
+RETURN f.path, f.num_symbols
+ORDER BY f.num_symbols DESC
+LIMIT 10
 ```
 
-### 5. Find community members
-
-What symbols belong to the "auth" community?
+### 5. Find the methods of a class
 
 ```cypher
-MATCH (s)-[:BELONGS_TO_COMMUNITY]->(c:Community)
-WHERE c.label = "auth"
-RETURN s.name, s.kind
+MATCH (m)-[:CONTAINED_BY]->(c)
+WHERE c.name = "Router" AND c.kind = "Class"
+RETURN m.name, m.start_line
+ORDER BY m.start_line
 ```
 
 ### 6. Find functions by pattern
@@ -117,8 +119,8 @@ RETURN s.name, s.kind
 Find all functions with "test" in their name:
 
 ```cypher
-MATCH (f:Function)
-WHERE f.name CONTAINS "test"
+MATCH (f:CodeSymbol)
+WHERE f.kind = "Function" AND f.name CONTAINS "test"
 RETURN f.name, f.file_path
 ORDER BY f.name
 LIMIT 10
@@ -136,45 +138,38 @@ RETURN a.name, b.name
 
 ## More Examples
 
-### Find classes that implement an interface
+### Call edges between functions
 
 ```cypher
-MATCH (c:Class)-[:IMPLEMENTS]->(i:Interface)
-WHERE i.name = "Repository"
-RETURN c.name, c.file_path
-```
-
-### Find the inheritance chain
-
-```cypher
-MATCH (child:Class)-[:EXTENDS]->(parent:Class)
-RETURN child.name, parent.name
-```
-
-### Find orphan functions (called by nothing)
-
-```cypher
-MATCH (f:Function)
-WHERE NOT ()-[:CALLS]->(f)
-RETURN f.name, f.file_path
-ORDER BY f.name
+MATCH (a:CodeSymbol)-[:CALLS]->(b:CodeSymbol)
+WHERE a.kind = "Function" AND b.kind = "Function"
+RETURN a.name, b.name
+LIMIT 10
 ```
 
 ### Count symbols per file
 
 ```cypher
-MATCH (s)-[:CONTAINED_BY]->(f:File)
-RETURN f.file_path, count(s) AS symbol_count
+MATCH (s:CodeSymbol)
+RETURN s.file_path, count(s) AS symbol_count
 ORDER BY symbol_count DESC
 LIMIT 10
 ```
 
-### Find all communities
+### Count symbols per kind
 
 ```cypher
-MATCH (c:Community)
-RETURN c.label, c.description
-ORDER BY c.label
+MATCH (s)
+RETURN s.kind, count(s) AS total
+ORDER BY total DESC
+```
+
+### Rationale comments and what they explain
+
+```cypher
+MATCH (r)-[:RATIONALE_FOR]->(s)
+RETURN r.name, s.name, s.file_path
+LIMIT 20
 ```
 
 ## Using Cypher via MCP
@@ -185,7 +180,7 @@ When myceliums is running as an MCP server, use the `cypher_query` tool:
 {
   "tool": "cypher_query",
   "arguments": {
-    "query": "MATCH (f:Function) WHERE f.name CONTAINS 'auth' RETURN f.name, f.file_path LIMIT 10"
+    "query": "MATCH (f:CodeSymbol) WHERE f.kind = 'Function' AND f.name CONTAINS 'auth' RETURN f.name, f.file_path LIMIT 10"
   }
 }
 ```
@@ -196,5 +191,5 @@ The results come back as structured JSON, making them easy for AI agents to proc
 
 - **Start broad, then narrow.** Use `LIMIT` generously while exploring. You can always remove it once you know what you are looking for.
 - **Use `CONTAINS` for fuzzy matching.** File paths and symbol names often have predictable substrings.
-- **Combine relationship traversals.** You can chain multiple `MATCH` clauses or use multi-hop patterns like `(a)-[:CALLS]->(b)-[:CALLS]->(c)` to trace call chains.
-- **Check node properties.** Most nodes have `name`, `file_path`, and `kind` properties. Communities have `label` and `description`.
+- **One pattern per query.** Comma-separated patterns in one `MATCH` are cross-joined and fail beyond 10,000 combined rows; a relationship pattern with `WHERE` filters on both ends is the usual way to connect two symbols.
+- **Check node properties.** Symbols have `name`, `qualified_name`, `kind`, `file_path` and line numbers; files have `path`, `language` and `num_symbols`.

@@ -42,10 +42,11 @@ pub enum MyceliumError {
     #[error("the index of repository {0} changed during this call (a re-analysis finished)")]
     IndexChanged(String),
 
-    /// A storage condition described by a message (no repository
-    /// registered, repository not found).
-    #[error("storage error: {0}")]
-    Storage(String),
+    /// No repository has been analyzed, or not the one asked for: there is
+    /// no registry entry to read. (Was `Storage(String)`, easily confused
+    /// with [`MyceliumError::Store`], #118.)
+    #[error("{0}")]
+    NotAnalyzed(String),
 
     /// A storage-layer operation (registry, LanceDB store) failed; the
     /// [`myceliums_storage::StorageError`] says how.

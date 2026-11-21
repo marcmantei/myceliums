@@ -64,7 +64,9 @@ impl RenamePlan {
     ///
     /// Uses tree-sitter to identify nodes of kind "comment" or "string_literal"
     /// (or language-specific variants like "line_comment", "block_comment", etc.)
-    /// and returns their byte ranges.
+    /// and returns their byte ranges in source order. A string literal is
+    /// one range, quotes included; nodes inside it (its content, escapes)
+    /// are not visited.
     fn comment_and_string_ranges(source: &[u8], language: Language) -> Vec<ByteRange> {
         let mut parser = Parser::new();
 
@@ -80,34 +82,32 @@ impl RenamePlan {
         let mut ranges = Vec::new();
         let mut cursor = tree.walk();
 
-        loop {
+        // Pre-order walk: a node, then its children, then its next sibling.
+        // (#118: after a leaf the cursor went to the next sibling and then
+        // straight back up to the parent without visiting it, so the walk
+        // revisited the parent's first child forever.)
+        'walk: loop {
             let node = cursor.node();
             let kind = node.kind();
 
             // Detect comment and string nodes across all supported languages.
-            let is_comment_or_string = kind == "comment"
-                || kind.ends_with("_comment")
-                || kind.contains("comment")
-                || kind == "string"
-                || kind == "string_literal"
-                || kind == "raw_string_literal"
-                || kind.contains("string");
+            let is_comment_or_string = kind.contains("comment") || kind.contains("string");
 
-            if is_comment_or_string && node.child_count() == 0 {
+            if is_comment_or_string {
                 ranges.push(ByteRange {
                     start: node.start_byte(),
                     end: node.end_byte(),
                 });
+            } else if cursor.goto_first_child() {
+                continue;
             }
 
-            if !cursor.goto_first_child() {
-                while !cursor.goto_next_sibling() {
-                    if !cursor.goto_parent() {
-                        break;
-                    }
+            loop {
+                if cursor.goto_next_sibling() {
+                    continue 'walk;
                 }
                 if !cursor.goto_parent() {
-                    break;
+                    break 'walk;
                 }
             }
         }
@@ -328,6 +328,27 @@ impl RenamePlan {
 mod tests {
     use super::*;
     use myceliums_storage::models::{CodeSymbol, Relationship, RelationshipKind, SymbolKind};
+
+    /// #118: the walk visits every comment and string once, in source
+    /// order, and ends.
+    #[test]
+    fn comment_and_string_ranges_are_found_in_source_order() {
+        let source =
+            "// foo here\nfn foo() -> &'static str {\n    let s = \"foo\"; /* foo */ s\n}\n";
+        let ranges = RenamePlan::comment_and_string_ranges(
+            source.as_bytes(),
+            tree_sitter_rust::LANGUAGE.into(),
+        );
+        let texts: Vec<&str> = ranges.iter().map(|r| &source[r.start..r.end]).collect();
+        assert_eq!(texts, ["// foo here", "\"foo\"", "/* foo */"]);
+        let excluded = RenamePlan::excluded_ranges_in_line(
+            source.as_bytes(),
+            source.find("    let").unwrap(),
+            source.find(" s\n}").unwrap(),
+            tree_sitter_rust::LANGUAGE.into(),
+        );
+        assert_eq!(excluded, [(12, 17), (19, 28)]);
+    }
 
     fn make_symbol(uid: &str, name: &str, content: &str, file: &str, start: u32) -> CodeSymbol {
         CodeSymbol {

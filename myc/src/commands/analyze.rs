@@ -181,7 +181,13 @@ pub(crate) async fn cmd_analyze(
     // Cache check: skip re-analysis if cache is fresh (unless --force)
     if !force {
         let registry = RepoRegistry::load(&registry_path())?;
-        if let Some(repo_info) = registry.get(&repo_id) {
+        // Registered, but the index directory is gone: nothing to reuse.
+        if registry.get(&repo_id).is_some() && !db_path.is_dir() {
+            println!(
+                "Re-analysis needed: the index {} is missing",
+                db_path.display()
+            );
+        } else if let Some(repo_info) = registry.get(&repo_id) {
             let cache_config = CacheCheckConfig {
                 max_age_minutes,
                 ..Default::default()
@@ -285,6 +291,9 @@ pub(crate) async fn cmd_analyze(
     println!("  Relationships: {}", result.relationship_count);
     // How many call sites got an edge, and why the others did not (#139).
     println!("  Calls:         {}", result.call_resolution.summary());
+    if let Some(skipped) = result.skip_summary() {
+        println!("  Skipped:       {skipped}");
+    }
     let kept = if result.embeddings_reused > 0 {
         format!(
             ", {} kept from the previous index",

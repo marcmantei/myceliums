@@ -10,66 +10,99 @@ use std::path::PathBuf;
 
 /// Errors returned by [`crate::Store`], [`crate::TeamStore`] and
 /// [`crate::RepoRegistry`].
-#[derive(Debug, thiserror::Error)]
+///
+/// The message of a variant that wraps a library error is
+/// `"{context}: {error}"`, so printing it alone says everything. Its
+/// [`std::error::Error::source`] is therefore the wrapped error's own
+/// source, not the wrapped error: a report that prints the whole chain
+/// (`anyhow`'s `{:#}` or `Caused by:`) shows each message once (#118).
+#[derive(Debug)]
 pub enum StorageError {
     /// [`crate::Store::open_existing`] found no index at the path.
-    #[error("no index at {}", .0.display())]
     NoIndex(PathBuf),
 
     /// The database path is not valid UTF-8, which LanceDB's URI-based
     /// `connect` cannot express.
-    #[error("the database path {} is not valid UTF-8", .0.display())]
     NonUtf8Path(PathBuf),
 
     /// A repository id is malformed or not registered.
-    #[error(transparent)]
-    RepoId(#[from] RepoIdError),
+    RepoId(RepoIdError),
 
     /// A LanceDB operation failed.
-    #[error("{}", with_context(context, source))]
     Database {
         /// What the store was doing; empty when there is nothing to add.
         context: String,
         /// The LanceDB error.
-        #[source]
         source: lancedb::Error,
     },
 
     /// Building or reading an Arrow record batch failed.
-    #[error("{}", with_context(context, source))]
     Arrow {
         /// What the store was doing; empty when there is nothing to add.
         context: String,
         /// The Arrow error.
-        #[source]
         source: arrow_schema::ArrowError,
     },
 
     /// A file of the registry or the store could not be read or written.
-    #[error("{}", with_context(context, source))]
     Io {
         /// What the store was doing; empty when there is nothing to add.
         context: String,
         /// The I/O error.
-        #[source]
         source: std::io::Error,
     },
 
     /// JSON (the registry file, metadata columns) could not be encoded or
     /// decoded.
-    #[error("{}", with_context(context, source))]
     Json {
         /// What the store was doing; empty when there is nothing to add.
         context: String,
         /// The serde_json error.
-        #[source]
         source: serde_json::Error,
     },
 
     /// Stored data does not have the expected shape (a missing column, an
     /// unknown enum value).
-    #[error("{0}")]
     InvalidData(String),
+}
+
+impl fmt::Display for StorageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StorageError::NoIndex(path) => write!(f, "no index at {}", path.display()),
+            StorageError::NonUtf8Path(path) => {
+                write!(f, "the database path {} is not valid UTF-8", path.display())
+            }
+            StorageError::RepoId(e) => fmt::Display::fmt(e, f),
+            StorageError::Database { context, source } => write_with_context(f, context, source),
+            StorageError::Arrow { context, source } => write_with_context(f, context, source),
+            StorageError::Io { context, source } => write_with_context(f, context, source),
+            StorageError::Json { context, source } => write_with_context(f, context, source),
+            StorageError::InvalidData(msg) => f.write_str(msg),
+        }
+    }
+}
+
+impl std::error::Error for StorageError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // The wrapped error's message is part of ours: continue the chain
+        // below it, so no message is printed twice.
+        match self {
+            StorageError::RepoId(e) => e.source(),
+            StorageError::Database { source, .. } => source.source(),
+            StorageError::Arrow { source, .. } => source.source(),
+            StorageError::Io { source, .. } => source.source(),
+            StorageError::Json { source, .. } => source.source(),
+            StorageError::NoIndex(_) | StorageError::NonUtf8Path(_) => None,
+            StorageError::InvalidData(_) => None,
+        }
+    }
+}
+
+impl From<RepoIdError> for StorageError {
+    fn from(e: RepoIdError) -> Self {
+        StorageError::RepoId(e)
+    }
 }
 
 /// Convenience alias for results of this crate.
@@ -83,11 +116,27 @@ pub(crate) fn db_uri(path: &std::path::Path) -> Result<&str> {
 }
 
 /// `"{context}: {source}"`, or just the source without a context.
-fn with_context(context: &str, source: &dyn fmt::Display) -> String {
+fn write_with_context(
+    f: &mut fmt::Formatter<'_>,
+    context: &str,
+    source: &dyn fmt::Display,
+) -> fmt::Result {
     if context.is_empty() {
-        source.to_string()
+        write!(f, "{source}")
     } else {
-        format!("{context}: {source}")
+        write!(f, "{context}: {source}")
+    }
+}
+
+/// `outer` in front of the context an error already has: `.context()`
+/// called twice keeps both (`"outer: inner: source"`).
+fn nest(outer: String, inner: String) -> String {
+    if inner.is_empty() {
+        outer
+    } else if outer.is_empty() {
+        inner
+    } else {
+        format!("{outer}: {inner}")
     }
 }
 
@@ -120,15 +169,39 @@ pub(crate) trait Contextual {
 }
 
 impl Contextual for StorageError {
+    /// Adds `context` in front of the one the error already carries, rather
+    /// than replacing it (#118).
     fn in_context(self, context: String) -> StorageError {
         match self {
-            StorageError::Database { source, .. } => StorageError::Database { context, source },
-            StorageError::Arrow { source, .. } => StorageError::Arrow { context, source },
-            StorageError::Io { source, .. } => StorageError::Io { context, source },
-            StorageError::Json { source, .. } => StorageError::Json { context, source },
-            StorageError::InvalidData(msg) => {
-                StorageError::InvalidData(format!("{context}: {msg}"))
-            }
+            StorageError::Database {
+                context: inner,
+                source,
+            } => StorageError::Database {
+                context: nest(context, inner),
+                source,
+            },
+            StorageError::Arrow {
+                context: inner,
+                source,
+            } => StorageError::Arrow {
+                context: nest(context, inner),
+                source,
+            },
+            StorageError::Io {
+                context: inner,
+                source,
+            } => StorageError::Io {
+                context: nest(context, inner),
+                source,
+            },
+            StorageError::Json {
+                context: inner,
+                source,
+            } => StorageError::Json {
+                context: nest(context, inner),
+                source,
+            },
+            StorageError::InvalidData(msg) => StorageError::InvalidData(nest(context, msg)),
             other => other,
         }
     }
@@ -156,10 +229,67 @@ mod tests {
         let err = err.unwrap_err();
         assert_eq!(err.to_string(), "Failed to write: disk full");
         assert!(matches!(err, StorageError::Io { .. }));
-        assert!(std::error::Error::source(&err).is_some());
 
         let bare = StorageError::from(std::io::Error::other("disk full"));
         assert_eq!(bare.to_string(), "disk full");
+    }
+
+    /// #118: the wrapped error's message is in ours, so it is not also the
+    /// source — a full chain prints "disk full" once.
+    #[test]
+    fn the_chain_prints_each_message_once() {
+        let err: Result<()> = Err(std::io::Error::other("disk full")).context("Failed to write");
+        let err = err.unwrap_err();
+        let mut chain = vec![err.to_string()];
+        let mut cause = std::error::Error::source(&err);
+        while let Some(e) = cause {
+            chain.push(e.to_string());
+            cause = e.source();
+        }
+        assert_eq!(chain, ["Failed to write: disk full"]);
+
+        // Deeper causes of the wrapped error are still in the chain.
+        #[derive(Debug)]
+        struct Cause;
+        impl std::fmt::Display for Cause {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("sector unreadable")
+            }
+        }
+        impl std::error::Error for Cause {}
+        #[derive(Debug)]
+        struct ReadFailed(Cause);
+        impl std::fmt::Display for ReadFailed {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("read failed")
+            }
+        }
+        impl std::error::Error for ReadFailed {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                Some(&self.0)
+            }
+        }
+        let io = std::io::Error::other(ReadFailed(Cause));
+        let err = StorageError::from(io).in_context("Failed to read".to_string());
+        assert_eq!(err.to_string(), "Failed to read: read failed");
+        let source = std::error::Error::source(&err).expect("the cause below the io error");
+        assert_eq!(source.to_string(), "sector unreadable");
+    }
+
+    /// #118: a second `.context()` used to replace the first.
+    #[test]
+    fn nested_context_keeps_both_messages() {
+        let inner: Result<()> = Err(std::io::Error::other("disk full")).context("write symbols");
+        let outer = inner.context("store analysis");
+        assert_eq!(
+            outer.unwrap_err().to_string(),
+            "store analysis: write symbols: disk full"
+        );
+        let invalid: Result<()> = Err(StorageError::InvalidData("no column uid".into()));
+        assert_eq!(
+            invalid.context("read symbols").unwrap_err().to_string(),
+            "read symbols: no column uid"
+        );
     }
 
     /// A non-UTF-8 database path is an error, not a panic (#101).

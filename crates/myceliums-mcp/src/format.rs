@@ -41,6 +41,11 @@ pub fn format_analyze(o: &AnalyzeOutput) -> String {
     if let Some(calls) = &o.calls {
         out.push_str(&format!("\nCalls:       {calls}"));
     }
+    if let Some(skipped) = &o.skipped {
+        out.push_str(&format!(
+            "\nSkipped:     {skipped} (not indexed; limits in .myceliums.toml [analysis])"
+        ));
+    }
     let missing = o.symbols_total.saturating_sub(o.symbols_embedded);
     if o.embedding_failures > 0 {
         out.push_str(&format!(
@@ -2049,6 +2054,33 @@ pub fn format_contracts(report: &ContractsReport) -> String {
 mod tests {
     use super::*;
     use crate::{CentralityNodeOutput, CohesionEntry, CycleItemOutput, ModuleCouplingEntry};
+
+    /// #118: a fresh analysis says which files it left out and why.
+    #[test]
+    fn analyze_output_shows_skipped_files() {
+        let mut output = AnalyzeOutput {
+            repo_id: "r".into(),
+            symbols: 3,
+            files: 1,
+            relationships: 0,
+            communities: 0,
+            processes: 0,
+            symbols_embedded: 3,
+            symbols_total: 3,
+            embedding_failures: 0,
+            embeddings_reused: 0,
+            calls: None,
+            skipped: Some("3 files: 2 oversized file, 1 parse timeout".into()),
+            cached: false,
+        };
+        let text = format_analyze(&output);
+        assert!(
+            text.contains("\nSkipped:     3 files: 2 oversized file, 1 parse timeout (not indexed"),
+            "{text}"
+        );
+        output.skipped = None;
+        assert!(!format_analyze(&output).contains("Skipped"));
+    }
 
     #[test]
     fn truncate_never_splits_multibyte_characters() {

@@ -140,6 +140,17 @@ pub(crate) fn service_error(e: MyceliumError) -> ToolError {
             format!("The index of {repo_id} was replaced while this call was reading it."),
             "retry the call; it reads the new index",
         ),
+        MyceliumError::NotAnalyzed(msg) => {
+            ToolError::recoverable(format!("{msg}."), "run analyze with the project path")
+        }
+        // Registered, but its index directory is gone (deleted, or moved
+        // aside by a rebuild that just failed).
+        MyceliumError::Store(myceliums_storage::StorageError::NoIndex(_)) => {
+            ToolError::recoverable(
+                "This repository is registered but its index is missing.",
+                "run analyze with the project path to rebuild it",
+            )
+        }
         other => ToolError::internal("graph read failed", other),
     }
 }
@@ -185,6 +196,29 @@ mod tests {
         assert!(matches!(err, ToolError::Recoverable { .. }));
         assert!(msg.contains("unknown repo_id \"nope\""), "{msg}");
         assert!(msg.contains("Next: use one of: a, b"), "{msg}");
+    }
+
+    /// #118: nothing analyzed, or an index missing on disk, is something the
+    /// agent can fix, not a server fault.
+    #[test]
+    fn missing_repositories_and_indexes_are_recoverable() {
+        let err = service_error(MyceliumError::NotAnalyzed(
+            "No repositories analyzed yet".into(),
+        ));
+        assert!(matches!(err, ToolError::Recoverable { .. }));
+        assert_eq!(
+            err.message(),
+            "No repositories analyzed yet.\nNext: run analyze with the project path"
+        );
+        let err = service_error(MyceliumError::Store(
+            myceliums_storage::StorageError::NoIndex("/data/r".into()),
+        ));
+        assert!(matches!(err, ToolError::Recoverable { .. }));
+        assert!(
+            err.message().contains("Next: run analyze"),
+            "{}",
+            err.message()
+        );
     }
 
     #[test]

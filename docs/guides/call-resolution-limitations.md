@@ -123,7 +123,7 @@ Before #139, 41% of the edges in the first four were `ambiguous` and none `impor
 
 The fallback for receivers of unknown type stays the weak spot: `ep.load()` on an entry point linked to the only project method named `load` is labelled `name-match` and wrong. Untyped code — most Python and JavaScript — relies on this fallback for its method calls.
 
-**Cost.** Analyzing Django 5.1.4 (2,788 files, 41,842 symbols, ~157,000 call sites; debug build, embeddings off, two runs each): 51.6–54.1 s and 1,164–1,176 MiB peak RSS before (`origin/main`), 54.5–55.9 s and 1,098–1,129 MiB after (analysis time; a shared machine, so runs vary by a few seconds). Base classes and open hierarchies are memoised per class; without that the re-check's fallback cost Django about 4 s.
+**Cost.** Analyzing Django 5.1.4 (2,788 files, 41,842 symbols, ~157,000 call sites; debug build, embeddings off, two runs each): 51.6–54.1 s and 1,164–1,176 MiB peak RSS before (`origin/main`), 54.5–55.9 s and 1,098–1,129 MiB after (analysis time; a shared machine, so runs vary by a few seconds). Base classes and open hierarchies are memoised per class; without that the re-check's fallback cost Django 1–5 s more (the #139 commit message's "55–59 s vs 60 s": the memoised re-check head against the same head without memoisation, measured in another session than the before/after figures above, so the two pairs are not directly comparable).
 
 ## What is modelled, and what is not
 

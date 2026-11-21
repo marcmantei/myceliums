@@ -159,7 +159,10 @@ impl MyceliumsMcp {
         // Cache check: return cached results if fresh enough
         if !force {
             let registry = registry()?;
-            if let Some(repo_info) = registry.get(&repo_id) {
+            // A registered repository whose index directory is gone is not
+            // cached: analyze rebuilds it (#118).
+            let indexed = RepoRegistry::repo_db_path(&data_dir(), &repo_id).is_dir();
+            if let Some(repo_info) = registry.get(&repo_id).filter(|_| indexed) {
                 let cache_config = CacheCheckConfig {
                     max_age_minutes: params.max_age_minutes.unwrap_or(60),
                     ..Default::default()
@@ -190,6 +193,9 @@ impl MyceliumsMcp {
                     let calls = crate::index_status::call_resolution(&store)
                         .await
                         .map(|stats| stats.summary());
+                    // The two reads above bypassed the tables: check they
+                    // come from the generation the counts do.
+                    graph.verify()?;
                     let output = AnalyzeOutput {
                         repo_id,
                         symbols: symbols.len(),
@@ -202,6 +208,7 @@ impl MyceliumsMcp {
                         embedding_failures: embedding_stats.embedding_failures,
                         embeddings_reused: 0,
                         calls,
+                        skipped: None,
                         cached: true,
                     };
                     return text(format::format_analyze(&output));

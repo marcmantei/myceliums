@@ -271,7 +271,8 @@ impl CallResolver {
     }
 
     /// The binding of `name` visible at `site` (a parameter or variable):
-    /// the most recently declared one whose scope contains the line.
+    /// the most recently declared one whose scope contains the line. An
+    /// export alias binds nothing inside its module.
     pub(super) fn binding<'a>(
         &'a self,
         site: &Site<'a>,
@@ -284,6 +285,7 @@ impl CallResolver {
             .enumerate()
             .filter(|(i, b)| {
                 b.owner.is_none()
+                    && !matches!(b.value, BindingValue::Export(_))
                     && b.name == name
                     && b.scope.0 <= site.line
                     && site.line <= b.scope.1
@@ -307,6 +309,9 @@ impl CallResolver {
             BindingValue::Type(ty) => self.type_ty(&site, ty, depth + 1),
             BindingValue::Expr(steps) => self.eval(&site, steps, depth + 1),
             BindingValue::Unknown => Ty::Unknown,
+            BindingValue::Export(name) => {
+                self.eval(&site, &[ExpressionStep::Ident(name.clone())], depth + 1)
+            }
         }
     }
 

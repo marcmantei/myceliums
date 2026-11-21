@@ -12,7 +12,7 @@
 
 mod support;
 
-use myceliums_cypher::lexer::{lex, Token};
+use myceliums_cypher::lexer::{lex, tokenize, Token};
 use myceliums_cypher::parser::{parse_cypher, ParseError, MAX_NESTING_DEPTH};
 use proptest::prelude::*;
 use proptest::test_runner::RngSeed;
@@ -207,6 +207,15 @@ proptest! {
         }
     }
 
+    /// Text the lexer cannot tokenise never parses: it is an error, not
+    /// skipped (#118).
+    #[test]
+    fn untokenizable_input_never_parses(input in cypher_soup()) {
+        if tokenize(&input).1.is_some() {
+            prop_assert!(parse_cypher(&input).is_err(), "{input:?} parsed");
+        }
+    }
+
     /// Parsing is a pure function of its input.
     #[test]
     fn parser_is_deterministic(input in cypher_soup()) {
@@ -226,9 +235,9 @@ proptest! {
     #![proptest_config(config(256))]
 
     /// A write keyword that the lexer recognises as a token is always
-    /// rejected, whatever surrounds it and however it is cased. (Text the
-    /// lexer cannot tokenise — e.g. everything after an unterminated quote —
-    /// is dropped, so a keyword inside it never becomes a token at all.)
+    /// rejected, whatever surrounds it and however it is cased — also next
+    /// to text the lexer cannot tokenise, which is otherwise a parse error.
+    /// (A keyword inside a quoted string never becomes a token at all.)
     #[test]
     fn write_clauses_are_always_blocked(
         prefix in cypher_soup(),

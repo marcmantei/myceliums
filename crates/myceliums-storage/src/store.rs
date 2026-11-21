@@ -177,6 +177,46 @@ fn escape_lance_str(value: &str) -> String {
     value.replace('\'', "''")
 }
 
+/// Which directory a path names, as far as the platform can tell: on Unix
+/// device, inode and change time (an inode number alone can be reused at
+/// once by a directory created right after another was removed).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DirIdentity(Option<(u64, u64, i64, i64)>);
+
+impl DirIdentity {
+    fn of(meta: &std::fs::Metadata) -> Self {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            DirIdentity(Some((
+                meta.dev(),
+                meta.ino(),
+                meta.ctime(),
+                meta.ctime_nsec(),
+            )))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = meta;
+            DirIdentity(None)
+        }
+    }
+}
+
+/// Whether `path` is now an empty directory other than the one `before`
+/// identified: the index was removed after it was checked, and `connect`
+/// created an empty directory in its place. Always `false` where the
+/// identity is unknown (not Unix).
+fn recreated_empty(path: &Path, before: DirIdentity) -> bool {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return false;
+    };
+    let now = DirIdentity::of(&meta);
+    before.0.is_some()
+        && now != before
+        && std::fs::read_dir(path).is_ok_and(|mut entries| entries.next().is_none())
+}
+
 /// LanceDB-backed persistence layer for a single repository's code graph.
 ///
 /// A `Store` owns a connection to the repository's on-disk database and
@@ -212,11 +252,27 @@ impl Store {
     /// [`Store::open`] for reading an index that must already exist: fails
     /// instead of letting LanceDB create an empty database directory where
     /// the index is missing (for example while a rebuild swaps it in).
+    ///
+    /// LanceDB's `connect` creates the directory when it is missing, so the
+    /// check before it is not enough: the index can be removed (deleted, or
+    /// moved aside by a rebuild that swaps by renames) between the check and
+    /// the connect. On Unix the directory's identity is compared before and
+    /// after; an empty directory that was not there before is the one
+    /// `connect` just created, and is removed again (#118).
     pub async fn open_existing(db_path: &Path, repo_id: &str) -> Result<Self> {
-        if !db_path.is_dir() {
-            return Err(StorageError::NoIndex(db_path.to_path_buf()));
+        let no_index = || StorageError::NoIndex(db_path.to_path_buf());
+        let before = match std::fs::metadata(db_path) {
+            Ok(meta) if meta.is_dir() => DirIdentity::of(&meta),
+            _ => return Err(no_index()),
+        };
+        let store = Self::open(db_path, repo_id).await?;
+        if recreated_empty(db_path, before) {
+            drop(store);
+            // Only removes an empty directory, never an index.
+            let _ = std::fs::remove_dir(db_path);
+            return Err(no_index());
         }
-        Self::open(db_path, repo_id).await
+        Ok(store)
     }
 
     /// Replace the ANN index policy. Production code never calls this; it
@@ -1377,6 +1433,46 @@ mod tests {
 
     fn test_db_path(name: &str) -> std::path::PathBuf {
         std::env::temp_dir().join(format!("myceliums_store_test_{}", name))
+    }
+
+    /// A missing index is `NoIndex`, and nothing is created.
+    #[tokio::test]
+    async fn open_existing_never_creates_a_missing_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("repo");
+        let err = Store::open_existing(&db, "r")
+            .await
+            .err()
+            .expect("no index");
+        assert!(matches!(err, StorageError::NoIndex(_)), "{err:?}");
+        assert!(!db.exists());
+        // An index that exists opens, also while it is still empty.
+        drop(Store::open(&db, "r").await.unwrap());
+        Store::open_existing(&db, "r").await.unwrap();
+        assert!(db.is_dir());
+    }
+
+    /// #118: an index removed between the check and LanceDB's `connect`
+    /// (which creates the directory) is told apart from the one checked.
+    #[cfg(unix)]
+    #[test]
+    fn a_recreated_empty_directory_is_detected() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("repo");
+        std::fs::create_dir(&db).unwrap();
+        let before = DirIdentity::of(&std::fs::metadata(&db).unwrap());
+        assert!(!recreated_empty(&db, before), "the same directory");
+
+        std::fs::remove_dir(&db).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::create_dir(&db).unwrap();
+        assert!(recreated_empty(&db, before), "removed and created again");
+
+        // A directory swapped in with content is an index, not connect's.
+        std::fs::write(db.join("symbols.lance"), b"").unwrap();
+        assert!(!recreated_empty(&db, before));
+        std::fs::remove_dir_all(&db).unwrap();
+        assert!(!recreated_empty(&db, before), "gone");
     }
 
     #[test]

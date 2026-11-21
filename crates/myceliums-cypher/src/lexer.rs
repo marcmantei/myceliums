@@ -181,12 +181,72 @@ pub enum Token {
 
 /// Tokenizes a Cypher query string into `(token, byte-span)` pairs,
 /// discarding whitespace and unrecognized input.
+///
+/// Lenient: text the lexer cannot tokenize is dropped. Use [`tokenize`] to
+/// get an error for it instead; [`crate::parser::parse_cypher`] does.
 pub fn lex(input: &str) -> Vec<(Token, std::ops::Range<usize>)> {
     let lexer = Token::lexer(input);
     lexer
         .spanned()
         .filter_map(|(tok, span)| tok.ok().map(|t| (t, span)))
         .collect()
+}
+
+/// Input the lexer cannot tokenize: an unterminated string literal, a
+/// character outside the supported syntax, or an integer literal too large
+/// for an `i64`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LexError {
+    /// What is wrong, e.g. "unterminated string literal".
+    pub message: String,
+    /// 1-based character position (not byte offset) in the query where the
+    /// offending text starts.
+    pub position: usize,
+}
+
+impl std::fmt::Display for LexError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} at position {}", self.message, self.position)
+    }
+}
+
+impl std::error::Error for LexError {}
+
+/// [`lex`], plus the first piece of input it could not tokenize.
+///
+/// Every token the lexer recognises is returned, including those after the
+/// error, so a caller can still inspect the whole query (the parser rejects
+/// write keywords before it reports a lexing error). A single `;` at the end
+/// of the query is accepted and ignored.
+pub fn tokenize(input: &str) -> (Vec<(Token, std::ops::Range<usize>)>, Option<LexError>) {
+    let mut tokens = Vec::new();
+    let mut error = None;
+    for (tok, span) in Token::lexer(input).spanned() {
+        match tok {
+            Ok(t) => tokens.push((t, span)),
+            Err(()) if error.is_none() => error = lex_error(input, span),
+            Err(()) => {}
+        }
+    }
+    (tokens, error)
+}
+
+/// The error for the untokenizable `span` of `input`; `None` for a trailing
+/// `;`.
+fn lex_error(input: &str, span: std::ops::Range<usize>) -> Option<LexError> {
+    let rest = &input[span.start..];
+    let position = input[..span.start].chars().count() + 1;
+    let first = rest.chars().next()?;
+    let message = match first {
+        '\'' | '"' => format!("unterminated string literal (no closing {first})"),
+        ';' if rest[1..].trim().is_empty() => return None,
+        c if c.is_ascii_digit() => {
+            let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+            format!("integer literal {digits} is out of range")
+        }
+        c => format!("unexpected character `{c}`"),
+    };
+    Some(LexError { message, position })
 }
 
 #[cfg(test)]
@@ -212,6 +272,53 @@ mod tests {
         assert!(tokens
             .iter()
             .any(|(t, _)| matches!(t, Token::StringLit(s) if s == "handler")));
+    }
+
+    /// #118: text after an unterminated quote was dropped silently; now it
+    /// is an error that says where the literal starts.
+    #[test]
+    fn unterminated_string_literal_is_an_error_with_its_position() {
+        let (_, error) = tokenize("MATCH (s) WHERE s.name = 'handler RETURN s");
+        let error = error.expect("an unterminated quote is an error");
+        assert_eq!(error.position, 26);
+        assert!(
+            error.message.contains("unterminated string literal"),
+            "{error}"
+        );
+        assert_eq!(
+            error.to_string(),
+            "unterminated string literal (no closing ') at position 26"
+        );
+
+        let (_, error) = tokenize("MATCH (s) WHERE s.name = \"x");
+        assert_eq!(error.expect("double quotes too").position, 26);
+    }
+
+    /// Positions count characters, not bytes.
+    #[test]
+    fn lex_error_positions_count_characters() {
+        let (_, error) = tokenize("RETURN '日本' § 1");
+        let error = error.expect("§ is not Cypher");
+        assert_eq!(error.position, 13);
+        assert_eq!(error.message, "unexpected character `§`");
+    }
+
+    #[test]
+    fn integer_overflow_is_a_lex_error() {
+        let (_, error) = tokenize("MATCH (s) RETURN s LIMIT 99999999999999999999");
+        assert_eq!(
+            error.expect("too large for i64").message,
+            "integer literal 99999999999999999999 is out of range"
+        );
+    }
+
+    #[test]
+    fn a_trailing_semicolon_is_accepted() {
+        let (tokens, error) = tokenize("MATCH (s) RETURN s;  \n");
+        assert_eq!(error, None);
+        assert_eq!(tokens.len(), 6);
+        let (_, error) = tokenize("MATCH (s); RETURN s");
+        assert_eq!(error.expect("not at the end").position, 10);
     }
 
     #[test]

@@ -386,6 +386,8 @@ impl MyceliumsMcp {
             myceliums_core::semantic_search(store.as_ref(), &query_vector, page.fetch(), &tests)
                 .await
                 .map_err(|e| ToolError::internal("vector search failed", e))?;
+        // Every store read before `verify()`: one after it is not covered.
+        let warning = partial_index_warning(store).await;
         graph.verify()?;
         let page = page.take_open(results);
         let items: Vec<SearchResultItem> = page
@@ -403,7 +405,6 @@ impl MyceliumsMcp {
                 explain: None,
             })
             .collect();
-        let warning = partial_index_warning(store).await;
         Ok(format::with_index_warning(
             warning,
             with_notice(
@@ -426,6 +427,10 @@ impl MyceliumsMcp {
         explain: bool,
         tests: TestPolicy,
     ) -> Result<String, ToolError> {
+        // `embedder` was chosen by a store read: pin the snapshot to that
+        // generation before the first table read could move it (see
+        // `RepoGraph::verify`).
+        graph.verify()?;
         let store = &graph.store();
         let symbols = graph.symbols().await?;
         // Ranked top-k: ask for one past the page to learn whether more
@@ -452,7 +457,8 @@ impl MyceliumsMcp {
             .await
             .map_err(|e| ToolError::internal("hybrid search failed", e))?
         };
-        // The vector half read the store directly.
+        // The vector half read the store directly; so does the warning.
+        let warning = partial_index_warning(store).await;
         graph.verify()?;
 
         // Apply reranking if requested, using the reranker recorded at indexing time
@@ -495,7 +501,6 @@ impl MyceliumsMcp {
                 explain: r.explain.and_then(|e| serde_json::to_value(e).ok()),
             })
             .collect();
-        let warning = partial_index_warning(store).await;
         Ok(format::with_index_warning(
             warning,
             with_notice(

@@ -419,6 +419,12 @@ fn only_managed_block_changed(root: &Path, rel: &Path, index: &Indexed<'_>) -> b
     let Some(lang) = index.scope.language(rel) else {
         return false;
     };
+    // The analysis would not index the file as it is now (a block that
+    // pushed it past `max_file_size_kb`): the next run drops it, so the
+    // index is not current even if the text outside the block is (#118).
+    if !index.scope.affects_index(root, rel) {
+        return false;
+    }
     if !blanks_managed_blocks(lang) {
         return false;
     }
@@ -887,6 +893,42 @@ mod tests {
         .unwrap();
         let state = assess(&info(Some(HEAD), built, &path), Some(&git), &index);
         assert!(state.is_stale(), "{state:?}");
+    }
+
+    /// #118: a block that pushes CLAUDE.md past the size limit is a change,
+    /// although the text outside the block is what was indexed: the next
+    /// analysis drops the file.
+    #[test]
+    fn a_block_pushing_claude_md_past_the_size_limit_is_a_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let notes = "# Notes\n\nTeam notes.\n";
+        let mut fingerprints = BTreeMap::new();
+        fingerprints.insert("CLAUDE.md".to_string(), text_fingerprint(notes));
+        let mut config = myceliums_core::config::ProjectConfig::default();
+        config.analysis.max_file_size_kb = 1;
+        let scope = IndexScope::new(Some(&config)).unwrap();
+        let all = |_: &Path| true;
+        let index = Indexed {
+            holds: &all,
+            scope: &scope,
+            fingerprints: &fingerprints,
+        };
+        let path = root.to_string_lossy();
+        let git = at_head(Some(vec![PathBuf::from("CLAUDE.md")]));
+        let built = "2001-01-01T00:00:00Z";
+
+        std::fs::write(root.join("CLAUDE.md"), format!("{notes}\n{BLOCK_V1}")).unwrap();
+        let state = assess(&info(Some(HEAD), built, &path), Some(&git), &index);
+        assert!(!state.is_stale(), "a small block: {state:?}");
+
+        let big_block = format!(
+            "<!-- BEGIN myceliums -->\n{}<!-- END myceliums -->\n",
+            "routing line\n".repeat(100)
+        );
+        std::fs::write(root.join("CLAUDE.md"), format!("{notes}\n{big_block}")).unwrap();
+        let state = assess(&info(Some(HEAD), built, &path), Some(&git), &index);
+        assert!(state.is_stale(), "past 1 KB: {state:?}");
     }
 
     /// A file the index holds that grew past the size limit is a change:

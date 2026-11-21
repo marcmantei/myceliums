@@ -2643,7 +2643,7 @@ mod tests {
             &[binding(
                 "HonoBase",
                 (21, u32::MAX),
-                BindingValue::Expr(vec![ident("Hono")]),
+                BindingValue::Export("Hono".to_string()),
             )],
             &[],
         );
@@ -2691,6 +2691,51 @@ mod tests {
             ]
         );
         assert_eq!(resolver.stats().library, 1);
+    }
+
+    /// `import { Foo } from './lib'; export { Bar as Foo }`: inside the
+    /// module `Foo` is still the imported class — the export alias only
+    /// names `Bar` for importers (#118).
+    #[test]
+    fn an_export_alias_does_not_shadow_an_import_of_its_name() {
+        let mut resolver = resolver(&[
+            class("src/lib.ts", "Foo", (1, 5)),
+            method("src/lib.ts", "Foo.run", (2, 4)),
+            class("src/a.ts", "Bar", (2, 6)),
+            method("src/a.ts", "Bar.run", (3, 5)),
+            function("src/a.ts", "main", (8, 12)),
+            function("src/b.ts", "use", (2, 6)),
+        ]);
+        resolver.register_file(
+            "src/a.ts",
+            &[import("Foo", "./lib", Some("Foo"))],
+            &[],
+            &[binding(
+                "Foo",
+                (7, u32::MAX),
+                BindingValue::Export("Bar".to_string()),
+            )],
+            &[],
+        );
+        resolver.register_file(
+            "src/b.ts",
+            &[import("Foo", "./a", Some("Foo"))],
+            &[],
+            &[],
+            &[],
+        );
+        // `Foo.run()` in each file.
+        let calls = [
+            member("src/a.ts", 10, "main", vec![ident("Foo")], "run"),
+            member("src/b.ts", 4, "use", vec![ident("Foo")], "run"),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge("src/a.ts::main", "src/lib.ts::Foo.run", "exact"),
+                edge("src/b.ts::use", "src/a.ts::Bar.run", "exact"),
+            ]
+        );
     }
 
     /// `from io import BytesIO` is the standard library's `io`, not the

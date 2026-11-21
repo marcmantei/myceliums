@@ -26,6 +26,11 @@ pub enum ParseError {
     /// input cannot overflow the stack of the recursive-descent parser.
     #[error("Expression nested too deeply (limit {0})")]
     TooDeeplyNested(usize),
+    /// Part of the query is not a token of the supported syntax (an
+    /// unterminated string literal, an unknown character, an integer out of
+    /// range).
+    #[error("Invalid query: {0}")]
+    Lex(#[from] crate::lexer::LexError),
 }
 
 /// Maximum number of nested `NOT`s, function calls, and aggregations (in any
@@ -107,7 +112,7 @@ pub enum Pattern {
     Relationship(NodePattern, RelPattern, NodePattern),
 }
 
-/// A node pattern such as `(n:Function {name: "foo"})`.
+/// A node pattern such as `(n:CodeSymbol {name: "foo"})`.
 #[derive(Debug, Clone)]
 pub struct NodePattern {
     /// Optional bound variable for the node.
@@ -270,17 +275,8 @@ impl Parser {
 
     /// Parses the token stream into a [`Query`], rejecting write operations.
     pub fn parse(mut self) -> Result<Query, ParseError> {
-        // Check for blocked operations
-        for tok in &self.tokens {
-            match tok {
-                Token::Create => return Err(ParseError::BlockedOperation("CREATE".into())),
-                Token::Delete => return Err(ParseError::BlockedOperation("DELETE".into())),
-                Token::Set => return Err(ParseError::BlockedOperation("SET".into())),
-                Token::Merge => return Err(ParseError::BlockedOperation("MERGE".into())),
-                Token::Drop => return Err(ParseError::BlockedOperation("DROP".into())),
-                Token::Alter => return Err(ParseError::BlockedOperation("ALTER".into())),
-                _ => {}
-            }
+        if let Some(blocked) = blocked_operation(&self.tokens) {
+            return Err(blocked);
         }
 
         let match_clause = if self.peek_is(&Token::Match) {
@@ -493,7 +489,7 @@ impl Parser {
         } else {
             None
         };
-        // Skip label if present (e.g., :Function)
+        // Skip label if present (e.g., :CodeSymbol)
         if self.peek_is(&Token::Colon) {
             self.advance();
             self.expect_ident()?;
@@ -875,12 +871,36 @@ fn balanced(mut operands: Vec<Expr>, op: BinOp) -> Expr {
     )
 }
 
+/// The error for the first write keyword among `tokens`, if any.
+fn blocked_operation(tokens: &[Token]) -> Option<ParseError> {
+    tokens.iter().find_map(|tok| {
+        let keyword = match tok {
+            Token::Create => "CREATE",
+            Token::Delete => "DELETE",
+            Token::Set => "SET",
+            Token::Merge => "MERGE",
+            Token::Drop => "DROP",
+            Token::Alter => "ALTER",
+            _ => return None,
+        };
+        Some(ParseError::BlockedOperation(keyword.into()))
+    })
+}
+
 /// Lexes and parses a Cypher query string into a [`Query`] AST in one step.
+///
+/// Input the lexer cannot tokenize is an error ([`ParseError::Lex`], with
+/// its position) rather than being skipped; a write keyword anywhere in the
+/// query is still reported as [`ParseError::BlockedOperation`] first.
 pub fn parse_cypher(input: &str) -> Result<Query, ParseError> {
-    let tokens: Vec<Token> = crate::lexer::lex(input)
-        .into_iter()
-        .map(|(t, _)| t)
-        .collect();
+    let (tokens, lex_error) = crate::lexer::tokenize(input);
+    let tokens: Vec<Token> = tokens.into_iter().map(|(t, _)| t).collect();
+    if let Some(blocked) = blocked_operation(&tokens) {
+        return Err(blocked);
+    }
+    if let Some(error) = lex_error {
+        return Err(error.into());
+    }
     Parser::new(tokens).parse()
 }
 
@@ -919,6 +939,27 @@ mod tests {
         let result = parse_cypher("CREATE (n:Node) RETURN n");
         assert!(result.is_err());
         assert!(matches!(result, Err(ParseError::BlockedOperation(_))));
+    }
+
+    /// #118: an unterminated quote used to drop the rest of the query and
+    /// parse what came before it.
+    #[test]
+    fn unterminated_quote_is_a_parse_error_with_position() {
+        let err = parse_cypher("MATCH (s:CodeSymbol) RETURN s.name LIMIT 5 'oops")
+            .expect_err("the quote is never closed");
+        assert!(matches!(err, ParseError::Lex(_)), "{err:?}");
+        assert_eq!(
+            err.to_string(),
+            "Invalid query: unterminated string literal (no closing ') at position 44"
+        );
+    }
+
+    /// A write keyword is reported as such even next to text the lexer
+    /// rejects.
+    #[test]
+    fn blocked_keyword_wins_over_a_lex_error() {
+        let err = parse_cypher("MATCH (n) § DELETE n").expect_err("blocked");
+        assert!(matches!(err, ParseError::BlockedOperation(_)), "{err:?}");
     }
 
     #[test]

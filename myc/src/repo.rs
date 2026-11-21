@@ -95,6 +95,29 @@ pub(crate) fn resolve_repo_or_latest(repo: Option<&str>) -> Result<(String, Repo
     anyhow::bail!("No repositories analyzed yet. Run: myc analyze <path>");
 }
 
+/// A missing index (`no index at <path>`) is fixed by analyzing the project
+/// again: say so above the error (#118). Other errors pass unchanged.
+pub(crate) fn hint_for_missing_index(e: anyhow::Error) -> anyhow::Error {
+    use myceliums_core::MyceliumError;
+    use myceliums_storage::StorageError;
+    let missing = e.chain().any(|cause| {
+        matches!(
+            cause.downcast_ref::<StorageError>(),
+            Some(StorageError::NoIndex(_))
+        ) || matches!(
+            cause.downcast_ref::<MyceliumError>(),
+            Some(MyceliumError::Store(StorageError::NoIndex(_)))
+        )
+    });
+    if missing {
+        e.context(
+            "This repository has no index on disk. Run `myc analyze <project path>` to build it.",
+        )
+    } else {
+        e
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,6 +140,25 @@ mod tests {
             });
         }
         registry
+    }
+
+    #[test]
+    fn a_missing_index_suggests_myc_analyze() {
+        let no_index = || myceliums_storage::StorageError::NoIndex("/data/r".into());
+        for err in [
+            anyhow::Error::from(no_index()),
+            anyhow::Error::from(myceliums_core::MyceliumError::from(no_index())),
+            anyhow::Error::from(no_index()).context("reading the graph"),
+        ] {
+            let report = format!("{:#}", hint_for_missing_index(err));
+            assert!(
+                report.starts_with("This repository has no index on disk. Run `myc analyze"),
+                "{report}"
+            );
+            assert!(report.contains("no index at /data/r"), "{report}");
+        }
+        let other = hint_for_missing_index(anyhow::anyhow!("disk full"));
+        assert_eq!(format!("{other:#}"), "disk full");
     }
 
     #[test]
