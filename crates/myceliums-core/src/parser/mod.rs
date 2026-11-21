@@ -37,6 +37,9 @@ mod swift;
 mod typescript;
 mod zig;
 
+#[cfg(test)]
+mod stack_probe;
+
 /// A supported source language for tree-sitter parsing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SourceLanguage {
@@ -281,13 +284,29 @@ const INLINE_TREE_DEPTH: usize = 64;
 
 /// Stack reserved per tree level for deeper trees. The reservation is virtual
 /// memory; only the pages the walk touches are committed, but it is reserved
-/// per extracting worker: about three times the worst per-level cost measured
-/// in an unoptimized build (~11 KiB). The same size is used in release builds:
-/// optimized frame sizes were not measured and no CI job exercises the
-/// release path, so a smaller release value would be an untested bet whose
-/// failure mode (stack overflow) aborts the whole indexer. At
-/// [`MAX_TREE_DEPTH`] this reserves ~315 MiB of address space per worker.
-const STACK_BYTES_PER_LEVEL: usize = 32 * 1024;
+/// per extracting worker.
+///
+/// Measured by the stack probe (`parser/stack_probe.rs`, CI workflow
+/// `stack-probe.yml`, #159) as the smallest thread stack that survives each
+/// language's walk on deeply nested input, per (tree depth +
+/// [`INLINE_TREE_DEPTH`]). The worst language, Linux x86_64 and macOS
+/// aarch64:
+///
+/// - unoptimized: ~11.9 KiB (C++ nested calls), so 32 KiB leaves 2.8x;
+/// - optimized: ~1 KiB (966 B, TypeScript/JavaScript nested calls), so 8 KiB
+///   leaves 8x — more than the 2x the probe enforces, because the probe's
+///   five input shapes cannot cover every recursion path real code takes.
+///
+/// `debug_assertions` stands in for "unoptimized": a release build with
+/// debug assertions on keeps the larger value. The probe fails CI if either
+/// profile's value falls below twice the measured worst. At
+/// [`MAX_TREE_DEPTH`] this reserves ~315 MiB of address space per worker
+/// unoptimized, ~79 MiB optimized.
+const STACK_BYTES_PER_LEVEL: usize = if cfg!(debug_assertions) {
+    32 * 1024
+} else {
+    8 * 1024
+};
 
 /// Why [`SourceParser`] gave up on a file without extracting anything.
 ///
@@ -669,35 +688,43 @@ impl SourceParser {
         let source_bytes = parse_source.as_bytes();
 
         Self::with_stack_for(&tree, || {
-            let root = tree.root_node();
-            let engine = crate::dsl::DslEngine::new(&rules, source_bytes);
-            let (symbols, calls, imports) = engine.extract(root);
-
-            // Add chain: None and file: None to DSL-produced calls
-            let calls = calls
-                .into_iter()
-                .map(|c| CallReference {
-                    caller_name: c.caller_name,
-                    callee_name: c.callee_name,
-                    line: c.line,
-                    chain: c.chain,
-                    file: None,
-                    ..Default::default()
-                })
-                .collect();
-
-            let rationales = Self::extract_rationales(root, source_bytes);
-
-            ParseResult {
-                symbols,
-                calls,
-                imports,
-                rationales,
-                aliases: vec![],
-                bindings: vec![],
-                declared: vec![],
-            }
+            Self::extract_with_dsl(&rules, tree.root_node(), source_bytes)
         })
+    }
+
+    /// Run the DSL engine with `rules` over a parsed tree.
+    fn extract_with_dsl(
+        rules: &crate::dsl::LanguageRules,
+        root: tree_sitter::Node,
+        source_bytes: &[u8],
+    ) -> ParseResult {
+        let engine = crate::dsl::DslEngine::new(rules, source_bytes);
+        let (symbols, calls, imports) = engine.extract(root);
+
+        // Add chain: None and file: None to DSL-produced calls
+        let calls = calls
+            .into_iter()
+            .map(|c| CallReference {
+                caller_name: c.caller_name,
+                callee_name: c.callee_name,
+                line: c.line,
+                chain: c.chain,
+                file: None,
+                ..Default::default()
+            })
+            .collect();
+
+        let rationales = Self::extract_rationales(root, source_bytes);
+
+        ParseResult {
+            symbols,
+            calls,
+            imports,
+            rationales,
+            aliases: vec![],
+            bindings: vec![],
+            declared: vec![],
+        }
     }
 
     /// Parses `source` and extracts its symbols, calls, imports, comments and type information.
