@@ -421,9 +421,9 @@ benchmarks and examples are product code.
 
 Demotion is a down-weight, never a filter, and it works on rank positions so
 it means the same in every mode: a test symbol at position `p` of the
-ranking is placed as if it were at `p / 0.25` = `4p` (`DEFAULT_TEST_WEIGHT`), so
-it lands no lower than position `4p`: a test ranked 1st ends up 4th at worst,
-one ranked 2nd 8th, one ranked 3rd 12th. In `hybrid` the
+ranking is placed as if it were at `p / 0.2` = `5p` (`DEFAULT_TEST_WEIGHT`), so
+it lands no lower than position `5p`: a test ranked 1st ends up 5th at worst,
+one ranked 2nd 10th, one ranked 3rd 15th. In `hybrid` the
 fused list is reordered before it is cut to the page; with `rerank` the
 cross-encoder's order is reordered again. Displayed scores are unchanged, so
 a page is ordered by placement, not strictly by score; with `explain=true` a

@@ -894,15 +894,84 @@ per weight; each distinct rerank pool is reranked once. The run fails unless
 the sweep reproduces the production scores of every mode at the shipped
 weight and at `w = 1`, on every dev and test-seeking query.
 
-**Results.** Pending: the run of this protocol is
+**Results.** Run
 [44815708513](https://github.com/marcmantei/myceliums/actions/runs/44815708513)
-(Retrieval Quality, real repositories). Until it is recorded here,
-`DEFAULT_TEST_WEIGHT` is 0.25, the fallback that keeps a test ranked 1st, 2nd
-or 3rd within the first 12 results. The earlier run on `af33385` measured
-keyword search only correctly (its vector hits carried no metadata, so the
-model-backed modes were barely demoted): weight 0.1 vs no demotion,
-nDCG@10 0.381 → 0.478 over all 168 queries and +0.100 [+0.063, +0.140] on
-the held-out 72, every repository improving.
+(hosted runner, `linux-x86_64`, commit `3451b49`, dataset `2026-11-19`
+plus test-seeking set `2026-11-20`, shipped models, embedding batch 32). The
+sweep reproduced the production scores of every mode at weights 0.25 (then
+shipped) and 1 on all 96 dev and 20 test-seeking queries. All labels are
+unreviewed agent drafts.
+
+Dev split (96 queries), nDCG@10; Δ is the objective against `w = 1`, and the
+last columns are the test-seeking queries' hit@10 and nDCG@10, means over the
+four modes:
+
+| Weight | `lexical` | `semantic` | `hybrid` | `hybrid+rerank` | Objective | Δ objective [95% CI] | Test-seeking hit@10 | Test-seeking nDCG@10 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 (none) | 0.3389 | 0.4243 | 0.4199 | 0.4997 | 0.4207 | — | 0.7375 | 0.5248 |
+| 0.5 | 0.3690 | 0.4516 | 0.4590 | 0.5238 | 0.4508 | +0.030 [+0.023, +0.037] | 0.7250 | 0.4863 |
+| 0.33 | 0.4058 | 0.4830 | 0.5024 | 0.5524 | 0.4859 | +0.065 [+0.051, +0.080] | 0.7000 | 0.3769 |
+| 0.25 | 0.4148 | 0.4915 | 0.5049 | 0.5529 | 0.4910 | +0.070 [+0.055, +0.086] | 0.7000 | 0.3519 |
+| **0.2** | 0.4175 | 0.4980 | 0.5168 | 0.5563 | 0.4972 | +0.077 [+0.060, +0.094] | 0.6750 | 0.3114 |
+| 0.1 | 0.4330 | 0.5285 | 0.5414 | 0.5749 | 0.5195 | +0.099 [+0.076, +0.123] | 0.5250 | 0.1668 |
+
+The floor is 0.8 × 0.7375 = 0.59. Weight 0.1 falls below it (0.525), so 0.2,
+the strongest weight above it, is chosen and **ships**
+(`DEFAULT_TEST_WEIGHT = 0.2`; a test ranked `p` lands no lower than `5p`).
+As expected, every regular-query cell improves monotonically with stronger
+demotion.
+
+**Held-out confirmation (72 queries), weight 0.2 − tests included,** through
+the production paths: objective **+0.090 [+0.067, +0.114]**, so demotion
+stays on by default.
+
+| Mode | Δ nDCG@10 | Δ MRR@10 | Δ recall@10 | Δ hit@10 |
+| --- | ---: | ---: | ---: | ---: |
+| `lexical` | **+0.088 [+0.055, +0.124]** | **+0.102 [+0.058, +0.149]** | **+0.056 [+0.021, +0.101]** | **+0.056 [+0.014, +0.111]** |
+| `semantic` | **+0.081 [+0.052, +0.113]** | **+0.093 [+0.053, +0.141]** | **+0.063 [+0.025, +0.110]** | **+0.069 [+0.014, +0.139]** |
+| `hybrid` | **+0.084 [+0.056, +0.115]** | **+0.081 [+0.044, +0.123]** | **+0.068 [+0.033, +0.110]** | +0.042 [+0.000, +0.097] |
+| `hybrid+rerank` | **+0.106 [+0.070, +0.145]** | **+0.095 [+0.050, +0.146]** | **+0.126 [+0.069, +0.196]** | **+0.083 [+0.028, +0.153]** |
+
+By repository, all 168 queries, nDCG@10 / MRR@10, tests included → weight
+0.2; every Δ nDCG@10 interval lies above zero:
+
+| Repository | `lexical` | `semantic` | `hybrid` | `hybrid+rerank` |
+| --- | ---: | ---: | ---: | ---: |
+| requests | 0.531 / 0.528 → 0.628 / 0.645 | 0.539 / 0.581 → 0.647 / 0.664 | 0.581 / 0.598 → 0.698 / 0.731 | 0.637 / 0.667 → 0.714 / 0.744 |
+| flask | 0.483 / 0.469 → 0.556 / 0.549 | 0.596 / 0.611 → 0.664 / 0.696 | 0.608 / 0.609 → 0.692 / 0.682 | 0.647 / 0.631 → 0.694 / 0.669 |
+| gin | 0.357 / 0.370 → 0.474 / 0.485 | 0.521 / 0.540 → 0.560 / 0.589 | 0.493 / 0.520 → 0.566 / 0.588 | 0.518 / 0.544 → 0.598 / 0.611 |
+| hono | 0.153 / 0.167 → 0.197 / 0.201 | 0.254 / 0.278 → 0.345 / 0.370 | 0.239 / 0.244 → 0.333 / 0.342 | 0.324 / 0.355 → 0.429 / 0.460 |
+| **all 168** | 0.381 / 0.383 → 0.464 / 0.470 | 0.477 / 0.502 → 0.554 / 0.580 | 0.480 / 0.493 → 0.572 / 0.586 | 0.531 / 0.549 → 0.609 / 0.621 |
+
+**What it costs: the test-seeking queries (20), tests included → weight
+0.2.**
+
+| Mode | hit@10 | nDCG@10 | MRR@10 | Δ nDCG@10 [95% CI] |
+| --- | ---: | ---: | ---: | ---: |
+| `lexical` | 0.750 → 0.550 | 0.375 → 0.185 | 0.362 → 0.184 | −0.191 [−0.273, −0.116] |
+| `semantic` | 0.700 → 0.650 | 0.575 → 0.448 | 0.583 → 0.467 | −0.127 [−0.178, −0.077] |
+| `hybrid` | 0.750 → 0.750 | 0.500 → 0.298 | 0.527 → 0.322 | −0.201 [−0.281, −0.128] |
+| `hybrid+rerank` | 0.750 → 0.750 | 0.650 → 0.315 | 0.700 → 0.412 | −0.335 [−0.429, −0.235] |
+
+- **Demotion is a real gain for questions about product code** — +0.08 to
+  +0.11 nDCG@10 on held-out in every mode, and in every repository. hono
+  gains most in the model-backed modes (semantic 0.254 → 0.345), less than
+  the 0.470 upper bound of dropping tests entirely.
+- **Searches for tests still find them, lower down.** Hybrid and reranked
+  search keep a test in the top 10 as often as without demotion (hit@10
+  0.75); keyword search loses most (0.75 → 0.55). But tests are pushed down
+  the page: their nDCG@10 roughly halves. The floor constrains hit@10 only,
+  by design: an agent looking for tests should say so (`tests=prefer`), and
+  the default serves the far more common question. The 0.8 floor was set in
+  the review, not derived from the data.
+- **Limits.** Twenty test-seeking queries are few (hit@10 moves in steps of
+  0.05 per mode), and hono's labels are stand-ins (the test file's `app`)
+  because its tests are not extracted symbols. The held-out split had been
+  read twice before (#95) and once more by an earlier run of this protocol on
+  commit `af33385`, which had a bug (vector hits carried no metadata, so the
+  model-backed modes were barely demoted); only its keyword numbers were
+  valid, and they agree with these. Intervals ignore clustering by
+  repository (see below).
 
 ### Limits of this set
 
