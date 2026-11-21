@@ -46,6 +46,7 @@ tree-sitter-scala = { workspace = true }
 tree-sitter-objc = { workspace = true }
 tree-sitter-dart = { workspace = true }
 rayon = { workspace = true }
+dirs = { workspace = true }
 dashmap = { workspace = true }
 rustc-hash = { workspace = true }
 sha2 = { workspace = true }

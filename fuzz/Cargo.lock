@@ -4271,6 +4271,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "dashmap",
+ "dirs",
  "fastembed",
  "futures",
  "globset",

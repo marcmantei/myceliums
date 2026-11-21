@@ -33,11 +33,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tokio::sync::{Mutex, OnceCell};
+use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
-/// The default fastembed cache directory name (relative to CWD unless overridden).
-const DEFAULT_CACHE_DIR: &str = ".fastembed_cache";
+/// The model cache inside the data directory (`MYCELIUMS_DATA_DIR`, else
+/// `~/.myceliums`): one copy of every model, wherever `myc` runs.
+const MODELS_DIR: &str = "models";
+
+/// The cache directory when no data directory can be found (no home
+/// directory): fastembed's default, relative to the working directory.
+const FALLBACK_CACHE_DIR: &str = ".fastembed_cache";
 
 // ── Model registry ────────────────────────────────────────────────────
 
@@ -52,15 +57,33 @@ pub enum Pooling {
     Cls,
 }
 
-/// A weights file of a model, with the size and SHA-256 it must have.
+/// A file of a model's pinned revision, with the size and SHA-256 it must
+/// have: the loader refuses any other content, whether the file came from the
+/// cache or the network.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WeightsFile {
+pub struct PinnedFile {
     /// Path inside the repository.
     pub path: &'static str,
     /// Size in bytes.
     pub bytes: u64,
-    /// SHA-256 of the content (the Git LFS object id).
+    /// SHA-256 of the content (for Git LFS files, the LFS object id).
     pub sha256: &'static str,
+}
+
+/// The files that decide how a model tokenizes, pinned like the weights: the
+/// tokenizer itself, and the configuration files the loader reads the
+/// special tokens and the padding token from. `None` pins a file's absence at
+/// the revision: it is never fetched, and the loader's default applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenizerFiles {
+    /// `tokenizer.json`.
+    pub tokenizer: PinnedFile,
+    /// `tokenizer_config.json` (the padding token).
+    pub tokenizer_config: Option<PinnedFile>,
+    /// `config.json` (the padding token id, when the tokenizer config names none).
+    pub config: Option<PinnedFile>,
+    /// `special_tokens_map.json` (special tokens registered with the tokenizer).
+    pub special_tokens_map: Option<PinnedFile>,
 }
 
 /// A curated local embedding model.
@@ -78,9 +101,11 @@ pub struct EmbeddingModelSpec {
     /// Pinned commit of `repo`.
     pub revision: &'static str,
     /// The ONNX graph.
-    pub onnx: WeightsFile,
+    pub onnx: PinnedFile,
     /// External-data files the graph loads its weights from, if any.
-    pub onnx_data: &'static [WeightsFile],
+    pub onnx_data: &'static [PinnedFile],
+    /// The tokenizer and the files its configuration is read from.
+    pub tokenizer: TokenizerFiles,
     /// Vector dimension.
     pub dim: usize,
     /// Pooling of the token embeddings.
@@ -113,8 +138,20 @@ pub struct EmbeddingModelSpec {
 
 impl EmbeddingModelSpec {
     /// Every weights file, the graph first.
-    pub fn weights(&self) -> impl Iterator<Item = &WeightsFile> {
+    pub fn weights(&self) -> impl Iterator<Item = &PinnedFile> {
         std::iter::once(&self.onnx).chain(self.onnx_data.iter())
+    }
+
+    /// Every file the model loads: the weights, then the tokenizer files the
+    /// revision has.
+    pub fn files(&self) -> impl Iterator<Item = &PinnedFile> {
+        let t = &self.tokenizer;
+        self.weights().chain(
+            std::iter::once(&t.tokenizer)
+                .chain(t.tokenizer_config.iter())
+                .chain(t.config.iter())
+                .chain(t.special_tokens_map.iter()),
+        )
     }
 }
 
@@ -130,12 +167,34 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         id: "multilingual-e5-small",
         repo: "intfloat/multilingual-e5-small",
         revision: "614241f622f53c4eeff9890bdc4f31cfecc418b3",
-        onnx: WeightsFile {
+        onnx: PinnedFile {
             path: "onnx/model.onnx",
             bytes: 470_268_510,
             sha256: "ca456c06b3a9505ddfd9131408916dd79290368331e7d76bb621f1cba6bc8665",
         },
         onnx_data: &[],
+        tokenizer: TokenizerFiles {
+            tokenizer: PinnedFile {
+                path: "tokenizer.json",
+                bytes: 17_082_730,
+                sha256: "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39",
+            },
+            tokenizer_config: Some(PinnedFile {
+                path: "tokenizer_config.json",
+                bytes: 443,
+                sha256: "a1d6bc8734a6f635dc158508bef000f8e2e5a759c7d92f984b2c86e5ff53425b",
+            }),
+            config: Some(PinnedFile {
+                path: "config.json",
+                bytes: 655,
+                sha256: "69137736cab8b8903a07fe8afaafdda25aac55415a12a55d1bffa9f581abf959",
+            }),
+            special_tokens_map: Some(PinnedFile {
+                path: "special_tokens_map.json",
+                bytes: 167,
+                sha256: "d05497f1da52c5e09554c0cd874037a083e1dc1b9cfd48034d1c717f1afc07a7",
+            }),
+        },
         dim: 384,
         pooling: Pooling::Mean,
         query_prefix: Some("query: "),
@@ -153,12 +212,34 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         id: "multilingual-e5-base",
         repo: "intfloat/multilingual-e5-base",
         revision: "d128750597153bb5987e10b1c3493a34e5a4502a",
-        onnx: WeightsFile {
+        onnx: PinnedFile {
             path: "onnx/model.onnx",
             bytes: 1_110_059_084,
             sha256: "84a4d426f7e87a6bf5bf195f0bae2c4a7d15f675b23ca96f42fab8326d7a77aa",
         },
         onnx_data: &[],
+        tokenizer: TokenizerFiles {
+            tokenizer: PinnedFile {
+                path: "tokenizer.json",
+                bytes: 17_082_660,
+                sha256: "62c24cdc13d4c9952d63718d6c9fa4c287974249e16b7ade6d5a85e7bbb75626",
+            },
+            tokenizer_config: Some(PinnedFile {
+                path: "tokenizer_config.json",
+                bytes: 418,
+                sha256: "efb5c0d09722e5fe59a462cd2a9976ee216d55b037597d997cd3fe833216da15",
+            }),
+            config: Some(PinnedFile {
+                path: "config.json",
+                bytes: 694,
+                sha256: "9dab198f24c8c0879e481cf7822005d5ecbceedbacb390ffafa594e28d31bac4",
+            }),
+            special_tokens_map: Some(PinnedFile {
+                path: "special_tokens_map.json",
+                bytes: 280,
+                sha256: "06e405a36dfe4b9604f484f6a1e619af1a7f7d09e34a8555eb0b77b66318067f",
+            }),
+        },
         dim: 768,
         pooling: Pooling::Mean,
         query_prefix: Some("query: "),
@@ -176,16 +257,38 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         id: "multilingual-e5-large",
         repo: "Qdrant/multilingual-e5-large-onnx",
         revision: "ac6781cd1cf88b8306a536d7c9d18a5bd57cc14b",
-        onnx: WeightsFile {
+        onnx: PinnedFile {
             path: "model.onnx",
             bytes: 545_851,
             sha256: "1c09780c907c8a91a77a6ab1fd231f79e090d2907ca431223703dfebeed3d36c",
         },
-        onnx_data: &[WeightsFile {
+        onnx_data: &[PinnedFile {
             path: "model.onnx_data",
             bytes: 2_235_363_328,
             sha256: "0cf1883fee81c63819a44e2ba0efa51d4043d9759685a4ebebbde97e0623d15c",
         }],
+        tokenizer: TokenizerFiles {
+            tokenizer: PinnedFile {
+                path: "tokenizer.json",
+                bytes: 17_082_756,
+                sha256: "f59925fcb90c92b894cb93e51bb9b4a6105c5c249fe54ce1c704420ac39b81af",
+            },
+            tokenizer_config: Some(PinnedFile {
+                path: "tokenizer_config.json",
+                bytes: 1_147,
+                sha256: "f90024142df07163e5e6c5b9a6ad7c8c68b22a9112af11e3db4559a9ff90f737",
+            }),
+            config: Some(PinnedFile {
+                path: "config.json",
+                bytes: 716,
+                sha256: "1de8c3be1f344c0eefa4962480a006f8639f416dfafaa95a770e3cf4bceae6a4",
+            }),
+            special_tokens_map: Some(PinnedFile {
+                path: "special_tokens_map.json",
+                bytes: 964,
+                sha256: "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835",
+            }),
+        },
         dim: 1024,
         pooling: Pooling::Mean,
         query_prefix: Some("query: "),
@@ -203,12 +306,34 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         id: "jina-embeddings-v2-base-code",
         repo: "jinaai/jina-embeddings-v2-base-code",
         revision: "516f4baf13dec4ddddda8631e019b5737c8bc250",
-        onnx: WeightsFile {
+        onnx: PinnedFile {
             path: "onnx/model.onnx",
             bytes: 641_517_466,
             sha256: "63363fc178428b74620c6f3780cbc7191883fa5c7f84c0945c45eb5c4256733b",
         },
         onnx_data: &[],
+        tokenizer: TokenizerFiles {
+            tokenizer: PinnedFile {
+                path: "tokenizer.json",
+                bytes: 2_561_316,
+                sha256: "b01c78a902aa4facb2f47f95449f48e2f7bbfea5d2472ee2f6ce92323c6f86e5",
+            },
+            tokenizer_config: Some(PinnedFile {
+                path: "tokenizer_config.json",
+                bytes: 493,
+                sha256: "f477aeb15ff9f78d3c1ddf2361d2b0b8b20cf55220f839f29a37f3a18efddd89",
+            }),
+            config: Some(PinnedFile {
+                path: "config.json",
+                bytes: 1_216,
+                sha256: "e426aa684c7f9a95c5f020aa855faf93a24f065f5fad0c9e17b124670cabdea6",
+            }),
+            special_tokens_map: Some(PinnedFile {
+                path: "special_tokens_map.json",
+                bytes: 280,
+                sha256: "06e405a36dfe4b9604f484f6a1e619af1a7f7d09e34a8555eb0b77b66318067f",
+            }),
+        },
         dim: 768,
         pooling: Pooling::Mean,
         query_prefix: None,
@@ -226,16 +351,38 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         id: "granite-embedding-small-english-r2",
         repo: "onnx-community/granite-embedding-small-english-r2-ONNX",
         revision: "1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8",
-        onnx: WeightsFile {
+        onnx: PinnedFile {
             path: "onnx/model.onnx",
             bytes: 182_504,
             sha256: "cddb145cd1147ec24a3908b2ca2602b98b20a3d198365cff270b7cb26c98179e",
         },
-        onnx_data: &[WeightsFile {
+        onnx_data: &[PinnedFile {
             path: "onnx/model.onnx_data",
             bytes: 194_844_160,
             sha256: "86a3a705d4598615894d89540ea71a3d9bbdb17a315e79edcd5dfc737222834b",
         }],
+        tokenizer: TokenizerFiles {
+            tokenizer: PinnedFile {
+                path: "tokenizer.json",
+                bytes: 2_128_614,
+                sha256: "feeb83348dcb033bc6b9d2e1f7906ca9eb2d122845000c9416d894d7c2927149",
+            },
+            tokenizer_config: Some(PinnedFile {
+                path: "tokenizer_config.json",
+                bytes: 20_839,
+                sha256: "ce06781b38bb393db68c9e0709bddd31ef5d88f2c6fbb3fd9f369778fb85e451",
+            }),
+            config: Some(PinnedFile {
+                path: "config.json",
+                bytes: 1_526,
+                sha256: "1a1710c20911da8c96179716bf44058e54cca6fa7952cce77be83ef05edae3ee",
+            }),
+            special_tokens_map: Some(PinnedFile {
+                path: "special_tokens_map.json",
+                bytes: 694,
+                sha256: "ea97ecdbcc73713039d8d64dbb05e3689495c96657fbd9a18f5bed381be81049",
+            }),
+        },
         dim: 384,
         pooling: Pooling::Cls,
         query_prefix: None,
@@ -256,12 +403,34 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         // prefix follow the upstream sentence-transformers configuration.
         repo: "jamie8johnson/CodeRankEmbed-onnx",
         revision: "151669b173750250e611e1be00c812f112ea6020",
-        onnx: WeightsFile {
+        onnx: PinnedFile {
             path: "onnx/model.onnx",
             bytes: 547_715_715,
             sha256: "a5454ae55b5ee6888b8f59f30c645c9da1c6ac887627b84dc62b30064bce9546",
         },
         onnx_data: &[],
+        tokenizer: TokenizerFiles {
+            tokenizer: PinnedFile {
+                path: "tokenizer.json",
+                bytes: 711_649,
+                sha256: "91f1def9b9391fdabe028cd3f3fcc4efd34e5d1f08c3bf2de513ebb5911a1854",
+            },
+            tokenizer_config: Some(PinnedFile {
+                path: "tokenizer_config.json",
+                bytes: 1_447,
+                sha256: "8de9ab7560d7fb63338c00736faac7bb9d85d49da44c774c607e7766b59614ea",
+            }),
+            config: Some(PinnedFile {
+                path: "config.json",
+                bytes: 1_514,
+                sha256: "96fc4007ae641a67e24cc7410d11f2c42b45cab9ce78bc6a6fd46fd872d5d389",
+            }),
+            special_tokens_map: Some(PinnedFile {
+                path: "special_tokens_map.json",
+                bytes: 695,
+                sha256: "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a",
+            }),
+        },
         dim: 768,
         pooling: Pooling::Cls,
         query_prefix: Some("Represent this query for searching relevant code: "),
@@ -279,12 +448,34 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         id: "gte-modernbert-base",
         repo: "Alibaba-NLP/gte-modernbert-base",
         revision: "e7f32e3c00f91d699e8c43b53106206bcc72bb22",
-        onnx: WeightsFile {
+        onnx: PinnedFile {
             path: "onnx/model.onnx",
             bytes: 596_392_315,
             sha256: "947f31df7effaeec4edb57c50e4ed7e0f2034d9336063f92615b92e3e0d24d78",
         },
         onnx_data: &[],
+        tokenizer: TokenizerFiles {
+            tokenizer: PinnedFile {
+                path: "tokenizer.json",
+                bytes: 3_583_228,
+                sha256: "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30",
+            },
+            tokenizer_config: Some(PinnedFile {
+                path: "tokenizer_config.json",
+                bytes: 20_867,
+                sha256: "9654072f7c873161814043cf08cb5ed72f71d0b935abcd4e267935cb34352c21",
+            }),
+            config: Some(PinnedFile {
+                path: "config.json",
+                bytes: 1_184,
+                sha256: "8ba54dc3d35d7194f5178a4194b649f146753e02dabd22bdca5c5cbac15069ed",
+            }),
+            special_tokens_map: Some(PinnedFile {
+                path: "special_tokens_map.json",
+                bytes: 694,
+                sha256: "ea97ecdbcc73713039d8d64dbb05e3689495c96657fbd9a18f5bed381be81049",
+            }),
+        },
         dim: 768,
         pooling: Pooling::Cls,
         query_prefix: None,
@@ -302,12 +493,34 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         id: "all-minilm-l6-v2",
         repo: "Qdrant/all-MiniLM-L6-v2-onnx",
         revision: "d13954661f83248295ba75c1ed411eef3b7b936e",
-        onnx: WeightsFile {
+        onnx: PinnedFile {
             path: "model.onnx",
             bytes: 90_387_630,
             sha256: "bbd7b466f6d58e646fdc2bd5fd67b2f5e93c0b687011bd4548c420f7bd46f0c5",
         },
         onnx_data: &[],
+        tokenizer: TokenizerFiles {
+            tokenizer: PinnedFile {
+                path: "tokenizer.json",
+                bytes: 711_649,
+                sha256: "851ca67100d372ca3ae031a6abd168f53489eebfd7d89523f35c5c9b4d372c3c",
+            },
+            tokenizer_config: Some(PinnedFile {
+                path: "tokenizer_config.json",
+                bytes: 1_412,
+                sha256: "abda01c8c14c5151ae498aceb30db406d6b91242c394fd88d3b6fd5a63a101e6",
+            }),
+            config: Some(PinnedFile {
+                path: "config.json",
+                bytes: 650,
+                sha256: "1b4d8e2a3988377ed8b519a31d8d31025a25f1c5f8606998e8014111438efcd7",
+            }),
+            special_tokens_map: Some(PinnedFile {
+                path: "special_tokens_map.json",
+                bytes: 695,
+                sha256: "5d5b662e421ea9fac075174bb0688ee0d9431699900b90662acd44b2a350503a",
+            }),
+        },
         dim: 384,
         pooling: Pooling::Mean,
         query_prefix: None,
@@ -459,12 +672,6 @@ pub struct IndexEmbeddingMeta {
 impl IndexEmbeddingMeta {
     /// Key under which this record is stored in the `index_meta` table.
     pub const META_KEY: &'static str = "embedding";
-
-    /// Whether this record is from this build's schema and embedding-text
-    /// template, so its vectors match documents built now.
-    pub fn is_current(&self) -> bool {
-        self.meta_version == Self::META_VERSION && self.text_version == EMBEDDING_TEXT_VERSION
-    }
 
     /// The document template the vectors were built with, or `None` when
     /// this build does not know it (`0`: written before #92).
@@ -692,15 +899,25 @@ pub struct ModelCacheInfo {
     pub size_bytes: u64,
 }
 
-/// Get the fastembed cache directory, respecting `FASTEMBED_CACHE_DIR` and `HF_HOME` env vars.
+/// The model cache: `FASTEMBED_CACHE_DIR`, else `HF_HOME`, else `models/` in
+/// the data directory (`MYCELIUMS_DATA_DIR`, else `~/.myceliums`) — one
+/// shared copy of every model, not one per working directory.
 pub(crate) fn get_cache_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("FASTEMBED_CACHE_DIR") {
-        return PathBuf::from(dir);
+    cache_dir_from(|name| std::env::var_os(name), dirs::home_dir())
+}
+
+fn cache_dir_from(
+    var: impl Fn(&str) -> Option<std::ffi::OsString>,
+    home: Option<PathBuf>,
+) -> PathBuf {
+    let set = |name: &str| var(name).filter(|v| !v.is_empty()).map(PathBuf::from);
+    if let Some(dir) = set("FASTEMBED_CACHE_DIR").or_else(|| set("HF_HOME")) {
+        return dir;
     }
-    if let Ok(dir) = std::env::var("HF_HOME") {
-        return PathBuf::from(dir);
+    match set("MYCELIUMS_DATA_DIR").or_else(|| home.map(|h| h.join(".myceliums"))) {
+        Some(data) => data.join(MODELS_DIR),
+        None => PathBuf::from(FALLBACK_CACHE_DIR),
     }
-    PathBuf::from(DEFAULT_CACHE_DIR)
 }
 
 /// Compute total size of a directory recursively.
@@ -1066,6 +1283,11 @@ impl IndexVectors {
 /// Called with `(done, total)` texts as embedding proceeds.
 pub type EmbedProgress<'a> = &'a (dyn Fn(usize, usize) + Send + Sync);
 
+/// Texts a local model tokenizes and embeds per slice. Batches are sorted by
+/// length within a slice; a few thousand texts give batches that pad as
+/// little as one global sort while tokenization stays bounded.
+pub const EMBED_SLICE_TEXTS: usize = 4096;
+
 /// Generates vector embeddings for code symbols and queries.
 ///
 /// Construct via [`Embedder::new`] with resolved [`IndexEmbeddingMeta`], or
@@ -1371,20 +1593,26 @@ impl Embedder {
         let total = texts.len();
         let vectors = match &self.kind {
             EmbedderKind::Local(model) => {
-                let prefixed: Vec<String> = texts
-                    .iter()
-                    .map(|t| self.apply_prefix(t, EmbedInput::Passage))
-                    .collect();
-                let encoded = model.encode(&prefixed)?;
-                stats.tokens = encoded.iter().map(|e| e.len()).sum();
-                stats.truncated_texts =
-                    encoded.iter().filter(|e| e.len() >= model.window()).count();
-                drop(prefixed);
-                model.embed_encoded(&encoded, options.batch, &mut |done| {
-                    if let Some(report) = progress {
-                        report(done, total);
-                    }
-                })?
+                // Tokenized and embedded a slice at a time: what tokenization
+                // holds is bounded by the slice, not the repository.
+                let mut out = Vec::with_capacity(total);
+                for slice in texts.chunks(EMBED_SLICE_TEXTS) {
+                    let prefixed: Vec<String> = slice
+                        .iter()
+                        .map(|t| self.apply_prefix(t, EmbedInput::Passage))
+                        .collect();
+                    let encoded = model.encode(&prefixed)?;
+                    drop(prefixed);
+                    stats.tokens += encoded.iter().map(|e| e.len()).sum::<usize>();
+                    stats.truncated_texts += encoded.iter().filter(|e| e.truncated).count();
+                    let before = out.len();
+                    out.extend(model.embed_encoded(&encoded, options.batch, &mut |done| {
+                        if let Some(report) = progress {
+                            report(before + done, total);
+                        }
+                    })?);
+                }
+                out
             }
             EmbedderKind::Remote(_) => {
                 let mut out = Vec::with_capacity(total);
@@ -1671,25 +1899,48 @@ fn document_key(symbol: &CodeSymbol, template: TextTemplate) -> [u8; 32] {
 
 // ── Cached instances ──────────────────────────────────────────────────
 
+/// One cached instance per key, initialized at most once: concurrent first
+/// uses of the same key wait for the one load, other keys do not.
+type InstanceCache<T> = std::sync::Mutex<HashMap<String, Arc<OnceCell<Arc<T>>>>>;
+
+/// The cell for `key`, created on first use. The map's lock is held only to
+/// find or insert the cell, never during a load.
+fn instance_cell<T>(cache: &InstanceCache<T>, key: &str) -> Arc<OnceCell<Arc<T>>> {
+    cache
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .entry(key.to_string())
+        .or_default()
+        .clone()
+}
+
+/// Load an instance on the blocking pool: a first use downloads and hashes
+/// hundreds of megabytes, which must not stall a runtime worker.
+async fn load_blocking<T: Send + 'static>(
+    load: impl FnOnce() -> Result<T> + Send + 'static,
+) -> Result<Arc<T>> {
+    tokio::task::spawn_blocking(load)
+        .await
+        .map_err(|e| anyhow!("the model loading task failed: {e}"))?
+        .map(Arc::new)
+}
+
 /// Embedder instances cached per fingerprint, so a model is loaded at most
 /// once per process even when serving multiple indexes.
-static EMBEDDER_CACHE: OnceCell<Mutex<HashMap<String, Arc<Embedder>>>> = OnceCell::const_new();
+static EMBEDDER_CACHE: std::sync::LazyLock<InstanceCache<Embedder>> =
+    std::sync::LazyLock::new(Default::default);
 
 /// Get or initialize a cached embedder for the given metadata.
 ///
-/// The initialization happens while holding the cache lock, which also
-/// serializes concurrent first-use downloads of the same model.
+/// Concurrent first uses of the same model wait for one load (and one
+/// download); a lookup of another model, or of one already loaded, does not
+/// wait for it. A failed load is not cached: the next call tries again.
 pub async fn get_embedder_for(meta: IndexEmbeddingMeta) -> Result<Arc<Embedder>> {
-    let cache = EMBEDDER_CACHE
-        .get_or_init(|| async { Mutex::new(HashMap::new()) })
-        .await;
-    let mut map = cache.lock().await;
-    if let Some(embedder) = map.get(&meta.fingerprint()) {
-        return Ok(embedder.clone());
-    }
-    let embedder = Arc::new(Embedder::new(meta.clone())?);
-    map.insert(meta.fingerprint(), embedder.clone());
-    Ok(embedder)
+    let cell = instance_cell(&EMBEDDER_CACHE, &meta.fingerprint());
+    let embedder = cell
+        .get_or_try_init(|| load_blocking(move || Embedder::new(meta)))
+        .await?;
+    Ok(embedder.clone())
 }
 
 /// Read the embedding metadata recorded in an index, falling back to the
@@ -1776,9 +2027,11 @@ impl Reranker {
 }
 
 /// Reranker instances cached per registry id.
-static RERANKER_CACHE: OnceCell<Mutex<HashMap<String, Arc<Reranker>>>> = OnceCell::const_new();
+static RERANKER_CACHE: std::sync::LazyLock<InstanceCache<Reranker>> =
+    std::sync::LazyLock::new(Default::default);
 
-/// Get or initialize a cached reranker by registry id (`None` = default).
+/// Get or initialize a cached reranker by registry id (`None` = default),
+/// loaded like [`get_embedder_for`]'s models.
 pub async fn get_reranker(id: Option<&str>) -> Result<Arc<Reranker>> {
     let id = id.unwrap_or(DEFAULT_RERANKER_MODEL);
     let spec = reranker_spec(id).ok_or_else(|| {
@@ -1788,16 +2041,11 @@ pub async fn get_reranker(id: Option<&str>) -> Result<Arc<Reranker>> {
             known_reranker_ids()
         )
     })?;
-    let cache = RERANKER_CACHE
-        .get_or_init(|| async { Mutex::new(HashMap::new()) })
-        .await;
-    let mut map = cache.lock().await;
-    if let Some(reranker) = map.get(spec.id) {
-        return Ok(reranker.clone());
-    }
-    let reranker = Arc::new(Reranker::new(spec)?);
-    map.insert(spec.id.to_string(), reranker.clone());
-    Ok(reranker)
+    let cell = instance_cell(&RERANKER_CACHE, spec.id);
+    let reranker = cell
+        .get_or_try_init(|| load_blocking(move || Reranker::new(spec)))
+        .await?;
+    Ok(reranker.clone())
 }
 
 #[cfg(test)]
@@ -1820,6 +2068,52 @@ mod tests {
         assert!(reranker_spec(DEFAULT_RERANKER_MODEL).is_some());
     }
 
+    /// One model cache per machine: the data directory's `models/`, not a
+    /// `.fastembed_cache` in whatever directory `myc` runs in.
+    #[test]
+    fn the_model_cache_lives_in_the_data_directory() {
+        let env = |pairs: &'static [(&'static str, &'static str)]| {
+            move |name: &str| {
+                pairs
+                    .iter()
+                    .find(|(k, _)| *k == name)
+                    .map(|(_, v)| std::ffi::OsString::from(v))
+            }
+        };
+        let home = Some(PathBuf::from("/home/u"));
+        assert_eq!(
+            cache_dir_from(env(&[]), home.clone()),
+            PathBuf::from("/home/u/.myceliums/models")
+        );
+        assert_eq!(
+            cache_dir_from(env(&[("MYCELIUMS_DATA_DIR", "/data")]), home.clone()),
+            PathBuf::from("/data/models")
+        );
+        assert_eq!(
+            cache_dir_from(
+                env(&[("HF_HOME", "/hf"), ("MYCELIUMS_DATA_DIR", "/data")]),
+                home.clone()
+            ),
+            PathBuf::from("/hf")
+        );
+        assert_eq!(
+            cache_dir_from(
+                env(&[("FASTEMBED_CACHE_DIR", "/fe"), ("HF_HOME", "/hf")]),
+                home.clone()
+            ),
+            PathBuf::from("/fe")
+        );
+        assert_eq!(
+            cache_dir_from(env(&[("FASTEMBED_CACHE_DIR", "")]), home),
+            PathBuf::from("/home/u/.myceliums/models"),
+            "an empty variable is unset"
+        );
+        assert_eq!(
+            cache_dir_from(env(&[]), None),
+            PathBuf::from(FALLBACK_CACHE_DIR)
+        );
+    }
+
     #[test]
     fn registry_entries_are_complete() {
         let mut ids = std::collections::HashSet::new();
@@ -1828,9 +2122,21 @@ mod tests {
             assert!(spec.dim > 0, "{} has no dimension", spec.id);
             assert_eq!(spec.revision.len(), 40, "{} pins no commit", spec.id);
             assert!(spec.revision.chars().all(|c| c.is_ascii_hexdigit()));
-            for weights in spec.weights() {
-                assert_eq!(weights.sha256.len(), 64, "{} {}", spec.id, weights.path);
-                assert!(weights.bytes > 0);
+            for file in spec.files() {
+                assert_eq!(file.sha256.len(), 64, "{} {}", spec.id, file.path);
+                assert!(file.sha256.chars().all(|c| c.is_ascii_hexdigit()));
+                assert!(file.bytes > 0, "{} {}", spec.id, file.path);
+            }
+            let t = &spec.tokenizer;
+            assert_eq!(t.tokenizer.path, "tokenizer.json", "{}", spec.id);
+            for (file, name) in [
+                (&t.tokenizer_config, "tokenizer_config.json"),
+                (&t.config, "config.json"),
+                (&t.special_tokens_map, "special_tokens_map.json"),
+            ] {
+                if let Some(file) = file {
+                    assert_eq!(file.path, name, "{}", spec.id);
+                }
             }
             assert!(spec.window_tokens <= spec.max_input_tokens, "{}", spec.id);
             assert!(
@@ -1838,10 +2144,10 @@ mod tests {
                 "{} is not permissively licensed",
                 spec.id
             );
-            let weights_mb: u64 = spec.weights().map(|w| w.bytes).sum::<u64>() / 1_000_000;
+            let files_mb: u64 = spec.files().map(|f| f.bytes).sum::<u64>() / 1_000_000;
             assert!(
-                spec.download_mb as u64 >= weights_mb,
-                "{} downloads at least its weights",
+                spec.download_mb as u64 >= files_mb,
+                "{} downloads every pinned file",
                 spec.id
             );
         }
