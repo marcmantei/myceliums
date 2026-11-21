@@ -14,7 +14,7 @@ use super::real_repos::{RealRepoSet, Split};
 use super::report::round;
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// Body length above which a labelled symbol makes its query part of the
 /// slice: `(512 − 64) × 4` bytes, template 1's content budget for a
@@ -32,17 +32,24 @@ pub struct LongSymbolReport {
     pub queries: BTreeMap<String, Split>,
     /// Per slice query, its long labels with their body length in bytes.
     pub long_labels: BTreeMap<String, Vec<(String, usize)>>,
+    /// Long labels the index embedded with body chunks — `null` for an index
+    /// without chunking. Labels that fit the window after template 2's
+    /// normalisation, and containers, have none.
+    pub long_labels_chunked: Option<usize>,
     /// Mode means by scope (`all`, `dev`, `held-out`), then mode.
     pub means: BTreeMap<String, BTreeMap<String, MetricValues>>,
 }
 
 /// The slice of `set` over `corpora`, with the means of `scores`.
+/// `chunked` holds the symbols (as `file::qualified_name`) that have body
+/// chunks in the index, `None` when it does not chunk.
 pub fn report(
     set: &RealRepoSet,
     corpora: &[Corpus],
     scores: &BTreeMap<SearchMode, Vec<QueryScore>>,
     modes: &[SearchMode],
     assignment: &BTreeMap<String, Split>,
+    chunked: Option<&HashSet<String>>,
 ) -> Result<LongSymbolReport> {
     let mut length: HashMap<_, usize> = HashMap::new();
     for corpus in corpora {
@@ -99,7 +106,15 @@ pub fn report(
         }
         means.insert(scope.to_string(), by_mode);
     }
+    let long_labels_chunked = chunked.map(|chunked| {
+        long_labels
+            .values()
+            .flatten()
+            .filter(|(label, _)| chunked.contains(label))
+            .count()
+    });
     Ok(LongSymbolReport {
+        long_labels_chunked,
         rule: format!(
             "queries with at least one label whose body exceeds {LONG_SYMBOL_BYTES} bytes \
              (template 1's content budget for a 512-token model)"
@@ -118,12 +133,19 @@ pub fn markdown(report: &LongSymbolReport) -> String {
         .values()
         .filter(|s| **s == Split::Dev)
         .count();
+    let labels: usize = report.long_labels.values().map(Vec::len).sum();
     let mut out = format!(
-        "\n### Long-symbol slice (#157)\n\n{} queries ({} dev, {} held-out): {}.\n",
+        "\n### Long-symbol slice (#157)\n\n{} queries ({} dev, {} held-out): {}. {} long \
+         labels{}.\n",
         report.queries.len(),
         dev,
         report.queries.len() - dev,
-        report.rule
+        report.rule,
+        labels,
+        report
+            .long_labels_chunked
+            .map(|n| format!(", {n} of them embedded with body chunks"))
+            .unwrap_or_default()
     );
     if let Some(all) = report.means.get("all") {
         out.push_str("\n| Mode | nDCG@10 | MRR@10 | hit@10 | recall@10 |\n| --- | ---: | ---: | ---: | ---: |\n");

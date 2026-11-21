@@ -682,7 +682,36 @@ async fn main() -> Result<()> {
             peak_rss_bytes: peak_rss,
         })
     };
-    let long_symbols = long_symbols::report(&set, &corpora, &all_scores, &modes, &assignment)?;
+    // Which symbols the index embedded with body chunks.
+    let mut chunked: Option<std::collections::HashSet<String>> = None;
+    if setup.embedding.chunking.is_some() {
+        let mut refs = std::collections::HashSet::new();
+        for index in &indices {
+            let uids: std::collections::HashSet<String> = index
+                .store()
+                .get_chunk_vectors()
+                .await?
+                .into_iter()
+                .map(|c| c.symbol_uid)
+                .collect();
+            refs.extend(
+                index
+                    .symbols()
+                    .iter()
+                    .filter(|s| uids.contains(&s.uid))
+                    .map(|s| symbol_ref(s).to_string()),
+            );
+        }
+        chunked = Some(refs);
+    }
+    let long_symbols = long_symbols::report(
+        &set,
+        &corpora,
+        &all_scores,
+        &modes,
+        &assignment,
+        chunked.as_ref(),
+    )?;
 
     // Test-seeking queries (#146): their labels are tests, the cost of
     // demotion the regular labels cannot show.
