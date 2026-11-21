@@ -142,6 +142,8 @@ pub mod ontology;
 pub mod parser;
 #[cfg(feature = "pdf")]
 pub mod pdf;
+#[cfg(feature = "embeddings")]
+pub mod pending_embeddings;
 pub mod process;
 pub mod progress;
 pub mod rename;
@@ -230,6 +232,10 @@ pub use mentions::{extract_mentions, extract_mentions_llm};
 pub use mermaid_export::{export_mermaid, export_mermaid_with_communities, MermaidDiagramType};
 pub use neo4j_export::export_neo4j_cypher;
 pub use ontology::{EdgeType, EntityType, Ontology, Property};
+#[cfg(feature = "embeddings")]
+pub use pending_embeddings::{
+    embed_pending, pending_symbols, PendingOutcome, PendingProgress, PENDING_SLICE_SYMBOLS,
+};
 pub use process::{ProcessFilter, ProcessTracer};
 pub use progress::{AnalysisPhase, ProgressReporter, SilentReporter};
 pub use rename::RenamePlan;

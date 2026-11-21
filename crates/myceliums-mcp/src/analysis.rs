@@ -17,6 +17,10 @@
 //! * **Progress.** When the client sent a `progressToken`,
 //!   [`ProgressSink`] turns analysis phases into `notifications/progress`
 //!   (0–100, increasing, with a message).
+//! * **Embeddings afterwards.** The analysis embeds nothing itself: symbols
+//!   that cannot take their vector over from the previous index are embedded
+//!   in the background once the new index is live
+//!   ([`crate::embedding_jobs`]), so the call returns after the graph.
 
 use crate::errors::ToolError;
 use crate::output::AnalyzeOutput;
@@ -61,6 +65,17 @@ impl Busy {
     /// The error of an `analyze` that found the repository busy.
     pub(crate) fn for_analyze(self, repo_id: &str) -> ToolError {
         match self {
+            Busy::Running(_) if crate::embedding_jobs::is_running(repo_id) => {
+                let line = crate::embedding_jobs::status_line(repo_id).unwrap_or_default();
+                ToolError::recoverable(
+                    format!(
+                        "{repo_id:?} is indexed; its embeddings are being built in the \
+                         background. {line}"
+                    ),
+                    "use the tools now; call analyze again once the embedding finished (the \
+                     Index line of every result and server_stats show progress)",
+                )
+            }
             Busy::Running(holder) => ToolError::recoverable(
                 format!("Analysis already running for {repo_id:?} ({holder})."),
                 "wait until it finishes, then call analyze again (without force it reuses the \
@@ -187,9 +202,7 @@ impl SinkInner {
                 2 + share(*current, *total, 58),
                 format!("parsing files: {current}/{total}"),
             ),
-            AnalysisPhase::BuildingRelationships => {
-                self.send(62, "resolving calls and imports, embedding symbols")
-            }
+            AnalysisPhase::BuildingRelationships => self.send(62, "resolving calls and imports"),
             AnalysisPhase::GeneratingEmbeddings { current, total } => self.send(
                 62 + share(*current, *total, 16),
                 format!(
@@ -361,11 +374,22 @@ impl Rebuild {
         let store = Store::open(staged.path(), &repo_id)
             .await
             .map_err(|e| ToolError::internal("cannot open the new index", e))?;
+        let embed_options = config
+            .as_ref()
+            .map(|c| {
+                myceliums_core::EmbedOptions::new(
+                    c.analysis.embedding_batch_size,
+                    c.analysis.embedding_batch_tokens,
+                )
+            })
+            .unwrap_or_default();
         let analyzer = match config {
             Some(cfg) => Analyzer::with_config(store, project.clone(), cfg),
             None => Analyzer::new(store, project.clone()),
         }
         .set_skip_embeddings(skip_embeddings)
+        // The model runs after the swap, in the background (#157).
+        .defer_embeddings(!skip_embeddings)
         .with_previous_vectors(previous)
         .with_progress(reporters.clone())
         .with_cancel({
@@ -386,6 +410,13 @@ impl Rebuild {
         let store = Store::open(staged.path(), &repo_id)
             .await
             .map_err(|e| ToolError::internal("cannot open the new index", e))?;
+        let embedding_model = match result.embeddings_pending {
+            0 => None,
+            _ => myceliums_core::index_embedding_meta(&store)
+                .await
+                .ok()
+                .map(|meta| meta.model),
+        };
         let symbols = store
             .get_symbols()
             .await
@@ -444,7 +475,6 @@ impl Rebuild {
             .map_err(|e| ToolError::internal("cannot save the repository registry", e))?;
         // Reads from here on see the new index and its registry entry.
         service.invalidate(&repo_id);
-        drop(guard);
 
         // Record this analysis for detect_architecture_drift. Best effort: a
         // failed write costs the drift history, not the index.
@@ -453,6 +483,21 @@ impl Rebuild {
             myceliums_core::record_snapshot(&data_dir, &snapshot, analyzed_commit.as_deref())
         {
             tracing::warn!("cannot record the graph snapshot: {e}");
+        }
+
+        // The symbols left without a vector are embedded in the background,
+        // under this analysis' lock (#157).
+        match &embedding_model {
+            Some(model) => crate::embedding_jobs::start(crate::embedding_jobs::PendingJob {
+                repo_id: repo_id.clone(),
+                db_path: live.clone(),
+                model: model.clone(),
+                pending: result.embeddings_pending,
+                options: embed_options,
+                service: service.clone(),
+                guard,
+            }),
+            None => drop(guard),
         }
 
         if let Some(sink) = &sink {
@@ -470,6 +515,10 @@ impl Rebuild {
             symbols_total: embedding_stats.symbols_total,
             embedding_failures: embedding_stats.embedding_failures,
             embeddings_reused: result.embeddings_reused,
+            embeddings_pending: embedding_model
+                .as_ref()
+                .map_or(0, |_| result.embeddings_pending),
+            embedding_model,
             calls: Some(result.call_resolution.summary()),
             skipped: result.skip_summary(),
             cached: false,

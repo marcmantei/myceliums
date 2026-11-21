@@ -46,7 +46,21 @@ pub fn format_analyze(o: &AnalyzeOutput) -> String {
             "\nSkipped:     {skipped} (not indexed; limits in .myceliums.toml [analysis])"
         ));
     }
-    let missing = o.symbols_total.saturating_sub(o.symbols_embedded);
+    if o.embeddings_pending > 0 {
+        out.push_str(&format!(
+            "\nEmbedding:   {} symbols in the background with {} — the graph tools answer \
+             now; semantic and hybrid search cover the symbols embedded so far until it \
+             finishes. A first index takes the longest; later analyses reuse the vectors of \
+             unchanged symbols. Progress: the Index line of every result, and server_stats.",
+            o.embeddings_pending,
+            o.embedding_model
+                .as_deref()
+                .unwrap_or("the configured model")
+        ));
+    }
+    let missing = o
+        .symbols_total
+        .saturating_sub(o.symbols_embedded + o.embeddings_pending);
     if o.embedding_failures > 0 {
         out.push_str(&format!(
             "\n⚠ Embedding failures: {} — {} of {} symbols have no vector and are \
@@ -2069,6 +2083,8 @@ mod tests {
             symbols_total: 3,
             embedding_failures: 0,
             embeddings_reused: 0,
+            embeddings_pending: 0,
+            embedding_model: None,
             calls: None,
             skipped: Some("3 files: 2 oversized file, 1 parse timeout".into()),
             cached: false,

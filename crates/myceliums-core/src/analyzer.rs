@@ -54,6 +54,8 @@ pub struct Analyzer {
     repo_path: PathBuf,
     config: Option<ProjectConfig>,
     skip_embeddings: bool,
+    /// Embed nothing new: leave it to [`crate::embed_pending`] (#157).
+    defer_embeddings: bool,
     global_config: crate::global_config::GlobalConfig,
     progress: Option<Arc<dyn ProgressReporter>>,
     cancel: Option<CancelCheck>,
@@ -97,6 +99,7 @@ impl Analyzer {
             repo_path,
             config: None,
             skip_embeddings: false,
+            defer_embeddings: false,
             global_config: crate::global_config::GlobalConfig::default(),
             progress: None,
             cancel: None,
@@ -112,6 +115,7 @@ impl Analyzer {
             repo_path,
             config: Some(config),
             skip_embeddings: false,
+            defer_embeddings: false,
             global_config: crate::global_config::GlobalConfig::default(),
             progress: None,
             cancel: None,
@@ -169,6 +173,19 @@ impl Analyzer {
     /// Set whether to skip embedding generation (much faster analysis).
     pub fn set_skip_embeddings(mut self, skip: bool) -> Self {
         self.skip_embeddings = skip;
+        self
+    }
+
+    /// Build the index under the configured embedder without running the
+    /// model (#157): unchanged symbols take their vectors over from the
+    /// previous index as usual, the embedder is recorded, and every other
+    /// symbol is left pending — counted in
+    /// [`AnalysisResult::embeddings_pending`], not as a failure — for
+    /// [`crate::embed_pending`] to embed afterwards, in the background and
+    /// resumably. A first index then takes as long as the graph, not as long
+    /// as the model. Ignored with `skip_embeddings`.
+    pub fn defer_embeddings(mut self, defer: bool) -> Self {
+        self.defer_embeddings = defer;
         self
     }
 
@@ -436,7 +453,11 @@ impl Analyzer {
     }
 
     /// Embeds and stores the vectors of a full run's `symbols` under `meta`;
-    /// returns `(stored, failures, reused)`.
+    /// returns `(stored, failures, reused)`. With
+    /// [`Analyzer::defer_embeddings`] nothing is embedded: the symbols
+    /// without a vector are pending, not failures, and `meta` is recorded
+    /// even when no vector was stored, so [`crate::embed_pending`] knows the
+    /// embedder.
     ///
     /// Symbols whose document the previous index embedded with the same
     /// model take that vector over — with their body chunks, for a chunked
@@ -491,7 +512,7 @@ impl Analyzer {
             );
         }
 
-        if !self.skip_embeddings && !missing.is_empty() {
+        if !self.skip_embeddings && !self.defer_embeddings && !missing.is_empty() {
             match crate::embeddings::get_embedder_for(meta.clone()).await {
                 Ok(embedder) => {
                     let progress = self.embedding_progress();
@@ -530,7 +551,7 @@ impl Analyzer {
 
         let stored = match self.store.store_embeddings(pairs).await {
             Ok(n) => {
-                if n > 0 {
+                if n > 0 || self.defer_embeddings {
                     self.record_embedding_meta(meta).await;
                 }
                 // Every stored vector belongs to a candidate symbol.
@@ -551,8 +572,8 @@ impl Analyzer {
             }
         }
         let reused = reused.min(stored);
-        // Not embedding on purpose is no failure.
-        let failures = if self.skip_embeddings {
+        // Not embedding on purpose, or not yet, is no failure.
+        let failures = if self.skip_embeddings || self.defer_embeddings {
             0
         } else {
             total - stored
@@ -1436,6 +1457,17 @@ impl Analyzer {
             });
         }
 
+        // Left for `embed_pending` by a deferred run (#157).
+        #[cfg(feature = "embeddings")]
+        let embeddings_pending =
+            if embed_meta.is_some() && self.defer_embeddings && !self.skip_embeddings {
+                symbols_total - embedding_count
+            } else {
+                0
+            };
+        #[cfg(not(feature = "embeddings"))]
+        let embeddings_pending = 0;
+
         let result = AnalysisResult {
             symbol_count: all_symbols.len(),
             file_count: all_files.len(),
@@ -1445,6 +1477,7 @@ impl Analyzer {
             symbols_embedded: embedding_count,
             embedding_failures,
             embeddings_reused,
+            embeddings_pending,
             mentions_count,
             timing: Some(timing),
             skip_reasons,
@@ -1570,6 +1603,7 @@ impl Analyzer {
                 symbols_embedded: 0,
                 embedding_failures: 0,
                 embeddings_reused: 0,
+                embeddings_pending: 0,
                 mentions_count: 0,
                 timing: None,
                 skip_reasons: HashMap::new(),
@@ -2123,6 +2157,7 @@ impl Analyzer {
             symbols_embedded: embedding_count,
             embedding_failures,
             embeddings_reused: 0,
+            embeddings_pending: 0,
             mentions_count,
             timing: None,
             skip_reasons,
@@ -2616,6 +2651,9 @@ pub struct AnalysisResult {
     /// replaced (unchanged symbols, same model) instead of being embedded
     /// again. 0 for incremental runs.
     pub embeddings_reused: usize,
+    /// Symbols a run with [`Analyzer::defer_embeddings`] left without a
+    /// vector for [`crate::embed_pending`]; 0 otherwise.
+    pub embeddings_pending: usize,
     /// Number of cross-domain mention relationships discovered.
     pub mentions_count: usize,
     /// Timing information for each phase of the analysis.
@@ -3047,6 +3085,7 @@ mod tests {
             symbols_embedded: 0,
             embedding_failures: 0,
             embeddings_reused: 0,
+            embeddings_pending: 0,
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),
@@ -3154,6 +3193,7 @@ mod tests {
             symbols_embedded: 6,
             embedding_failures: 4,
             embeddings_reused: 0,
+            embeddings_pending: 0,
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),
@@ -3184,6 +3224,7 @@ mod tests {
             symbols_embedded: 4,
             embedding_failures: 0,
             embeddings_reused: 0,
+            embeddings_pending: 0,
             mentions_count: 0,
             timing: None,
             skip_reasons: HashMap::new(),

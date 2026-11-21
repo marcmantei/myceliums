@@ -1270,6 +1270,29 @@ impl Store {
         Ok(out)
     }
 
+    /// Remove the body-chunk vectors of the symbols `symbol_uids` (#157):
+    /// rows an interrupted embedding run stored before the symbols' own
+    /// vectors, which a new run embeds again.
+    pub async fn delete_chunk_vectors_of(&self, symbol_uids: &[String]) -> Result<()> {
+        let Some(table) = self.open_table_if_exists("chunks").await? else {
+            return Ok(());
+        };
+        for group in symbol_uids.chunks(500) {
+            let list = group
+                .iter()
+                .map(|uid| format!("'{}'", escape_lance_str(uid)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            table
+                .delete(&format!(
+                    "repo_id = '{}' AND symbol_uid IN ({list})",
+                    escape_lance_str(&self.repo_id)
+                ))
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Number of body-chunk vectors stored for this repository (#157).
     pub async fn chunk_count(&self) -> Result<usize> {
         let Some(table) = self.open_table_if_exists("chunks").await? else {

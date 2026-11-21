@@ -22,6 +22,16 @@ use std::time::{Duration, Instant, SystemTime};
 /// indistinguishable from "no warning") but does not fail the query.
 pub(crate) async fn partial_index_warning(store: &Store) -> Option<String> {
     match myceliums_core::EmbeddingStats::load(store).await {
+        // Being embedded in the background (#157): not a failure.
+        Ok(Some(stats))
+            if stats.is_partial() && crate::embedding_jobs::is_running(store.repo_id()) =>
+        {
+            Some(format!(
+                "embeddings are being built in the background: {} of {} symbols have vectors \
+                 so far; the others are not yet found by semantic and hybrid search",
+                stats.symbols_embedded, stats.symbols_total
+            ))
+        }
         Ok(stats) => stats.and_then(|stats| stats.partial_index_warning()),
         Err(e) => {
             tracing::warn!("Failed to load embedding accounting for partial-index warning: {e}");
