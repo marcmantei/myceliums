@@ -45,7 +45,7 @@ jobs:
   probe:
     name: Stack Probe (${{ matrix.os }}, ${{ matrix.profile }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -74,3 +74,10 @@ jobs:
           if [ "${{ matrix.profile }}" = release ]; then flags=(--release); fi
           cargo test -p myceliums-core --no-default-features --lib --locked "${flags[@]}" \
             parser::stack_probe::measure_stack_per_tree_level -- --ignored --exact --nocapture
+      # The production path (SourceParser::parse on deep input, with the
+      # reserve above) in the same profile.
+      - name: Deep-tree extraction tests
+        run: |
+          flags=()
+          if [ "${{ matrix.profile }}" = release ]; then flags=(--release); fi
+          cargo test -p myceliums-core --no-default-features --test extractor_budgets --locked "${flags[@]}"

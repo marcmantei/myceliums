@@ -11,9 +11,10 @@
 //! variable.
 //!
 //! The result is expressed in the unit [`SourceParser::with_stack_for`] uses:
-//! minimum stack / (tree depth + [`INLINE_TREE_DEPTH`]). The test fails unless
-//! [`STACK_BYTES_PER_LEVEL`] is at least [`REQUIRED_MARGIN`] times the worst
-//! value, so a regression in frame sizes fails CI instead of crashing the
+//! minimum stack / (tree depth + [`INLINE_TREE_DEPTH`]), and as the slope
+//! between a shallow and a deep tree (what a deeper tree approaches). The
+//! test fails unless [`STACK_BYTES_PER_LEVEL`] is at least
+//! [`REQUIRED_MARGIN`] times the larger of the two for the worst language, so a regression in frame sizes fails CI instead of crashing the
 //! indexer.
 //!
 //! Both tests are `#[ignore]`d: the probe spawns thousands of processes and
@@ -27,7 +28,9 @@
 //! (and without `--release` for the debug numbers). With
 //! `GITHUB_STEP_SUMMARY` set, the table is appended to that file as well.
 
-use super::{SourceLanguage, SourceParser, INLINE_TREE_DEPTH, STACK_BYTES_PER_LEVEL};
+use super::{
+    SourceLanguage, SourceParser, INLINE_TREE_DEPTH, MAX_TREE_DEPTH, STACK_BYTES_PER_LEVEL,
+};
 use std::io::Write;
 use std::process::Command;
 use std::sync::Mutex;
@@ -245,7 +248,9 @@ fn measure_stack_per_tree_level() {
         for shape in 0..SHAPES.len() {
             for n in NESTINGS {
                 let depth = super::tree_depth(&parse_input(lang, shape, n).2);
-                if depth <= INLINE_TREE_DEPTH {
+                // Shallow trees are walked inline; trees past the limit are
+                // refused, never walked.
+                if depth <= INLINE_TREE_DEPTH || depth > MAX_TREE_DEPTH {
                     continue;
                 }
                 for dsl in [false, true] {
@@ -291,14 +296,16 @@ fn measure_stack_per_tree_level() {
         "### Extractor stack per tree level ({profile}, {}-{})\n\n\
          Minimum thread stack the walk survives, per (tree depth + {INLINE_TREE_DEPTH}) — \
          the unit of `STACK_BYTES_PER_LEVEL`. Worst over {} input shapes, nesting {NESTINGS:?}, \
-         per extraction path. Slope: extra stack per extra level between the two nestings.\n\n\
+         per extraction path. Slope: extra stack per extra level between the two nestings; \
+         a deeper tree approaches it, so the reserve is checked against the larger of the two.\n\n\
          | Language | hand B/level | DSL B/level | worst input | depth | min stack | slope B/level |\n\
          |---|---:|---:|---|---:|---:|---:|\n",
         std::env::consts::ARCH,
         std::env::consts::OS,
         SHAPES.len(),
     );
-    let mut worst_overall: Option<&Measurement> = None;
+    // (bytes per level the reserve must cover, language index)
+    let mut worst_overall = (0usize, 0usize);
     for (lang_index, lang) in LANGUAGES.iter().enumerate() {
         let of_lang: Vec<&Measurement> = results.iter().filter(|m| m.lang == lang_index).collect();
         let worst_of = |dsl: bool| {
@@ -323,9 +330,9 @@ fn measure_stack_per_tree_level() {
         let slope = match pair[..] {
             [a, b] if a.depth != b.depth => {
                 let (lo, hi) = if a.depth < b.depth { (a, b) } else { (b, a) };
-                (hi.min_stack.saturating_sub(lo.min_stack) / (hi.depth - lo.depth)).to_string()
+                Some(hi.min_stack.saturating_sub(lo.min_stack) / (hi.depth - lo.depth))
             }
-            _ => "-".into(),
+            _ => None,
         };
         let cell = |m: Option<&Measurement>| m.map_or("-".into(), |m| m.per_level().to_string());
         table.push_str(&format!(
@@ -338,20 +345,19 @@ fn measure_stack_per_tree_level() {
             worst.n,
             worst.depth,
             worst.min_stack.div_ceil(1024),
-            slope,
+            slope.map_or("-".into(), |s| s.to_string()),
         ));
-        if worst_overall.is_none_or(|w| worst.per_level() > w.per_level()) {
-            worst_overall = Some(worst);
+        let required = worst.per_level().max(slope.unwrap_or(0));
+        if required > worst_overall.0 {
+            worst_overall = (required, lang_index);
         }
     }
-    let worst = worst_overall.expect("at least one language");
-    let ratio = STACK_BYTES_PER_LEVEL as f64 / worst.per_level() as f64;
+    let (worst, worst_lang) = worst_overall;
+    let worst_lang = LANGUAGES[worst_lang].name();
+    let ratio = STACK_BYTES_PER_LEVEL as f64 / worst as f64;
     table.push_str(&format!(
-        "\nWorst: {} B/level ({}). `STACK_BYTES_PER_LEVEL` = {} B: {ratio:.1}x the worst \
-         (required: {REQUIRED_MARGIN}x).\n",
-        worst.per_level(),
-        LANGUAGES[worst.lang].name(),
-        STACK_BYTES_PER_LEVEL,
+        "\nWorst: {worst} B/level ({worst_lang}). `STACK_BYTES_PER_LEVEL` = \
+         {STACK_BYTES_PER_LEVEL} B: {ratio:.1}x the worst (required: {REQUIRED_MARGIN}x).\n",
     ));
     println!("{table}");
     if let Ok(path) = std::env::var("GITHUB_STEP_SUMMARY") {
@@ -363,10 +369,8 @@ fn measure_stack_per_tree_level() {
         writeln!(file, "{table}").unwrap();
     }
     assert!(
-        STACK_BYTES_PER_LEVEL >= REQUIRED_MARGIN * worst.per_level(),
+        worst > 0 && STACK_BYTES_PER_LEVEL >= REQUIRED_MARGIN * worst,
         "STACK_BYTES_PER_LEVEL ({STACK_BYTES_PER_LEVEL}) is less than {REQUIRED_MARGIN}x the \
-         worst measured per-level stack ({} B, {}); raise it",
-        worst.per_level(),
-        LANGUAGES[worst.lang].name(),
+         worst measured per-level stack ({worst} B, {worst_lang}); raise it",
     );
 }
