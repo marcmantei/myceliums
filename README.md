@@ -230,7 +230,11 @@ you want to build one locally; the publishing workflow is disabled.
 
 ### First run
 
-On the very first `myc analyze` or semantic/hybrid search, the configured embedding model is downloaded automatically (a one-time cost — subsequent runs use the cached model). Pre-download it with `myc doctor --download`.
+On the very first `myc analyze` or semantic/hybrid search, the configured embedding model is downloaded automatically (a one-time cost with a progress bar; later runs use the cached model). The default model, `jina-embeddings-v2-base-code`, is about 644 MB. Pre-download it with `myc doctor --download`.
+
+The first `myc analyze` of a repository embeds every symbol, which takes the longest: about 4.4× as long as with the fast option, `multilingual-e5-small` (see [Semantic search](#semantic-search--meaning-based-ai-model)). `myc analyze` says so before it starts and shows embedding progress. Later runs reuse the vectors of unchanged symbols.
+
+The MCP `analyze` tool does not wait for the model: it builds the graph, answers, and then embeds in the background. The graph tools answer at once. Semantic and hybrid search cover the symbols embedded so far, and the Index line of every result and `server_stats` show the progress. What it embedded is stored every 1,024 symbols or 20 seconds. If it stops (the server exits, the download fails), the next `analyze` resumes it; a server that exits stops it within a model batch.
 
 ---
 
@@ -264,7 +268,7 @@ On the very first `myc analyze` or semantic/hybrid search, the configured embedd
 | `myc status` | Show overview of all indexed repos, disk usage, and orphaned data |
 | `myc clean --orphans` | Remove orphaned data directories not tracked in the registry |
 | `myc clean --all` | Remove ALL myceliums data (with confirmation) |
-| `myc clean --cache` | Remove the fastembed model cache |
+| `myc clean --cache` | Remove the model cache |
 | `myc clean <repo>` | Remove a specific repository's data (with confirmation) |
 | `myc doctor` | Verify the installation, check all components, detect orphans and stale locks |
 | `myc configure` | View or update global configuration |
@@ -484,17 +488,37 @@ Myceliums offers three search modes that combine classical text matching with AI
 
 ### Semantic search — meaning-based (AI model)
 
-`myc semantic-search` converts your query and all code symbols into vectors (embeddings) using an embedding model that runs **locally on your CPU** via [fastembed](https://github.com/Anush008/fastembed-rs) (downloaded once on first use). Symbols with similar meaning land close together in vector space — so "authenticate user" finds `login()`, `verifyCredentials()`, and `checkSession()` even without shared keywords.
+`myc semantic-search` converts your query and all code symbols into vectors (embeddings) using an embedding model that runs **locally on your CPU** on ONNX Runtime. Every file the model loads (graph, weights, tokenizer and its configuration) is downloaded once over HTTPS from a pinned HuggingFace revision, checked against a pinned size and SHA-256, and kept in one shared cache, `~/.myceliums/models`. Symbols with similar meaning land close together in vector space — so "authenticate user" finds `login()`, `verifyCredentials()`, and `checkSession()` even without shared keywords.
 
-The default model is [multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small) (384 dimensions, multilingual — queries in German, French, etc. work against English code). The model is configurable per project via the `[embedding]` section in `.myceliums.toml`:
+The default model is [jina-embeddings-v2-base-code](https://huggingface.co/jinaai/jina-embeddings-v2-base-code) (768 dimensions, trained on code and English text). It embeds each symbol as a structured document, and a long symbol as several overlapping chunks (`chunking`, on by default). It was chosen by measurement ([#157](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#embedding-model-document-template-and-chunking-157)). The set was 168 labelled queries over four real repositories, and jina was the only candidate whose gain over the previous default, `multilingual-e5-small`, held on the 72 held-out queries (+0.070, 95% CI [+0.010, +0.128]). The price is indexing time. The first index takes about 4.4× as long as with e5-small and stores twice the vectors. Later `myc analyze` runs reuse the vectors of unchanged symbols. This cost is above the index-time budget of 2.5× that was fixed before measuring. The project owner waived that budget: quality over first-index time. For queries in languages other than English, or for the fastest first index, use the fast option, `multilingual-e5-small`. The model is configurable per project via the `[embedding]` section in `.myceliums.toml`:
 
-| Model id | Dim | Multilingual | Notes |
-|---|---|---|---|
-| `multilingual-e5-small` | 384 | ✓ | Default — best size/quality balance |
-| `multilingual-e5-base` | 768 | ✓ | Higher quality, larger download |
-| `multilingual-e5-large` | 1024 | ✓ | Maximum quality, ~2 GB download |
-| `jina-embeddings-v2-base-code` | 768 | — | Code-specialized, English queries |
-| `all-minilm-l6-v2` | 384 | — | Legacy default, English only |
+| Model id | Dim | Download | License | Multilingual | Code-trained | Quality, held-out ¹ | Index time ² | Query p50 ³ | Peak memory ² |
+|---|---:|---:|---|:---:|:---:|---:|---:|---:|---:|
+| `jina-embeddings-v2-base-code` — **default** | 768 | 644 MB | Apache-2.0 | — | ✓ | **0.707** (+0.070, CI above 0) | 4.4× | 35 ms | 1.3× |
+| `multilingual-e5-small` — fast option | 384 | 487 MB | MIT | ✓ | — | 0.637 | 1.0× | 12 ms | 1.0× |
+| `granite-embedding-small-english-r2` | 384 | 197 MB | Apache-2.0 | — | ✓ | 0.684 (+0.047, CI includes 0) | 1.3× | 11 ms | 1.6× |
+| `coderankembed` ⁴ | 768 | 548 MB | MIT | — | ✓ | 0.664 | 5.6× | 48 ms | 1.4× |
+| `gte-modernbert-base` | 768 | 600 MB | Apache-2.0 | — | — | 0.655 | 4.9× | 25 ms | 2.0× |
+| `multilingual-e5-base` | 768 | 1.1 GB | MIT | ✓ | — | not measured | | | |
+| `multilingual-e5-large` | 1024 | 2.3 GB | MIT | ✓ | — | not measured | | | |
+| `all-minilm-l6-v2` | 384 | 91 MB | Apache-2.0 | — | — | legacy | | | |
+
+¹ Mean of semantic and hybrid nDCG@10 on the 72 held-out real-repository queries. The e5-small row is the fast option's configuration (template 1, `chunking = false`, the previous default); the other rows use chunking, as in the default. Differences are paired-bootstrap 95% intervals against e5-small. The default was picked after the held-out results were known, so its interval is a measurement, not a pre-registered confirmation; the golden set below is the independent check. Labels are unreviewed agent drafts. ² Relative to `multilingual-e5-small` indexed on the same 4-vCPU machine (release build). ³ One semantic query (embedding + exact search) on that machine. ⁴ A third-party fp32 ONNX export of `nomic-ai/CodeRankEmbed`, pinned and hash-checked.
+
+**Choosing a model.** Keep the default for English code where search quality matters most. Use `multilingual-e5-small` for queries in other languages or for the fastest first index. It indexed 4.4× faster, stores half the vectors and answers a query in about a third of the time (12 vs. 35 ms), at a held-out quality 0.070 lower:
+
+```toml
+[embedding]
+model = "multilingual-e5-small"
+chunking = false   # the configuration measured as the fast option, and the previous default
+```
+
+`model = "multilingual-e5-small"` without `chunking = false` keeps chunking on: about 1.2× the fast option's index time, the same quality over all held-out queries within noise, and +0.033 [+0.003, +0.066] on queries whose answers are long symbols. `granite-embedding-small-english-r2` is nearly as fast as e5-small and scored better on every split. But its held-out gain cannot be told apart from zero, and while indexing at the default batch size it needed about 1.9 GB more memory than e5-small (lower `[analysis] embedding_batch_tokens` to trade speed for memory; not measured).
+
+The next `myc analyze` notices that the index was embedded with another model, template or chunking setting, and re-embeds it. **Upgrading from an earlier release:** every existing index is re-embedded once, on its next `myc analyze` (or MCP `analyze`, which re-analyzes an index whose embedder differs from the configured one and embeds in the background). After that, runs reuse vectors again. Models are now cached in `~/.myceliums/models` instead of a `.fastembed_cache/` directory in the working directory, so they are downloaded there once; old `.fastembed_cache/` directories can be deleted. The result depends on `.myceliums.toml`:
+
+- **No `model` line:** the index moves to the new default. The model (about 644 MB) is downloaded once, and this first index takes about 4.4× as long as before.
+- **`model = "multilingual-e5-small"`** (earlier `myc init` versions wrote the default model into the file): the index stays on e5-small, now with the structured template and chunking. To keep the previous configuration exactly and skip the re-embed, add `chunking = false`. To move to the new default, delete the `model` line.
 
 Alternatively, set `provider = "openai-compatible"` to use any server speaking the OpenAI embeddings API (Ollama, LM Studio, TEI, vLLM, or a cloud provider) — see [Project config](#project-config).
 
@@ -518,24 +542,25 @@ Vectors are stored in [LanceDB](https://lancedb.com/), an embedded vector databa
 
 ### How well does search actually work?
 
-Retrieval quality is measured, not asserted. A golden set of 51 hand-labelled queries over the in-repo fixture corpus (96 symbols) scores every mode through the code that ships, with the default models (`multilingual-e5-small`, reranker `bge-reranker-v2-m3`):
+Retrieval quality is measured, not asserted. A golden set of 51 hand-labelled queries over the in-repo fixture corpus (99 symbols) scores every mode through the code that ships. It uses the default models: `jina-embeddings-v2-base-code` with chunking, and the reranker `bge-reranker-v2-m3`.
 
 | Mode | MRR@10 | nDCG@10 | recall@10 | hit@10 |
 |---|---:|---:|---:|---:|
-| BM25 (lexical) | 0.641 | 0.626 | 0.698 | 0.824 |
-| Semantic | 0.803 | 0.790 | 0.842 | 0.941 |
-| Hybrid | 0.771 | 0.744 | 0.810 | 0.941 |
-| Hybrid + rerank | 0.811 | 0.777 | 0.833 | 0.922 |
+| BM25 (lexical) | 0.630 | 0.619 | 0.698 | 0.824 |
+| Semantic | 0.922 | 0.893 | 0.937 | 1.000 |
+| Hybrid | 0.852 | 0.815 | 0.890 | 0.980 |
+| Hybrid + rerank | 0.817 | 0.809 | 0.894 | 0.980 |
 
 Differences with paired bootstrap 95% confidence intervals:
 
-- **Semantic, hybrid and hybrid+rerank all beat BM25**, by 0.13–0.17 MRR (e.g. hybrid − BM25: +0.131, CI [+0.056, +0.211]). The gain is in paraphrase and behavioural queries, where BM25 has no shared words to match.
-- **Hybrid does not beat semantic search alone on this set** (MRR −0.031, CI [−0.094, +0.025]; nDCG@10 −0.046, CI [−0.095, −0.007]).
-- **Reranking is not measurably better than hybrid** (MRR +0.039, CI [−0.043, +0.127]).
+- **Semantic, hybrid and hybrid+rerank all beat BM25**, by 0.19–0.29 MRR (e.g. hybrid − BM25: +0.222, CI [+0.137, +0.316]). The gain is in paraphrase, behavioural and conceptual queries, where BM25 has no shared words to match.
+- **The default model beats the fast option**, `multilingual-e5-small`, on the same set: nDCG@10 +0.114 [+0.035, +0.196] in semantic search, +0.086 [+0.024, +0.150] in hybrid search and +0.038 [+0.004, +0.079] with reranking. Nothing was tuned on this set, so it is the independent check of the default that was chosen on the real-repository set.
+- **Hybrid does not beat semantic search alone on this set** (MRR −0.070, CI [−0.142, +0.000]; nDCG@10 −0.078, CI [−0.130, −0.033]).
+- **Reranking is not measurably better than hybrid** (MRR −0.035, CI [−0.128, +0.056]).
 
 The set is small and synthetic, so read this as "the semantic leg matters", not as a verdict on which mode to use on a real repository; tuning on these 51 queries would only overfit them. The CI job scores all four modes on every pull request and fails only on a regression of at least 0.02 whose 95% confidence interval lies wholly below zero. "Significant" here always means a 95% interval that excludes zero, per comparison and not corrected for the roughly 45 intervals a run reports — expect about two of them to exclude zero by chance alone.
 
-Reproduce with `cargo run -p myceliums-benchmarks --bin retrieval-eval -- --allow-model-download` (downloads ~2.7 GB of model weights once). Methodology, the decision rule, per-intent results and limitations: [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
+Reproduce with `cargo run -p myceliums-benchmarks --bin retrieval-eval -- --allow-model-download` (downloads ~2.9 GB of model weights once). Methodology, the decision rule, per-intent results and limitations: [`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md).
 
 ### How much text does a query print?
 
@@ -559,7 +584,7 @@ graph TD
     
     D --> E["Community Detection<br/>(Leiden algorithm)"]
     D --> F["Process Tracing<br/>(entry-point → call chain)"]
-    D --> K["Embedding Generation<br/>(fastembed · configurable, default multilingual-e5-small)"]
+    D --> K["Embedding Generation<br/>(ONNX Runtime · configurable, default jina-embeddings-v2-base-code)"]
     
     E --> G["LanceDB Storage<br/>~/.myceliums/"]
     F --> G
@@ -604,7 +629,7 @@ resolution = 1.0
 [embedding]
 # Local ONNX model from the curated registry (see `myc doctor` for the list)
 provider = "local"
-model = "multilingual-e5-small"
+model = "jina-embeddings-v2-base-code"
 reranker = "bge-reranker-v2-m3"
 ```
 
@@ -649,7 +674,7 @@ Shows all indexed repos, file/symbol counts, disk usage per repo, orphaned direc
 ```bash
 myc clean --orphans      # Remove orphaned data dirs
 myc clean my-project     # Remove a specific repo (with confirmation)
-myc clean --cache        # Remove the fastembed model cache
+myc clean --cache        # Remove the model cache
 myc clean --all          # Remove everything (with confirmation)
 myc clean --orphans --yes  # Skip confirmation prompts
 ```

@@ -140,7 +140,8 @@ async fn a_reindex_that_does_not_embed_keeps_the_previous_vectors() {
     assert_eq!(after["gamma"], None);
 
     // `alpha` changes and the model fails: the others keep their vectors,
-    // `alpha` and `gamma` are failures — nothing else is lost.
+    // `alpha` and `gamma` are left to the background embedding (#157), which
+    // fails — nothing else is lost.
     std::fs::write(
         project.join("src/a.ts"),
         "export function alpha(): number {\n    return 10;\n}\n",
@@ -149,17 +150,24 @@ async fn a_reindex_that_does_not_embed_keeps_the_previous_vectors() {
     let out = server
         .analyze_for_test(analyze(&project, false))
         .await
-        .expect("a failing model is no tool error");
+        .expect("the model runs after the answer");
     assert!(
-        out.contains(&format!(
-            "⚠ Embedding failures: 2 — {} of {} symbols have no vector",
-            total - 1,
-            total + 1
-        )),
+        out.contains(&format!("Embeddings:  {}/{} symbols", total - 1, total + 1)),
         "{out}"
     );
+    assert!(
+        out.contains("Embedding:   2 symbols in the background with unreachable"),
+        "{out}"
+    );
+    let line = server
+        .wait_for_embedding_for_test(&repo_id, std::time::Duration::from_secs(60))
+        .await
+        .expect("a background embedding ran");
+    assert!(line.contains("stopped after 0/2 symbols"), "{line}");
     let failed = vectors(&db, &repo_id).await;
     assert_eq!(failed["alpha"], None);
     assert_eq!(failed["gamma"], None);
     assert_eq!(failed["beta"], before["beta"]);
+    let stats = server.server_stats_for_test().await.unwrap();
+    assert!(stats.contains("Background embedding:"), "{stats}");
 }

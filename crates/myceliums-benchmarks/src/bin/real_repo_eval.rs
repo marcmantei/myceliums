@@ -19,7 +19,14 @@
 //!    defaults should change (see `eval::sweep` for the rule);
 //! 4. scores every mode again with test code left in place, sweeps the
 //!    test-code demotion weight on **dev** and confirms it on **held-out**
-//!    (#146, see `eval::demotion_sweep`).
+//!    (#146, see `eval::demotion_sweep`);
+//! 5. reports what the embeddings cost — indexing time, texts and chunks,
+//!    vector and disk bytes, query latency, peak memory — and scores the
+//!    long-symbol slice (#157).
+//!
+//! `--model`, `--template` and `--chunking` evaluate another embedding
+//! configuration than the shipped one; `--modes` and `--no-demotion` keep such
+//! a variant run to what it needs (#157, see `real-repo-compare`).
 //!
 //! The run is report-only: numbers never fail it. It fails when it cannot
 //! measure honestly — a checkout at the wrong commit, a label that names no
@@ -40,10 +47,13 @@ use myceliums_benchmarks::eval::demotion_sweep::{
 };
 use myceliums_benchmarks::eval::evaluator::{
     evaluate_queries, Metric, MetricValues, ModeScore, QueryScore, Retrieval, SearchMode,
+    RANKING_DEPTH,
 };
 use myceliums_benchmarks::eval::golden_set::GoldenQuery;
+use myceliums_benchmarks::eval::long_symbols::{self, LongSymbolReport};
 use myceliums_benchmarks::eval::models::{
-    embedding_batch, ModelIndex, ModelPolicy, ModelProvenance, ModelSetup, ALLOW_DOWNLOAD_FLAG,
+    embedding_batch, embedding_batch_tokens, IndexBuildStats, ModelIndex, ModelPolicy,
+    ModelProvenance, ModelSetup, Variant, ALLOW_DOWNLOAD_FLAG,
 };
 use myceliums_benchmarks::eval::real_repos::{
     repos_dir, verify_checkout, RealRepoSet, Split, REPOS_DIR_ENV,
@@ -80,9 +90,18 @@ struct Options {
     allow_model_download: bool,
     record: bool,
     sweep: bool,
+    /// Score with test code left in place, the test-seeking queries and the
+    /// demotion sweep (#146).
+    demotion: bool,
     repos_dir: Option<PathBuf>,
     report_path: PathBuf,
     summary_path: Option<PathBuf>,
+    /// An embedding configuration other than the shipped one (#157).
+    variant: Variant,
+    /// The modes to score.
+    modes: Vec<SearchMode>,
+    /// Only these repositories (a quick local run); `None`: all of them.
+    repos: Option<Vec<String>>,
 }
 
 impl Options {
@@ -92,16 +111,43 @@ impl Options {
             allow_model_download: false,
             record: false,
             sweep: true,
+            demotion: true,
             repos_dir: None,
             report_path: crate_dir.join(DEFAULT_REPORT),
             summary_path: None,
+            variant: Variant::default(),
+            modes: SearchMode::all().to_vec(),
+            repos: None,
         };
+        let (mut model, mut template, mut chunking) = (None, None, None);
         let mut args = args.skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
                 ALLOW_DOWNLOAD_FLAG => options.allow_model_download = true,
                 "--record" => options.record = true,
                 "--no-sweep" => options.sweep = false,
+                "--no-demotion" => options.demotion = false,
+                "--repos" => {
+                    options.repos = Some(
+                        args.next()
+                            .context("--repos requires a list")?
+                            .split(',')
+                            .map(|r| r.trim().to_string())
+                            .filter(|r| !r.is_empty())
+                            .collect(),
+                    )
+                }
+                "--model" => model = Some(args.next().context("--model requires an id")?),
+                "--template" => {
+                    template = Some(args.next().context("--template requires a version")?)
+                }
+                "--chunking" => {
+                    chunking = Some(args.next().context("--chunking requires on or off")?)
+                }
+                "--modes" => {
+                    options.modes =
+                        SearchMode::parse_list(&args.next().context("--modes requires a list")?)?
+                }
                 "--repos-dir" => {
                     options.repos_dir = Some(PathBuf::from(
                         args.next().context("--repos-dir requires a path")?,
@@ -122,6 +168,12 @@ impl Options {
                          --repos-dir <dir>       checkouts (default ${REPOS_DIR_ENV} or ~/.cache/myceliums-eval-repos)\n  \
                          {ALLOW_DOWNLOAD_FLAG}  download missing model weights\n  \
                          --no-sweep              score the modes only\n  \
+                         --no-demotion           skip the tests-included scoring and the demotion sweep\n  \
+                         --model <id>            embedding model to evaluate instead of the shipped one\n  \
+                         --template <1|2>        embedding-document template\n  \
+                         --chunking <on|off>     chunk long symbols\n  \
+                         --modes <list>          modes to score, e.g. lexical,semantic,hybrid\n  \
+                         --repos <list>          only these repositories (a quick local run)\n  \
                          --out <path>            JSON report (default {DEFAULT_REPORT})\n  \
                          --record                also write {RECORDED_RUN} (the committed record)\n  \
                          --summary <path>        append a Markdown summary (e.g. $GITHUB_STEP_SUMMARY)"
@@ -130,6 +182,15 @@ impl Options {
                 }
                 other => bail!("unknown argument '{other}' (try --help)"),
             }
+        }
+        options.variant =
+            Variant::parse(model.as_deref(), template.as_deref(), chunking.as_deref())?;
+        if options.record
+            && (!options.variant.is_shipped() || !options.demotion || options.repos.is_some())
+        {
+            bail!(
+                "--record writes the committed run: the shipped configuration, demotion included"
+            );
         }
         Ok(options)
     }
@@ -147,8 +208,17 @@ struct Report {
     review: ReviewState,
     repos: Vec<RepoReport>,
     models: Option<ModelProvenance>,
-    /// Symbols embedded per batch (`MYC_EVAL_EMBEDDING_BATCH`, default 256).
+    /// Whether the embedding configuration is the shipped one (#157).
+    shipped_configuration: bool,
+    /// Most texts per embedding batch (`MYC_EVAL_EMBEDDING_BATCH`, default 256).
     embedding_batch: usize,
+    /// Most tokens per embedding batch (`MYC_EVAL_EMBEDDING_BATCH_TOKENS`,
+    /// default 16384; #157).
+    embedding_batch_tokens: usize,
+    /// What the embeddings cost (#157); `null` without an embedding index.
+    embedding: Option<EmbeddingReport>,
+    /// The long-symbol slice (#157).
+    long_symbols: LongSymbolReport,
     bootstrap: BootstrapConfig,
     split: SplitReport,
     /// Every mode over every query, per-query detail included.
@@ -229,6 +299,78 @@ struct DemotionReport {
     decision: demotion_sweep::Decision,
 }
 
+/// What indexing and querying with the embedding configuration cost (#157).
+#[derive(Serialize)]
+struct EmbeddingReport {
+    /// Intra-op threads of the ONNX sessions.
+    threads: usize,
+    /// Megabytes a first use of the model downloads.
+    download_mb: u32,
+    /// License of the weights.
+    license: String,
+    /// Per repository: the index build.
+    by_repo: BTreeMap<String, IndexBuildStats>,
+    /// Over the repositories.
+    total: CostTotals,
+    /// Semantic query latency (embedding the query + exact vector search for
+    /// 20 results), per repository and over all queries, after 3 warm-up
+    /// queries per repository.
+    latency_ms: BTreeMap<String, Latency>,
+    /// Peak resident memory of the process when indexing finished, in bytes
+    /// (`null` where the platform does not report it).
+    peak_rss_bytes: Option<u64>,
+}
+
+#[derive(Serialize, Default)]
+struct CostTotals {
+    symbols: usize,
+    texts: usize,
+    chunked_symbols: usize,
+    chunk_vectors: usize,
+    tokens: usize,
+    embed_seconds: f64,
+    index_seconds: f64,
+    /// Symbols embedded per second of embedding wall time.
+    symbols_per_second: f64,
+    vector_bytes: u64,
+    disk_bytes: u64,
+}
+
+#[derive(Serialize, Clone, Copy)]
+struct Latency {
+    queries: usize,
+    p50: f64,
+    p95: f64,
+    mean: f64,
+}
+
+impl Latency {
+    fn of(mut samples: Vec<f64>) -> Self {
+        samples.sort_by(f64::total_cmp);
+        let at = |q: f64| -> f64 {
+            if samples.is_empty() {
+                return 0.0;
+            }
+            let i = ((samples.len() - 1) as f64 * q).round() as usize;
+            samples[i]
+        };
+        Self {
+            queries: samples.len(),
+            p50: round(at(0.5)),
+            p95: round(at(0.95)),
+            mean: round(samples.iter().sum::<f64>() / samples.len().max(1) as f64),
+        }
+    }
+}
+
+/// Peak resident set size of this process, in bytes.
+fn peak_rss_bytes() -> Option<u64> {
+    let status = std::fs::read_to_string("/proc/self/status").ok()?;
+    let line = status.lines().find(|l| l.starts_with("VmHWM:"))?;
+    let kb: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+    Some(kb * 1024)
+}
+
 #[derive(Serialize)]
 struct ReviewState {
     queries: usize,
@@ -285,8 +427,20 @@ async fn main() -> Result<()> {
     let options = Options::from_args(std::env::args())?;
     let started = Instant::now();
     let dataset_path = RealRepoSet::default_path();
-    let set = RealRepoSet::from_path(&dataset_path)?;
+    let mut set = RealRepoSet::from_path(&dataset_path)?;
     let assignment = set.split();
+    if let Some(repos) = &options.repos {
+        // The split is the full set's; only the queries of these repositories
+        // are scored.
+        if let Some(unknown) = repos
+            .iter()
+            .find(|r| !set.repos.iter().any(|p| &p.name == *r))
+        {
+            bail!("--repos names '{unknown}', which the set does not pin");
+        }
+        set.repos.retain(|p| repos.contains(&p.name));
+        set.queries.retain(|q| repos.contains(&q.repo));
+    }
     let dev_ids = ids_in(&set, Split::Dev);
     let held_ids = ids_in(&set, Split::HeldOut);
     let review_note = if set.reviewed() == set.queries.len() {
@@ -348,22 +502,42 @@ async fn main() -> Result<()> {
     }
 
     // Embedding indexes, when the weights are there.
-    let setup = ModelSetup::shipped_default()?;
+    let setup = ModelSetup::variant(&options.variant)?;
+    if !options.variant.is_shipped() {
+        println!(
+            "variant: {} · template {} · chunking {}",
+            setup.embedding.model,
+            setup.embedding.text_version,
+            setup
+                .embedding
+                .chunking
+                .map(|c| c.label())
+                .unwrap_or_else(|| "off".to_string())
+        );
+    }
     let policy = ModelPolicy::from_flag_and_env(options.allow_model_download);
     let mut indices: Vec<ModelIndex> = Vec::new();
-    if setup.blocker(SearchMode::Semantic, policy).is_none() {
+    let wants_models = options.modes.iter().any(SearchMode::needs_embeddings);
+    if wants_models && setup.blocker(SearchMode::Semantic, policy).is_none() {
         for corpus in &corpora {
             let t = Instant::now();
-            indices.push(ModelIndex::build(corpus, &setup, policy).await?);
+            let index = ModelIndex::build(corpus, &setup, policy).await?;
+            let stats = index.stats();
             println!(
-                "  indexed {} in {:.0}s",
+                "  indexed {} in {:.0}s ({} texts, {} chunk vectors, {:.1} symbols/s)",
                 corpus.repo_id(),
-                t.elapsed().as_secs_f64()
+                t.elapsed().as_secs_f64(),
+                stats.embed.texts,
+                stats.chunk_vectors,
+                stats.embed.symbols as f64 / stats.embed.seconds.max(1e-9)
             );
+            indices.push(index);
         }
     }
+    let peak_rss = peak_rss_bytes();
     let modes: Vec<SearchMode> = SearchMode::all()
         .into_iter()
+        .filter(|mode| options.modes.contains(mode))
         .filter(|mode| !mode.needs_embeddings() || !indices.is_empty())
         .filter(|mode| setup.blocker(*mode, policy).is_none())
         .collect();
@@ -400,6 +574,8 @@ async fn main() -> Result<()> {
     for mode in SearchMode::all() {
         let report = if modes.contains(&mode) {
             ModeReport::measured(&score_of(mode, &all_ids))
+        } else if !options.modes.contains(&mode) {
+            ModeReport::unavailable("not requested (--modes)".to_string())
         } else {
             ModeReport::unavailable(
                 setup
@@ -455,10 +631,96 @@ async fn main() -> Result<()> {
         }
     }
 
+    // What the embeddings cost (#157): index builds, query latency, memory.
+    let embedding_report = if indices.is_empty() {
+        None
+    } else {
+        let mut latency_ms = BTreeMap::new();
+        let mut all_samples = Vec::new();
+        for (corpus, index) in corpora.iter().zip(&indices) {
+            let queries = set.queries_in(None, Some(corpus.repo_id()));
+            for query in queries.iter().take(3) {
+                let vector = index.embed_query(&query.query).await?;
+                index.store().vector_search(&vector, RANKING_DEPTH).await?;
+            }
+            let mut samples = Vec::new();
+            for query in &queries {
+                let t = Instant::now();
+                let vector = index.embed_query(&query.query).await?;
+                index.store().vector_search(&vector, RANKING_DEPTH).await?;
+                samples.push(t.elapsed().as_secs_f64() * 1000.0);
+            }
+            all_samples.extend(samples.iter().copied());
+            latency_ms.insert(corpus.repo_id().to_string(), Latency::of(samples));
+        }
+        latency_ms.insert("all".to_string(), Latency::of(all_samples));
+        let mut total = CostTotals::default();
+        let mut by_repo = BTreeMap::new();
+        for (corpus, index) in corpora.iter().zip(&indices) {
+            let s = index.stats().clone();
+            total.symbols += s.embed.symbols;
+            total.texts += s.embed.texts;
+            total.chunked_symbols += s.embed.chunked_symbols;
+            total.chunk_vectors += s.chunk_vectors;
+            total.tokens += s.embed.tokens;
+            total.embed_seconds += s.embed.seconds;
+            total.index_seconds += s.seconds;
+            total.vector_bytes += s.vector_bytes;
+            total.disk_bytes += s.disk_bytes;
+            by_repo.insert(corpus.repo_id().to_string(), s);
+        }
+        total.symbols_per_second = round(total.symbols as f64 / total.embed_seconds.max(1e-9));
+        total.embed_seconds = round(total.embed_seconds);
+        total.index_seconds = round(total.index_seconds);
+        Some(EmbeddingReport {
+            threads: myceliums_core::embeddings::session_threads(),
+            download_mb: setup.embedding_spec.download_mb,
+            license: setup.embedding_spec.license.to_string(),
+            by_repo,
+            total,
+            latency_ms,
+            peak_rss_bytes: peak_rss,
+        })
+    };
+    // Which symbols the index embedded with body chunks.
+    let mut chunked: Option<std::collections::HashSet<String>> = None;
+    if setup.embedding.chunking.is_some() {
+        let mut refs = std::collections::HashSet::new();
+        for index in &indices {
+            let uids: std::collections::HashSet<String> = index
+                .store()
+                .get_chunk_vectors()
+                .await?
+                .into_iter()
+                .map(|c| c.symbol_uid)
+                .collect();
+            refs.extend(
+                index
+                    .symbols()
+                    .iter()
+                    .filter(|s| uids.contains(&s.uid))
+                    .map(|s| symbol_ref(s).to_string()),
+            );
+        }
+        chunked = Some(refs);
+    }
+    let long_symbols = long_symbols::report(
+        &set,
+        &corpora,
+        &all_scores,
+        &modes,
+        &assignment,
+        chunked.as_ref(),
+    )?;
+
     // Test-seeking queries (#146): their labels are tests, the cost of
     // demotion the regular labels cannot show.
-    let seeking =
+    let mut seeking =
         RealRepoSet::from_path(&Path::new(env!("CARGO_MANIFEST_DIR")).join(TEST_SEEKING))?;
+    if let Some(repos) = &options.repos {
+        seeking.repos.retain(|p| repos.contains(&p.name));
+        seeking.queries.retain(|q| repos.contains(&q.repo));
+    }
     if seeking.repos != set.repos {
         bail!("{TEST_SEEKING} must pin the same repositories as queries.json");
     }
@@ -487,7 +749,8 @@ async fn main() -> Result<()> {
     let mut seeking_shipped: BTreeMap<SearchMode, Vec<QueryScore>> = BTreeMap::new();
     let mut seeking_include: BTreeMap<SearchMode, Vec<QueryScore>> = BTreeMap::new();
     let mut retrievals = Vec::new();
-    for (i, corpus) in corpora.iter().enumerate() {
+    let demotion_corpora: &[Corpus] = if options.demotion { &corpora } else { &[] };
+    for (i, corpus) in demotion_corpora.iter().enumerate() {
         let retrieval = match indices.get(i) {
             Some(index) => Retrieval::with_models(index),
             None => Retrieval::lexical_only(corpus).await?,
@@ -534,7 +797,7 @@ async fn main() -> Result<()> {
         retrievals.push(retrieval);
     }
 
-    let demotion_report = if options.sweep {
+    let demotion_report = if options.sweep && options.demotion {
         Some(
             tune_demotion(
                 &set,
@@ -599,7 +862,11 @@ async fn main() -> Result<()> {
             })
             .collect(),
         models: (!indices.is_empty()).then(|| setup.provenance()),
+        shipped_configuration: options.variant.is_shipped(),
         embedding_batch: embedding_batch(),
+        embedding_batch_tokens: embedding_batch_tokens(),
+        embedding: embedding_report,
+        long_symbols,
         bootstrap: BootstrapConfig::current(),
         split: SplitReport {
             rule: format!(
@@ -1178,6 +1445,65 @@ fn render_markdown(report: &Report) -> String {
             ));
         }
     }
+    if let Some(models) = &report.models {
+        out.push_str(&format!(
+            "\n### Embedding configuration (#157)\n\n`{}` (`{}`), {} dimensions, template {}, \
+             chunking {}{}.\n",
+            models.embedding_model,
+            models.embedding_weights,
+            models.embedding_dim,
+            models.embedding_text_version,
+            models.embedding_chunking.as_deref().unwrap_or("off"),
+            if report.shipped_configuration {
+                " — the shipped configuration"
+            } else {
+                " — a variant, not the shipped configuration"
+            }
+        ));
+    }
+    if let Some(e) = &report.embedding {
+        out.push_str(
+            "\n| Repository | Symbols | Texts | Chunk vectors | Embed s | Symbols/s | Vector MB | Disk MB | Query p50 / p95 ms |\n\
+             | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
+        );
+        for (repo, s) in &e.by_repo {
+            let l = e.latency_ms.get(repo);
+            out.push_str(&format!(
+                "| {repo} | {} | {} | {} | {:.0} | {:.1} | {:.1} | {:.1} | {} |\n",
+                s.embed.symbols,
+                s.embed.texts,
+                s.chunk_vectors,
+                s.embed.seconds,
+                s.embed.symbols as f64 / s.embed.seconds.max(1e-9),
+                s.vector_bytes as f64 / 1e6,
+                s.disk_bytes as f64 / 1e6,
+                l.map(|l| format!("{:.1} / {:.1}", l.p50, l.p95))
+                    .unwrap_or_default()
+            ));
+        }
+        let t = &e.total;
+        let l = e.latency_ms.get("all");
+        out.push_str(&format!(
+            "| **all** | {} | {} | {} | {:.0} | {:.1} | {:.1} | {:.1} | {} |\n\n\
+             {} threads · download {} MB · license {} · peak RSS {}\n",
+            t.symbols,
+            t.texts,
+            t.chunk_vectors,
+            t.embed_seconds,
+            t.symbols_per_second,
+            t.vector_bytes as f64 / 1e6,
+            t.disk_bytes as f64 / 1e6,
+            l.map(|l| format!("{:.1} / {:.1}", l.p50, l.p95))
+                .unwrap_or_default(),
+            e.threads,
+            e.download_mb,
+            e.license,
+            e.peak_rss_bytes
+                .map(|b| format!("{:.2} GB", b as f64 / 1e9))
+                .unwrap_or_else(|| "n/a".to_string())
+        ));
+    }
+    out.push_str(&long_symbols::markdown(&report.long_symbols));
     if let Some(sweep) = &report.sweep {
         out.push_str(&format!(
             "\n### Hybrid parameter sweep — dev split ({} queries)\n\n{}.\n\n\

@@ -7,7 +7,7 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "analyze",
-        description = "Index a project into the knowledge graph: parses 20+ languages (TypeScript/JavaScript, Python, Go, Rust, Java, Kotlin, C/C++, C#, Ruby, PHP, Swift, …) plus Markdown, PDF and email, extracts symbols and call edges, detects communities and traces execution flows. Reuses a fresh index unless force=true. Writes only to the myceliums data directory, never to the project.",
+        description = "Index a project into the knowledge graph: parses 20+ languages (TypeScript/JavaScript, Python, Go, Rust, Java, Kotlin, C/C++, C#, Ruby, PHP, Swift, …) plus Markdown, PDF and email, extracts symbols and call edges, detects communities and traces execution flows, then answers; symbols are embedded for search by meaning in the background afterwards (progress in the Index line of every result and in server_stats). Reuses a fresh index unless force=true. Writes only to the myceliums data directory, never to the project.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -39,7 +39,11 @@ impl MyceliumsMcp {
         )
     )]
     pub(crate) async fn server_stats(&self) -> TextResult {
-        text(self.stats.snapshot().to_text())
+        let mut out = self.stats.snapshot().to_text();
+        if let Some(jobs) = crate::embedding_jobs::summary() {
+            out.push_str(&format!("\n\n{jobs}"));
+        }
+        text(out)
     }
 
     #[tool(
@@ -155,6 +159,22 @@ impl MyceliumsMcp {
         RepoRegistry::validate_repo_id(&repo_id).map_err(repo_id_error)?;
         let repo_name = analyzer::repo_name_from_path(&abs_path);
         let force = params.force.unwrap_or(false);
+        let skip_embeddings = params.skip_embeddings.unwrap_or(false);
+
+        // Honor the project's .myceliums.toml (analysis filters, embedding
+        // model) the same way the CLI does.
+        let config_path = abs_path.join(myceliums_core::config::CONFIG_FILENAME);
+        let config = if config_path.exists() {
+            let cfg = myceliums_core::config::ProjectConfig::load(&config_path).map_err(|e| {
+                ToolError::recoverable(
+                    format!("Invalid {}: {e}", config_path.display()),
+                    "fix or remove that config file, then call analyze again",
+                )
+            })?;
+            Some(cfg)
+        } else {
+            None
+        };
 
         // Cache check: return cached results if fresh enough
         if !force {
@@ -182,36 +202,85 @@ impl MyceliumsMcp {
                     CacheDecision::ReanalyzeNeeded { .. } => None,
                 };
                 if let Some((repo_id, reason, graph)) = cached {
-                    info!("Using cached analysis: {}", reason);
                     let store = graph.store();
                     let symbols = graph.symbols().await?;
-                    let files = graph.files().await?;
-                    let relationships = graph.relationships().await?;
-                    let communities = graph.communities().await?;
-                    let processes = graph.processes().await?;
-                    let embedding_stats = load_embedding_stats(&store, symbols.len()).await?;
-                    let calls = crate::index_status::call_resolution(&store)
-                        .await
-                        .map(|stats| stats.summary());
-                    // The two reads above bypassed the tables: check they
-                    // come from the generation the counts do.
-                    graph.verify()?;
-                    let output = AnalyzeOutput {
-                        repo_id,
-                        symbols: symbols.len(),
-                        files: files.len(),
-                        relationships: relationships.len(),
-                        communities: communities.len(),
-                        processes: processes.len(),
-                        symbols_embedded: embedding_stats.symbols_embedded,
-                        symbols_total: embedding_stats.symbols_total,
-                        embedding_failures: embedding_stats.embedding_failures,
-                        embeddings_reused: 0,
-                        calls,
-                        skipped: None,
-                        cached: true,
-                    };
-                    return text(format::format_analyze(&output));
+                    // The vectors must come from the embedder the project
+                    // configures now (#157).
+                    let plan =
+                        embedding_plan(&store, config.as_ref(), skip_embeddings, symbols.len())
+                            .await?;
+                    if let EmbeddingPlan::Rebuild(why) = &plan {
+                        info!("Re-analyzing {repo_id}: {why}");
+                    } else {
+                        info!("Using cached analysis: {}", reason);
+                        let files = graph.files().await?;
+                        let relationships = graph.relationships().await?;
+                        let communities = graph.communities().await?;
+                        let processes = graph.processes().await?;
+                        let embedding_stats = load_embedding_stats(&store, symbols.len()).await?;
+                        let calls = crate::index_status::call_resolution(&store)
+                            .await
+                            .map(|stats| stats.summary());
+                        // The two reads above bypassed the tables: check they
+                        // come from the generation the counts do.
+                        graph.verify()?;
+                        let mut output = AnalyzeOutput {
+                            repo_id: repo_id.clone(),
+                            symbols: symbols.len(),
+                            files: files.len(),
+                            relationships: relationships.len(),
+                            communities: communities.len(),
+                            processes: processes.len(),
+                            symbols_embedded: embedding_stats.symbols_embedded,
+                            symbols_total: embedding_stats.symbols_total,
+                            embedding_failures: embedding_stats.embedding_failures,
+                            embeddings_reused: 0,
+                            embeddings_pending: 0,
+                            embedding_model: None,
+                            calls,
+                            skipped: None,
+                            cached: true,
+                        };
+                        let mut note = crate::embedding_jobs::status_line(&repo_id);
+                        if let EmbeddingPlan::Resume { pending, model } = plan {
+                            if crate::embedding_jobs::is_running(&repo_id) {
+                                // The status line says how far it is.
+                            } else {
+                                match crate::analysis::RunningGuard::acquire(&data_dir(), &repo_id)
+                                {
+                                    Ok(guard) => {
+                                        output.embeddings_pending = pending;
+                                        output.embedding_model = Some(model.clone());
+                                        // Its failures are being retried.
+                                        output.embedding_failures = 0;
+                                        note = None;
+                                        crate::embedding_jobs::start(
+                                            crate::embedding_jobs::PendingJob {
+                                                repo_id: repo_id.clone(),
+                                                db_path: RepoRegistry::repo_db_path(
+                                                    &data_dir(),
+                                                    &repo_id,
+                                                ),
+                                                model,
+                                                pending,
+                                                options: embed_options(config.as_ref()),
+                                                service: self.service.clone(),
+                                                guard,
+                                            },
+                                        );
+                                    }
+                                    Err(busy) => {
+                                        note = Some(busy.for_analyze(&repo_id).message());
+                                    }
+                                }
+                            }
+                        }
+                        let mut answer = format::format_analyze(&output);
+                        if let Some(note) = note {
+                            answer.push_str(&format!("\n{note}"));
+                        }
+                        return text(answer);
+                    }
                 }
             }
         }
@@ -221,24 +290,25 @@ impl MyceliumsMcp {
         let started_at = chrono::Utc::now().to_rfc3339();
         let analyzed_commit = cache::get_head_commit(&abs_path).ok();
 
-        // Honor the project's .myceliums.toml (analysis filters, embedding
-        // model) the same way the CLI does.
-        let config_path = abs_path.join(myceliums_core::config::CONFIG_FILENAME);
-        let config = if config_path.exists() {
-            let cfg = myceliums_core::config::ProjectConfig::load(&config_path).map_err(|e| {
-                ToolError::recoverable(
-                    format!("Invalid {}: {e}", config_path.display()),
-                    "fix or remove that config file, then call analyze again",
-                )
-            })?;
-            Some(cfg)
-        } else {
-            None
-        };
-
         // Write path: `repo_id` was derived from the canonical project path
         // above, not supplied by the caller, and this run registers it.
         let data_dir = data_dir();
+        // A background embedding of this repository holds its lock, and the
+        // index it embeds is about to be replaced (another embedder, a moved
+        // HEAD, force): stop it — what it stored carries over — and wait for
+        // it (#157).
+        if crate::embedding_jobs::cancel(&repo_id)
+            && !crate::embedding_jobs::wait_until_stopped(&repo_id, JOB_STOP_WAIT).await
+        {
+            return Err(ToolError::recoverable(
+                format!(
+                    "The background embedding of {repo_id:?} was asked to stop for this analysis \
+                     and is still finishing its current step (a model batch, or the model \
+                     download)."
+                ),
+                "call analyze again in a moment",
+            ));
+        }
         let guard = crate::analysis::RunningGuard::acquire(&data_dir, &repo_id)
             .map_err(|busy| busy.for_analyze(&repo_id))?;
         let output = crate::analysis::Rebuild {
@@ -246,7 +316,7 @@ impl MyceliumsMcp {
             repo_name,
             project: abs_path,
             config,
-            skip_embeddings: params.skip_embeddings.unwrap_or(false),
+            skip_embeddings,
             data_dir,
             service: self.service.clone(),
             started_at,
@@ -257,4 +327,87 @@ impl MyceliumsMcp {
         .await?;
         text(format::format_analyze(&output))
     }
+}
+
+/// How long `analyze` waits for a background embedding it stopped.
+const JOB_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// What the cached index needs for the embedder the project configures now
+/// (#157).
+enum EmbeddingPlan {
+    /// Nothing: its vectors are current (or embeddings are skipped).
+    Current,
+    /// Its vectors are of the configured embedder, but some symbols have
+    /// none: embed them in the background.
+    Resume { pending: usize, model: String },
+    /// Its vectors are of another embedder, or it has none and records no
+    /// embedder: a full analysis, which embeds in the background.
+    Rebuild(String),
+}
+
+/// Compares the embedder the index records with the one `config`
+/// configures: a changed model, template or chunking re-analyzes the index,
+/// as `myc analyze` does; symbols still without a vector are embedded.
+async fn embedding_plan(
+    store: &myceliums_storage::Store,
+    config: Option<&myceliums_core::config::ProjectConfig>,
+    skip_embeddings: bool,
+    symbol_count: usize,
+) -> Result<EmbeddingPlan, ToolError> {
+    use myceliums_core::IndexEmbeddingMeta;
+    if skip_embeddings || symbol_count == 0 {
+        return Ok(EmbeddingPlan::Current);
+    }
+    let section = config.map(|c| c.embedding.clone()).unwrap_or_default();
+    let configured = IndexEmbeddingMeta::from_config(&section).map_err(|e| {
+        ToolError::recoverable(
+            format!("Invalid [embedding] configuration: {e}"),
+            "fix the [embedding] section of .myceliums.toml, or call analyze with \
+             skip_embeddings=true",
+        )
+    })?;
+    let recorded = store
+        .get_index_meta(IndexEmbeddingMeta::META_KEY)
+        .await
+        .map_err(|e| ToolError::internal("cannot read embedding metadata", e))?;
+    let Some(recorded) = recorded else {
+        return Ok(EmbeddingPlan::Rebuild(
+            "the index has no embeddings yet".to_string(),
+        ));
+    };
+    let Ok(recorded) = serde_json::from_str::<IndexEmbeddingMeta>(&recorded) else {
+        return Ok(EmbeddingPlan::Rebuild(
+            "the index's embedding metadata is unreadable".to_string(),
+        ));
+    };
+    if recorded.fingerprint() != configured.fingerprint() {
+        return Ok(EmbeddingPlan::Rebuild(format!(
+            "its vectors come from {}, the project configures {}",
+            recorded.fingerprint(),
+            configured.fingerprint()
+        )));
+    }
+    let stats = load_embedding_stats(store, symbol_count).await?;
+    Ok(if stats.is_partial() {
+        EmbeddingPlan::Resume {
+            pending: stats.symbols_total.saturating_sub(stats.symbols_embedded),
+            model: recorded.model,
+        }
+    } else {
+        EmbeddingPlan::Current
+    })
+}
+
+/// Embedding batch limits from `[analysis]`.
+fn embed_options(
+    config: Option<&myceliums_core::config::ProjectConfig>,
+) -> myceliums_core::EmbedOptions {
+    config
+        .map(|c| {
+            myceliums_core::EmbedOptions::new(
+                c.analysis.embedding_batch_size,
+                c.analysis.embedding_batch_tokens,
+            )
+        })
+        .unwrap_or_default()
 }

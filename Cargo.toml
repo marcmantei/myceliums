@@ -91,6 +91,14 @@ logos = "0.15"
 
 # Search (Phase 5)
 fastembed = "4"
+# Local embedding inference (#157): the crates fastembed runs on, at the
+# versions it locks, so one ONNX Runtime and one tokenizer build serve both.
+ort = { version = "=2.0.0-rc.9", default-features = false }
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+# Model downloads (#157): the HTTP client and TLS stack hf-hub used, driven
+# directly so a download can be stopped and resumed.
+ureq = { version = "2", default-features = false, features = ["native-tls"] }
+native-tls = "0.2"
 
 # Concurrency
 dashmap = "6"

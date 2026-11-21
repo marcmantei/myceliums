@@ -61,7 +61,7 @@ mod prelude {
     pub(crate) use std::path::PathBuf;
     pub(crate) use tracing::info;
 
-    pub(crate) use super::{require_query, text, TextResult};
+    pub(crate) use super::{require_query, retry_on_index_change, text, TextResult};
     pub(crate) use crate::errors::{repo_id_error, service_error, ToolError};
     pub(crate) use crate::format::{self, untrusted};
     pub(crate) use crate::index_status::{load_embedding_stats, partial_index_warning};
@@ -80,7 +80,12 @@ impl MyceliumsMcp {
     /// [`crate::index_status::freshness_line`]).
     pub(crate) async fn index_status(&self, graph: &Graph<'_>) -> Result<String, ToolError> {
         let indexed = graph.files().await?.shared();
-        Ok(crate::index_status::freshness_line(graph.info(), indexed, graph.store()).await)
+        let line = crate::index_status::freshness_line(graph.info(), indexed, graph.store()).await;
+        // A background embedding of this index says how far it is (#157).
+        Ok(match crate::embedding_jobs::status_line(&graph.info().id) {
+            Some(job) => format!("{line}\n{job}"),
+            None => line,
+        })
     }
 
     /// A text graph result: freshness line, then `body`.
@@ -92,6 +97,20 @@ impl MyceliumsMcp {
 
 /// The result of a text tool: plain text content on success.
 pub(crate) type TextResult = Result<String, ToolError>;
+
+/// Runs a read-only call once more when the index changed under its first
+/// run — a re-analysis swapping it, a background embedding moving its
+/// vectors in at the end (#157): the second run reads the new generation.
+pub(crate) async fn retry_on_index_change<F, Fut>(call: F) -> TextResult
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = TextResult>,
+{
+    match call().await {
+        Err(ToolError::IndexChanged { .. }) => call().await,
+        other => other,
+    }
+}
 
 /// A plain text result (no graph read, so no freshness line).
 pub(crate) fn text(text: impl Into<String>) -> TextResult {

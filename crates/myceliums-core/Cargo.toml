@@ -14,9 +14,9 @@ categories = ["development-tools", "parser-implementations"]
 
 [features]
 default = ["embeddings"]
-## Enable fastembed-based semantic search and cross-encoder reranking.
+## Enable local semantic search (ONNX Runtime) and cross-encoder reranking.
 ## Disable this feature for a lighter build that only supports BM25 text search.
-embeddings = ["dep:fastembed"]
+embeddings = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:ureq", "dep:native-tls"]
 ## Enable PDF-to-markdown conversion via the opendataloader-pdf CLI tool.
 pdf = []
 ## Enable cross-repository comparison and adaptation planning (premium feature).
@@ -46,6 +46,7 @@ tree-sitter-scala = { workspace = true }
 tree-sitter-objc = { workspace = true }
 tree-sitter-dart = { workspace = true }
 rayon = { workspace = true }
+dirs = { workspace = true }
 dashmap = { workspace = true }
 rustc-hash = { workspace = true }
 sha2 = { workspace = true }
@@ -55,6 +56,10 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 fastembed = { workspace = true, optional = true }
+ort = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+ureq = { workspace = true, optional = true }
+native-tls = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

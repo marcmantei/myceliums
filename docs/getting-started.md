@@ -56,7 +56,7 @@ Point `myc` at a project directory to build the knowledge graph.
 myc analyze ./my-project
 ```
 
-On the first run, the fastembed model (~100 MB) downloads automatically. This is cached for all future runs. If you want to skip embeddings entirely, pass `--skip-embeddings`.
+On the first run, the embedding model downloads automatically, with a progress bar: about 644 MB for the default model, `jina-embeddings-v2-base-code` (sizes per model are in the README's model table). It is cached for all future runs. The first analysis of a project embeds every symbol and takes the longest; later runs reuse the vectors of unchanged symbols. For a faster first index, set `model = "multilingual-e5-small"` and `chunking = false` in the `[embedding]` section of `.myceliums.toml`. If you want to skip embeddings entirely, pass `--skip-embeddings`.
 
 ## Step 3: Check the Results
 

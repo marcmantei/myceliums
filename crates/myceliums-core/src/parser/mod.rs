@@ -24,6 +24,7 @@ pub mod classify;
 mod common;
 mod cpp;
 mod dart;
+mod docs;
 mod dotnet;
 mod elixir;
 mod go;
@@ -734,7 +735,11 @@ impl SourceParser {
         let tree = self.parse_tree(&parse_source)?;
         let source_bytes = parse_source.as_bytes();
         let this = &*self;
-        Self::with_stack_for(&tree, || this.extract(tree.root_node(), source_bytes))
+        let mut result =
+            Self::with_stack_for(&tree, || this.extract(tree.root_node(), source_bytes))?;
+        // Doc comments sit outside the declaration nodes (#157).
+        docs::attach_docs(&parse_source, self.lang, &mut result.symbols);
+        Ok(result)
     }
 
     /// Run the hand-coded extractors for this language over a parsed tree.

@@ -44,6 +44,23 @@ impl MyceliumsMcp {
         self.into_service(toolsets)
     }
 
+    /// Invoke the `search_code` handler.
+    pub async fn search_code_for_test(&self, params: SearchCodeParams) -> Result<String, String> {
+        self.search_code(Parameters(params))
+            .await
+            .map_err(|e| e.message())
+    }
+
+    /// Invoke the `impact_of_change` handler.
+    pub async fn impact_of_change_for_test(
+        &self,
+        params: ImpactOfChangeParams,
+    ) -> Result<String, String> {
+        self.impact_of_change(Parameters(params))
+            .await
+            .map_err(|e| e.message())
+    }
+
     /// Invoke the `context_search` handler.
     pub async fn context_search_for_test(&self, params: SearchParams) -> Result<String, String> {
         self.context_search(Parameters(params))
@@ -219,5 +236,29 @@ impl MyceliumsMcp {
     /// Whether the server currently holds a cached graph for `repo_id`.
     pub fn graph_is_cached_for_test(&self, repo_id: &str) -> bool {
         self.service.is_cached(repo_id)
+    }
+
+    /// Waits until no background embedding of `repo_id` runs (#157) and
+    /// returns its last status line (`None`: no job ran). Panics after
+    /// `timeout`.
+    pub async fn wait_for_embedding_for_test(
+        &self,
+        repo_id: &str,
+        timeout: std::time::Duration,
+    ) -> Option<String> {
+        let deadline = std::time::Instant::now() + timeout;
+        while crate::embedding_jobs::is_running(repo_id) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the background embedding of {repo_id} still runs after {timeout:?}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        crate::embedding_jobs::job(repo_id).map(|job| job.line())
+    }
+
+    /// Invoke the `server_stats` handler.
+    pub async fn server_stats_for_test(&self) -> Result<String, String> {
+        self.server_stats().await.map_err(|e| e.message())
     }
 }

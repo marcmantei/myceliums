@@ -107,7 +107,7 @@ pub mod dsl;
 pub mod email;
 // `embedding_stats` is deliberately *not* gated on `embeddings` while
 // `embeddings` is: the two answer different questions. `embeddings` generates
-// vectors and needs `fastembed`, so it only exists when the feature is on.
+// vectors and needs the ONNX runtime, so it only exists when the feature is on.
 // `embedding_stats` only *reports* how completely an index was embedded — it
 // depends on `Store` and `serde` alone. A BM25-only build still opens indexes
 // built elsewhere with embeddings, and must be able to read their accounting to
@@ -142,6 +142,8 @@ pub mod ontology;
 pub mod parser;
 #[cfg(feature = "pdf")]
 pub mod pdf;
+#[cfg(feature = "embeddings")]
+pub mod pending_embeddings;
 pub mod process;
 pub mod progress;
 pub mod rename;
@@ -200,10 +202,12 @@ pub use email::{parse_eml, parse_eml_file, EmailAttachment, ParsedEmail};
 pub use embedding_stats::EmbeddingStats;
 #[cfg(feature = "embeddings")]
 pub use embeddings::{
-    check_model_cache, embedder_for_index, embedding_cache_info, embedding_model_spec,
-    get_embedder_for, get_reranker, index_embedding_meta, local_model_code, reranker_spec,
-    EmbedInput, Embedder, EmbeddingModelSpec, IndexEmbeddingMeta, ModelCacheInfo, PreviousVectors,
-    Reranker, RerankerSpec, DEFAULT_LOCAL_EMBEDDING_MODEL, DEFAULT_RERANKER_MODEL,
+    check_model_cache, download_status, embedder_for_index, embedding_cache_info,
+    embedding_model_spec, embedding_stopped, get_embedder_for, get_reranker, index_embedding_meta,
+    local_model_cached, local_model_code, reranker_spec, stop_embedding, BatchLimits, Chunking,
+    DownloadStatus, EmbedInput, EmbedOptions, EmbedStats, Embedder, EmbeddingModelSpec,
+    IndexEmbeddingMeta, IndexVectors, ModelCacheInfo, PreviousVectors, Reranker, RerankerSpec,
+    SymbolChunk, TextTemplate, DEFAULT_LOCAL_EMBEDDING_MODEL, DEFAULT_RERANKER_MODEL,
     EMBEDDING_MODELS, LEGACY_LOCAL_EMBEDDING_MODEL, RERANKER_MODELS,
 };
 pub use error::MyceliumError;
@@ -229,6 +233,10 @@ pub use mentions::{extract_mentions, extract_mentions_llm};
 pub use mermaid_export::{export_mermaid, export_mermaid_with_communities, MermaidDiagramType};
 pub use neo4j_export::export_neo4j_cypher;
 pub use ontology::{EdgeType, EntityType, Ontology, Property};
+#[cfg(feature = "embeddings")]
+pub use pending_embeddings::{
+    embed_pending, pending_symbols, PendingOutcome, PendingProgress, PENDING_SLICE_SYMBOLS,
+};
 pub use process::{ProcessFilter, ProcessTracer};
 pub use progress::{AnalysisPhase, ProgressReporter, SilentReporter};
 pub use rename::RenamePlan;

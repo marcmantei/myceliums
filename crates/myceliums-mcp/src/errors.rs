@@ -31,6 +31,11 @@ use std::fmt::Display;
 pub(crate) enum ToolError {
     /// Sent as an `isError: true` result: `{problem}\nNext: {next}`.
     Recoverable { problem: String, next: String },
+    /// The index changed under the call (a re-analysis swapped it, a
+    /// background embedding moved its vectors in): sent like
+    /// [`ToolError::Recoverable`], but a read-only handler first runs once
+    /// more on the new index (`tools::retry_on_index_change`).
+    IndexChanged { problem: String, next: String },
     /// Sent as a JSON-RPC error (`invalid_params` or `internal_error`).
     Protocol(rmcp::ErrorData),
 }
@@ -80,7 +85,10 @@ impl ToolError {
     /// The agent-visible text, whichever channel carries it.
     pub(crate) fn message(&self) -> String {
         match self {
-            ToolError::Recoverable { problem, next } => format!("{problem}\nNext: {next}"),
+            ToolError::Recoverable { problem, next }
+            | ToolError::IndexChanged { problem, next } => {
+                format!("{problem}\nNext: {next}")
+            }
             ToolError::Protocol(e) => e.message.to_string(),
         }
     }
@@ -136,10 +144,10 @@ pub(crate) fn service_error(e: MyceliumError) -> ToolError {
     match e {
         MyceliumError::Repo(e) => repo_id_error(e),
         MyceliumError::SymbolNotFound(name) => ToolError::symbol_not_found(&name),
-        MyceliumError::IndexChanged(repo_id) => ToolError::recoverable(
-            format!("The index of {repo_id} was replaced while this call was reading it."),
-            "retry the call; it reads the new index",
-        ),
+        MyceliumError::IndexChanged(repo_id) => ToolError::IndexChanged {
+            problem: format!("The index of {repo_id} was replaced while this call was reading it."),
+            next: "retry the call; it reads the new index".to_string(),
+        },
         MyceliumError::NotAnalyzed(msg) => {
             ToolError::recoverable(format!("{msg}."), "run analyze with the project path")
         }

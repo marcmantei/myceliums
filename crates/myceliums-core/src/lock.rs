@@ -40,9 +40,13 @@ impl AnalysisLock {
         let lock_dir = locks_dir(data_dir);
         fs::create_dir_all(&lock_dir)
             .with_context(|| format!("Failed to create lock dir: {}", lock_dir.display()))?;
+        Self::acquire_file(lock_path(data_dir, repo_id))
+    }
 
-        let lock_path = lock_path(data_dir, repo_id);
-
+    /// [`AnalysisLock::acquire`] for any lock file: the same PID lock, held
+    /// at `lock_path`, whose directory must exist. A model download holds one
+    /// per file, so two processes never write one partial file (#157).
+    pub fn acquire_file(lock_path: PathBuf) -> Result<LockOutcome> {
         // Try to detect an existing lock
         if lock_path.exists() {
             if let Ok(content) = fs::read_to_string(&lock_path) {

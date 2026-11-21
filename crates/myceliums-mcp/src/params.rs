@@ -216,7 +216,7 @@ impl From<TestsParam> for myceliums_core::TestRanking {
 
 // ── Core tool parameters ─────────────────────────────────────────────────
 
-#[derive(Deserialize, schemars::JsonSchema, Default)]
+#[derive(Deserialize, schemars::JsonSchema, Default, Clone)]
 pub struct SearchCodeParams {
     /// What to find: a name (parseConfig, Item.AsString) or what the code does (builds the Set-Cookie header)
     pub query: String,
@@ -266,7 +266,7 @@ pub struct FindCallsParams {
     pub offset: Option<usize>,
 }
 
-#[derive(Deserialize, schemars::JsonSchema, Default)]
+#[derive(Deserialize, schemars::JsonSchema, Default, Clone)]
 pub struct ImpactOfChangeParams {
     /// The symbol you plan to change (name, qualified name, or file_path:qualified_name). Give at most one of symbol_name, file_path, diff
     pub symbol_name: Option<String>,
