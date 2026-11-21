@@ -118,32 +118,45 @@ object on stdout in the shape the
 documents:
 
 ```json
-{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"myceliums code graph of repo flask-3735c01f (index: 22d9247 = HEAD). MCP tools find_callers, impact_of_change and search_code answer structural questions (callers, blast radius, where code lives)."},"systemMessage":"[myceliums] flask ready | 93 files · 1592 symbols"}
+{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"myceliums code graph of repo flask-3735c01f (index: 22d9247 = HEAD). MCP tools find_callers, impact_of_change and search_code answer structural questions."},"systemMessage":"[myceliums] flask ready | 93 files · 1592 symbols"}
 ```
 
 - `additionalContext` goes into the model's context before the first prompt:
-  the repository id, the index freshness (`index: <commit> = HEAD`, or a
-  stale warning when HEAD has moved) and the core tools. It is one line of at
+  the repository id, the index state and the core tools. It is one line of at
   most 280 characters (about 60 tokens), because every session pays for it.
+  The index state is one of:
+  - the freshness (`index: <commit> = HEAD`, or a stale warning when HEAD
+    has moved);
+  - `index stale, re-indexing in the background; results may be outdated
+    until done`;
+  - `no index of repo … yet, building in the background`;
+  - `… already running`, when another process holds the analysis lock.
+
   The tools sentence is left out when you declined AI instructions in the
   `myc setup` wizard.
 - `systemMessage` is the status line Claude Code shows you, not the model.
   The same line goes to stderr for a run by hand.
-- On a skip (no git repository, home directory, no supported files), an error
-  or a timeout the hook adds no context, only the status line. It always
-  exits 0; `; exit 0` covers a crash or an older `myc`.
+- On a skip (no git repository, home directory, no supported files) or an
+  error, the hook adds no context, only the status line. It always exits 0;
+  `; exit 0` covers a crash or an older `myc`.
 
-**Runtime.** Claude Code waits for a SessionStart hook before the session
-starts. With a current index the hook reads the registry, checks the cache
-and runs `git rev-parse HEAD` (0.1 s on flask with a debug build). With no
-index or a stale one it re-analyzes without embeddings in a child process
-whose output goes to stderr, so it cannot reach the model; the session waits
-for that, up to `--timeout` seconds (300). After the timeout the analysis is
-killed, the session starts without the context line, and the next session
-tries again. A repository whose analysis takes longer than that (a debug
-build did not finish hono in 300 s) never gets indexed by the hook: run
-`myc analyze .` once by hand. The handler also carries `"timeout": 330`, so
-Claude Code stops a hook that hangs anywhere else.
+**Runtime.** Claude Code waits for SessionStart hooks before the first model
+response, so the hook never analyzes in the foreground. It reads the
+registry, runs the cache check and `git rev-parse HEAD` (bounded to 1.5 s),
+then returns: 0.05 to 0.11 s on flask with a debug build, whatever the index
+state. A missing or stale index is rebuilt by a detached `myc analyze .
+--force --skip-embeddings` (`--strict-embeddings` when the hook got it). It
+runs in its own session (`setsid`), so it is not tied to the hook's process
+group or terminal, and appends its output to
+`<data dir>/logs/session-<repo id>.log` (cut at 1 MB). It takes the analysis
+lock that MCP `analyze` and `myc analyze` share. If the lock is already held,
+the hook starts nothing and reports the run in progress. A second session
+racing the first loses at the lock and exits. The re-index has no time limit:
+on flask it took 26 s with a debug build. Until it finishes, the graph tools
+answer from the previous index, or fail if there is none. `--timeout` is
+ignored since #152; installed hooks still pass it, which bounds an older
+`myc`. The handler carries `"timeout": 15`, so Claude Code stops a hook that
+hangs anyway.
 
 ### 1. Routing block
 

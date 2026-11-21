@@ -59,13 +59,12 @@ fn estimate_time(file_count: usize) -> &'static str {
 pub(crate) async fn cmd_session(
     path: &Path,
     auto_yes: bool,
-    timeout_secs: u64,
     strict_embeddings: bool,
     no_git_check: bool,
 ) -> Result<()> {
     if auto_yes {
         // The Claude Code SessionStart hook: never an error, whatever happens.
-        let report = hook::run(path, timeout_secs, strict_embeddings, no_git_check).await;
+        let report = hook::run(path, strict_embeddings, no_git_check).await;
         hook::emit(&report);
         return Ok(());
     }

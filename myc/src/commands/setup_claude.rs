@@ -295,9 +295,9 @@ fn handler(command: String, extra: &[(&str, Value)]) -> Value {
     Value::Object(h)
 }
 
-/// Claude Code's timeout for the SessionStart hook: `myc session --timeout
-/// 300` plus a margin for start-up and the final registry read.
-const SESSION_HOOK_TIMEOUT_SECS: u64 = 330;
+/// Claude Code's timeout for the SessionStart hook. The hook itself returns
+/// in well under a second (the re-index runs detached).
+const SESSION_HOOK_TIMEOUT_SECS: u64 = 15;
 
 /// Hook groups to install, per event, for the `myc` invocation `myc`.
 pub fn hook_groups(myc: &str, layers: Layers) -> Vec<(&'static str, Value)> {
@@ -306,9 +306,10 @@ pub fn hook_groups(myc: &str, layers: Layers) -> Vec<(&'static str, Value)> {
         (
             // stdout is one JSON object whose `additionalContext` reaches the
             // model (#152); `; exit 0` keeps the session safe from a crash or
-            // an older `myc`. Claude Code waits for this hook, so `myc` bounds
-            // a re-index to 300 s and Claude Code's own `timeout` (a margin
-            // above that) catches anything else that hangs.
+            // an older `myc`. Claude Code waits for this hook, so `myc` only
+            // checks the index and starts a re-index in the background; the
+            // `timeout` stops anything that hangs anyway. `--timeout 300` is
+            // ignored by current `myc` and bounds an older one.
             "SessionStart",
             json!({
                 "matcher": "",
@@ -973,7 +974,7 @@ mod tests {
             h["command"],
             "myc session . --yes --timeout 300 2>/dev/null; exit 0"
         );
-        assert_eq!(h["timeout"], 330);
+        assert_eq!(h["timeout"], 15);
         assert!(is_myceliums_hook_command(h["command"].as_str().unwrap()));
     }
 

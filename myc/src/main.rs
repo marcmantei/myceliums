@@ -218,12 +218,12 @@ async fn run(cli: Cli) -> Result<()> {
         Commands::Session {
             path,
             yes,
-            timeout,
+            timeout: _,
             strict_embeddings,
             no_git_check,
         } => {
             let p = path.unwrap_or_else(|| PathBuf::from("."));
-            cmd_session(&p, yes, timeout, strict_embeddings, no_git_check).await
+            cmd_session(&p, yes, strict_embeddings, no_git_check).await
         }
         Commands::Status => cmd_status().await,
         Commands::Clean {

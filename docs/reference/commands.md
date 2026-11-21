@@ -84,7 +84,7 @@ Interactive session setup: checks cache freshness, prompts for analysis if data 
 |------|------|---------|-------------|
 | `<path>` | positional, optional | current directory | Path to the project directory |
 | `--yes` | bool | `false` | Skip interactive prompt and auto-analyze if needed |
-| `--timeout` | integer (seconds) | `300` | Maximum runtime in seconds for auto mode (0 = no limit) |
+| `--timeout` | integer (seconds) | `300` | Ignored since #152 (auto mode re-indexes in the background); accepted so installed hooks keep working |
 | `--strict-embeddings` | bool | `false` | Generate embeddings during bootstrap and fail unless the index is fully embedded |
 | `--no-git-check` | bool | `false` | Allow analyzing directories without a `.git` repository |
 
@@ -92,8 +92,10 @@ Interactive session setup: checks cache freshness, prompts for analysis if data 
 # Interactive session in current directory
 myc session
 
-# Non-interactive, auto-analyze with 5-minute timeout
-myc session /path/to/project --yes --timeout 300
+# Claude Code SessionStart hook: one JSON object on stdout; a missing or
+# stale index is rebuilt by a detached `myc analyze` (log under
+# ~/.myceliums/logs/), so this returns at once
+myc session /path/to/project --yes
 ```
 
 Session bootstrap skips embedding generation by default so startup stays fast;

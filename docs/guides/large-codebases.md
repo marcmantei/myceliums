@@ -21,15 +21,14 @@ Everything except semantic search and hybrid search will still work:
 
 You can always generate embeddings later with `myc analyze --force` when you need semantic search.
 
-## Set a Timeout
+## Session start does not wait for the analysis
 
-For CI pipelines, hooks, or automated sessions, set a timeout to prevent analysis from blocking indefinitely:
-
-```bash
-myc session . --yes --timeout 300
-```
-
-The timeout is in seconds (300 = 5 minutes). This is the default used by the Claude Code hook. If analysis does not complete within the timeout, myceliums saves partial results and exits cleanly.
+The Claude Code hook, `myc session . --yes`, returns at once. A missing or
+stale index is rebuilt by a detached `myc analyze` that has no time limit and
+writes its output to `~/.myceliums/logs/session-<repo id>.log`; until it
+finishes, the session is told the index is being rebuilt. For a very large
+repository, run `myc analyze .` once by hand so the first session already has
+an index. (`--timeout` is ignored since #152.)
 
 ## Configure Exclusions
 

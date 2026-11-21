@@ -44,5 +44,10 @@ notify = { workspace = true }
 notify-debouncer-mini = { workspace = true }
 rpassword = "5"
 
+[target.'cfg(unix)'.dependencies]
+# setsid for the detached SessionStart re-index (#152); already in the tree
+# through myceliums-core.
+libc = "0.2"
+
 [dev-dependencies]
 tempfile = { workspace = true }

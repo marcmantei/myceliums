@@ -80,7 +80,7 @@ Claude Code asks each user once to approve a project's MCP server.
 {
   "hooks": {
     "SessionStart": [
-      { "matcher": "", "hooks": [{ "type": "command", "timeout": 330,
+      { "matcher": "", "hooks": [{ "type": "command", "timeout": 15,
         "command": "myc session . --yes --timeout 300 2>/dev/null; exit 0" }] }
     ],
     "PostToolUse": [
@@ -100,7 +100,7 @@ Claude Code asks each user once to approve a project's MCP server.
 ```
 
 - **SessionStart** checks whether the project has a fresh index; if not, it
-  re-analyzes (skipping embeddings, at most 5 minutes; the session waits).
+  starts a re-index in the background and returns at once.
   It adds one line to the model's context (`additionalContext`: repository
   id, index freshness, the core tools) and shows you a status line such as
   `[myceliums] my-project ready | 312 files · 1,247 symbols`. Details in the
@@ -150,7 +150,7 @@ Myceliums reduces token consumption by replacing multi-step file-reading workflo
 
 ### "Hook causes high CPU on session start"
 
-The SessionStart hook has a 5-minute timeout (`--timeout 300`), and Claude Code waits for it before the session starts. For very large codebases, the initial analysis can take significant time and resources. Run `myc status` to check the size of the indexed project. If analysis consistently takes too long, consider using `--skip-embeddings` in your project's `.myceliums.toml` to speed things up.
+The SessionStart hook returns at once and re-indexes in the background (`myc analyze`, log in `~/.myceliums/logs/session-<repo id>.log`), one run at a time per repository. For very large codebases, the initial analysis can take significant time and resources. Run `myc status` to check the size of the indexed project. If analysis consistently takes too long, consider using `--skip-embeddings` in your project's `.myceliums.toml` to speed things up.
 
 ### "I want only the MCP server"
 

@@ -187,7 +187,7 @@ Run `myc setup` to auto-detect which ones are installed and configure them all a
 
 This is a Claude Code-specific feature. When enabled, Claude Code runs `myc session` automatically when the editor starts. This keeps the knowledge graph fresh without you having to remember to re-analyze.
 
-It adds one line to the model's context (repository id, index freshness, the core tools to use) and shows you a status line. Claude Code waits for the hook: with a current index that takes a fraction of a second; a missing or stale index is re-analyzed for at most 5 minutes, after which the session starts without it.
+It adds one line to the model's context (repository id, index freshness, the core tools to use) and shows you a status line. The hook returns in a fraction of a second: a missing or stale index is rebuilt in the background, and the context line says so until it is done.
 
 You can enable it during `myc setup` or add it manually to your Claude Code hooks configuration.
 
