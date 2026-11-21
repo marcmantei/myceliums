@@ -90,7 +90,8 @@ weights, `tokenizer.json`, `tokenizer_config.json`, `config.json`,
 revision over HTTPS into the model cache (`FASTEMBED_CACHE_DIR`, else
 `HF_HOME`, else `models/` in the data directory: `MYCELIUMS_DATA_DIR`, else
 `~/.myceliums`), and checked against its pinned size and SHA-256. A mirror set
-with `HF_ENDPOINT` must be an `https://` URL.
+with `HF_ENDPOINT` must be an `https://` URL, and redirects are only followed
+to HTTPS.
 The environment variable `MYCELIUMS_EMBEDDING_THREADS` sets how many CPU
 threads an embedding session uses (default: all logical cores) — a machine
 setting, so it is not part of this file.

@@ -524,7 +524,7 @@ impl ModelFiles {
     /// load, and nothing is fetched for it.
     pub fn resolve(spec: &EmbeddingModelSpec, cache: &Path, download: bool) -> Result<Self> {
         let fetch = |file: &PinnedFile| -> Result<PathBuf> {
-            let path = fetch_file(spec, cache, file.path, download)?;
+            let path = fetch_file(spec, cache, file, download)?;
             verify_file(spec, file, &path)?;
             Ok(path)
         };
@@ -582,124 +582,239 @@ fn hf_endpoint(value: Option<String>) -> Result<String> {
 fn fetch_file(
     spec: &EmbeddingModelSpec,
     cache: &Path,
-    file: &str,
+    file: &PinnedFile,
     download: bool,
 ) -> Result<PathBuf> {
-    let local = snapshot_path(spec, cache, file);
+    let local = snapshot_path(spec, cache, file.path);
     if local.is_file() {
         return Ok(local);
     }
     if !download {
-        bail!("{} is not in the model cache {}", file, cache.display());
+        bail!(
+            "{} is not in the model cache {}",
+            file.path,
+            cache.display()
+        );
     }
     let endpoint = hf_endpoint(std::env::var("HF_ENDPOINT").ok())?;
-    let url = format!("{endpoint}/{}/resolve/{}/{file}", spec.repo, spec.revision);
+    let url = format!(
+        "{endpoint}/{}/resolve/{}/{}",
+        spec.repo, spec.revision, file.path
+    );
     let status = |done: u64, total: Option<u64>| super::DownloadStatus {
         model: spec.id.to_string(),
-        file: file.to_string(),
+        file: file.path.to_string(),
         done,
         total,
     };
-    let downloaded = download_to(
-        &url,
-        &local,
-        &super::embedding_stopped,
-        &mut |done, total| super::report_download(Some(status(done, total))),
-    );
+    let downloaded = Downloader::new().and_then(|downloader| {
+        downloader.fetch(
+            &url,
+            &local,
+            file.bytes,
+            &super::embedding_stopped,
+            &mut |done, total| super::report_download(Some(status(done, total))),
+        )
+    });
     super::report_download(None);
-    downloaded.with_context(|| format!("downloading {file} of {}@{}", spec.repo, spec.revision))?;
+    downloaded.with_context(|| {
+        format!(
+            "downloading {} of {}@{}",
+            file.path, spec.repo, spec.revision
+        )
+    })?;
     Ok(local)
 }
 
-/// Download `url` to `target` over HTTPS (or whatever scheme `url` names;
-/// [`hf_endpoint`] only lets https through), following redirects and the
-/// proxy of the environment. The bytes go to `<target>.part` first, renamed
-/// to `target` once complete; an existing `.part` is resumed with a range
-/// request. `stop` is asked between two reads: `true` leaves the `.part` for
-/// the next run and fails with [`crate::AnalysisCancelled`]. `progress` hears
-/// the bytes on disk and the size, when the server said.
-pub(crate) fn download_to(
-    url: &str,
-    target: &Path,
-    stop: &dyn Fn() -> bool,
-    progress: &mut dyn FnMut(u64, Option<u64>),
-) -> Result<()> {
-    use std::io::{Read, Write};
-    if let Some(dir) = target.parent() {
-        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+/// How a model file is downloaded: over HTTPS only — redirects included,
+/// so a redirect to plain HTTP fails instead of being followed — through
+/// the proxy of the environment, with the system's TLS (native-tls, as
+/// hf-hub used).
+pub(crate) struct Downloader {
+    agent: ureq::Agent,
+}
+
+/// What one request of a download brought.
+enum Attempt {
+    Done,
+    /// Start over from the first byte (the partial file was dropped).
+    Restart,
+}
+
+impl Downloader {
+    /// The downloader with the system's trust store.
+    pub(crate) fn new() -> Result<Self> {
+        Ok(Self::with_tls(native_tls::TlsConnector::new()?))
     }
-    let part = target.with_file_name(format!(
-        "{}.part",
-        target
+
+    fn with_tls(tls: native_tls::TlsConnector) -> Self {
+        let agent = ureq::builder()
+            .https_only(true)
+            .try_proxy_from_env(true)
+            .tls_connector(std::sync::Arc::new(tls))
+            .timeout_connect(std::time::Duration::from_secs(30))
+            .timeout_read(std::time::Duration::from_secs(60))
+            .build();
+        Self { agent }
+    }
+
+    /// Download `url` to `target`, which must come out exactly `expected`
+    /// bytes long (the pinned size; the pinned hash is checked by the
+    /// caller).
+    ///
+    /// The bytes go to `<target>.part`, are synced and then renamed to
+    /// `target`. An existing `.part` is resumed with a range request when
+    /// the server answers with exactly that range, otherwise the download
+    /// starts over. More bytes than `expected` abort it and remove the
+    /// `.part`. `<target>.part.lock` (a PID lock) keeps two processes from
+    /// writing one `.part`: a second one waits for the first, then uses what
+    /// it downloaded. `stop` is asked between two reads (and while waiting):
+    /// `true` leaves the `.part` for the next run and fails with
+    /// [`crate::AnalysisCancelled`]. `progress` hears the bytes on disk and
+    /// the size.
+    pub(crate) fn fetch(
+        &self,
+        url: &str,
+        target: &Path,
+        expected: u64,
+        stop: &dyn Fn() -> bool,
+        progress: &mut dyn FnMut(u64, Option<u64>),
+    ) -> Result<()> {
+        if let Some(dir) = target.parent() {
+            std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+        }
+        let name = target
             .file_name()
             .and_then(|n| n.to_str())
-            .unwrap_or("download")
-    ));
-    let agent = ureq::builder()
-        .try_proxy_from_env(true)
-        .tls_connector(std::sync::Arc::new(native_tls::TlsConnector::new()?))
-        .timeout_connect(std::time::Duration::from_secs(30))
-        .timeout_read(std::time::Duration::from_secs(60))
-        .build();
-    let request = || {
-        agent.get(url).set(
-            "User-Agent",
-            concat!("myceliums/", env!("CARGO_PKG_VERSION")),
-        )
-    };
-    let mut start = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
-    let response = if start > 0 {
-        match request().set("Range", &format!("bytes={start}-")).call() {
-            // The part is complete already (or not this file): start over.
-            Err(ureq::Error::Status(416, _)) => {
-                start = 0;
-                request().call()
+            .unwrap_or("download");
+        let part = target.with_file_name(format!("{name}.part"));
+        let lock = target.with_file_name(format!("{name}.part.lock"));
+        let _lock = loop {
+            if stop() {
+                return Err(crate::AnalysisCancelled.into());
             }
-            other => other,
+            match crate::AnalysisLock::acquire_file(lock.clone())? {
+                crate::LockOutcome::Acquired(held) => break held,
+                crate::LockOutcome::AlreadyRunning { .. } => {
+                    std::thread::sleep(std::time::Duration::from_millis(200))
+                }
+            }
+        };
+        if target.is_file() {
+            // Another process finished the download while this one waited.
+            return Ok(());
         }
-    } else {
-        request().call()
-    }
-    .map_err(|e| anyhow!("{e}"))?;
-    let resumed = start > 0 && response.status() == 206;
-    if !resumed {
-        start = 0;
-    }
-    let total = response
-        .header("Content-Length")
-        .and_then(|v| v.trim().parse::<u64>().ok())
-        .map(|length| start + length);
-    let mut out = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .append(resumed)
-        .truncate(!resumed)
-        .open(&part)
-        .with_context(|| format!("writing {}", part.display()))?;
-    let mut reader = response.into_reader();
-    let mut buf = vec![0u8; 256 * 1024];
-    let mut done = start;
-    progress(done, total);
-    loop {
-        if stop() {
-            return Err(crate::AnalysisCancelled.into());
+        for _ in 0..3 {
+            match self.attempt(url, &part, expected, stop, progress)? {
+                Attempt::Done => {
+                    std::fs::rename(&part, target)
+                        .with_context(|| format!("moving {} into place", part.display()))?;
+                    return Ok(());
+                }
+                Attempt::Restart => continue,
+            }
         }
-        let n = reader.read(&mut buf)?;
-        if n == 0 {
-            break;
+        bail!("the server kept answering with other ranges than the one asked for")
+    }
+
+    /// One request: resume `part` or start it, and stream into it.
+    fn attempt(
+        &self,
+        url: &str,
+        part: &Path,
+        expected: u64,
+        stop: &dyn Fn() -> bool,
+        progress: &mut dyn FnMut(u64, Option<u64>),
+    ) -> Result<Attempt> {
+        use std::io::{Read, Write};
+        let mut start = std::fs::metadata(part).map(|m| m.len()).unwrap_or(0);
+        if start > expected {
+            std::fs::remove_file(part)?;
+            start = 0;
         }
-        out.write_all(&buf[..n])?;
-        done += n as u64;
-        progress(done, total);
+        let mut request = self
+            .agent
+            .get(url)
+            .set(
+                "User-Agent",
+                concat!("myceliums/", env!("CARGO_PKG_VERSION")),
+            )
+            // Byte ranges and sizes of the file itself, not of a compressed
+            // transfer.
+            .set("Accept-Encoding", "identity");
+        if start > 0 {
+            request = request.set("Range", &format!("bytes={start}-"));
+        }
+        let response = match request.call() {
+            // The part is complete already, or not of this file.
+            Err(ureq::Error::Status(416, _)) if start > 0 => {
+                std::fs::remove_file(part)?;
+                return Ok(Attempt::Restart);
+            }
+            other => other.map_err(|e| anyhow!("{e}"))?,
+        };
+        let resumed = start > 0 && response.status() == 206;
+        if resumed && content_range_start(response.header("Content-Range")) != Some(start) {
+            // Not the range asked for: the part cannot be extended with it.
+            std::fs::remove_file(part)?;
+            return Ok(Attempt::Restart);
+        }
+        if !resumed {
+            start = 0;
+        }
+        let length = response
+            .header("Content-Length")
+            .and_then(|v| v.trim().parse::<u64>().ok());
+        if let Some(length) = length.filter(|&l| start + l != expected) {
+            bail!(
+                "the server announced {} bytes, the pinned size is {expected}",
+                start + length
+            );
+        }
+        let mut out = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(resumed)
+            .truncate(!resumed)
+            .open(part)
+            .with_context(|| format!("writing {}", part.display()))?;
+        let mut reader = response.into_reader();
+        let mut buf = vec![0u8; 256 * 1024];
+        let mut done = start;
+        progress(done, Some(expected));
+        loop {
+            if stop() {
+                out.flush()?;
+                return Err(crate::AnalysisCancelled.into());
+            }
+            let n = reader.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            if done + n as u64 > expected {
+                drop(out);
+                std::fs::remove_file(part)?;
+                bail!("the server sent more than the pinned {expected} bytes");
+            }
+            out.write_all(&buf[..n])?;
+            done += n as u64;
+            progress(done, Some(expected));
+        }
+        if done != expected {
+            // Kept: the next run resumes it.
+            out.flush()?;
+            bail!("the download ended after {done} of {expected} bytes");
+        }
+        out.sync_all()
+            .with_context(|| format!("syncing {}", part.display()))?;
+        Ok(Attempt::Done)
     }
-    out.flush()?;
-    drop(out);
-    if let Some(total) = total.filter(|&t| t != done) {
-        bail!("the download ended after {done} of {total} bytes");
-    }
-    std::fs::rename(&part, target)
-        .with_context(|| format!("moving {} into place", part.display()))?;
-    Ok(())
+}
+
+/// The first byte of a `Content-Range: bytes <first>-<last>/<size>` header.
+fn content_range_start(header: Option<&str>) -> Option<u64> {
+    let range = header?.trim().strip_prefix("bytes ")?;
+    range.split('-').next()?.trim().parse().ok()
 }
 
 /// A pinned file must have its pinned size, checked on every load, and its
@@ -1051,91 +1166,415 @@ mod tests {
         assert!(err.to_string().contains("https://"), "{err}");
     }
 
-    /// An HTTP server on localhost serving `content` at every path, with
-    /// range requests; the ranges it was asked for.
-    fn file_server(content: Vec<u8>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<u64>>>) {
+    /// What a test server was asked: the path and the first byte of the
+    /// range, if any.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Asked {
+        path: String,
+        range: Option<u64>,
+    }
+
+    /// What a test server answers: status line, headers, body. Without a
+    /// `Content-Length` header the body ends when the connection closes.
+    struct Reply {
+        status: &'static str,
+        headers: Vec<(String, String)>,
+        body: Vec<u8>,
+    }
+
+    type Handler = std::sync::Arc<dyn Fn(&Asked) -> Reply + Send + Sync>;
+
+    /// A certificate authority and a server certificate for 127.0.0.1
+    /// signed by it: the authority is the client's only root.
+    fn test_certificates() -> (
+        openssl::x509::X509,
+        openssl::x509::X509,
+        openssl::pkey::PKey<openssl::pkey::Private>,
+    ) {
+        use openssl::asn1::Asn1Time;
+        use openssl::bn::BigNum;
+        use openssl::ec::{EcGroup, EcKey};
+        use openssl::hash::MessageDigest;
+        use openssl::nid::Nid;
+        use openssl::pkey::PKey;
+        use openssl::x509::extension::{
+            BasicConstraints, ExtendedKeyUsage, KeyUsage, SubjectAlternativeName,
+        };
+        use openssl::x509::{X509NameBuilder, X509};
+        let group = EcGroup::from_curve_name(Nid::X9_62_PRIME256V1).unwrap();
+        let key = || PKey::from_ec_key(EcKey::generate(&group).unwrap()).unwrap();
+        let name = |cn: &str| {
+            let mut name = X509NameBuilder::new().unwrap();
+            name.append_entry_by_text("CN", cn).unwrap();
+            name.build()
+        };
+        let builder = |serial: u32| {
+            let mut b = X509::builder().unwrap();
+            b.set_version(2).unwrap();
+            b.set_serial_number(&BigNum::from_u32(serial).unwrap().to_asn1_integer().unwrap())
+                .unwrap();
+            b.set_not_before(&Asn1Time::days_from_now(0).unwrap())
+                .unwrap();
+            b.set_not_after(&Asn1Time::days_from_now(2).unwrap())
+                .unwrap();
+            b
+        };
+        let ca_key = key();
+        let mut ca = builder(1);
+        ca.set_subject_name(&name("myceliums test CA")).unwrap();
+        ca.set_issuer_name(&name("myceliums test CA")).unwrap();
+        ca.set_pubkey(&ca_key).unwrap();
+        ca.append_extension(BasicConstraints::new().critical().ca().build().unwrap())
+            .unwrap();
+        ca.append_extension(
+            KeyUsage::new()
+                .critical()
+                .key_cert_sign()
+                .crl_sign()
+                .build()
+                .unwrap(),
+        )
+        .unwrap();
+        ca.sign(&ca_key, MessageDigest::sha256()).unwrap();
+        let ca = ca.build();
+
+        let server_key = key();
+        let mut server = builder(2);
+        server.set_subject_name(&name("127.0.0.1")).unwrap();
+        server.set_issuer_name(ca.subject_name()).unwrap();
+        server.set_pubkey(&server_key).unwrap();
+        server
+            .append_extension(BasicConstraints::new().critical().build().unwrap())
+            .unwrap();
+        server
+            .append_extension(
+                KeyUsage::new()
+                    .critical()
+                    .digital_signature()
+                    .build()
+                    .unwrap(),
+            )
+            .unwrap();
+        server
+            .append_extension(ExtendedKeyUsage::new().server_auth().build().unwrap())
+            .unwrap();
+        let san = SubjectAlternativeName::new()
+            .ip("127.0.0.1")
+            .dns("localhost")
+            .build(&server.x509v3_context(Some(&ca), None))
+            .unwrap();
+        server.append_extension(san).unwrap();
+        server.sign(&ca_key, MessageDigest::sha256()).unwrap();
+        (ca, server.build(), server_key)
+    }
+
+    /// An HTTPS server on 127.0.0.1 answering every request with `handler`;
+    /// its URL for `path`, a downloader that trusts it, and what it was
+    /// asked.
+    fn https_server(
+        path: &str,
+        handler: Handler,
+    ) -> (
+        String,
+        Downloader,
+        std::sync::Arc<std::sync::Mutex<Vec<Asked>>>,
+    ) {
+        use openssl::ssl::{SslAcceptor, SslMethod};
         use std::io::{BufRead, BufReader, Write};
+        let (ca, cert, key) = test_certificates();
+        let mut acceptor = SslAcceptor::mozilla_intermediate_v5(SslMethod::tls()).unwrap();
+        acceptor.set_certificate(&cert).unwrap();
+        acceptor.set_private_key(&key).unwrap();
+        acceptor.check_private_key().unwrap();
+        let acceptor = std::sync::Arc::new(acceptor.build());
         let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let url = format!("http://{}/model.onnx", listener.local_addr().unwrap());
-        let ranges = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
-        let seen = ranges.clone();
+        let url = format!(
+            "https://127.0.0.1:{}{path}",
+            listener.local_addr().unwrap().port()
+        );
+        let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let log = asked.clone();
         std::thread::spawn(move || {
-            for stream in listener.incoming() {
-                let Ok(stream) = stream else { continue };
-                let mut reader = BufReader::new(stream.try_clone().unwrap());
-                let mut start = 0u64;
-                loop {
-                    let mut line = String::new();
-                    if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
-                        break;
+            for tcp in listener.incoming() {
+                let Ok(tcp) = tcp else { continue };
+                let (acceptor, handler, log) = (acceptor.clone(), handler.clone(), log.clone());
+                std::thread::spawn(move || {
+                    let Ok(mut stream) = acceptor.accept(tcp) else {
+                        return;
+                    };
+                    let mut request = Asked {
+                        path: String::new(),
+                        range: None,
+                    };
+                    {
+                        let mut reader = BufReader::new(&mut stream);
+                        let mut first = true;
+                        loop {
+                            let mut line = String::new();
+                            if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                                break;
+                            }
+                            if first {
+                                request.path = line.split(' ').nth(1).unwrap_or("").to_string();
+                                first = false;
+                            }
+                            let lower = line.to_ascii_lowercase();
+                            if let Some(range) = lower.strip_prefix("range: bytes=") {
+                                request.range = range.trim().trim_end_matches('-').parse().ok();
+                            }
+                        }
                     }
-                    let lower = line.to_ascii_lowercase();
-                    if let Some(range) = lower.strip_prefix("range: bytes=") {
-                        start = range.trim().trim_end_matches('-').parse().unwrap_or(0);
+                    log.lock().unwrap().push(request.clone());
+                    let reply = handler(&request);
+                    let mut head = format!("HTTP/1.1 {}\r\nConnection: close\r\n", reply.status);
+                    for (name, value) in &reply.headers {
+                        head.push_str(&format!("{name}: {value}\r\n"));
                     }
-                }
-                seen.lock().unwrap().push(start);
-                let body = &content[start as usize..];
-                let status = if start > 0 {
-                    "206 Partial Content"
-                } else {
-                    "200 OK"
-                };
-                let mut out = stream;
-                let _ = write!(
-                    out,
-                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                    body.len()
-                );
-                for piece in body.chunks(16 * 1024) {
-                    if out.write_all(piece).is_err() {
-                        break;
+                    head.push_str("\r\n");
+                    if stream.write_all(head.as_bytes()).is_err() {
+                        return;
                     }
-                }
+                    for piece in reply.body.chunks(16 * 1024) {
+                        if stream.write_all(piece).is_err() {
+                            return;
+                        }
+                    }
+                    let _ = stream.shutdown();
+                });
             }
         });
-        (url, ranges)
+        let tls = native_tls::TlsConnector::builder()
+            .add_root_certificate(native_tls::Certificate::from_der(&ca.to_der().unwrap()).unwrap())
+            .build()
+            .unwrap();
+        (url, Downloader::with_tls(tls), asked)
+    }
+
+    /// Serves `content` with range requests answered correctly.
+    fn file_handler(content: Vec<u8>) -> Handler {
+        std::sync::Arc::new(move |asked: &Asked| {
+            let len = content.len() as u64;
+            match asked.range {
+                Some(from) => Reply {
+                    status: "206 Partial Content",
+                    headers: vec![
+                        ("Content-Length".into(), (len - from).to_string()),
+                        (
+                            "Content-Range".into(),
+                            format!("bytes {from}-{}/{len}", len - 1),
+                        ),
+                    ],
+                    body: content[from as usize..].to_vec(),
+                },
+                None => Reply {
+                    status: "200 OK",
+                    headers: vec![("Content-Length".into(), len.to_string())],
+                    body: content.clone(),
+                },
+            }
+        })
+    }
+
+    fn content(len: u32) -> Vec<u8> {
+        (0..len).map(|i| (i % 251) as u8).collect()
+    }
+
+    fn paths(dir: &Path) -> (PathBuf, PathBuf) {
+        (
+            dir.join("snapshots/rev/onnx/model.onnx"),
+            dir.join("snapshots/rev/onnx/model.onnx.part"),
+        )
     }
 
     /// A download that is stopped keeps its partial file, and the next one
     /// resumes it with a range request; the result is the whole file.
     #[test]
     fn a_stopped_download_resumes_where_it_stopped() {
-        let content: Vec<u8> = (0..1_000_000u32).map(|i| (i % 251) as u8).collect();
-        let (url, ranges) = file_server(content.clone());
+        let body = content(1_000_000);
+        let (url, downloader, asked) = https_server("/model.onnx", file_handler(body.clone()));
         let dir = tempfile::tempdir().unwrap();
-        let target = dir.path().join("snapshots/rev/onnx/model.onnx");
-        let part = dir.path().join("snapshots/rev/onnx/model.onnx.part");
+        let (target, part) = paths(dir.path());
 
         let reached = std::cell::Cell::new(0u64);
-        let err = download_to(
-            &url,
-            &target,
-            &|| reached.get() >= 100_000,
-            &mut |done, total| {
-                assert_eq!(total, Some(1_000_000));
-                reached.set(done);
-            },
-        )
-        .unwrap_err();
+        let err = downloader
+            .fetch(
+                &url,
+                &target,
+                1_000_000,
+                &|| reached.get() >= 100_000,
+                &mut |done, total| {
+                    assert_eq!(total, Some(1_000_000));
+                    reached.set(done);
+                },
+            )
+            .unwrap_err();
         assert!(err.is::<crate::AnalysisCancelled>(), "{err}");
         assert!(!target.exists());
         let kept = std::fs::metadata(&part).unwrap().len();
         assert!((100_000..1_000_000).contains(&kept), "{kept}");
 
         let mut last = (0, None);
-        download_to(&url, &target, &|| false, &mut |done, total| {
-            last = (done, total)
-        })
-        .unwrap();
-        assert_eq!(std::fs::read(&target).unwrap(), content);
+        downloader
+            .fetch(&url, &target, 1_000_000, &|| false, &mut |done, total| {
+                last = (done, total)
+            })
+            .unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), body);
         assert!(!part.exists());
         assert_eq!(last, (1_000_000, Some(1_000_000)));
+        let ranges: Vec<Option<u64>> = asked.lock().unwrap().iter().map(|a| a.range).collect();
         assert_eq!(
-            *ranges.lock().unwrap(),
-            vec![0, kept],
+            ranges,
+            vec![None, Some(kept)],
             "resumed at the partial size"
         );
+    }
+
+    /// The client follows no redirect from HTTPS to plain HTTP: the
+    /// download fails without a request reaching the HTTP server.
+    #[test]
+    fn a_redirect_to_plain_http_is_refused() {
+        let plain = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let plain_port = plain.local_addr().unwrap().port();
+        plain.set_nonblocking(true).unwrap();
+        let location = format!("http://127.0.0.1:{plain_port}/model.onnx");
+        let (url, downloader, asked) = https_server(
+            "/model.onnx",
+            std::sync::Arc::new(move |_: &Asked| Reply {
+                status: "302 Found",
+                headers: vec![
+                    ("Location".into(), location.clone()),
+                    ("Content-Length".into(), "0".into()),
+                ],
+                body: vec![],
+            }),
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let (target, part) = paths(dir.path());
+        let err = downloader
+            .fetch(&url, &target, 1_000, &|| false, &mut |_, _| {})
+            .unwrap_err();
+        let message = format!("{err:#}").to_lowercase();
+        assert!(
+            message.contains("https") || message.contains("insecure"),
+            "{message}"
+        );
+        assert_eq!(asked.lock().unwrap().len(), 1, "the redirect was served");
+        assert!(
+            plain.accept().is_err(),
+            "nothing reached the plain HTTP server"
+        );
+        assert!(!target.exists() && !part.exists());
+    }
+
+    /// A server that sends more than the pinned size — here without a
+    /// length, until it closes the connection — is cut off, and its bytes
+    /// are removed.
+    #[test]
+    fn a_download_longer_than_the_pinned_size_is_aborted() {
+        let body = content(600_000);
+        let (url, downloader, _) = https_server(
+            "/model.onnx",
+            std::sync::Arc::new(move |_: &Asked| Reply {
+                status: "200 OK",
+                headers: vec![],
+                body: body.clone(),
+            }),
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let (target, part) = paths(dir.path());
+        let err = downloader
+            .fetch(&url, &target, 300_000, &|| false, &mut |_, _| {})
+            .unwrap_err();
+        assert!(
+            format!("{err:#}").contains("more than the pinned"),
+            "{err:#}"
+        );
+        assert!(!target.exists() && !part.exists());
+
+        // An announced length other than the pinned size fails at once.
+        let (url, downloader, _) = https_server("/model.onnx", file_handler(content(1_000)));
+        let err = downloader
+            .fetch(&url, &target, 999, &|| false, &mut |_, _| {})
+            .unwrap_err();
+        assert!(format!("{err:#}").contains("pinned size"), "{err:#}");
+    }
+
+    /// A 206 for another range than the one asked for cannot extend the
+    /// partial file: it is dropped and the download starts over.
+    #[test]
+    fn a_partial_answer_for_another_range_restarts_the_download() {
+        let body = content(50_000);
+        let served = body.clone();
+        let (url, downloader, asked) = https_server(
+            "/model.onnx",
+            std::sync::Arc::new(move |asked: &Asked| {
+                let len = served.len();
+                match asked.range {
+                    // Ignores the range but says 206.
+                    Some(_) => Reply {
+                        status: "206 Partial Content",
+                        headers: vec![
+                            ("Content-Length".into(), len.to_string()),
+                            ("Content-Range".into(), format!("bytes 0-{}/{len}", len - 1)),
+                        ],
+                        body: served.clone(),
+                    },
+                    None => Reply {
+                        status: "200 OK",
+                        headers: vec![("Content-Length".into(), len.to_string())],
+                        body: served.clone(),
+                    },
+                }
+            }),
+        );
+        let dir = tempfile::tempdir().unwrap();
+        let (target, part) = paths(dir.path());
+        std::fs::create_dir_all(part.parent().unwrap()).unwrap();
+        std::fs::write(&part, vec![7u8; 1_000]).unwrap();
+        downloader
+            .fetch(&url, &target, 50_000, &|| false, &mut |_, _| {})
+            .unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), body);
+        let ranges: Vec<Option<u64>> = asked.lock().unwrap().iter().map(|a| a.range).collect();
+        assert_eq!(ranges, vec![Some(1_000), None]);
+    }
+
+    /// A download another process holds the lock of is waited for, and what
+    /// that process downloaded is used: no second request.
+    #[test]
+    fn a_download_in_another_process_is_waited_for() {
+        let (url, downloader, asked) = https_server("/model.onnx", file_handler(content(10)));
+        let dir = tempfile::tempdir().unwrap();
+        let (target, _) = paths(dir.path());
+        let lock = target.with_file_name("model.onnx.part.lock");
+        std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+        // A live process holds it: this one.
+        std::fs::write(&lock, format!("{}\nnow", std::process::id())).unwrap();
+        let (finished, release) = (target.clone(), lock.clone());
+        let other = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            std::fs::write(&finished, content(10)).unwrap();
+            std::fs::remove_file(&release).unwrap();
+        });
+        downloader
+            .fetch(&url, &target, 10, &|| false, &mut |_, _| {})
+            .unwrap();
+        other.join().unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), content(10));
+        assert!(
+            asked.lock().unwrap().is_empty(),
+            "nothing was downloaded twice"
+        );
+        assert!(!lock.exists());
+    }
+
+    #[test]
+    fn content_ranges_are_read_from_their_first_byte() {
+        assert_eq!(content_range_start(Some("bytes 100-999/1000")), Some(100));
+        assert_eq!(content_range_start(Some("bytes 0-9/*")), Some(0));
+        assert_eq!(content_range_start(Some("items 1-2/3")), None);
+        assert_eq!(content_range_start(None), None);
     }
 
     /// The downloader against HuggingFace itself: a file stored in git and
@@ -1149,7 +1588,7 @@ mod tests {
             super::super::embedding_model_spec("granite-embedding-small-english-r2").unwrap();
         let cache = tempfile::tempdir().unwrap();
         for file in [spec.tokenizer.config.as_ref().unwrap(), &spec.onnx] {
-            let path = fetch_file(spec, cache.path(), file.path, true).unwrap();
+            let path = fetch_file(spec, cache.path(), file, true).unwrap();
             verify_file(spec, file, &path).unwrap();
             println!("{}: {} bytes, hash ok", file.path, file.bytes);
         }
