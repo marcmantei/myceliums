@@ -170,7 +170,7 @@ myc knowledge "processPayment" --limit 10
 
 ### `myc query`
 
-Execute a Cypher query against the knowledge graph. Supports `MATCH`, `RETURN`, `WHERE`, `ORDER BY`, `LIMIT`, `SKIP`, `CONTAINS`, `IS NULL`. Write operations are blocked.
+Execute a Cypher query against the knowledge graph. Supports `MATCH`, `RETURN`, `WHERE`, `ORDER BY`, `LIMIT`, `SKIP`, `CONTAINS`, `IS NULL`. Write operations are blocked. Node labels are `CodeSymbol` and `File`; filter symbols by `kind` (`WHERE s.kind = 'Function'`). See the [Cypher Query Guide](../guides/cypher-queries.md).
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
@@ -179,10 +179,10 @@ Execute a Cypher query against the knowledge graph. Supports `MATCH`, `RETURN`, 
 
 ```bash
 # Find all functions in a file
-myc query "MATCH (f:Function) WHERE f.file_path CONTAINS 'auth' RETURN f.name, f.file_path LIMIT 20"
+myc query "MATCH (f:CodeSymbol) WHERE f.kind = 'Function' AND f.file_path CONTAINS 'auth' RETURN f.name, f.file_path LIMIT 20"
 
 # Find call relationships
-myc query "MATCH (a:Function)-[:CALLS]->(b:Function) RETURN a.name, b.name LIMIT 10"
+myc query "MATCH (a)-[:CALLS]->(b) RETURN a.name, b.name LIMIT 10"
 ```
 
 ### `myc communities`

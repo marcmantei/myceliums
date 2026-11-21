@@ -25,7 +25,9 @@
 //! # async fn run() -> anyhow::Result<()> {
 //! let store = Store::open(std::path::Path::new("/tmp/data"), "repo-id").await?;
 //! let executor = CypherExecutor::from_store(&store).await?;
-//! let rows = executor.execute("MATCH (f:Function) RETURN f.name LIMIT 10")?;
+//! let rows = executor.execute(
+//!     "MATCH (f:CodeSymbol) WHERE f.kind = 'Function' RETURN f.name LIMIT 10",
+//! )?;
 //! for row in rows {
 //!     println!("{row:?}");
 //! }

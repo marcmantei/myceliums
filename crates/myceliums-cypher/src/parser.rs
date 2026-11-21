@@ -112,7 +112,7 @@ pub enum Pattern {
     Relationship(NodePattern, RelPattern, NodePattern),
 }
 
-/// A node pattern such as `(n:Function {name: "foo"})`.
+/// A node pattern such as `(n:CodeSymbol {name: "foo"})`.
 #[derive(Debug, Clone)]
 pub struct NodePattern {
     /// Optional bound variable for the node.
@@ -489,7 +489,7 @@ impl Parser {
         } else {
             None
         };
-        // Skip label if present (e.g., :Function)
+        // Skip label if present (e.g., :CodeSymbol)
         if self.peek_is(&Token::Colon) {
             self.advance();
             self.expect_ident()?;
