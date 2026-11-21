@@ -52,7 +52,9 @@ use crate::repo::{data_dir, registry_path};
 pub(crate) const CONTEXT_BUDGET_CHARS: usize = 280;
 
 /// Replaces the program the background re-index runs (default: this `myc`).
-/// A test seam: the integration tests point it at a slow script.
+/// A test seam for the integration tests (debug builds); release builds
+/// ignore it.
+#[cfg(debug_assertions)]
 pub(crate) const REINDEX_EXE_ENV: &str = "MYC_SESSION_REINDEX_EXE";
 
 /// A log above this size is cut before the next background run appends.
@@ -103,12 +105,19 @@ pub(crate) fn emit(report: &HookReport) {
 pub(crate) enum IndexState<'a> {
     /// Current per the cache check.
     Fresh(&'a IndexFreshness),
-    /// Stale; this hook started a background re-index.
-    Refreshing,
+    /// Stale; this hook started a background re-index. `skips_embeddings`:
+    /// the run writes no new vectors (the session default).
+    Refreshing {
+        /// Whether the background run skips embeddings.
+        skips_embeddings: bool,
+    },
     /// Stale; a re-index holding the analysis lock is already running.
     RefreshRunning,
     /// No index; this hook started a background build.
-    Building,
+    Building {
+        /// Whether the background run skips embeddings.
+        skips_embeddings: bool,
+    },
     /// No index; a build holding the analysis lock is already running.
     BuildRunning,
 }
@@ -120,17 +129,27 @@ pub(crate) fn context_line(repo_id: &str, state: IndexState<'_>, tools_hint: boo
         IndexState::Fresh(f) => {
             format!("myceliums code graph of repo {repo_id} ({}).", f.summary())
         }
-        IndexState::Refreshing => format!(
-            "myceliums code graph of repo {repo_id}: index stale, re-indexing in the \
-             background; results may be outdated until done."
+        IndexState::Refreshing { skips_embeddings } => format!(
+            "myceliums graph of repo {repo_id}: stale, re-indexing in the background; results \
+             may lag until done{}.",
+            if skips_embeddings {
+                ", and new symbols lack embeddings until a full `myc analyze`"
+            } else {
+                ""
+            }
         ),
         IndexState::RefreshRunning => format!(
             "myceliums code graph of repo {repo_id}: index stale, re-index already running; \
              results may be outdated until done."
         ),
-        IndexState::Building => format!(
-            "myceliums: no index of repo {repo_id} yet, building in the background; the graph \
-             tools answer once it is done."
+        IndexState::Building { skips_embeddings } => format!(
+            "myceliums: no index of repo {repo_id} yet, building in the background; graph tools \
+             answer once done{}.",
+            if skips_embeddings {
+                ", without embeddings until a full `myc analyze`"
+            } else {
+                ""
+            }
         ),
         IndexState::BuildRunning => format!(
             "myceliums: no index of repo {repo_id} yet, a build is already running; the graph \
@@ -244,12 +263,16 @@ async fn run_inner(
     spawn_reindex(&abs_path, strict_embeddings, no_git_check, &log)?;
     let (state, what) = if indexed {
         (
-            IndexState::Refreshing,
+            IndexState::Refreshing {
+                skips_embeddings: !strict_embeddings,
+            },
             "stale, re-indexing in the background",
         )
     } else {
         (
-            IndexState::Building,
+            IndexState::Building {
+                skips_embeddings: !strict_embeddings,
+            },
             "no index yet, building in the background",
         )
     };
@@ -274,8 +297,12 @@ fn spawn_reindex(
     no_git_check: bool,
     log: &Path,
 ) -> Result<u32> {
-    let program = match std::env::var_os(REINDEX_EXE_ENV) {
-        Some(exe) => PathBuf::from(exe),
+    #[cfg(debug_assertions)]
+    let program = std::env::var_os(REINDEX_EXE_ENV).map(PathBuf::from);
+    #[cfg(not(debug_assertions))]
+    let program: Option<PathBuf> = None;
+    let program = match program {
+        Some(exe) => exe,
         None => std::env::current_exe().context("cannot locate the myc binary")?,
     };
     let mut args: Vec<OsString> = vec![
@@ -386,9 +413,19 @@ mod tests {
             IndexState::Fresh(&behind),
             IndexState::Fresh(&current),
             IndexState::Fresh(&unknown),
-            IndexState::Refreshing,
+            IndexState::Refreshing {
+                skips_embeddings: true,
+            },
+            IndexState::Refreshing {
+                skips_embeddings: false,
+            },
             IndexState::RefreshRunning,
-            IndexState::Building,
+            IndexState::Building {
+                skips_embeddings: true,
+            },
+            IndexState::Building {
+                skips_embeddings: false,
+            },
             IndexState::BuildRunning,
         ];
         for state in states {
@@ -408,11 +445,17 @@ mod tests {
         let line = |s| context_line(repo, s, true);
         assert!(line(IndexState::Fresh(&current)).contains("abcdef0 = HEAD"));
         assert!(line(IndexState::Fresh(&behind)).contains("may be stale"));
-        assert!(line(IndexState::Refreshing).contains("re-indexing in the background"));
+        let refreshing = |skips_embeddings| IndexState::Refreshing { skips_embeddings };
+        let building = |skips_embeddings| IndexState::Building { skips_embeddings };
+        assert!(line(refreshing(true)).contains("re-indexing in the background"));
+        assert!(line(refreshing(true)).contains("lack embeddings until a full `myc analyze`"));
+        assert!(!line(refreshing(false)).contains("embeddings"));
+        assert!(line(building(true)).contains("without embeddings until a full `myc analyze`"));
+        assert!(!line(building(false)).contains("embeddings"));
         assert!(line(IndexState::RefreshRunning).contains("already running"));
-        assert!(line(IndexState::Building).contains("building in the background"));
+        assert!(line(building(true)).contains("building in the background"));
         assert!(line(IndexState::BuildRunning).contains("already running"));
-        assert!(!context_line(repo, IndexState::Refreshing, false).contains("find_callers"));
+        assert!(!context_line(repo, refreshing(true), false).contains("find_callers"));
         let huge = "x".repeat(400);
         assert_eq!(
             context_line(&huge, IndexState::Fresh(&current), true).len(),

@@ -127,9 +127,11 @@ documents:
   The index state is one of:
   - the freshness (`index: <commit> = HEAD`, or a stale warning when HEAD
     has moved);
-  - `index stale, re-indexing in the background; results may be outdated
-    until done`;
-  - `no index of repo … yet, building in the background`;
+  - `stale, re-indexing in the background; results may lag until done, and
+    new symbols lack embeddings until a full myc analyze`;
+  - `no index of repo … yet, building in the background; … without
+    embeddings until a full myc analyze` (the embeddings note is left out
+    with `--strict-embeddings`);
   - `… already running`, when another process holds the analysis lock.
 
   The tools sentence is left out when you declined AI instructions in the

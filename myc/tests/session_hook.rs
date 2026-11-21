@@ -3,6 +3,10 @@
 //! `hookSpecificOutput.additionalContext` reaches the model, the hook must
 //! return at once (a re-index runs detached, under the #98 analysis lock),
 //! and the process must exit 0 whatever goes wrong.
+//!
+//! Some tests swap the background `myc analyze` for a script through
+//! `MYC_SESSION_REINDEX_EXE`, which only debug builds honour: run these
+//! without `--release`.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -164,6 +168,10 @@ fn builds_in_the_background_then_reports_a_fresh_index() {
     let ctx = context(&v);
     assert!(ctx.contains(&id), "{ctx}");
     assert!(ctx.contains("building in the background"), "{ctx}");
+    assert!(
+        ctx.contains("without embeddings until a full `myc analyze`"),
+        "{ctx}"
+    );
     assert!(ctx.contains("find_callers"), "{ctx}");
     assert!(ctx.len() <= 280 && !ctx.contains('\n'), "{ctx}");
     assert!(
