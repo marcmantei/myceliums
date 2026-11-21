@@ -234,7 +234,7 @@ tokenized, so the memory tokenization takes does not grow with the
 repository. `MYCELIUMS_EMBEDDING_THREADS` caps the CPU threads of an embedding
 session (default: all logical cores). `myc analyze` shows embedding progress.
 The MCP `analyze` tool builds the graph, answers, and embeds in the
-background, 256 symbols at a time, each slice stored before the next: the
+background, storing what it embedded every 1,024 symbols or 20 seconds: the
 Index line of every result shows the progress, search by meaning covers the
 symbols embedded so far, and an interrupted embedding resumes on the next
 `analyze`.

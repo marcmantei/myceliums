@@ -325,17 +325,26 @@ same warning instead of claiming a complete index.
 
 **Embeddings follow in the background (#157).** The analysis itself runs no
 model: symbols that cannot take a vector over from the previous index are left
-pending, and after the swap the server embeds them on a blocking thread, 256 at
-a time, each slice stored before the next. The response says so (`Embedding:
-1243 symbols in the background with jina-embeddings-v2-base-code …`), so a
-first index — a 644 MB model download and minutes of inference — never runs
-inside the call. While the job runs it holds the repository's analysis lock;
-the `Index:` line of every result and `server_stats` show its progress and the
+pending, and after the swap the server embeds them on a blocking thread. The
+response says so (`Embedding: 1243 symbols in the background with
+jina-embeddings-v2-base-code …`), so a first index — a 644 MB model download
+and minutes of inference — never runs inside the call. While the job runs it
+holds the repository's analysis lock; the `Index:` line of every result and
+`server_stats` show its progress (the model download's included) and the
 estimated time left; semantic and hybrid search cover the symbols embedded so
-far (with a warning saying how many), and `auto` search uses keywords until
-the first slice is stored. A job that stops — the server exits, the download or
-the model fails — loses at most one slice: `analyze` of the still fresh index
-resumes it (a cached answer that says `in the background`) instead of
+far, with a warning saying how many, and `auto` search uses keywords until the
+first vectors are stored. The job stages each symbol's vector next to its body
+chunks, every 1,024 symbols or 20 seconds, in tables the graph is not read
+from: the graph cache stays and running calls are not disturbed. At the end it
+moves the vectors onto the symbols' rows in one write (a search or impact call
+that this write interrupts runs once more) and compacts the tables.
+
+The job stops between two model batches, or between two reads of the model
+download, when the server stops serving (stdin closed, Ctrl-C) — the process
+waits for it at most 5 seconds — and when an `analyze` re-analyzes the
+repository (another embedder, a moved `HEAD`, `force`), which stops it first.
+A stopped or failed job keeps what it stored, and `analyze` of the still fresh
+index resumes it (a cached answer that says `in the background`) instead of
 re-analyzing. A cached index is re-analyzed when the embedder it records
 (model, template, chunking) differs from the one the project configures, or
 when it has no embeddings yet.

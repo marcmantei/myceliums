@@ -234,7 +234,7 @@ On the very first `myc analyze` or semantic/hybrid search, the configured embedd
 
 The first `myc analyze` of a repository embeds every symbol, which takes the longest: about 4.4× as long as with the fast option, `multilingual-e5-small` (see [Semantic search](#semantic-search--meaning-based-ai-model)). `myc analyze` says so before it starts and shows embedding progress. Later runs reuse the vectors of unchanged symbols.
 
-The MCP `analyze` tool does not wait for the model: it builds the graph, answers, and then embeds in the background. The graph tools answer at once. Semantic and hybrid search cover the symbols embedded so far, and the Index line of every result and `server_stats` show the progress. The embedding is stored a slice at a time, so if it stops (the server exits, the download fails), the next `analyze` resumes it.
+The MCP `analyze` tool does not wait for the model: it builds the graph, answers, and then embeds in the background. The graph tools answer at once. Semantic and hybrid search cover the symbols embedded so far, and the Index line of every result and `server_stats` show the progress. What it embedded is stored every 1,024 symbols or 20 seconds. If it stops (the server exits, the download fails), the next `analyze` resumes it; a server that exits stops it within a model batch.
 
 ---
 
