@@ -100,6 +100,9 @@ pub struct EmbeddingModelSpec {
     /// a long symbol is chunked rather than embedded as one long sequence,
     /// whose cost grows quadratically (#157).
     pub window_tokens: usize,
+    /// The document template indexes of this model use unless chunking asks
+    /// for template 2: the template the model was measured with (#157).
+    pub template: TextTemplate,
     /// SPDX id of the weights' license.
     pub license: &'static str,
     /// Parameters, in millions.
@@ -141,6 +144,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         code: false,
         max_input_tokens: 512,
         window_tokens: 512,
+        template: TextTemplate::Flat,
         license: "MIT",
         params_millions: 118,
         download_mb: 487,
@@ -163,6 +167,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         code: false,
         max_input_tokens: 512,
         window_tokens: 512,
+        template: TextTemplate::Flat,
         license: "MIT",
         params_millions: 278,
         download_mb: 1_127,
@@ -189,6 +194,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         code: false,
         max_input_tokens: 512,
         window_tokens: 512,
+        template: TextTemplate::Flat,
         license: "MIT",
         params_millions: 560,
         download_mb: 2_253,
@@ -211,6 +217,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         code: true,
         max_input_tokens: 8192,
         window_tokens: 512,
+        template: TextTemplate::Structured,
         license: "Apache-2.0",
         params_millions: 161,
         download_mb: 644,
@@ -237,6 +244,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         code: true,
         max_input_tokens: 8192,
         window_tokens: 512,
+        template: TextTemplate::Structured,
         license: "Apache-2.0",
         params_millions: 47,
         download_mb: 197,
@@ -262,6 +270,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         code: true,
         max_input_tokens: 8192,
         window_tokens: 512,
+        template: TextTemplate::Structured,
         license: "MIT",
         params_millions: 137,
         download_mb: 548,
@@ -284,6 +293,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         code: false,
         max_input_tokens: 8192,
         window_tokens: 512,
+        template: TextTemplate::Structured,
         license: "Apache-2.0",
         params_millions: 149,
         download_mb: 600,
@@ -306,6 +316,7 @@ pub const EMBEDDING_MODELS: &[EmbeddingModelSpec] = &[
         code: false,
         max_input_tokens: 256,
         window_tokens: 256,
+        template: TextTemplate::Flat,
         license: "Apache-2.0",
         params_millions: 23,
         download_mb: 91,
@@ -498,10 +509,15 @@ impl IndexEmbeddingMeta {
                         known_embedding_model_ids()
                     )
                 })?;
-                let template = DEFAULT_TEXT_TEMPLATE;
-                let chunking = (cfg.chunking.unwrap_or(DEFAULT_CHUNKING)
-                    && template.supports_chunking())
-                .then(|| Chunking::for_window(spec.window_tokens));
+                // Chunking needs the structured template; without it, the
+                // template the model was measured with (#157).
+                let chunk = cfg.chunking.unwrap_or(DEFAULT_CHUNKING);
+                let template = if chunk {
+                    TextTemplate::Structured
+                } else {
+                    spec.template
+                };
+                let chunking = chunk.then(|| Chunking::for_window(spec.window_tokens));
                 Ok(Self {
                     meta_version: Self::META_VERSION,
                     provider: "local".to_string(),
@@ -749,11 +765,15 @@ pub fn embedding_cache_info() -> ModelCacheInfo {
 /// pins both layouts.
 pub const EMBEDDING_TEXT_VERSION: u32 = 1;
 
-/// The template new indexes are built with.
+/// The template of the default model's indexes ([`EmbeddingModelSpec::template`]
+/// of [`DEFAULT_LOCAL_EMBEDDING_MODEL`]), and of remote models'. Template 2
+/// did not beat it for `multilingual-e5-small` on the held-out split (#157).
 pub const DEFAULT_TEXT_TEMPLATE: TextTemplate = TextTemplate::Flat;
 
 /// Whether new indexes of a local model chunk long symbols when the project
-/// does not say (`[embedding] chunking`).
+/// does not say (`[embedding] chunking`). Off: chunking helped the long-symbol
+/// slice, but the default model with chunking did not beat it on the held-out
+/// split as a whole (#157). Turning it on embeds with template 2.
 pub const DEFAULT_CHUNKING: bool = false;
 
 /// Truncate a byte-oriented slice to at most `max` bytes, ensuring the cut
@@ -1897,8 +1917,50 @@ mod tests {
     #[test]
     fn default_text_version_names_the_default_template() {
         assert_eq!(EMBEDDING_TEXT_VERSION, DEFAULT_TEXT_TEMPLATE.version());
-        // Chunking needs a template that supports it.
-        assert!(!DEFAULT_CHUNKING || DEFAULT_TEXT_TEMPLATE.supports_chunking());
+        let default = embedding_model_spec(DEFAULT_LOCAL_EMBEDDING_MODEL).unwrap();
+        assert_eq!(default.template, DEFAULT_TEXT_TEMPLATE);
+    }
+
+    /// Each model indexes with the template it was measured with (#157): the
+    /// e5 family and the legacy model with template 1, the models evaluated
+    /// on the real-repository set with template 2; chunking always uses 2.
+    #[test]
+    fn models_use_the_template_they_were_measured_with() {
+        for spec in EMBEDDING_MODELS {
+            let meta = IndexEmbeddingMeta::from_config(&EmbeddingSection {
+                model: spec.id.to_string(),
+                chunking: Some(false),
+                ..Default::default()
+            })
+            .unwrap();
+            assert_eq!(meta.template(), Some(spec.template), "{}", spec.id);
+            let chunked = IndexEmbeddingMeta::from_config(&EmbeddingSection {
+                model: spec.id.to_string(),
+                chunking: Some(true),
+                ..Default::default()
+            })
+            .unwrap();
+            assert_eq!(
+                chunked.template(),
+                Some(TextTemplate::Structured),
+                "{}",
+                spec.id
+            );
+        }
+        let flat: Vec<&str> = EMBEDDING_MODELS
+            .iter()
+            .filter(|s| s.template == TextTemplate::Flat)
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(
+            flat,
+            [
+                "multilingual-e5-small",
+                "multilingual-e5-base",
+                "multilingual-e5-large",
+                "all-minilm-l6-v2"
+            ]
+        );
     }
 
     #[test]
@@ -1909,12 +1971,8 @@ mod tests {
             ..Default::default()
         };
         let meta = IndexEmbeddingMeta::from_config(&on).unwrap();
-        // Template 1 cannot chunk, so chunking follows the default template.
-        if DEFAULT_TEXT_TEMPLATE.supports_chunking() {
-            assert_eq!(meta.chunking, Some(Chunking::for_window(512)));
-        } else {
-            assert_eq!(meta.chunking, None);
-        }
+        assert_eq!(meta.chunking, Some(Chunking::for_window(512)));
+        assert_eq!(meta.text_version, TextTemplate::Structured.version());
         let off = EmbeddingSection {
             chunking: Some(false),
             ..on

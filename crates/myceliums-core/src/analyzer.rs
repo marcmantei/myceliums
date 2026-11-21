@@ -2567,13 +2567,18 @@ struct EmailSymbolMeta {
 fn refuse_incremental_template_mix(
     existing: Option<&crate::embeddings::IndexEmbeddingMeta>,
 ) -> Result<()> {
-    use crate::embeddings::EMBEDDING_TEXT_VERSION;
+    use crate::embeddings::TextTemplate;
     let Some(existing) = existing else {
         return Ok(());
     };
     if existing.template().is_some() {
         return Ok(());
     }
+    let known = TextTemplate::ALL
+        .iter()
+        .map(|t| t.version().to_string())
+        .collect::<Vec<_>>()
+        .join(" and ");
     let recorded = match existing.text_version {
         0 => "an unrecorded embedding-text template (the index predates template versioning)"
             .to_string(),
@@ -2583,9 +2588,9 @@ fn refuse_incremental_template_mix(
     };
     crate::error::bail!(
         "Incremental re-index refused: the index's vectors were built from {recorded}, but \
-         this build embeds with version {EMBEDDING_TEXT_VERSION}. Embedding the changed files \
-         now would mix two templates in one vector space. Run a full analysis (`myc analyze`) \
-         to re-embed the index, or re-index with --skip-embeddings."
+         this build embeds with versions {known}. Embedding the changed files now would mix \
+         two templates in one vector space. Run a full analysis (`myc analyze`) to re-embed \
+         the index, or re-index with --skip-embeddings."
     )
 }
 
