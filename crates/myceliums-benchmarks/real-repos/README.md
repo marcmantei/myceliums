@@ -56,6 +56,26 @@ Add `--allow-model-download` the first time if the weights are not cached,
 `recorded-run.json`. CI runs it weekly and on demand
 (`.github/workflows/retrieval-quality-real-repos.yml`), report-only.
 
+### Embedding variants (#157)
+
+```bash
+# one variant, three modes, no sweeps; --repos keeps a local run short
+cargo run -p myceliums-benchmarks --bin real-repo-eval -- --allow-model-download \
+  --model granite-embedding-small-english-r2 --template 2 --chunking on \
+  --modes lexical,semantic,hybrid --no-sweep --no-demotion --out variant-D.json
+# compare reports against the incumbent's (multilingual-e5-small, template 1, no chunking)
+cargo run -p myceliums-benchmarks --bin real-repo-compare -- --baseline variant-A.json variant-*.json
+```
+
+Every report records what indexing cost (embedding seconds, texts, chunk
+vectors, vector and disk bytes, query latency, peak memory) and the
+long-symbol slice. Heavy runs belong on CI: dispatch the workflow with a
+`variants` list (and `release=true` for cost measurements) — see the comment
+at the top of the workflow file. Locally, weights a sandbox cannot download
+can be placed into the cache by hand at
+`$FASTEMBED_CACHE_DIR/models--<org>--<name>/snapshots/<revision>/<path>`; the
+loader checks them against the pinned SHA-256.
+
 ## Reviewing the labels
 
 ```bash

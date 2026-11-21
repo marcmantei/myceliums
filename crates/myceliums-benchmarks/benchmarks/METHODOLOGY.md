@@ -1034,9 +1034,11 @@ inference code — so runner-to-runner variation cancels:
 Models outside the budget may still ship as opt-in registry entries, with
 their measured costs in the model table; they cannot be the default.
 
-**Amendment, made before any 768-dimension variant had finished.** The first
-grid run built the evaluator in debug mode, like every earlier real-repo
-run. Its first finished variant (`multilingual-e5-small`, template 2,
+**Amendment, made before any 768-dimension variant had finished** (the dev
+scores of the four 384-dimension variants A, B, C and D′ had been seen; no
+held-out score of any variant). It changes how costs are measured, not what
+is selected. The first grid run built the evaluator in debug mode, like every
+earlier real-repo run. Its first finished variant (`multilingual-e5-small`, template 2,
 chunking) measured a semantic query at 41 ms p50 — 71 ms on hono — mostly
 debug-mode Rust (the exact vector scan, tokenization), not the model; users
 run release builds, and the latency limit is absolute. So the costs (index
