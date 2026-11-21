@@ -160,6 +160,45 @@ impl EmbeddingPolicy {
     }
 }
 
+/// Why the index at `db_path` must be re-embedded for the embedding
+/// configuration of the project at `root`, or `None` when its vectors already
+/// match (or embeddings are skipped, or the index records no embedder: a run
+/// without vectors has nothing to redo). Best effort: anything unreadable is
+/// `None`, and the usual freshness check decides.
+async fn embedder_change(
+    root: &Path,
+    db_path: &Path,
+    repo_id: &str,
+    skip_embeddings: bool,
+) -> Option<String> {
+    use myceliums_core::IndexEmbeddingMeta;
+    if skip_embeddings {
+        return None;
+    }
+    let config_path = root.join(config::CONFIG_FILENAME);
+    let section = if config_path.exists() {
+        ProjectConfig::load(&config_path).ok()?.embedding
+    } else {
+        Default::default()
+    };
+    let configured = IndexEmbeddingMeta::from_config(&section).ok()?;
+    let store = Store::open_existing(db_path, repo_id).await.ok()?;
+    let json = store
+        .get_index_meta(IndexEmbeddingMeta::META_KEY)
+        .await
+        .ok()??;
+    let recorded: IndexEmbeddingMeta = serde_json::from_str(&json).ok()?;
+    (recorded.fingerprint() != configured.fingerprint()).then(|| {
+        format!(
+            "the index was embedded with {} (template {}), the configuration asks for {} (template {})",
+            recorded.identity(),
+            recorded.text_version,
+            configured.identity(),
+            configured.text_version
+        )
+    })
+}
+
 pub(crate) async fn cmd_analyze(
     path: &Path,
     force: bool,
@@ -187,6 +226,13 @@ pub(crate) async fn cmd_analyze(
                 "Re-analysis needed: the index {} is missing",
                 db_path.display()
             );
+        } else if let Some(change) =
+            embedder_change(&abs_path, &db_path, &repo_id, skip_embeddings).await
+        {
+            // The index's vectors come from another embedder than the one
+            // configured now (a model edit, or a release with a new default
+            // model, template or chunking, #157): only a full run re-embeds.
+            println!("Re-analysis needed: {change}");
         } else if let Some(repo_info) = registry.get(&repo_id) {
             let cache_config = CacheCheckConfig {
                 max_age_minutes,
@@ -537,6 +583,68 @@ mod tests {
     use clap::Parser;
     use myceliums_storage::Store;
     use tempfile::TempDir;
+
+    /// An index embedded with another model or template than the project
+    /// now configures is re-analyzed instead of reused (#157); the same
+    /// embedder, a skipped embedding run and an index without an embedder
+    /// record are left to the freshness check.
+    #[tokio::test]
+    async fn an_embedder_change_needs_a_re_analysis() {
+        use myceliums_core::IndexEmbeddingMeta;
+        let root = TempDir::new().unwrap();
+        let db = root.path().join("db");
+        let store = Store::open(&db, "r").await.unwrap();
+        store
+            .store_symbols(&[myceliums_storage::CodeSymbol {
+                uid: "u".into(),
+                name: "f".into(),
+                qualified_name: "f".into(),
+                kind: myceliums_storage::SymbolKind::Function,
+                file_path: "a.rs".into(),
+                start_line: 1,
+                end_line: 1,
+                signature: "fn f()".into(),
+                content: "fn f() {}".into(),
+                repo_id: "r".into(),
+                metadata: None,
+            }])
+            .await
+            .unwrap();
+        assert_eq!(embedder_change(root.path(), &db, "r", false).await, None);
+
+        let write_config = |model: &str| {
+            std::fs::write(
+                root.path().join(config::CONFIG_FILENAME),
+                format!("[embedding]\nmodel = \"{model}\"\n"),
+            )
+            .unwrap();
+        };
+        write_config("multilingual-e5-small");
+        let section = ProjectConfig::load(&root.path().join(config::CONFIG_FILENAME))
+            .unwrap()
+            .embedding;
+        let recorded = IndexEmbeddingMeta::from_config(&section).unwrap();
+        store
+            .set_index_meta(
+                IndexEmbeddingMeta::META_KEY,
+                &serde_json::to_string(&recorded).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(embedder_change(root.path(), &db, "r", false).await, None);
+
+        write_config("granite-embedding-small-english-r2");
+        let change = embedder_change(root.path(), &db, "r", false)
+            .await
+            .expect("a model change needs a re-analysis");
+        assert!(change.contains("multilingual-e5-small"), "{change}");
+        assert!(
+            change.contains("granite-embedding-small-english-r2"),
+            "{change}"
+        );
+        // A run that does not embed has nothing to redo.
+        assert_eq!(embedder_change(root.path(), &db, "r", true).await, None);
+    }
 
     #[test]
     fn test_safeguard_rejects_home_directory() {
