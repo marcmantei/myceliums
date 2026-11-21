@@ -195,8 +195,8 @@ fn first_index_notice(
         }
         if configured.model != "multilingual-e5-small" {
             notice.push_str(
-                " For a faster first index, set `[embedding] model = \"multilingual-e5-small\"` \
-                 in .myceliums.toml.",
+                " For a faster first index, set `model = \"multilingual-e5-small\"` and \
+                 `chunking = false` in the [embedding] section of .myceliums.toml.",
             );
         }
     }
