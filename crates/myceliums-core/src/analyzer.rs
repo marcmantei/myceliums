@@ -879,6 +879,9 @@ impl Analyzer {
                 Err(_) => {
                     warn!("Skipping {} — not valid UTF-8", rel_path_display);
                     skipped_count += 1;
+                    // Notebooks skip `should_skip_file`; count the reason
+                    // here so `skip_summary` names it (#118).
+                    *skip_reasons.entry(FileSkipReason::BinaryFile).or_insert(0) += 1;
                     continue;
                 }
             };
@@ -1610,7 +1613,9 @@ impl Analyzer {
                 let source = match std::str::from_utf8(&raw_bytes) {
                     Ok(s) => s,
                     Err(_) => {
+                        warn!("Skipping {} — not valid UTF-8", rel_path_display);
                         skipped_count += 1;
+                        *skip_reasons.entry(FileSkipReason::BinaryFile).or_insert(0) += 1;
                         continue;
                     }
                 };
@@ -2996,6 +3001,38 @@ mod tests {
         assert_eq!(
             result.skip_summary().as_deref(),
             Some("1 file: 1 line too long")
+        );
+    }
+
+    /// #118: a notebook that is not UTF-8 is skipped with a reason in both
+    /// paths, so `skip_summary` names it (notebooks bypass
+    /// `should_skip_file`, which records it for other files).
+    #[tokio::test]
+    async fn a_non_utf8_notebook_is_skipped_with_a_reason() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        fs::write(root.join("good.py"), "def ok():\n    return 1\n").unwrap();
+        let notebook = root.join("latin1.ipynb");
+        fs::write(&notebook, b"{\"cells\": [], \"note\": \"caf\xe9\"}").unwrap();
+
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::new(store, root.clone()).set_skip_embeddings(true);
+        let result = analyzer.analyze().await.unwrap();
+        assert_eq!(
+            result.skip_reasons,
+            HashMap::from([(FileSkipReason::BinaryFile, 1)])
+        );
+        assert_eq!(
+            result.skip_summary().as_deref(),
+            Some("1 file: 1 binary file (not UTF-8)")
+        );
+
+        let result = analyzer.analyze_files(&[notebook]).await.unwrap();
+        assert_eq!(
+            result.skip_reasons,
+            HashMap::from([(FileSkipReason::BinaryFile, 1)])
         );
     }
 
