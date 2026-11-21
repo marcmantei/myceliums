@@ -4,7 +4,7 @@
 //!
 //! | Cause | Status |
 //! |-------|--------|
-//! | malformed request parameter (`tests=bogus`) | `400` |
+//! | malformed request parameter or body (`tests=bogus`, `top_k=abc`, a missing `q`, invalid JSON) | `400` |
 //! | unknown `repo_id` (`next` lists the known ids) | `404` |
 //! | registered repository without an index | `404` |
 //! | symbol / node not in the index | `404` |
@@ -14,13 +14,14 @@
 
 use crate::state::AppState;
 use axum::{
-    http::{header, StatusCode},
+    extract::{FromRequest, FromRequestParts, Query, Request},
+    http::{header, request::Parts, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
 use myceliums_core::MyceliumError;
 use myceliums_storage::{RepoIdError, StorageError};
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 
 /// A failed API request: its status and the `{error, next}` body.
 #[derive(Debug)]
@@ -80,6 +81,54 @@ impl IntoResponse for ApiError {
         } else {
             (self.status, body).into_response()
         }
+    }
+}
+
+/// [`Query`] whose rejection (a malformed or missing parameter) is a `400`
+/// in the error contract instead of axum's plain-text answer.
+pub(crate) struct ApiQuery<T>(pub(crate) T);
+
+impl<T, S> FromRequestParts<S> for ApiQuery<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        Query::<T>::from_request_parts(parts, state)
+            .await
+            .map(|Query(value)| ApiQuery(value))
+            .map_err(|e| {
+                ApiError::bad_request(
+                    e.body_text(),
+                    "fix the query string; the parameters are listed in the `myc serve` section of docs/reference/commands.md",
+                )
+            })
+    }
+}
+
+/// [`Json`] whose rejection (not JSON, wrong content type, missing or
+/// mistyped fields) is a `400` in the error contract.
+pub(crate) struct ApiJson<T>(pub(crate) T);
+
+impl<T, S> FromRequest<S> for ApiJson<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        Json::<T>::from_request(req, state)
+            .await
+            .map(|Json(value)| ApiJson(value))
+            .map_err(|e| {
+                ApiError::bad_request(
+                    e.body_text(),
+                    "send a JSON body with Content-Type: application/json, e.g. {\"query\": \"...\", \"limit\": 20}",
+                )
+            })
     }
 }
 
@@ -179,6 +228,7 @@ mod tests {
         test_data_dir,
     };
     use serde_json::json;
+    use tower::ServiceExt;
 
     /// Every repository-scoped endpoint, as `(method, path after the repo
     /// id is substituted for `{r}`, JSON body)`.
@@ -324,6 +374,63 @@ mod tests {
         let (error, next) = error_body(&json);
         assert!(error.contains("replaced"), "{error}");
         assert!(next.starts_with("retry"), "{next}");
+    }
+
+    /// #118: malformed parameters and bodies are `400`s in the contract,
+    /// not axum's plain-text rejections, and are refused before the index
+    /// is read (the repository here does not even exist).
+    #[tokio::test]
+    async fn malformed_parameters_are_400_with_the_contract() {
+        let dir = test_data_dir("contract_bad_params");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let state = app_state(dir.clone());
+        let cases: Vec<(&str, &str, Option<serde_json::Value>)> = vec![
+            ("GET", "/api/v1/graph/overview/r?page=abc", None),
+            ("GET", "/api/v1/graph/overview/r?per_page=-1", None),
+            ("GET", "/api/v1/graph/search/r", None),
+            ("GET", "/api/v1/graph/search/r?q=x&top_k=many", None),
+            ("GET", "/api/v1/graph/search/r?q=x&tests=bogus", None),
+            ("GET", "/api/v1/graph/nodes/r/n?tests=bogus", None),
+            (
+                "GET",
+                "/api/repos/r/module-coupling?group_by_dir=maybe",
+                None,
+            ),
+            ("GET", "/api/repos/r/centrality?top_n=abc", None),
+            ("GET", "/api/repos/r/centrality?metric=pagerank", None),
+            ("POST", "/api/repos/r/knowledge", Some(json!({"limit": 5}))),
+            ("POST", "/api/repos/r/knowledge", Some(json!({"query": 1}))),
+            (
+                "POST",
+                "/api/repos/r/knowledge?tests=bogus",
+                Some(json!({"query": "x"})),
+            ),
+        ];
+        for (method, uri, body) in cases {
+            let (status, _, json) = request(state.clone(), method, uri, body).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{method} {uri}: {json}");
+            error_body(&json);
+        }
+        // A body that is not JSON at all, or has no JSON content type.
+        for content_type in ["application/json", "text/plain"] {
+            let resp = crate::routes::build_router(state.clone())
+                .oneshot(
+                    axum::http::Request::post("/api/repos/r/knowledge")
+                        .header("host", "127.0.0.1:8888")
+                        .header("content-type", content_type)
+                        .body(axum::body::Body::from("{ not json"))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST, "{content_type}");
+            let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            error_body(&serde_json::from_slice(&bytes).unwrap());
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// A registry that cannot be read is a `500` with the message.

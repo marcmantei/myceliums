@@ -1,9 +1,9 @@
 //! Graph analytics: centrality, community metrics, module coupling and cycles.
 
-use crate::error::{ApiError, Repo};
+use crate::error::{ApiError, ApiQuery, Repo};
 use crate::state::AppState;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     Json,
 };
 use serde::{Deserialize, Serialize};
@@ -29,11 +29,30 @@ struct CentralityNodeResponse {
     eigenvector: f64,
 }
 
+#[derive(Deserialize)]
+pub(crate) struct CentralityParams {
+    metric: Option<String>,
+    top_n: Option<usize>,
+}
+
+/// The centrality measures `metric` may name.
+const CENTRALITY_METRICS: [&str; 4] = ["betweenness", "degree", "closeness", "eigenvector"];
+
 pub(crate) async fn get_centrality(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-    Query(params): Query<HashMap<String, String>>,
+    ApiQuery(params): ApiQuery<CentralityParams>,
 ) -> Result<Json<CentralityResponse>, ApiError> {
+    // An unknown metric is a mistake to report, not a reason to answer
+    // with another one.
+    let metric = params.metric.as_deref().unwrap_or("betweenness");
+    if !CENTRALITY_METRICS.contains(&metric) {
+        return Err(ApiError::bad_request(
+            format!("unknown centrality metric {metric:?}"),
+            format!("use metric={}", CENTRALITY_METRICS.join(", metric=")),
+        ));
+    }
+    let top_n = params.top_n.unwrap_or(20);
     let repo = Repo::new(&state, &repo_id);
     let graph = state
         .graph
@@ -54,15 +73,6 @@ pub(crate) async fn get_centrality(
             ))
         }
     };
-
-    let metric = params
-        .get("metric")
-        .map(|s| s.as_str())
-        .unwrap_or("betweenness");
-    let top_n: usize = params
-        .get("top_n")
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(20);
 
     let uid_map: HashMap<&str, &myceliums_storage::CodeSymbol> =
         symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
@@ -211,7 +221,7 @@ pub(crate) struct ModuleCouplingParams {
 pub(crate) async fn get_module_coupling(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-    Query(params): Query<ModuleCouplingParams>,
+    ApiQuery(params): ApiQuery<ModuleCouplingParams>,
 ) -> Result<Json<ModuleCouplingResponse>, ApiError> {
     let repo = Repo::new(&state, &repo_id);
     let graph = state

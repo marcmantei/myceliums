@@ -4,11 +4,11 @@
 //! code ranked below product code unless `?tests=include|prefer` (#150);
 //! the answer lists what mentions the best `limit` matches.
 
-use crate::error::{ApiError, Repo};
+use crate::error::{ApiError, ApiJson, ApiQuery, Repo};
 use crate::handlers::{unclassified_notice, TestsParam};
 use crate::state::AppState;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     Json,
 };
 use myceliums_core::mentions::MentionMetadata;
@@ -52,8 +52,8 @@ struct KnowledgeResult {
 pub(crate) async fn query_knowledge(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-    Query(tests): Query<TestsParam>,
-    Json(body): Json<KnowledgeRequest>,
+    ApiQuery(tests): ApiQuery<TestsParam>,
+    ApiJson(body): ApiJson<KnowledgeRequest>,
 ) -> Result<Json<KnowledgeResponse>, ApiError> {
     let tests = tests.policy()?;
     let repo = Repo::new(&state, &repo_id);

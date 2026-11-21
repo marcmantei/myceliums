@@ -4,14 +4,14 @@
 //! below product code unless `?tests=include|prefer` (#150), like
 //! `search_code` and `myc semantic-search`.
 
-use crate::error::{ApiError, Repo};
+use crate::error::{ApiError, ApiQuery, Repo};
 use crate::handlers::graph::{
     build_community_map, calculate_depths, color_for_kind, symbol_kind_display,
 };
 use crate::handlers::{test_policy, unclassified_notice, TestsParam};
 use crate::state::AppState;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
     Json,
 };
@@ -85,6 +85,9 @@ pub(crate) struct NodeDetailResponse {
     is_entry_point: bool,
     /// How test code was ranked among `semantic_neighbors`.
     tests: &'static str,
+    /// Set when the index cannot tell test code from product code.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    notice: Option<String>,
     neighbors: Vec<NodeNeighbor>,
     semantic_neighbors: Vec<SemanticNeighbor>,
 }
@@ -304,7 +307,7 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 pub(crate) async fn graph_v1_overview(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-    Query(params): Query<GraphOverviewParams>,
+    ApiQuery(params): ApiQuery<GraphOverviewParams>,
 ) -> Result<Json<GraphOverviewApiResponse>, ApiError> {
     let repo = Repo::new(&state, &repo_id);
     let graph = state
@@ -492,7 +495,7 @@ pub(crate) async fn graph_v1_overview(
 pub(crate) async fn graph_v1_node(
     State(state): State<Arc<AppState>>,
     Path((repo_id, node_id)): Path<(String, String)>,
-    Query(tests): Query<TestsParam>,
+    ApiQuery(tests): ApiQuery<TestsParam>,
 ) -> Result<Json<NodeDetailResponse>, ApiError> {
     let tests = tests.policy()?;
     let repo = Repo::new(&state, &repo_id);
@@ -598,6 +601,7 @@ pub(crate) async fn graph_v1_node(
         depth: depths.get(&node_id).copied().unwrap_or(0),
         is_entry_point,
         tests: tests.ranking.as_str(),
+        notice: unclassified_notice(graph.info(), &tests),
         neighbors,
         semantic_neighbors,
     }))
@@ -609,7 +613,7 @@ pub(crate) async fn graph_v1_node(
 pub(crate) async fn graph_v1_search(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-    Query(params): Query<GraphSearchParams>,
+    ApiQuery(params): ApiQuery<GraphSearchParams>,
 ) -> Result<Json<GraphSearchResponse>, ApiError> {
     let tests = test_policy(params.tests.as_deref())?;
     let repo = Repo::new(&state, &repo_id);
@@ -680,8 +684,8 @@ mod tests {
     use axum::response::IntoResponse;
 
     use crate::test_support::{
-        app_state, corrupt_seeded_store, error_body, request, sample_symbol, seed_healthy_store,
-        seed_store, test_data_dir, test_symbol, tilted_vector,
+        app_state, corrupt_seeded_store, error_body, register_repo_with, request, sample_symbol,
+        seed_healthy_store, seed_store, test_data_dir, test_symbol, tilted_vector,
     };
 
     // --- Regression tests for #30: search/neighbor endpoints must not collapse
@@ -699,7 +703,7 @@ mod tests {
         let resp = graph_v1_node(
             State(app_state(dir.clone())),
             Path((repo_id.to_string(), node_id.to_string())),
-            Query(TestsParam::default()),
+            ApiQuery(TestsParam::default()),
         )
         .await
         .into_response();
@@ -721,7 +725,7 @@ mod tests {
         let resp = graph_v1_node(
             State(app_state(dir.clone())),
             Path((repo_id.to_string(), node_id.to_string())),
-            Query(TestsParam::default()),
+            ApiQuery(TestsParam::default()),
         )
         .await
         .into_response();
@@ -755,7 +759,7 @@ mod tests {
         let resp = graph_v1_search(
             State(app_state(dir.clone())),
             Path(repo_id.to_string()),
-            Query(GraphSearchParams {
+            ApiQuery(GraphSearchParams {
                 q: "anything".to_string(),
                 top_k: Some(20),
                 tests: None,
@@ -808,6 +812,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK, "{body}");
         assert_eq!(body["tests"], "demote");
         assert_eq!(neighbors(&body), ["product_far", "test_near", "test_mid"]);
+        assert!(body.get("notice").is_none(), "{body}");
 
         let (status, _, body) =
             request(state.clone(), "GET", &format!("{uri}?tests=include"), None).await;
@@ -820,11 +825,22 @@ mod tests {
         assert_eq!(status, StatusCode::OK, "{body}");
         assert_eq!(neighbors(&body), ["test_near", "test_mid", "product_far"]);
 
-        let (status, _, body) = request(state, "GET", &format!("{uri}?tests=bogus"), None).await;
+        let (status, _, body) =
+            request(state.clone(), "GET", &format!("{uri}?tests=bogus"), None).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         let (error, next) = error_body(&body);
         assert!(error.contains("bogus"), "{error}");
         assert!(next.contains("tests=include"), "{next}");
+
+        // An index from before the classification cannot demote: it says so.
+        register_repo_with(&dir, repo, 0);
+        let (status, _, body) = request(state, "GET", &uri, None).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let notice = body["notice"].as_str().unwrap_or_else(|| panic!("{body}"));
+        assert!(
+            notice.contains("before test code was classified"),
+            "{notice}"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

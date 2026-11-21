@@ -2486,11 +2486,14 @@ svg { width: 100%; height: 100%; display: block; }
   function renderKnowledgeResults(data) {
     const container = document.getElementById('knowledge-results');
     if (!data.results || data.results.length === 0) {
-      container.innerHTML = '<div id="knowledge-status">No results found for "' + escHtml(data.query) + '"</div>';
+      container.innerHTML = '<div id="knowledge-status">No results found for "' + escHtml(data.query) + '"'
+        + (data.notice ? '<br>Note: ' + escHtml(data.notice) : '') + '</div>';
       return;
     }
 
     let html = '<div class="knowledge-summary"><span>' + data.total_mentions + '</span> mention(s) from <span>' + data.source_count + '</span> source(s)</div>';
+    // The index cannot tell test code from product code (#150).
+    if (data.notice) html += '<div class="knowledge-summary">Note: ' + escHtml(data.notice) + '</div>';
 
     data.results.forEach(r => {
       const badgeClass = getSourceBadgeClass(r.source_kind);

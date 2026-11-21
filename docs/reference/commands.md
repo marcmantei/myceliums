@@ -713,7 +713,7 @@ A request that fails gets an error status and the body
 
 | Status | When | `next` |
 |--------|------|--------|
-| `400` | A parameter is invalid (`tests=bogus`) | The accepted values |
+| `400` | A parameter or body is malformed or invalid (`tests=bogus`, `top_k=abc`, a missing `q`, `metric=pagerank`, a body that is not JSON) | What to send instead |
 | `404` | Unknown `repo_id` | The registered ids, or `myc analyze <path>` when there are none |
 | `404` | The repository is registered but has no index on disk | `myc analyze <path>` with its path |
 | `404` | No symbol with that id | Where ids come from |
