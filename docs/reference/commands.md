@@ -696,8 +696,32 @@ myc serve --port 3000 --repo my-project
 The server listens on `127.0.0.1` only and rejects requests whose `Host` is
 not loopback (DNS rebinding) or whose `Origin` is a foreign site, so other web
 pages cannot call its API (for example `POST /api/llm/config`).
-Its search endpoints still rank test code like product code; unlike
-`myc search` and `search_code` they do not demote it yet (#150).
+
+Its search endpoints rank test code below product code, like `myc search`
+and `search_code` (#150): `GET /api/v1/graph/search/{repo_id}?q=...`
+(semantic search), the semantic neighbours of
+`GET /api/v1/graph/nodes/{repo_id}/{node_id}` and the keyword matches of
+`POST /api/repos/{repo_id}/knowledge` take `tests=demote` (default),
+`tests=include` or `tests=prefer` as a query parameter, and echo the
+ranking used in a `tests` field. On an index built before test code was
+classified the search answers carry a `notice` saying that nothing was
+reordered.
+
+A request that fails gets an error status and the body
+`{"error": "...", "next": "..."}`, never `200` with empty or partial data
+(#118):
+
+| Status | When | `next` |
+|--------|------|--------|
+| `400` | A parameter or body is malformed or invalid (`tests=bogus`, `top_k=abc`, a missing `q`, `metric=pagerank`, a body that is not JSON) | What to send instead |
+| `404` | Unknown `repo_id` | The registered ids, or `myc analyze <path>` when there are none |
+| `404` | The repository is registered but has no index on disk | `myc analyze <path>` with its path |
+| `404` | No symbol with that id | Where ids come from |
+| `409` | Semantic search on an index without embeddings | Re-analyze without `--skip-embeddings`, or the keyword endpoint |
+| `503` | A re-analysis replaced the index during the request (`Retry-After: 1`) | Retry |
+| `500` | Reading the index or computing the answer failed; `error` holds the cause | Check the log; rebuild with `myc analyze <path>` |
+
+The dashboard shows `error` and `next` in place of the view.
 
 ### `myc email`
 

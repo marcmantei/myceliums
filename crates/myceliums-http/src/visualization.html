@@ -855,10 +855,24 @@ svg { width: 100%; height: 100%; display: block; }
   let communityMetricsCache = null;
   let focusedCommunity = null;
 
+  // A failed API request answers with a non-2xx status and a JSON body
+  // {error, next} (#118). Throw it as an Error so every view shows what
+  // went wrong and what to do, instead of rendering empty data.
+  async function apiJson(url, options) {
+    const res = await fetch(url, options);
+    let body = null;
+    try { body = await res.json(); } catch (_) { /* not JSON */ }
+    if (!res.ok) {
+      let msg = (body && body.error) || ('HTTP ' + res.status + ' ' + res.statusText);
+      if (body && body.next) msg += '. Next: ' + body.next;
+      throw new Error(msg);
+    }
+    return body;
+  }
+
   async function loadRepos() {
     try {
-      const res = await fetch('/api/repos');
-      const repos = await res.json();
+      const repos = await apiJson('/api/repos');
       const sel = document.getElementById('repo-select');
       sel.innerHTML = '';
       repos.forEach(r => {
@@ -883,8 +897,7 @@ svg { width: 100%; height: 100%; display: block; }
     if (!currentRepoId) return;
     document.getElementById('loading').style.display = 'block';
     try {
-      const res = await fetch('/api/repos/' + encodeURIComponent(currentRepoId) + '/graph');
-      graphData = await res.json();
+      graphData = await apiJson('/api/repos/' + encodeURIComponent(currentRepoId) + '/graph');
 
       // Pre-compute degree map for layout functions
       degreeMap = {};
@@ -897,6 +910,12 @@ svg { width: 100%; height: 100%; display: block; }
       document.getElementById('loading').style.display = 'none';
       buildGraph();
     } catch(e) {
+      // Do not leave the previous repository's graph behind the message.
+      graphData = { nodes: [], edges: [], communities: [] };
+      d3.select('#graph-svg').selectAll('*').remove();
+      ['stat-nodes', 'stat-edges', 'stat-communities'].forEach(id => {
+        document.getElementById(id).textContent = '0';
+      });
       document.getElementById('loading').textContent = 'Failed to load graph: ' + e.message;
     }
   }
@@ -1796,8 +1815,7 @@ svg { width: 100%; height: 100%; display: block; }
     document.getElementById('centrality-loading').style.display = 'block';
 
     try {
-      const res = await fetch('/api/repos/' + encodeURIComponent(currentRepoId) + '/centrality?metric=' + centralityMetric + '&top_n=' + topN);
-      centralityData = await res.json();
+      centralityData = await apiJson('/api/repos/' + encodeURIComponent(currentRepoId) + '/centrality?metric=' + centralityMetric + '&top_n=' + topN);
       document.getElementById('centrality-loading').style.display = 'none';
       document.getElementById('heatmap-legend').style.display = 'flex';
       renderCentralityHeatmap();
@@ -2468,11 +2486,14 @@ svg { width: 100%; height: 100%; display: block; }
   function renderKnowledgeResults(data) {
     const container = document.getElementById('knowledge-results');
     if (!data.results || data.results.length === 0) {
-      container.innerHTML = '<div id="knowledge-status">No results found for "' + escHtml(data.query) + '"</div>';
+      container.innerHTML = '<div id="knowledge-status">No results found for "' + escHtml(data.query) + '"'
+        + (data.notice ? '<br>Note: ' + escHtml(data.notice) : '') + '</div>';
       return;
     }
 
     let html = '<div class="knowledge-summary"><span>' + data.total_mentions + '</span> mention(s) from <span>' + data.source_count + '</span> source(s)</div>';
+    // The index cannot tell test code from product code (#150).
+    if (data.notice) html += '<div class="knowledge-summary">Note: ' + escHtml(data.notice) + '</div>';
 
     data.results.forEach(r => {
       const badgeClass = getSourceBadgeClass(r.source_kind);
@@ -2537,12 +2558,11 @@ svg { width: 100%; height: 100%; display: block; }
     addToHistory(query);
 
     try {
-      const res = await fetch('/api/repos/' + encodeURIComponent(currentRepoId) + '/knowledge', {
+      const data = await apiJson('/api/repos/' + encodeURIComponent(currentRepoId) + '/knowledge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: query, limit: 20 })
       });
-      const data = await res.json();
       renderKnowledgeResults(data);
     } catch(e) {
       resultsContainer.innerHTML = '<div id="knowledge-status">Error: ' + escHtml(e.message) + '</div>';
@@ -2572,8 +2592,7 @@ svg { width: 100%; height: 100%; display: block; }
     document.getElementById('cycles-loading').textContent = 'Detecting circular dependencies...';
 
     try {
-      const res = await fetch('/api/repos/' + encodeURIComponent(currentRepoId) + '/cycles');
-      const data = await res.json();
+      const data = await apiJson('/api/repos/' + encodeURIComponent(currentRepoId) + '/cycles');
       cyclesData = data;
       selectedCycleIdx = null;
       renderCyclesSidebar();
@@ -2948,8 +2967,7 @@ svg { width: 100%; height: 100%; display: block; }
     loading.style.display = 'flex';
     loading.textContent = 'Loading coupling data...';
     try {
-      const res = await fetch(`/api/repos/${encodeURIComponent(repoId)}/module-coupling?group_by_dir=${couplingGroupByDir}`);
-      const data = await res.json();
+      const data = await apiJson(`/api/repos/${encodeURIComponent(repoId)}/module-coupling?group_by_dir=${couplingGroupByDir}`);
       couplingData = data.modules || [];
       loading.style.display = 'none';
       renderCouplingSidebar();

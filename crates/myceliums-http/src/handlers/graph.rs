@@ -1,11 +1,10 @@
 //! Repository listing, the 2D schematic graph, symbol details, stats and processes.
 
+use crate::error::{ApiError, Repo};
 use crate::state::AppState;
-use anyhow::Result;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
     Json,
 };
 use myceliums_core::RepoGraph;
@@ -14,12 +13,11 @@ use serde::Serialize;
 use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
-use tracing::error;
 
 /// Phase 1 extended GraphResponse for 2D schematic view.
 /// Includes enriched nodes, edges, and community/process clustering information.
 #[derive(Serialize)]
-struct GraphResponse {
+pub(crate) struct GraphResponse {
     nodes: Vec<GraphNode>,
     edges: Vec<GraphEdge>,
     communities: Vec<GraphCommunity>,
@@ -76,7 +74,7 @@ struct GraphCommunity {
 /// Process cluster: ordered steps from entry point.
 /// Used for identifying process flows in the 2D schematic.
 #[derive(Serialize)]
-struct ProcessCluster {
+pub(crate) struct ProcessCluster {
     id: String,
     name: String,
     entry_point_id: String,
@@ -85,7 +83,7 @@ struct ProcessCluster {
 }
 
 #[derive(Serialize)]
-struct RepoListItem {
+pub(crate) struct RepoListItem {
     id: String,
     name: String,
     path: String,
@@ -95,7 +93,7 @@ struct RepoListItem {
 }
 
 #[derive(Serialize)]
-struct SymbolDetail {
+pub(crate) struct SymbolDetail {
     id: String,
     name: String,
     qualified_name: String,
@@ -117,7 +115,7 @@ struct ConnectionInfo {
 }
 
 #[derive(Serialize)]
-struct StatsResponse {
+pub(crate) struct StatsResponse {
     symbols: usize,
     files: usize,
     relationships: usize,
@@ -284,14 +282,19 @@ fn count_cross_community_edges(
         .count() as u32
 }
 
-/// Build community membership map: symbol uid -> community label
+/// Build community membership map: symbol uid -> community label.
+///
+/// Stored communities first; without any, communities computed on the fly,
+/// then top-level directories. A failure to read the stored communities is
+/// an error, not a reason to fall back.
 pub(crate) async fn build_community_map(
     graph: &RepoGraph<'_>,
     symbols: &[myceliums_storage::CodeSymbol],
     relationships: &[myceliums_storage::Relationship],
-) -> HashMap<String, String> {
+) -> myceliums_core::error::Result<HashMap<String, String>> {
     // Try stored communities first
-    if let Ok(communities) = graph.communities().await {
+    {
+        let communities = graph.communities().await?;
         if !communities.is_empty() {
             let mut map = HashMap::new();
             for community in &communities {
@@ -308,7 +311,7 @@ pub(crate) async fn build_community_map(
                 }
             }
             if !map.is_empty() {
-                return map;
+                return Ok(map);
             }
         }
     }
@@ -316,7 +319,7 @@ pub(crate) async fn build_community_map(
     // Fallback: compute communities on-the-fly via Leiden
     if let Ok(map) = myceliums_core::compute_uid_to_community_label(symbols, relationships) {
         if !map.is_empty() {
-            return map;
+            return Ok(map);
         }
     }
 
@@ -333,7 +336,7 @@ pub(crate) async fn build_community_map(
             map.insert(sym.uid.clone(), dir);
         }
     }
-    map
+    Ok(map)
 }
 
 /// Extract process clusters from the stored processes.
@@ -341,8 +344,8 @@ pub(crate) async fn build_community_map(
 async fn extract_processes(
     graph: &RepoGraph<'_>,
     symbols: &[myceliums_storage::CodeSymbol],
-) -> Result<Vec<ProcessCluster>> {
-    let processes = graph.processes().await.unwrap_or_default();
+) -> myceliums_core::error::Result<Vec<ProcessCluster>> {
+    let processes = graph.processes().await?;
 
     // Build name→uid lookup (first match wins; entry_point is already a name)
     let name_to_uid: HashMap<&str, &str> = symbols
@@ -390,17 +393,20 @@ async fn extract_processes(
     Ok(clusters)
 }
 
-pub(crate) async fn list_repos(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    let registry = match RepoRegistry::load(&state.registry_path) {
-        Ok(r) => r,
-        Err(e) => {
-            error!("Failed to load registry: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(Vec::<RepoListItem>::new()),
-            );
-        }
-    };
+pub(crate) async fn list_repos(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Vec<RepoListItem>>, ApiError> {
+    let registry = RepoRegistry::load(&state.registry_path).map_err(|e| {
+        tracing::error!("Failed to load registry: {}", e);
+        ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("cannot read the repository registry: {e}"),
+            format!(
+                "check {} (or remove it and re-run `myc analyze <path>`)",
+                state.registry_path.display()
+            ),
+        )
+    })?;
 
     let repos: Vec<RepoListItem> = registry
         .list()
@@ -428,7 +434,7 @@ pub(crate) async fn list_repos(State(state): State<Arc<AppState>>) -> impl IntoR
         repos
     };
 
-    (StatusCode::OK, Json(repos))
+    Ok(Json(repos))
 }
 
 /// Get enriched graph for 2D schematic view (Phase 1).
@@ -436,27 +442,20 @@ pub(crate) async fn list_repos(State(state): State<Arc<AppState>>) -> impl IntoR
 pub(crate) async fn get_graph(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-) -> impl IntoResponse {
-    let graph = match state.graph.graph(&repo_id).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to open store for {}: {}", repo_id, e);
-            return (
-                StatusCode::NOT_FOUND,
-                Json(GraphResponse {
-                    nodes: vec![],
-                    edges: vec![],
-                    communities: vec![],
-                    processes: vec![],
-                }),
-            );
-        }
-    };
+) -> Result<Json<GraphResponse>, ApiError> {
+    let repo = Repo::new(&state, &repo_id);
+    let graph = state
+        .graph
+        .graph(&repo_id)
+        .await
+        .map_err(|e| repo.error(e))?;
 
-    let symbols = graph.symbols().await.unwrap_or_default();
-    let relationships = graph.relationships().await.unwrap_or_default();
-    let communities_raw = graph.communities().await.unwrap_or_default();
-    let community_map = build_community_map(&graph, &symbols, &relationships).await;
+    let symbols = graph.symbols().await.map_err(|e| repo.error(e))?;
+    let relationships = graph.relationships().await.map_err(|e| repo.error(e))?;
+    let communities_raw = graph.communities().await.map_err(|e| repo.error(e))?;
+    let community_map = build_community_map(&graph, &symbols, &relationships)
+        .await
+        .map_err(|e| repo.error(e))?;
 
     // Phase 1: Calculate depths
     let depths = calculate_depths(&symbols, &relationships).await;
@@ -575,38 +574,34 @@ pub(crate) async fn get_graph(
     // Phase 1: Extract processes with resolved step UIDs
     let processes = extract_processes(&graph, &symbols)
         .await
-        .unwrap_or_default();
+        .map_err(|e| repo.error(e))?;
 
-    (
-        StatusCode::OK,
-        Json(GraphResponse {
-            nodes,
-            edges,
-            communities,
-            processes,
-        }),
-    )
+    Ok(Json(GraphResponse {
+        nodes,
+        edges,
+        communities,
+        processes,
+    }))
 }
 
 pub(crate) async fn get_symbol(
     State(state): State<Arc<AppState>>,
     Path((repo_id, uid)): Path<(String, String)>,
-) -> impl IntoResponse {
-    let graph = match state.graph.graph(&repo_id).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to open store for {}: {}", repo_id, e);
-            return (StatusCode::NOT_FOUND, Json(Option::<SymbolDetail>::None));
-        }
-    };
+) -> Result<Json<SymbolDetail>, ApiError> {
+    let repo = Repo::new(&state, &repo_id);
+    let graph = state
+        .graph
+        .graph(&repo_id)
+        .await
+        .map_err(|e| repo.error(e))?;
 
-    let symbols = graph.symbols().await.unwrap_or_default();
-    let relationships = graph.relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.map_err(|e| repo.error(e))?;
+    let relationships = graph.relationships().await.map_err(|e| repo.error(e))?;
 
-    let symbol = match symbols.iter().find(|s| s.uid == uid) {
-        Some(s) => s,
-        None => return (StatusCode::NOT_FOUND, Json(None)),
-    };
+    let symbol = symbols
+        .iter()
+        .find(|s| s.uid == uid)
+        .ok_or_else(|| repo.symbol_not_found(&uid))?;
 
     let sym_map: HashMap<&str, &myceliums_storage::CodeSymbol> =
         symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
@@ -650,65 +645,58 @@ pub(crate) async fn get_symbol(
         callees,
     };
 
-    (StatusCode::OK, Json(Some(detail)))
+    Ok(Json(detail))
 }
 
 pub(crate) async fn get_stats(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-) -> impl IntoResponse {
-    let graph = match state.graph.graph(&repo_id).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to open store for {}: {}", repo_id, e);
-            return (
-                StatusCode::NOT_FOUND,
-                Json(StatsResponse {
-                    symbols: 0,
-                    files: 0,
-                    relationships: 0,
-                    communities: 0,
-                }),
-            );
-        }
-    };
+) -> Result<Json<StatsResponse>, ApiError> {
+    let repo = Repo::new(&state, &repo_id);
+    let graph = state
+        .graph
+        .graph(&repo_id)
+        .await
+        .map_err(|e| repo.error(e))?;
     let store = graph.store();
 
-    let symbols = store.symbol_count().await.unwrap_or(0);
-    let files = store.file_count().await.unwrap_or(0);
-    let relationships = store.relationship_count().await.unwrap_or(0);
-    let communities = graph.communities().await.map(|c| c.len()).unwrap_or(0);
+    let symbols = store.symbol_count().await.map_err(|e| repo.error(e))?;
+    let files = store.file_count().await.map_err(|e| repo.error(e))?;
+    let relationships = store
+        .relationship_count()
+        .await
+        .map_err(|e| repo.error(e))?;
+    // The counts above bypass the graph tables: pin the snapshot to the
+    // generation they read before the first table read.
+    graph.verify().map_err(|e| repo.error(e))?;
+    let communities = graph.communities().await.map_err(|e| repo.error(e))?.len();
 
-    (
-        StatusCode::OK,
-        Json(StatsResponse {
-            symbols,
-            files,
-            relationships,
-            communities,
-        }),
-    )
+    Ok(Json(StatsResponse {
+        symbols,
+        files,
+        relationships,
+        communities,
+    }))
 }
 
 /// Phase 1: Get processes for 2D schematic view.
 pub(crate) async fn get_processes(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-) -> impl IntoResponse {
-    let graph = match state.graph.graph(&repo_id).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to open store for {}: {}", repo_id, e);
-            return (StatusCode::NOT_FOUND, Json(Vec::<ProcessCluster>::new()));
-        }
-    };
+) -> Result<Json<Vec<ProcessCluster>>, ApiError> {
+    let repo = Repo::new(&state, &repo_id);
+    let graph = state
+        .graph
+        .graph(&repo_id)
+        .await
+        .map_err(|e| repo.error(e))?;
 
-    let symbols = graph.symbols().await.unwrap_or_default();
+    let symbols = graph.symbols().await.map_err(|e| repo.error(e))?;
     let processes = extract_processes(&graph, &symbols)
         .await
-        .unwrap_or_default();
+        .map_err(|e| repo.error(e))?;
 
-    (StatusCode::OK, Json(processes))
+    Ok(Json(processes))
 }
 
 #[cfg(test)]

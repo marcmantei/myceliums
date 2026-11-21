@@ -12,6 +12,7 @@ use crate::state::{data_dir, AppState};
 use anyhow::Result;
 use std::sync::Arc;
 
+mod error;
 mod handlers;
 mod routes;
 mod security;

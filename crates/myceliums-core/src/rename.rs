@@ -66,7 +66,10 @@ impl RenamePlan {
     /// (or language-specific variants like "line_comment", "block_comment", etc.)
     /// and returns their byte ranges in source order. A string literal is
     /// one range, quotes included; nodes inside it (its content, escapes)
-    /// are not visited.
+    /// are not visited — except the code interpolated into a template string
+    /// or f-string (`${user.id}`, `{user.id}`), which is code: the literal
+    /// parts around it are ranges, the interpolation is walked like any
+    /// other code (#118).
     fn comment_and_string_ranges(source: &[u8], language: Language) -> Vec<ByteRange> {
         let mut parser = Parser::new();
 
@@ -80,38 +83,48 @@ impl RenamePlan {
         };
 
         let mut ranges = Vec::new();
-        let mut cursor = tree.walk();
-
-        // Pre-order walk: a node, then its children, then its next sibling.
-        // (#118: after a leaf the cursor went to the next sibling and then
-        // straight back up to the parent without visiting it, so the walk
-        // revisited the parent's first child forever.)
-        'walk: loop {
-            let node = cursor.node();
+        // Pre-order walk with an explicit stack (no recursion on deep
+        // trees). (#118: the cursor walk this replaced went from a leaf to
+        // its next sibling and then straight back to the parent, revisiting
+        // the parent's first child forever.)
+        let mut stack = vec![tree.root_node()];
+        while let Some(node) = stack.pop() {
             let kind = node.kind();
-
-            // Detect comment and string nodes across all supported languages.
-            let is_comment_or_string = kind.contains("comment") || kind.contains("string");
+            // Python's implicit concatenation holds strings; walk into it.
+            let is_comment_or_string = (kind.contains("comment") || kind.contains("string"))
+                && kind != "concatenated_string";
 
             if is_comment_or_string {
-                ranges.push(ByteRange {
-                    start: node.start_byte(),
-                    end: node.end_byte(),
-                });
-            } else if cursor.goto_first_child() {
-                continue;
-            }
-
-            loop {
-                if cursor.goto_next_sibling() {
-                    continue 'walk;
+                // Literal text between the interpolations; the
+                // interpolations themselves are walked as code.
+                let mut start = node.start_byte();
+                let mut cursor = node.walk();
+                for child in node.children(&mut cursor) {
+                    if matches!(child.kind(), "template_substitution" | "interpolation") {
+                        if start < child.start_byte() {
+                            ranges.push(ByteRange {
+                                start,
+                                end: child.start_byte(),
+                            });
+                        }
+                        stack.push(child);
+                        start = child.end_byte();
+                    }
                 }
-                if !cursor.goto_parent() {
-                    break 'walk;
+                if start < node.end_byte() {
+                    ranges.push(ByteRange {
+                        start,
+                        end: node.end_byte(),
+                    });
                 }
+            } else {
+                let mut cursor = node.walk();
+                let children: Vec<_> = node.children(&mut cursor).collect();
+                stack.extend(children.into_iter().rev());
             }
         }
 
+        ranges.sort_by_key(|r| r.start);
         ranges
     }
 
@@ -348,6 +361,27 @@ mod tests {
             tree_sitter_rust::LANGUAGE.into(),
         );
         assert_eq!(excluded, [(12, 17), (19, 28)]);
+    }
+
+    /// #118: the code inside a template string or f-string is not part of
+    /// the string's range; the literal text around it is.
+    #[test]
+    fn interpolations_are_code_not_string() {
+        let ts = "const s = `id ${user.id} of ${name}`; // user\n";
+        let ranges = RenamePlan::comment_and_string_ranges(
+            ts.as_bytes(),
+            tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
+        );
+        let texts: Vec<&str> = ranges.iter().map(|r| &ts[r.start..r.end]).collect();
+        assert_eq!(texts, ["`id ", " of ", "`", "// user"]);
+
+        let py = "s = f\"id {user.id}!\"  # user\n";
+        let ranges = RenamePlan::comment_and_string_ranges(
+            py.as_bytes(),
+            tree_sitter_python::LANGUAGE.into(),
+        );
+        let texts: Vec<&str> = ranges.iter().map(|r| &py[r.start..r.end]).collect();
+        assert_eq!(texts, ["f\"id ", "!\"", "# user"]);
     }
 
     fn make_symbol(uid: &str, name: &str, content: &str, file: &str, start: u32) -> CodeSymbol {
