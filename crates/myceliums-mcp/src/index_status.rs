@@ -32,7 +32,11 @@ pub(crate) async fn partial_index_warning(store: &Store) -> Option<String> {
                 stats.symbols_embedded, stats.symbols_total
             ))
         }
-        Ok(stats) => stats.and_then(|stats| stats.partial_index_warning()),
+        // Not embedding now (a stopped or failed run, or a restart): the
+        // next analyze resumes it.
+        Ok(stats) => stats.and_then(|stats| stats.partial_index_warning()).map(|warning| {
+            format!("{warning}; call analyze to embed the rest (it resumes where the last run stopped)")
+        }),
         Err(e) => {
             tracing::warn!("Failed to load embedding accounting for partial-index warning: {e}");
             None

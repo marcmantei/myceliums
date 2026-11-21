@@ -179,6 +179,9 @@ pub async fn run_mcp_server(opts: ServeOptions) -> Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("MCP serve error: {}", e))?;
     let served = running.waiting().await;
+    // The client is gone: a background embedding stops within a model batch
+    // instead of holding the process (#157); the next analyze resumes it.
+    crate::embedding_jobs::stop_all();
     stats.finish().await;
     served?;
     Ok(())
@@ -235,6 +238,8 @@ pub async fn run_mcp_http_server(http: McpHttpOptions, opts: ServeOptions) -> Re
         served = axum::serve(listener, app) => served,
         _ = tokio::signal::ctrl_c() => Ok(()),
     };
+    // As for stdio: background embeddings stop, resumable (#157).
+    crate::embedding_jobs::stop_all();
     stats_file.finish().await;
     served?;
 

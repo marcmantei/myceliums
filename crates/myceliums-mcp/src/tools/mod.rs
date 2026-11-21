@@ -61,7 +61,7 @@ mod prelude {
     pub(crate) use std::path::PathBuf;
     pub(crate) use tracing::info;
 
-    pub(crate) use super::{require_query, text, TextResult};
+    pub(crate) use super::{require_query, retry_on_index_change, text, TextResult};
     pub(crate) use crate::errors::{repo_id_error, service_error, ToolError};
     pub(crate) use crate::format::{self, untrusted};
     pub(crate) use crate::index_status::{load_embedding_stats, partial_index_warning};
@@ -97,6 +97,20 @@ impl MyceliumsMcp {
 
 /// The result of a text tool: plain text content on success.
 pub(crate) type TextResult = Result<String, ToolError>;
+
+/// Runs a read-only call once more when the index changed under its first
+/// run — a re-analysis swapping it, a background embedding moving its
+/// vectors in at the end (#157): the second run reads the new generation.
+pub(crate) async fn retry_on_index_change<F, Fut>(call: F) -> TextResult
+where
+    F: Fn() -> Fut,
+    Fut: std::future::Future<Output = TextResult>,
+{
+    match call().await {
+        Err(ToolError::IndexChanged { .. }) => call().await,
+        other => other,
+    }
+}
 
 /// A plain text result (no graph read, so no freshness line).
 pub(crate) fn text(text: impl Into<String>) -> TextResult {

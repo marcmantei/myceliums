@@ -44,6 +44,23 @@ impl MyceliumsMcp {
         self.into_service(toolsets)
     }
 
+    /// Invoke the `search_code` handler.
+    pub async fn search_code_for_test(&self, params: SearchCodeParams) -> Result<String, String> {
+        self.search_code(Parameters(params))
+            .await
+            .map_err(|e| e.message())
+    }
+
+    /// Invoke the `impact_of_change` handler.
+    pub async fn impact_of_change_for_test(
+        &self,
+        params: ImpactOfChangeParams,
+    ) -> Result<String, String> {
+        self.impact_of_change(Parameters(params))
+            .await
+            .map_err(|e| e.message())
+    }
+
     /// Invoke the `context_search` handler.
     pub async fn context_search_for_test(&self, params: SearchParams) -> Result<String, String> {
         self.context_search(Parameters(params))

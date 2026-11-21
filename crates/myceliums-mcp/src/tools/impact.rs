@@ -33,84 +33,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<ImpactOfChangeParams>,
     ) -> TextResult {
-        let given = [
-            params.symbol_name.is_some(),
-            params.file_path.is_some(),
-            params.diff.is_some(),
-        ];
-        if given.iter().filter(|g| **g).count() > 1 {
-            return Err(ToolError::invalid(
-                "give at most one of symbol_name, file_path and diff",
-            ));
-        }
-        let graph = self.graph_for(params.repo_id.as_deref()).await?;
-        let repo_id = graph.repo_id().to_string();
-        let depth = params.depth.unwrap_or(2).clamp(1, 10);
-        let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
-
-        let symbols = graph.symbols().await?;
-        let relationships = graph.relationships().await?;
-        let (subject, roots) = match (params.symbol_name, params.file_path) {
-            (Some(name), _) => {
-                let s = navigation::resolve(&symbols, &name)?;
-                let subject = format!(
-                    "{} ({}, {}:{}-{})",
-                    s.qualified_name, s.kind, s.file_path, s.start_line, s.end_line
-                );
-                (subject, vec![s])
-            }
-            (None, Some(path)) => {
-                // Core's file matching (exact path, else a unique suffix), as
-                // `myc impact <file>` uses it.
-                let roots = navigation::symbols_in_file(&symbols, &path);
-                let path = match roots.first() {
-                    Some(s) => s.file_path.clone(),
-                    None => {
-                        let path = path.trim().trim_start_matches("./").to_string();
-                        let files = graph.files().await?;
-                        if !files.iter().any(|f| f.path == path) {
-                            return Err(ToolError::recoverable(
-                                format!("File `{path}` is not in the index."),
-                                "pass the path relative to the repository root (e.g. src/main.rs), or find the code with search_code",
-                            ));
-                        }
-                        path
-                    }
-                };
-                (format!("{path} ({} definitions)", roots.len()), roots)
-            }
-            (None, None) => {
-                let diff_text = diff_or_git(params.diff, &repo_id)?;
-                let body = if diff_text.trim().is_empty() {
-                    "No changes detected (empty diff).".to_string()
-                } else {
-                    let report = detect_impact(&diff_text, &symbols, &relationships, depth);
-                    let stats = crate::index_status::call_resolution(&graph.store()).await;
-                    let note = crate::index_status::unlinked_impact_note(
-                        stats.as_ref(),
-                        report
-                            .directly_changed
-                            .iter()
-                            .map(|s| (s.name.as_str(), s.file_path.as_str())),
-                    );
-                    with_note(format::format_impact_report(&report, page), note)
-                };
-                return self.graph_text(&graph, body).await;
-            }
-        };
-        let hits = navigation::dependents(&symbols, &relationships, &roots, depth);
-        let stats = crate::index_status::call_resolution(&graph.store()).await;
-        let note = crate::index_status::unlinked_impact_note(
-            stats.as_ref(),
-            roots
-                .iter()
-                .map(|s| (s.name.as_str(), s.file_path.as_str())),
-        );
-        let body = with_note(
-            format::format_dependents(&subject, &hits, depth, page),
-            note,
-        );
-        self.graph_text(&graph, body).await
+        retry_on_index_change(|| self.impact_of_change_once(params.clone())).await
     }
 
     #[tool(
@@ -589,6 +512,90 @@ fn with_note(body: String, note: Option<String>) -> String {
     match note {
         Some(note) => format!("{}\n\n{note}\n", body.trim_end()),
         None => body,
+    }
+}
+
+impl MyceliumsMcp {
+    /// One run of `impact_of_change` (see [`retry_on_index_change`]).
+    async fn impact_of_change_once(&self, params: ImpactOfChangeParams) -> TextResult {
+        let given = [
+            params.symbol_name.is_some(),
+            params.file_path.is_some(),
+            params.diff.is_some(),
+        ];
+        if given.iter().filter(|g| **g).count() > 1 {
+            return Err(ToolError::invalid(
+                "give at most one of symbol_name, file_path and diff",
+            ));
+        }
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let repo_id = graph.repo_id().to_string();
+        let depth = params.depth.unwrap_or(2).clamp(1, 10);
+        let page = Page::new(params.limit, params.offset, Budget::new(50, 500));
+
+        let symbols = graph.symbols().await?;
+        let relationships = graph.relationships().await?;
+        let (subject, roots) = match (params.symbol_name, params.file_path) {
+            (Some(name), _) => {
+                let s = navigation::resolve(&symbols, &name)?;
+                let subject = format!(
+                    "{} ({}, {}:{}-{})",
+                    s.qualified_name, s.kind, s.file_path, s.start_line, s.end_line
+                );
+                (subject, vec![s])
+            }
+            (None, Some(path)) => {
+                // Core's file matching (exact path, else a unique suffix), as
+                // `myc impact <file>` uses it.
+                let roots = navigation::symbols_in_file(&symbols, &path);
+                let path = match roots.first() {
+                    Some(s) => s.file_path.clone(),
+                    None => {
+                        let path = path.trim().trim_start_matches("./").to_string();
+                        let files = graph.files().await?;
+                        if !files.iter().any(|f| f.path == path) {
+                            return Err(ToolError::recoverable(
+                                format!("File `{path}` is not in the index."),
+                                "pass the path relative to the repository root (e.g. src/main.rs), or find the code with search_code",
+                            ));
+                        }
+                        path
+                    }
+                };
+                (format!("{path} ({} definitions)", roots.len()), roots)
+            }
+            (None, None) => {
+                let diff_text = diff_or_git(params.diff, &repo_id)?;
+                let body = if diff_text.trim().is_empty() {
+                    "No changes detected (empty diff).".to_string()
+                } else {
+                    let report = detect_impact(&diff_text, &symbols, &relationships, depth);
+                    let stats = crate::index_status::call_resolution(&graph.store()).await;
+                    let note = crate::index_status::unlinked_impact_note(
+                        stats.as_ref(),
+                        report
+                            .directly_changed
+                            .iter()
+                            .map(|s| (s.name.as_str(), s.file_path.as_str())),
+                    );
+                    with_note(format::format_impact_report(&report, page), note)
+                };
+                return self.graph_text(&graph, body).await;
+            }
+        };
+        let hits = navigation::dependents(&symbols, &relationships, &roots, depth);
+        let stats = crate::index_status::call_resolution(&graph.store()).await;
+        let note = crate::index_status::unlinked_impact_note(
+            stats.as_ref(),
+            roots
+                .iter()
+                .map(|s| (s.name.as_str(), s.file_path.as_str())),
+        );
+        let body = with_note(
+            format::format_dependents(&subject, &hits, depth, page),
+            note,
+        );
+        self.graph_text(&graph, body).await
     }
 }
 

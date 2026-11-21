@@ -293,6 +293,22 @@ impl MyceliumsMcp {
         // Write path: `repo_id` was derived from the canonical project path
         // above, not supplied by the caller, and this run registers it.
         let data_dir = data_dir();
+        // A background embedding of this repository holds its lock, and the
+        // index it embeds is about to be replaced (another embedder, a moved
+        // HEAD, force): stop it — what it stored carries over — and wait for
+        // it (#157).
+        if crate::embedding_jobs::cancel(&repo_id)
+            && !crate::embedding_jobs::wait_until_stopped(&repo_id, JOB_STOP_WAIT).await
+        {
+            return Err(ToolError::recoverable(
+                format!(
+                    "The background embedding of {repo_id:?} was asked to stop for this analysis \
+                     and is still finishing its current step (a model batch, or the model \
+                     download)."
+                ),
+                "call analyze again in a moment",
+            ));
+        }
         let guard = crate::analysis::RunningGuard::acquire(&data_dir, &repo_id)
             .map_err(|busy| busy.for_analyze(&repo_id))?;
         let output = crate::analysis::Rebuild {
@@ -312,6 +328,9 @@ impl MyceliumsMcp {
         text(format::format_analyze(&output))
     }
 }
+
+/// How long `analyze` waits for a background embedding it stopped.
+const JOB_STOP_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// What the cached index needs for the embedder the project configures now
 /// (#157).

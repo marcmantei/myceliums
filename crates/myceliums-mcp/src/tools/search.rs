@@ -125,58 +125,7 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<SearchCodeParams>,
     ) -> TextResult {
-        require_query("query", &params.query)?;
-        let graph = self.graph_for(params.repo_id.as_deref()).await?;
-        let page = Page::new(params.limit, params.offset, SEARCH);
-        let explain = params.explain.unwrap_or(false);
-        let rerank = params.rerank.unwrap_or(false);
-        let tests = TestPolicy::new(params.tests.unwrap_or_default().into());
-        let query = params.query.as_str();
-        let body = match params.mode.unwrap_or_default() {
-            SearchMode::Keyword => {
-                self.keyword_results(&graph, query, page, explain, tests)
-                    .await?
-            }
-            SearchMode::Semantic => {
-                let store = graph.store();
-                let embedder = vector_embedder(&store).await?;
-                self.semantic_results(&graph, &embedder, query, page, tests)
-                    .await?
-            }
-            SearchMode::Hybrid => {
-                let embedder = vector_embedder(&graph.store()).await?;
-                self.hybrid_results(&graph, &embedder, query, page, rerank, explain, tests)
-                    .await?
-            }
-            SearchMode::Auto => {
-                let store = graph.store();
-                let embedder = if has_vectors(&store).await {
-                    myceliums_core::embedder_for_index(&store).await.ok()
-                } else {
-                    None
-                };
-                match embedder {
-                    Some(embedder) => {
-                        self.hybrid_results(&graph, &embedder, query, page, rerank, explain, tests)
-                            .await?
-                    }
-                    None if crate::embedding_jobs::is_running(&graph.info().id) => format!(
-                        "Keyword search (embeddings are being built in the background; search \
-                         by meaning starts once the first symbols are embedded).\n\n{}",
-                        self.keyword_results(&graph, query, page, explain, tests)
-                            .await?
-                    ),
-                    None => format!(
-                        "Keyword search (this index has no usable embeddings; re-run analyze \
-                         without skip_embeddings for search by meaning).\n\n{}",
-                        self.keyword_results(&graph, query, page, explain, tests)
-                            .await?
-                    ),
-                }
-            }
-        };
-        let body = with_notice(body, unclassified_notice(&graph, &tests));
-        self.graph_text(&graph, body).await
+        retry_on_index_change(|| self.search_code_once(params.clone())).await
     }
 
     #[tool(
@@ -523,5 +472,63 @@ impl MyceliumsMcp {
                 page.notice.as_deref(),
             ),
         ))
+    }
+}
+
+impl MyceliumsMcp {
+    /// One run of `search_code` (see [`retry_on_index_change`]).
+    async fn search_code_once(&self, params: SearchCodeParams) -> TextResult {
+        require_query("query", &params.query)?;
+        let graph = self.graph_for(params.repo_id.as_deref()).await?;
+        let page = Page::new(params.limit, params.offset, SEARCH);
+        let explain = params.explain.unwrap_or(false);
+        let rerank = params.rerank.unwrap_or(false);
+        let tests = TestPolicy::new(params.tests.unwrap_or_default().into());
+        let query = params.query.as_str();
+        let body = match params.mode.unwrap_or_default() {
+            SearchMode::Keyword => {
+                self.keyword_results(&graph, query, page, explain, tests)
+                    .await?
+            }
+            SearchMode::Semantic => {
+                let store = graph.store();
+                let embedder = vector_embedder(&store).await?;
+                self.semantic_results(&graph, &embedder, query, page, tests)
+                    .await?
+            }
+            SearchMode::Hybrid => {
+                let embedder = vector_embedder(&graph.store()).await?;
+                self.hybrid_results(&graph, &embedder, query, page, rerank, explain, tests)
+                    .await?
+            }
+            SearchMode::Auto => {
+                let store = graph.store();
+                let embedder = if has_vectors(&store).await {
+                    myceliums_core::embedder_for_index(&store).await.ok()
+                } else {
+                    None
+                };
+                match embedder {
+                    Some(embedder) => {
+                        self.hybrid_results(&graph, &embedder, query, page, rerank, explain, tests)
+                            .await?
+                    }
+                    None if crate::embedding_jobs::is_running(&graph.info().id) => format!(
+                        "Keyword search (embeddings are being built in the background; search \
+                         by meaning starts once the first symbols are embedded).\n\n{}",
+                        self.keyword_results(&graph, query, page, explain, tests)
+                            .await?
+                    ),
+                    None => format!(
+                        "Keyword search (this index has no usable embeddings; re-run analyze \
+                         without skip_embeddings for search by meaning).\n\n{}",
+                        self.keyword_results(&graph, query, page, explain, tests)
+                            .await?
+                    ),
+                }
+            }
+        };
+        let body = with_notice(body, unclassified_notice(&graph, &tests));
+        self.graph_text(&graph, body).await
     }
 }

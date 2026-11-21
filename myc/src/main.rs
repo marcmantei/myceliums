@@ -89,12 +89,18 @@ fn main() -> Result<()> {
     } else {
         tokio::runtime::Builder::new_multi_thread()
     };
-    runtime
-        .enable_all()
-        .build()?
-        .block_on(run(cli))
-        .map_err(repo::hint_for_missing_index)
+    let runtime = runtime.enable_all().build()?;
+    let result = runtime.block_on(run(cli));
+    // A background embedding of the MCP server may still be ending on a
+    // blocking thread: it was asked to stop when serving ended, and stops
+    // within a model batch. Never wait for it longer than this (#157).
+    runtime.shutdown_timeout(SHUTDOWN_GRACE);
+    result.map_err(repo::hint_for_missing_index)
 }
+
+/// How long the process waits, after its work, for blocking threads still
+/// running (a background embedding finishing its batch) before it exits.
+const SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
 
 async fn run(cli: Cli) -> Result<()> {
     // Restore or delete what interrupted index rebuilds of dead processes
