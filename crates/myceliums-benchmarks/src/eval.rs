@@ -36,6 +36,7 @@ pub mod evaluator;
 pub mod exact_vs_ann;
 pub mod gate;
 pub mod golden_set;
+pub mod long_symbols;
 pub mod metrics;
 pub mod models;
 pub mod real_repos;

@@ -43,7 +43,7 @@ use myceliums_benchmarks::eval::evaluator::{evaluate, Metric, ModeScore, Retriev
 use myceliums_benchmarks::eval::gate;
 use myceliums_benchmarks::eval::golden_set::{GoldenSet, QueryIntent};
 use myceliums_benchmarks::eval::models::{
-    ModelIndex, ModelPolicy, ModelSetup, ALLOW_DOWNLOAD_FLAG, MODELS_ENV_VAR,
+    ModelIndex, ModelPolicy, ModelSetup, Variant, ALLOW_DOWNLOAD_FLAG, MODELS_ENV_VAR,
 };
 use myceliums_benchmarks::eval::report::{
     format_delta, markdown_comparisons, markdown_results, ModeReport, RunReport, MODE_COMPARISONS,
@@ -76,6 +76,10 @@ struct Options {
     fetch_models: bool,
     report_path: PathBuf,
     summary_path: Option<PathBuf>,
+    /// An embedding configuration other than the shipped one (#157).
+    variant: Variant,
+    /// The modes to score; the others are reported unavailable.
+    modes: Vec<SearchMode>,
 }
 
 impl Options {
@@ -92,7 +96,10 @@ impl Options {
             fetch_models: false,
             report_path: crate_dir.join(DEFAULT_REPORT),
             summary_path: None,
+            variant: Variant::default(),
+            modes: SearchMode::all().to_vec(),
         };
+        let (mut model, mut template, mut chunking) = (None, None, None);
         let mut args = args.skip(1);
         while let Some(arg) = args.next() {
             match arg.as_str() {
@@ -109,6 +116,17 @@ impl Options {
                     let path = args.next().context("--summary requires a path")?;
                     options.summary_path = Some(PathBuf::from(path));
                 }
+                "--model" => model = Some(args.next().context("--model requires an id")?),
+                "--template" => {
+                    template = Some(args.next().context("--template requires a version")?)
+                }
+                "--chunking" => {
+                    chunking = Some(args.next().context("--chunking requires on or off")?)
+                }
+                "--modes" => {
+                    options.modes =
+                        SearchMode::parse_list(&args.next().context("--modes requires a list")?)?
+                }
                 "--help" | "-h" => {
                     println!(
                         "retrieval-eval [options]\n\n  \
@@ -118,12 +136,23 @@ impl Options {
                          --out <path>            write the JSON report here (default {DEFAULT_REPORT})\n  \
                          --summary <path>        append a Markdown summary (e.g. $GITHUB_STEP_SUMMARY)\n  \
                          --model-cache-key       print the CI cache key for the model weights and exit\n  \
-                         --fetch-models          download the model weights and exit (an explicit opt-in)"
+                         --fetch-models          download the model weights and exit (an explicit opt-in)\n  \
+                         --model <id>            embedding model to evaluate instead of the shipped one\n  \
+                         --template <1|2>        embedding-document template\n  \
+                         --chunking <on|off>     chunk long symbols\n  \
+                         --modes <list>          modes to score, e.g. lexical,semantic,hybrid"
                     );
                     std::process::exit(0);
                 }
                 other => bail!("unknown argument '{other}' (try --help)"),
             }
+        }
+        options.variant =
+            Variant::parse(model.as_deref(), template.as_deref(), chunking.as_deref())?;
+        if options.update_baseline
+            && (!options.variant.is_shipped() || options.modes.len() < SearchMode::all().len())
+        {
+            bail!("--update-baseline records the shipped configuration with every mode");
         }
         Ok(options)
     }
@@ -132,7 +161,20 @@ impl Options {
 #[tokio::main]
 async fn main() -> Result<()> {
     let options = Options::from_args(std::env::args())?;
-    let setup = ModelSetup::shipped_default().context("resolving the shipped model setup")?;
+    let setup = ModelSetup::variant(&options.variant).context("resolving the model setup")?;
+    if !options.variant.is_shipped() {
+        println!(
+            "variant: {} · template {} · chunking {} (fingerprint {})",
+            setup.embedding.model,
+            setup.embedding.text_version,
+            setup
+                .embedding
+                .chunking
+                .map(|c| c.label())
+                .unwrap_or_else(|| "off".to_string()),
+            setup.embedding.fingerprint()
+        );
+    }
     if options.print_cache_key {
         println!("{}", setup.cache_key());
         return Ok(());
@@ -159,9 +201,10 @@ async fn main() -> Result<()> {
     );
 
     // Build the embedding index only if some model-backed mode may run.
-    let model_modes_runnable = SearchMode::all()
-        .into_iter()
-        .any(|mode| mode.needs_embeddings() && setup.blocker(mode, policy).is_none());
+    let model_modes_runnable = options
+        .modes
+        .iter()
+        .any(|mode| mode.needs_embeddings() && setup.blocker(*mode, policy).is_none());
     let model_index = if model_modes_runnable {
         println!(
             "models: {} + {} (cache {})",
@@ -199,7 +242,9 @@ async fn main() -> Result<()> {
     let mut results = BTreeMap::new();
     let mut scores: Vec<ModeScore> = Vec::new();
     for mode in SearchMode::all() {
-        let blocker = if mode.needs_embeddings() {
+        let blocker = if !options.modes.contains(&mode) {
+            Some("not requested (--modes)".to_string())
+        } else if mode.needs_embeddings() {
             setup.blocker(mode, policy)
         } else {
             None

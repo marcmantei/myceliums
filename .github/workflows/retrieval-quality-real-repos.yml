@@ -15,16 +15,42 @@ name: Retrieval Quality (real repositories)
 # no longer reproduces the production hybrid ranking) — never on the numbers.
 # Method and recorded results: crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md.
 
+#
+# Embedding variants (#157): dispatch with `variants`, a JSON list of
+# {"id", "model", "template", "chunking"} objects, to score each variant in
+# its own job (lexical, semantic and hybrid by default; no sweeps), then
+# compare them against the variant with id "A" — the incumbent, by the
+# protocol in METHODOLOGY.md — in a final job. For example:
+#
+#   gh workflow run retrieval-quality-real-repos.yml --ref <branch> \
+#     -f variants='[{"id":"A","model":"multilingual-e5-small","template":"1","chunking":"off"},
+#                   {"id":"B","model":"multilingual-e5-small","template":"2","chunking":"off"}]'
+
 on:
   schedule:
     - cron: "41 4 * * 1" # weekly, Monday 04:41 UTC
   workflow_dispatch:
+    inputs:
+      variants:
+        description: 'JSON list of {"id","model","template","chunking"}; empty runs the shipped configuration with every sweep'
+        required: false
+        default: ""
+      modes:
+        description: "Modes a variant job scores"
+        required: false
+        default: "lexical,semantic,hybrid"
+      batch_tokens:
+        description: "Most tokens per embedding batch (empty: the shipped default)"
+        required: false
+        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: retrieval-quality-real-repos
+  # The weekly run and plain dispatches queue behind each other; every variant
+  # dispatch runs on its own.
+  group: ${{ inputs.variants != '' && format('retrieval-quality-variants-{0}', github.run_id) || 'retrieval-quality-real-repos' }}
   cancel-in-progress: false
 
 env:
@@ -36,6 +62,7 @@ env:
 jobs:
   real-repos:
     name: Real-repo retrieval and parameter sweep
+    if: inputs.variants == ''
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
@@ -92,13 +119,10 @@ jobs:
           path: ~/.cache/myceliums-eval-repos
           key: ${{ steps.keys.outputs.repos }}
       - name: Score, sweep and confirm
-        # With the shipped embedding batch (256 symbols of up to 512 tokens)
-        # the evaluator was seen at ~11 GB RSS locally, and the first run on
-        # the 16 GB runner lost the runner mid-indexing. A batch of 32 changes
-        # only how symbols are padded together, not their vectors beyond float
-        # noise. `nice` leaves the runner agent CPU while ONNX uses every core.
-        env:
-          MYC_EVAL_EMBEDDING_BATCH: "32"
+        # The shipped batching since #157: texts sorted by length, batches of
+        # at most 16,384 tokens (32 full windows) — the bound that keeps the
+        # 16 GB runner alive, where 256 unsorted symbols per batch took it down
+        # (#95). `nice` leaves the runner agent CPU while ONNX uses every core.
         run: |
           set -o pipefail
           nice -n 10 target/debug/real-repo-eval --out real-repo-report.json --summary "$GITHUB_STEP_SUMMARY" | tee real-repo.txt
@@ -110,4 +134,109 @@ jobs:
           path: |
             real-repo-report.json
             real-repo.txt
+          retention-days: 90
+
+  variant:
+    name: Variant ${{ matrix.variant.id }} (${{ matrix.variant.model }}, template ${{ matrix.variant.template }}, chunking ${{ matrix.variant.chunking }})
+    if: inputs.variants != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(inputs.variants) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Free runner disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: retrieval
+          save-if: false
+      - name: Build the evaluator
+        run: cargo build -p myceliums-benchmarks --bin real-repo-eval --locked
+      - name: Resolve cache keys
+        id: keys
+        run: |
+          {
+            echo "FASTEMBED_CACHE_DIR=$HOME/.cache/myceliums-eval-models"
+            echo "HF_HOME=$HOME/.cache/myceliums-eval-models"
+            echo "MYC_EVAL_REPOS_DIR=$HOME/.cache/myceliums-eval-repos"
+          } >> "$GITHUB_ENV"
+          pins="$(jq -c '.repos' crates/myceliums-benchmarks/real-repos/queries.json | sha256sum | cut -c1-16)"
+          echo "repos=real-repos-${pins}" >> "$GITHUB_OUTPUT"
+      - name: Restore repository checkouts
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/myceliums-eval-repos
+          key: ${{ steps.keys.outputs.repos }}
+      - name: Fetch the pinned repositories
+        run: crates/myceliums-benchmarks/real-repos/fetch.sh
+      - name: Score the variant
+        # Weights are downloaded from the pinned revision (and hash-checked)
+        # by the evaluator; nothing is saved to the shared cache.
+        env:
+          MYC_EVAL_EMBEDDING_BATCH_TOKENS: ${{ inputs.batch_tokens }}
+        run: |
+          set -o pipefail
+          nice -n 10 target/debug/real-repo-eval --allow-model-download --no-sweep --no-demotion \
+            --modes "${{ inputs.modes }}" \
+            --model "${{ matrix.variant.model }}" --template "${{ matrix.variant.template }}" \
+            --chunking "${{ matrix.variant.chunking }}" \
+            --out "variant-${{ matrix.variant.id }}.json" --summary "$GITHUB_STEP_SUMMARY" \
+            | tee "variant-${{ matrix.variant.id }}.txt"
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: variant-${{ matrix.variant.id }}
+          path: |
+            variant-${{ matrix.variant.id }}.json
+            variant-${{ matrix.variant.id }}.txt
+          retention-days: 90
+
+  compare:
+    name: Compare the variants
+    if: always() && inputs.variants != ''
+    needs: variant
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: retrieval
+          save-if: false
+      - name: Build the comparison
+        run: cargo build -p myceliums-benchmarks --bin real-repo-compare --locked
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: variant-*
+          merge-multiple: true
+      - name: Compare against variant A
+        run: |
+          set -o pipefail
+          others=()
+          for report in variant-*.json; do
+            [ "$report" = variant-A.json ] || others+=("$report")
+          done
+          target/debug/real-repo-compare --baseline variant-A.json "${others[@]}" \
+            --out compare.json --summary "$GITHUB_STEP_SUMMARY" | tee compare.txt
+      - name: Upload the comparison
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: variant-comparison
+          path: |
+            compare.json
+            compare.txt
           retention-days: 90
