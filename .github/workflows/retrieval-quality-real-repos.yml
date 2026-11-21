@@ -297,6 +297,10 @@ jobs:
       - name: Compare against variant A
         run: |
           set -o pipefail
+          if [ ! -f variant-A.json ]; then
+            echo "No variant A in this dispatch: nothing to compare against." | tee compare.txt
+            exit 0
+          fi
           others=()
           for report in variant-*.json; do
             [ "$report" = variant-A.json ] || others+=("$report")
