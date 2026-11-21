@@ -1,8 +1,8 @@
 {
   "schema_version": "2.0",
   "regenerate_with": "MYC_EVAL_MODELS=1 cargo run -p myceliums-benchmarks --bin retrieval-eval -- --update-baseline",
-  "timestamp": "2026-11-21T13:37:48Z",
-  "commit_sha": "8b00e351f5132227297131ba61f45865bf142404",
+  "timestamp": "2026-11-21T16:29:25Z",
+  "commit_sha": "f222175025bd20e2f1a47c39a10eeb136d459f77",
   "dataset_digest": "05ff3a8c7b12b939192f6a03de4285aa158c273ddff33ed31e3c1c125c8f9308",
   "dataset_version": "2026-07-30",
   "corpus_symbols": 99,

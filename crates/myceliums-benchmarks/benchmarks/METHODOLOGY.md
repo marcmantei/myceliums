@@ -402,16 +402,18 @@ The file records that command in its own `regenerate_with` field.
 
 ### Recorded results
 
-51 queries over 99 symbols, recorded on `macos-aarch64` from commit `8b00e35`
-with the default since #157: `jina-embeddings-v2-base-code` (revision
-`516f4baf13de`, embedding-text version 2, chunking 512/64/16) and
-`bge-reranker-v2-m3`. **This baseline was re-recorded on purpose for the
-default switch** (#157, owner decision; see "Owner decision" in the #157
-section). Before writing it, the run compared itself with the previous
-baseline (`multilingual-e5-small`, template 1, 96 symbols, `acde60cc`) and
-passed the gate's rule in every mode: nDCG@10 semantic +0.104 [+0.024,
-+0.188], hybrid +0.072 [+0.008, +0.137], hybrid+rerank +0.032 [−0.005,
-+0.075].
+51 queries over 99 symbols, recorded on `macos-aarch64` from the clean tree
+at commit `f222175` with the default since #157:
+`jina-embeddings-v2-base-code` (revision `516f4baf13de`, embedding-text
+version 2, chunking 512/64/16) and `bge-reranker-v2-m3`. **This baseline was
+re-recorded on purpose for the default switch** (#157, owner decision; see
+"Owner decision" in the #157 section). The first recording, before the review
+fixes of #160 (pinned tokenizer files, tokenization in slices with a cut
+before the window, background embedding), gave the same score for every
+query. Before writing it, the run compared itself with the previous baseline
+(`multilingual-e5-small`, template 1, 96 symbols, `acde60cc`) and passed the
+gate's rule in every mode: nDCG@10 semantic +0.104 [+0.024, +0.188], hybrid
++0.072 [+0.008, +0.137], hybrid+rerank +0.032 [−0.005, +0.075].
 
 | Mode | MRR@10 | nDCG@10 | recall@10 | hit@1 | hit@10 | R-precision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
