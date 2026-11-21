@@ -314,6 +314,13 @@ impl Store {
     /// Returns `true` if the table was rebuilt.
     pub async fn ensure_symbols_dim(&self) -> Result<bool> {
         let tables = self.db.table_names().execute().await?;
+        // Chunk vectors (#157) share the symbols' vector space.
+        if tables.contains(&"chunks".to_string()) {
+            let table = self.db.open_table("chunks").execute().await?;
+            if vector_dim(table.schema().await?.as_ref()) != Some(self.embedding_dim()) {
+                self.db.drop_table("chunks", &[]).await?;
+            }
+        }
         if !tables.contains(&"symbols".to_string()) {
             return Ok(false);
         }
@@ -851,6 +858,18 @@ impl Store {
                 .await?;
         }
 
+        // Delete the body-chunk vectors of those symbols (#157)
+        if tables.contains(&"chunks".to_string()) {
+            let table = self.db.open_table("chunks").execute().await?;
+            table
+                .delete(&format!(
+                    "repo_id = '{}' AND file_path = '{}'",
+                    escape_lance_str(&self.repo_id),
+                    escape_lance_str(file_path)
+                ))
+                .await?;
+        }
+
         // Delete file node
         if tables.contains(&"files".to_string()) {
             let table = self.db.open_table("files").execute().await?;
@@ -898,6 +917,7 @@ impl Store {
         let escaped_repo_id = escape_lance_str(&self.repo_id);
         for table_name in [
             "symbols",
+            "chunks",
             "files",
             "relationships",
             "communities",
@@ -1172,6 +1192,120 @@ impl Store {
         Ok(count)
     }
 
+    /// Append the vectors of long symbols' body chunks (#157) to the `chunks`
+    /// table. A re-indexed file's rows are removed by
+    /// [`Store::delete_file_data`], a whole repository's by
+    /// [`Store::delete_repo_data`]; this never replaces rows itself.
+    pub async fn store_chunk_vectors(&self, chunks: Vec<ChunkVector>) -> Result<usize> {
+        if chunks.is_empty() {
+            return Ok(0);
+        }
+        let dim = self.embedding_dim();
+        if let Some(bad) = chunks.iter().find(|c| c.vector.len() != dim as usize) {
+            return Err(StorageError::InvalidData(format!(
+                "chunk {} of symbol {} has {} dimensions, the index {}",
+                bad.chunk_index,
+                bad.symbol_uid,
+                bad.vector.len(),
+                dim
+            )));
+        }
+        let table = self
+            .ensure_table("chunks", schema::chunks_schema(dim))
+            .await?;
+        let schema = Arc::new(schema::chunks_schema(dim));
+        let count = chunks.len();
+        let symbol_uids: Vec<&str> = chunks.iter().map(|c| c.symbol_uid.as_str()).collect();
+        let file_paths: Vec<&str> = chunks.iter().map(|c| c.file_path.as_str()).collect();
+        let repo_ids: Vec<&str> = chunks.iter().map(|_| self.repo_id.as_str()).collect();
+        let indices: Vec<u32> = chunks.iter().map(|c| c.chunk_index).collect();
+        let hashes: Vec<&str> = chunks.iter().map(|c| c.text_hash.as_str()).collect();
+        let values: Vec<f32> = chunks
+            .iter()
+            .flat_map(|c| c.vector.iter().copied())
+            .collect();
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(StringArray::from(symbol_uids)),
+                Arc::new(StringArray::from(file_paths)),
+                Arc::new(StringArray::from(repo_ids)),
+                Arc::new(UInt32Array::from(indices)),
+                Arc::new(StringArray::from(hashes)),
+                Arc::new(create_fixed_size_list(Float32Array::from(values), dim)?),
+            ],
+        )?;
+        table
+            .add(RecordBatchIterator::new(vec![Ok(batch)], schema))
+            .execute()
+            .await?;
+        info!("Stored {} chunk vectors", count);
+        Ok(count)
+    }
+
+    /// Every body-chunk vector of this repository (#157).
+    pub async fn get_chunk_vectors(&self) -> Result<Vec<ChunkVector>> {
+        let mut out = Vec::new();
+        for batch in &self.query_table("chunks").await? {
+            let symbol_uids = col_str(batch, "symbol_uid");
+            let file_paths = col_str(batch, "file_path");
+            let indices = col_u32(batch, "chunk_index");
+            let hashes = col_str(batch, "text_hash");
+            let vectors = batch
+                .column_by_name("vector")
+                .and_then(|c| c.as_any().downcast_ref::<FixedSizeListArray>());
+            for i in 0..batch.num_rows() {
+                let Some(vector) = vectors.and_then(|v| list_values(v, i)) else {
+                    continue;
+                };
+                out.push(ChunkVector {
+                    symbol_uid: symbol_uids.value(i).to_string(),
+                    file_path: file_paths.value(i).to_string(),
+                    chunk_index: indices.value(i),
+                    text_hash: hashes.value(i).to_string(),
+                    vector,
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    /// Remove the body-chunk vectors of the symbols `symbol_uids` (#157):
+    /// rows an interrupted embedding run stored before the symbols' own
+    /// vectors, which a new run embeds again.
+    pub async fn delete_chunk_vectors_of(&self, symbol_uids: &[String]) -> Result<()> {
+        let Some(table) = self.open_table_if_exists("chunks").await? else {
+            return Ok(());
+        };
+        for group in symbol_uids.chunks(500) {
+            let list = group
+                .iter()
+                .map(|uid| format!("'{}'", escape_lance_str(uid)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            table
+                .delete(&format!(
+                    "repo_id = '{}' AND symbol_uid IN ({list})",
+                    escape_lance_str(&self.repo_id)
+                ))
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// Number of body-chunk vectors stored for this repository (#157).
+    pub async fn chunk_count(&self) -> Result<usize> {
+        let Some(table) = self.open_table_if_exists("chunks").await? else {
+            return Ok(0);
+        };
+        Ok(table
+            .count_rows(Some(format!(
+                "repo_id = '{}'",
+                escape_lance_str(&self.repo_id)
+            )))
+            .await?)
+    }
+
     /// Create the ANN index described by this store's [`AnnSettings`] on the
     /// vector column. Only builds when `num_symbols >= threshold`; below that
     /// the flat scan is exact and fast enough (issues #29, #117).
@@ -1288,8 +1422,141 @@ impl Store {
         Ok(())
     }
 
-    /// Perform vector similarity search using LanceDB.
+    /// The `limit` symbols nearest to `query_vector`, best first, scored by
+    /// cosine similarity.
+    ///
+    /// A symbol's score is the best of its vectors: its own (the header
+    /// chunk) and, for a long symbol of a chunked index, those of its body
+    /// chunks (#157). Each symbol appears once. The search is exact: chunk
+    /// hits are fetched until the weakest one fetched cannot beat the
+    /// `limit`-th symbol, so no symbol whose best chunk lies deeper could
+    /// enter the result.
     pub async fn vector_search(
+        &self,
+        query_vector: &[f32],
+        limit: usize,
+    ) -> Result<Vec<(CodeSymbol, f32)>> {
+        let primary = self.symbol_vector_search(query_vector, limit).await?;
+        if limit == 0 {
+            return Ok(primary);
+        }
+        let Some(chunks) = self.open_table_if_exists("chunks").await? else {
+            return Ok(primary);
+        };
+        let mut fetch = limit;
+        loop {
+            let hits = self.chunk_hits(&chunks, query_vector, fetch).await?;
+            if hits.is_empty() {
+                return Ok(primary);
+            }
+            let exhausted = hits.len() < fetch;
+            let merged = merge_by_symbol(&primary, &hits);
+            let weakest_fetched = hits.last().map(|(_, score)| *score).unwrap_or(f32::MIN);
+            let settled = merged
+                .get(limit - 1)
+                .is_some_and(|(_, score)| weakest_fetched <= *score);
+            if exhausted || settled {
+                return self.materialize(primary, merged, limit).await;
+            }
+            fetch *= 2;
+        }
+    }
+
+    /// The `fetch` chunk vectors nearest to `query_vector`: `(symbol_uid,
+    /// cosine)`, best first. Exact, like the symbol search.
+    async fn chunk_hits(
+        &self,
+        table: &lancedb::Table,
+        query_vector: &[f32],
+        fetch: usize,
+    ) -> Result<Vec<(String, f32)>> {
+        let stream = table
+            .vector_search(query_vector)?
+            .column("vector")
+            .only_if(format!("repo_id = '{}'", escape_lance_str(&self.repo_id)))
+            .limit(fetch)
+            .bypass_vector_index()
+            .execute()
+            .await?;
+        let batches: Vec<RecordBatch> = stream.try_collect().await?;
+        let mut hits = Vec::new();
+        for batch in &batches {
+            let uids = col_str(batch, "symbol_uid");
+            let distances = batch
+                .column_by_name("_distance")
+                .and_then(|c| c.as_any().downcast_ref::<Float32Array>());
+            for i in 0..batch.num_rows() {
+                let distance = distances.map(|d| d.value(i)).unwrap_or(f32::MAX);
+                hits.push((uids.value(i).to_string(), distance_to_cosine(distance)));
+            }
+        }
+        Ok(hits)
+    }
+
+    /// The first `limit` of `merged` as symbols: rows of `primary` reused,
+    /// symbols reached only through a chunk read from the `symbols` table.
+    async fn materialize(
+        &self,
+        primary: Vec<(CodeSymbol, f32)>,
+        merged: Vec<(String, f32)>,
+        limit: usize,
+    ) -> Result<Vec<(CodeSymbol, f32)>> {
+        let mut known: std::collections::HashMap<String, CodeSymbol> = primary
+            .into_iter()
+            .map(|(symbol, _)| (symbol.uid.clone(), symbol))
+            .collect();
+        let missing: Vec<String> = merged
+            .iter()
+            .take(limit)
+            .filter(|(uid, _)| !known.contains_key(uid))
+            .map(|(uid, _)| uid.clone())
+            .collect();
+        for symbol in self.symbols_by_uid(&missing).await? {
+            known.insert(symbol.uid.clone(), symbol);
+        }
+        Ok(merged
+            .into_iter()
+            .take(limit)
+            // A chunk whose symbol row is gone (never in a consistent index)
+            // is skipped rather than invented.
+            .filter_map(|(uid, score)| known.remove(&uid).map(|symbol| (symbol, score)))
+            .collect())
+    }
+
+    /// The symbols of this repository with the given uids, in no order.
+    async fn symbols_by_uid(&self, uids: &[String]) -> Result<Vec<CodeSymbol>> {
+        if uids.is_empty() {
+            return Ok(vec![]);
+        }
+        let Some(table) = self.open_table_if_exists("symbols").await? else {
+            return Ok(vec![]);
+        };
+        let list = uids
+            .iter()
+            .map(|uid| format!("'{}'", escape_lance_str(uid)))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let stream = table
+            .query()
+            .only_if(format!(
+                "repo_id = '{}' AND uid IN ({})",
+                escape_lance_str(&self.repo_id),
+                list
+            ))
+            .execute()
+            .await?;
+        let batches: Vec<RecordBatch> = stream.try_collect().await?;
+        let mut out = Vec::new();
+        for batch in &batches {
+            for i in 0..batch.num_rows() {
+                out.push(symbol_at(batch, i));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Nearest neighbours over the symbols' own vectors only.
+    async fn symbol_vector_search(
         &self,
         query_vector: &[f32],
         limit: usize,
@@ -1395,6 +1662,96 @@ impl Store {
         }
 
         Ok(results)
+    }
+}
+
+/// `primary` (symbol hits, best first) and `chunks` (chunk hits by symbol
+/// uid, best first) as one list of symbols, each scored by its best hit,
+/// best first. Ties keep the order symbols were first seen in: symbol hits,
+/// then symbols only a chunk reached.
+fn merge_by_symbol(primary: &[(CodeSymbol, f32)], chunks: &[(String, f32)]) -> Vec<(String, f32)> {
+    let mut order: Vec<String> = Vec::with_capacity(primary.len() + chunks.len());
+    let mut best: std::collections::HashMap<&str, f32> = std::collections::HashMap::new();
+    for (symbol, score) in primary {
+        if best.insert(symbol.uid.as_str(), *score).is_none() {
+            order.push(symbol.uid.clone());
+        }
+    }
+    for (uid, score) in chunks {
+        match best.get_mut(uid.as_str()) {
+            Some(current) => *current = current.max(*score),
+            None => {
+                best.insert(uid.as_str(), *score);
+                order.push(uid.clone());
+            }
+        }
+    }
+    let mut merged: Vec<(String, f32)> = order
+        .into_iter()
+        .map(|uid| {
+            let score = best[uid.as_str()];
+            (uid, score)
+        })
+        .collect();
+    merged.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    merged
+}
+
+/// Cosine similarity from LanceDB's squared-L2 `_distance` between unit
+/// vectors: `dist² = 2 - 2·cos` (issue #29), clamped against float drift.
+fn distance_to_cosine(distance: f32) -> f32 {
+    if distance == f32::MAX {
+        0.0
+    } else {
+        (1.0 - distance / 2.0).clamp(-1.0, 1.0)
+    }
+}
+
+/// The dimension of a table's `vector` column, if it has one.
+fn vector_dim(schema: &Schema) -> Option<i32> {
+    schema.field_with_name("vector").ok().and_then(|f| {
+        if let DataType::FixedSizeList(_, size) = f.data_type() {
+            Some(*size)
+        } else {
+            None
+        }
+    })
+}
+
+/// Row `i` of a vector column, `None` when null or all zeros (a symbol row
+/// that was never embedded).
+fn list_values(vectors: &FixedSizeListArray, i: usize) -> Option<Vec<f32>> {
+    if vectors.is_null(i) {
+        return None;
+    }
+    let inner = vectors.value(i);
+    let floats = inner.as_any().downcast_ref::<Float32Array>()?;
+    let data: Vec<f32> = (0..floats.len()).map(|j| floats.value(j)).collect();
+    (!data.iter().all(|&x| x == 0.0)).then_some(data)
+}
+
+/// Row `i` of a `symbols` batch as a [`CodeSymbol`].
+fn symbol_at(batch: &RecordBatch, i: usize) -> CodeSymbol {
+    let metadata = batch
+        .column_by_name("metadata")
+        .and_then(|c| c.as_any().downcast_ref::<StringArray>())
+        .filter(|col| !col.is_null(i) && !col.value(i).is_empty())
+        .map(|col| col.value(i).to_string());
+    CodeSymbol {
+        uid: col_str(batch, "uid").value(i).to_string(),
+        name: col_str(batch, "name").value(i).to_string(),
+        qualified_name: col_str(batch, "qualified_name").value(i).to_string(),
+        kind: col_str(batch, "kind")
+            .value(i)
+            .parse()
+            .unwrap_or(SymbolKind::Variable),
+        file_path: col_str(batch, "file_path").value(i).to_string(),
+        start_line: col_u32(batch, "start_line").value(i),
+        end_line: col_u32(batch, "end_line").value(i),
+        signature: col_str(batch, "signature").value(i).to_string(),
+        content: col_str(batch, "content").value(i).to_string(),
+        repo_id: col_str(batch, "repo_id").value(i).to_string(),
+        metadata,
     }
 }
 
@@ -2208,6 +2565,225 @@ mod tests {
         let results = store.vector_search(&unit(vec![1.0; dim]), 5).await.unwrap();
         assert_eq!(results.len(), 5);
 
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ── Chunk vectors (#157) ─────────────────────────────────────────────
+
+    /// Deterministic pseudo-random unit vectors.
+    fn noise(seed: u64, n: usize, dim: usize) -> Vec<Vec<f32>> {
+        let mut state = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
+        (0..n)
+            .map(|_| {
+                unit(
+                    (0..dim)
+                        .map(|_| {
+                            state = state
+                                .wrapping_mul(6364136223846793005)
+                                .wrapping_add(1442695040888963407);
+                            ((state >> 33) as f32 / u32::MAX as f32) - 0.25
+                        })
+                        .collect(),
+                )
+            })
+            .collect()
+    }
+
+    fn chunk(uid: &str, file: &str, index: u32, vector: Vec<f32>) -> ChunkVector {
+        ChunkVector {
+            symbol_uid: uid.to_string(),
+            file_path: file.to_string(),
+            chunk_index: index,
+            text_hash: format!("{uid}-{index}"),
+            vector,
+        }
+    }
+
+    async fn store_with_dim(name: &str, dim: i32) -> (Store, std::path::PathBuf) {
+        let dir = test_db_path(name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = Store::open(&dir, "test-repo").await.unwrap();
+        store.set_embedding_dim(dim);
+        (store, dir)
+    }
+
+    /// A symbol is scored by its best vector, its own or a body chunk's, and
+    /// appears once however many of its chunks match.
+    #[tokio::test]
+    async fn vector_search_scores_a_symbol_by_its_best_chunk() {
+        let (store, dir) = store_with_dim("chunk_best", 3).await;
+        let symbols: Vec<CodeSymbol> = ["a", "b", "c"]
+            .iter()
+            .map(|u| make_symbol(u, None))
+            .collect();
+        store.store_symbols(&symbols).await.unwrap();
+        let query = unit(vec![0.0, 0.0, 1.0]);
+        store
+            .store_embeddings(vec![
+                ("a".into(), unit(vec![0.2, 0.0, 1.0])),
+                ("b".into(), unit(vec![1.0, 0.0, 0.3])),
+                ("c".into(), unit(vec![1.0, 1.0, 0.0])),
+            ])
+            .await
+            .unwrap();
+        // c's own vector is orthogonal to the query; its second chunk is it.
+        store
+            .store_chunk_vectors(vec![
+                chunk("c", "src/lib.rs", 1, unit(vec![0.0, 1.0, 0.1])),
+                chunk("c", "src/lib.rs", 2, query.clone()),
+                chunk("b", "src/lib.rs", 1, unit(vec![0.0, 0.4, 1.0])),
+            ])
+            .await
+            .unwrap();
+        assert_eq!(store.chunk_count().await.unwrap(), 3);
+        let hits = store.vector_search(&query, 3).await.unwrap();
+        let uids: Vec<&str> = hits.iter().map(|(s, _)| s.uid.as_str()).collect();
+        assert_eq!(uids, ["c", "a", "b"]);
+        assert!((hits[0].1 - 1.0).abs() < 1e-5, "{hits:?}");
+        let b_best = cosine(&query, &unit(vec![0.0, 0.4, 1.0]));
+        assert!((hits[2].1 - b_best).abs() < 1e-5);
+        // The symbol rows come back whole, metadata included.
+        assert_eq!(hits[0].0.signature, "fn c()");
+        // Fewer results than symbols: still each symbol once, best first.
+        let top = store.vector_search(&query, 1).await.unwrap();
+        assert_eq!(top.len(), 1);
+        assert_eq!(top[0].0.uid, "c");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The merged search returns exactly the brute-force top k by best
+    /// vector per symbol, also when most good chunks belong to few symbols
+    /// and the first fetch is not enough.
+    #[tokio::test]
+    async fn chunked_search_is_the_brute_force_top_k() {
+        let dim = 16;
+        let (store, dir) = store_with_dim("chunk_exact", dim as i32).await;
+        let symbols: Vec<CodeSymbol> = (0..120)
+            .map(|i| make_symbol(&format!("s{i}"), None))
+            .collect();
+        store.store_symbols(&symbols).await.unwrap();
+        let own = noise(1, symbols.len(), dim);
+        store
+            .store_embeddings(
+                symbols
+                    .iter()
+                    .zip(&own)
+                    .map(|(s, v)| (s.uid.clone(), v.clone()))
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        // 40 symbols get 1–8 chunks each; one of them gets many near-copies of
+        // the first query, so a fetch of k chunk rows is all one symbol.
+        let queries = noise(7, 25, dim);
+        let mut chunks = Vec::new();
+        let extra = noise(3, 400, dim);
+        let mut next = 0;
+        for i in 0..40 {
+            for c in 1..=(1 + i % 8) {
+                chunks.push(chunk(
+                    &format!("s{i}"),
+                    "src/lib.rs",
+                    c as u32,
+                    extra[next].clone(),
+                ));
+                next += 1;
+            }
+        }
+        for c in 0..30 {
+            let mut v = queries[0].clone();
+            v[c % dim] += 0.01;
+            chunks.push(chunk("s99", "src/lib.rs", 100 + c as u32, unit(v)));
+        }
+        store.store_chunk_vectors(chunks.clone()).await.unwrap();
+
+        for (q, query) in queries.iter().enumerate() {
+            for k in [1, 5, 10, 20] {
+                let mut best: std::collections::HashMap<&str, f32> =
+                    std::collections::HashMap::new();
+                for (s, v) in symbols.iter().zip(&own) {
+                    best.insert(s.uid.as_str(), cosine(query, v));
+                }
+                for c in &chunks {
+                    let score = cosine(query, &c.vector);
+                    let entry = best.get_mut(c.symbol_uid.as_str()).unwrap();
+                    *entry = entry.max(score);
+                }
+                let mut expected: Vec<(&str, f32)> = best.into_iter().collect();
+                expected.sort_by(|a, b| b.1.total_cmp(&a.1));
+                let got = store.vector_search(query, k).await.unwrap();
+                assert_eq!(got.len(), k);
+                let mut seen = std::collections::HashSet::new();
+                for (rank, (symbol, score)) in got.iter().enumerate() {
+                    assert!(
+                        seen.insert(symbol.uid.clone()),
+                        "query {q}: duplicate {}",
+                        symbol.uid
+                    );
+                    // Equal to the brute-force score at that rank (ties may
+                    // swap symbols, never scores).
+                    assert!(
+                        (score - expected[rank].1).abs() < 1e-4,
+                        "query {q}, k {k}, rank {rank}: {score} vs {:?}",
+                        expected[rank]
+                    );
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Re-indexing a file removes its symbols' chunk rows; deleting the
+    /// repository removes all of them.
+    #[tokio::test]
+    async fn deletes_remove_chunk_rows() {
+        let (store, dir) = store_with_dim("chunk_delete", 3).await;
+        let mut other = make_symbol("o", None);
+        other.file_path = "src/other.rs".to_string();
+        store
+            .store_symbols(&[make_symbol("a", None), other])
+            .await
+            .unwrap();
+        store
+            .store_chunk_vectors(vec![
+                chunk("a", "src/lib.rs", 1, unit(vec![1.0, 0.0, 0.0])),
+                chunk("o", "src/other.rs", 1, unit(vec![0.0, 1.0, 0.0])),
+            ])
+            .await
+            .unwrap();
+        store.delete_file_data("src/lib.rs").await.unwrap();
+        let left = store.get_chunk_vectors().await.unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].symbol_uid, "o");
+        assert_eq!(left[0].text_hash, "o-1");
+        store.delete_repo_data().await.unwrap();
+        assert_eq!(store.chunk_count().await.unwrap(), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Chunk vectors live in the symbols' vector space: a dimension change
+    /// drops them with the symbols table, and a wrong-sized vector is refused.
+    #[tokio::test]
+    async fn chunk_rows_follow_the_embedding_dimension() {
+        let (store, dir) = store_with_dim("chunk_dim", 3).await;
+        store
+            .store_symbols(&[make_symbol("a", None)])
+            .await
+            .unwrap();
+        store
+            .store_chunk_vectors(vec![chunk("a", "src/lib.rs", 1, unit(vec![1.0, 0.0, 0.0]))])
+            .await
+            .unwrap();
+        assert!(store
+            .store_chunk_vectors(vec![chunk("a", "src/lib.rs", 2, vec![1.0, 0.0])])
+            .await
+            .is_err());
+        store.set_embedding_dim(4);
+        assert!(store.ensure_symbols_dim().await.unwrap());
+        assert_eq!(store.chunk_count().await.unwrap(), 0);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

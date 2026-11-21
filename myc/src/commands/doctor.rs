@@ -6,7 +6,8 @@ use crate::ui::format_bytes;
 use anyhow::Result;
 use myceliums_core::config::{self, ProjectConfig};
 use myceliums_core::{
-    check_model_cache, local_model_code, Embedder, GlobalConfig, IndexEmbeddingMeta,
+    check_model_cache, local_model_cached, local_model_code, Embedder, GlobalConfig,
+    IndexEmbeddingMeta,
 };
 use myceliums_storage::RepoRegistry;
 
@@ -261,7 +262,8 @@ pub(crate) async fn cmd_doctor(download: bool) -> Result<()> {
             if meta.provider == "local" {
                 let model_code = local_model_code(&meta.model)?;
                 let cache_info = check_model_cache(&model_code);
-                if cache_info.is_cached {
+                // The pinned revision's files, not any snapshot of the repo.
+                if local_model_cached(&meta.model) {
                     println!(
                         "\u{2713} Embedding model: cached ({:.0} MB at {})",
                         cache_info.size_bytes as f64 / 1_000_000.0,

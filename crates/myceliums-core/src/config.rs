@@ -72,6 +72,12 @@ pub struct EmbeddingSection {
     /// For `local` models this is ignored — the registry value wins.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub passage_prefix: Option<String>,
+    /// Split long symbols into overlapping, window-sized chunks, each with
+    /// its own vector, so the end of a long function is searchable too
+    /// (#157). Unset: the shipped default. Local models only — a remote
+    /// model's tokenizer is not available to count chunk boundaries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chunking: Option<bool>,
 }
 
 impl Default for EmbeddingSection {
@@ -85,6 +91,7 @@ impl Default for EmbeddingSection {
             api_key_env: Self::default_api_key_env(),
             query_prefix: None,
             passage_prefix: None,
+            chunking: None,
         }
     }
 }
@@ -95,7 +102,9 @@ impl EmbeddingSection {
     }
 
     fn default_model() -> String {
-        "multilingual-e5-small".to_string()
+        // `embeddings::DEFAULT_LOCAL_EMBEDDING_MODEL`, which a build without
+        // the `embeddings` feature does not have (#157).
+        "jina-embeddings-v2-base-code".to_string()
     }
 
     fn default_reranker() -> String {
@@ -158,10 +167,20 @@ pub struct AnalysisSection {
     /// never written by `myc init`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ann_threshold: Option<usize>,
-    /// Number of symbols to embed in a single batch (default 256).
-    /// Smaller values reduce peak memory for large repositories.
+    /// Most texts embedded in one batch (default 256). An upper bound: the
+    /// token budget (`embedding_batch_tokens`) usually binds first.
     #[serde(default = "AnalysisSection::default_embedding_batch_size")]
     pub embedding_batch_size: usize,
+    /// Most tokens in one embedding batch, counted as texts × padded length
+    /// (`0`: the default, 16384 — 32 full 512-token windows). The memory
+    /// knob: activations grow with it. Texts are sorted by length before
+    /// batching, so short symbols share large batches (#157).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub embedding_batch_tokens: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 /// The `[process]` section of `.myceliums.toml`: process tracing.
@@ -199,6 +218,7 @@ impl Default for AnalysisSection {
             use_dsl: false,
             ann_threshold: None,
             embedding_batch_size: Self::default_embedding_batch_size(),
+            embedding_batch_tokens: 0,
         }
     }
 }
@@ -372,7 +392,7 @@ max_file_size_kb = 1024
     fn test_embedding_defaults() {
         let cfg: ProjectConfig = toml::from_str("").unwrap();
         assert_eq!(cfg.embedding.provider, "local");
-        assert_eq!(cfg.embedding.model, "multilingual-e5-small");
+        assert_eq!(cfg.embedding.model, "jina-embeddings-v2-base-code");
         assert_eq!(cfg.embedding.reranker, "bge-reranker-v2-m3");
         assert_eq!(cfg.embedding.api_key_env, "MYCELIUMS_EMBEDDING_API_KEY");
         assert!(cfg.embedding.base_url.is_none());

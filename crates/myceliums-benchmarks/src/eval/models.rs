@@ -24,13 +24,14 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use myceliums_core::config::EmbeddingSection;
-use myceliums_core::embeddings::EMBEDDING_TEXT_VERSION;
+use myceliums_core::embeddings::{Chunking, EmbedStats, DEFAULT_CHUNKING};
 use myceliums_core::search::SearchResult;
 use myceliums_core::HybridSearchResult;
 use myceliums_core::{
-    check_model_cache, embedder_for_index, get_embedder_for, get_reranker, hybrid_search_with,
-    local_model_code, rerank_results, reranker_spec, semantic_search, Embedder, HybridParams,
-    IndexEmbeddingMeta, TestPolicy,
+    check_model_cache, embedder_for_index, embedding_model_spec, get_embedder_for, get_reranker,
+    hybrid_search_with, local_model_cached, rerank_results, reranker_spec, semantic_search,
+    EmbedOptions, Embedder, EmbeddingModelSpec, HybridParams, IndexEmbeddingMeta, TestPolicy,
+    TextTemplate,
 };
 use myceliums_storage::{AnnSettings, CodeSymbol, Store};
 use serde::{Deserialize, Serialize};
@@ -60,30 +61,46 @@ pub const SHIPPED_RRF_K: u32 = myceliums_core::DEFAULT_RRF_K as u32;
 /// fastembed version in `Cargo.lock`, read by the build script.
 pub const FASTEMBED_VERSION: &str = env!("MYC_FASTEMBED_VERSION");
 
-/// Embedding batch size `myc analyze` uses when the project sets none.
-pub const SHIPPED_EMBEDDING_BATCH: usize = 256;
+/// Most texts per embedding batch `myc analyze` uses when the project sets
+/// none (`[analysis] embedding_batch_size`).
+pub const SHIPPED_EMBEDDING_BATCH: usize = myceliums_core::BatchLimits::DEFAULT_MAX_TEXTS;
 
-/// Environment variable that lowers the embedding batch size, for machines
-/// whose memory the shipped batch exhausts.
+/// Most tokens per embedding batch `myc analyze` uses when the project sets
+/// none (`[analysis] embedding_batch_tokens`).
+pub const SHIPPED_EMBEDDING_BATCH_TOKENS: usize = myceliums_core::BatchLimits::DEFAULT_MAX_TOKENS;
+
+/// Environment variable that lowers the most texts per embedding batch, for
+/// machines whose memory the shipped batch exhausts.
 ///
-/// A batch of 256 symbols at the model's 512-token budget holds attention
-/// buffers of several gigabytes — fine on a workstation, enough to take down
-/// a 16 GB CI runner on a real repository. The batch only decides which
-/// symbols are padded together; each symbol's vector is the same up to float
-/// noise, as `myc analyze` with a lower `embedding_batch_size` would produce.
+/// The batch only decides which texts are padded together; each vector is the
+/// same up to float noise, as `myc analyze` with a lower
+/// `embedding_batch_size` would produce. Since #157 texts are sorted by length
+/// and batches are bounded by tokens as well
+/// ([`EMBEDDING_BATCH_TOKENS_ENV`]), which is what bounds memory.
 pub const EMBEDDING_BATCH_ENV: &str = "MYC_EVAL_EMBEDDING_BATCH";
 
-/// The embedding batch size of this run: [`EMBEDDING_BATCH_ENV`] when it holds
-/// a positive integer, else [`SHIPPED_EMBEDDING_BATCH`].
+/// Environment variable that sets the most tokens per embedding batch
+/// (`[analysis] embedding_batch_tokens` of `myc analyze`).
+pub const EMBEDDING_BATCH_TOKENS_ENV: &str = "MYC_EVAL_EMBEDDING_BATCH_TOKENS";
+
+/// Most texts per embedding batch in this run: [`EMBEDDING_BATCH_ENV`] when it
+/// holds a positive integer, else [`SHIPPED_EMBEDDING_BATCH`].
 pub fn embedding_batch() -> usize {
     parse_batch(std::env::var(EMBEDDING_BATCH_ENV).ok().as_deref())
+        .unwrap_or(SHIPPED_EMBEDDING_BATCH)
 }
 
-fn parse_batch(value: Option<&str>) -> usize {
+/// Most tokens per embedding batch in this run: [`EMBEDDING_BATCH_TOKENS_ENV`]
+/// when it holds a positive integer, else [`SHIPPED_EMBEDDING_BATCH_TOKENS`].
+pub fn embedding_batch_tokens() -> usize {
+    parse_batch(std::env::var(EMBEDDING_BATCH_TOKENS_ENV).ok().as_deref())
+        .unwrap_or(SHIPPED_EMBEDDING_BATCH_TOKENS)
+}
+
+fn parse_batch(value: Option<&str>) -> Option<usize> {
     value
         .and_then(|v| v.trim().parse::<usize>().ok())
         .filter(|&n| n > 0)
-        .unwrap_or(SHIPPED_EMBEDDING_BATCH)
 }
 
 /// Whether this run may download model weights.
@@ -117,11 +134,14 @@ impl ModelPolicy {
     }
 }
 
-/// The models the shipped default configuration uses, and where they live.
+/// The models a run uses — the shipped default configuration unless a variant
+/// is asked for (#157) — and where they live.
 #[derive(Debug, Clone)]
 pub struct ModelSetup {
-    /// Embedding configuration an index built with the defaults records.
+    /// Embedding configuration an index built with these models records.
     pub embedding: IndexEmbeddingMeta,
+    /// The registry entry of the embedding model.
+    pub embedding_spec: &'static EmbeddingModelSpec,
     /// HuggingFace repository the embedding weights come from.
     pub embedding_model_code: String,
     /// Reranker registry id.
@@ -130,10 +150,83 @@ pub struct ModelSetup {
     pub reranker_model_code: String,
 }
 
+/// An embedding configuration other than the shipped one, to evaluate (#157):
+/// each `None` keeps the shipped value.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Variant {
+    /// Registry id of the embedding model.
+    pub model: Option<String>,
+    /// Document template.
+    pub template: Option<TextTemplate>,
+    /// Whether long symbols are chunked.
+    pub chunking: Option<bool>,
+}
+
+impl Variant {
+    /// The variant from `--model`, `--template` and `--chunking` values.
+    pub fn parse(
+        model: Option<&str>,
+        template: Option<&str>,
+        chunking: Option<&str>,
+    ) -> Result<Self> {
+        let template = template
+            .map(|t| {
+                let version: u32 = t
+                    .trim()
+                    .parse()
+                    .with_context(|| format!("--template takes a version number, not '{t}'"))?;
+                TextTemplate::from_version(version)
+                    .ok_or_else(|| anyhow!("no embedding-text template {version}"))
+            })
+            .transpose()?;
+        let chunking = chunking
+            .map(|c| match c.trim() {
+                "on" | "true" | "1" => Ok(true),
+                "off" | "false" | "0" => Ok(false),
+                other => bail!("--chunking takes on or off, not '{other}'"),
+            })
+            .transpose()?;
+        Ok(Self {
+            model: model.map(str::to_string),
+            template,
+            chunking,
+        })
+    }
+
+    /// Whether this is the shipped configuration.
+    pub fn is_shipped(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
 impl ModelSetup {
     /// The default `[embedding]` configuration — what ships.
     pub fn shipped_default() -> Result<Self> {
         Self::from_config(&EmbeddingSection::default())
+    }
+
+    /// The shipped configuration with `variant`'s overrides.
+    pub fn variant(variant: &Variant) -> Result<Self> {
+        let mut config = EmbeddingSection::default();
+        if let Some(model) = &variant.model {
+            config.model = model.clone();
+        }
+        let mut setup = Self::from_config(&config)?;
+        let template = variant
+            .template
+            .or_else(|| setup.embedding.template())
+            .context("the shipped configuration names no known template")?;
+        let chunk = variant.chunking.unwrap_or(DEFAULT_CHUNKING);
+        if chunk && !template.supports_chunking() {
+            bail!(
+                "template {} embeds one vector per symbol; chunking needs template 2",
+                template.version()
+            );
+        }
+        setup.embedding.text_version = template.version();
+        setup.embedding.chunking =
+            chunk.then(|| Chunking::for_window(setup.embedding_spec.window_tokens));
+        Ok(setup)
     }
 
     fn from_config(config: &EmbeddingSection) -> Result<Self> {
@@ -144,7 +237,9 @@ impl ModelSetup {
                 embedding.provider
             );
         }
-        let embedding_model_code = local_model_code(&embedding.model)?;
+        let embedding_spec = embedding_model_spec(&embedding.model)
+            .ok_or_else(|| anyhow!("unknown embedding model '{}'", embedding.model))?;
+        let embedding_model_code = embedding_spec.repo.to_string();
         let reranker_id = embedding
             .reranker
             .clone()
@@ -158,6 +253,7 @@ impl ModelSetup {
             .ok_or_else(|| anyhow!("fastembed does not list reranker '{reranker_id}'"))?;
         Ok(Self {
             embedding,
+            embedding_spec,
             embedding_model_code,
             reranker_id,
             reranker_model_code,
@@ -166,19 +262,20 @@ impl ModelSetup {
 
     /// Cache key for the CI weights cache.
     ///
-    /// Built from what decides which files fastembed fetches: the locked
-    /// fastembed version (its model list maps registry entries to repositories
-    /// and file names) and the HuggingFace repositories of both models. Not
-    /// covered: the HuggingFace *revision*. fastembed downloads each
-    /// repository's `main` branch and nothing pins a commit, so if a repository
-    /// is re-uploaded under the same name, a cache hit keeps serving the old
-    /// files while a fresh download would get the new ones.
+    /// Built from what decides which files are fetched: the embedding model's
+    /// repository and pinned revision (#157), and for the reranker — still
+    /// loaded by fastembed — the locked fastembed version (its model list maps
+    /// registry entries to repositories and file names) and the repository.
+    /// fastembed downloads the reranker repository's `main` branch and nothing
+    /// pins a commit, so if it is re-uploaded under the same name, a cache hit
+    /// keeps serving the old files while a fresh download gets the new ones.
     pub fn cache_key(&self) -> String {
         let repo = |code: &str| code.replace('/', "--");
         format!(
-            "fastembed-{}-{}-{}",
-            FASTEMBED_VERSION,
+            "{}-{}-fastembed-{}-{}",
             repo(&self.embedding_model_code),
+            &self.embedding_spec.revision[..12],
+            FASTEMBED_VERSION,
             repo(&self.reranker_model_code)
         )
     }
@@ -189,7 +286,7 @@ impl ModelSetup {
     }
 
     fn embedding_cached(&self) -> bool {
-        check_model_cache(&self.embedding_model_code).is_cached
+        local_model_cached(&self.embedding.model)
     }
 
     fn reranker_cached(&self) -> bool {
@@ -265,9 +362,11 @@ impl ModelSetup {
         ModelProvenance {
             embedding_model: self.embedding.model.clone(),
             embedding_weights: self.embedding_model_code.clone(),
+            embedding_revision: Some(self.embedding_spec.revision.to_string()),
             embedding_dim: self.embedding.dim,
             embedding_fingerprint: self.embedding.fingerprint(),
-            embedding_text_version: EMBEDDING_TEXT_VERSION,
+            embedding_text_version: self.embedding.text_version,
+            embedding_chunking: self.embedding.chunking.map(|c| c.label()),
             reranker: self.reranker_id.clone(),
             reranker_weights: self.reranker_model_code.clone(),
             rerank_pool: SHIPPED_HYBRID_LIMIT,
@@ -294,12 +393,19 @@ pub struct ModelProvenance {
     pub embedding_model: String,
     /// HuggingFace repository of the embedding weights.
     pub embedding_weights: String,
+    /// Pinned revision of that repository (#157; absent in older reports).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embedding_revision: Option<String>,
     /// Embedding dimension.
     pub embedding_dim: usize,
     /// Index fingerprint of the embedding configuration.
     pub embedding_fingerprint: String,
     /// Version of the embedding-document template.
     pub embedding_text_version: u32,
+    /// Chunking parameters (`window/overlap/max`), `None` for one vector per
+    /// symbol (#157; absent in older reports).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embedding_chunking: Option<String>,
     /// Reranker registry id.
     pub reranker: String,
     /// HuggingFace repository of the reranker weights.
@@ -327,6 +433,25 @@ pub struct ModelIndex {
     /// Reranked pools, keyed by query and the pool's uids in order: the
     /// reranker's output before any test-code policy reorders it.
     reranked: Mutex<RerankMemo>,
+    /// What building the index cost (#157).
+    stats: IndexBuildStats,
+}
+
+/// What indexing one corpus cost (#157).
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct IndexBuildStats {
+    /// The embedding step: texts, tokens, chunks, seconds.
+    pub embed: EmbedStats,
+    /// Symbol rows with a vector.
+    pub symbol_vectors: usize,
+    /// Body-chunk rows.
+    pub chunk_vectors: usize,
+    /// Bytes of stored vectors: rows × dimension × 4.
+    pub vector_bytes: u64,
+    /// Bytes the LanceDB directory takes on disk.
+    pub disk_bytes: u64,
+    /// The whole build — symbols stored, embedded, vectors stored — in seconds.
+    pub seconds: f64,
 }
 
 impl ModelIndex {
@@ -349,17 +474,28 @@ impl ModelIndex {
             .await
             .context("storing corpus symbols")?;
 
+        let started = std::time::Instant::now();
         let embedder = get_embedder_for(meta.clone())
             .await
             .context("loading the embedding model")?;
+        // The production indexing step (`Analyzer` calls the same function):
+        // the index's template, chunks for long symbols when it chunks.
+        let refs: Vec<&CodeSymbol> = corpus.symbols().iter().collect();
         let vectors = embedder
-            .embed_symbols(corpus.symbols(), embedding_batch())
+            .embed_index(
+                &refs,
+                EmbedOptions::new(embedding_batch(), embedding_batch_tokens()),
+                None,
+                None,
+            )
             .await
             .context("embedding the corpus")?;
+        let chunk_rows = vectors.chunk_rows(&refs);
+        let embed = vectors.stats.clone();
         let pairs: Vec<(String, Vec<f32>)> = corpus
             .symbols()
             .iter()
-            .zip(vectors)
+            .zip(vectors.primary)
             .map(|(symbol, vector)| (symbol.uid.clone(), vector))
             .collect();
         let stored = store
@@ -373,6 +509,18 @@ impl ModelIndex {
                 corpus.len()
             );
         }
+        let chunk_vectors = store
+            .store_chunk_vectors(chunk_rows)
+            .await
+            .context("storing chunk vectors")?;
+        let stats = IndexBuildStats {
+            embed,
+            symbol_vectors: stored,
+            chunk_vectors,
+            vector_bytes: ((stored + chunk_vectors) * meta.dim * 4) as u64,
+            disk_bytes: dir_size(dir.path()),
+            seconds: started.elapsed().as_secs_f64(),
+        };
         let json = serde_json::to_string(&meta)?;
         store
             .set_index_meta(IndexEmbeddingMeta::META_KEY, &json)
@@ -393,7 +541,13 @@ impl ModelIndex {
             setup: setup.clone(),
             policy,
             reranked: Mutex::new(HashMap::new()),
+            stats,
         })
+    }
+
+    /// What building this index cost.
+    pub fn stats(&self) -> &IndexBuildStats {
+        &self.stats
     }
 
     /// The indexed symbols in store order, as every product search path reads
@@ -637,6 +791,17 @@ impl FusionInputs {
     }
 }
 
+/// Total size of the files under `path`.
+fn dir_size(path: &std::path::Path) -> u64 {
+    walkdir::WalkDir::new(path)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_file())
+        .filter_map(|e| e.metadata().ok())
+        .map(|m| m.len())
+        .sum()
+}
+
 /// The corpus as an index built without embeddings presents it: written with
 /// `Store::store_symbols` and read back with `Store::get_symbols`, which is
 /// what `myc search` ranks on an index analysed with `--skip-embeddings`.
@@ -675,11 +840,48 @@ mod tests {
 
     #[test]
     fn the_embedding_batch_defaults_to_the_shipped_one() {
-        assert_eq!(parse_batch(None), SHIPPED_EMBEDDING_BATCH);
-        assert_eq!(parse_batch(Some("")), SHIPPED_EMBEDDING_BATCH);
-        assert_eq!(parse_batch(Some("0")), SHIPPED_EMBEDDING_BATCH);
-        assert_eq!(parse_batch(Some("lots")), SHIPPED_EMBEDDING_BATCH);
-        assert_eq!(parse_batch(Some(" 32 ")), 32);
+        assert_eq!(parse_batch(None), None);
+        assert_eq!(parse_batch(Some("")), None);
+        assert_eq!(parse_batch(Some("0")), None);
+        assert_eq!(parse_batch(Some("lots")), None);
+        assert_eq!(parse_batch(Some(" 32 ")), Some(32));
+    }
+
+    #[test]
+    fn variants_override_the_shipped_configuration() {
+        let shipped = ModelSetup::shipped_default().unwrap();
+        let same = ModelSetup::variant(&Variant::default()).unwrap();
+        assert_eq!(shipped.embedding, same.embedding);
+
+        let variant = Variant::parse(
+            Some("granite-embedding-small-english-r2"),
+            Some("2"),
+            Some("on"),
+        )
+        .unwrap();
+        assert!(!variant.is_shipped());
+        let setup = ModelSetup::variant(&variant).unwrap();
+        assert_eq!(setup.embedding.model, "granite-embedding-small-english-r2");
+        assert_eq!(setup.embedding.text_version, 2);
+        assert_eq!(setup.embedding.chunking, Some(Chunking::for_window(512)));
+        assert_ne!(
+            setup.embedding.fingerprint(),
+            shipped.embedding.fingerprint()
+        );
+        assert!(setup
+            .cache_key()
+            .contains("granite-embedding-small-english-r2"));
+
+        // Template 1 cannot chunk; unknown values are refused.
+        let flat_chunked = Variant::parse(None, Some("1"), Some("on")).unwrap();
+        assert!(ModelSetup::variant(&flat_chunked).is_err());
+        assert!(Variant::parse(None, Some("7"), None).is_err());
+        assert!(Variant::parse(None, None, Some("maybe")).is_err());
+        assert!(ModelSetup::variant(&Variant {
+            model: Some("no-such-model".into()),
+            ..Default::default()
+        })
+        .is_err());
     }
 
     #[test]
@@ -691,7 +893,11 @@ mod tests {
         );
         assert_eq!(setup.reranker_id, myceliums_core::DEFAULT_RERANKER_MODEL);
         let key = setup.cache_key();
-        assert!(key.contains("intfloat--multilingual-e5-small"), "{key}");
+        assert!(
+            key.contains("jinaai--jina-embeddings-v2-base-code"),
+            "{key}"
+        );
+        assert!(key.contains(&setup.embedding_spec.revision[..12]), "{key}");
         assert!(key.contains("rozgo--bge-reranker-v2-m3"), "{key}");
         assert!(key.contains(FASTEMBED_VERSION), "{key}");
         assert!(!key.contains('/'), "{key}");
@@ -701,7 +907,7 @@ mod tests {
         );
         assert_eq!(
             setup.provenance().embedding_text_version,
-            EMBEDDING_TEXT_VERSION
+            myceliums_core::embeddings::EMBEDDING_TEXT_VERSION
         );
     }
 

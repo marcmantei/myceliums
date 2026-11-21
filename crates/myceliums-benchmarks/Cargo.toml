@@ -47,6 +47,10 @@ name = "real-repo-eval"
 path = "src/bin/real_repo_eval.rs"
 
 [[bin]]
+name = "real-repo-compare"
+path = "src/bin/real_repo_compare.rs"
+
+[[bin]]
 name = "real-repo-review"
 path = "src/bin/real_repo_review.rs"
 

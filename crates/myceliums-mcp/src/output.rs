@@ -285,6 +285,12 @@ pub struct AnalyzeOutput {
     /// Of `symbols_embedded`, the vectors kept from the previous index for
     /// unchanged symbols (0 for a cached result).
     pub embeddings_reused: usize,
+    /// Symbols being embedded in the background after this call (#157).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub embeddings_pending: usize,
+    /// The embedding model of the background embedding, when there is one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub embedding_model: Option<String>,
     /// Call sites linked by a CALLS edge, and why the others were not: more
     /// candidates than the resolver links, a library target, a call through
     /// a variable, nothing in scope, outside any function. Absent for an
@@ -733,6 +739,11 @@ pub struct KnowledgeResultItem {
     pub match_context: String,
     pub match_line: u32,
     pub confidence: f64,
+}
+
+/// serde: leave a zero count out.
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 #[cfg(test)]

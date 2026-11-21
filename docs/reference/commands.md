@@ -454,7 +454,7 @@ Check the health of the Myceliums installation. Verifies registry integrity, dat
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--download` | bool | `false` | Pre-download the fastembed model (~100 MB) |
+| `--download` | bool | `false` | Pre-download the configured embedding model |
 
 ```bash
 myc doctor
@@ -509,7 +509,7 @@ Clean up myceliums data: specific repos, orphaned data, caches, or everything.
 | `<repo>` | positional, optional | | Repository ID or path to clean |
 | `--orphans` | bool | `false` | Remove orphaned data directories not tracked in the registry |
 | `--all` | bool | `false` | Remove ALL myceliums data |
-| `--cache` | bool | `false` | Remove the fastembed model cache |
+| `--cache` | bool | `false` | Remove the model cache |
 | `--yes` | bool | `false` | Skip confirmation prompts |
 
 ```bash

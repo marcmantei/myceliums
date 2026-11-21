@@ -220,4 +220,28 @@ impl MyceliumsMcp {
     pub fn graph_is_cached_for_test(&self, repo_id: &str) -> bool {
         self.service.is_cached(repo_id)
     }
+
+    /// Waits until no background embedding of `repo_id` runs (#157) and
+    /// returns its last status line (`None`: no job ran). Panics after
+    /// `timeout`.
+    pub async fn wait_for_embedding_for_test(
+        &self,
+        repo_id: &str,
+        timeout: std::time::Duration,
+    ) -> Option<String> {
+        let deadline = std::time::Instant::now() + timeout;
+        while crate::embedding_jobs::is_running(repo_id) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the background embedding of {repo_id} still runs after {timeout:?}"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        crate::embedding_jobs::job(repo_id).map(|job| job.line())
+    }
+
+    /// Invoke the `server_stats` handler.
+    pub async fn server_stats_for_test(&self) -> Result<String, String> {
+        self.server_stats().await.map_err(|e| e.message())
+    }
 }

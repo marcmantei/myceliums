@@ -80,7 +80,12 @@ impl MyceliumsMcp {
     /// [`crate::index_status::freshness_line`]).
     pub(crate) async fn index_status(&self, graph: &Graph<'_>) -> Result<String, ToolError> {
         let indexed = graph.files().await?.shared();
-        Ok(crate::index_status::freshness_line(graph.info(), indexed, graph.store()).await)
+        let line = crate::index_status::freshness_line(graph.info(), indexed, graph.store()).await;
+        // A background embedding of this index says how far it is (#157).
+        Ok(match crate::embedding_jobs::status_line(&graph.info().id) {
+            Some(job) => format!("{line}\n{job}"),
+            None => line,
+        })
     }
 
     /// A text graph result: freshness line, then `body`.

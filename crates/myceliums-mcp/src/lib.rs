@@ -19,11 +19,13 @@
 //!   `--stats-file`.
 //! * `analysis` — the full re-analysis behind `analyze`: off the runtime,
 //!   built beside the live index and swapped in, with progress
-//!   notifications.
+//!   notifications; `embedding_jobs` — the embedding that follows it, in the
+//!   background and resumable.
 
 #![warn(missing_docs)]
 
 mod analysis;
+mod embedding_jobs;
 mod errors;
 mod format;
 pub mod http_security;

@@ -92,6 +92,12 @@ async fn has_vectors(store: &Store) -> bool {
 /// recoverable error: no model is loaded (or downloaded) for an index that
 /// could not use it.
 async fn vector_embedder(store: &Store) -> Result<Arc<Embedder>, ToolError> {
+    if !has_vectors(store).await && crate::embedding_jobs::is_running(store.repo_id()) {
+        return Err(ToolError::recoverable(
+            "This index's embeddings are being built in the background and no symbol has a vector yet.",
+            "call search_code with mode=keyword now; search by meaning works once the first symbols are embedded (the Index line shows progress)",
+        ));
+    }
     if !has_vectors(store).await {
         return Err(ToolError::recoverable(
             "This index has no embeddings (built with skip_embeddings, or before embedding metadata was recorded), so it cannot be searched by meaning.",
@@ -154,6 +160,12 @@ impl MyceliumsMcp {
                         self.hybrid_results(&graph, &embedder, query, page, rerank, explain, tests)
                             .await?
                     }
+                    None if crate::embedding_jobs::is_running(&graph.info().id) => format!(
+                        "Keyword search (embeddings are being built in the background; search \
+                         by meaning starts once the first symbols are embedded).\n\n{}",
+                        self.keyword_results(&graph, query, page, explain, tests)
+                            .await?
+                    ),
                     None => format!(
                         "Keyword search (this index has no usable embeddings; re-run analyze \
                          without skip_embeddings for search by meaning).\n\n{}",

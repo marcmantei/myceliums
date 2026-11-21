@@ -220,6 +220,28 @@ impl SearchMode {
         SearchMode::all().into_iter().find(|mode| mode.id() == id)
     }
 
+    /// Modes named in a comma-separated list (`lexical,semantic,hybrid`), in
+    /// the canonical order, each once.
+    pub fn parse_list(list: &str) -> anyhow::Result<Vec<SearchMode>> {
+        let mut wanted = Vec::new();
+        for id in list.split(',').map(str::trim).filter(|id| !id.is_empty()) {
+            let mode = SearchMode::from_id(id).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "unknown mode '{id}' (one of {})",
+                    SearchMode::all().map(|m| m.id()).join(", ")
+                )
+            })?;
+            wanted.push(mode);
+        }
+        if wanted.is_empty() {
+            anyhow::bail!("no mode named");
+        }
+        Ok(SearchMode::all()
+            .into_iter()
+            .filter(|mode| wanted.contains(mode))
+            .collect())
+    }
+
     /// True when ranking needs the embedding model.
     pub fn needs_embeddings(&self) -> bool {
         !matches!(self, SearchMode::Lexical)

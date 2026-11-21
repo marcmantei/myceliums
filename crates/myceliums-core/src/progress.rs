@@ -27,9 +27,10 @@ pub enum AnalysisPhase {
     TracingProcesses,
     /// Generating vector embeddings for semantic search.
     GeneratingEmbeddings {
-        /// Symbols embedded so far.
+        /// Texts embedded so far: symbols, plus the body chunks of long
+        /// symbols in a chunked index (#157).
         current: usize,
-        /// Symbols to embed.
+        /// Texts to embed.
         total: usize,
     },
     /// Analysis finished successfully.
