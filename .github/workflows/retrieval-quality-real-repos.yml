@@ -239,6 +239,15 @@ jobs:
             --chunking "${{ matrix.variant.chunking }}" \
             --out "variant-${{ matrix.variant.id }}.json" --summary "$GITHUB_STEP_SUMMARY" \
             | tee "variant-${{ matrix.variant.id }}.txt"
+      - name: Index with the incumbent on this runner
+        # Every matrix job gets its own machine, and their speeds differ by
+        # more than the budget can tolerate: cost ratios pair each variant
+        # with the incumbent measured in the same job, in its own process.
+        run: |
+          set -o pipefail
+          nice -n 10 "$EVAL" --allow-model-download --no-sweep --no-demotion --modes semantic \
+            --model multilingual-e5-small --template 1 --chunking off \
+            --out "calibration-${{ matrix.variant.id }}.json" | tee "calibration-${{ matrix.variant.id }}.txt"
       - name: Upload the report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -247,6 +256,8 @@ jobs:
           path: |
             variant-${{ matrix.variant.id }}.json
             variant-${{ matrix.variant.id }}.txt
+            calibration-${{ matrix.variant.id }}.json
+            calibration-${{ matrix.variant.id }}.txt
           retention-days: 90
 
   compare:

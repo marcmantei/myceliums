@@ -58,6 +58,9 @@ struct Run {
     long: BTreeMap<String, String>,
     embedding: Value,
     digest: String,
+    /// The incumbent indexed on the same runner (`calibration-<id>.json`
+    /// next to `variant-<id>.json`), the denominator of the cost ratios.
+    calibration: Option<Value>,
 }
 
 impl Run {
@@ -122,6 +125,7 @@ impl Run {
             long,
             embedding: v["embedding"].clone(),
             digest: v["dataset_digest"].as_str().unwrap_or_default().to_string(),
+            calibration: calibration_of(&path),
             path,
         })
     }
@@ -184,12 +188,29 @@ impl Run {
     }
 
     fn cost(&self, path: &[&str]) -> Option<f64> {
-        let mut v = &self.embedding;
-        for key in path {
-            v = v.get(key)?;
-        }
-        v.as_f64()
+        lookup(&self.embedding, path)
     }
+
+    /// `path` in the same-runner incumbent's embedding report.
+    fn calibration_cost(&self, path: &[&str]) -> Option<f64> {
+        lookup(self.calibration.as_ref()?, path)
+    }
+}
+
+fn lookup(mut v: &Value, path: &[&str]) -> Option<f64> {
+    for key in path {
+        v = v.get(key)?;
+    }
+    v.as_f64()
+}
+
+/// The embedding report of `calibration-<id>.json` beside `variant-<id>.json`.
+fn calibration_of(path: &std::path::Path) -> Option<Value> {
+    let name = path.file_name()?.to_str()?;
+    let id = name.strip_prefix("variant-")?;
+    let text = std::fs::read_to_string(path.with_file_name(format!("calibration-{id}"))).ok()?;
+    let v: Value = serde_json::from_str(&text).ok()?;
+    Some(v["embedding"].clone())
 }
 
 #[derive(Serialize)]
@@ -343,12 +364,22 @@ fn main() -> Result<()> {
         ] {
             costs.insert(key.to_string(), run.cost(path));
         }
+        // Same-runner ratios when the job measured the incumbent too, else
+        // against the baseline job (another machine).
         let ratio = |key: &str, path: &[&str]| -> Option<f64> {
-            Some(costs.get(key)?.as_ref()? / base_cost(path)?)
+            let value = costs.get(key)?.as_ref()?;
+            match run.calibration_cost(path) {
+                Some(incumbent) => Some(value / incumbent),
+                None => Some(value / base_cost(path)?),
+            }
         };
         let time_ratio = ratio("embed_seconds", &["total", "embed_seconds"]);
         let size_ratio = ratio("vector_bytes", &["total", "vector_bytes"]);
         let rss_ratio = ratio("peak_rss_bytes", &["peak_rss_bytes"]);
+        costs.insert(
+            "same_runner".into(),
+            Some(if run.calibration.is_some() { 1.0 } else { 0.0 }),
+        );
         costs.insert("time_ratio".into(), time_ratio.map(round));
         costs.insert("size_ratio".into(), size_ratio.map(round));
         costs.insert("rss_ratio".into(), rss_ratio.map(round));
@@ -517,7 +548,8 @@ fn render(c: &Comparison) -> String {
         ));
     }
     out.push_str(
-        "\n**Costs** (hosted runner unless noted)\n\n\
+        "\n**Costs** (hosted runner; × is against the incumbent indexed on the same runner \
+         when the job measured it)\n\n\
          | Variant | Embed s | × | Symbols/s | Texts | Chunk vectors | Vector MB | × | Disk MB | Query p50 / p95 ms | Peak RSS GB | × | Download MB |\n\
          | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n",
     );

@@ -1043,7 +1043,12 @@ run release builds, and the latency limit is absolute. So the costs (index
 time, latency, memory) are taken from a second run of the same grid with the
 evaluator built in release mode. Quality does not depend on the build mode:
 the release run must reproduce every query's scores of the debug run exactly,
-or neither counts.
+or neither counts. The same first run showed that "the same dispatch" does not
+cancel runner speed: every matrix job gets its own machine, and the
+incumbent's job embedded more slowly (522 s) than a variant doing strictly
+more work (347 s). In the release run each job therefore also indexes the
+four repositories with the incumbent, in a separate process on the same
+machine, and the time and memory ratios divide by that measurement.
 
 ### Variants
 
