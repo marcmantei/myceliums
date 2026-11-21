@@ -16,7 +16,7 @@ categories = ["development-tools", "parser-implementations"]
 default = ["embeddings"]
 ## Enable local semantic search (ONNX Runtime) and cross-encoder reranking.
 ## Disable this feature for a lighter build that only supports BM25 text search.
-embeddings = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:hf-hub"]
+embeddings = ["dep:fastembed", "dep:ort", "dep:tokenizers", "dep:ureq", "dep:native-tls"]
 ## Enable PDF-to-markdown conversion via the opendataloader-pdf CLI tool.
 pdf = []
 ## Enable cross-repository comparison and adaptation planning (premium feature).
@@ -58,7 +58,8 @@ anyhow = { workspace = true }
 fastembed = { workspace = true, optional = true }
 ort = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
-hf-hub = { workspace = true, optional = true }
+ureq = { workspace = true, optional = true }
+native-tls = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

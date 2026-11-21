@@ -437,10 +437,14 @@ impl Store {
         let repo_ids: Vec<&str> = symbols.iter().map(|s| s.repo_id.as_str()).collect();
         let metadata: Vec<Option<&str>> = symbols.iter().map(|s| s.metadata.as_deref()).collect();
 
-        // Create zero vectors as placeholders (filled in by store_embeddings)
-        let total_values = symbols.len() * embedding_dim as usize;
-        let zero_values = Float32Array::from(vec![0.0f32; total_values]);
-        let vector_array = create_fixed_size_list(zero_values, embedding_dim)?;
+        // No vector yet (filled in by store_embeddings): null, which vector
+        // search skips. Indexes before #157 hold zero vectors instead, which
+        // it scored as cosine 0.5.
+        let vector_array = FixedSizeListArray::new_null(
+            Arc::new(Field::new("item", DataType::Float32, true)),
+            embedding_dim,
+            symbols.len(),
+        );
 
         Ok(RecordBatch::try_new(
             schema,
@@ -1268,6 +1272,70 @@ impl Store {
             }
         }
         Ok(out)
+    }
+
+    /// Creates the (empty) `chunks` table if this index has none, so that
+    /// vectors stored later — by a background embedding of the live index —
+    /// add rows to an existing table instead of creating one (#157).
+    pub async fn ensure_chunks_table(&self) -> Result<()> {
+        self.ensure_table("chunks", schema::chunks_schema(self.embedding_dim()))
+            .await?;
+        Ok(())
+    }
+
+    /// Moves the staged vectors — chunk rows with index 0, which a background
+    /// embedding stores a symbol's own vector as until it finishes (#157) —
+    /// onto their symbols' rows, in one write of the `symbols` table, and
+    /// removes the staged rows. Returns how many symbols got their vector.
+    pub async fn promote_staged_vectors(&self) -> Result<usize> {
+        let Some(table) = self.open_table_if_exists("chunks").await? else {
+            return Ok(0);
+        };
+        let filter = format!(
+            "repo_id = '{}' AND chunk_index = 0",
+            escape_lance_str(&self.repo_id)
+        );
+        let batches: Vec<RecordBatch> = table
+            .query()
+            .only_if(filter.clone())
+            .execute()
+            .await?
+            .try_collect()
+            .await?;
+        let mut staged = Vec::new();
+        for batch in &batches {
+            let uids = col_str(batch, "symbol_uid");
+            let vectors = batch
+                .column_by_name("vector")
+                .and_then(|c| c.as_any().downcast_ref::<FixedSizeListArray>());
+            for i in 0..batch.num_rows() {
+                if let Some(vector) = vectors.and_then(|v| list_values(v, i)) {
+                    staged.push((uids.value(i).to_string(), vector));
+                }
+            }
+        }
+        if staged.is_empty() {
+            return Ok(0);
+        }
+        let promoted = self.store_embeddings(staged).await?;
+        table.delete(&filter).await?;
+        Ok(promoted)
+    }
+
+    /// Compacts the `symbols` and `chunks` tables: a background embedding
+    /// writes them in many small commits (#157).
+    pub async fn compact_vector_tables(&self) -> Result<()> {
+        for name in ["symbols", "chunks"] {
+            if let Some(table) = self.open_table_if_exists(name).await? {
+                table
+                    .optimize(lancedb::table::OptimizeAction::Compact {
+                        options: Default::default(),
+                        remap_options: None,
+                    })
+                    .await?;
+            }
+        }
+        Ok(())
     }
 
     /// Remove the body-chunk vectors of the symbols `symbol_uids` (#157):
@@ -2657,6 +2725,64 @@ mod tests {
     /// The merged search returns exactly the brute-force top k by best
     /// vector per symbol, also when most good chunks belong to few symbols
     /// and the first fetch is not enough.
+    /// A symbol without a vector yet (a partial index, a background
+    /// embedding in progress, #157) is never a vector hit: its placeholder is
+    /// null, not a zero vector that scored cosine 0.5. Staged vectors (chunk
+    /// rows with index 0) are found, and moving them onto the symbols' rows
+    /// keeps the same answer.
+    #[tokio::test]
+    async fn symbols_without_a_vector_are_no_hits_and_staged_ones_are() {
+        let dim = 16;
+        let (store, _dir) = store_with_dim("partial_vectors", dim as i32).await;
+        let symbols: Vec<CodeSymbol> = (0..40)
+            .map(|i| make_symbol(&format!("s{i}"), None))
+            .collect();
+        store.store_symbols(&symbols).await.unwrap();
+        let vectors = noise(5, 10, dim);
+        // s0..s4 on their rows, s5..s9 staged, s10..s39 without a vector.
+        store
+            .store_embeddings(
+                (0..5)
+                    .map(|i| (format!("s{i}"), vectors[i].clone()))
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        store
+            .store_chunk_vectors(
+                (5..10)
+                    .map(|i| chunk(&format!("s{i}"), "src/lib.rs", 0, vectors[i].clone()))
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let query = vectors[7].clone();
+        let hits = store.vector_search(&query, 40).await.unwrap();
+        let uids: Vec<&str> = hits.iter().map(|(s, _)| s.uid.as_str()).collect();
+        assert_eq!(hits.len(), 10, "{uids:?}");
+        assert_eq!(uids[0], "s7");
+        assert!(hits.iter().all(|(s, _)| {
+            let n: usize = s.uid[1..].parse().unwrap();
+            n < 10
+        }));
+
+        assert_eq!(store.promote_staged_vectors().await.unwrap(), 5);
+        assert!(store.get_chunk_vectors().await.unwrap().is_empty());
+        let after = store.vector_search(&query, 40).await.unwrap();
+        let after_uids: Vec<&str> = after.iter().map(|(s, _)| s.uid.as_str()).collect();
+        assert_eq!(after_uids, uids, "the same symbols, in the same order");
+        let with_vectors = store
+            .get_symbols_with_vectors()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|(_, v)| v.is_some())
+            .count();
+        assert_eq!(with_vectors, 10);
+        store.compact_vector_tables().await.unwrap();
+        assert_eq!(store.vector_search(&query, 40).await.unwrap().len(), 10);
+    }
+
     #[tokio::test]
     async fn chunked_search_is_the_brute_force_top_k() {
         let dim = 16;

@@ -1405,7 +1405,7 @@ impl Embedder {
         let vectors = match &self.kind {
             EmbedderKind::Local(model) => {
                 let encoded = model.encode(&prefixed)?;
-                model.embed_encoded(&encoded, BatchLimits::default(), &mut |_| {})?
+                model.embed_encoded(&encoded, BatchLimits::default(), &mut |_| {}, &|| false)?
             }
             EmbedderKind::Remote(remote) => remote.embed(&prefixed).await?,
         };
@@ -1463,6 +1463,7 @@ impl Embedder {
                 EmbedOptions::new(batch_size, 0),
                 None,
                 None,
+                &|| false,
             )
             .await?;
         Ok(vectors.primary)
@@ -1480,8 +1481,23 @@ impl Embedder {
         reuse: Option<&HashMap<String, Vec<f32>>>,
         progress: Option<EmbedProgress<'_>>,
     ) -> Result<IndexVectors> {
+        self.embed_index_until(symbols, options, reuse, progress, &|| false)
+            .await
+    }
+
+    /// [`Embedder::embed_index`] that gives up between two model batches once
+    /// `stop` — or [`stop_embedding`], for the whole process — says so, with
+    /// an error for which [`crate::MyceliumError::is_cancelled`] holds.
+    pub async fn embed_index_until(
+        &self,
+        symbols: &[&CodeSymbol],
+        options: EmbedOptions,
+        reuse: Option<&HashMap<String, Vec<f32>>>,
+        progress: Option<EmbedProgress<'_>>,
+        stop: &(dyn Fn() -> bool + Send + Sync),
+    ) -> Result<IndexVectors> {
         let meta = self.meta.clone();
-        self.embed_with(symbols, &meta, options, reuse, progress)
+        self.embed_with(symbols, &meta, options, reuse, progress, stop)
             .await
     }
 
@@ -1492,7 +1508,9 @@ impl Embedder {
         options: EmbedOptions,
         reuse: Option<&HashMap<String, Vec<f32>>>,
         progress: Option<EmbedProgress<'_>>,
+        stop: &(dyn Fn() -> bool + Send + Sync),
     ) -> Result<IndexVectors> {
+        let stopped = || stop() || embedding_stopped();
         let started = std::time::Instant::now();
         let template = meta.template().ok_or_else(|| {
             anyhow!(
@@ -1606,17 +1624,25 @@ impl Embedder {
                     stats.tokens += encoded.iter().map(|e| e.len()).sum::<usize>();
                     stats.truncated_texts += encoded.iter().filter(|e| e.truncated).count();
                     let before = out.len();
-                    out.extend(model.embed_encoded(&encoded, options.batch, &mut |done| {
-                        if let Some(report) = progress {
-                            report(before + done, total);
-                        }
-                    })?);
+                    out.extend(model.embed_encoded(
+                        &encoded,
+                        options.batch,
+                        &mut |done| {
+                            if let Some(report) = progress {
+                                report(before + done, total);
+                            }
+                        },
+                        &stopped,
+                    )?);
                 }
                 out
             }
             EmbedderKind::Remote(_) => {
                 let mut out = Vec::with_capacity(total);
                 for batch in texts.chunks(options.batch.max_texts.max(1)) {
+                    if stopped() {
+                        return Err(crate::AnalysisCancelled.into());
+                    }
                     out.extend(self.embed_texts(batch, EmbedInput::Passage).await?);
                     if let Some(report) = progress {
                         report(out.len(), total);
@@ -1766,9 +1792,19 @@ impl PreviousVectors {
             }
         }
         let mut chunks_by_document: HashMap<[u8; 32], Vec<PreviousChunk>> = HashMap::new();
+        let chunks = store.get_chunk_vectors().await?;
+        for chunk in &chunks {
+            // A symbol's own vector staged by a background embedding that
+            // stopped before it moved it onto the symbol's row (#157).
+            if chunk.chunk_index == 0 && chunk.vector.len() == meta.dim {
+                if let Some(key) = key_of_uid.get(&chunk.symbol_uid) {
+                    by_text.entry(*key).or_insert_with(|| chunk.vector.clone());
+                }
+            }
+        }
         if meta.chunking.is_some() {
-            for chunk in store.get_chunk_vectors().await? {
-                if chunk.vector.len() != meta.dim {
+            for chunk in chunks {
+                if chunk.vector.len() != meta.dim || chunk.chunk_index == 0 {
                     continue;
                 }
                 if let Some(key) = key_of_uid.get(&chunk.symbol_uid) {
@@ -1895,6 +1931,89 @@ fn document_key(symbol: &CodeSymbol, template: TextTemplate) -> [u8; 32] {
         TextTemplate::Structured => text::structured(symbol).text(),
     };
     Sha256::digest(text.as_bytes()).into()
+}
+
+// ── Stopping and downloads (process-wide) ─────────────────────────────
+
+static STOPPING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Asks every embedding run of this process to stop: between two model
+/// batches, between two slices of a background embedding, and between two
+/// reads of a model download (whose partial file the next run resumes). A
+/// server calls it when it stops serving, so the work in flight ends within
+/// a batch instead of holding the process. There is no way back: the
+/// process is ending.
+pub fn stop_embedding() {
+    STOPPING.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Whether [`stop_embedding`] has been called.
+pub fn embedding_stopped() -> bool {
+    STOPPING.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+/// A model file being downloaded, as last reported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadStatus {
+    /// Registry id of the model.
+    pub model: String,
+    /// Path of the file in the model repository.
+    pub file: String,
+    /// Bytes on disk so far.
+    pub done: u64,
+    /// Size of the file, when the server said.
+    pub total: Option<u64>,
+}
+
+static DOWNLOAD: std::sync::Mutex<Option<(DownloadStatus, std::time::Instant)>> =
+    std::sync::Mutex::new(None);
+
+/// The model download in progress in this process, if any.
+pub fn download_status() -> Option<DownloadStatus> {
+    DOWNLOAD
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|(status, _)| status.clone())
+}
+
+/// Records a download's progress (`None` when it ended) and prints a line on
+/// stderr every few seconds.
+pub(crate) fn report_download(status: Option<DownloadStatus>) {
+    let mut current = DOWNLOAD.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(status) = status else {
+        *current = None;
+        return;
+    };
+    let printed = current
+        .as_ref()
+        .filter(|(last, _)| last.file == status.file)
+        .map(|(_, at)| *at);
+    let due = printed.is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(5));
+    if due {
+        let mb = |bytes: u64| bytes / 1_000_000;
+        match status.total {
+            Some(total) => eprintln!(
+                "  downloading {} {}: {}/{} MB",
+                status.model,
+                status.file,
+                mb(status.done),
+                mb(total)
+            ),
+            None => eprintln!(
+                "  downloading {} {}: {} MB",
+                status.model,
+                status.file,
+                mb(status.done)
+            ),
+        }
+    }
+    let at = if due {
+        std::time::Instant::now()
+    } else {
+        printed.unwrap_or_else(std::time::Instant::now)
+    };
+    *current = Some((status, at));
 }
 
 // ── Cached instances ──────────────────────────────────────────────────

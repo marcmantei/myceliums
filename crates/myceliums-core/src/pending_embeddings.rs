@@ -1,24 +1,40 @@
-//! Embedding the symbols an index holds without a vector, a slice at a time,
-//! each slice stored before the next is embedded (#157).
+//! Embedding the symbols an index holds without a vector, in the background
+//! and resumably (#157).
 //!
 //! A full analysis with [`crate::Analyzer::defer_embeddings`] builds the graph
 //! and leaves every symbol it could not take a vector over for to this step.
 //! The MCP server runs it in the background after `analyze` answered, so a
 //! first index — hundreds of megabytes of model download and minutes of
-//! inference with the default model — never runs inside one tool call. What a
-//! slice stored stays stored: an interrupted run (a stopped server, a failed
-//! model) resumes where it stopped, and the index is searchable by meaning for
-//! the symbols embedded so far.
+//! inference with the default model — never runs inside one tool call.
+//!
+//! It writes the live index while tools read it, so it touches no table the
+//! graph is read from until it is done. Every few slices, the vectors so far
+//! are added to the `chunks` table — a symbol's own vector staged as chunk 0,
+//! next to its body chunks — where vector search finds them, and the
+//! accounting is updated; neither table counts towards the index's graph
+//! generation ([`crate::service::UNCACHED_TABLES`]), so cached graphs stay and
+//! running reads do not fail. At the end the staged vectors move onto their
+//! symbols' rows in one write, and the tables are compacted. A run that stops
+//! — the process ends, the model fails — keeps what it staged; the next run
+//! moves that first and embeds only the rest.
 
 use crate::embedding_stats::EmbeddingStats;
-use crate::embeddings::{get_embedder_for, EmbedOptions, IndexEmbeddingMeta};
+use crate::embeddings::{embedding_stopped, get_embedder_for, EmbedOptions, IndexEmbeddingMeta};
 use crate::error::{MyceliumError, Result};
-use myceliums_storage::{CodeSymbol, Store};
+use myceliums_storage::{ChunkVector, CodeSymbol, Store};
+use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
-/// Symbols embedded and stored per slice: what an interrupted run loses at
-/// most, about half a minute of work with the default model on four cores.
+/// Symbols embedded per slice: how often a stop request and the progress are
+/// looked at between model calls.
 pub const PENDING_SLICE_SYMBOLS: usize = 256;
+
+/// Staged vectors are written once this many symbols are embedded...
+pub const PERSIST_SYMBOLS: usize = 1024;
+
+/// ...or once this long has passed since the last write: what a stopped run
+/// loses at most.
+pub const PERSIST_INTERVAL: Duration = Duration::from_secs(20);
 
 /// Called with `(done, total)` pending symbols as [`embed_pending`] proceeds.
 pub type PendingProgress<'a> = &'a (dyn Fn(usize, usize) + Send + Sync);
@@ -32,7 +48,8 @@ pub struct PendingOutcome {
     pub pending: usize,
     /// Of those, the ones this run embedded and stored.
     pub embedded: usize,
-    /// Whether the run stopped early because `stop` asked it to.
+    /// Whether the run stopped early because `stop` (or
+    /// [`crate::embeddings::stop_embedding`]) asked it to.
     pub stopped: bool,
 }
 
@@ -48,13 +65,14 @@ pub async fn pending_symbols(store: &Store) -> Result<(Vec<CodeSymbol>, usize)> 
 }
 
 /// Embed every symbol of the index in `store` that has no vector, with the
-/// embedder the index records, [`PENDING_SLICE_SYMBOLS`] at a time. After
-/// each slice its vectors (body chunks first, then the symbols' own) and the
-/// embedding accounting are stored, and `stop` is asked whether to go on.
+/// embedder the index records, [`PENDING_SLICE_SYMBOLS`] at a time, staging
+/// the vectors and moving them onto the symbols' rows at the end (see the
+/// module documentation). `stop` is asked before every slice and between
+/// two model batches; a stopped run keeps what it staged.
 ///
 /// Fails when the index records no embedder, or when the model cannot be
 /// loaded or embed; the accounting then counts the symbols still without a
-/// vector as failures, and what earlier slices stored stays.
+/// vector as failures, and what was staged stays.
 pub async fn embed_pending(
     store: &Store,
     options: EmbedOptions,
@@ -70,6 +88,12 @@ pub async fn embed_pending(
         }
     };
     store.set_embedding_dim(meta.dim as i32);
+    let stopped = || stop() || embedding_stopped();
+    // What an earlier run staged and did not move.
+    let leftovers = store.promote_staged_vectors().await?;
+    if leftovers > 0 {
+        info!("Moved {leftovers} vectors a stopped background embedding had staged");
+    }
     let (pending, symbols_total) = pending_symbols(store).await?;
     let mut outcome = PendingOutcome {
         symbols_total,
@@ -85,6 +109,9 @@ pub async fn embed_pending(
     };
     if pending.is_empty() {
         record(0, 0).record(store).await?;
+        if leftovers > 0 {
+            compact(store).await;
+        }
         return Ok(outcome);
     }
     info!(
@@ -93,12 +120,11 @@ pub async fn embed_pending(
         symbols_total,
         meta.identity()
     );
-    if meta.chunking.is_some() {
-        // Body chunks an interrupted run stored before the symbol's own
-        // vector: the symbol is embedded again, chunks included.
-        let uids: Vec<String> = pending.iter().map(|s| s.uid.clone()).collect();
-        store.delete_chunk_vectors_of(&uids).await?;
-    }
+    // Rows a run of an earlier build stored before the symbol's own vector:
+    // the symbol is embedded again, chunks included.
+    let uids: Vec<String> = pending.iter().map(|s| s.uid.clone()).collect();
+    store.delete_chunk_vectors_of(&uids).await?;
+    store.ensure_chunks_table().await?;
     let report = |done: usize| {
         if let Some(progress) = progress {
             progress(done, pending.len());
@@ -107,48 +133,80 @@ pub async fn embed_pending(
     report(0);
     let embedder = match get_embedder_for(meta.clone()).await {
         Ok(embedder) => embedder,
+        Err(e) if e.is_cancelled() || stopped() => {
+            outcome.stopped = true;
+            return Ok(outcome);
+        }
         Err(e) => {
             record(0, pending.len()).record(store).await?;
             return Err(e);
         }
     };
+    let mut staged: Vec<ChunkVector> = Vec::new();
+    let mut staged_symbols = 0;
+    let mut last_write = Instant::now();
+    let mut done = 0;
     for slice in pending.chunks(PENDING_SLICE_SYMBOLS) {
-        if stop() {
+        if stopped() {
             outcome.stopped = true;
             break;
         }
-        let done = outcome.embedded;
         let refs: Vec<&CodeSymbol> = slice.iter().collect();
         let within = |texts_done: usize, texts_total: usize| {
             report(done + texts_done * slice.len() / texts_total.max(1));
         };
         let vectors = match embedder
-            .embed_index(&refs, options, None, Some(&within))
+            .embed_index_until(&refs, options, None, Some(&within), &stopped)
             .await
         {
             Ok(vectors) => vectors,
+            Err(e) if e.is_cancelled() => {
+                outcome.stopped = true;
+                break;
+            }
             Err(e) => {
-                record(done, pending.len() - done).record(store).await?;
+                outcome.embedded += write_staged(store, &mut staged, &mut staged_symbols).await?;
+                record(outcome.embedded, pending.len() - outcome.embedded)
+                    .record(store)
+                    .await?;
                 return Err(e);
             }
         };
-        store.store_chunk_vectors(vectors.chunk_rows(&refs)).await?;
-        let pairs = refs
-            .iter()
-            .zip(vectors.primary)
-            .map(|(s, v)| (s.uid.clone(), v))
-            .collect();
-        let stored = store.store_embeddings(pairs).await?;
-        if stored < slice.len() {
+        let chunks = vectors.chunk_rows(&refs);
+        staged.extend(
+            refs.iter()
+                .zip(vectors.primary)
+                .map(|(s, vector)| ChunkVector {
+                    symbol_uid: s.uid.clone(),
+                    file_path: s.file_path.clone(),
+                    chunk_index: 0,
+                    text_hash: String::new(),
+                    vector,
+                }),
+        );
+        staged.extend(chunks);
+        staged_symbols += slice.len();
+        done += slice.len();
+        if staged_symbols >= PERSIST_SYMBOLS || last_write.elapsed() >= PERSIST_INTERVAL {
+            outcome.embedded += write_staged(store, &mut staged, &mut staged_symbols).await?;
+            record(outcome.embedded, 0).record(store).await?;
+            last_write = Instant::now();
+        }
+        report(done);
+    }
+    outcome.embedded += write_staged(store, &mut staged, &mut staged_symbols).await?;
+    record(outcome.embedded, 0).record(store).await?;
+    if !outcome.stopped {
+        // Every symbol has its vector: onto the symbols' rows, in one write.
+        let promoted = store.promote_staged_vectors().await?;
+        if promoted < outcome.embedded {
             warn!(
                 "{} of {} embedded symbols were no longer in the index",
-                slice.len() - stored,
-                slice.len()
+                outcome.embedded - promoted,
+                outcome.embedded
             );
         }
-        outcome.embedded += stored;
-        record(outcome.embedded, 0).record(store).await?;
-        report(done + slice.len());
+        compact(store).await;
     }
     info!(
         "Background embedding: {} of {} pending symbols embedded{}",
@@ -157,6 +215,28 @@ pub async fn embed_pending(
         if outcome.stopped { " (stopped)" } else { "" }
     );
     Ok(outcome)
+}
+
+/// Adds the staged rows to the `chunks` table in one write; returns how many
+/// symbols they cover.
+async fn write_staged(
+    store: &Store,
+    staged: &mut Vec<ChunkVector>,
+    staged_symbols: &mut usize,
+) -> Result<usize> {
+    if staged.is_empty() {
+        return Ok(0);
+    }
+    store.store_chunk_vectors(std::mem::take(staged)).await?;
+    Ok(std::mem::take(staged_symbols))
+}
+
+/// Compacts the tables the embedding wrote in many small commits. Best
+/// effort: an uncompacted table is only slower to scan.
+async fn compact(store: &Store) {
+    if let Err(e) = store.compact_vector_tables().await {
+        warn!("Could not compact the vector tables: {e}");
+    }
 }
 
 #[cfg(test)]
@@ -341,15 +421,25 @@ pub(crate) mod tests {
         let store = Store::open(&db, "pending-test").await.unwrap();
 
         // Stopped after the first slice, as a server shutting down would be.
-        let asked = AtomicUsize::new(0);
-        let stop = || asked.fetch_add(1, Ordering::SeqCst) >= 1;
-        let first = embed_pending(&store, EmbedOptions::default(), None, &stop)
+        let done = AtomicUsize::new(0);
+        let progress = |d: usize, _: usize| done.store(d, Ordering::SeqCst);
+        let stop = || done.load(Ordering::SeqCst) >= PENDING_SLICE_SYMBOLS;
+        let first = embed_pending(&store, EmbedOptions::default(), Some(&progress), &stop)
             .await
             .unwrap();
         assert!(first.stopped);
         assert_eq!(first.embedded, PENDING_SLICE_SYMBOLS);
         let stats = EmbeddingStats::load(&store).await.unwrap().unwrap();
         assert_eq!(stats.symbols_embedded, PENDING_SLICE_SYMBOLS);
+        // Staged, not yet on the symbols' rows: the graph tables are as the
+        // analysis left them.
+        let (left, _) = pending_symbols(&store).await.unwrap();
+        assert_eq!(left.len(), result.symbols_total);
+        let staged = store.get_chunk_vectors().await.unwrap();
+        assert_eq!(
+            staged.iter().filter(|c| c.chunk_index == 0).count(),
+            PENDING_SLICE_SYMBOLS
+        );
 
         let second = embed_pending(&store, EmbedOptions::default(), None, &|| false)
             .await
@@ -404,6 +494,74 @@ pub(crate) mod tests {
             .unwrap();
         assert_eq!(outcome.embedded, 1);
         assert_eq!(texts.load(Ordering::SeqCst), embedded_once + 1);
+    }
+
+    /// While vectors are staged, no table the graph is read from changes:
+    /// the index's graph generation stays, cached graphs and running reads
+    /// survive the background embedding, and vector search already finds the
+    /// staged symbols — and never one without a vector. Moving the vectors in
+    /// at the end is one new generation.
+    #[tokio::test]
+    async fn staging_keeps_the_graph_generation_and_search_finds_the_staged_symbols() {
+        use crate::service::IndexFingerprint;
+        let (base_url, _) = fake_embedding_server().await;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("project");
+        let n = PENDING_SLICE_SYMBOLS + 40;
+        project(&root, n, false);
+        let db = dir.path().join("db");
+        let result = deferred(&root, &db, &base_url).await;
+        let store = Store::open(&db, "pending-test").await.unwrap();
+        let before = IndexFingerprint::read(&db);
+
+        let done = AtomicUsize::new(0);
+        let progress = |d: usize, _: usize| done.store(d, Ordering::SeqCst);
+        let stop = || done.load(Ordering::SeqCst) >= PENDING_SLICE_SYMBOLS;
+        embed_pending(&store, EmbedOptions::default(), Some(&progress), &stop)
+            .await
+            .unwrap();
+        assert_eq!(
+            IndexFingerprint::read(&db),
+            before,
+            "staging and the accounting are no new graph generation"
+        );
+        let staged: std::collections::HashSet<String> = store
+            .get_chunk_vectors()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|c| c.chunk_index == 0)
+            .map(|c| c.symbol_uid)
+            .collect();
+        let query = fake_vector("export function f3(): number {");
+        let mut query = query;
+        crate::embeddings::l2_normalize(&mut query);
+        let hits = store.vector_search(&query, 50).await.unwrap();
+        assert_eq!(hits.len(), 50, "staged symbols are found");
+        assert!(
+            hits.iter().all(|(s, _)| staged.contains(&s.uid)),
+            "only symbols with a vector are found"
+        );
+
+        embed_pending(&store, EmbedOptions::default(), None, &|| false)
+            .await
+            .unwrap();
+        assert_ne!(
+            IndexFingerprint::read(&db),
+            before,
+            "moving the vectors in is"
+        );
+        assert!(store
+            .get_chunk_vectors()
+            .await
+            .unwrap()
+            .iter()
+            .all(|c| c.chunk_index > 0));
+        let (left, _) = pending_symbols(&store).await.unwrap();
+        assert!(left.is_empty());
+        let hits = store.vector_search(&query, 10).await.unwrap();
+        assert_eq!(hits.len(), 10);
+        assert!(result.symbols_total > 50);
     }
 
     #[tokio::test]

@@ -252,16 +252,21 @@ impl LocalModel {
 
     /// Embed already tokenized texts in token-budgeted batches, longest first;
     /// unit-length vectors in input order. `progress` is told how many texts
-    /// are done after every batch.
+    /// are done after every batch; `stop` is asked before every batch, and a
+    /// `true` ends the call with [`crate::AnalysisCancelled`].
     pub fn embed_encoded(
         &self,
         encoded: &[Encoded],
         limits: BatchLimits,
         progress: &mut dyn FnMut(usize),
+        stop: &dyn Fn() -> bool,
     ) -> Result<Vec<Vec<f32>>> {
         let mut out: Vec<Option<Vec<f32>>> = vec![None; encoded.len()];
         let mut done = 0;
         for batch in plan_batches(encoded, limits) {
+            if stop() {
+                return Err(crate::AnalysisCancelled.into());
+            }
             let rows: Vec<&Encoded> = batch.iter().map(|&i| &encoded[i]).collect();
             let vectors = self.run(&rows)?;
             for (&i, vector) in batch.iter().zip(vectors) {
@@ -588,22 +593,113 @@ fn fetch_file(
         bail!("{} is not in the model cache {}", file, cache.display());
     }
     let endpoint = hf_endpoint(std::env::var("HF_ENDPOINT").ok())?;
-    let api = hf_hub::api::sync::ApiBuilder::new()
-        .with_cache_dir(cache.to_path_buf())
-        .with_endpoint(endpoint)
-        .with_progress(true)
-        .build()
-        .context("setting up the HuggingFace client")?;
-    let repo = api.repo(hf_hub::Repo::with_revision(
-        spec.repo.to_string(),
-        hf_hub::RepoType::Model,
-        spec.revision.to_string(),
+    let url = format!("{endpoint}/{}/resolve/{}/{file}", spec.repo, spec.revision);
+    let status = |done: u64, total: Option<u64>| super::DownloadStatus {
+        model: spec.id.to_string(),
+        file: file.to_string(),
+        done,
+        total,
+    };
+    let downloaded = download_to(
+        &url,
+        &local,
+        &super::embedding_stopped,
+        &mut |done, total| super::report_download(Some(status(done, total))),
+    );
+    super::report_download(None);
+    downloaded.with_context(|| format!("downloading {file} of {}@{}", spec.repo, spec.revision))?;
+    Ok(local)
+}
+
+/// Download `url` to `target` over HTTPS (or whatever scheme `url` names;
+/// [`hf_endpoint`] only lets https through), following redirects and the
+/// proxy of the environment. The bytes go to `<target>.part` first, renamed
+/// to `target` once complete; an existing `.part` is resumed with a range
+/// request. `stop` is asked between two reads: `true` leaves the `.part` for
+/// the next run and fails with [`crate::AnalysisCancelled`]. `progress` hears
+/// the bytes on disk and the size, when the server said.
+pub(crate) fn download_to(
+    url: &str,
+    target: &Path,
+    stop: &dyn Fn() -> bool,
+    progress: &mut dyn FnMut(u64, Option<u64>),
+) -> Result<()> {
+    use std::io::{Read, Write};
+    if let Some(dir) = target.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    let part = target.with_file_name(format!(
+        "{}.part",
+        target
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("download")
     ));
-    let path = repo
-        .get(file)
-        .with_context(|| format!("downloading {file} of {}@{}", spec.repo, spec.revision))?;
-    // hf-hub files a pinned commit under that commit's snapshot.
-    Ok(if local.is_file() { local } else { path })
+    let agent = ureq::builder()
+        .try_proxy_from_env(true)
+        .tls_connector(std::sync::Arc::new(native_tls::TlsConnector::new()?))
+        .timeout_connect(std::time::Duration::from_secs(30))
+        .timeout_read(std::time::Duration::from_secs(60))
+        .build();
+    let request = || {
+        agent.get(url).set(
+            "User-Agent",
+            concat!("myceliums/", env!("CARGO_PKG_VERSION")),
+        )
+    };
+    let mut start = std::fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
+    let response = if start > 0 {
+        match request().set("Range", &format!("bytes={start}-")).call() {
+            // The part is complete already (or not this file): start over.
+            Err(ureq::Error::Status(416, _)) => {
+                start = 0;
+                request().call()
+            }
+            other => other,
+        }
+    } else {
+        request().call()
+    }
+    .map_err(|e| anyhow!("{e}"))?;
+    let resumed = start > 0 && response.status() == 206;
+    if !resumed {
+        start = 0;
+    }
+    let total = response
+        .header("Content-Length")
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map(|length| start + length);
+    let mut out = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(resumed)
+        .truncate(!resumed)
+        .open(&part)
+        .with_context(|| format!("writing {}", part.display()))?;
+    let mut reader = response.into_reader();
+    let mut buf = vec![0u8; 256 * 1024];
+    let mut done = start;
+    progress(done, total);
+    loop {
+        if stop() {
+            return Err(crate::AnalysisCancelled.into());
+        }
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        out.write_all(&buf[..n])?;
+        done += n as u64;
+        progress(done, total);
+    }
+    out.flush()?;
+    drop(out);
+    if let Some(total) = total.filter(|&t| t != done) {
+        bail!("the download ended after {done} of {total} bytes");
+    }
+    std::fs::rename(&part, target)
+        .with_context(|| format!("moving {} into place", part.display()))?;
+    Ok(())
 }
 
 /// A pinned file must have its pinned size, checked on every load, and its
@@ -953,6 +1049,110 @@ mod tests {
         );
         let err = hf_endpoint(Some("http://mirror.example".into())).unwrap_err();
         assert!(err.to_string().contains("https://"), "{err}");
+    }
+
+    /// An HTTP server on localhost serving `content` at every path, with
+    /// range requests; the ranges it was asked for.
+    fn file_server(content: Vec<u8>) -> (String, std::sync::Arc<std::sync::Mutex<Vec<u64>>>) {
+        use std::io::{BufRead, BufReader, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/model.onnx", listener.local_addr().unwrap());
+        let ranges = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = ranges.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { continue };
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut start = 0u64;
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                        break;
+                    }
+                    let lower = line.to_ascii_lowercase();
+                    if let Some(range) = lower.strip_prefix("range: bytes=") {
+                        start = range.trim().trim_end_matches('-').parse().unwrap_or(0);
+                    }
+                }
+                seen.lock().unwrap().push(start);
+                let body = &content[start as usize..];
+                let status = if start > 0 {
+                    "206 Partial Content"
+                } else {
+                    "200 OK"
+                };
+                let mut out = stream;
+                let _ = write!(
+                    out,
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                );
+                for piece in body.chunks(16 * 1024) {
+                    if out.write_all(piece).is_err() {
+                        break;
+                    }
+                }
+            }
+        });
+        (url, ranges)
+    }
+
+    /// A download that is stopped keeps its partial file, and the next one
+    /// resumes it with a range request; the result is the whole file.
+    #[test]
+    fn a_stopped_download_resumes_where_it_stopped() {
+        let content: Vec<u8> = (0..1_000_000u32).map(|i| (i % 251) as u8).collect();
+        let (url, ranges) = file_server(content.clone());
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("snapshots/rev/onnx/model.onnx");
+        let part = dir.path().join("snapshots/rev/onnx/model.onnx.part");
+
+        let reached = std::cell::Cell::new(0u64);
+        let err = download_to(
+            &url,
+            &target,
+            &|| reached.get() >= 100_000,
+            &mut |done, total| {
+                assert_eq!(total, Some(1_000_000));
+                reached.set(done);
+            },
+        )
+        .unwrap_err();
+        assert!(err.is::<crate::AnalysisCancelled>(), "{err}");
+        assert!(!target.exists());
+        let kept = std::fs::metadata(&part).unwrap().len();
+        assert!((100_000..1_000_000).contains(&kept), "{kept}");
+
+        let mut last = (0, None);
+        download_to(&url, &target, &|| false, &mut |done, total| {
+            last = (done, total)
+        })
+        .unwrap();
+        assert_eq!(std::fs::read(&target).unwrap(), content);
+        assert!(!part.exists());
+        assert_eq!(last, (1_000_000, Some(1_000_000)));
+        assert_eq!(
+            *ranges.lock().unwrap(),
+            vec![0, kept],
+            "resumed at the partial size"
+        );
+    }
+
+    /// The downloader against HuggingFace itself: a file stored in git and
+    /// one stored in LFS (served through a redirect to the CDN), each with
+    /// its pinned size and SHA-256. Needs the network:
+    /// `cargo test -p myceliums-core downloads_pinned_files -- --ignored`
+    #[test]
+    #[ignore]
+    fn downloads_pinned_files_from_huggingface() {
+        let spec =
+            super::super::embedding_model_spec("granite-embedding-small-english-r2").unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        for file in [spec.tokenizer.config.as_ref().unwrap(), &spec.onnx] {
+            let path = fetch_file(spec, cache.path(), file.path, true).unwrap();
+            verify_file(spec, file, &path).unwrap();
+            println!("{}: {} bytes, hash ok", file.path, file.bytes);
+        }
     }
 
     fn pinned_for(content: &[u8]) -> PinnedFile {

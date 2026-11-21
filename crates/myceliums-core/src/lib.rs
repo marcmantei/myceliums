@@ -202,12 +202,13 @@ pub use email::{parse_eml, parse_eml_file, EmailAttachment, ParsedEmail};
 pub use embedding_stats::EmbeddingStats;
 #[cfg(feature = "embeddings")]
 pub use embeddings::{
-    check_model_cache, embedder_for_index, embedding_cache_info, embedding_model_spec,
-    get_embedder_for, get_reranker, index_embedding_meta, local_model_cached, local_model_code,
-    reranker_spec, BatchLimits, Chunking, EmbedInput, EmbedOptions, EmbedStats, Embedder,
-    EmbeddingModelSpec, IndexEmbeddingMeta, IndexVectors, ModelCacheInfo, PreviousVectors,
-    Reranker, RerankerSpec, SymbolChunk, TextTemplate, DEFAULT_LOCAL_EMBEDDING_MODEL,
-    DEFAULT_RERANKER_MODEL, EMBEDDING_MODELS, LEGACY_LOCAL_EMBEDDING_MODEL, RERANKER_MODELS,
+    check_model_cache, download_status, embedder_for_index, embedding_cache_info,
+    embedding_model_spec, embedding_stopped, get_embedder_for, get_reranker, index_embedding_meta,
+    local_model_cached, local_model_code, reranker_spec, stop_embedding, BatchLimits, Chunking,
+    DownloadStatus, EmbedInput, EmbedOptions, EmbedStats, Embedder, EmbeddingModelSpec,
+    IndexEmbeddingMeta, IndexVectors, ModelCacheInfo, PreviousVectors, Reranker, RerankerSpec,
+    SymbolChunk, TextTemplate, DEFAULT_LOCAL_EMBEDDING_MODEL, DEFAULT_RERANKER_MODEL,
+    EMBEDDING_MODELS, LEGACY_LOCAL_EMBEDDING_MODEL, RERANKER_MODELS,
 };
 pub use error::MyceliumError;
 pub use file_guard::{should_skip_file, FileSkipReason};

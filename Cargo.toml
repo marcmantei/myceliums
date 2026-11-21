@@ -95,7 +95,10 @@ fastembed = "4"
 # versions it locks, so one ONNX Runtime and one tokenizer build serve both.
 ort = { version = "=2.0.0-rc.9", default-features = false }
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
-hf-hub = { version = "0.4", default-features = false, features = ["ureq", "native-tls"] }
+# Model downloads (#157): the HTTP client and TLS stack hf-hub used, driven
+# directly so a download can be stopped and resumed.
+ureq = { version = "2", default-features = false, features = ["native-tls"] }
+native-tls = "0.2"
 
 # Concurrency
 dashmap = "6"

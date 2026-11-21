@@ -351,8 +351,19 @@ fn table_bytes<T: HeapSize>(rows: &[T]) -> u64 {
 /// count as the old one, inside the same timestamp tick, maybe even on a
 /// reused inode — but Lance stamps every manifest with its commit time in
 /// nanoseconds, so the content differs.
+///
+/// Tables no graph table is read from are left out ([`UNCACHED_TABLES`]):
+/// the body-chunk and staged vectors and the index metadata, which a
+/// background embedding of the live index writes every few seconds (#157).
+/// Their writes are not new generations of the graph — cached tables stay,
+/// and a running read does not fail with [`MyceliumError::IndexChanged`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexFingerprint(Vec<TableStamp>);
+
+/// Table directories of an index that no graph table is read from, and that
+/// therefore do not count towards its [`IndexFingerprint`]: vector search
+/// and the metadata readers read them directly.
+pub const UNCACHED_TABLES: [&str; 2] = ["chunks.lance", "index_meta.lance"];
 
 /// The on-disk state of one table directory (or of the database directory
 /// itself, under the empty name).
@@ -462,6 +473,9 @@ impl IndexFingerprint {
                 let path = entry.path();
                 if path.is_dir() {
                     let name = entry.file_name().to_string_lossy().into_owned();
+                    if UNCACHED_TABLES.contains(&name.as_str()) {
+                        continue;
+                    }
                     stamps.push(TableStamp::read(name, &path.join("_versions")));
                 }
             }

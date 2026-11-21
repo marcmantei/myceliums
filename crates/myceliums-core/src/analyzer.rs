@@ -571,6 +571,13 @@ impl Analyzer {
                 warn!("Failed to store chunk vectors: {e} (long symbols keep their first window)");
             }
         }
+        if self.defer_embeddings {
+            // The pending embedding adds rows to it in the live index: create
+            // it here, before the index goes live (#157).
+            if let Err(e) = self.store.ensure_chunks_table().await {
+                warn!("Failed to create the chunks table: {e}");
+            }
+        }
         let reused = reused.min(stored);
         // Not embedding on purpose, or not yet, is no failure.
         let failures = if self.skip_embeddings || self.defer_embeddings {
