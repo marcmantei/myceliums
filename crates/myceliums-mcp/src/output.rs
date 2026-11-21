@@ -291,6 +291,11 @@ pub struct AnalyzeOutput {
     /// index analyzed before these were recorded.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub calls: Option<String>,
+    /// Files left out of the index for a known reason (size, line length,
+    /// minified, binary, parse budget), counted per reason, most frequent
+    /// first. Only for a fresh analysis: the reasons are not stored.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skipped: Option<String>,
     /// Whether this result came from cache (true) or a fresh analysis (false)
     pub cached: bool,
 }

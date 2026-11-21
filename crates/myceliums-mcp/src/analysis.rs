@@ -468,6 +468,7 @@ impl Rebuild {
             embedding_failures: embedding_stats.embedding_failures,
             embeddings_reused: result.embeddings_reused,
             calls: Some(result.call_resolution.summary()),
+            skipped: result.skip_summary(),
             cached: false,
         })
     }

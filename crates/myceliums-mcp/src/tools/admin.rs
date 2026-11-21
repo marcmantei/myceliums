@@ -205,6 +205,7 @@ impl MyceliumsMcp {
                         embedding_failures: embedding_stats.embedding_failures,
                         embeddings_reused: 0,
                         calls,
+                        skipped: None,
                         cached: true,
                     };
                     return text(format::format_analyze(&output));

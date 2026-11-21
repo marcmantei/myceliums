@@ -2571,6 +2571,28 @@ impl AnalysisResult {
         }
     }
 
+    /// `"3 files: 2 oversized file, 1 parse timeout"` — the files left out
+    /// for a known reason, most frequent reason first; `None` when there are
+    /// none.
+    pub fn skip_summary(&self) -> Option<String> {
+        let total: usize = self.skip_reasons.values().sum();
+        if total == 0 {
+            return None;
+        }
+        let mut reasons: Vec<(FileSkipReason, usize)> =
+            self.skip_reasons.iter().map(|(r, n)| (*r, *n)).collect();
+        reasons.sort_by(|a, b| {
+            b.1.cmp(&a.1)
+                .then_with(|| a.0.to_string().cmp(&b.0.to_string()))
+        });
+        let parts: Vec<String> = reasons
+            .iter()
+            .map(|(reason, count)| format!("{count} {reason}"))
+            .collect();
+        let files = if total == 1 { "file" } else { "files" };
+        Some(format!("{total} {files}: {}", parts.join(", ")))
+    }
+
     /// True when embedding generation failed for at least one symbol. CI can
     /// treat this as a failure via the strict-embeddings knob.
     pub fn has_embedding_failures(&self) -> bool {
@@ -2942,6 +2964,38 @@ mod tests {
             start.elapsed() < std::time::Duration::from_secs(10),
             "took {:?}",
             start.elapsed()
+        );
+    }
+
+    #[test]
+    fn skip_summary_lists_the_most_frequent_reason_first() {
+        let mut result = AnalysisResult {
+            symbol_count: 0,
+            file_count: 0,
+            relationship_count: 0,
+            embedding_count: 0,
+            symbols_total: 0,
+            symbols_embedded: 0,
+            embedding_failures: 0,
+            embeddings_reused: 0,
+            mentions_count: 0,
+            timing: None,
+            skip_reasons: HashMap::new(),
+            call_resolution: Default::default(),
+        };
+        assert_eq!(result.skip_summary(), None);
+        result.skip_reasons = HashMap::from([
+            (FileSkipReason::ParseTimeout, 1),
+            (FileSkipReason::OversizedFile, 2),
+        ]);
+        assert_eq!(
+            result.skip_summary().as_deref(),
+            Some("3 files: 2 oversized file, 1 parse timeout")
+        );
+        result.skip_reasons = HashMap::from([(FileSkipReason::LineTooLong, 1)]);
+        assert_eq!(
+            result.skip_summary().as_deref(),
+            Some("1 file: 1 line too long")
         );
     }
 

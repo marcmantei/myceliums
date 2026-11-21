@@ -285,6 +285,9 @@ pub(crate) async fn cmd_analyze(
     println!("  Relationships: {}", result.relationship_count);
     // How many call sites got an edge, and why the others did not (#139).
     println!("  Calls:         {}", result.call_resolution.summary());
+    if let Some(skipped) = result.skip_summary() {
+        println!("  Skipped:       {skipped}");
+    }
     let kept = if result.embeddings_reused > 0 {
         format!(
             ", {} kept from the previous index",
