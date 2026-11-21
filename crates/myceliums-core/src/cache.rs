@@ -527,6 +527,7 @@ mod tests {
             file_count: 0,
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
         };
         let config = CacheCheckConfig {
             max_age_minutes: 120,
