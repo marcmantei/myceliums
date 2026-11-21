@@ -110,7 +110,7 @@ globset = "0.4"
 
 # File watching
 notify = "7"
-notify-debouncer-mini = "0.5"
+notify-debouncer-mini = "0.7"
 
 # HTTP / LLM
 reqwest = { version = "0.12", features = ["json"] }
