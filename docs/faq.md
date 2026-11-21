@@ -4,7 +4,7 @@
 
 ### 1. `myc analyze` takes very long on first run
 
-The first analysis downloads the fastembed model (~100 MB). This is a one-time cost and the model is cached in `~/.myceliums/` for all future runs.
+The first analysis downloads the embedding model (a few hundred MB; sizes per model are in the README's model table). This is a one-time cost and the model is cached in `~/.myceliums/` for all future runs.
 
 If you want to skip embedding generation entirely (faster, but disables semantic search), run:
 

@@ -1118,6 +1118,156 @@ scored with it once.
 chunking decision. Each look is a chance to fit it; the golden set is the
 independent second confirmation for that reason.
 
+### Results (#157)
+
+Two runs of the grid on the hosted runner: run
+[44884767742](https://github.com/marcmantei/myceliums/actions/runs/44884767742)
+with the evaluator built in debug mode, and run
+[44886094990](https://github.com/marcmantei/myceliums/actions/runs/44886094990)
+built in release mode, where every job also indexed the four repositories
+with the incumbent on its own machine. `real-repo-compare --same-scores`
+confirmed that the two runs agree on every query's scores in all eleven
+variants (504 scores each), so the quality numbers below hold for both and the
+costs come from the release run. Dataset `2026-11-19`, all 168 queries, the
+shipped test-code demotion; the full comparison is
+[`real-repos/embedding-variants.json`](../real-repos/embedding-variants.json).
+**All labels are unreviewed agent drafts** — read every number as provisional.
+
+**The new inference reproduces the old.** Variant A — the incumbent through
+the new ONNX path and batching — scores dev semantic nDCG@10 0.4980 and hybrid
+0.5168, exactly the values the #146 run recorded at the shipped test weight,
+and the golden set matches main's CI report to the fourth decimal.
+
+**Quality.** Objective: per query the mean of semantic and hybrid nDCG@10.
+Δ: paired bootstrap against A (10,000 resamples, 95%, uncorrected); bold
+intervals exclude zero.
+
+| Id | Model | Template | Chunking | dev | held-out | all | Δ dev [95% CI] | Δ held-out [95% CI] |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| A | `multilingual-e5-small` | 1 | off | 0.5074 | 0.6371 | 0.5630 | — | — |
+| B | `multilingual-e5-small` | 2 | off | 0.5232 | 0.6238 | 0.5663 | +0.016 [-0.018, +0.052] | -0.013 [-0.047, +0.022] |
+| C | `multilingual-e5-small` | 2 | on | 0.5351 | 0.6241 | 0.5733 | +0.028 [-0.011, +0.068] | -0.013 [-0.047, +0.021] |
+| D | `granite-embedding-small-english-r2` | 2 | on | 0.5988 | 0.6840 | 0.6353 | **+0.091 [+0.043, +0.144]** | +0.047 [-0.011, +0.105] |
+| D′ | `granite-embedding-small-english-r2` | 2 | off | 0.5867 | 0.6816 | 0.6274 | **+0.079 [+0.034, +0.127]** | +0.044 [-0.014, +0.104] |
+| E | `jina-embeddings-v2-base-code` | 2 | on | 0.6370 | 0.7070 | 0.6670 | **+0.130 [+0.074, +0.187]** | **+0.070 [+0.010, +0.128]** |
+| E′ | `jina-embeddings-v2-base-code` | 2 | off | 0.6229 | 0.7067 | 0.6588 | **+0.116 [+0.060, +0.172]** | **+0.070 [+0.010, +0.129]** |
+| F | `coderankembed` | 2 | on | 0.5957 | 0.6642 | 0.6251 | **+0.088 [+0.033, +0.146]** | +0.027 [-0.030, +0.084] |
+| F′ | `coderankembed` | 2 | off | 0.5654 | 0.6721 | 0.6112 | **+0.058 [+0.003, +0.116]** | +0.035 [-0.022, +0.094] |
+| G | `gte-modernbert-base` | 2 | on | 0.5989 | 0.6551 | 0.6230 | **+0.091 [+0.041, +0.145]** | +0.018 [-0.043, +0.081] |
+| G′ | `gte-modernbert-base` | 2 | off | 0.5934 | 0.6581 | 0.6211 | **+0.086 [+0.037, +0.138]** | +0.021 [-0.040, +0.084] |
+
+**Costs**, release build, 4-vCPU hosted runner. "× A" divides by the
+incumbent indexed on the same machine; the incumbent's own time ranged from 211
+to 503 s over the eleven machines (2.4×), so the absolute column scales each
+ratio to the median machine (344 s). Vectors: symbol and chunk rows ×
+dimension × 4 bytes. Latency: one semantic query (query embedding plus exact
+search for 20 results, chunk rows included), 168 queries after warm-up. Peak
+RSS: the whole evaluator process after indexing all four repositories.
+
+| Id | Index time × A | Embed s (median runner) | Symbols/s | Vectors MB | × A | Query p50 / p95 ms | Peak RSS GB | × A | Download MB | Budget |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| A | 1.01 | 347 | 42.7 | 22.7 | 1.00 | 12.5 / 19.0 | 3.22 | 1.01 | 487 | within |
+| B | 1.11 | 382 | 38.7 | 22.7 | 1.00 | 13.4 / 18.3 | 3.25 | 1.03 | 487 | within |
+| C | 1.24 | 426 | 34.7 | 23.3 | 1.03 | 11.4 / 20.6 | 3.26 | 1.01 | 487 | within |
+| D | 1.34 | 461 | 32.1 | 23.2 | 1.02 | 11.2 / 15.5 | 5.14 | 1.63 | 197 | peak RSS ×1.63 > 1.5 |
+| D′ | 1.23 | 422 | 35.1 | 22.7 | 1.00 | 7.9 / 14.2 | 5.09 | 1.59 | 197 | peak RSS ×1.59 > 1.5 |
+| E | 4.40 | 1514 | 9.8 | 46.2 | 2.03 | 35.4 / 50.3 | 4.23 | 1.34 | 644 | index time ×4.40 > 2.5 |
+| E′ | 4.16 | 1432 | 10.3 | 45.5 | 2.00 | 23.6 / 35.7 | 4.16 | 1.33 | 644 | index time ×4.16 > 2.5 |
+| F | 5.61 | 1928 | 7.7 | 46.5 | 2.05 | 47.8 / 74.8 | 4.31 | 1.37 | 548 | index time ×5.61 > 2.5 |
+| F′ | 4.99 | 1715 | 8.6 | 45.5 | 2.00 | 44.1 / 68.5 | 4.57 | 1.46 | 548 | index time ×4.99 > 2.5 |
+| G | 4.94 | 1698 | 8.7 | 46.3 | 2.04 | 25.2 / 45.1 | 6.42 | 2.00 | 600 | index time ×4.94 > 2.5; peak RSS ×2.00 > 1.5 |
+| G′ | 4.52 | 1556 | 9.5 | 45.5 | 2.00 | 27.5 / 37.9 | 6.39 | 1.98 | 600 | index time ×4.52 > 2.5; peak RSS ×1.98 > 1.5 |
+
+**Selection and confirmation.** Only A, B and C are within the budget:
+`granite-embedding-small-english-r2` needs 1.6× the incumbent's memory at the
+shipped batch settings, every 768-dimension model 4.2–5.6× its indexing time.
+Among B and C, C has the higher dev objective (+0.028 [−0.011, +0.068]) and is
+selected. On held-out it scores −0.013 [−0.047, +0.021] against A:
+
+| Mode | Δ nDCG@10 | Δ hit@10 |
+| --- | ---: | ---: |
+| `semantic` | -0.013 [-0.058, +0.034] | +0.042 [-0.014, +0.111] |
+| `hybrid` | -0.013 [-0.050, +0.023] | +0.028 [-0.028, +0.083] |
+
+**Decision: the default stays `multilingual-e5-small` with template 1 and no
+chunking.** The held-out interval does not lie above zero; per the protocol
+nothing changes. The golden set therefore keeps its baseline. (For the record,
+both C and the jina configuration pass the gate's rule against it — C:
+semantic recall@10 +0.043 [+0.002, +0.094], no gated regression; jina,
+template 2: semantic nDCG@10 +0.104 [+0.024, +0.188], hybrid +0.072 [+0.008,
++0.137], no gated regression.)
+
+**Long-symbol slice** — 60 queries (41 dev, 19 held-out) with a label whose
+body exceeds 1,792 bytes; objective, chunking on − off, same model and
+template 2:
+
+| Model, template 2 | Chunked | One vector | Δ all 60 [95% CI] | Δ dev 41 | Δ held-out 19 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `multilingual-e5-small` | 0.5243 | 0.4918 | **+0.033 [+0.003, +0.066]** | +0.038 [-0.000, +0.083] | +0.020 [-0.025, +0.074] |
+| `granite-embedding-small-english-r2` | 0.6252 | 0.5990 | **+0.026 [+0.003, +0.055]** | +0.033 [-0.001, +0.073] | +0.012 [-0.001, +0.030] |
+| `jina-embeddings-v2-base-code` | 0.6620 | 0.6339 | **+0.028 [+0.011, +0.047]** | **+0.034 [+0.014, +0.059]** | +0.014 [-0.014, +0.047] |
+| `coderankembed` | 0.5871 | 0.5375 | **+0.050 [+0.017, +0.089]** | **+0.073 [+0.026, +0.127]** | -0.000 [-0.027, +0.023] |
+| `gte-modernbert-base` | 0.5940 | 0.5798 | +0.014 [-0.003, +0.034] | +0.023 [-0.002, +0.052] | -0.004 [-0.011, +0.000] |
+
+Chunking measurably helps long symbols: the interval over the whole slice
+lies above zero for four of the five models, `multilingual-e5-small`
+included (+0.033 [+0.003, +0.066]). The held-out part alone — 19 queries — is
+too small to confirm it for any model. Chunking costs little: 1.7–2.6% more
+texts and 1.5–3% more vector bytes; every chunked variant stays within the
+latency limit (the chunk rows add a second exact scan per query).
+
+**By repository**, nDCG@10 / hit@10, all 168 queries (every variant in the
+JSON):
+
+| Repository | Mode | A `e5-small` t1 | C `e5-small` t2 + chunks | D `granite-small` t2 + chunks | E `jina-code` t2 + chunks |
+| --- | --- | ---: | ---: | ---: | ---: |
+| requests | `semantic` | 0.647 / 0.881 | 0.653 / 0.857 | 0.791 / 0.976 | 0.848 / 1.000 |
+| requests | `hybrid` | 0.698 / 0.929 | 0.688 / 0.952 | 0.741 / 0.952 | 0.832 / 1.000 |
+| flask | `semantic` | 0.664 / 0.905 | 0.626 / 0.952 | 0.733 / 0.952 | 0.668 / 0.857 |
+| flask | `hybrid` | 0.692 / 0.929 | 0.646 / 0.929 | 0.663 / 0.952 | 0.700 / 0.952 |
+| gin | `semantic` | 0.560 / 0.738 | 0.620 / 0.905 | 0.667 / 0.881 | 0.662 / 0.905 |
+| gin | `hybrid` | 0.566 / 0.857 | 0.600 / 0.881 | 0.596 / 0.905 | 0.591 / 0.929 |
+| hono | `semantic` | 0.345 / 0.571 | 0.395 / 0.643 | 0.496 / 0.786 | 0.587 / 0.857 |
+| hono | `hybrid` | 0.333 / 0.571 | 0.357 / 0.667 | 0.395 / 0.762 | 0.448 / 0.762 |
+
+### What the numbers say — and do not
+
+- **Better models exist, at a price the budget does not allow.**
+  `jina-embeddings-v2-base-code` with template 2 is the only variant whose
+  held-out gain is confirmed — +0.070 [+0.010, +0.128] chunked, +0.070
+  [+0.010, +0.129] without, after +0.12–0.13 on dev; on hono its semantic
+  nDCG@10 is 0.587 against 0.345. It indexes 4.2–4.4× slower, doubles the
+  vector bytes and downloads 644 MB: an opt-in for repositories where search
+  quality matters more than indexing time. The budget was set before
+  measuring and is kept.
+- **The small code-aware model is fast but memory-hungry.**
+  `granite-embedding-small-english-r2` indexes at 1.2–1.3× the incumbent's
+  time, downloads 197 MB, and scores dev +0.08–0.09; on held-out +0.044 and
+  +0.047, with intervals reaching down to −0.014 and −0.011. Its peak memory
+  at the shipped batch budget is 5.1 GB against 3.2 GB — probably its
+  ModernBERT export's attention buffers. Whether a smaller batch budget brings it within
+  the memory limit at an acceptable speed is a new question with its own run,
+  not a reason to bend this one.
+- **Template 2 does not help `multilingual-e5-small`** (dev +0.016, held-out
+  −0.013, both intervals across zero). The general-purpose multilingual model
+  gains nothing measurable from the structured header; the code-aware models
+  were only measured with it.
+- **Chunking helps where it can and is invisible elsewhere** — about +0.03 on
+  long symbols, with 254–379 chunk vectors added over 14,795 symbols. Over all
+  queries its effect is within noise, which is why it ships as an option
+  (`[embedding] chunking = true`, which embeds with template 2) and not as the
+  default.
+- **Debug builds and runner choice mislead.** The debug run measured query
+  latency at 33–68 ms p50 where the release build needs 8–48 ms, and the same
+  configuration indexed up to 2.4× faster on one hosted runner than on another.
+  Cost ratios between separate jobs would have been noise; the protocol was
+  amended (above) before any 768-dimension result existed.
+- **Limits.** Unreviewed labels; the held-out split had been read twice
+  before (#95, #146), and 72 queries give intervals of about ±0.035 on the
+  objective; one platform; peak memory is the whole evaluator process, which
+  dilutes the models' own share; the budget thresholds are judgments, fixed in
+  advance, not derived from data.
+
 ## ANN recall: what the vector index costs
 
 Every semantic query and the vector leg of every hybrid query search the

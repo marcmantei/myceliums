@@ -70,7 +70,7 @@ Cursor uses a rules system instead of hooks. Consider adding a rule file in `~/.
 
 ## What Works Without Embeddings
 
-Not all features require the embedding model (which is a ~100 MB download on first use). Here is what works out of the box:
+Not all features require the embedding model (a one-time download of a few hundred MB). Here is what works out of the box:
 
 **No embeddings needed:**
 - BM25 text search (keyword matching)

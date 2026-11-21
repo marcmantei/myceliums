@@ -1,0 +1,1341 @@
+{
+  "dataset_digest": "85a21ec6ccf7f2cd7415bd2175bb1612d09e6676df785616bce71e9e4dead7c7",
+  "baseline": "multilingual-e5-small · t1 · one vector",
+  "variants": [
+    {
+      "report": "variant-A/variant-A.json",
+      "label": "multilingual-e5-small · t1 · one vector",
+      "objective": {
+        "all": 0.563,
+        "dev": 0.5074,
+        "held-out": 0.6371
+      },
+      "vs_baseline": {},
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.6915,
+            0.9286
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.6645,
+            0.9048
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.5659,
+            0.8571
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.5597,
+            0.7381
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.3325,
+            0.5714
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.3447,
+            0.5714
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.6976,
+            0.9286
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.6475,
+            0.881
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 0.0,
+        "disk_bytes": 59626108.0,
+        "download_mb": 487.0,
+        "embed_seconds": 498.0111,
+        "p50_ms": 12.4931,
+        "p95_ms": 19.025,
+        "peak_rss_bytes": 3224821760.0,
+        "rss_ratio": 1.0119,
+        "same_runner": 1.0,
+        "size_ratio": 1.0,
+        "symbols_per_second": 29.7082,
+        "texts": 14795.0,
+        "time_ratio": 1.008,
+        "vector_bytes": 22725120.0
+      },
+      "over_budget": []
+    },
+    {
+      "report": "variant-B/variant-B.json",
+      "label": "multilingual-e5-small · t2 · one vector",
+      "objective": {
+        "all": 0.5663,
+        "dev": 0.5232,
+        "held-out": 0.6238
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.0034,
+          "ci_low": -0.0213,
+          "ci_high": 0.0285
+        },
+        "dev": {
+          "delta": 0.0159,
+          "ci_low": -0.0184,
+          "ci_high": 0.0525
+        },
+        "held-out": {
+          "delta": -0.0133,
+          "ci_low": -0.0468,
+          "ci_high": 0.0216
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.6768,
+            0.9524
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.6381,
+            0.9524
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.5978,
+            0.9048
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.5957,
+            0.8571
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.3337,
+            0.619
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.3665,
+            0.619
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.6885,
+            0.9524
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.6334,
+            0.8571
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 0.0,
+        "disk_bytes": 59626109.0,
+        "download_mb": 487.0,
+        "embed_seconds": 558.8126,
+        "p50_ms": 13.3569,
+        "p95_ms": 18.2698,
+        "peak_rss_bytes": 3247616000.0,
+        "rss_ratio": 1.0306,
+        "same_runner": 1.0,
+        "size_ratio": 1.0,
+        "symbols_per_second": 26.4758,
+        "texts": 14795.0,
+        "time_ratio": 1.1105,
+        "vector_bytes": 22725120.0
+      },
+      "over_budget": []
+    },
+    {
+      "report": "variant-C/variant-C.json",
+      "label": "multilingual-e5-small · t2 · chunked",
+      "objective": {
+        "all": 0.5733,
+        "dev": 0.5351,
+        "held-out": 0.6241
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.0103,
+          "ci_low": -0.0165,
+          "ci_high": 0.0377
+        },
+        "dev": {
+          "delta": 0.0278,
+          "ci_low": -0.0109,
+          "ci_high": 0.0682
+        },
+        "held-out": {
+          "delta": -0.013,
+          "ci_low": -0.0472,
+          "ci_high": 0.0214
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.6459,
+            0.9286
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.6263,
+            0.9524
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.6,
+            0.881
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.6203,
+            0.9048
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.3569,
+            0.6667
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.395,
+            0.6429
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.6884,
+            0.9524
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.6535,
+            0.8571
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 379.0,
+        "disk_bytes": 60267094.0,
+        "download_mb": 487.0,
+        "embed_seconds": 322.5082,
+        "p50_ms": 11.3972,
+        "p95_ms": 20.5568,
+        "peak_rss_bytes": 3256139776.0,
+        "rss_ratio": 1.0149,
+        "same_runner": 1.0,
+        "size_ratio": 1.0256,
+        "symbols_per_second": 45.8748,
+        "texts": 15174.0,
+        "time_ratio": 1.2382,
+        "vector_bytes": 23307264.0
+      },
+      "over_budget": []
+    },
+    {
+      "report": "variant-D/variant-D.json",
+      "label": "granite-embedding-small-english-r2 · t2 · chunked",
+      "objective": {
+        "all": 0.6353,
+        "dev": 0.5988,
+        "held-out": 0.684
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.0724,
+          "ci_low": 0.0344,
+          "ci_high": 0.1112
+        },
+        "dev": {
+          "delta": 0.0914,
+          "ci_low": 0.043,
+          "ci_high": 0.1436
+        },
+        "held-out": {
+          "delta": 0.0469,
+          "ci_low": -0.0106,
+          "ci_high": 0.1053
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.6633,
+            0.9524
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.7331,
+            0.9524
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.5962,
+            0.9048
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.6673,
+            0.881
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.3951,
+            0.7619
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.4958,
+            0.7857
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.7409,
+            0.9524
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.7911,
+            0.9762
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 284.0,
+        "disk_bytes": 60114675.0,
+        "download_mb": 197.0,
+        "embed_seconds": 283.233,
+        "p50_ms": 11.2158,
+        "p95_ms": 15.5419,
+        "peak_rss_bytes": 5142740992.0,
+        "rss_ratio": 1.6293,
+        "same_runner": 1.0,
+        "size_ratio": 1.0192,
+        "symbols_per_second": 52.2361,
+        "texts": 15079.0,
+        "time_ratio": 1.3394,
+        "vector_bytes": 23161344.0
+      },
+      "over_budget": [
+        "peak RSS × 1.63 > 1.5"
+      ]
+    },
+    {
+      "report": "variant-D2/variant-D2.json",
+      "label": "granite-embedding-small-english-r2 · t2 · one vector",
+      "objective": {
+        "all": 0.6274,
+        "dev": 0.5867,
+        "held-out": 0.6816
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.0644,
+          "ci_low": 0.0275,
+          "ci_high": 0.1018
+        },
+        "dev": {
+          "delta": 0.0794,
+          "ci_low": 0.0342,
+          "ci_high": 0.1269
+        },
+        "held-out": {
+          "delta": 0.0445,
+          "ci_low": -0.0143,
+          "ci_high": 0.104
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.6783,
+            0.9524
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.7418,
+            0.9524
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.5889,
+            0.881
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.6511,
+            0.881
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.3699,
+            0.7381
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.4577,
+            0.7619
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.748,
+            0.9524
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.7833,
+            0.9762
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 0.0,
+        "disk_bytes": 59626109.0,
+        "download_mb": 197.0,
+        "embed_seconds": 273.1417,
+        "p50_ms": 7.9081,
+        "p95_ms": 14.219,
+        "peak_rss_bytes": 5093675008.0,
+        "rss_ratio": 1.5851,
+        "same_runner": 1.0,
+        "size_ratio": 1.0,
+        "symbols_per_second": 54.166,
+        "texts": 14795.0,
+        "time_ratio": 1.2257,
+        "vector_bytes": 22725120.0
+      },
+      "over_budget": [
+        "peak RSS × 1.59 > 1.5"
+      ]
+    },
+    {
+      "report": "variant-E/variant-E.json",
+      "label": "jina-embeddings-v2-base-code · t2 · chunked",
+      "objective": {
+        "all": 0.667,
+        "dev": 0.637,
+        "held-out": 0.707
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.104,
+          "ci_low": 0.0628,
+          "ci_high": 0.1464
+        },
+        "dev": {
+          "delta": 0.1296,
+          "ci_low": 0.0736,
+          "ci_high": 0.1871
+        },
+        "held-out": {
+          "delta": 0.0699,
+          "ci_low": 0.0102,
+          "ci_high": 0.1284
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.6997,
+            0.9524
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.668,
+            0.8571
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.5911,
+            0.9286
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.6619,
+            0.9048
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.4478,
+            0.7619
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.5866,
+            0.8571
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.8323,
+            1.0
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.8484,
+            1.0
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 254.0,
+        "disk_bytes": 105905406.0,
+        "download_mb": 644.0,
+        "embed_seconds": 1513.927,
+        "p50_ms": 35.4107,
+        "p95_ms": 50.3144,
+        "peak_rss_bytes": 4233424896.0,
+        "rss_ratio": 1.3421,
+        "same_runner": 1.0,
+        "size_ratio": 2.0343,
+        "symbols_per_second": 9.7726,
+        "texts": 15049.0,
+        "time_ratio": 4.4004,
+        "vector_bytes": 46230528.0
+      },
+      "over_budget": [
+        "index time × 4.40 > 2.5"
+      ]
+    },
+    {
+      "report": "variant-E2/variant-E2.json",
+      "label": "jina-embeddings-v2-base-code · t2 · one vector",
+      "objective": {
+        "all": 0.6588,
+        "dev": 0.6229,
+        "held-out": 0.7067
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.0958,
+          "ci_low": 0.0553,
+          "ci_high": 0.1378
+        },
+        "dev": {
+          "delta": 0.1155,
+          "ci_low": 0.0605,
+          "ci_high": 0.1725
+        },
+        "held-out": {
+          "delta": 0.0696,
+          "ci_low": 0.0099,
+          "ci_high": 0.129
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.6986,
+            0.9524
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.6485,
+            0.8571
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.5912,
+            0.9286
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.6479,
+            0.9048
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.45,
+            0.7619
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.5599,
+            0.8333
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.8361,
+            1.0
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.8383,
+            1.0
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 0.0,
+        "disk_bytes": 105076360.0,
+        "download_mb": 644.0,
+        "embed_seconds": 1159.2978,
+        "p50_ms": 23.6033,
+        "p95_ms": 35.676,
+        "peak_rss_bytes": 4160827392.0,
+        "rss_ratio": 1.3256,
+        "same_runner": 1.0,
+        "size_ratio": 2.0,
+        "symbols_per_second": 12.762,
+        "texts": 14795.0,
+        "time_ratio": 4.1642,
+        "vector_bytes": 45450240.0
+      },
+      "over_budget": [
+        "index time × 4.16 > 2.5"
+      ]
+    },
+    {
+      "report": "variant-F/variant-F.json",
+      "label": "coderankembed · t2 · chunked",
+      "objective": {
+        "all": 0.6251,
+        "dev": 0.5957,
+        "held-out": 0.6642
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.0621,
+          "ci_low": 0.0213,
+          "ci_high": 0.1029
+        },
+        "dev": {
+          "delta": 0.0883,
+          "ci_low": 0.033,
+          "ci_high": 0.1459
+        },
+        "held-out": {
+          "delta": 0.0271,
+          "ci_low": -0.0296,
+          "ci_high": 0.084
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.69,
+            0.9286
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.6418,
+            0.9048
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.6197,
+            0.9286
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.728,
+            0.9524
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.3515,
+            0.6905
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.4085,
+            0.7381
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.7844,
+            0.9762
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.7766,
+            0.9762
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 347.0,
+        "disk_bytes": 106197588.0,
+        "download_mb": 548.0,
+        "embed_seconds": 2501.0469,
+        "p50_ms": 47.781,
+        "p95_ms": 74.8425,
+        "peak_rss_bytes": 4314640384.0,
+        "rss_ratio": 1.3693,
+        "same_runner": 1.0,
+        "size_ratio": 2.0469,
+        "symbols_per_second": 5.9155,
+        "texts": 15142.0,
+        "time_ratio": 5.6058,
+        "vector_bytes": 46516224.0
+      },
+      "over_budget": [
+        "index time × 5.61 > 2.5"
+      ]
+    },
+    {
+      "report": "variant-F2/variant-F2.json",
+      "label": "coderankembed · t2 · one vector",
+      "objective": {
+        "all": 0.6112,
+        "dev": 0.5654,
+        "held-out": 0.6721
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.0482,
+          "ci_low": 0.007,
+          "ci_high": 0.0891
+        },
+        "dev": {
+          "delta": 0.0581,
+          "ci_low": 0.0028,
+          "ci_high": 0.1159
+        },
+        "held-out": {
+          "delta": 0.035,
+          "ci_low": -0.0225,
+          "ci_high": 0.0936
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.6984,
+            0.9286
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.6261,
+            0.9048
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.585,
+            0.9048
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.7063,
+            0.9286
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.3232,
+            0.6429
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.3918,
+            0.6667
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.7857,
+            0.9762
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.7729,
+            0.9524
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 0.0,
+        "disk_bytes": 105076356.0,
+        "download_mb": 548.0,
+        "embed_seconds": 2443.3535,
+        "p50_ms": 44.0949,
+        "p95_ms": 68.4753,
+        "peak_rss_bytes": 4573462528.0,
+        "rss_ratio": 1.4574,
+        "same_runner": 1.0,
+        "size_ratio": 2.0,
+        "symbols_per_second": 6.0552,
+        "texts": 14795.0,
+        "time_ratio": 4.9855,
+        "vector_bytes": 45450240.0
+      },
+      "over_budget": [
+        "index time × 4.99 > 2.5"
+      ]
+    },
+    {
+      "report": "variant-G/variant-G.json",
+      "label": "gte-modernbert-base · t2 · chunked",
+      "objective": {
+        "all": 0.623,
+        "dev": 0.5989,
+        "held-out": 0.6551
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.06,
+          "ci_low": 0.0198,
+          "ci_high": 0.0994
+        },
+        "dev": {
+          "delta": 0.0915,
+          "ci_low": 0.0411,
+          "ci_high": 0.1449
+        },
+        "held-out": {
+          "delta": 0.018,
+          "ci_low": -0.0433,
+          "ci_high": 0.0812
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.7067,
+            0.9524
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.6869,
+            0.9524
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.6072,
+            0.9286
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.6374,
+            0.9286
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.366,
+            0.6429
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.4267,
+            0.6667
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.7482,
+            1.0
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.8051,
+            0.9762
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 284.0,
+        "disk_bytes": 106001151.0,
+        "download_mb": 600.0,
+        "embed_seconds": 1057.4567,
+        "p50_ms": 25.2112,
+        "p95_ms": 45.0791,
+        "peak_rss_bytes": 6419464192.0,
+        "rss_ratio": 1.9969,
+        "same_runner": 1.0,
+        "size_ratio": 2.0384,
+        "symbols_per_second": 13.9911,
+        "texts": 15079.0,
+        "time_ratio": 4.9371,
+        "vector_bytes": 46322688.0
+      },
+      "over_budget": [
+        "index time × 4.94 > 2.5",
+        "peak RSS × 2.00 > 1.5"
+      ]
+    },
+    {
+      "report": "variant-G2/variant-G2.json",
+      "label": "gte-modernbert-base · t2 · one vector",
+      "objective": {
+        "all": 0.6211,
+        "dev": 0.5934,
+        "held-out": 0.6581
+      },
+      "vs_baseline": {
+        "all": {
+          "delta": 0.0581,
+          "ci_low": 0.0184,
+          "ci_high": 0.0968
+        },
+        "dev": {
+          "delta": 0.086,
+          "ci_low": 0.0368,
+          "ci_high": 0.1382
+        },
+        "held-out": {
+          "delta": 0.021,
+          "ci_low": -0.04,
+          "ci_high": 0.0839
+        }
+      },
+      "by_repo": {
+        "flask": {
+          "hybrid": [
+            0.7118,
+            0.9524
+          ],
+          "lexical": [
+            0.5561,
+            0.8095
+          ],
+          "semantic": [
+            0.6936,
+            0.9524
+          ]
+        },
+        "gin": {
+          "hybrid": [
+            0.6039,
+            0.9286
+          ],
+          "lexical": [
+            0.4739,
+            0.7619
+          ],
+          "semantic": [
+            0.6432,
+            0.9286
+          ]
+        },
+        "hono": {
+          "hybrid": [
+            0.3527,
+            0.619
+          ],
+          "lexical": [
+            0.1971,
+            0.4048
+          ],
+          "semantic": [
+            0.4143,
+            0.6667
+          ]
+        },
+        "requests": {
+          "hybrid": [
+            0.7436,
+            0.9762
+          ],
+          "lexical": [
+            0.6279,
+            0.881
+          ],
+          "semantic": [
+            0.8059,
+            0.9762
+          ]
+        }
+      },
+      "costs": {
+        "chunk_vectors": 0.0,
+        "disk_bytes": 105076360.0,
+        "download_mb": 600.0,
+        "embed_seconds": 1967.9621,
+        "p50_ms": 27.5303,
+        "p95_ms": 37.8846,
+        "peak_rss_bytes": 6388019200.0,
+        "rss_ratio": 1.9836,
+        "same_runner": 1.0,
+        "size_ratio": 2.0,
+        "symbols_per_second": 7.5179,
+        "texts": 14795.0,
+        "time_ratio": 4.5227,
+        "vector_bytes": 45450240.0
+      },
+      "over_budget": [
+        "index time × 4.52 > 2.5",
+        "peak RSS × 1.98 > 1.5"
+      ]
+    }
+  ],
+  "long_symbol_slice": [
+    {
+      "label": "multilingual-e5-small · t2 · chunked",
+      "queries": {
+        "slice": 60,
+        "slice-dev": 41,
+        "slice-held-out": 19
+      },
+      "chunked": {
+        "slice": 0.5243,
+        "slice-dev": 0.4826,
+        "slice-held-out": 0.6142
+      },
+      "one_vector": {
+        "slice": 0.4918,
+        "slice-dev": 0.4444,
+        "slice-held-out": 0.5941
+      },
+      "delta": {
+        "slice": {
+          "delta": 0.0325,
+          "ci_low": 0.0026,
+          "ci_high": 0.0664
+        },
+        "slice-dev": {
+          "delta": 0.0382,
+          "ci_low": -0.0003,
+          "ci_high": 0.0832
+        },
+        "slice-held-out": {
+          "delta": 0.0201,
+          "ci_low": -0.0253,
+          "ci_high": 0.0742
+        }
+      }
+    },
+    {
+      "label": "granite-embedding-small-english-r2 · t2 · chunked",
+      "queries": {
+        "slice": 60,
+        "slice-dev": 41,
+        "slice-held-out": 19
+      },
+      "chunked": {
+        "slice": 0.6252,
+        "slice-dev": 0.5911,
+        "slice-held-out": 0.6986
+      },
+      "one_vector": {
+        "slice": 0.599,
+        "slice-dev": 0.5582,
+        "slice-held-out": 0.6869
+      },
+      "delta": {
+        "slice": {
+          "delta": 0.0262,
+          "ci_low": 0.0026,
+          "ci_high": 0.0548
+        },
+        "slice-dev": {
+          "delta": 0.0329,
+          "ci_low": -0.0012,
+          "ci_high": 0.0734
+        },
+        "slice-held-out": {
+          "delta": 0.0116,
+          "ci_low": -0.0008,
+          "ci_high": 0.0298
+        }
+      }
+    },
+    {
+      "label": "jina-embeddings-v2-base-code · t2 · chunked",
+      "queries": {
+        "slice": 60,
+        "slice-dev": 41,
+        "slice-held-out": 19
+      },
+      "chunked": {
+        "slice": 0.662,
+        "slice-dev": 0.6357,
+        "slice-held-out": 0.7187
+      },
+      "one_vector": {
+        "slice": 0.6339,
+        "slice-dev": 0.6012,
+        "slice-held-out": 0.7043
+      },
+      "delta": {
+        "slice": {
+          "delta": 0.0281,
+          "ci_low": 0.011,
+          "ci_high": 0.0473
+        },
+        "slice-dev": {
+          "delta": 0.0344,
+          "ci_low": 0.014,
+          "ci_high": 0.0586
+        },
+        "slice-held-out": {
+          "delta": 0.0144,
+          "ci_low": -0.0138,
+          "ci_high": 0.0471
+        }
+      }
+    },
+    {
+      "label": "coderankembed · t2 · chunked",
+      "queries": {
+        "slice": 60,
+        "slice-dev": 41,
+        "slice-held-out": 19
+      },
+      "chunked": {
+        "slice": 0.5871,
+        "slice-dev": 0.5645,
+        "slice-held-out": 0.6357
+      },
+      "one_vector": {
+        "slice": 0.5375,
+        "slice-dev": 0.4918,
+        "slice-held-out": 0.6361
+      },
+      "delta": {
+        "slice": {
+          "delta": 0.0496,
+          "ci_low": 0.0165,
+          "ci_high": 0.0888
+        },
+        "slice-dev": {
+          "delta": 0.0727,
+          "ci_low": 0.0264,
+          "ci_high": 0.1266
+        },
+        "slice-held-out": {
+          "delta": -0.0004,
+          "ci_low": -0.0272,
+          "ci_high": 0.0228
+        }
+      }
+    },
+    {
+      "label": "gte-modernbert-base · t2 · chunked",
+      "queries": {
+        "slice": 60,
+        "slice-dev": 41,
+        "slice-held-out": 19
+      },
+      "chunked": {
+        "slice": 0.594,
+        "slice-dev": 0.5771,
+        "slice-held-out": 0.6304
+      },
+      "one_vector": {
+        "slice": 0.5798,
+        "slice-dev": 0.5543,
+        "slice-held-out": 0.6348
+      },
+      "delta": {
+        "slice": {
+          "delta": 0.0142,
+          "ci_low": -0.0028,
+          "ci_high": 0.0344
+        },
+        "slice-dev": {
+          "delta": 0.0229,
+          "ci_low": -0.0015,
+          "ci_high": 0.0525
+        },
+        "slice-held-out": {
+          "delta": -0.0045,
+          "ci_low": -0.0115,
+          "ci_high": 0.0
+        }
+      }
+    }
+  ],
+  "selected": "multilingual-e5-small · t2 · chunked",
+  "held_out_confirmation": {
+    "delta": -0.013,
+    "ci_low": -0.0472,
+    "ci_high": 0.0214
+  },
+  "held_out_by_mode": {
+    "hybrid": {
+      "hit_at_10": {
+        "delta": 0.0278,
+        "ci_low": -0.0278,
+        "ci_high": 0.0833
+      },
+      "ndcg_at_10": {
+        "delta": -0.0131,
+        "ci_low": -0.0497,
+        "ci_high": 0.0234
+      }
+    },
+    "lexical": {
+      "hit_at_10": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0
+      },
+      "ndcg_at_10": {
+        "delta": 0.0,
+        "ci_low": 0.0,
+        "ci_high": 0.0
+      }
+    },
+    "semantic": {
+      "hit_at_10": {
+        "delta": 0.0417,
+        "ci_low": -0.0139,
+        "ci_high": 0.1111
+      },
+      "ndcg_at_10": {
+        "delta": -0.0128,
+        "ci_low": -0.0576,
+        "ci_high": 0.0336
+      }
+    }
+  },
+  "decision": "the incumbent stays: the dev winner multilingual-e5-small · t2 · chunked does not hold on held-out (-0.0130 [-0.0472, +0.0214])"
+}

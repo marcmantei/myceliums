@@ -47,7 +47,7 @@ Semantic search uses vector embeddings to find code by meaning rather than exact
 - Understands natural language queries
 - Finds conceptually similar code, even when different words are used
 - Requires embeddings (run `myc analyze --force` if you previously skipped them)
-- First run downloads the embedding model (about 0.5 GB for the default model, cached at `.fastembed_cache/`)
+- First run downloads the embedding model (about 0.5 GB for the default model; sizes per model are in the README), cached in `FASTEMBED_CACHE_DIR`, else `HF_HOME`, else `.fastembed_cache/`
 
 **Best for:**
 - Natural language queries ("function that validates user input")
@@ -154,62 +154,76 @@ When using myceliums through MCP (e.g., in Claude Code or Cursor), the same sear
 
 The older `context_search`, `semantic_search`, `hybrid_search` and `search_documents` tools remain as deprecated aliases with `--toolsets all` for one release.
 
-## How Symbols Are Embedded (and Truncated)
+## How Symbols Are Embedded
 
-Semantic and hybrid search embed **one vector per symbol**. The document text
-for a symbol is built as:
+Semantic search and the vector leg of hybrid search compare the query's vector
+with vectors computed from each symbol at index time. What a symbol is
+embedded *as* is versioned and recorded in the index, so an index never mixes
+two ways of building vectors (#92, #157).
 
+### The document: two templates
+
+The default model, `multilingual-e5-small`, embeds each symbol from template
+1: `{kind} {name} {decorators} {signature} {return_type} {superclasses}
+{content_head}`, the body cut to a byte budget. Template 2 — a structured
+document, most telling lines first — is used by the models evaluated in #157
+(`jina-embeddings-v2-base-code`, `granite-embedding-small-english-r2`,
+`coderankembed`, `gte-modernbert-base`) and whenever chunking is on:
+
+```text
+python method src/requests/sessions.py::SessionRedirectMixin.resolve_redirects
+session redirect mixin resolve redirects
+def resolve_redirects(self, resp, req, stream=False, timeout=None, ...)
+Receives a Response. Returns a generator of Responses or Requests.
+hist = []  # keep track of history
+...
 ```
-{kind} {name} {decorators} {signature} {return_type} {superclasses} {content_head}
-```
 
-The leading header (kind, name, signature, decorators, return type,
-superclasses) is short and high-signal, so it is **always kept whole**. Only the
-trailing `content_head` is truncated, and the truncation is **bounded by the
-embedding model's token budget**, not an arbitrary byte count.
+1. language, kind and `file::qualified.name`;
+2. the qualified name split into words (`getUserById` → `get user by id`);
+3. decorators and the signature;
+4. the doc comment written above the symbol (`///`, `/** */`, `//`, `#` lines,
+   extracted at parse time) or the Python docstring;
+5. the body, without the signature line and docstring it would repeat, every
+   line trimmed and blank lines dropped — indentation costs tokens and means
+   nothing to retrieval.
 
-### Why truncation is bounded
+The model's window (512 tokens for every registry model but the legacy
+`all-minilm-l6-v2`, 256) cuts the end of the document, never the header.
+Measured on the real-repository set, template 2 did not improve
+`multilingual-e5-small` (held-out −0.013 [−0.047, +0.021]), which is why the
+default keeps template 1.
 
-Every embedding model has a maximum input length in tokens. Text longer than
-that is silently discarded by the model's tokenizer. To keep index-time text
-within that limit, myceliums derives a **content byte budget** from the model's
-declared `max_input_tokens`:
+### Long symbols: chunking
 
-```
-content_bytes = max(256, (max_input_tokens − header_reserve) × bytes_per_token)
-```
+With chunking (`[embedding] chunking = true`; off by default), a symbol longer
+than the window is embedded as its header chunk — the document cut at the window, the
+symbol's own vector — plus body chunks: consecutive 512-token windows over the
+rest of the body, overlapping by 64 tokens, each starting with the symbol's
+`language kind file::qualified.name` line, at most 16 vectors per symbol.
+Boundaries are counted in the model's own tokens. A symbol's similarity is the
+best of its vectors, and results stay one row per symbol: vector search fetches
+chunk vectors until no deeper chunk could change the top results, so it stays
+exact. Classes, interfaces, enums and modules are not chunked — their bodies are
+their members, which have vectors of their own. Chunk vectors live in their own
+table and are removed with their file.
 
-with `header_reserve = 64` tokens and a conservative `bytes_per_token = 4`
-(subword tokenizers average ~3–4 characters per token on code; picking the high
-end keeps us at or under the true limit rather than over it). For the default
-`multilingual-e5-small` model (512 tokens) this is **1792 bytes** of content —
-substantially more than the previous fixed 512-byte cut, and it scales with the
-model:
+Measured on the 60 real-repository queries whose answers include a long
+symbol, chunking raised the objective by +0.026 to +0.050 for four of five
+models (+0.033 [+0.003, +0.066] for `multilingual-e5-small`); over all queries
+its effect is within noise, so it is an option, not the default.
 
-| Model | `max_input_tokens` | Content budget (bytes) |
-|-------|-------------------:|-----------------------:|
-| all-minilm-l6-v2 | 256 | 768 |
-| multilingual-e5-small / base / large | 512 | 1792 |
-| jina-embeddings-v2-base-code | 8192 | 32512 |
+BM25 always indexes the full symbol text, chunked or not.
 
-### Known limitation: long symbols are still truncated
+### Indexing speed, threads and memory
 
-This is the **single-vector-per-symbol** design (issue #36, option 2). A symbol
-whose content exceeds the model's budget still loses its tail from the semantic
-index. The header and the first ~1.8 KB (default model) of the body are indexed;
-a very long function's final branches are not directly embedded. BM25 still
-indexes the **full** symbol text, so lexical search covers what semantic search
-truncates, and hybrid search fuses the two.
+Texts are sorted by token count and batched up to a token budget
+(`[analysis] embedding_batch_tokens`, default 16,384 — 32 full windows), so a
+batch pads to a length its texts share instead of to the longest of 256 random
+symbols. `MYCELIUMS_EMBEDDING_THREADS` caps the CPU threads of an embedding
+session (default: all logical cores). `myc analyze` shows embedding progress.
+A re-index takes over the vectors of unchanged symbols — their chunk vectors
+included — and of unchanged body chunks of changed symbols (#151).
 
-The reranker uses the **same** builder as the retriever, so the cross-encoder
-scores exactly the text that was indexed — there is no longer an asymmetry where
-rerank saw content the retriever never embedded.
-
-### Roadmap: multi-chunk embeddings
-
-Full coverage of long symbols requires splitting them into overlapping chunks,
-embedding each chunk as its own row, and de-duplicating to the best chunk per
-symbol at query time (issue #36, option 1). That improves recall at the cost of
-index growth and query-side dedup, and is tracked as a follow-up rather than
-shipped here. For launch, the bounded single-vector approach above is the
-documented, measured behaviour.
+The reranker scores the template-1 document of each candidate, whatever the
+index's template.

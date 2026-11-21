@@ -56,7 +56,7 @@ Point `myc` at a project directory to build the knowledge graph.
 myc analyze ./my-project
 ```
 
-On the first run, the fastembed model (~100 MB) downloads automatically. This is cached for all future runs. If you want to skip embeddings entirely, pass `--skip-embeddings`.
+On the first run, the embedding model downloads automatically (a few hundred MB; sizes per model are in the README's model table). This is cached for all future runs. If you want to skip embeddings entirely, pass `--skip-embeddings`.
 
 ## Step 3: Check the Results
 

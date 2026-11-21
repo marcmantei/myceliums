@@ -264,7 +264,7 @@ On the very first `myc analyze` or semantic/hybrid search, the configured embedd
 | `myc status` | Show overview of all indexed repos, disk usage, and orphaned data |
 | `myc clean --orphans` | Remove orphaned data directories not tracked in the registry |
 | `myc clean --all` | Remove ALL myceliums data (with confirmation) |
-| `myc clean --cache` | Remove the fastembed model cache |
+| `myc clean --cache` | Remove the model cache |
 | `myc clean <repo>` | Remove a specific repository's data (with confirmation) |
 | `myc doctor` | Verify the installation, check all components, detect orphans and stale locks |
 | `myc configure` | View or update global configuration |
@@ -484,17 +484,32 @@ Myceliums offers three search modes that combine classical text matching with AI
 
 ### Semantic search — meaning-based (AI model)
 
-`myc semantic-search` converts your query and all code symbols into vectors (embeddings) using an embedding model that runs **locally on your CPU** via [fastembed](https://github.com/Anush008/fastembed-rs) (downloaded once on first use). Symbols with similar meaning land close together in vector space — so "authenticate user" finds `login()`, `verifyCredentials()`, and `checkSession()` even without shared keywords.
+`myc semantic-search` converts your query and all code symbols into vectors (embeddings) using an embedding model that runs **locally on your CPU** on ONNX Runtime (downloaded once from a pinned HuggingFace revision and checked against a pinned SHA-256). Symbols with similar meaning land close together in vector space — so "authenticate user" finds `login()`, `verifyCredentials()`, and `checkSession()` even without shared keywords.
 
-The default model is [multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small) (384 dimensions, multilingual — queries in German, French, etc. work against English code). The model is configurable per project via the `[embedding]` section in `.myceliums.toml`:
+The default model is [multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small) (384 dimensions, multilingual — queries in German, French, etc. work against English code). It was kept by measurement ([#157](crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md#embedding-model-document-template-and-chunking-157)): on 168 labelled queries over four real repositories, every candidate that beat it on quality cost more than the indexing-time or memory budget fixed beforehand. The model is configurable per project via the `[embedding]` section in `.myceliums.toml`:
 
-| Model id | Dim | Multilingual | Notes |
-|---|---|---|---|
-| `multilingual-e5-small` | 384 | ✓ | Default — best size/quality balance |
-| `multilingual-e5-base` | 768 | ✓ | Higher quality, larger download |
-| `multilingual-e5-large` | 1024 | ✓ | Maximum quality, ~2 GB download |
-| `jina-embeddings-v2-base-code` | 768 | — | Code-specialized, English queries |
-| `all-minilm-l6-v2` | 384 | — | Legacy default, English only |
+| Model id | Dim | Download | License | Multilingual | Code-trained | Quality, held-out ¹ | Index time ² | Query p50 ³ | Peak memory ² |
+|---|---:|---:|---|:---:|:---:|---:|---:|---:|---:|
+| `multilingual-e5-small` | 384 | 487 MB | MIT | ✓ | — | 0.637 | 1.0× | 12 ms | 1.0× |
+| `jina-embeddings-v2-base-code` | 768 | 644 MB | Apache-2.0 | — | ✓ | **0.707** (+0.070, CI above 0) | 4.4× | 35 ms | 1.3× |
+| `granite-embedding-small-english-r2` | 384 | 197 MB | Apache-2.0 | — | ✓ | 0.684 (+0.047, CI includes 0) | 1.3× | 11 ms | 1.6× |
+| `coderankembed` ⁴ | 768 | 548 MB | MIT | — | ✓ | 0.664 | 5.6× | 48 ms | 1.4× |
+| `gte-modernbert-base` | 768 | 600 MB | Apache-2.0 | — | — | 0.655 | 4.9× | 25 ms | 2.0× |
+| `multilingual-e5-base` | 768 | 1.1 GB | MIT | ✓ | — | not measured | | | |
+| `multilingual-e5-large` | 1024 | 2.3 GB | MIT | ✓ | — | not measured | | | |
+| `all-minilm-l6-v2` | 384 | 91 MB | Apache-2.0 | — | — | legacy | | | |
+
+¹ Mean of semantic and hybrid nDCG@10 on the 72 held-out real-repository queries; the e5 row is the default configuration, the others are measured with `chunking = true`. Differences are paired-bootstrap 95% intervals against the default. Labels are unreviewed agent drafts. ² Relative to `multilingual-e5-small` indexed on the same 4-vCPU machine (release build). ³ One semantic query (embedding + exact search) on that machine. ⁴ A third-party fp32 ONNX export of `nomic-ai/CodeRankEmbed`, pinned and hash-checked.
+
+**Choosing a model.** Keep the default for multilingual queries and fast indexing. For an English codebase where search quality matters more than a 4× longer first index (and 2× the vector storage), `jina-embeddings-v2-base-code` with `chunking = true` is the only candidate whose gain held on the held-out queries. `granite-embedding-small-english-r2` is nearly as fast as the default and scored better on every split, but its gain on held-out is not distinguishable from zero and it needed about 1.9 GB more memory than the default while indexing at the default batch size (lower `[analysis] embedding_batch_tokens` to trade speed for memory; not measured).
+
+```toml
+[embedding]
+model = "jina-embeddings-v2-base-code"
+chunking = true   # long symbols as several vectors; needs the structured document template
+```
+
+The next `myc analyze` notices that the index was embedded with another model and re-embeds it. **Upgrading:** indexes built by earlier releases keep working unchanged with the default model — no re-embedding; an index built with `jina-embeddings-v2-base-code` moves to the structured template (the configuration that was measured) on its next `myc analyze`.
 
 Alternatively, set `provider = "openai-compatible"` to use any server speaking the OpenAI embeddings API (Ollama, LM Studio, TEI, vLLM, or a cloud provider) — see [Project config](#project-config).
 
@@ -559,7 +574,7 @@ graph TD
     
     D --> E["Community Detection<br/>(Leiden algorithm)"]
     D --> F["Process Tracing<br/>(entry-point → call chain)"]
-    D --> K["Embedding Generation<br/>(fastembed · configurable, default multilingual-e5-small)"]
+    D --> K["Embedding Generation<br/>(ONNX Runtime · configurable, default multilingual-e5-small)"]
     
     E --> G["LanceDB Storage<br/>~/.myceliums/"]
     F --> G
@@ -649,7 +664,7 @@ Shows all indexed repos, file/symbol counts, disk usage per repo, orphaned direc
 ```bash
 myc clean --orphans      # Remove orphaned data dirs
 myc clean my-project     # Remove a specific repo (with confirmation)
-myc clean --cache        # Remove the fastembed model cache
+myc clean --cache        # Remove the model cache
 myc clean --all          # Remove everything (with confirmation)
 myc clean --orphans --yes  # Skip confirmation prompts
 ```

@@ -27,7 +27,7 @@ All Myceliums data is stored in `~/.myceliums/`. This directory is created autom
       <decision-id>.json
   service-maps/        # Community-to-service name mappings
     <repo-id>.json
-  fastembed_cache/     # Downloaded embedding model files (~100 MB)
+  fastembed_cache/     # Downloaded model files (embedding model and reranker)
 ```
 
 ### Registry (`repos.json`)
@@ -87,7 +87,7 @@ Health check for the Myceliums installation. Verifies:
 # Run health checks
 myc doctor
 
-# Pre-download the embedding model (~100 MB)
+# Pre-download the embedding model
 myc doctor --download
 ```
 
@@ -124,7 +124,7 @@ myc clean --orphans --yes
 
 ### `myc clean --cache`
 
-Remove the fastembed model cache (`~/.myceliums/fastembed_cache/`). The model (~100 MB) will be re-downloaded on next use. Useful for freeing disk space or forcing a model update.
+Remove the model cache (`~/.myceliums/fastembed_cache/`). The models are re-downloaded on next use. Useful for freeing disk space or forcing a model update.
 
 ```bash
 myc clean --cache
@@ -193,7 +193,7 @@ A lock is considered stale if the process that created it is no longer running.
 
 | Component | Typical Size | How to Clean |
 |-----------|-------------|--------------|
-| Embedding model cache | ~100 MB | `myc clean --cache` |
+| Model cache | 0.2–0.7 GB per embedding model, 2.2 GB for the reranker | `myc clean --cache` |
 | Small repo (< 1,000 symbols) | 5-20 MB | `myc clean <repo>` or `myc delete <repo>` |
 | Medium repo (1,000-10,000 symbols) | 20-100 MB | `myc clean <repo>` or `myc delete <repo>` |
 | Large repo (10,000+ symbols) | 100-500 MB | `myc clean <repo>` or `myc delete <repo>` |
