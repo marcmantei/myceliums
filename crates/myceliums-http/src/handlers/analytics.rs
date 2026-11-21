@@ -1,19 +1,17 @@
 //! Graph analytics: centrality, community metrics, module coupling and cycles.
 
+use crate::error::{ApiError, Repo};
 use crate::state::AppState;
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
     Json,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::error;
 
 #[derive(Serialize)]
-struct CentralityResponse {
+pub(crate) struct CentralityResponse {
     nodes: Vec<CentralityNodeResponse>,
     total_nodes: usize,
     metric: String,
@@ -35,37 +33,25 @@ pub(crate) async fn get_centrality(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
     Query(params): Query<HashMap<String, String>>,
-) -> impl IntoResponse {
-    let graph = match state.graph.graph(&repo_id).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to open store for {}: {}", repo_id, e);
-            return (
-                StatusCode::NOT_FOUND,
-                Json(CentralityResponse {
-                    nodes: vec![],
-                    total_nodes: 0,
-                    metric: "betweenness".to_string(),
-                }),
-            );
-        }
-    };
+) -> Result<Json<CentralityResponse>, ApiError> {
+    let repo = Repo::new(&state, &repo_id);
+    let graph = state
+        .graph
+        .graph(&repo_id)
+        .await
+        .map_err(|e| repo.error(e))?;
 
-    let symbols = graph.symbols().await.unwrap_or_default();
-    let relationships = graph.relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.map_err(|e| repo.error(e))?;
+    let relationships = graph.relationships().await.map_err(|e| repo.error(e))?;
 
     let centrality = match myceliums_core::compute_centrality(&relationships) {
         Ok(c) => c,
         Err(e) => {
-            error!("Centrality computation failed: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CentralityResponse {
-                    nodes: vec![],
-                    total_nodes: 0,
-                    metric: "betweenness".to_string(),
-                }),
-            );
+            return Err(ApiError::internal(
+                "centrality computation failed",
+                e,
+                &repo,
+            ))
         }
     };
 
@@ -125,18 +111,15 @@ pub(crate) async fn get_centrality(
     let total_nodes = nodes.len();
     nodes.truncate(top_n);
 
-    (
-        StatusCode::OK,
-        Json(CentralityResponse {
-            nodes,
-            total_nodes,
-            metric: metric.to_string(),
-        }),
-    )
+    Ok(Json(CentralityResponse {
+        nodes,
+        total_nodes,
+        metric: metric.to_string(),
+    }))
 }
 
 #[derive(Serialize)]
-struct CommunityMetricsResponse {
+pub(crate) struct CommunityMetricsResponse {
     modularity: f64,
     community_count: usize,
     cohesion: Vec<CohesionEntryResponse>,
@@ -159,40 +142,20 @@ struct CouplingEntryResponse {
 pub(crate) async fn get_community_metrics(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-) -> impl IntoResponse {
-    let graph = match state.graph.graph(&repo_id).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to open store for {}: {}", repo_id, e);
-            return (
-                StatusCode::NOT_FOUND,
-                Json(CommunityMetricsResponse {
-                    modularity: 0.0,
-                    community_count: 0,
-                    cohesion: vec![],
-                    coupling: vec![],
-                }),
-            );
-        }
-    };
+) -> Result<Json<CommunityMetricsResponse>, ApiError> {
+    let repo = Repo::new(&state, &repo_id);
+    let graph = state
+        .graph
+        .graph(&repo_id)
+        .await
+        .map_err(|e| repo.error(e))?;
 
-    let symbols = graph.symbols().await.unwrap_or_default();
-    let relationships = graph.relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.map_err(|e| repo.error(e))?;
+    let relationships = graph.relationships().await.map_err(|e| repo.error(e))?;
 
     let metrics = match myceliums_core::compute_community_metrics(&symbols, &relationships) {
         Ok(m) => m,
-        Err(e) => {
-            error!("Community metrics failed: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CommunityMetricsResponse {
-                    modularity: 0.0,
-                    community_count: 0,
-                    cohesion: vec![],
-                    coupling: vec![],
-                }),
-            );
-        }
+        Err(e) => return Err(ApiError::internal("community metrics failed", e, &repo)),
     };
 
     let mut cohesion: Vec<CohesionEntryResponse> = metrics
@@ -216,21 +179,18 @@ pub(crate) async fn get_community_metrics(
         })
         .collect();
 
-    (
-        StatusCode::OK,
-        Json(CommunityMetricsResponse {
-            modularity: metrics.modularity,
-            community_count: metrics.community_count,
-            cohesion,
-            coupling,
-        }),
-    )
+    Ok(Json(CommunityMetricsResponse {
+        modularity: metrics.modularity,
+        community_count: metrics.community_count,
+        cohesion,
+        coupling,
+    }))
 }
 
 // --- Module Coupling Dashboard ---
 
 #[derive(Serialize)]
-struct ModuleCouplingResponse {
+pub(crate) struct ModuleCouplingResponse {
     modules: Vec<ModuleCouplingEntry>,
     total_modules: usize,
 }
@@ -252,23 +212,16 @@ pub(crate) async fn get_module_coupling(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
     Query(params): Query<ModuleCouplingParams>,
-) -> impl IntoResponse {
-    let graph = match state.graph.graph(&repo_id).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to open store for {}: {}", repo_id, e);
-            return (
-                StatusCode::NOT_FOUND,
-                Json(ModuleCouplingResponse {
-                    modules: vec![],
-                    total_modules: 0,
-                }),
-            );
-        }
-    };
+) -> Result<Json<ModuleCouplingResponse>, ApiError> {
+    let repo = Repo::new(&state, &repo_id);
+    let graph = state
+        .graph
+        .graph(&repo_id)
+        .await
+        .map_err(|e| repo.error(e))?;
 
-    let symbols = graph.symbols().await.unwrap_or_default();
-    let relationships = graph.relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.map_err(|e| repo.error(e))?;
+    let relationships = graph.relationships().await.map_err(|e| repo.error(e))?;
     let group_by_dir = params.group_by_dir.unwrap_or(true);
 
     let coupling_data =
@@ -285,17 +238,14 @@ pub(crate) async fn get_module_coupling(
         })
         .collect();
 
-    (
-        StatusCode::OK,
-        Json(ModuleCouplingResponse {
-            modules,
-            total_modules,
-        }),
-    )
+    Ok(Json(ModuleCouplingResponse {
+        modules,
+        total_modules,
+    }))
 }
 
 #[derive(Serialize)]
-struct CyclesResponse {
+pub(crate) struct CyclesResponse {
     cycles: Vec<CycleEntryResponse>,
     total_count: usize,
 }
@@ -310,36 +260,20 @@ struct CycleEntryResponse {
 pub(crate) async fn get_cycles(
     State(state): State<Arc<AppState>>,
     Path(repo_id): Path<String>,
-) -> impl IntoResponse {
-    let graph = match state.graph.graph(&repo_id).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!("Failed to open store for {}: {}", repo_id, e);
-            return (
-                StatusCode::NOT_FOUND,
-                Json(CyclesResponse {
-                    cycles: vec![],
-                    total_count: 0,
-                }),
-            );
-        }
-    };
+) -> Result<Json<CyclesResponse>, ApiError> {
+    let repo = Repo::new(&state, &repo_id);
+    let graph = state
+        .graph
+        .graph(&repo_id)
+        .await
+        .map_err(|e| repo.error(e))?;
 
-    let symbols = graph.symbols().await.unwrap_or_default();
-    let relationships = graph.relationships().await.unwrap_or_default();
+    let symbols = graph.symbols().await.map_err(|e| repo.error(e))?;
+    let relationships = graph.relationships().await.map_err(|e| repo.error(e))?;
 
     let cycles = match myceliums_core::detect_cycles(&symbols, &relationships, true, true, 2) {
         Ok(c) => c,
-        Err(e) => {
-            error!("Cycle detection failed: {}", e);
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(CyclesResponse {
-                    cycles: vec![],
-                    total_count: 0,
-                }),
-            );
-        }
+        Err(e) => return Err(ApiError::internal("cycle detection failed", e, &repo)),
     };
 
     let total_count = cycles.len();
@@ -352,13 +286,10 @@ pub(crate) async fn get_cycles(
         })
         .collect();
 
-    (
-        StatusCode::OK,
-        Json(CyclesResponse {
-            cycles: cycle_entries,
-            total_count,
-        }),
-    )
+    Ok(Json(CyclesResponse {
+        cycles: cycle_entries,
+        total_count,
+    }))
 }
 
 #[cfg(test)]
