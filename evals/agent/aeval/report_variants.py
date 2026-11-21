@@ -31,9 +31,15 @@ DESCRIPTIONS = {
          "with Claude Code's built-in subagents denied",
 }
 
-# `none` as the comparison arm of #153 rather than a calibration run.
-OUTCOME_NONE = ("no myceliums at all: no MCP server, no CLAUDE.md routing block, no hooks; the built-in read and "
-                "search tools only")
+# A `none` vs myceliums run (#153): `none` is the comparison arm, not a
+# calibration run, and the report has no condition A to refer to.
+OUTCOME = {
+    "none": "no myceliums at all: no MCP server, no CLAUDE.md routing block, no hooks; the built-in read and "
+            "search tools only",
+    "C": "the myceliums MCP server (default core toolset, 9 tools loaded up front) + what `myc setup-claude "
+         "--scope project --no-agent` writes: the routing block in CLAUDE.md, the SessionStart (context line), "
+         "PostToolUse and PreToolUse grep-redirect hooks in .claude/settings.json",
+}
 
 METRICS = [
     # key, label, format, per-run extractor
@@ -143,7 +149,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     L.append("| Condition | What the session has |")
     L.append("|---|---|")
     for c in conditions:
-        desc = OUTCOME_NONE if outcome and c == "none" else DESCRIPTIONS.get(c, c)
+        desc = OUTCOME.get(c, DESCRIPTIONS.get(c, c)) if outcome else DESCRIPTIONS.get(c, c)
         L.append(f"| **{c}** | {desc} |")
     L.append("")
 
@@ -271,11 +277,18 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
                 reasons.update(r.get("hook_grep_silent_reasons") or {})
             fmt = sum(r.get("format_hook_calls") or 0 for r in rs)
             ready = sum(1 for r in rs if " ready " in (r.get("session_hook") or ""))
+            # Since #152 the hook prints JSON: an `additionalContext` line for the
+            # model ("... (index: <commit> = HEAD) ...") next to the systemMessage.
+            ctx = [r.get("session_hook") or "" for r in rs if "additionalContext" in (r.get("session_hook") or "")]
+            session = (f"The SessionStart hook put its context line into the model's context in "
+                       f"{len(ctx)} of {len(rs)} sessions, naming the index "
+                       f"current (`index: <commit> = HEAD`) in {sum(1 for x in ctx if '= HEAD' in x)} of them."
+                       if ctx else
+                       f"The SessionStart hook reported the index ready in {ready} of {len(rs)} sessions (a "
+                       "`systemMessage`, shown to the user, not to the model).")
             L.append(f"- **{c}:** the grep hook ran on {calls} Grep calls and added a hint to {hints}; silent "
                      "because " + (", ".join(f"{k} ({v})" for k, v in reasons.most_common(4)) or "–")
-                     + f". The PostToolUse formatter ran {fmt} times. The SessionStart hook reported the index "
-                     f"ready in {ready} of {len(rs)} sessions (a `systemMessage`, shown to the user, not to the "
-                     "model).")
+                     + f". The PostToolUse formatter ran {fmt} times. " + session)
         L.append("")
     if any(config.VARIANTS[c].agent for c in conditions):
         for c in conditions:

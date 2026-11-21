@@ -21,12 +21,16 @@ Task types, four tasks each:
 * ``ambiguous``: callers (two or three levels) of one of several same-named
   functions in different apps, the others named in the question.
 
-``--audit`` greps every name on each chain (the target and every gold
-function below the last level) for call sites in ``django/`` and prints the
-ones the graph does not account for: neither an edge into that node, nor an
-attribute call on another object (excluded by the rule), nor a call through
-``self`` that resolves to another class. Each printed site was read; the
-verdicts are in the task rationales.
+``--audit`` collects every call site in ``django/`` (from the AST) whose
+callee has the name of a node on a chain (the target and every gold function
+below the last level) and prints the ones the graph does not account for:
+neither an edge into that node, nor an attribute call on another object
+(excluded by the rule), nor a call that resolves to another function or
+method of that name. For the committed task set it printed 39 sites; each was
+read: all are calls through ``self`` or ``super()`` that the enclosing class
+neither defines nor inherits (subclass dispatch, excluded by the rule),
+recursion, or another class's method (evals/agent/README.md, outcome eval).
+The task file's ``verified_with`` calls this the grep audit.
 """
 
 from __future__ import annotations

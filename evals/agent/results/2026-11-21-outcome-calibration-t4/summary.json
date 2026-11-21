@@ -1,0 +1,151 @@
+{
+  "analysis": {
+    "by_type": {
+      "ambiguous": {
+        "none": {
+          "cost_usd": 0.0949273,
+          "f1": 0.0,
+          "first_turn_input_tokens": 5713.0,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 5.0,
+          "output_tokens": 2805.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "success": 0.0,
+          "tool_calls": 9.0,
+          "total_input_tokens": 48053.0,
+          "wall_s": 22.43
+        }
+      },
+      "blast_radius": {
+        "none": {
+          "cost_usd": 0.044646599999999995,
+          "f1": 1.0,
+          "first_turn_input_tokens": 5631.0,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 4.0,
+          "output_tokens": 2101.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 3.0,
+          "total_input_tokens": 21557.0,
+          "wall_s": 16.81
+        }
+      },
+      "transitive_callers": {
+        "none": {
+          "cost_usd": 0.09239510000000001,
+          "f1": 0.0,
+          "first_turn_input_tokens": 5678.5,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 5.0,
+          "output_tokens": 4138.5,
+          "precision": 0.0,
+          "recall": 0.0,
+          "success": 0.0,
+          "tool_calls": 6.5,
+          "total_input_tokens": 38946.0,
+          "wall_s": 32.58
+        }
+      }
+    },
+    "means": {
+      "none": {
+        "cost_usd": {
+          "hi": 0.09674885,
+          "lo": 0.057216775,
+          "mean": 0.081091025,
+          "n_tasks": 4
+        },
+        "f1": {
+          "hi": 0.75,
+          "lo": 0.0,
+          "mean": 0.25,
+          "n_tasks": 4
+        },
+        "first_turn_input_tokens": {
+          "hi": 5702.75,
+          "lo": 5644.5,
+          "mean": 5675.25,
+          "n_tasks": 4
+        },
+        "myc_calls": {
+          "hi": 0.0,
+          "lo": 0.0,
+          "mean": 0.0,
+          "n_tasks": 4
+        },
+        "myc_used": {
+          "hi": 0.0,
+          "lo": 0.0,
+          "mean": 0.0,
+          "n_tasks": 4
+        },
+        "num_turns": {
+          "hi": 5.0,
+          "lo": 4.25,
+          "mean": 4.75,
+          "n_tasks": 4
+        },
+        "output_tokens": {
+          "hi": 4138.5,
+          "lo": 2453.0,
+          "mean": 3295.75,
+          "n_tasks": 4
+        },
+        "precision": {
+          "hi": 0.75,
+          "lo": 0.0,
+          "mean": 0.25,
+          "n_tasks": 4
+        },
+        "recall": {
+          "hi": 0.75,
+          "lo": 0.0,
+          "mean": 0.25,
+          "n_tasks": 4
+        },
+        "success": {
+          "hi": 0.75,
+          "lo": 0.0,
+          "mean": 0.25,
+          "n_tasks": 4
+        },
+        "tool_calls": {
+          "hi": 8.5,
+          "lo": 4.0,
+          "mean": 6.25,
+          "n_tasks": 4
+        },
+        "total_input_tokens": {
+          "hi": 45474.0,
+          "lo": 26206.5,
+          "mean": 36875.5,
+          "n_tasks": 4
+        },
+        "wall_s": {
+          "hi": 32.58,
+          "lo": 19.619999999999997,
+          "mean": 26.1,
+          "n_tasks": 4
+        }
+      }
+    },
+    "vs_baseline": {}
+  },
+  "baseline": "none",
+  "conditions": [
+    "none"
+  ],
+  "label": "2026-11-21-outcome-calibration-t4",
+  "n_rows": 4,
+  "statuses": {
+    "none/max_turns": 3,
+    "none/ok": 1
+  },
+  "threshold": 0.8
+}

@@ -1,0 +1,98 @@
+[
+ {
+  "id": "django-tc-permission-codename",
+  "repo": "django",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 36,
+  "question": "Which functions or methods in the `django/` package call `get_permission_codename` (django/contrib/auth/__init__.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_permission_codename` itself."
+ },
+ {
+  "id": "django-tc-get-format",
+  "repo": "django",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 36,
+  "question": "Which functions or methods in the `django/` package call `get_format` (django/utils/formats.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_format` itself."
+ },
+ {
+  "id": "django-tc-safe-join",
+  "repo": "django",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 33,
+  "question": "Which functions or methods in the `django/` package call `safe_join` (django/utils/_os.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `safe_join` itself."
+ },
+ {
+  "id": "django-tc-resolve-url",
+  "repo": "django",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 25,
+  "question": "Which functions or methods in the `django/` package call `resolve_url` (django/shortcuts.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `resolve_url` itself."
+ },
+ {
+  "id": "django-blast-iri-to-uri",
+  "repo": "django",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 17,
+  "question": "Suppose the behaviour of `iri_to_uri` (django/utils/encoding.py) changes. Which files in the `django/` package contain a call to `iri_to_uri`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "django-blast-current-timezone",
+  "repo": "django",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 24,
+  "question": "Suppose the behaviour of `get_current_timezone` (django/utils/timezone.py) changes. Which files in the `django/` package contain a call to `get_current_timezone`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "django-blast-template-does-not-exist",
+  "repo": "django",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 16,
+  "question": "Suppose the constructor of `TemplateDoesNotExist` (django/template/exceptions.py) gains a required parameter. Which files in the `django/` package contain code that instantiates `TemplateDoesNotExist` (`raise TemplateDoesNotExist(...)` included), or a call to a function or method that does so directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "django-blast-script-prefix",
+  "repo": "django",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 21,
+  "question": "Suppose the behaviour of the function `get_script_prefix` in django/urls/base.py changes (not the `get_script_prefix` method of `ASGIHandler` in django/core/handlers/asgi.py). Which files in the `django/` package contain a call to `get_script_prefix`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "django-amb-transaction-get-connection",
+  "repo": "django",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 23,
+  "question": "Django defines several functions and methods named `get_connection`. Which functions or methods in the `django/` package call `get_connection` (django/db/transaction.py) directly (not `get_connection` in django/core/mail/__init__.py, `EmailMessage.get_connection` or any other `get_connection`), call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_connection` itself."
+ },
+ {
+  "id": "django-amb-migrations-resolve-relation",
+  "repo": "django",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 16,
+  "question": "Two modules define a function named `resolve_relation`. Which functions or methods in the `django/` package call `resolve_relation` (django/db/migrations/utils.py) directly (not the `resolve_relation` in django/db/models/fields/related.py), call such a caller, or call one of those - that is, every caller up to two levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `resolve_relation` itself."
+ },
+ {
+  "id": "django-amb-urls-resolve",
+  "repo": "django",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 18,
+  "question": "Many functions and methods in Django are named `resolve`. Which functions or methods in the `django/` package call `resolve` (django/urls/base.py) directly (not `URLResolver.resolve`, `URLPattern.resolve`, `Variable.resolve`, `FilterExpression.resolve` or any other `resolve`), call such a caller, or call one of those - that is, every caller up to two levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `resolve` itself."
+ },
+ {
+  "id": "django-amb-auth-load-backend",
+  "repo": "django",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 22,
+  "question": "Two modules define a function named `load_backend`. Which functions or methods in the `django/` package call `load_backend` (django/contrib/auth/__init__.py) directly (not the database `load_backend` in django/db/utils.py), call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `load_backend` itself."
+ }
+]
