@@ -450,7 +450,8 @@ impl SourceParser {
                 }
             }
             // `export { Hono as HonoBase }`: the module exports `Hono` under
-            // another name, as if by `const HonoBase = Hono`.
+            // another name — for importers as if by `const HonoBase = Hono`;
+            // the module itself still sees its own `HonoBase`, if any.
             "export_statement" if node.child_by_field_name("source").is_none() => {
                 if let Some(clause) = self.find_child_by_kind(node, "export_clause") {
                     let specs = &mut clause.walk();
@@ -470,9 +471,7 @@ impl SourceParser {
                             name: alias.to_string(),
                             owner: None,
                             scope: local_scope(node),
-                            value: BindingValue::Expr(vec![ExpressionStep::Ident(
-                                name.to_string(),
-                            )]),
+                            value: BindingValue::Export(name.to_string()),
                         });
                     }
                 }
@@ -1442,10 +1441,7 @@ export class UserService extends Base {
             .collect();
         assert_eq!(
             module_level,
-            [(
-                "HonoBase",
-                &BindingValue::Expr(vec![ExpressionStep::Ident("Hono".to_string())])
-            )]
+            [("HonoBase", &BindingValue::Export("Hono".to_string()))]
         );
     }
 }

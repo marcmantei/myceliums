@@ -449,6 +449,11 @@ pub enum BindingValue {
     /// Bound, of unknown type: an untyped parameter, a closure, a loop
     /// variable. It still shadows outer names.
     Unknown,
+    /// `export { name as Alias }` (TypeScript): the module exports its
+    /// `name` under the binding's name. Only importers see it; inside the
+    /// module the alias binds nothing, so it does not shadow an import or
+    /// declaration of the same name there (#118).
+    Export(String),
 }
 
 /// What the call resolver needs to know about a definition beyond its
