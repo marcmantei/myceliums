@@ -346,3 +346,26 @@ async fn a_project_named_like_a_leftover_survives_other_rebuilds() {
     );
     finds(&server, &repo_id, "anything").await;
 }
+
+/// #118: a registered repository whose index directory is gone is rebuilt
+/// by `analyze`, not answered from the cache — reading the cached index
+/// failed, and the error said to run `analyze`.
+#[tokio::test]
+async fn analyze_rebuilds_a_registered_repo_whose_index_is_missing() {
+    let _turn = serial().await;
+    let server = new_server();
+    let (_dir, project, repo_id) = analyzed_project(&server, "lost-index").await;
+    let index = data_dir().join("data").join(&repo_id);
+    std::fs::remove_dir_all(&index).unwrap();
+
+    let out = server
+        .analyze_for_test(AnalyzeParams {
+            force: Some(false),
+            ..params(&project)
+        })
+        .await
+        .expect("analyze rebuilds the index");
+    assert!(out.contains("(fresh)"), "{out}");
+    assert!(index.is_dir());
+    assert!(finds(&server, &repo_id, "formatName").await);
+}

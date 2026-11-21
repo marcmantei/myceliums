@@ -89,7 +89,11 @@ fn main() -> Result<()> {
     } else {
         tokio::runtime::Builder::new_multi_thread()
     };
-    runtime.enable_all().build()?.block_on(run(cli))
+    runtime
+        .enable_all()
+        .build()?
+        .block_on(run(cli))
+        .map_err(repo::hint_for_missing_index)
 }
 
 async fn run(cli: Cli) -> Result<()> {

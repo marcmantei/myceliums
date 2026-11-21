@@ -181,7 +181,13 @@ pub(crate) async fn cmd_analyze(
     // Cache check: skip re-analysis if cache is fresh (unless --force)
     if !force {
         let registry = RepoRegistry::load(&registry_path())?;
-        if let Some(repo_info) = registry.get(&repo_id) {
+        // Registered, but the index directory is gone: nothing to reuse.
+        if registry.get(&repo_id).is_some() && !db_path.is_dir() {
+            println!(
+                "Re-analysis needed: the index {} is missing",
+                db_path.display()
+            );
+        } else if let Some(repo_info) = registry.get(&repo_id) {
             let cache_config = CacheCheckConfig {
                 max_age_minutes,
                 ..Default::default()

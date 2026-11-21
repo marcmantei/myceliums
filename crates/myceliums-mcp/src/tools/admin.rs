@@ -159,7 +159,10 @@ impl MyceliumsMcp {
         // Cache check: return cached results if fresh enough
         if !force {
             let registry = registry()?;
-            if let Some(repo_info) = registry.get(&repo_id) {
+            // A registered repository whose index directory is gone is not
+            // cached: analyze rebuilds it (#118).
+            let indexed = RepoRegistry::repo_db_path(&data_dir(), &repo_id).is_dir();
+            if let Some(repo_info) = registry.get(&repo_id).filter(|_| indexed) {
                 let cache_config = CacheCheckConfig {
                     max_age_minutes: params.max_age_minutes.unwrap_or(60),
                     ..Default::default()
