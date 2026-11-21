@@ -1493,12 +1493,13 @@ impl Analyzer {
         let mut resolver = CallResolver::new();
         let mut skipped_count: usize = 0;
         let mut skip_reasons: HashMap<FileSkipReason, usize> = HashMap::new();
-        let parse_cap = parse_timeout(
-            self.config
-                .as_ref()
-                .map(|c| &c.analysis)
-                .unwrap_or(&crate::config::AnalysisSection::default()),
-        );
+        let default_config = crate::config::AnalysisSection::default();
+        let config = self
+            .config
+            .as_ref()
+            .map(|c| &c.analysis)
+            .unwrap_or(&default_config);
+        let parse_cap = parse_timeout(config);
 
         // Filter to only files we know how to parse
         let source_files: Vec<(PathBuf, SourceLanguage)> = changed_paths
@@ -1759,6 +1760,20 @@ impl Analyzer {
             if raw_bytes.is_empty() {
                 skipped_count += 1;
                 self.register_empty_package_marker(&mut resolver, path);
+                continue;
+            }
+
+            // The full analysis' skip rules (size, line length, minified,
+            // binary), so a file it leaves out is left out here too.
+            if let Some(skip_reason) = should_skip_file(path, &raw_bytes, config) {
+                warn!(
+                    "Skipping {} — {} ({}B file)",
+                    rel_path_display,
+                    skip_reason,
+                    raw_bytes.len()
+                );
+                skipped_count += 1;
+                *skip_reasons.entry(skip_reason).or_insert(0) += 1;
                 continue;
             }
 
@@ -2927,6 +2942,45 @@ mod tests {
             start.elapsed() < std::time::Duration::from_secs(10),
             "took {:?}",
             start.elapsed()
+        );
+    }
+
+    /// #118: the incremental path applies the full analysis' file skip
+    /// rules (size, line length, minified) and records why, so a file the
+    /// full analysis leaves out is not indexed by `analyze_files` either.
+    #[tokio::test]
+    async fn incremental_analysis_applies_the_file_skip_rules() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        let good = root.join("good.py");
+        fs::write(&good, "def ok():\n    return 1\n").unwrap();
+        let big = root.join("big.py");
+        fs::write(&big, "x = 1\n".repeat(400)).unwrap();
+        let long = root.join("long.py");
+        fs::write(&long, format!("x = '{}'\n", "a".repeat(300))).unwrap();
+        let minified = root.join("app.min.js");
+        fs::write(&minified, "function f() { return 1; }\n").unwrap();
+
+        let mut config = ProjectConfig::default();
+        config.analysis.max_file_size_kb = 1;
+        config.analysis.max_line_length_bytes = 200;
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::with_config(store, root, config).set_skip_embeddings(true);
+
+        let result = analyzer
+            .analyze_files(&[good, big, long, minified])
+            .await
+            .unwrap();
+        assert_eq!(result.file_count, 1, "only good.py is indexed");
+        assert_eq!(
+            result.skip_reasons,
+            HashMap::from([
+                (FileSkipReason::OversizedFile, 1),
+                (FileSkipReason::LineTooLong, 1),
+                (FileSkipReason::MinifiedOrBundled, 1),
+            ])
         );
     }
 
