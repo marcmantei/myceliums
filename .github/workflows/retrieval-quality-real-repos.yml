@@ -20,11 +20,14 @@ name: Retrieval Quality (real repositories)
 # {"id", "model", "template", "chunking"} objects, to score each variant in
 # its own job (lexical, semantic and hybrid by default; no sweeps), then
 # compare them against the variant with id "A" — the incumbent, by the
-# protocol in METHODOLOGY.md — in a final job. For example:
+# protocol in METHODOLOGY.md — in a final job. Every variant job also indexes
+# with variant A's configuration, the denominator of its cost ratios. The
+# incumbent is the shipped default (jina-embeddings-v2-base-code, template 2,
+# chunking on since #157). For example:
 #
 #   gh workflow run retrieval-quality-real-repos.yml --ref <branch> \
-#     -f variants='[{"id":"A","model":"multilingual-e5-small","template":"1","chunking":"off"},
-#                   {"id":"B","model":"multilingual-e5-small","template":"2","chunking":"off"}]'
+#     -f variants='[{"id":"A","model":"jina-embeddings-v2-base-code","template":"2","chunking":"on"},
+#                   {"id":"B","model":"multilingual-e5-small","template":"1","chunking":"off"}]'
 
 on:
   schedule:
@@ -242,11 +245,20 @@ jobs:
       - name: Index with the incumbent on this runner
         # Every matrix job gets its own machine, and their speeds differ by
         # more than the budget can tolerate: cost ratios pair each variant
-        # with the incumbent measured in the same job, in its own process.
+        # with the incumbent (variant A) measured in the same job, in its own
+        # process. Without a variant A there is nothing to compare against.
+        env:
+          VARIANTS: ${{ inputs.variants }}
         run: |
           set -o pipefail
+          incumbent="$(jq -c 'map(select(.id == "A")) | first // empty' <<<"$VARIANTS")"
+          if [ -z "$incumbent" ]; then
+            echo "no variant A: no same-runner incumbent to measure"
+            exit 0
+          fi
           nice -n 10 "$EVAL" --allow-model-download --no-sweep --no-demotion --modes semantic \
-            --model multilingual-e5-small --template 1 --chunking off \
+            --model "$(jq -r .model <<<"$incumbent")" --template "$(jq -r .template <<<"$incumbent")" \
+            --chunking "$(jq -r .chunking <<<"$incumbent")" \
             --out "calibration-${{ matrix.variant.id }}.json" | tee "calibration-${{ matrix.variant.id }}.txt"
       - name: Upload the report
         if: always()
