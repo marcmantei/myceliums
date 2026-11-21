@@ -382,10 +382,12 @@ token-budgeted form. Measured in [#125](evals/agent/README.md#variant-matrix-125
 myceliums in 80 % of sessions; layers 1-3 together raised that to 100 % and
 made a graph query its first step; the subagent (layer 4) was never called.
 None of the variants changed accuracy, tokens or cost measurably on these
-tasks, where all of them were near the ceiling. On Django tasks under a budget
-of three rounds of tool calls ([#153](evals/agent/README.md#outcome-eval-153),
-a pilot over 11 tasks), layers 1-3 raised success from 36 % to 100 % (+64 pp
-[+36, +91]) at 35 % lower cost. Guide:
+tasks, where all of them were near the ceiling. On 11 static call-graph
+questions about Django under a budget of three rounds of tool calls
+(`--max-turns 4`; [#153](evals/agent/README.md#outcome-eval-153), a pilot),
+layers 1-3 raised success from 36 % to 100 % (+64 pp [+36, +91]); with up to
+seven rounds, the agent without myceliums had solved 5 of 6 of these
+questions in calibration, so the gain shown is a budget effect. Guide:
 [docs/guides/agent-integration.md](docs/guides/agent-integration.md).
 
 ---
@@ -465,8 +467,13 @@ Django 5.1.4 — callers three levels up, blast radius over 16 to 24 files,
 callers of one of several same-named functions — with a budget of three
 rounds of tool calls (`--max-turns 4`, stated in the prompt), once without
 any myceliums and once with what `myc setup-claude --no-agent` installs
-(MCP server, routing block, hooks). The index was fully embedded before the
-run. Brackets: 95 % paired bootstrap intervals over the 11 tasks.
+(MCP server, routing block, hooks). Neither had a shell: the built-in tools
+were `Read`, `Grep` and `Glob`. The budget was chosen in calibration (10
+sessions on 9 of the 12 tasks) because the agent without myceliums failed
+at it, and the tasks were frozen before any myceliums output existed. The
+index was fully embedded before the run. Brackets: 95 % paired bootstrap
+intervals over the 11 tasks; for success also an exact sign test (7
+discordant tasks, all in favour of myceliums: two-sided p = 0.016).
 
 | Per session | without myceliums | with `setup-claude` | difference |
 |---|---:|---:|---:|
@@ -480,9 +487,12 @@ run. Brackets: 95 % paired bootstrap intervals over the 11 tasks.
 With myceliums the agent answered each question with one `find_callers` call
 (`depth` 2 or 3). Without it, every transitive-caller and same-name question
 took a fourth round of greps, ran past the budget and ended without an answer;
-the blast-radius questions it solved either way. This is an efficiency gain
-that a budget turns into success: with seven rounds the agent without
-myceliums had solved 5 of 6 of these questions. A pilot — one repetition,
+the blast-radius questions it solved either way. The success gain is a
+budget effect: in calibration with up to seven rounds (and an earlier,
+partly wrong budget text) the agent without myceliums had solved 5 of 6 of
+these questions. The cost and time ratios hold under the budget only — the
+failed sessions without myceliums were cut off at the limit — and without a
+budget they were not measured. A pilot — one repetition,
 one repository, one model, gold sets that follow static call rules a call
 graph computes by construction, labels from Python's `ast` module checked by
 an agent, not a person. [Report](evals/agent/results/2026-11-21-outcome/REPORT.md),

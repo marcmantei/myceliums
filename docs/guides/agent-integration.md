@@ -45,11 +45,16 @@ prompt), Claude Code 2.1.330, one repetition:
 > [+36, +91] (paired over 11 tasks): with C the agent answered each question
 > with one `find_callers` call at `depth` 2 or 3, while without myceliums it
 > ran past the budget, without an answer, on every transitive-caller and
-> same-name task. With seven rounds of tool calls the agent without myceliums
-> had solved 5 of 6 of these tasks, so the gain is speed, which a budget turns
-> into success; input tokens did not change measurably (0.93× [0.74×, 1.17×]).
-> A pilot: n = 11, one repository, one model, and questions whose static call
-> rules a call graph computes by construction.
+> same-name task (7 discordant tasks, all in C's favour: exact sign test
+> p = 0.016). The budget was chosen in calibration because the agent without
+> myceliums failed at it; with up to seven rounds of tool calls (and an
+> earlier, partly wrong budget text) it had solved 5 of 6 of these tasks. So
+> the success gain is a budget effect, and the cost and time ratios hold under
+> the budget only, where the failed sessions were cut off; without a budget
+> they were not measured. Input tokens did not change measurably (0.93×
+> [0.74×, 1.17×]). Neither condition had a shell (`Read`, `Grep`, `Glob`).
+> A pilot: n = 11, one repository, one model, and static call-graph
+> questions, whose rules a call graph computes by construction.
 
 This guide describes five ways to route an agent to myceliums, from soft to
 hard, and what `myc setup-claude` installs for each.

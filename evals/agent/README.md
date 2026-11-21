@@ -34,14 +34,19 @@ of sessions with the MCP server alone (A), 100 % with what
 **Outcome eval, 21 November 2026** (#153; myc at `951d041ff9e0`, Claude
 Code 2.1.330, 22 graded sessions on 11 multi-hop Django tasks, one repetition):
 [report](results/2026-11-21-outcome/REPORT.md), [method and
-summary](#outcome-eval-153). With a budget of three rounds of tool calls,
-the agent without myceliums succeeded on 4 of 11 tasks (36 %), the agent
-with what `myc setup-claude --no-agent` installs (C) on 11 of 11; success
-+64 pp [+36, +91], mean F1 +0.63 [+0.35, +0.90]. Every failure without
-myceliums was a session that ran out of turns before answering; with seven
-rounds the agent without myceliums had solved 5 of 6 of these tasks. C also
-cost 35 % less [24 %, 46 %] and took half the wall time. A pilot: n = 11
-tasks, wide intervals, one repository and model.
+summary](#outcome-eval-153). On static call-graph questions (callers three
+levels up, blast radius, callers of one of several same-named functions)
+with a budget of three rounds of tool calls (`--max-turns 4`, chosen in
+calibration because the agent without myceliums failed there), the agent
+without myceliums succeeded on 4 of 11 tasks (36 %), the agent with what
+`myc setup-claude --no-agent` installs (C) on 11 of 11: success +64 pp [+36,
++91] (exact sign test over the 7 discordant tasks, all in C's favour:
+p = 0.016), mean F1 +0.63 [+0.35, +0.90]. Every failure without myceliums
+was a session that ran out of turns before answering; in calibration with up
+to seven rounds (and an earlier, partly wrong budget text) it had solved 5
+of 6 of these tasks. Under the budget C also cost 35 % less [24 %, 46 %] and
+took half the wall time; without a budget, cost and time were not measured.
+A pilot: n = 11 tasks, wide intervals, one repository and model.
 
 ## What is measured
 
@@ -384,7 +389,9 @@ recursion, or another class's method of the same name. Every gold item has an
 evidence line that `check-tasks` re-verifies.
 
 **Conditions.** `none`: no myceliums at all (no MCP server, no CLAUDE.md, no
-hooks), the built-in `Read`, `Grep` and `Glob`. `C`: the MCP server with its
+hooks), the built-in `Read`, `Grep` and `Glob` only — no Bash or other shell,
+in either condition (the harness also allows `ToolSearch`, which the CLI drops
+when there is no MCP server). `C`: the MCP server with its
 9 core tools loaded up front plus what `myc setup-claude --scope project
 --no-agent` writes into the working copy (routing block, SessionStart hook,
 which since #152 puts a context line into the model's context, PostToolUse
@@ -403,16 +410,35 @@ fit before the final answer (checked with `probe`: `--max-turns 1` ends after
 the first tool round, `2` lets the final text through). `num_turns` in the
 result counts tool calls + 1 and is not what the limit compares.
 
-**Calibration** (10 sessions, `none`): at `--max-turns 8`, 5 of 6 tasks
-succeeded ([report](results/2026-11-21-outcome-calibration/REPORT.md); the
-agent used two to five rounds of tool calls), which is the ceiling; at
-`--max-turns 4`, 1 of 4 ([report](results/2026-11-21-outcome-calibration-t4/REPORT.md)).
-The main run uses 4.
+**Calibration** (10 sessions, `none`, on 9 of the 12 tasks): at
+`--max-turns 8`, 5 of 6 tasks succeeded
+([report](results/2026-11-21-outcome-calibration/REPORT.md); the agent used
+two to five rounds of tool calls), which is the ceiling. That run's prompt
+still said that parallel calls count one turn each, which the probe later
+disproved, so it is not the main run's prompt. At `--max-turns 4` with the
+corrected text, 1 of 4 succeeded
+([report](results/2026-11-21-outcome-calibration-t4/REPORT.md)). The main run
+uses 4: the budget was chosen because the agent without myceliums failed at
+it on three calibration tasks that are also in the main run, which is what
+the issue asked for (a baseline below the ceiling) but also means the
+baseline's success rate is partly selected.
+
+**Tasks frozen before any myceliums output.** The task file
+(`tasks-outcome.json`, sha256 `3a1b3848ce66…`) was committed in `9619d24`
+at 20:56:11 UTC and has not changed since: all three result directories
+record that sha256, and the questions in all 32 graded session prompts,
+from the first calibration session (20:47:13 UTC), are the committed ones.
+The Django index finished at 20:59:17 UTC; the first session with myceliums
+(a mock-API probe) started at 20:59:41 UTC and the main run at 21:00:18
+UTC. Before that, myc had only been run to count symbols (a graph-only
+`analyze` and `myc stats`), never to list callers.
 
 **Results, 21 November 2026** (myc 0.3.2 at `951d041ff9e0`, Claude Code
 2.1.330; 22 graded sessions, 11 tasks × 2 conditions × 1 repetition;
 [report](results/2026-11-21-outcome/REPORT.md)). Means over tasks, brackets
-95 % paired bootstrap intervals over the 11 tasks:
+95 % paired bootstrap intervals over the 11 tasks. Success, as an exact
+sign (McNemar) test: 7 tasks are discordant, all 7 failed without myceliums
+and succeeded with it, none the other way; two-sided p = 2 × 0.5⁷ = 0.016.
 
 | Per session | none | C | C − none (C ÷ none) |
 |---|---:|---:|---:|
@@ -439,16 +465,21 @@ The main run uses 4.
   fourth round of greps and reads in every transitive-caller and ambiguous
   task, overran the stated budget and ended without an answer (F1 = 0) in all
   seven. No session in either condition failed with a wrong answer.
-* **It is an efficiency effect.** With seven rounds (calibration) the agent
-  without myceliums solved 5 of 6 of these tasks. myceliums gets
-  the same answer in one call instead of four or five rounds; a budget turns
-  that into success or failure. On the four blast-radius tasks both
+* **The success gain depends on the budget.** In calibration with up to
+  seven rounds (a different, partly wrong budget text) the agent without
+  myceliums solved 5 of 6 of these tasks; myceliums gets the answer in one
+  call instead of four or five rounds, and the budget turns that into
+  success or failure. C never ran without a budget, so whether myceliums
+  saves time or cost there is not measured. The only comparison of two
+  successful sessions is descriptive: on the four blast-radius tasks both
   conditions solved, C used 2.25 tool calls instead of 4.25, 12.5 s instead
-  of 21.8 s and 0.047 USD instead of 0.069 (n = 4, descriptive).
-* **Cost fell, input tokens did not change measurably.** C's first request is
-  5,418 tokens larger (the tool schemas, the routing block, the context
-  line), which the shorter sessions offset: input tokens 0.93× [0.74×,
-  1.17×], output tokens and cost clearly lower.
+  of 21.8 s and 0.047 USD instead of 0.069 (n = 4, still under the budget).
+* **Under the budget, cost fell and input tokens did not change measurably.**
+  C's first request is 5,418 tokens larger (the tool schemas, the routing
+  block, the context line), which the shorter sessions offset: input tokens
+  0.93× [0.74×, 1.17×], output tokens and cost clearly lower. These ratios
+  hold only under the budget: the failed sessions without myceliums were cut
+  off at the limit, which also caps their cost and time.
 
 Session accounting: 10 calibration sessions; 23 of the 24 approved main-run
 sessions launched, 22 graded. One C session (`django-amb-transaction-get-connection`)
@@ -494,13 +525,17 @@ passes and the most frequent confusions go to `TOOLSEL.md`.
 * Outcome eval (#153): a pilot. One repetition, 11 paired tasks, one
   repository, one language, one model: the intervals are wide and say
   direction and rough size. The effect is measured under a tight budget
-  (three rounds of tool calls); with seven rounds the agent without
-  myceliums was at the ceiling, so outside a budget the gain is speed and
-  cost, not accuracy. The gold sets follow static call rules that a call
-  graph computes by construction, while an agent with grep has to emulate
-  them; the tasks are structural questions of the kind myceliums is built
-  for, not a sample of developer questions. The task set was calibrated on
-  10 of its 12 tasks, and one task was not run.
+  (three rounds of tool calls), chosen in calibration because the agent
+  without myceliums failed there. With up to seven rounds (and an earlier,
+  partly wrong budget text) that agent was at the ceiling, so only the
+  success gain is shown to be a budget effect; time and cost without a
+  budget were not measured (C never ran without one), apart from the
+  descriptive four blast-radius tasks both conditions solved. The gold sets
+  follow static call rules that a call graph computes by construction,
+  while an agent with grep has to emulate them; the tasks are structural
+  questions of the kind myceliums is built for, not a sample of developer
+  questions. Neither condition had a shell. The calibration (10 sessions)
+  covered 9 of the 12 tasks, and one task was not run.
 * Variant matrix (#125): both hard sets turned out close to the ceiling for
   this model, so the matrix measures tool use, tokens and time well and
   accuracy hardly at all. Its task set was not calibrated (the allowance was
