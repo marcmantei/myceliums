@@ -30,6 +30,32 @@ with `claude-sonnet-5-5` in Claude Code 2.1.329, 116 graded sessions:
 > task set and Claude Code version also changed since the pilot), and it did
 > not test routing without hooks (B) or hooks without up-front tools (D).
 
+The outcome eval ([#153](../../evals/agent/README.md#outcome-eval-153),
+21 November 2026, [report](../../evals/agent/results/2026-11-21-outcome/REPORT.md))
+compared variant C with no myceliums at all on 11 multi-hop Django tasks
+under a budget of three rounds of tool calls (`--max-turns 4`, stated in the
+prompt), Claude Code 2.1.330, one repetition:
+
+| Condition | Sessions with ≥ 1 myceliums call | Success / mean F1 | Cost per session | Wall time |
+|---|---:|---:|---:|---:|
+| none: built-in read and search tools only | 0 % | 36 % / 0.362 | 0.076 USD | 24.0 s |
+| C (layers 1-3) | 100 % | 100 % / 0.988 | 0.049 USD (0.65× [0.54×, 0.76×]) | 12.6 s (0.52×) |
+
+> **What the numbers say, and what they do not.** Success rose by 64 pp
+> [+36, +91] (paired over 11 tasks): with C the agent answered each question
+> with one `find_callers` call at `depth` 2 or 3, while without myceliums it
+> ran past the budget, without an answer, on every transitive-caller and
+> same-name task (7 discordant tasks, all in C's favour: exact sign test
+> p = 0.016). The budget was chosen in calibration because the agent without
+> myceliums failed at it; with up to seven rounds of tool calls (and an
+> earlier, partly wrong budget text) it had solved 5 of 6 of these tasks. So
+> the success gain is a budget effect, and the cost and time ratios hold under
+> the budget only, where the failed sessions were cut off; without a budget
+> they were not measured. Input tokens did not change measurably (0.93×
+> [0.74×, 1.17×]). Neither condition had a shell (`Read`, `Grep`, `Glob`).
+> A pilot: n = 11, one repository, one model, and static call-graph
+> questions, whose rules a call graph computes by construction.
+
 This guide describes five ways to route an agent to myceliums, from soft to
 hard, and what `myc setup-claude` installs for each.
 
@@ -39,7 +65,7 @@ hard, and what `myc setup-claude` installs for each.
 |---|---|---|---|---|
 | 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | together with layer 3 (variant C): myceliums used in 100 % of sessions instead of 80 %, first call a graph query; not measured alone | +348 tokens per request | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | variant A: myceliums used in 80 % of sessions (pilot with 54 deferred tools: 0 %; not a controlled comparison) | the schemas are in every request (A's first prompt: 10,162 tokens) | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
-| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see (it adds a context line since #152) | a few ms per Grep (400 ms cap) | `myc setup-claude` |
+| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see. Since #152 it adds a context line: in #153 it reached the model in 11 of 11 C sessions, and the grep hook added a hint to 14 of 17 Grep calls | a few ms per Grep (400 ms cap) | `myc setup-claude` |
 | 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | never called (0 of 38 sessions): with the tools in the main context the agent queries them itself | about 1,860 tokens per request more than C (Agent tool and its agent list) | `myc setup-claude` |
 | 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | not measured | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
 

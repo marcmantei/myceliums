@@ -1,0 +1,106 @@
+{
+  "attempts_total": 4,
+  "claude_version": "2.1.330",
+  "conditions": [
+    "none"
+  ],
+  "date": "2026-11-21",
+  "effort": "medium",
+  "index": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "communities": 325,
+      "embedded": 12443,
+      "files": 828,
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_seconds": 1446.7,
+      "indexed_at": "2026-11-21T20:59:17.411273+00:00",
+      "myc_sha256": "4ef9e803790e41b4010695dc34c3dc75a391047296a56459de8319dfbbed9a33",
+      "myc_version": "myc 0.3.2",
+      "processes": 2922,
+      "relationships": 31408,
+      "repo": "django",
+      "repo_id": "django-f980c747",
+      "symbols": 12443,
+      "work_path": "/private/tmp/aeval153/django"
+    }
+  },
+  "label": "2026-11-21-outcome-calibration-t4",
+  "max_turns": 4,
+  "mcp_tools_offered": null,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "951d041ff9e0",
+  "myc_sha256": "4ef9e803790e41b4010695dc34c3dc75a391047296a56459de8319dfbbed9a33",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Second calibration of the outcome eval (#153): condition none only, 4 tasks, --max-turns 4 (three rounds of tool calls before the final answer, as the corrected prompt says). 1 of 4 succeeded; the three others made a fourth round of tool calls and ended without an answer. The main run (2026-11-21-outcome) uses this budget.",
+    "Together the two calibration runs used the 10 calibration sessions approved for #153."
+  ],
+  "prompt_budget": true,
+  "repos": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "display_name": "Django",
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_note": "Only the django/ package is indexed (12,443 symbols, 828 files): with tests/ and docs/ included, `myc analyze` produced 41,842 symbols and 328,884 relationships and its community detection had not finished after 9 minutes on the benchmark machine. The agent still sees the whole checkout; every #153 question is about the django/ package.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "django",
+      "ref": "5.1.4",
+      "url": "https://github.com/django/django.git"
+    },
+    "fastapi": {
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "display_name": "FastAPI",
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_note": "docs/ (1,709 Markdown files in 13 languages) is excluded from the index: with it, `myc analyze` produced 23,941 symbols and its community detection had not finished after 13 minutes on the benchmark machine, before any embedding. The agent still sees docs/.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "fastapi",
+      "ref": "0.162.5",
+      "url": "https://github.com/fastapi/fastapi.git"
+    },
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "display_name": "fzf",
+      "language": "go",
+      "language_name": "Go",
+      "name": "fzf",
+      "ref": "v0.75.0",
+      "url": "https://github.com/junegunn/fzf.git"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "display_name": "hono",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "hono",
+      "ref": "v4.13.18",
+      "url": "https://github.com/honojs/hono.git"
+    }
+  },
+  "reps": 1,
+  "retried_runs": [],
+  "runs_final": 4,
+  "sessions_launched_ledger": 4,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-outcome.json",
+  "tasks_sha256": "3a1b3848ce66bb2612cdf2c39d27fa8688280189bce55d07e782719a637767d6",
+  "timeout_s": 900,
+  "tool_search": null
+}

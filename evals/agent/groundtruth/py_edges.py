@@ -2,6 +2,7 @@
 resolved through imports, ``self``/``cls`` and class names.
 
     python3 -I py_edges.py <repoDir> [<package> ...] > edges.tsv
+    python3 -I py_edges.py --local-imports --star-imports <repoDir> django > edges.tsv   # #153
 
 One line per call site::
 
@@ -43,6 +44,7 @@ class Module:
         self.defs: dict[str, str] = {}  # local name -> "func" | "class"
         self.imports: dict[str, tuple[str, str | None]] = {}  # alias -> (module, attr or None)
         self.classes: dict[str, ast.ClassDef] = {}
+        self.stars: list[str] = []  # modules star-imported (``from x import *``), --star-imports only
 
     def resolve_relative(self, level: int, mod: str | None) -> str:
         if level == 0:
@@ -83,6 +85,9 @@ def _collect(m: Module, node: ast.stmt) -> None:
     elif isinstance(node, ast.ImportFrom):
         src = m.resolve_relative(node.level, node.module)
         for a in node.names:
+            if a.name == "*" and STAR_IMPORTS:
+                m.stars.append(src)
+                continue
             m.imports[a.asname or a.name] = (src, a.name)
     elif isinstance(node, ast.Import):
         for a in node.names:
@@ -114,6 +119,10 @@ def lookup(mods: dict[str, Module], mod: str, name: str, depth: int = 0) -> tupl
         return lookup(mods, src, attr, depth + 1)
     if f"{mod}.{name}" in mods:
         return (f"{mod}.{name}", "")
+    for src in m.stars:  # `from django.db.models.fields import *` in django/db/models/__init__.py
+        r = lookup(mods, src, name, depth + 1)
+        if r:
+            return r
     return None
 
 
@@ -150,23 +159,59 @@ def method_of(mods, mod: str, cls: str, meth: str, skip_self: bool = False) -> s
     return None
 
 
+def local_imports(m: Module, func: ast.AST) -> dict[str, tuple[str, str | None]]:
+    """Imports anywhere inside a function body (``def f(): from x import y``),
+    alias -> (module, attr or None), like :attr:`Module.imports`."""
+    out: dict[str, tuple[str, str | None]] = {}
+    for node in ast.walk(func):
+        if isinstance(node, ast.ImportFrom):
+            src = m.resolve_relative(node.level, node.module)
+            for a in node.names:
+                out[a.asname or a.name] = (src, a.name)
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                if a.asname:
+                    out[a.asname] = (a.name, None)
+                else:
+                    out[a.name.split(".")[0]] = (a.name.split(".")[0], None)
+    return out
+
+
+# --local-imports: also resolve names imported inside a function body. Django
+# imports inside functions to break import cycles. --star-imports: follow
+# `from x import *` re-exports (django.db.models and django.forms are built
+# that way, so `models.CharField(...)` and `forms.Field` resolve only with it).
+# Both are off by default so the FastAPI edge lists of #125 stay reproducible.
+LOCAL_IMPORTS = False
+STAR_IMPORTS = False
+
+
 def edges(mods: dict[str, Module]):
     for m in mods.values():
-        def visit(node, owner: str, cls: str | None, top_cls: str | None):
+        module_imports = dict(m.imports)
+
+        def visit(node, owner: str, cls: str | None, top_cls: str | None, local):
             for child in ast.iter_child_nodes(node):
-                o, c = owner, cls
+                o, c, loc = owner, cls, local
                 if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) and owner == "<module>":
                     o = f"{top_cls}.{child.name}" if top_cls else child.name
+                    if LOCAL_IMPORTS:
+                        loc = local_imports(m, child)
                 if isinstance(child, ast.ClassDef):
                     if owner == "<module>" and top_cls is None:
-                        yield from visit(child, owner, child.name, child.name)
+                        yield from visit(child, owner, child.name, child.name, local)
                         continue
                 if isinstance(child, ast.Call):
-                    callee = resolve_call(mods, m, child.func, cls)
+                    # A function's own imports shadow the module's while its calls resolve.
+                    m.imports = {**module_imports, **loc} if loc else module_imports
+                    try:
+                        callee = resolve_call(mods, m, child.func, cls)
+                    finally:
+                        m.imports = module_imports
                     if callee:
                         yield (f"{m.name}:{o}", callee[0], f"{os.path.relpath(m.path, ROOT)}:{child.lineno}", callee[1])
-                yield from visit(child, o, c, top_cls)
-        yield from visit(m.tree, "<module>", None, None)
+                yield from visit(child, o, c, top_cls, loc)
+        yield from visit(m.tree, "<module>", None, None, {})
 
 
 def target_name(mods, mod: str, name: str) -> tuple[str, str] | None:
@@ -208,8 +253,11 @@ def resolve_call(mods, m: Module, func: ast.expr, cls: str | None):
 ROOT = "."
 
 if __name__ == "__main__":
-    ROOT = os.path.abspath(sys.argv[1])
-    pkgs = sys.argv[2:] or ["fastapi"]
+    args = [a for a in sys.argv[1:] if a not in ("--local-imports", "--star-imports")]
+    LOCAL_IMPORTS = "--local-imports" in sys.argv[1:]
+    STAR_IMPORTS = "--star-imports" in sys.argv[1:]
+    ROOT = os.path.abspath(args[0])
+    pkgs = args[1:] or ["fastapi"]
     mods = load(ROOT, pkgs)
     for e in sorted(set(edges(mods))):
         print("\t".join(e))

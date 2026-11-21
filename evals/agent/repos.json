@@ -1,5 +1,5 @@
 {
-  "description": "Pinned target repositories. Fetched into the cache (agent_eval.py fetch), never vendored. Chosen as mid-size, actively maintained projects in three languages myceliums parses: an application (fzf, Go), a library with many small modules (hono, TypeScript) and a library whose repository is dominated by docs and tests (fastapi, Python).",
+  "description": "Pinned target repositories. Fetched into the cache (agent_eval.py fetch), never vendored. Chosen as mid-size, actively maintained projects in three languages myceliums parses: an application (fzf, Go), a library with many small modules (hono, TypeScript) and a library whose repository is dominated by docs and tests (fastapi, Python). Django (Python) was added for the outcome eval (#153): a large framework with many same-named methods across apps.",
   "repos": [
     {
       "name": "fzf",
@@ -31,6 +31,23 @@
         "docs/**"
       ],
       "index_note": "docs/ (1,709 Markdown files in 13 languages) is excluded from the index: with it, `myc analyze` produced 23,941 symbols and its community detection had not finished after 13 minutes on the benchmark machine, before any embedding. The agent still sees docs/."
+    },
+    {
+      "name": "django",
+      "display_name": "Django",
+      "language": "python",
+      "language_name": "Python",
+      "url": "https://github.com/django/django.git",
+      "ref": "5.1.4",
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_note": "Only the django/ package is indexed (12,443 symbols, 828 files): with tests/ and docs/ included, `myc analyze` produced 41,842 symbols and 328,884 relationships and its community detection had not finished after 9 minutes on the benchmark machine. The agent still sees the whole checkout; every #153 question is about the django/ package."
     }
   ]
 }
