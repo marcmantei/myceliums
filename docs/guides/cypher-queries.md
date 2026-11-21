@@ -53,8 +53,8 @@ The kind of symbol is the `kind` property, filtered with `WHERE`:
 |-------------|---------|
 | `CALLS` | Function/method calls another |
 | `IMPORTS` | A symbol imports another |
-| `CONTAINED_BY` | Symbol is contained by another (a method in its class) |
-| `MEMBER_OF` | Symbol is a member of a container |
+| `CONTAINED_BY` | A symbol is defined in a file (symbol → `File`). Relationship patterns connect symbols only, so this edge matches nothing in Cypher; filter on `s.file_path` instead |
+| `MEMBER_OF` | A method or field belongs to its class, struct or other container (member → container) |
 | `STEP_IN_PROCESS` | Symbol is a step of a traced process |
 | `REFERENCES` | A document links to another document or code file |
 | `RATIONALE_FOR` | A rationale comment explains a symbol |
@@ -108,7 +108,7 @@ LIMIT 10
 ### 5. Find the methods of a class
 
 ```cypher
-MATCH (m)-[:CONTAINED_BY]->(c)
+MATCH (m)-[:MEMBER_OF]->(c)
 WHERE c.name = "Router" AND c.kind = "Class"
 RETURN m.name, m.start_line
 ORDER BY m.start_line
