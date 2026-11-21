@@ -323,6 +323,23 @@ leaves every symbol without a vector). A cached
 answer for an index built with `skip_embeddings` reports `0/N` symbols and the
 same warning instead of claiming a complete index.
 
+**Embeddings follow in the background (#157).** The analysis itself runs no
+model: symbols that cannot take a vector over from the previous index are left
+pending, and after the swap the server embeds them on a blocking thread, 256 at
+a time, each slice stored before the next. The response says so (`Embedding:
+1243 symbols in the background with jina-embeddings-v2-base-code …`), so a
+first index — a 644 MB model download and minutes of inference — never runs
+inside the call. While the job runs it holds the repository's analysis lock;
+the `Index:` line of every result and `server_stats` show its progress and the
+estimated time left; semantic and hybrid search cover the symbols embedded so
+far (with a warning saying how many), and `auto` search uses keywords until
+the first slice is stored. A job that stops — the server exits, the download or
+the model fails — loses at most one slice: `analyze` of the still fresh index
+resumes it (a cached answer that says `in the background`) instead of
+re-analyzing. A cached index is re-analyzed when the embedder it records
+(model, template, chunking) differs from the one the project configures, or
+when it has no embeddings yet.
+
 **The previous index stays usable.** A full analysis builds the new index in a
 staging directory beside the live one (`data/.staging/build-…`) and swaps it in only
 when it is complete — in one system call on Linux and macOS — and the graph
@@ -335,8 +352,9 @@ start (see [Data management](data-management.md#data-directory-datarepo-id)).
 
 **One analysis per repository.** While a repository is being analyzed — by
 this server or by another process such as `myc analyze` — another `analyze`
-of it returns an `isError` result (`Analysis already running for …`) with a
-`Next:` step; it does not wait.
+of it returns an `isError` result (`Analysis already running for …`, or, while
+its embeddings are built in the background, a note saying how far that is)
+with a `Next:` step; it does not wait.
 
 **Off the request path.** The analysis runs on a blocking thread, so other
 tool calls are answered while it runs.
@@ -344,7 +362,7 @@ tool calls are answered while it runs.
 **Progress.** When the request carries a `progressToken` in `_meta`, the
 server sends `notifications/progress` with `total: 100`, a `progress` that only
 increases, and a message: discovering files, `parsing files: n/m`, resolving
-calls and embedding, `graph written`, detecting communities, tracing execution
+calls, `graph written`, detecting communities, tracing execution
 flows, `replacing the previous index`, and `done` at 100. All of them arrive
 before the result. Without a token, none are sent. A cached result (index still
 fresh) sends none either.

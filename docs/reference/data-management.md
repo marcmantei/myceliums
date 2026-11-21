@@ -27,7 +27,7 @@ All Myceliums data is stored in `~/.myceliums/`. This directory is created autom
       <decision-id>.json
   service-maps/        # Community-to-service name mappings
     <repo-id>.json
-  fastembed_cache/     # Downloaded model files (embedding model and reranker)
+  models/              # Downloaded model files (embedding models and reranker)
 ```
 
 ### Registry (`repos.json`)
@@ -124,7 +124,7 @@ myc clean --orphans --yes
 
 ### `myc clean --cache`
 
-Remove the model cache (`~/.myceliums/fastembed_cache/`). The models are re-downloaded on next use. Useful for freeing disk space or forcing a model update.
+Remove the model cache (`~/.myceliums/models/`, or `FASTEMBED_CACHE_DIR` / `HF_HOME` when set). The models are re-downloaded on next use. Useful for freeing disk space or forcing a model update.
 
 ```bash
 myc clean --cache

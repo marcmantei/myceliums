@@ -15,8 +15,8 @@
 //! # Model weights
 //!
 //! The lexical mode needs nothing. Semantic, hybrid and hybrid+rerank run when
-//! their weights are already in the fastembed cache (`FASTEMBED_CACHE_DIR`,
-//! else `HF_HOME`, else `.fastembed_cache` in the working directory), or when
+//! their weights are already in the model cache (`FASTEMBED_CACHE_DIR`,
+//! else `HF_HOME`, else `models/` in the data directory), or when
 //! the run opts in to downloading them with `--allow-model-download` or
 //! `MYC_EVAL_MODELS=1`. Otherwise they are reported `UNAVAILABLE` with the
 //! reason; they never report a number they did not measure.

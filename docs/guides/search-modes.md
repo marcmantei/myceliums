@@ -47,7 +47,7 @@ Semantic search uses vector embeddings to find code by meaning rather than exact
 - Understands natural language queries
 - Finds conceptually similar code, even when different words are used
 - Requires embeddings (run `myc analyze --force` if you previously skipped them)
-- First run downloads the embedding model (about 644 MB for the default model; sizes per model are in the README), cached in `FASTEMBED_CACHE_DIR`, else `HF_HOME`, else `.fastembed_cache/`
+- First run downloads the embedding model (about 644 MB for the default model; sizes per model are in the README), cached in `FASTEMBED_CACHE_DIR`, else `HF_HOME`, else `~/.myceliums/models`
 - The first index of a repository embeds every symbol and takes the longest (with the default model about 4.4× as long as with `multilingual-e5-small`); later runs reuse the vectors of unchanged symbols
 
 **Best for:**
@@ -228,8 +228,16 @@ BM25 always indexes the full symbol text, chunked or not.
 Texts are sorted by token count and batched up to a token budget
 (`[analysis] embedding_batch_tokens`, default 16,384 — 32 full windows), so a
 batch pads to a length its texts share instead of to the longest of 256 random
-symbols. `MYCELIUMS_EMBEDDING_THREADS` caps the CPU threads of an embedding
+symbols. Texts are tokenized and embedded 4,096 at a time, and a text longer
+than the window is cut at a word boundary just past it before it is
+tokenized, so the memory tokenization takes does not grow with the
+repository. `MYCELIUMS_EMBEDDING_THREADS` caps the CPU threads of an embedding
 session (default: all logical cores). `myc analyze` shows embedding progress.
+The MCP `analyze` tool builds the graph, answers, and embeds in the
+background, 256 symbols at a time, each slice stored before the next: the
+Index line of every result shows the progress, search by meaning covers the
+symbols embedded so far, and an interrupted embedding resumes on the next
+`analyze`.
 A re-index takes over the vectors of unchanged symbols — their chunk vectors
 included — and of unchanged body chunks of changed symbols (#151).
 
