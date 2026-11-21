@@ -1474,10 +1474,12 @@ impl PreviousVectors {
     /// `None` when it holds none (built with `skip_embeddings`, or without
     /// embedding metadata), and when they cannot be carried into a new index:
     /// a stored geometry other than the current one (an index from before
-    /// L2 normalization, which must be re-embedded, #29), or metadata from an
-    /// older schema or embedding-text template than this build's — keys are
-    /// built from the current template, so they would pair a vector with a
-    /// text it was not computed from.
+    /// L2 normalization, which must be re-embedded, #29), or an embedding-text
+    /// template this build does not know (`0`: unrecorded, before #92) — its
+    /// documents cannot be rebuilt to key the vectors by. Vectors of a known
+    /// template are keyed by documents built with *that* template; whether a
+    /// new index may take them over is decided by the fingerprint in
+    /// [`PreviousVectors::take_all`].
     pub async fn load(store: &Store, geometry_version: u32) -> Result<Option<Self>> {
         if geometry_version != myceliums_storage::schema::VECTOR_GEOMETRY_VERSION {
             return Ok(None);
@@ -1488,9 +1490,6 @@ impl PreviousVectors {
         let Ok(meta) = serde_json::from_str::<IndexEmbeddingMeta>(&json) else {
             return Ok(None);
         };
-        if !meta.is_current() {
-            return Ok(None);
-        }
         let Some(template) = meta.template() else {
             return Ok(None);
         };

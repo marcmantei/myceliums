@@ -3742,6 +3742,146 @@ mod tests {
                 .collect()
         }
 
+        /// A chunked index (#157) carries its body-chunk vectors into a full
+        /// re-analysis that does not embed, with the symbol vectors, for the
+        /// symbols whose document did not change; a changed symbol leaves
+        /// its old chunks behind.
+        #[tokio::test]
+        async fn a_reindex_that_does_not_embed_keeps_chunk_vectors() {
+            use crate::embeddings::{Chunking, PreviousVectors, TextTemplate};
+
+            let dir = TempDir::new().unwrap();
+            let root = make_test_root(&dir);
+            fs::write(
+                root.join("a.ts"),
+                "export function alpha(): number {\n    return 1;\n}\n",
+            )
+            .unwrap();
+            fs::write(
+                root.join("b.ts"),
+                "export function beta(): number {\n    return 2;\n}\n",
+            )
+            .unwrap();
+            let mut section = openai_section("http://127.0.0.1:9/v1");
+            section.dim = Some(myceliums_storage::schema::DEFAULT_EMBEDDING_DIM as usize);
+            let mut meta = IndexEmbeddingMeta::from_config(&section).unwrap();
+            meta.text_version = TextTemplate::Structured.version();
+            meta.chunking = Some(Chunking::for_window(512));
+            let config = ProjectConfig {
+                embedding: section,
+                ..Default::default()
+            };
+
+            let first = dir.path().join("first");
+            Analyzer::with_config(
+                Store::open(&first, "test-repo").await.unwrap(),
+                root.clone(),
+                config.clone(),
+            )
+            .set_skip_embeddings(true)
+            .analyze()
+            .await
+            .unwrap();
+            let store = Store::open(&first, "test-repo").await.unwrap();
+            let dim = meta.dim;
+            let symbols = store.get_symbols().await.unwrap();
+            let unit = |i: usize| {
+                let mut v = vec![0.0f32; dim];
+                v[i % dim] = 1.0;
+                v
+            };
+            store
+                .store_embeddings(
+                    symbols
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| (s.uid.clone(), unit(i)))
+                        .collect(),
+                )
+                .await
+                .unwrap();
+            store
+                .store_chunk_vectors(
+                    symbols
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| myceliums_storage::ChunkVector {
+                            symbol_uid: s.uid.clone(),
+                            file_path: s.file_path.clone(),
+                            chunk_index: 1,
+                            text_hash: format!("hash-{}", s.name),
+                            vector: unit(i + 100),
+                        })
+                        .collect(),
+                )
+                .await
+                .unwrap();
+            store
+                .set_index_meta(
+                    IndexEmbeddingMeta::META_KEY,
+                    &serde_json::to_string(&meta).unwrap(),
+                )
+                .await
+                .unwrap();
+            let chunks_by_name = |db: std::path::PathBuf| async move {
+                let store = Store::open(&db, "test-repo").await.unwrap();
+                let names: HashMap<String, String> = store
+                    .get_symbols()
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|s| (s.uid, s.name))
+                    .collect();
+                store
+                    .get_chunk_vectors()
+                    .await
+                    .unwrap()
+                    .into_iter()
+                    .map(|c| (names[&c.symbol_uid].clone(), (c.text_hash, c.vector)))
+                    .collect::<HashMap<_, _>>()
+            };
+            let before = chunks_by_name(first.clone()).await;
+            assert_eq!(before.len(), symbols.len());
+            let previous = || async {
+                let store = Store::open(&first, "test-repo").await.unwrap();
+                PreviousVectors::load(&store, myceliums_storage::schema::VECTOR_GEOMETRY_VERSION)
+                    .await
+                    .unwrap()
+            };
+
+            // `beta` changes; with skip_embeddings `alpha` keeps vector and
+            // chunk, `beta` keeps neither.
+            fs::write(
+                root.join("b.ts"),
+                "export function beta(): number {\n    return 3;\n}\n",
+            )
+            .unwrap();
+            let skipped = dir.path().join("skipped");
+            Analyzer::with_config(
+                Store::open(&skipped, "test-repo").await.unwrap(),
+                root.clone(),
+                config,
+            )
+            .set_skip_embeddings(true)
+            .with_previous_vectors(previous().await)
+            .analyze()
+            .await
+            .unwrap();
+            let after = chunks_by_name(skipped.clone()).await;
+            assert_eq!(after.get("alpha"), before.get("alpha"));
+            assert!(!after.contains_key("beta"), "{after:?}");
+            let store = Store::open(&skipped, "test-repo").await.unwrap();
+            let recorded: IndexEmbeddingMeta = serde_json::from_str(
+                &store
+                    .get_index_meta(IndexEmbeddingMeta::META_KEY)
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(recorded.fingerprint(), meta.fingerprint());
+        }
+
         /// A full re-analysis that does not embed keeps the vectors of the
         /// symbols it did not change — with `skip_embeddings`, and when the
         /// model cannot be reached — instead of replacing an embedded index
@@ -3893,10 +4033,10 @@ mod tests {
                 .await
                 .unwrap()
                 .is_none());
-            // ... or an older embedding-text template: keys are built from
-            // the current one, so they would pair vectors with other texts.
+            // ... or an embedding-text template this build cannot rebuild:
+            // its documents, the keys, are unknown.
             let mut older = meta.clone();
-            older.text_version = crate::embeddings::EMBEDDING_TEXT_VERSION - 1;
+            older.text_version = 0;
             store
                 .set_index_meta(
                     IndexEmbeddingMeta::META_KEY,
