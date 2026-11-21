@@ -22,7 +22,8 @@
 //! - the selection on dev among in-budget variants and its held-out
 //!   confirmation.
 //!
-//! It reads reports only; it never runs a model.
+//! It reads reports only; it never runs a model. `--same-scores A B` checks
+//! instead that two reports of one configuration agree on every query.
 
 use anyhow::{bail, Context, Result};
 use myceliums_benchmarks::eval::bootstrap::{paired_bootstrap_default, DeltaEstimate};
@@ -222,8 +223,50 @@ struct Comparison {
     decision: String,
 }
 
+/// `--same-scores A B`: every query's scores of every mode agree between two
+/// reports of the same configuration — a release-built run against a
+/// debug-built one, which may differ in costs only (#157).
+fn same_scores(a: &str, b: &str) -> Result<()> {
+    let (a, b) = (Run::load(PathBuf::from(a))?, Run::load(PathBuf::from(b))?);
+    if a.digest != b.digest || a.model != b.model || a.template != b.template {
+        bail!("the two reports do not score the same configuration");
+    }
+    let mut compared = 0;
+    for (mode, queries) in &a.per_query {
+        let other = b
+            .per_query
+            .get(mode)
+            .with_context(|| format!("{} lacks mode {mode}", b.path.display()))?;
+        if queries.len() != other.len() {
+            bail!("mode {mode}: {} vs {} queries", queries.len(), other.len());
+        }
+        for (id, values) in queries {
+            let theirs = other
+                .get(id)
+                .with_context(|| format!("{mode}: {id} missing"))?;
+            if values != theirs {
+                bail!("mode {mode}, query {id}: {values:?} vs {theirs:?}");
+            }
+            compared += 1;
+        }
+    }
+    println!(
+        "{} and {} agree on all {compared} query scores",
+        a.path.display(),
+        b.path.display()
+    );
+    Ok(())
+}
+
 fn main() -> Result<()> {
-    let mut args = std::env::args().skip(1);
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    if raw.first().map(String::as_str) == Some("--same-scores") {
+        let [_, a, b] = raw.as_slice() else {
+            bail!("--same-scores <report> <report>");
+        };
+        return same_scores(a, b);
+    }
+    let mut args = raw.into_iter();
     let (mut baseline, mut out, mut summary, mut others) = (None, None, None, Vec::new());
     while let Some(arg) = args.next() {
         match arg.as_str() {

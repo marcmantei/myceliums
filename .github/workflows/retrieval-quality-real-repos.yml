@@ -43,6 +43,11 @@ on:
         description: "Most tokens per embedding batch (empty: the shipped default)"
         required: false
         default: ""
+      release:
+        description: "Build the evaluator in release mode once and run every variant with it (the cost measurements of #157)"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -136,9 +141,36 @@ jobs:
             real-repo.txt
           retention-days: 90
 
+  build-release:
+    # Costs — index time, query latency, memory — are measured with the build
+    # users install; quality does not depend on the build mode (#157).
+    name: Build the evaluator (release)
+    if: inputs.variants != '' && inputs.release
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Free runner disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        with:
+          toolchain: stable
+      - name: Build
+        run: cargo build --release -p myceliums-benchmarks --bin real-repo-eval --bin real-repo-compare --locked
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: evaluator-release
+          path: |
+            target/release/real-repo-eval
+            target/release/real-repo-compare
+          retention-days: 7
+
   variant:
     name: Variant ${{ matrix.variant.id }} (${{ matrix.variant.model }}, template ${{ matrix.variant.template }}, chunking ${{ matrix.variant.chunking }})
-    if: inputs.variants != ''
+    needs: build-release
+    if: ${{ !cancelled() && inputs.variants != '' && needs.build-release.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
@@ -150,16 +182,33 @@ jobs:
       - name: Free runner disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install protoc
+        if: ${{ !inputs.release }}
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        if: ${{ !inputs.release }}
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: ${{ !inputs.release }}
         with:
           shared-key: retrieval
           save-if: false
       - name: Build the evaluator
-        run: cargo build -p myceliums-benchmarks --bin real-repo-eval --locked
+        if: ${{ !inputs.release }}
+        run: |
+          cargo build -p myceliums-benchmarks --bin real-repo-eval --locked
+          echo "EVAL=target/debug/real-repo-eval" >> "$GITHUB_ENV"
+      - name: Fetch the release evaluator
+        if: ${{ inputs.release }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: evaluator-release
+          path: target/release
+      - name: Use the release evaluator
+        if: ${{ inputs.release }}
+        run: |
+          chmod +x target/release/real-repo-eval
+          echo "EVAL=target/release/real-repo-eval" >> "$GITHUB_ENV"
       - name: Resolve cache keys
         id: keys
         run: |
@@ -184,7 +233,7 @@ jobs:
           MYC_EVAL_EMBEDDING_BATCH_TOKENS: ${{ inputs.batch_tokens }}
         run: |
           set -o pipefail
-          nice -n 10 target/debug/real-repo-eval --allow-model-download --no-sweep --no-demotion \
+          nice -n 10 "$EVAL" --allow-model-download --no-sweep --no-demotion \
             --modes "${{ inputs.modes }}" \
             --model "${{ matrix.variant.model }}" --template "${{ matrix.variant.template }}" \
             --chunking "${{ matrix.variant.chunking }}" \
@@ -202,22 +251,34 @@ jobs:
 
   compare:
     name: Compare the variants
-    if: always() && inputs.variants != ''
+    if: ${{ !cancelled() && inputs.variants != '' }}
     needs: variant
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Install protoc
+        if: ${{ !inputs.release }}
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # master (2026-10-16)
+        if: ${{ !inputs.release }}
         with:
           toolchain: stable
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: ${{ !inputs.release }}
         with:
           shared-key: retrieval
           save-if: false
       - name: Build the comparison
-        run: cargo build -p myceliums-benchmarks --bin real-repo-compare --locked
+        if: ${{ !inputs.release }}
+        run: |
+          cargo build -p myceliums-benchmarks --bin real-repo-compare --locked
+          mkdir -p target/release && cp target/debug/real-repo-compare target/release/
+      - name: Fetch the release comparison
+        if: ${{ inputs.release }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: evaluator-release
+          path: target/release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: variant-*
@@ -229,7 +290,8 @@ jobs:
           for report in variant-*.json; do
             [ "$report" = variant-A.json ] || others+=("$report")
           done
-          target/debug/real-repo-compare --baseline variant-A.json "${others[@]}" \
+          chmod +x target/release/real-repo-compare
+          target/release/real-repo-compare --baseline variant-A.json "${others[@]}" \
             --out compare.json --summary "$GITHUB_STEP_SUMMARY" | tee compare.txt
       - name: Upload the comparison
         if: always()

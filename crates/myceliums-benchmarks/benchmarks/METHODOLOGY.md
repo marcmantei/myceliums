@@ -1034,6 +1034,17 @@ inference code — so runner-to-runner variation cancels:
 Models outside the budget may still ship as opt-in registry entries, with
 their measured costs in the model table; they cannot be the default.
 
+**Amendment, made before any 768-dimension variant had finished.** The first
+grid run built the evaluator in debug mode, like every earlier real-repo
+run. Its first finished variant (`multilingual-e5-small`, template 2,
+chunking) measured a semantic query at 41 ms p50 — 71 ms on hono — mostly
+debug-mode Rust (the exact vector scan, tokenization), not the model; users
+run release builds, and the latency limit is absolute. So the costs (index
+time, latency, memory) are taken from a second run of the same grid with the
+evaluator built in release mode. Quality does not depend on the build mode:
+the release run must reproduce every query's scores of the debug run exactly,
+or neither counts.
+
 ### Variants
 
 Template 2 (structured) puts the high-signal header first: language, kind
