@@ -1004,6 +1004,101 @@ By repository, all 168 queries, nDCG@10 / MRR@10, tests included → weight
 - **One platform.** The recorded run is `linux-x86_64`; model arithmetic can
   differ in the last bits elsewhere (see Determinism).
 
+## Embedding model, document template and chunking (#157)
+
+Until #157 the semantic leg was one vector per symbol from
+`multilingual-e5-small`, built from a flat document (kind, name, decorators,
+signature, return type, superclasses, then the first 1,792 bytes of the body)
+— a model and a template nobody had compared against anything. This section
+fixes, **before any number was measured**, what is compared, on which
+queries, what a winner must clear, and what it may cost. Results follow in
+their own subsection once measured.
+
+### Budget for the shipped default
+
+A variant can become the default only within all of these limits. They are
+measured by `real-repo-eval` on the hosted CI runner (`ubuntu-latest`,
+4 vCPU, 16 GB), relative to the incumbent measured in the same workflow
+dispatch — `multilingual-e5-small`, template 1, no chunking, through the same
+inference code — so runner-to-runner variation cancels:
+
+| Budget | Limit |
+| --- | --- |
+| Index time | embedding wall time over the four repositories at most **2.5×** the incumbent's |
+| Index size | stored vectors (symbol and chunk rows × dimension × 4 bytes) at most **3×** the incumbent's |
+| Query latency | semantic query (query embedding + exact vector search, chunk rows included) **p50 ≤ 50 ms, p95 ≤ 150 ms** over the 168 queries, warm |
+| Memory | peak RSS of the indexing process at most **1.5×** the incumbent's, at the shipped batch settings |
+| Model download | at most **700 MB** — every file of the pinned revision the model needs |
+| License | the weights under a permissive license (MIT, Apache-2.0, BSD); local inference, no API key |
+
+Models outside the budget may still ship as opt-in registry entries, with
+their measured costs in the model table; they cannot be the default.
+
+### Variants
+
+Template 2 (structured) puts the high-signal header first: language, kind
+and `file::qualified.name`, the qualified name split into words, the
+signature, decorators, the doc comment or docstring, then the body with the
+duplicated signature line and docstring removed and indentation collapsed.
+Chunking embeds a long symbol as its header chunk (the document cut at the
+window) plus overlapping body chunks, each prefixed with the symbol's
+`file::qualified.name` line; a symbol's vector score is the maximum over its
+chunks, and results stay one row per symbol. Containers (classes,
+interfaces, enums, modules) are not chunked: their bodies are their members,
+which carry their own vectors. Chunking parameters are fixed, not tuned:
+a 512-token window for every model, 64 tokens of overlap, at most 16 vectors
+per symbol.
+
+| Id | Model | Template | Chunking | Why |
+| --- | --- | --- | --- | --- |
+| A | `multilingual-e5-small` | 1 | off | the incumbent |
+| B | `multilingual-e5-small` | 2 | off | template effect |
+| C | `multilingual-e5-small` | 2 | on | chunking effect |
+| D, D′ | `granite-embedding-small-english-r2` | 2 | on, off | small, code-aware (47M, 384-d) |
+| E, E′ | `jina-embeddings-v2-base-code` | 2 | on, off | code-specialised (161M, 768-d) |
+| F, F′ | `coderankembed` | 2 | on, off | code-specialised (137M, 768-d) |
+| G, G′ | `gte-modernbert-base` | 2 | on, off | stronger general model (149M, 768-d) |
+
+Every model is downloaded from a pinned HuggingFace revision and its ONNX
+weights are checked against a pinned SHA-256. `nomic-ai/CodeRankEmbed`
+publishes no ONNX file; its variant uses a third-party fp32 export
+(`jamie8johnson/CodeRankEmbed-onnx`), which is what the pin and the hash are
+for.
+
+Every variant scores lexical, semantic and hybrid search on all 168 queries
+of the real-repository set, with the shipped test-code demotion. The
+reranker is left out of the grid (it does not depend on the vectors beyond
+its candidate pool, and it is most of the run time); the chosen default is
+scored with it once.
+
+### Selection and confirmation
+
+- **Objective** — per query, the mean of semantic and hybrid nDCG@10: the two
+  modes the vectors decide. Lexical search does not depend on them.
+- **Selection, dev split only (96 queries)** — the in-budget variant with the
+  highest mean objective. The incumbent wins ties.
+- **Confirmation, held-out split (72 queries)** — the selected variant
+  against the incumbent through the production search paths, paired
+  bootstrap (10,000 resamples, 95%) of the objective. The default changes
+  only if that interval lies wholly above zero; otherwise
+  `multilingual-e5-small` with template 1 stays, and this section says so.
+  One comparison is pre-registered; the held-out numbers of the other
+  variants are reported for completeness, never used to choose.
+- **Second confirmation, the golden set (51 queries)** — never tuned on and
+  kept for exactly this kind of final measurement (see "What the numbers say"
+  above). The new default must not fail the CI gate's rule against the
+  current baseline in any mode; the baseline is then re-recorded with it.
+- **Chunking** is judged on the **long-symbol slice**: the queries with at
+  least one label whose body exceeds 1,792 bytes — the content budget at
+  which template 1 truncates a 512-token model. Chunking on against off, same
+  model and template, paired bootstrap on the slice; reported for dev,
+  held-out and all queries (chunking parameters are not tuned, so all
+  queries are a fair sample for it).
+
+**The held-out split has been read before** — for the fusion parameters
+(#95) and the test-code weight (#146), never for a model, template or
+chunking decision. Each look is a chance to fit it; the golden set is the
+independent second confirmation for that reason.
 
 ## ANN recall: what the vector index costs
 
