@@ -63,7 +63,8 @@ Add `--allow-model-download` the first time if the weights are not cached,
 cargo run -p myceliums-benchmarks --bin real-repo-eval -- --allow-model-download \
   --model granite-embedding-small-english-r2 --template 2 --chunking on \
   --modes lexical,semantic,hybrid --no-sweep --no-demotion --out variant-D.json
-# compare reports against the incumbent's (multilingual-e5-small, template 1, no chunking)
+# compare reports against the incumbent's (the shipped default since #157:
+# jina-embeddings-v2-base-code, template 2, chunking on)
 cargo run -p myceliums-benchmarks --bin real-repo-compare -- --baseline variant-A.json variant-*.json
 ```
 

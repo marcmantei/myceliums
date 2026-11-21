@@ -147,8 +147,9 @@ something useful"; recall@10 answers "did it find everything".
 ## Search modes
 
 Every mode runs through the code that ships, with the shipped default
-configuration (`[embedding]` defaults: `multilingual-e5-small`, reranker
-`bge-reranker-v2-m3`). Nothing is re-implemented for the benchmark.
+configuration (`[embedding]` defaults since #157: `jina-embeddings-v2-base-code`
+with template 2 and chunking, reranker `bge-reranker-v2-m3`). Nothing is
+re-implemented for the benchmark.
 
 | Mode | What runs | Same as |
 | --- | --- | --- |
@@ -281,14 +282,18 @@ the weights are still missing, the modes report `UNAVAILABLE` and the gate fails
 loudly rather than silently skipping them.
 
 The cache is *restored* on every run but *saved* only from pushes to `main`:
-the repository's 10 GB cache budget cannot hold a 1.5 GB copy per pull request,
+the repository's 10 GB cache budget cannot hold a 2.9 GB copy per pull request,
 so a pull request that misses downloads the weights and discards them. The key
-(`retrieval-eval --model-cache-key`) is the locked fastembed version plus the
-HuggingFace repositories of both models, e.g.
-`fastembed-4.9.1-intfloat--multilingual-e5-small-rozgo--bge-reranker-v2-m3`.
-It does **not** pin a HuggingFace revision — fastembed downloads each
-repository's `main` — so if a repository is re-uploaded under the same name, a
-cache hit keeps serving the old files while a fresh download gets the new ones.
+(`retrieval-eval --model-cache-key`) is the embedding model's HuggingFace
+repository and pinned revision, the locked fastembed version and the reranker's
+repository, e.g.
+`jinaai--jina-embeddings-v2-base-code-516f4baf13de-fastembed-4.9.1-rozgo--bge-reranker-v2-m3`:
+a change of the default embedding model or its revision misses the cache and
+downloads the new weights. The embedding weights are checked against their
+pinned SHA-256 after download. The reranker is **not** pinned — fastembed
+downloads its repository's `main` — so if it is re-uploaded under the same
+name, a cache hit keeps serving the old files while a fresh download gets the
+new ones.
 
 **Decision rule.** For each mode measured in the baseline and each metric, take
 the paired bootstrap difference `current − baseline` (95% interval, per
@@ -397,63 +402,90 @@ The file records that command in its own `regenerate_with` field.
 
 ### Recorded results
 
-51 queries over 96 symbols, recorded on `macos-aarch64` with
-`multilingual-e5-small` and `bge-reranker-v2-m3` (embedding-text version 1):
+51 queries over 99 symbols, recorded on `macos-aarch64` from commit `8b00e35`
+with the default since #157: `jina-embeddings-v2-base-code` (revision
+`516f4baf13de`, embedding-text version 2, chunking 512/64/16) and
+`bge-reranker-v2-m3`. **This baseline was re-recorded on purpose for the
+default switch** (#157, owner decision; see "Owner decision" in the #157
+section). Before writing it, the run compared itself with the previous
+baseline (`multilingual-e5-small`, template 1, 96 symbols, `acde60cc`) and
+passed the gate's rule in every mode: nDCG@10 semantic +0.104 [+0.024,
++0.188], hybrid +0.072 [+0.008, +0.137], hybrid+rerank +0.032 [−0.005,
++0.075].
 
 | Mode | MRR@10 | nDCG@10 | recall@10 | hit@1 | hit@10 | R-precision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `lexical` | 0.6405 | 0.6255 | 0.6983 | 0.5294 | 0.8235 | 0.5242 |
-| `semantic` | 0.8027 | 0.7896 | 0.8422 | 0.7647 | 0.9412 | 0.6877 |
-| `hybrid` | 0.7713 | 0.7435 | 0.8102 | 0.7255 | 0.9412 | 0.6419 |
-| `hybrid+rerank` | 0.8106 | 0.7773 | 0.8330 | 0.7647 | 0.9216 | 0.6783 |
+| `lexical` | 0.6297 | 0.6190 | 0.6983 | 0.5098 | 0.8235 | 0.5144 |
+| `semantic` | 0.9216 | 0.8933 | 0.9372 | 0.8824 | 1.0000 | 0.7989 |
+| `hybrid` | 0.8516 | 0.8154 | 0.8900 | 0.7647 | 0.9804 | 0.6822 |
+| `hybrid+rerank` | 0.8167 | 0.8092 | 0.8944 | 0.7451 | 0.9804 | 0.6972 |
 
-recall@1 / recall@5 / hit@5 are in the baseline file. The lexical row is
-unchanged from the previous baseline (MRR 0.6405, recall@10 0.6983): adding the
-other modes moved no lexical number.
+recall@1 / recall@5 / hit@5 are in the baseline file. The corpus has 99
+symbols instead of 96 because of parser changes merged after the previous
+baseline (main's CI already measured these 99). That is the only reason the
+lexical row moved (MRR 0.6405 → 0.6297; recall@10 is still 0.6983): BM25 does
+not read the vectors.
 
-Differences, paired bootstrap 95% CI (10 000 resamples, fixed seed). **Bold**
-intervals exclude zero — per comparison, uncorrected for the 45 intervals the
-run computes (see "What significant means here"):
+**The default against the fast option.** The fast option is
+`multilingual-e5-small` with template 1 and no chunking, the previous default.
+It was measured on the same 99 symbols with `retrieval-eval --model
+multilingual-e5-small --template 1 --chunking off`. Δ = default − fast option,
+paired bootstrap 95% CI:
+
+| Mode | e5-small MRR@10 / nDCG@10 | Δ MRR@10 | Δ nDCG@10 | Δ recall@10 |
+| --- | ---: | ---: | ---: | ---: |
+| `semantic` | 0.7896 / 0.7793 | **+0.132 [+0.023, +0.246]** | **+0.114 [+0.035, +0.196]** | **+0.095 [+0.029, +0.170]** |
+| `hybrid` | 0.7517 / 0.7297 | **+0.100 [+0.018, +0.187]** | **+0.086 [+0.024, +0.150]** | **+0.080 [+0.024, +0.142]** |
+| `hybrid+rerank` | 0.8010 / 0.7712 | +0.016 [−0.042, +0.078] | **+0.038 [+0.004, +0.079]** | **+0.060 [+0.014, +0.118]** |
+
+Lexical search does not use the vectors; its scores are identical.
+
+Differences between the modes, paired bootstrap 95% CI (10 000 resamples,
+fixed seed). **Bold** intervals exclude zero. They are per comparison,
+uncorrected for the 45 intervals the run computes (see "What significant
+means here"):
 
 | Comparison | Δ MRR@10 | Δ nDCG@10 | Δ recall@10 |
 | --- | ---: | ---: | ---: |
-| semantic − lexical | **+0.162 [+0.070, +0.258]** | **+0.164 [+0.095, +0.241]** | **+0.144 [+0.073, +0.222]** |
-| hybrid − lexical | **+0.131 [+0.056, +0.211]** | **+0.118 [+0.069, +0.174]** | **+0.112 [+0.056, +0.177]** |
-| hybrid+rerank − lexical | **+0.170 [+0.065, +0.278]** | **+0.152 [+0.068, +0.240]** | **+0.135 [+0.060, +0.218]** |
-| hybrid − semantic | −0.031 [−0.094, +0.025] | **−0.046 [−0.095, −0.007]** | −0.032 [−0.084, +0.016] |
-| hybrid+rerank − hybrid | +0.039 [−0.043, +0.127] | +0.034 [−0.032, +0.106] | +0.023 [−0.025, +0.078] |
+| semantic − lexical | **+0.292 [+0.179, +0.412]** | **+0.274 [+0.181, +0.371]** | **+0.239 [+0.148, +0.338]** |
+| hybrid − lexical | **+0.222 [+0.137, +0.316]** | **+0.196 [+0.128, +0.271]** | **+0.192 [+0.110, +0.282]** |
+| hybrid+rerank − lexical | **+0.187 [+0.078, +0.296]** | **+0.190 [+0.102, +0.281]** | **+0.196 [+0.111, +0.290]** |
+| hybrid − semantic | −0.070 [−0.142, +0.000] | **−0.078 [−0.130, −0.033]** | **−0.047 [−0.104, −0.007]** |
+| hybrid+rerank − hybrid | −0.035 [−0.128, +0.056] | −0.006 [−0.076, +0.064] | +0.004 [−0.055, +0.072] |
 
 By intent, MRR@10 / nDCG@10:
 
 | Intent (queries) | `lexical` | `semantic` | `hybrid` | `hybrid+rerank` |
 | --- | ---: | ---: | ---: | ---: |
-| `exact-name` (15) | 0.933 / 0.929 | 0.947 / 0.952 | 0.933 / 0.933 | 0.889 / 0.900 |
-| `paraphrase` (12) | 0.396 / 0.436 | 0.662 / 0.687 | 0.573 / 0.616 | 0.715 / 0.777 |
-| `behavioural` (14) | 0.589 / 0.569 | 0.871 / 0.802 | 0.839 / 0.743 | 0.871 / 0.769 |
-| `conceptual` (10) | 0.567 / 0.478 | 0.659 / 0.652 | 0.671 / 0.613 | 0.723 / 0.606 |
+| `exact-name` (15) | 0.900 / 0.909 | 0.967 / 0.968 | 0.933 / 0.952 | 0.863 / 0.887 |
+| `paraphrase` (12) | 0.392 / 0.432 | 0.889 / 0.858 | 0.675 / 0.690 | 0.757 / 0.808 |
+| `behavioural` (14) | 0.625 / 0.581 | 0.881 / 0.878 | 0.929 / 0.808 | 0.850 / 0.822 |
+| `conceptual` (10) | 0.517 / 0.461 | 0.950 / 0.843 | 0.833 / 0.771 | 0.772 / 0.676 |
 
-Per-intent cells rest on 10–15 queries each; read them as where the modes
+Each per-intent cell rests on 10–15 queries. Read the cells as where the modes
 differ, not as estimates precise to the second decimal.
 
 ### What the numbers say — and do not
 
 - **The semantic leg earns its keep.** Every model-backed mode beats BM25 by
-  0.11–0.17 on MRR, nDCG and recall@10, with intervals well clear of zero. The
-  gain sits where it was predicted: paraphrase and behavioural queries, where
-  BM25 has no shared tokens to match. On exact-name queries all four modes are
-  within a query or two of each other.
+  0.19–0.29 on MRR, nDCG and recall@10, with intervals well clear of zero. The
+  gain is in paraphrase, behavioural and conceptual queries, where BM25 has no
+  shared tokens to match. On exact-name queries the four modes are within a
+  query or two of each other.
 - **Hybrid does not beat semantic search on this set.** Fusing BM25 into the
-  vector ranking costs 0.03–0.05 on MRR, nDCG@10 and recall@10; only the
-  nDCG@10 interval excludes zero (uncorrected, and its upper end is −0.007). The loss is concentrated in
-  paraphrase queries (MRR 0.66 → 0.57), where BM25 has little to contribute,
-  while exact-name queries — where BM25 should help — were already solved by
-  the vector leg. A plausible reading is that RRF's equal weighting lets the
-  weaker ranking pull good vector results down; it has not been tested.
-- **Reranking is not measurably better than hybrid.** +0.04 MRR with an
-  interval from −0.04 to +0.13: it helps paraphrase queries and hurts a few
-  exact-name ones (`exact-name-database-findbyid` drops from rank 1 to rank 3),
-  and 51 queries cannot tell the net effect from zero.
-- **This set is too small and too synthetic to choose a default from.** 96
+  vector ranking costs 0.05–0.08 on MRR, nDCG@10 and recall@10. The nDCG@10
+  and recall@10 intervals exclude zero (uncorrected); the MRR interval ends at
+  zero. Most of the loss is in paraphrase queries (MRR 0.89 → 0.68), where
+  BM25 has little to add. Exact-name queries, where BM25 should help, were
+  already solved by the vector leg. A plausible reading is that RRF's equal
+  weighting lets the weaker ranking pull good vector results down; it has not
+  been tested.
+- **Reranking is not measurably better than hybrid.** The MRR difference is
+  −0.035, with an interval from −0.13 to +0.06. Reranking helps paraphrase
+  queries (MRR 0.68 → 0.76) and hurts exact-name ones (0.93 → 0.86;
+  `exact-name-database-findbyid` drops from rank 1 to rank 3). 51 queries
+  cannot tell the net effect from zero.
+- **This set is too small and too synthetic to choose a default from.** 99
   symbols in five toy projects, one labeller. The ranking above says the
   semantic leg matters; it does not say semantic-only should replace hybrid on
   real repositories, where identifiers are long, domain-specific and far more
@@ -461,16 +493,20 @@ differ, not as estimates precise to the second decimal.
   leg weights, the rerank pool and model choice belong on a separate
   development split, with this set kept for the final measurement. That split
   now exists — see [the real-repository set](#real-repository-held-out-set-95).
+  #157 used this set that way: it is the independent check of the default
+  that was chosen on the real-repository set.
 
 ### The exact-name failure
 
-`exact-name-userservice-get-user` searches `"UserService get_user"` and BM25
+`exact-name-userservice-get-user` searches `"UserService get_user"`, and BM25
 returns no labelled answer in the top 10. Naming the class repeats the token
-`user`, which lifts bare `user` variables and the `UserService` class itself
-above the getter that was actually asked for. The vector leg barely helps:
-`semantic` ranks a labelled getter fifth, and `hybrid` and `hybrid+rerank` still
-miss. Qualifying a query with its class makes retrieval *worse*, which is the
-opposite of what anyone typing it would expect; the query stays in the set so
+`user`. This lifts bare `user` variables and the `UserService` class itself
+above the getter that was asked for. With `multilingual-e5-small` the vector
+leg barely helped: `semantic` ranked a labelled getter fifth, and `hybrid` and
+`hybrid+rerank` missed it. The default since #157 ranks the getter first in
+`semantic` and second in `hybrid`, but the reranker moves it down to ninth. For
+BM25, qualifying a query with its class still makes retrieval *worse*, the
+opposite of what a user typing it would expect. The query stays in the set so
 that a fix shows up as a win.
 
 ## Real-repository held-out set (#95)
@@ -592,6 +628,13 @@ commit, a label naming no corpus symbol, or a sweep that no longer reproduces
 the production hybrid ranking.
 
 ### Recorded results — real repositories
+
+> **This run predates the #157 default switch.** It measured
+> `multilingual-e5-small` with template 1, the default until #157, which is now
+> the fast option. The default since #157 is `jina-embeddings-v2-base-code`
+> with template 2 and chunking. Its semantic and hybrid scores on this set are
+> variant E in the [#157 results](#results-157); the next weekly run records
+> it with every mode.
 
 Recorded on 2026-11-19 by the CI workflow (`linux-x86_64`, hosted runner),
 dataset `2026-11-12` (digest `0eeb0ba91cf3…`), shipped models
@@ -1012,7 +1055,10 @@ signature, return type, superclasses, then the first 1,792 bytes of the body)
 — a model and a template nobody had compared against anything. This section
 fixes, **before any number was measured**, what is compared, on which
 queries, what a winner must clear, and what it may cost. Results follow in
-their own subsection once measured.
+their own subsection once measured. The protocol kept the default. After the
+results, the project owner made variant E the default and waived the
+index-time budget for it; see
+[Owner decision](#owner-decision-the-default-is-variant-e).
 
 ### Budget for the shipped default
 
@@ -1032,7 +1078,10 @@ inference code — so runner-to-runner variation cancels:
 | License | the weights under a permissive license (MIT, Apache-2.0, BSD); local inference, no API key |
 
 Models outside the budget may still ship as opt-in registry entries, with
-their measured costs in the model table; they cannot be the default.
+their measured costs in the model table; they cannot be the default. (After
+the results, the owner waived the index-time limit for the shipped default.
+This was a decision, not a measurement; see
+[Owner decision](#owner-decision-the-default-is-variant-e).)
 
 **Amendment, made before any 768-dimension variant had finished** (the dev
 scores of the four 384-dimension variants A, B, C and D′ had been seen; no
@@ -1189,18 +1238,20 @@ selected. On held-out it scores −0.013 [−0.047, +0.021] against A:
 | `semantic` | -0.013 [-0.058, +0.034] | +0.042 [-0.014, +0.111] |
 | `hybrid` | -0.013 [-0.050, +0.023] | +0.028 [-0.028, +0.083] |
 
-**Decision: the default stays `multilingual-e5-small` with template 1 and no
-chunking.** The held-out interval does not lie above zero; per the protocol
-nothing changes. The golden set therefore keeps its baseline, and the
-default's reranked scores are the ones the #146 run recorded (hybrid+rerank
-nDCG@10 0.609 / MRR@10 0.621 over all 168 queries at the shipped test weight):
-the reranker's input — template-1 documents cut to a 512-token budget — and its
-candidate pool are unchanged, and variant A reproduces that run's semantic and
-hybrid scores exactly (all 168 queries: 0.554 / 0.580 and 0.572 / 0.586). (For the record,
-both C and the jina configuration pass the gate's rule against it — C:
-semantic recall@10 +0.043 [+0.002, +0.094], no gated regression; jina,
-template 2: semantic nDCG@10 +0.104 [+0.024, +0.188], hybrid +0.072 [+0.008,
-+0.137], no gated regression.)
+**Protocol outcome: no change.** The held-out interval does not lie above
+zero, so by the pre-registered rule the default would have stayed
+`multilingual-e5-small` with template 1 and no chunking. The project owner
+decided otherwise; see
+[Owner decision](#owner-decision-the-default-is-variant-e) below. Variant A's
+reranked scores are the ones the #146 run recorded: hybrid+rerank nDCG@10
+0.609 / MRR@10 0.621 over all 168 queries at the shipped test weight. Run
+[44888947666](https://github.com/marcmantei/myceliums/actions/runs/44888947666)
+re-measured A with the reranker through the new inference and got the same
+values (0.6089 / 0.6211). Both C and the jina configuration pass the golden
+gate's rule against the previous baseline. C: semantic recall@10 +0.043
+[+0.002, +0.094], no gated regression. Jina, template 2, chunking: semantic
+nDCG@10 +0.104 [+0.024, +0.188], hybrid +0.072 [+0.008, +0.137], no gated
+regression.
 
 **Long-symbol slice** — 60 queries (41 dev, 19 held-out) with a label whose
 body exceeds 1,792 bytes; objective, chunking on − off, same model and
@@ -1235,6 +1286,47 @@ JSON):
 | hono | `semantic` | 0.345 / 0.571 | 0.395 / 0.643 | 0.496 / 0.786 | 0.587 / 0.857 |
 | hono | `hybrid` | 0.333 / 0.571 | 0.357 / 0.667 | 0.395 / 0.762 | 0.448 / 0.762 |
 
+### Owner decision: the default is variant E
+
+After these results, the project owner made variant E the shipped default:
+`jina-embeddings-v2-base-code`, template 2, chunking on (PR #160). The reason
+is quality over first-index time. **Index-time budget waived by owner
+decision: 4.4× first index; incremental runs reuse vectors.** E breaks only the
+index-time limit (4.40× against 2.5×). Every other limit holds: vectors 2.03×
+(limit 3×), peak memory 1.34× (1.5×), query p50 / p95 35.4 / 50.3 ms (50 /
+150 ms), download 644 MB (700 MB), license Apache-2.0.
+
+What the decision does to the evidence:
+
+- **The held-out interval is a measurement here, not a confirmation.** E has
+  the highest dev objective of all eleven variants (0.6370). Without the time
+  limit, the pre-registered selection rule would have picked it. But the
+  limit was waived after the held-out numbers were known. So E's held-out
+  gain, +0.070 [+0.010, +0.128], is reported; it is not the pre-registered
+  confirmation.
+- **The golden set is the independent check.** Nothing was tuned on it.
+  Against `multilingual-e5-small` on the same 99 symbols, E raises nDCG@10 by
+  +0.114 [+0.035, +0.196] in semantic search, +0.086 [+0.024, +0.150] in
+  hybrid and +0.038 [+0.004, +0.079] in hybrid+rerank (tables in "Recorded
+  results" above). It passes the gate's rule against the previous baseline in
+  every mode. The baseline was then re-recorded with E, as the protocol
+  requires. E and E′ get the same score on every golden query, so this set
+  checks the model and the template, not chunking.
+- **Chunking ships with it.** On the long-symbol slice, chunking raised
+  jina's objective by +0.028 [+0.011, +0.047]. Over all queries its effect is
+  within noise (held-out: E 0.7070, E′ 0.7067). It costs 2% more vectors and
+  about 6% more indexing time.
+- **Not measured in this record:** E with the reranker on the
+  real-repository set. The weekly run measures the shipped configuration with
+  every mode.
+- **What users pay.** The first index of a repository takes about 4.4× as
+  long as with e5-small, and the model is a 644 MB download, once. Later runs
+  reuse the vectors of unchanged symbols (#151), so the 4.4× applies to a
+  first index and to a full rebuild, not to incremental runs. Every existing
+  index is re-embedded once, on its next `myc analyze`. `multilingual-e5-small`
+  with `chunking = false` stays available as the fast option: the previous
+  default, multilingual, and 4.4× faster to index.
+
 ### What the numbers say — and do not
 
 - **Better models exist, at a price the budget does not allow.**
@@ -1242,9 +1334,9 @@ JSON):
   held-out gain is confirmed — +0.070 [+0.010, +0.128] chunked, +0.070
   [+0.010, +0.129] without, after +0.12–0.13 on dev; on hono its semantic
   nDCG@10 is 0.587 against 0.345. It indexes 4.2–4.4× slower, doubles the
-  vector bytes and downloads 644 MB: an opt-in for repositories where search
-  quality matters more than indexing time. The budget was set before
-  measuring and is kept.
+  vector bytes and downloads 644 MB. The budget was set before measuring and
+  rules it out. The owner waived the index-time limit for it, and it is the
+  default since #157 (see "Owner decision").
 - **The small code-aware model is fast but memory-hungry.**
   `granite-embedding-small-english-r2` indexes at 1.2–1.3× the incumbent's
   time, downloads 197 MB, and scores dev +0.08–0.09; on held-out +0.044 and
@@ -1259,9 +1351,9 @@ JSON):
   were only measured with it.
 - **Chunking helps where it can and is invisible elsewhere** — about +0.03 on
   long symbols, with 254–379 chunk vectors added over 14,795 symbols. Over all
-  queries its effect is within noise, which is why it ships as an option
-  (`[embedding] chunking = true`, which embeds with template 2) and not as the
-  default.
+  queries its effect is within noise. Under the protocol it would have
+  stayed an option. Since the owner decision it is on by default, as part of
+  variant E (`[embedding] chunking = false` turns it off).
 - **Debug builds and runner choice mislead.** The debug run measured query
   latency at 33–68 ms p50 where the release build needs 8–48 ms, and the same
   configuration indexed up to 2.4× faster on one hosted runner than on another.

@@ -75,14 +75,14 @@ the project (shared by the team) rather than kept as per-user state.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `provider` | string | `"local"` | `"local"` (bundled ONNX models via fastembed) or `"openai-compatible"` (any server speaking the OpenAI embeddings API — Ollama, LM Studio, TEI, vLLM, or a cloud provider) |
-| `model` | string | `"multilingual-e5-small"` | Registry id for `local` (measured quality and costs per model: README, "Semantic search"); the API model name for `openai-compatible` |
+| `model` | string | `"jina-embeddings-v2-base-code"` | Registry id for `local` (measured quality and costs per model: README, "Semantic search"); the API model name for `openai-compatible`. The fast option is `"multilingual-e5-small"` with `chunking = false`: about 4.4× faster first index, multilingual queries, lower quality on English code. Until #157 the default was `"multilingual-e5-small"`, and earlier `myc init` versions wrote it into this file |
 | `reranker` | string | `"bge-reranker-v2-m3"` | Cross-encoder used when `rerank` is requested at search time |
 | `base_url` | string | — | Embeddings API base URL. **Required** for `openai-compatible` |
 | `dim` | integer | — | Vector dimension. **Required** for `openai-compatible` (cannot be derived); ignored for `local` |
 | `api_key_env` | string | `"MYCELIUMS_EMBEDDING_API_KEY"` | Name of the environment variable holding the API key. The key itself never goes into this file |
 | `query_prefix` | string | — | Prefix prepended to search queries (e.g. `"query: "` for E5-style models). Ignored for `local` — the registry value wins |
 | `passage_prefix` | string | — | Prefix prepended to indexed documents (e.g. `"passage: "`). Ignored for `local` — the registry value wins |
-| `chunking` | bool | `false` | Split long symbols into overlapping 512-token chunks with a vector each, so the end of a long function is searchable too; search still returns one row per symbol, scored by its best chunk. Turning it on embeds with the structured document template (version 2), which chunking needs. Measured (#157): +0.03 on queries whose answers are long symbols, no measurable change over all queries. Local models only (chunk boundaries are counted in the model's tokens); ignored for `openai-compatible` |
+| `chunking` | bool | `true` | Split long symbols into overlapping 512-token chunks with a vector each, so the end of a long function is searchable too; search still returns one row per symbol, scored by its best chunk. Chunking embeds with the structured document template (version 2), which it needs; `false` embeds with the model's own registry template (version 1 for the e5 family, the previous default). Measured (#157): +0.03 on queries whose answers are long symbols, no measurable change over all queries, about 2% more vectors. Local models only (chunk boundaries are counted in the model's tokens); ignored for `openai-compatible` |
 
 Local models run in-process on ONNX Runtime. Their files are downloaded once
 from a pinned HuggingFace revision into the model cache (`FASTEMBED_CACHE_DIR`,

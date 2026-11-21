@@ -4,7 +4,15 @@
 
 ### 1. `myc analyze` takes very long on first run
 
-The first analysis downloads the embedding model (a few hundred MB; sizes per model are in the README's model table). This is a one-time cost and the model is cached in `~/.myceliums/` for all future runs.
+The first analysis downloads the embedding model: about 644 MB for the default, `jina-embeddings-v2-base-code` (sizes per model are in the README's model table). This is a one-time cost. The model is cached for all future runs, in `FASTEMBED_CACHE_DIR`, else `HF_HOME`, else `.fastembed_cache/`.
+
+The first analysis also embeds every symbol, and that takes the longest. Later runs reuse the vectors of unchanged symbols. `myc analyze` says this before it starts and shows embedding progress. For a first index about 4.4× faster, with multilingual queries but lower search quality on English code, use the fast option in `.myceliums.toml`:
+
+```toml
+[embedding]
+model = "multilingual-e5-small"
+chunking = false
+```
 
 If you want to skip embedding generation entirely (faster, but disables semantic search), run:
 

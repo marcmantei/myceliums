@@ -41,13 +41,14 @@ This will find symbols and files containing the exact token `validateEmail`, ran
 
 **Command:** `myc semantic-search "query"`
 
-Semantic search uses vector embeddings to find code by meaning rather than exact keywords. By default Myceliums uses the multilingual-e5-small model (384-dimensional vectors) to encode both the query and the indexed code. Other models can be selected in configuration (see the [configuration reference](../reference/config.md)).
+Semantic search uses vector embeddings to find code by meaning rather than exact keywords. By default Myceliums encodes the query and the indexed code with the `jina-embeddings-v2-base-code` model (768-dimensional vectors, trained on code and English text). Long symbols are embedded in several chunks. Other models can be selected in configuration (see the [configuration reference](../reference/config.md)). For queries in languages other than English, or for the fastest first index, use `multilingual-e5-small` with `chunking = false`.
 
 **Characteristics:**
 - Understands natural language queries
 - Finds conceptually similar code, even when different words are used
 - Requires embeddings (run `myc analyze --force` if you previously skipped them)
-- First run downloads the embedding model (about 0.5 GB for the default model; sizes per model are in the README), cached in `FASTEMBED_CACHE_DIR`, else `HF_HOME`, else `.fastembed_cache/`
+- First run downloads the embedding model (about 644 MB for the default model; sizes per model are in the README), cached in `FASTEMBED_CACHE_DIR`, else `HF_HOME`, else `.fastembed_cache/`
+- The first index of a repository embeds every symbol and takes the longest (with the default model about 4.4× as long as with `multilingual-e5-small`); later runs reuse the vectors of unchanged symbols
 
 **Best for:**
 - Natural language queries ("function that validates user input")
@@ -163,12 +164,10 @@ two ways of building vectors (#92, #157).
 
 ### The document: two templates
 
-The default model, `multilingual-e5-small`, embeds each symbol from template
-1: `{kind} {name} {decorators} {signature} {return_type} {superclasses}
-{content_head}`, the body cut to a byte budget. Template 2 — a structured
-document, most telling lines first — is used by the models evaluated in #157
-(`jina-embeddings-v2-base-code`, `granite-embedding-small-english-r2`,
-`coderankembed`, `gte-modernbert-base`) and whenever chunking is on:
+Template 2 is a structured document, with the most telling lines first. It is
+the default: it is used whenever chunking is on (the default) and by the models
+evaluated in #157 (`jina-embeddings-v2-base-code`, the default model,
+`granite-embedding-small-english-r2`, `coderankembed`, `gte-modernbert-base`):
 
 ```text
 python method src/requests/sessions.py::SessionRedirectMixin.resolve_redirects
@@ -190,13 +189,17 @@ hist = []  # keep track of history
 
 The model's window (512 tokens for every registry model but the legacy
 `all-minilm-l6-v2`, 256) cuts the end of the document, never the header.
+
+Template 1 — `{kind} {name} {decorators} {signature} {return_type}
+{superclasses} {content_head}`, the body cut to a byte budget — is what the e5
+family embeds with `chunking = false`, the fast option and the previous
+default. Remote (`openai-compatible`) models also embed with template 1.
 Measured on the real-repository set, template 2 did not improve
-`multilingual-e5-small` (held-out −0.013 [−0.047, +0.021]), which is why the
-default keeps template 1.
+`multilingual-e5-small` (held-out −0.013 [−0.047, +0.021]).
 
 ### Long symbols: chunking
 
-With chunking (`[embedding] chunking = true`; off by default), a symbol longer
+With chunking (`[embedding] chunking`, on by default for local models), a symbol longer
 than the window is embedded as its header chunk — the document cut at the window, the
 symbol's own vector — plus body chunks: consecutive 512-token windows over the
 rest of the body, overlapping by 64 tokens, each starting with the symbol's
@@ -210,8 +213,13 @@ table and are removed with their file.
 
 Measured on the 60 real-repository queries whose answers include a long
 symbol, chunking raised the objective by +0.026 to +0.050 for four of five
-models (+0.033 [+0.003, +0.066] for `multilingual-e5-small`); over all queries
-its effect is within noise, so it is an option, not the default.
+models: +0.028 [+0.011, +0.047] for `jina-embeddings-v2-base-code`, +0.033
+[+0.003, +0.066] for `multilingual-e5-small`. Over all queries its effect is
+within noise. It is on by default because the default configuration, jina with
+chunking, was the one whose gain held on the held-out queries. It is cheap: on
+the four evaluation repositories, jina stored 254 chunk vectors for 14,795
+symbols (2% more vectors) and indexed about 6% longer than without chunking.
+`chunking = false` turns it off.
 
 BM25 always indexes the full symbol text, chunked or not.
 
