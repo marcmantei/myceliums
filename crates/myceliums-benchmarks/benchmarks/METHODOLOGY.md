@@ -635,8 +635,8 @@ the production hybrid ranking.
 > `multilingual-e5-small` with template 1, the default until #157, which is now
 > the fast option. The default since #157 is `jina-embeddings-v2-base-code`
 > with template 2 and chunking. Its semantic and hybrid scores on this set are
-> variant E in the [#157 results](#results-157); the next weekly run records
-> it with every mode.
+> variant E in the [#157 results](#results-157), its reranked scores in
+> "Owner decision" there; the next weekly run records it with every sweep.
 
 Recorded on 2026-11-19 by the CI workflow (`linux-x86_64`, hosted runner),
 dataset `2026-11-12` (digest `0eeb0ba91cf3…`), shipped models
@@ -1318,9 +1318,15 @@ What the decision does to the evidence:
   jina's objective by +0.028 [+0.011, +0.047]. Over all queries its effect is
   within noise (held-out: E 0.7070, E′ 0.7067). It costs 2% more vectors and
   about 6% more indexing time.
-- **Not measured in this record:** E with the reranker on the
-  real-repository set. The weekly run measures the shipped configuration with
-  every mode.
+- **E with the reranker**, scored once on the real-repository set as the
+  protocol asks of a default: run
+  [44912391577](https://github.com/marcmantei/myceliums/actions/runs/44912391577)
+  (release build at `b033a53`, the shipped test demotion). Over all 168
+  queries hybrid+rerank scores nDCG@10 0.652 and MRR@10 0.637 (A: 0.609 /
+  0.621); held-out 0.706 / 0.696. As on the golden set, reranking is not
+  measurably better than plain hybrid (nDCG@10 +0.009 [−0.029, +0.047]), and
+  semantic search alone scores higher than hybrid (0.691 against 0.643;
+  hybrid − semantic −0.049 [−0.094, −0.004]).
 - **What users pay.** The first index of a repository takes about 4.4× as
   long as with e5-small, and the model is a 644 MB download, once. Later runs
   reuse the vectors of unchanged symbols (#151), so the 4.4× applies to a
