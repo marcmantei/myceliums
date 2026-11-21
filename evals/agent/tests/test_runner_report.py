@@ -23,7 +23,9 @@ class TaskFile(unittest.TestCase):
         tasks = config.load_tasks()
         self.assertEqual({t["type"] for t in tasks},
                          {"callers", "callees", "impact", "where", "dead_code", "flow"})
-        self.assertEqual({t["repo"] for t in tasks}, set(config.load_repos()))
+        # Django (#153) is used by the outcome eval's task set only.
+        self.assertEqual({t["repo"] for t in tasks}, {"fzf", "hono", "fastapi"})
+        self.assertLessEqual({t["repo"] for t in tasks}, set(config.load_repos()))
 
 
 class Plan(unittest.TestCase):

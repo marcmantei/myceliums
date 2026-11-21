@@ -43,7 +43,10 @@ def _default_models() -> str:
 
 
 def cmd_fetch(args) -> int:
-    prep.fetch(config.load_repos())
+    repos = config.load_repos()
+    if args.repo:
+        repos = {k: v for k, v in repos.items() if k in set(args.repo)}
+    prep.fetch(repos)
     return 0
 
 
@@ -78,6 +81,7 @@ def _run_config(args) -> RunConfig:
         tool_search=args.tool_search, claude=config.resolve_claude(args.claude),
         myc=args.myc, models_dir=args.models_dir, conditions=conditions,
         tasks_file=os.environ.get("AEVAL_TASKS", ""), stop_after_s=getattr(args, "stop_after", None),
+        prompt_budget=getattr(args, "prompt_budget", False),
     )
 
 
@@ -159,6 +163,7 @@ def cmd_export(args) -> int:
         "model": (first or {}).get("model"),
         "effort": cfg["effort"],
         "max_turns": cfg["max_turns"],
+        **({"prompt_budget": True} if cfg.get("prompt_budget") else {}),
         "timeout_s": cfg["timeout_s"],
         "reps": cfg["reps"],
         "success_threshold": cfg["success_threshold"],
@@ -271,7 +276,9 @@ def main(argv: list[str] | None = None) -> int:
                    "the variant matrix uses tasks/tasks-hard.json)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("fetch").set_defaults(fn=cmd_fetch)
+    s = sub.add_parser("fetch")
+    s.add_argument("--repo", action="append", help="only these repositories (default: all)")
+    s.set_defaults(fn=cmd_fetch)
 
     s = sub.add_parser("index")
     s.add_argument("--myc", default=_default_myc())
@@ -310,6 +317,8 @@ def main(argv: list[str] | None = None) -> int:
                    "variant matrix: A,C,E; calibration: none)")
     s.add_argument("--stop-after", type=int, help="start no new session after this many seconds "
                    "(running ones finish), to run a long matrix in bounded chunks")
+    s.add_argument("--prompt-budget", action="store_true",
+                   help="state the turn limit (--max-turns) in the prompt, identically in every condition (#153)")
     s.set_defaults(fn=cmd_run)
 
     s = sub.add_parser("probe", help="check a variant's session setup against a mock API (no model call)")

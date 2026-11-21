@@ -71,12 +71,33 @@ FORMAT_RULES = {
 }
 
 
-def build_prompt(task: dict, repo: dict) -> str:
+# A budgeted run (#153) states the turn limit in the prompt, the same text in
+# every condition, so that the agent can answer before the limit instead of
+# being cut off without an answer. `--max-turns N` counts the agent's replies:
+# a reply with tool calls (parallel calls in it included) is one turn, and
+# the session ends with `error_max_turns` right after the N-th such reply, so
+# N - 1 rounds of tool calls fit before the final answer (checked with `probe`
+# against the mock API: N = 1 ends after the first tool round, N = 2 lets the
+# final text through). `num_turns` in the result counts differently (tool
+# calls + 1) and is not what the limit compares.
+BUDGET_RULES = (
+    "Budget: this session ends after {max_turns} turns. Each of your replies is one turn: a reply with tool calls "
+    "(calls in the same reply run in parallel and share the turn) or your final answer. You can make at most "
+    "{tool_turns} replies with tool calls; your final answer must come at the latest as reply {max_turns}, "
+    "otherwise the session ends without it and the answer is lost. Answer within the budget even if your "
+    "investigation is incomplete."
+)
+
+
+def build_prompt(task: dict, repo: dict, budget_turns: int | None = None) -> str:
+    rules = FORMAT_RULES[task["answer_kind"]]
+    if budget_turns:
+        rules += "\n\n" + BUDGET_RULES.format(max_turns=budget_turns, tool_turns=budget_turns - 1)
     return PROMPT_TEMPLATE.format(
         repo=repo["display_name"],
         language=repo["language_name"],
         question=task["question"],
-        format_rules=FORMAT_RULES[task["answer_kind"]],
+        format_rules=rules,
     )
 
 
@@ -102,6 +123,7 @@ class RunConfig:
     tasks_file: str = ""  # empty: the pilot's set (kept out of old configs)
     extra_env: dict = field(default_factory=dict)  # `probe` only: the mock API
     stop_after_s: int | None = None  # start no session after this many seconds
+    prompt_budget: bool = False  # state --max-turns in the prompt (#153's budgeted sessions)
 
     def comparable(self) -> dict:
         """Fields that must not change when a run is resumed."""
@@ -117,6 +139,8 @@ class RunConfig:
             d["conditions"] = list(d["conditions"])
         if not d["tasks_file"]:
             d.pop("tasks_file")
+        if not d["prompt_budget"]:
+            d.pop("prompt_budget")
         return d
 
 
@@ -376,7 +400,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
     def _session(self, item: WorkItem, attempt: int) -> dict:
         task = item.task
         repo = self.repos[item.repo]
-        prompt = build_prompt(task, repo)
+        prompt = build_prompt(task, repo, self.cfg.max_turns if self.cfg.prompt_budget else None)
         out_dir = self.run_dir / "sessions" / item.run_id
         out_dir.mkdir(parents=True, exist_ok=True)
         transcript = out_dir / f"attempt{attempt}.jsonl"

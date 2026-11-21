@@ -1,0 +1,3342 @@
+{
+ "description": "Outcome eval (issue #153): twelve multi-hop tasks over Django 5.1.4 (the django/ package) - transitive callers three levels up, blast radius over 16 to 24 files, and callers of one of several same-named functions. Gold sets were computed by evals/agent/groundtruth/outcome_tasks.py from the call graph of py_edges.py (Python's ast module, import-aware, function-local and star imports included), never from myceliums output, and audited by grepping every name on each chain. Each gold item lists one evidence line (a call site on the chain) that check-tasks re-verifies; its note gives the level and the next hop.",
+ "tasks": [
+  {
+   "id": "django-tc-permission-codename",
+   "repo": "django",
+   "type": "transitive_callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods in the `django/` package call `get_permission_codename` (django/contrib/auth/__init__.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_permission_codename` itself.",
+   "gold": [
+    {
+     "name": "BaseModelAdmin.has_add_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 573,
+       "contains": "get_permission_codename"
+      }
+     ],
+     "note": "level 1, via get_permission_codename (django.contrib.admin.options)"
+    },
+    {
+     "name": "BaseModelAdmin.has_change_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 588,
+       "contains": "get_permission_codename"
+      }
+     ],
+     "note": "level 1, via get_permission_codename (django.contrib.admin.options)"
+    },
+    {
+     "name": "BaseModelAdmin.has_delete_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 603,
+       "contains": "get_permission_codename"
+      }
+     ],
+     "note": "level 1, via get_permission_codename (django.contrib.admin.options)"
+    },
+    {
+     "name": "BaseModelAdmin.has_view_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 618,
+       "contains": "get_permission_codename"
+      }
+     ],
+     "note": "level 1, via get_permission_codename (django.contrib.admin.options)"
+    },
+    {
+     "name": "InlineModelAdmin._has_any_perms_for_target_model",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2535,
+       "contains": "get_permission_codename"
+      }
+     ],
+     "note": "level 1, via get_permission_codename (django.contrib.admin.options)"
+    },
+    {
+     "name": "_get_builtin_permissions",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/management/__init__.py",
+       "line": 31,
+       "contains": "get_permission_codename"
+      }
+     ],
+     "note": "level 1, via get_permission_codename (django.contrib.auth.management)"
+    },
+    {
+     "name": "BaseModelAdmin.has_view_or_change_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 625,
+       "contains": "has_change_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_change_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "InlineModelAdmin.has_add_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2547,
+       "contains": "has_add_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_add_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "InlineModelAdmin.has_change_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2553,
+       "contains": "has_change_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_change_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "InlineModelAdmin.has_delete_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2559,
+       "contains": "has_delete_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_delete_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "InlineModelAdmin.has_view_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2566,
+       "contains": "has_view_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_view_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin._changeform_view",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1835,
+       "contains": "has_add_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_add_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin._delete_view",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2195,
+       "contains": "has_delete_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_delete_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.changelist_view",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2148,
+       "contains": "has_add_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_add_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.get_form",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 808,
+       "contains": "has_change_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_change_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.get_inline_formsets",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1756,
+       "contains": "has_add_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_add_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.get_model_perms",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 781,
+       "contains": "has_add_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_add_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.render_change_form",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1347,
+       "contains": "has_add_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_add_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.response_add",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1405,
+       "contains": "has_change_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_change_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.response_delete",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1715,
+       "contains": "has_change_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_change_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "UserAdmin._add_view",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/admin.py",
+       "line": 131,
+       "contains": "has_add_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_add_permission (django.contrib.auth.admin)"
+    },
+    {
+     "name": "UserAdmin.user_change_password",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/admin.py",
+       "line": 154,
+       "contains": "has_change_permission"
+      }
+     ],
+     "note": "level 2, via BaseModelAdmin.has_change_permission (django.contrib.auth.admin)"
+    },
+    {
+     "name": "_get_all_permissions",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/management/__init__.py",
+       "line": 19,
+       "contains": "_get_builtin_permissions"
+      }
+     ],
+     "note": "level 2, via _get_builtin_permissions (django.contrib.auth.management)"
+    },
+    {
+     "name": "check_models_permissions",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/checks.py",
+       "line": 139,
+       "contains": "_get_builtin_permissions"
+      }
+     ],
+     "note": "level 2, via _get_builtin_permissions (django.contrib.auth.checks)"
+    },
+    {
+     "name": "GenericInlineModelAdmin.get_formset",
+     "evidence": [
+      {
+       "file": "django/contrib/contenttypes/admin.py",
+       "line": 113,
+       "contains": "has_delete_permission"
+      }
+     ],
+     "note": "level 3, via InlineModelAdmin.has_delete_permission (django.contrib.contenttypes.admin)"
+    },
+    {
+     "name": "InlineModelAdmin.get_formset",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2450,
+       "contains": "has_add_permission"
+      }
+     ],
+     "note": "level 3, via InlineModelAdmin.has_add_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "InlineModelAdmin.get_queryset",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2516,
+       "contains": "has_view_or_change_permission"
+      }
+     ],
+     "note": "level 3, via BaseModelAdmin.has_view_or_change_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin._get_form_for_get_fields",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 788,
+       "contains": "get_form"
+      }
+     ],
+     "note": "level 3, via ModelAdmin.get_form (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin._response_post_save",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1584,
+       "contains": "has_view_or_change_permission"
+      }
+     ],
+     "note": "level 3, via BaseModelAdmin.has_view_or_change_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.changeform_view",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1820,
+       "contains": "_changeform_view"
+      }
+     ],
+     "note": "level 3, via ModelAdmin._changeform_view (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.delete_view",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2181,
+       "contains": "_delete_view"
+      }
+     ],
+     "note": "level 3, via ModelAdmin._delete_view (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.history_view",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 2261,
+       "contains": "has_view_or_change_permission"
+      }
+     ],
+     "note": "level 3, via BaseModelAdmin.has_view_or_change_permission (django.contrib.admin.options)"
+    },
+    {
+     "name": "UserAdmin.add_view",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/admin.py",
+       "line": 121,
+       "contains": "_add_view"
+      }
+     ],
+     "note": "level 3, via UserAdmin._add_view (django.contrib.auth.admin)"
+    },
+    {
+     "name": "UserAdmin.get_form",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/admin.py",
+       "line": 98,
+       "contains": "get_form"
+      }
+     ],
+     "note": "level 3, via ModelAdmin.get_form (django.contrib.auth.admin)"
+    },
+    {
+     "name": "UserAdmin.response_add",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/admin.py",
+       "line": 253,
+       "contains": "response_add"
+      }
+     ],
+     "note": "level 3, via ModelAdmin.response_add (django.contrib.auth.admin)"
+    },
+    {
+     "name": "create_permissions",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/management/__init__.py",
+       "line": 96,
+       "contains": "_get_all_permissions"
+      }
+     ],
+     "note": "level 3, via _get_all_permissions (django.contrib.auth.management)"
+    }
+   ],
+   "rationale": "Admin permission checks: level 1 is the four `has_*_permission` methods of `BaseModelAdmin`, `InlineModelAdmin._has_any_perms_for_target_model` and the permission builder of contrib/auth/management; the levels above run through `self.has_*_permission(...)` in ModelAdmin, InlineModelAdmin and UserAdmin views. Computed as all callers up to 3 levels up the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph; 36 functions. Each note gives the level, the function called on the way to the target and the caller's module.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-tc-get-format",
+   "repo": "django",
+   "type": "transitive_callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods in the `django/` package call `get_format` (django/utils/formats.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_format` itself.",
+   "gold": [
+    {
+     "name": "DateTimeBaseInput.format_value",
+     "evidence": [
+      {
+       "file": "django/forms/widgets.py",
+       "line": 554,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.forms.widgets)"
+    },
+    {
+     "name": "DateTimeFormatsIterator.__iter__",
+     "evidence": [
+      {
+       "file": "django/forms/fields.py",
+       "line": 521,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.forms.fields)"
+    },
+    {
+     "name": "SelectDateWidget._parse_date_fmt",
+     "evidence": [
+      {
+       "file": "django/forms/widgets.py",
+       "line": 1167,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.forms.widgets)"
+    },
+    {
+     "name": "SelectDateWidget.format_value",
+     "evidence": [
+      {
+       "file": "django/forms/widgets.py",
+       "line": 1156,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.forms.widgets)"
+    },
+    {
+     "name": "SelectDateWidget.value_from_datadict",
+     "evidence": [
+      {
+       "file": "django/forms/widgets.py",
+       "line": 1193,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.forms.widgets)"
+    },
+    {
+     "name": "date_format",
+     "evidence": [
+      {
+       "file": "django/utils/formats.py",
+       "line": 156,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.utils.formats)"
+    },
+    {
+     "name": "get_formats",
+     "evidence": [
+      {
+       "file": "django/views/i18n.py",
+       "line": 95,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.views.i18n)"
+    },
+    {
+     "name": "localize_input",
+     "evidence": [
+      {
+       "file": "django/utils/formats.py",
+       "line": 230,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.utils.formats)"
+    },
+    {
+     "name": "number_format",
+     "evidence": [
+      {
+       "file": "django/utils/formats.py",
+       "line": 184,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.utils.formats)"
+    },
+    {
+     "name": "sanitize_separators",
+     "evidence": [
+      {
+       "file": "django/utils/formats.py",
+       "line": 283,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.utils.formats)"
+    },
+    {
+     "name": "time_format",
+     "evidence": [
+      {
+       "file": "django/utils/formats.py",
+       "line": 168,
+       "contains": "get_format"
+      }
+     ],
+     "note": "level 1, via get_format (django.utils.formats)"
+    },
+    {
+     "name": "DecimalField.to_python",
+     "evidence": [
+      {
+       "file": "django/forms/fields.py",
+       "line": 424,
+       "contains": "sanitize_separators"
+      }
+     ],
+     "note": "level 2, via sanitize_separators (django.forms.fields)"
+    },
+    {
+     "name": "FloatField.to_python",
+     "evidence": [
+      {
+       "file": "django/forms/fields.py",
+       "line": 371,
+       "contains": "sanitize_separators"
+      }
+     ],
+     "note": "level 2, via sanitize_separators (django.forms.fields)"
+    },
+    {
+     "name": "IntegerField.to_python",
+     "evidence": [
+      {
+       "file": "django/forms/fields.py",
+       "line": 337,
+       "contains": "sanitize_separators"
+      }
+     ],
+     "note": "level 2, via sanitize_separators (django.forms.fields)"
+    },
+    {
+     "name": "JavaScriptCatalog.get_context_data",
+     "evidence": [
+      {
+       "file": "django/views/i18n.py",
+       "line": 208,
+       "contains": "get_formats"
+      }
+     ],
+     "note": "level 2, via get_formats (django.views.i18n)"
+    },
+    {
+     "name": "SelectDateWidget.get_context",
+     "evidence": [
+      {
+       "file": "django/forms/widgets.py",
+       "line": 1135,
+       "contains": "_parse_date_fmt"
+      }
+     ],
+     "note": "level 2, via SelectDateWidget._parse_date_fmt (django.forms.widgets)"
+    },
+    {
+     "name": "SelectDateWidget.id_for_label",
+     "evidence": [
+      {
+       "file": "django/forms/widgets.py",
+       "line": 1182,
+       "contains": "_parse_date_fmt"
+      }
+     ],
+     "note": "level 2, via SelectDateWidget._parse_date_fmt (django.forms.widgets)"
+    },
+    {
+     "name": "Widget.format_value",
+     "evidence": [
+      {
+       "file": "django/forms/widgets.py",
+       "line": 261,
+       "contains": "localize_input"
+      }
+     ],
+     "note": "level 2, via localize_input (django.forms.widgets)"
+    },
+    {
+     "name": "date",
+     "evidence": [
+      {
+       "file": "django/template/defaultfilters.py",
+       "line": 784,
+       "contains": "date_format"
+      }
+     ],
+     "note": "level 2, via date_format (django.template.defaultfilters)"
+    },
+    {
+     "name": "date_hierarchy",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/templatetags/admin_list.py",
+       "line": 405,
+       "contains": "date_format"
+      }
+     ],
+     "note": "level 2, via date_format (django.contrib.admin.templatetags.admin_list)"
+    },
+    {
+     "name": "display_for_field",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/utils.py",
+       "line": 452,
+       "contains": "number_format"
+      }
+     ],
+     "note": "level 2, via number_format (django.contrib.admin.utils)"
+    },
+    {
+     "name": "display_for_value",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/utils.py",
+       "line": 480,
+       "contains": "number_format"
+      }
+     ],
+     "note": "level 2, via number_format (django.contrib.admin.utils)"
+    },
+    {
+     "name": "filesizeformat",
+     "evidence": [
+      {
+       "file": "django/template/defaultfilters.py",
+       "line": 907,
+       "contains": "number_format"
+      }
+     ],
+     "note": "level 2, via number_format (django.template.defaultfilters)"
+    },
+    {
+     "name": "floatformat",
+     "evidence": [
+      {
+       "file": "django/template/defaultfilters.py",
+       "line": 185,
+       "contains": "number_format"
+      }
+     ],
+     "note": "level 2, via number_format (django.template.defaultfilters)"
+    },
+    {
+     "name": "intcomma",
+     "evidence": [
+      {
+       "file": "django/contrib/humanize/templatetags/humanize.py",
+       "line": 79,
+       "contains": "number_format"
+      }
+     ],
+     "note": "level 2, via number_format (django.contrib.humanize.templatetags.humanize)"
+    },
+    {
+     "name": "localize",
+     "evidence": [
+      {
+       "file": "django/utils/formats.py",
+       "line": 210,
+       "contains": "date_format"
+      }
+     ],
+     "note": "level 2, via date_format (django.utils.formats)"
+    },
+    {
+     "name": "time",
+     "evidence": [
+      {
+       "file": "django/template/defaultfilters.py",
+       "line": 798,
+       "contains": "time_format"
+      }
+     ],
+     "note": "level 2, via time_format (django.template.defaultfilters)"
+    },
+    {
+     "name": "AdminReadonlyField.contents",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/helpers.py",
+       "line": 302,
+       "contains": "display_for_field"
+      }
+     ],
+     "note": "level 3, via display_for_field (django.contrib.admin.helpers)"
+    },
+    {
+     "name": "JavaScriptCatalog.get",
+     "evidence": [
+      {
+       "file": "django/views/i18n.py",
+       "line": 123,
+       "contains": "get_context_data"
+      }
+     ],
+     "note": "level 3, via JavaScriptCatalog.get_context_data (django.views.i18n)"
+    },
+    {
+     "name": "NowNode.render",
+     "evidence": [
+      {
+       "file": "django/template/defaulttags.py",
+       "line": 398,
+       "contains": "date"
+      }
+     ],
+     "note": "level 3, via date (django.template.defaulttags)"
+    },
+    {
+     "name": "Widget.get_context",
+     "evidence": [
+      {
+       "file": "django/forms/widgets.py",
+       "line": 270,
+       "contains": "format_value"
+      }
+     ],
+     "note": "level 3, via Widget.format_value (django.forms.widgets)"
+    },
+    {
+     "name": "intword",
+     "evidence": [
+      {
+       "file": "django/contrib/humanize/templatetags/humanize.py",
+       "line": 145,
+       "contains": "floatformat"
+      }
+     ],
+     "note": "level 3, via floatformat (django.contrib.humanize.templatetags.humanize)"
+    },
+    {
+     "name": "items_for_result",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/templatetags/admin_list.py",
+       "line": 243,
+       "contains": "display_for_field"
+      }
+     ],
+     "note": "level 3, via display_for_field (django.contrib.admin.templatetags.admin_list)"
+    },
+    {
+     "name": "naturalday",
+     "evidence": [
+      {
+       "file": "django/contrib/humanize/templatetags/humanize.py",
+       "line": 198,
+       "contains": "date"
+      }
+     ],
+     "note": "level 3, via date (django.contrib.humanize.templatetags.humanize)"
+    },
+    {
+     "name": "render_value_in_context",
+     "evidence": [
+      {
+       "file": "django/template/base.py",
+       "line": 1047,
+       "contains": "localize"
+      }
+     ],
+     "note": "level 3, via localize (django.template.base)"
+    },
+    {
+     "name": "unlocalize",
+     "evidence": [
+      {
+       "file": "django/templatetags/l10n.py",
+       "line": 20,
+       "contains": "localize"
+      }
+     ],
+     "note": "level 3, via localize (django.templatetags.l10n)"
+    }
+   ],
+   "rationale": "Locale formats: level 1 spans utils/formats.py, forms widgets and fields and the JavaScript catalog; levels 2 and 3 reach template filters (`date`, `floatformat`), humanize, the admin and form field `to_python` methods. `localize` names two functions (utils/formats.py and templatetags/l10n.py), one answer item. Computed as all callers up to 3 levels up the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph; 36 functions. Each note gives the level, the function called on the way to the target and the caller's module.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-tc-safe-join",
+   "repo": "django",
+   "type": "transitive_callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods in the `django/` package call `safe_join` (django/utils/_os.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `safe_join` itself.",
+   "gold": [
+    {
+     "name": "BaseEngine.iter_template_filenames",
+     "evidence": [
+      {
+       "file": "django/template/backends/base.py",
+       "line": 79,
+       "contains": "safe_join"
+      }
+     ],
+     "note": "level 1, via safe_join (django.template.backends.base)"
+    },
+    {
+     "name": "FileSystemFinder.find_location",
+     "evidence": [
+      {
+       "file": "django/contrib/staticfiles/finders.py",
+       "line": 141,
+       "contains": "safe_join"
+      }
+     ],
+     "note": "level 1, via safe_join (django.contrib.staticfiles.finders)"
+    },
+    {
+     "name": "FileSystemStorage.path",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 220,
+       "contains": "safe_join"
+      }
+     ],
+     "note": "level 1, via safe_join (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "InMemoryStorage.path",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 253,
+       "contains": "safe_join"
+      }
+     ],
+     "note": "level 1, via safe_join (django.core.files.storage.memory)"
+    },
+    {
+     "name": "Loader.get_template_sources",
+     "evidence": [
+      {
+       "file": "django/template/loaders/filesystem.py",
+       "line": 35,
+       "contains": "safe_join"
+      }
+     ],
+     "note": "level 1, via safe_join (django.template.loaders.filesystem)"
+    },
+    {
+     "name": "TemplateDetailView.get_context_data",
+     "evidence": [
+      {
+       "file": "django/contrib/admindocs/views.py",
+       "line": 414,
+       "contains": "safe_join"
+      }
+     ],
+     "note": "level 1, via safe_join (django.contrib.admindocs.views)"
+    },
+    {
+     "name": "serve",
+     "evidence": [
+      {
+       "file": "django/views/static.py",
+       "line": 45,
+       "contains": "safe_join"
+      }
+     ],
+     "note": "level 1, via safe_join (django.views.static)"
+    },
+    {
+     "name": "FSFilesHandler.serve",
+     "evidence": [
+      {
+       "file": "django/test/testcases.py",
+       "line": 1664,
+       "contains": "serve"
+      }
+     ],
+     "note": "level 2, via serve (django.test.testcases)"
+    },
+    {
+     "name": "FileSystemFinder.find",
+     "evidence": [
+      {
+       "file": "django/contrib/staticfiles/finders.py",
+       "line": 124,
+       "contains": "find_location"
+      }
+     ],
+     "note": "level 2, via FileSystemFinder.find_location (django.contrib.staticfiles.finders)"
+    },
+    {
+     "name": "FileSystemStorage._open",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 81,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "FileSystemStorage._save",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 84,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "FileSystemStorage.delete",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 183,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "FileSystemStorage.exists",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 206,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "FileSystemStorage.get_accessed_time",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 242,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "FileSystemStorage.get_created_time",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 245,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "FileSystemStorage.get_modified_time",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 248,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "FileSystemStorage.listdir",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 209,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "FileSystemStorage.size",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/filesystem.py",
+       "line": 223,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.core.files.storage.filesystem)"
+    },
+    {
+     "name": "InMemoryStorage._relative_path",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 212,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via InMemoryStorage.path (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage._resolve",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 225,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via InMemoryStorage.path (django.core.files.storage.memory)"
+    },
+    {
+     "name": "StaticFilesStorage.path",
+     "evidence": [
+      {
+       "file": "django/contrib/staticfiles/storage.py",
+       "line": 44,
+       "contains": "path"
+      }
+     ],
+     "note": "level 2, via FileSystemStorage.path (django.contrib.staticfiles.storage)"
+    },
+    {
+     "name": "TemplateStrings.get_template",
+     "evidence": [
+      {
+       "file": "django/template/backends/dummy.py",
+       "line": 26,
+       "contains": "iter_template_filenames"
+      }
+     ],
+     "note": "level 2, via BaseEngine.iter_template_filenames (django.template.backends.dummy)"
+    },
+    {
+     "name": "FSFilesHandler.get_response",
+     "evidence": [
+      {
+       "file": "django/test/testcases.py",
+       "line": 1652,
+       "contains": "serve"
+      }
+     ],
+     "note": "level 3, via FSFilesHandler.serve (django.test.testcases)"
+    },
+    {
+     "name": "InMemoryStorage.__init__",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 180,
+       "contains": "_resolve"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._resolve (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage._open",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 230,
+       "contains": "_resolve"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._resolve (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage._save",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 250,
+       "contains": "_relative_path"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._relative_path (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage.delete",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 257,
+       "contains": "_resolve"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._resolve (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage.exists",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 263,
+       "contains": "_resolve"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._resolve (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage.get_accessed_time",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 281,
+       "contains": "_resolve"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._resolve (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage.get_created_time",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 285,
+       "contains": "_resolve"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._resolve (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage.get_modified_time",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 289,
+       "contains": "_resolve"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._resolve (django.core.files.storage.memory)"
+    },
+    {
+     "name": "InMemoryStorage.listdir",
+     "evidence": [
+      {
+       "file": "django/core/files/storage/memory.py",
+       "line": 266,
+       "contains": "_resolve"
+      }
+     ],
+     "note": "level 3, via InMemoryStorage._resolve (django.core.files.storage.memory)"
+    },
+    {
+     "name": "StaticFilesHandlerMixin.serve",
+     "evidence": [
+      {
+       "file": "django/contrib/staticfiles/handlers.py",
+       "line": 50,
+       "contains": "serve"
+      }
+     ],
+     "note": "level 3, via serve (django.contrib.staticfiles.handlers)"
+    }
+   ],
+   "rationale": "Path joining for storage, template loaders and static files: most of the levels above are `self.path(name)` in FileSystemStorage and `self._resolve(...)` in InMemoryStorage. `serve` names two functions (views/static.py and contrib/staticfiles/views.py), one answer item. Computed as all callers up to 3 levels up the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph; 33 functions. Each note gives the level, the function called on the way to the target and the caller's module.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-tc-resolve-url",
+   "repo": "django",
+   "type": "transitive_callers",
+   "answer_kind": "symbols",
+   "question": "Which functions or methods in the `django/` package call `resolve_url` (django/shortcuts.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `resolve_url` itself.",
+   "gold": [
+    {
+     "name": "AccessMixin.handle_no_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/mixins.py",
+       "line": 51,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.mixins)"
+    },
+    {
+     "name": "LoginRequiredMiddleware.handle_no_permission",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/middleware.py",
+       "line": 74,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.middleware)"
+    },
+    {
+     "name": "LoginView.get_default_redirect_url",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 94,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "LogoutView.get_default_redirect_url",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 151,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "PasswordResetCompleteView.get_context_data",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 349,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "RedirectURLMixin.get_default_redirect_url",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 61,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "logout_then_login",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 176,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "redirect",
+     "evidence": [
+      {
+       "file": "django/shortcuts.py",
+       "line": 49,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.shortcuts)"
+    },
+    {
+     "name": "redirect_to_login",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 184,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "user_passes_test",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/decorators.py",
+       "line": 25,
+       "contains": "resolve_url"
+      }
+     ],
+     "note": "level 1, via resolve_url (django.contrib.auth.decorators)"
+    },
+    {
+     "name": "AdminSite.admin_view",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/sites.py",
+       "line": 237,
+       "contains": "redirect_to_login"
+      }
+     ],
+     "note": "level 2, via redirect_to_login (django.contrib.admin.sites)"
+    },
+    {
+     "name": "LoginRequiredMiddleware.process_view",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/middleware.py",
+       "line": 57,
+       "contains": "handle_no_permission"
+      }
+     ],
+     "note": "level 2, via LoginRequiredMiddleware.handle_no_permission (django.contrib.auth.middleware)"
+    },
+    {
+     "name": "LoginRequiredMixin.dispatch",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/mixins.py",
+       "line": 72,
+       "contains": "handle_no_permission"
+      }
+     ],
+     "note": "level 2, via AccessMixin.handle_no_permission (django.contrib.auth.mixins)"
+    },
+    {
+     "name": "PermissionRequiredMixin.dispatch",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/mixins.py",
+       "line": 108,
+       "contains": "handle_no_permission"
+      }
+     ],
+     "note": "level 2, via AccessMixin.handle_no_permission (django.contrib.auth.mixins)"
+    },
+    {
+     "name": "RedirectURLMixin.get_success_url",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 41,
+       "contains": "get_default_redirect_url"
+      }
+     ],
+     "note": "level 2, via RedirectURLMixin.get_default_redirect_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "UserPassesTestMixin.dispatch",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/mixins.py",
+       "line": 134,
+       "contains": "handle_no_permission"
+      }
+     ],
+     "note": "level 2, via AccessMixin.handle_no_permission (django.contrib.auth.mixins)"
+    },
+    {
+     "name": "login_required",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/decorators.py",
+       "line": 79,
+       "contains": "user_passes_test"
+      }
+     ],
+     "note": "level 2, via user_passes_test (django.contrib.auth.decorators)"
+    },
+    {
+     "name": "permission_required",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/decorators.py",
+       "line": 134,
+       "contains": "user_passes_test"
+      }
+     ],
+     "note": "level 2, via user_passes_test (django.contrib.auth.decorators)"
+    },
+    {
+     "name": "render_flatpage",
+     "evidence": [
+      {
+       "file": "django/contrib/flatpages/views.py",
+       "line": 58,
+       "contains": "redirect_to_login"
+      }
+     ],
+     "note": "level 2, via redirect_to_login (django.contrib.flatpages.views)"
+    },
+    {
+     "name": "staff_member_required",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/views/decorators.py",
+       "line": 12,
+       "contains": "user_passes_test"
+      }
+     ],
+     "note": "level 2, via user_passes_test (django.contrib.admin.views.decorators)"
+    },
+    {
+     "name": "AdminSite.get_urls",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/sites.py",
+       "line": 260,
+       "contains": "admin_view"
+      }
+     ],
+     "note": "level 3, via AdminSite.admin_view (django.contrib.admin.sites)"
+    },
+    {
+     "name": "LoginView.dispatch",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 82,
+       "contains": "get_success_url"
+      }
+     ],
+     "note": "level 3, via RedirectURLMixin.get_success_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "LoginView.form_valid",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 109,
+       "contains": "get_success_url"
+      }
+     ],
+     "note": "level 3, via RedirectURLMixin.get_success_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "LogoutView.post",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 142,
+       "contains": "get_success_url"
+      }
+     ],
+     "note": "level 3, via RedirectURLMixin.get_success_url (django.contrib.auth.views)"
+    },
+    {
+     "name": "flatpage",
+     "evidence": [
+      {
+       "file": "django/contrib/flatpages/views.py",
+       "line": 45,
+       "contains": "render_flatpage"
+      }
+     ],
+     "note": "level 3, via render_flatpage (django.contrib.flatpages.views)"
+    }
+   ],
+   "rationale": "Redirect targets: level 1 is contrib/auth's views, mixins, middleware and decorators and `redirect`; `user_passes_test` calls it inside its nested wrapper, so the decorator factories built on it (`login_required`, `permission_required`, `staff_member_required`) are level 2. Computed as all callers up to 3 levels up the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph; 25 functions. Each note gives the level, the function called on the way to the target and the caller's module.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-blast-iri-to-uri",
+   "repo": "django",
+   "type": "blast_radius",
+   "answer_kind": "files",
+   "question": "Suppose the behaviour of `iri_to_uri` (django/utils/encoding.py) changes. Which files in the `django/` package contain a call to `iri_to_uri`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments.",
+   "gold": [
+    {
+     "name": "django/contrib/flatpages/models.py",
+     "evidence": [
+      {
+       "file": "django/contrib/flatpages/models.py",
+       "line": 49,
+       "contains": "iri_to_uri"
+      }
+     ],
+     "note": "level 1: FlatPage.get_absolute_url -> iri_to_uri"
+    },
+    {
+     "name": "django/contrib/syndication/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/syndication/views.py",
+       "line": 21,
+       "contains": "iri_to_uri"
+      }
+     ],
+     "note": "level 1: add_domain -> iri_to_uri"
+    },
+    {
+     "name": "django/http/request.py",
+     "evidence": [
+      {
+       "file": "django/http/request.py",
+       "line": 174,
+       "contains": "iri_to_uri"
+      }
+     ],
+     "note": "level 1: HttpRequest._get_full_path -> iri_to_uri"
+    },
+    {
+     "name": "django/http/response.py",
+     "evidence": [
+      {
+       "file": "django/http/response.py",
+       "line": 618,
+       "contains": "iri_to_uri"
+      }
+     ],
+     "note": "level 1: HttpResponseRedirectBase.__init__ -> iri_to_uri"
+    },
+    {
+     "name": "django/template/defaultfilters.py",
+     "evidence": [
+      {
+       "file": "django/template/defaultfilters.py",
+       "line": 226,
+       "contains": "iri_to_uri"
+      }
+     ],
+     "note": "level 1: iriencode -> iri_to_uri"
+    },
+    {
+     "name": "django/templatetags/static.py",
+     "evidence": [
+      {
+       "file": "django/templatetags/static.py",
+       "line": 48,
+       "contains": "iri_to_uri"
+      }
+     ],
+     "note": "level 1: PrefixNode.handle_simple -> iri_to_uri"
+    },
+    {
+     "name": "django/utils/feedgenerator.py",
+     "evidence": [
+      {
+       "file": "django/utils/feedgenerator.py",
+       "line": 222,
+       "contains": "iri_to_uri"
+      }
+     ],
+     "note": "level 1: Enclosure.__init__ -> iri_to_uri"
+    },
+    {
+     "name": "django/contrib/admin/options.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1815,
+       "contains": "return HttpResponseRedirect(url)"
+      }
+     ],
+     "note": "level 2: ModelAdmin._get_obj_does_not_exist_redirect -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/contrib/admin/sites.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/sites.py",
+       "line": 232,
+       "contains": "return HttpResponseRedirect(index_path)"
+      }
+     ],
+     "note": "level 2: AdminSite.admin_view -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/contrib/auth/admin.py",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/admin.py",
+       "line": 179,
+       "contains": "return HttpResponseRedirect(request.get_full_path())"
+      }
+     ],
+     "note": "level 2: UserAdmin.user_change_password -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/contrib/auth/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 88,
+       "contains": "return HttpResponseRedirect(redirect_to)"
+      }
+     ],
+     "note": "level 2: LoginView.dispatch -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/contrib/contenttypes/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/contenttypes/views.py",
+       "line": 42,
+       "contains": "return HttpResponseRedirect(absurl)"
+      }
+     ],
+     "note": "level 2: shortcut -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/contrib/flatpages/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/flatpages/views.py",
+       "line": 42,
+       "contains": "return HttpResponsePermanentRedirect(\"%s/\" % request.path)"
+      }
+     ],
+     "note": "level 2: flatpage -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/middleware/security.py",
+     "evidence": [
+      {
+       "file": "django/middleware/security.py",
+       "line": 29,
+       "contains": "return HttpResponsePermanentRedirect("
+      }
+     ],
+     "note": "level 2: SecurityMiddleware.process_request -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/views/generic/base.py",
+     "evidence": [
+      {
+       "file": "django/views/generic/base.py",
+       "line": 260,
+       "contains": "return HttpResponsePermanentRedirect(url)"
+      }
+     ],
+     "note": "level 2: RedirectView.get -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/views/generic/edit.py",
+     "evidence": [
+      {
+       "file": "django/views/generic/edit.py",
+       "line": 265,
+       "contains": "return HttpResponseRedirect(success_url)"
+      }
+     ],
+     "note": "level 2: BaseDeleteView.form_valid -> HttpResponseRedirectBase.__init__"
+    },
+    {
+     "name": "django/views/i18n.py",
+     "evidence": [
+      {
+       "file": "django/views/i18n.py",
+       "line": 56,
+       "contains": "response = HttpResponseRedirect(next_url) if next_url else H"
+      }
+     ],
+     "note": "level 2: set_language -> HttpResponseRedirectBase.__init__"
+    }
+   ],
+   "rationale": "Level 1 includes `HttpResponseRedirectBase.__init__`, so every file that instantiates `HttpResponseRedirect` or `HttpResponsePermanentRedirect` by name is level 2 (inherited `__init__`). django/shortcuts.py is not: `redirect` instantiates through a variable. Computed from the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph: the files holding a call to the target (level 1) or to one of its direct callers (level 2); 17 files. Each note names the calling function and its callee.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-blast-current-timezone",
+   "repo": "django",
+   "type": "blast_radius",
+   "answer_kind": "files",
+   "question": "Suppose the behaviour of `get_current_timezone` (django/utils/timezone.py) changes. Which files in the `django/` package contain a call to `get_current_timezone`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments.",
+   "gold": [
+    {
+     "name": "django/db/backends/base/operations.py",
+     "evidence": [
+      {
+       "file": "django/db/backends/base/operations.py",
+       "line": 639,
+       "contains": "get_current_timezone"
+      }
+     ],
+     "note": "level 1: BaseDatabaseOperations.year_lookup_bounds_for_datetime_field -> get_current_timezone"
+    },
+    {
+     "name": "django/db/models/query.py",
+     "evidence": [
+      {
+       "file": "django/db/models/query.py",
+       "line": 1434,
+       "contains": "get_current_timezone"
+      }
+     ],
+     "note": "level 1: QuerySet.datetimes -> get_current_timezone"
+    },
+    {
+     "name": "django/forms/utils.py",
+     "evidence": [
+      {
+       "file": "django/forms/utils.py",
+       "line": 219,
+       "contains": "get_current_timezone"
+      }
+     ],
+     "note": "level 1: from_current_timezone -> get_current_timezone"
+    },
+    {
+     "name": "django/template/defaulttags.py",
+     "evidence": [
+      {
+       "file": "django/template/defaulttags.py",
+       "line": 397,
+       "contains": "get_current_timezone"
+      }
+     ],
+     "note": "level 1: NowNode.render -> get_current_timezone"
+    },
+    {
+     "name": "django/templatetags/tz.py",
+     "evidence": [
+      {
+       "file": "django/templatetags/tz.py",
+       "line": 28,
+       "contains": "get_current_timezone"
+      }
+     ],
+     "note": "level 1: localtime -> get_current_timezone"
+    },
+    {
+     "name": "django/utils/timezone.py",
+     "evidence": [
+      {
+       "file": "django/utils/timezone.py",
+       "line": 71,
+       "contains": "get_current_timezone"
+      }
+     ],
+     "note": "level 1: get_current_timezone_name -> get_current_timezone"
+    },
+    {
+     "name": "django/contrib/admin/filters.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/filters.py",
+       "line": 475,
+       "contains": "localtime"
+      }
+     ],
+     "note": "level 2: DateFieldListFilter.__init__ -> localtime"
+    },
+    {
+     "name": "django/contrib/admin/templatetags/admin_list.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/templatetags/admin_list.py",
+       "line": 391,
+       "contains": "localtime"
+      }
+     ],
+     "note": "level 2: date_hierarchy -> localtime"
+    },
+    {
+     "name": "django/contrib/admin/views/main.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/views/main.py",
+       "line": 261,
+       "contains": "make_aware"
+      }
+     ],
+     "note": "level 2: ChangeList.get_filters -> make_aware"
+    },
+    {
+     "name": "django/contrib/sitemaps/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/sitemaps/views.py",
+       "line": 38,
+       "contains": "make_aware"
+      }
+     ],
+     "note": "level 2: _get_latest_lastmod -> make_aware"
+    },
+    {
+     "name": "django/contrib/syndication/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/syndication/views.py",
+       "line": 209,
+       "contains": "make_aware"
+      }
+     ],
+     "note": "level 2: Feed.get_feed -> make_aware"
+    },
+    {
+     "name": "django/db/backends/mysql/operations.py",
+     "evidence": [
+      {
+       "file": "django/db/backends/mysql/operations.py",
+       "line": 265,
+       "contains": "make_naive"
+      }
+     ],
+     "note": "level 2: DatabaseOperations.adapt_datetimefield_value -> make_naive"
+    },
+    {
+     "name": "django/db/backends/oracle/operations.py",
+     "evidence": [
+      {
+       "file": "django/db/backends/oracle/operations.py",
+       "line": 608,
+       "contains": "make_naive"
+      }
+     ],
+     "note": "level 2: DatabaseOperations.adapt_datetimefield_value -> make_naive"
+    },
+    {
+     "name": "django/db/backends/sqlite3/_functions.py",
+     "evidence": [
+      {
+       "file": "django/db/backends/sqlite3/_functions.py",
+       "line": 124,
+       "contains": "localtime"
+      }
+     ],
+     "note": "level 2: _sqlite_datetime_parse -> localtime"
+    },
+    {
+     "name": "django/db/backends/sqlite3/operations.py",
+     "evidence": [
+      {
+       "file": "django/db/backends/sqlite3/operations.py",
+       "line": 269,
+       "contains": "make_naive"
+      }
+     ],
+     "note": "level 2: DatabaseOperations.adapt_datetimefield_value -> make_naive"
+    },
+    {
+     "name": "django/db/models/fields/__init__.py",
+     "evidence": [
+      {
+       "file": "django/db/models/fields/__init__.py",
+       "line": 1481,
+       "contains": "make_naive"
+      }
+     ],
+     "note": "level 2: DateField.to_python -> make_naive"
+    },
+    {
+     "name": "django/db/models/functions/datetime.py",
+     "evidence": [
+      {
+       "file": "django/db/models/functions/datetime.py",
+       "line": 35,
+       "contains": "get_current_timezone_name"
+      }
+     ],
+     "note": "level 2: TimezoneMixin.get_tzname -> get_current_timezone_name"
+    },
+    {
+     "name": "django/forms/fields.py",
+     "evidence": [
+      {
+       "file": "django/forms/fields.py",
+       "line": 545,
+       "contains": "from_current_timezone"
+      }
+     ],
+     "note": "level 2: DateTimeField.to_python -> from_current_timezone"
+    },
+    {
+     "name": "django/http/response.py",
+     "evidence": [
+      {
+       "file": "django/http/response.py",
+       "line": 242,
+       "contains": "make_aware"
+      }
+     ],
+     "note": "level 2: HttpResponseBase.set_cookie -> make_aware"
+    },
+    {
+     "name": "django/template/context_processors.py",
+     "evidence": [
+      {
+       "file": "django/template/context_processors.py",
+       "line": 71,
+       "contains": "get_current_timezone_name"
+      }
+     ],
+     "note": "level 2: tz -> get_current_timezone_name"
+    },
+    {
+     "name": "django/utils/cache.py",
+     "evidence": [
+      {
+       "file": "django/utils/cache.py",
+       "line": 346,
+       "contains": "get_current_timezone_name"
+      }
+     ],
+     "note": "level 2: _i18n_cache_key_suffix -> get_current_timezone_name"
+    },
+    {
+     "name": "django/utils/dateformat.py",
+     "evidence": [
+      {
+       "file": "django/utils/dateformat.py",
+       "line": 271,
+       "contains": "make_aware"
+      }
+     ],
+     "note": "level 2: DateFormat.r -> make_aware"
+    },
+    {
+     "name": "django/views/decorators/http.py",
+     "evidence": [
+      {
+       "file": "django/views/decorators/http.py",
+       "line": 113,
+       "contains": "make_aware"
+      }
+     ],
+     "note": "level 2: condition -> make_aware"
+    },
+    {
+     "name": "django/views/generic/dates.py",
+     "evidence": [
+      {
+       "file": "django/views/generic/dates.py",
+       "line": 279,
+       "contains": "make_aware"
+      }
+     ],
+     "note": "level 2: DateMixin._make_date_lookup_arg -> make_aware"
+    }
+   ],
+   "rationale": "Level 1 includes the helpers in utils/timezone.py (`localtime`, `make_aware`, `make_naive`, `get_current_timezone_name`) that call it without an argument, so their callers across the admin, database backends, forms, HTTP and views are level 2. Computed from the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph: the files holding a call to the target (level 1) or to one of its direct callers (level 2); 24 files. Each note names the calling function and its callee.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-blast-template-does-not-exist",
+   "repo": "django",
+   "type": "blast_radius",
+   "answer_kind": "files",
+   "question": "Suppose the constructor of `TemplateDoesNotExist` (django/template/exceptions.py) gains a required parameter. Which files in the `django/` package contain code that instantiates `TemplateDoesNotExist` (`raise TemplateDoesNotExist(...)` included), or a call to a function or method that does so directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments.",
+   "gold": [
+    {
+     "name": "django/template/backends/dummy.py",
+     "evidence": [
+      {
+       "file": "django/template/backends/dummy.py",
+       "line": 39,
+       "contains": "TemplateDoesNotExist"
+      }
+     ],
+     "note": "level 1: TemplateStrings.get_template -> TemplateDoesNotExist.__init__"
+    },
+    {
+     "name": "django/template/backends/jinja2.py",
+     "evidence": [
+      {
+       "file": "django/template/backends/jinja2.py",
+       "line": 44,
+       "contains": "TemplateDoesNotExist"
+      }
+     ],
+     "note": "level 1: Jinja2.get_template -> TemplateDoesNotExist.__init__"
+    },
+    {
+     "name": "django/template/engine.py",
+     "evidence": [
+      {
+       "file": "django/template/engine.py",
+       "line": 163,
+       "contains": "TemplateDoesNotExist"
+      }
+     ],
+     "note": "level 1: Engine.find_template -> TemplateDoesNotExist.__init__"
+    },
+    {
+     "name": "django/template/loader.py",
+     "evidence": [
+      {
+       "file": "django/template/loader.py",
+       "line": 19,
+       "contains": "TemplateDoesNotExist"
+      }
+     ],
+     "note": "level 1: get_template -> TemplateDoesNotExist.__init__"
+    },
+    {
+     "name": "django/template/loaders/base.py",
+     "evidence": [
+      {
+       "file": "django/template/loaders/base.py",
+       "line": 35,
+       "contains": "TemplateDoesNotExist"
+      }
+     ],
+     "note": "level 1: Loader.get_template -> TemplateDoesNotExist.__init__"
+    },
+    {
+     "name": "django/template/loaders/filesystem.py",
+     "evidence": [
+      {
+       "file": "django/template/loaders/filesystem.py",
+       "line": 25,
+       "contains": "TemplateDoesNotExist"
+      }
+     ],
+     "note": "level 1: Loader.get_contents -> TemplateDoesNotExist.__init__"
+    },
+    {
+     "name": "django/template/loaders/locmem.py",
+     "evidence": [
+      {
+       "file": "django/template/loaders/locmem.py",
+       "line": 19,
+       "contains": "TemplateDoesNotExist"
+      }
+     ],
+     "note": "level 1: Loader.get_contents -> TemplateDoesNotExist.__init__"
+    },
+    {
+     "name": "django/contrib/admin/templatetags/admin_list.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/templatetags/admin_list.py",
+       "line": 502,
+       "contains": "get_template"
+      }
+     ],
+     "note": "level 2: admin_list_filter -> get_template"
+    },
+    {
+     "name": "django/contrib/flatpages/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/flatpages/views.py",
+       "line": 62,
+       "contains": "get_template"
+      }
+     ],
+     "note": "level 2: render_flatpage -> get_template"
+    },
+    {
+     "name": "django/contrib/syndication/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/syndication/views.py",
+       "line": 169,
+       "contains": "get_template"
+      }
+     ],
+     "note": "level 2: Feed.get_feed -> get_template"
+    },
+    {
+     "name": "django/forms/renderers.py",
+     "evidence": [
+      {
+       "file": "django/forms/renderers.py",
+       "line": 110,
+       "contains": "get_template"
+      }
+     ],
+     "note": "level 2: TemplatesSetting.get_template -> get_template"
+    },
+    {
+     "name": "django/template/loaders/cached.py",
+     "evidence": [
+      {
+       "file": "django/template/loaders/cached.py",
+       "line": 57,
+       "contains": "get_template"
+      }
+     ],
+     "note": "level 2: Loader.get_template -> Loader.get_template"
+    },
+    {
+     "name": "django/template/response.py",
+     "evidence": [
+      {
+       "file": "django/template/response.py",
+       "line": 74,
+       "contains": "get_template"
+      }
+     ],
+     "note": "level 2: SimpleTemplateResponse.resolve_template -> get_template"
+    },
+    {
+     "name": "django/views/csrf.py",
+     "evidence": [
+      {
+       "file": "django/views/csrf.py",
+       "line": 69,
+       "contains": "get_template"
+      }
+     ],
+     "note": "level 2: csrf_failure -> get_template"
+    },
+    {
+     "name": "django/views/defaults.py",
+     "evidence": [
+      {
+       "file": "django/views/defaults.py",
+       "line": 111,
+       "contains": "get_template"
+      }
+     ],
+     "note": "level 2: bad_request -> get_template"
+    },
+    {
+     "name": "django/views/static.py",
+     "evidence": [
+      {
+       "file": "django/views/static.py",
+       "line": 73,
+       "contains": "select_template"
+      }
+     ],
+     "note": "level 2: directory_index -> select_template"
+    }
+   ],
+   "rationale": "Level 1: the template backends, engine, loaders and `get_template` in template/loader.py; level 2 adds the callers of those (`get_template` and `select_template` users in admin, flatpages, syndication, forms renderers and views). Computed from the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph: the files holding a call to the target (level 1) or to one of its direct callers (level 2); 16 files. Each note names the calling function and its callee.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-blast-script-prefix",
+   "repo": "django",
+   "type": "blast_radius",
+   "answer_kind": "files",
+   "question": "Suppose the behaviour of the function `get_script_prefix` in django/urls/base.py changes (not the `get_script_prefix` method of `ASGIHandler` in django/core/handlers/asgi.py). Which files in the `django/` package contain a call to `get_script_prefix`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments.",
+   "gold": [
+    {
+     "name": "django/conf/__init__.py",
+     "evidence": [
+      {
+       "file": "django/conf/__init__.py",
+       "line": 139,
+       "contains": "get_script_prefix"
+      }
+     ],
+     "note": "level 1: LazySettings._add_script_prefix -> get_script_prefix"
+    },
+    {
+     "name": "django/contrib/admin/templatetags/admin_urls.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/templatetags/admin_urls.py",
+       "line": 37,
+       "contains": "get_script_prefix"
+      }
+     ],
+     "note": "level 1: add_preserved_filters -> get_script_prefix"
+    },
+    {
+     "name": "django/contrib/flatpages/models.py",
+     "evidence": [
+      {
+       "file": "django/contrib/flatpages/models.py",
+       "line": 49,
+       "contains": "get_script_prefix"
+      }
+     ],
+     "note": "level 1: FlatPage.get_absolute_url -> get_script_prefix"
+    },
+    {
+     "name": "django/middleware/locale.py",
+     "evidence": [
+      {
+       "file": "django/middleware/locale.py",
+       "line": 64,
+       "contains": "get_script_prefix"
+      }
+     ],
+     "note": "level 1: LocaleMiddleware.process_response -> get_script_prefix"
+    },
+    {
+     "name": "django/test/utils.py",
+     "evidence": [
+      {
+       "file": "django/test/utils.py",
+       "line": 878,
+       "contains": "get_script_prefix"
+      }
+     ],
+     "note": "level 1: override_script_prefix.enable -> get_script_prefix"
+    },
+    {
+     "name": "django/urls/base.py",
+     "evidence": [
+      {
+       "file": "django/urls/base.py",
+       "line": 34,
+       "contains": "get_script_prefix"
+      }
+     ],
+     "note": "level 1: reverse -> get_script_prefix"
+    },
+    {
+     "name": "django/contrib/admin/helpers.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/helpers.py",
+       "line": 257,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: AdminReadonlyField.get_admin_url -> reverse"
+    },
+    {
+     "name": "django/contrib/admin/models.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/models.py",
+       "line": 243,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: LogEntry.get_admin_url -> reverse"
+    },
+    {
+     "name": "django/contrib/admin/options.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 366,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: BaseModelAdmin.get_view_on_site_url -> reverse"
+    },
+    {
+     "name": "django/contrib/admin/sites.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/sites.py",
+       "line": 506,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: AdminSite._build_app_dict -> reverse"
+    },
+    {
+     "name": "django/contrib/admin/templatetags/admin_list.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/templatetags/admin_list.py",
+       "line": 261,
+       "contains": "add_preserved_filters"
+      }
+     ],
+     "note": "level 2: items_for_result -> add_preserved_filters"
+    },
+    {
+     "name": "django/contrib/admin/utils.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/utils.py",
+       "line": 153,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: get_deleted_objects -> reverse"
+    },
+    {
+     "name": "django/contrib/admin/views/main.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/views/main.py",
+       "line": 627,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: ChangeList.url_for_result -> reverse"
+    },
+    {
+     "name": "django/contrib/admin/widgets.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/widgets.py",
+       "line": 506,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: AutocompleteMixin.get_url -> reverse"
+    },
+    {
+     "name": "django/contrib/admindocs/utils.py",
+     "evidence": [
+      {
+       "file": "django/contrib/admindocs/utils.py",
+       "line": 67,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: parse_rst -> reverse"
+    },
+    {
+     "name": "django/contrib/auth/admin.py",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/admin.py",
+       "line": 191,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: UserAdmin.user_change_password -> reverse"
+    },
+    {
+     "name": "django/contrib/gis/sitemaps/kml.py",
+     "evidence": [
+      {
+       "file": "django/contrib/gis/sitemaps/kml.py",
+       "line": 67,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: KMLSitemap.location -> reverse"
+    },
+    {
+     "name": "django/contrib/sitemaps/views.py",
+     "evidence": [
+      {
+       "file": "django/contrib/sitemaps/views.py",
+       "line": 62,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: index -> reverse"
+    },
+    {
+     "name": "django/shortcuts.py",
+     "evidence": [
+      {
+       "file": "django/shortcuts.py",
+       "line": 180,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: resolve_url -> reverse"
+    },
+    {
+     "name": "django/template/defaulttags.py",
+     "evidence": [
+      {
+       "file": "django/template/defaulttags.py",
+       "line": 480,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: URLNode.render -> reverse"
+    },
+    {
+     "name": "django/views/generic/base.py",
+     "evidence": [
+      {
+       "file": "django/views/generic/base.py",
+       "line": 247,
+       "contains": "reverse"
+      }
+     ],
+     "note": "level 2: RedirectView.get_redirect_url -> reverse"
+    }
+   ],
+   "rationale": "Level 1 includes `reverse` in urls/base.py, so every file that calls `reverse` is level 2. Computed from the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph: the files holding a call to the target (level 1) or to one of its direct callers (level 2); 21 files. Each note names the calling function and its callee.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-amb-transaction-get-connection",
+   "repo": "django",
+   "type": "ambiguous",
+   "answer_kind": "symbols",
+   "question": "Django defines several functions and methods named `get_connection`. Which functions or methods in the `django/` package call `get_connection` (django/db/transaction.py) directly (not `get_connection` in django/core/mail/__init__.py, `EmailMessage.get_connection` or any other `get_connection`), call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_connection` itself.",
+   "gold": [
+    {
+     "name": "Atomic.__enter__",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 183,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "Atomic.__exit__",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 225,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "clean_savepoints",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 77,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "commit",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 40,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "get_autocommit",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 30,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "get_rollback",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 82,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "mark_for_rollback_on_error",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 122,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "on_commit",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 134,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "rollback",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 45,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "savepoint",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 54,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "savepoint_commit",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 70,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "savepoint_rollback",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 62,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "set_autocommit",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 35,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "set_rollback",
+     "evidence": [
+      {
+       "file": "django/db/transaction.py",
+       "line": 97,
+       "contains": "get_connection"
+      }
+     ],
+     "note": "level 1, via get_connection (django.db.transaction)"
+    },
+    {
+     "name": "Collector.delete",
+     "evidence": [
+      {
+       "file": "django/db/models/deletion.py",
+       "line": 448,
+       "contains": "mark_for_rollback_on_error"
+      }
+     ],
+     "note": "level 2, via mark_for_rollback_on_error (django.db.models.deletion)"
+    },
+    {
+     "name": "Command.handle",
+     "evidence": [
+      {
+       "file": "django/core/management/commands/loaddata.py",
+       "line": 109,
+       "contains": "get_autocommit"
+      }
+     ],
+     "note": "level 2, via get_autocommit (django.core.management.commands.loaddata)"
+    },
+    {
+     "name": "Model.save_base",
+     "evidence": [
+      {
+       "file": "django/db/models/base.py",
+       "line": 989,
+       "contains": "mark_for_rollback_on_error"
+      }
+     ],
+     "note": "level 2, via mark_for_rollback_on_error (django.db.models.base)"
+    },
+    {
+     "name": "QuerySet.update",
+     "evidence": [
+      {
+       "file": "django/db/models/query.py",
+       "line": 1252,
+       "contains": "mark_for_rollback_on_error"
+      }
+     ],
+     "note": "level 2, via mark_for_rollback_on_error (django.db.models.query)"
+    },
+    {
+     "name": "TestCase._rollback_atomics",
+     "evidence": [
+      {
+       "file": "django/test/testcases.py",
+       "line": 1365,
+       "contains": "set_rollback"
+      }
+     ],
+     "note": "level 2, via set_rollback (django.test.testcases)"
+    },
+    {
+     "name": "Model.save",
+     "evidence": [
+      {
+       "file": "django/db/models/base.py",
+       "line": 892,
+       "contains": "save_base"
+      }
+     ],
+     "note": "level 3, via Model.save_base (django.db.models.base)"
+    },
+    {
+     "name": "TestCase._fixture_teardown",
+     "evidence": [
+      {
+       "file": "django/test/testcases.py",
+       "line": 1457,
+       "contains": "_rollback_atomics"
+      }
+     ],
+     "note": "level 3, via TestCase._rollback_atomics (django.test.testcases)"
+    },
+    {
+     "name": "TestCase.setUpClass",
+     "evidence": [
+      {
+       "file": "django/test/testcases.py",
+       "line": 1396,
+       "contains": "_rollback_atomics"
+      }
+     ],
+     "note": "level 3, via TestCase._rollback_atomics (django.test.testcases)"
+    },
+    {
+     "name": "TestCase.tearDownClass",
+     "evidence": [
+      {
+       "file": "django/test/testcases.py",
+       "line": 1414,
+       "contains": "_rollback_atomics"
+      }
+     ],
+     "note": "level 3, via TestCase._rollback_atomics (django.test.testcases)"
+    }
+   ],
+   "rationale": "Level 1 is the module-level API of db/transaction.py and `Atomic`; levels 2 and 3 are its callers through `transaction.<function>(...)`. The mail `get_connection` has its own, unrelated callers. Computed as all callers up to 3 levels up the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph; 23 functions. Each note gives the level, the function called on the way to the target and the caller's module.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-amb-migrations-resolve-relation",
+   "repo": "django",
+   "type": "ambiguous",
+   "answer_kind": "symbols",
+   "question": "Two modules define a function named `resolve_relation`. Which functions or methods in the `django/` package call `resolve_relation` (django/db/migrations/utils.py) directly (not the `resolve_relation` in django/db/models/fields/related.py), call such a caller, or call one of those - that is, every caller up to two levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `resolve_relation` itself.",
+   "gold": [
+    {
+     "name": "CreateModel.references_model",
+     "evidence": [
+      {
+       "file": "django/db/migrations/operations/models.py",
+       "line": 125,
+       "contains": "resolve_relation"
+      }
+     ],
+     "note": "level 1, via resolve_relation (django.db.migrations.operations.models)"
+    },
+    {
+     "name": "MigrationAutodetector._generate_through_model_map",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 264,
+       "contains": "resolve_relation"
+      }
+     ],
+     "note": "level 1, via resolve_relation (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "MigrationAutodetector._get_dependencies_for_foreign_key",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 1526,
+       "contains": "resolve_relation"
+      }
+     ],
+     "note": "level 1, via resolve_relation (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "MigrationAutodetector.generate_altered_fields",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 1229,
+       "contains": "resolve_relation"
+      }
+     ],
+     "note": "level 1, via resolve_relation (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "MigrationAutodetector.generate_created_models",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 720,
+       "contains": "resolve_relation"
+      }
+     ],
+     "note": "level 1, via resolve_relation (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "ProjectState.update_model_field_relation",
+     "evidence": [
+      {
+       "file": "django/db/migrations/state.py",
+       "line": 444,
+       "contains": "resolve_relation"
+      }
+     ],
+     "note": "level 1, via resolve_relation (django.db.migrations.state)"
+    },
+    {
+     "name": "field_references",
+     "evidence": [
+      {
+       "file": "django/db/migrations/utils.py",
+       "line": 74,
+       "contains": "resolve_relation"
+      }
+     ],
+     "note": "level 1, via resolve_relation (django.db.migrations.utils)"
+    },
+    {
+     "name": "FieldOperation.references_field",
+     "evidence": [
+      {
+       "file": "django/db/migrations/operations/fields.py",
+       "line": 61,
+       "contains": "field_references"
+      }
+     ],
+     "note": "level 2, via field_references (django.db.migrations.operations.fields)"
+    },
+    {
+     "name": "FieldOperation.references_model",
+     "evidence": [
+      {
+       "file": "django/db/migrations/operations/fields.py",
+       "line": 37,
+       "contains": "field_references"
+      }
+     ],
+     "note": "level 2, via field_references (django.db.migrations.operations.fields)"
+    },
+    {
+     "name": "MigrationAutodetector._detect_changes",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 185,
+       "contains": "_generate_through_model_map"
+      }
+     ],
+     "note": "level 2, via MigrationAutodetector._generate_through_model_map (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "MigrationAutodetector._generate_added_field",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 1122,
+       "contains": "_get_dependencies_for_foreign_key"
+      }
+     ],
+     "note": "level 2, via MigrationAutodetector._get_dependencies_for_foreign_key (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "MigrationAutodetector._get_altered_foo_together_operations",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 1621,
+       "contains": "_get_dependencies_for_foreign_key"
+      }
+     ],
+     "note": "level 2, via MigrationAutodetector._get_dependencies_for_foreign_key (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "MigrationAutodetector._get_dependencies_for_model",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 1580,
+       "contains": "_get_dependencies_for_foreign_key"
+      }
+     ],
+     "note": "level 2, via MigrationAutodetector._get_dependencies_for_foreign_key (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "MigrationAutodetector.generate_renamed_models",
+     "evidence": [
+      {
+       "file": "django/db/migrations/autodetector.py",
+       "line": 603,
+       "contains": "_get_dependencies_for_foreign_key"
+      }
+     ],
+     "note": "level 2, via MigrationAutodetector._get_dependencies_for_foreign_key (django.db.migrations.autodetector)"
+    },
+    {
+     "name": "ProjectState.resolve_model_field_relations",
+     "evidence": [
+      {
+       "file": "django/db/migrations/state.py",
+       "line": 472,
+       "contains": "update_model_field_relation"
+      }
+     ],
+     "note": "level 2, via ProjectState.update_model_field_relation (django.db.migrations.state)"
+    },
+    {
+     "name": "get_references",
+     "evidence": [
+      {
+       "file": "django/db/migrations/utils.py",
+       "line": 120,
+       "contains": "field_references"
+      }
+     ],
+     "note": "level 2, via field_references (django.db.migrations.utils)"
+    }
+   ],
+   "rationale": "The migrations helper is used by the autodetector, operations and project state; the same-named function in db/models/fields/related.py serves lazy model relations. Computed as all callers up to 2 levels up the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph; 16 functions. Each note gives the level, the function called on the way to the target and the caller's module.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-amb-urls-resolve",
+   "repo": "django",
+   "type": "ambiguous",
+   "answer_kind": "symbols",
+   "question": "Many functions and methods in Django are named `resolve`. Which functions or methods in the `django/` package call `resolve` (django/urls/base.py) directly (not `URLResolver.resolve`, `URLPattern.resolve`, `Variable.resolve`, `FilterExpression.resolve` or any other `resolve`), call such a caller, or call one of those - that is, every caller up to two levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `resolve` itself.",
+   "gold": [
+    {
+     "name": "AdminSite.catch_all_view",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/sites.py",
+       "line": 454,
+       "contains": "resolve"
+      }
+     ],
+     "note": "level 1, via resolve (django.contrib.admin.sites)"
+    },
+    {
+     "name": "AsyncClient.request",
+     "evidence": [
+      {
+       "file": "django/test/client.py",
+       "line": 1460,
+       "contains": "resolve"
+      }
+     ],
+     "note": "level 1, via resolve (django.test.client)"
+    },
+    {
+     "name": "Client.request",
+     "evidence": [
+      {
+       "file": "django/test/client.py",
+       "line": 1103,
+       "contains": "resolve"
+      }
+     ],
+     "note": "level 1, via resolve (django.test.client)"
+    },
+    {
+     "name": "add_preserved_filters",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/templatetags/admin_urls.py",
+       "line": 39,
+       "contains": "resolve"
+      }
+     ],
+     "note": "level 1, via resolve (django.contrib.admin.templatetags.admin_urls)"
+    },
+    {
+     "name": "get_caller",
+     "evidence": [
+      {
+       "file": "django/views/debug.py",
+       "line": 102,
+       "contains": "resolve"
+      }
+     ],
+     "note": "level 1, via resolve (django.views.debug)"
+    },
+    {
+     "name": "is_valid_path",
+     "evidence": [
+      {
+       "file": "django/urls/base.py",
+       "line": 155,
+       "contains": "resolve"
+      }
+     ],
+     "note": "level 1, via resolve (django.urls.base)"
+    },
+    {
+     "name": "translate_url",
+     "evidence": [
+      {
+       "file": "django/urls/base.py",
+       "line": 169,
+       "contains": "resolve"
+      }
+     ],
+     "note": "level 1, via resolve (django.urls.base)"
+    },
+    {
+     "name": "CommonMiddleware.should_redirect_with_slash",
+     "evidence": [
+      {
+       "file": "django/middleware/common.py",
+       "line": 69,
+       "contains": "is_valid_path"
+      }
+     ],
+     "note": "level 2, via is_valid_path (django.middleware.common)"
+    },
+    {
+     "name": "ExceptionReporter.get_traceback_data",
+     "evidence": [
+      {
+       "file": "django/views/debug.py",
+       "line": 411,
+       "contains": "get_caller"
+      }
+     ],
+     "note": "level 2, via get_caller (django.views.debug)"
+    },
+    {
+     "name": "LocaleMiddleware.process_response",
+     "evidence": [
+      {
+       "file": "django/middleware/locale.py",
+       "line": 56,
+       "contains": "is_valid_path"
+      }
+     ],
+     "note": "level 2, via is_valid_path (django.middleware.locale)"
+    },
+    {
+     "name": "ModelAdmin._response_post_save",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1590,
+       "contains": "add_preserved_filters"
+      }
+     ],
+     "note": "level 2, via add_preserved_filters (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.render_change_form",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1329,
+       "contains": "add_preserved_filters"
+      }
+     ],
+     "note": "level 2, via add_preserved_filters (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.response_add",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1455,
+       "contains": "add_preserved_filters"
+      }
+     ],
+     "note": "level 2, via add_preserved_filters (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.response_change",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1543,
+       "contains": "add_preserved_filters"
+      }
+     ],
+     "note": "level 2, via add_preserved_filters (django.contrib.admin.options)"
+    },
+    {
+     "name": "ModelAdmin.response_delete",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/options.py",
+       "line": 1721,
+       "contains": "add_preserved_filters"
+      }
+     ],
+     "note": "level 2, via add_preserved_filters (django.contrib.admin.options)"
+    },
+    {
+     "name": "items_for_result",
+     "evidence": [
+      {
+       "file": "django/contrib/admin/templatetags/admin_list.py",
+       "line": 261,
+       "contains": "add_preserved_filters"
+      }
+     ],
+     "note": "level 2, via add_preserved_filters (django.contrib.admin.templatetags.admin_list)"
+    },
+    {
+     "name": "set_language",
+     "evidence": [
+      {
+       "file": "django/views/i18n.py",
+       "line": 61,
+       "contains": "translate_url"
+      }
+     ],
+     "note": "level 2, via translate_url (django.views.i18n)"
+    },
+    {
+     "name": "technical_404_response",
+     "evidence": [
+      {
+       "file": "django/views/debug.py",
+       "line": 649,
+       "contains": "get_caller"
+      }
+     ],
+     "note": "level 2, via get_caller (django.views.debug)"
+    }
+   ],
+   "rationale": "The module-level URL resolver function; its level-2 callers are mostly admin views through `add_preserved_filters` and middleware through `is_valid_path`. Computed as all callers up to 2 levels up the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph; 18 functions. Each note gives the level, the function called on the way to the target and the caller's module.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  },
+  {
+   "id": "django-amb-auth-load-backend",
+   "repo": "django",
+   "type": "ambiguous",
+   "answer_kind": "symbols",
+   "question": "Two modules define a function named `load_backend`. Which functions or methods in the `django/` package call `load_backend` (django/contrib/auth/__init__.py) directly (not the database `load_backend` in django/db/utils.py), call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `load_backend` itself.",
+   "gold": [
+    {
+     "name": "ClientMixin._get_backend",
+     "evidence": [
+      {
+       "file": "django/test/client.py",
+       "line": 870,
+       "contains": "load_backend"
+      }
+     ],
+     "note": "level 1, via load_backend (django.test.client)"
+    },
+    {
+     "name": "RemoteUserMiddleware._remove_invalid_user",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/middleware.py",
+       "line": 169,
+       "contains": "load_backend"
+      }
+     ],
+     "note": "level 1, via load_backend (django.contrib.auth.middleware)"
+    },
+    {
+     "name": "RemoteUserMiddleware.clean_username",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/middleware.py",
+       "line": 156,
+       "contains": "load_backend"
+      }
+     ],
+     "note": "level 1, via load_backend (django.contrib.auth.middleware)"
+    },
+    {
+     "name": "UserManager.with_perm",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/models.py",
+       "line": 192,
+       "contains": "load_backend"
+      }
+     ],
+     "note": "level 1, via load_backend (django.contrib.auth.models)"
+    },
+    {
+     "name": "_get_backends",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/__init__.py",
+       "line": 29,
+       "contains": "load_backend"
+      }
+     ],
+     "note": "level 1, via load_backend (django.contrib.auth)"
+    },
+    {
+     "name": "get_user",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/__init__.py",
+       "line": 215,
+       "contains": "load_backend"
+      }
+     ],
+     "note": "level 1, via load_backend (django.contrib.auth)"
+    },
+    {
+     "name": "ClientMixin.aforce_login",
+     "evidence": [
+      {
+       "file": "django/test/client.py",
+       "line": 862,
+       "contains": "_get_backend"
+      }
+     ],
+     "note": "level 2, via ClientMixin._get_backend (django.test.client)"
+    },
+    {
+     "name": "ClientMixin.force_login",
+     "evidence": [
+      {
+       "file": "django/test/client.py",
+       "line": 856,
+       "contains": "_get_backend"
+      }
+     ],
+     "note": "level 2, via ClientMixin._get_backend (django.test.client)"
+    },
+    {
+     "name": "ClientMixin.logout",
+     "evidence": [
+      {
+       "file": "django/test/client.py",
+       "line": 926,
+       "contains": "get_user"
+      }
+     ],
+     "note": "level 2, via get_user (django.test.client)"
+    },
+    {
+     "name": "RemoteUserMiddleware.process_request",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/middleware.py",
+       "line": 128,
+       "contains": "_remove_invalid_user"
+      }
+     ],
+     "note": "level 2, via RemoteUserMiddleware._remove_invalid_user (django.contrib.auth.middleware)"
+    },
+    {
+     "name": "authenticate",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/__init__.py",
+       "line": 70,
+       "contains": "_get_backends"
+      }
+     ],
+     "note": "level 2, via _get_backends (django.contrib.auth)"
+    },
+    {
+     "name": "get_backends",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/__init__.py",
+       "line": 40,
+       "contains": "_get_backends"
+      }
+     ],
+     "note": "level 2, via _get_backends (django.contrib.auth)"
+    },
+    {
+     "name": "login",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/__init__.py",
+       "line": 131,
+       "contains": "_get_backends"
+      }
+     ],
+     "note": "level 2, via _get_backends (django.contrib.auth)"
+    },
+    {
+     "name": "AuthenticationForm.clean",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/forms.py",
+       "line": 356,
+       "contains": "authenticate"
+      }
+     ],
+     "note": "level 3, via authenticate (django.contrib.auth.forms)"
+    },
+    {
+     "name": "AuthenticationMiddleware.process_request",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/middleware.py",
+       "line": 37,
+       "contains": "get_user"
+      }
+     ],
+     "note": "level 3, via get_user (django.contrib.auth.middleware)"
+    },
+    {
+     "name": "ClientMixin._login",
+     "evidence": [
+      {
+       "file": "django/test/client.py",
+       "line": 884,
+       "contains": "login"
+      }
+     ],
+     "note": "level 3, via login (django.test.client)"
+    },
+    {
+     "name": "ClientMixin.login",
+     "evidence": [
+      {
+       "file": "django/test/client.py",
+       "line": 838,
+       "contains": "authenticate"
+      }
+     ],
+     "note": "level 3, via authenticate (django.test.client)"
+    },
+    {
+     "name": "LoginView.form_valid",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 108,
+       "contains": "login"
+      }
+     ],
+     "note": "level 3, via login (django.contrib.auth.views)"
+    },
+    {
+     "name": "PasswordResetConfirmView.form_valid",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/views.py",
+       "line": 324,
+       "contains": "login"
+      }
+     ],
+     "note": "level 3, via login (django.contrib.auth.views)"
+    },
+    {
+     "name": "_user_get_permissions",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/models.py",
+       "line": 207,
+       "contains": "get_backends"
+      }
+     ],
+     "note": "level 3, via get_backends (django.contrib.auth.models)"
+    },
+    {
+     "name": "_user_has_module_perms",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/models.py",
+       "line": 232,
+       "contains": "get_backends"
+      }
+     ],
+     "note": "level 3, via get_backends (django.contrib.auth.models)"
+    },
+    {
+     "name": "_user_has_perm",
+     "evidence": [
+      {
+       "file": "django/contrib/auth/models.py",
+       "line": 217,
+       "contains": "get_backends"
+      }
+     ],
+     "note": "level 3, via get_backends (django.contrib.auth.models)"
+    }
+   ],
+   "rationale": "The authentication backend loader: level 1 is contrib/auth (`_get_backends`, `get_user`), the remote-user middleware, `UserManager.with_perm` and the test client; levels 2 and 3 reach `authenticate`, `login` and their callers. `get_user` names two functions (contrib/auth/__init__.py and contrib/auth/middleware.py), one answer item. Computed as all callers up to 3 levels up the py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges) call graph; 22 functions. Each note gives the level, the function called on the way to the target and the caller's module.",
+   "verified_with": [
+    "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
+    "grep audit of every name on each chain (outcome_tasks.py --audit)",
+    "reading the call sites"
+   ]
+  }
+ ]
+}
