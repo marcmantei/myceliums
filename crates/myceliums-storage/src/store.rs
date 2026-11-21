@@ -178,22 +178,23 @@ fn escape_lance_str(value: &str) -> String {
 }
 
 /// Which directory a path names, as far as the platform can tell: on Unix
-/// device, inode and change time (an inode number alone can be reused at
-/// once by a directory created right after another was removed).
+/// device, inode and birth time. An inode number alone can be reused at
+/// once by a directory created right after another was removed; the birth
+/// time tells the two apart. The change time would too, but it also moves
+/// whenever an entry is added to or removed from the directory, so a live
+/// index that an analysis emptied for a moment would look replaced and be
+/// removed (#118). Where the file system records no birth time, device and
+/// inode alone: a reused inode then goes unnoticed (an empty directory is
+/// left behind), but a live index is never taken for a new one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct DirIdentity(Option<(u64, u64, i64, i64)>);
+struct DirIdentity(Option<(u64, u64, Option<std::time::SystemTime>)>);
 
 impl DirIdentity {
     fn of(meta: &std::fs::Metadata) -> Self {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            DirIdentity(Some((
-                meta.dev(),
-                meta.ino(),
-                meta.ctime(),
-                meta.ctime_nsec(),
-            )))
+            DirIdentity(Some((meta.dev(), meta.ino(), meta.created().ok())))
         }
         #[cfg(not(unix))]
         {
@@ -1453,7 +1454,8 @@ mod tests {
     }
 
     /// #118: an index removed between the check and LanceDB's `connect`
-    /// (which creates the directory) is told apart from the one checked.
+    /// (which creates the directory) is told apart from the one checked,
+    /// and the checked one emptied in between is not.
     #[cfg(unix)]
     #[test]
     fn a_recreated_empty_directory_is_detected() {
@@ -1463,10 +1465,20 @@ mod tests {
         let before = DirIdentity::of(&std::fs::metadata(&db).unwrap());
         assert!(!recreated_empty(&db, before), "the same directory");
 
+        // An analysis that empties the live directory for a moment (its
+        // change time moves) has not replaced it.
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(db.join("symbols.lance"), b"").unwrap();
+        std::fs::remove_file(db.join("symbols.lance")).unwrap();
+        assert!(!recreated_empty(&db, before), "emptied, not replaced");
+
         std::fs::remove_dir(&db).unwrap();
         std::thread::sleep(std::time::Duration::from_millis(20));
         std::fs::create_dir(&db).unwrap();
-        assert!(recreated_empty(&db, before), "removed and created again");
+        // Without a birth time a reused inode is indistinguishable.
+        if std::fs::metadata(&db).unwrap().created().is_ok() {
+            assert!(recreated_empty(&db, before), "removed and created again");
+        }
 
         // A directory swapped in with content is an index, not connect's.
         std::fs::write(db.join("symbols.lance"), b"").unwrap();
