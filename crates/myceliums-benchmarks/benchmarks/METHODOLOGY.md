@@ -1191,7 +1191,12 @@ selected. On held-out it scores −0.013 [−0.047, +0.021] against A:
 
 **Decision: the default stays `multilingual-e5-small` with template 1 and no
 chunking.** The held-out interval does not lie above zero; per the protocol
-nothing changes. The golden set therefore keeps its baseline. (For the record,
+nothing changes. The golden set therefore keeps its baseline, and the
+default's reranked scores are the ones the #146 run recorded (hybrid+rerank
+nDCG@10 0.609 / MRR@10 0.621 over all 168 queries at the shipped test weight):
+the reranker's input — template-1 documents cut to a 512-token budget — and its
+candidate pool are unchanged, and variant A reproduces that run's semantic and
+hybrid scores exactly (all 168 queries: 0.554 / 0.580 and 0.572 / 0.586). (For the record,
 both C and the jina configuration pass the gate's rule against it — C:
 semantic recall@10 +0.043 [+0.002, +0.094], no gated regression; jina,
 template 2: semantic nDCG@10 +0.104 [+0.024, +0.188], hybrid +0.072 [+0.008,
