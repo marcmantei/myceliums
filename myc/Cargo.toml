@@ -42,7 +42,7 @@ dialoguer = { workspace = true }
 console = { workspace = true }
 notify = { workspace = true }
 notify-debouncer-mini = { workspace = true }
-rpassword = "5"
+rpassword = "7"
 
 [target.'cfg(unix)'.dependencies]
 # setsid for the detached SessionStart re-index (#152); already in the tree
