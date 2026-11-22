@@ -138,7 +138,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
             L.append(f"  - `{name}` {r.get('ref')} (`{r.get('commit', '')[:12]}`, {r.get('language_name')}): "
                      f"index {idx['symbols']:,} symbols in {idx.get('files', 0):,} files")
     L.append("- **Same in every condition:** prompt, model, effort, turn limit, timeout; built-in tools `Read`, "
-             "`Grep`, `Glob` (+ `ToolSearch`); `--setting-sources project` (the working copy's "
+             + ("`Grep`, `Glob`, `Bash` (+ `ToolSearch`)" if meta.get("bash") else "`Grep`, `Glob` (+ `ToolSearch`)")
+             + "; `--setting-sources project` (the working copy's "
              "`.claude/settings.json` and `CLAUDE.md` load, the user's do not); fresh working copy and index "
              "copy per session; transcripts checked for the expected tools, MCP server and subagents.")
     L.append(f"- **Grading:** set-based precision / recall / F1 against gold sets derived with compiler tooling; "

@@ -44,6 +44,16 @@ def _agents_offered(text: str) -> list[str]:
     return out
 
 
+def _tool_result_text(requests: list[dict], tool_use_id: str) -> str:
+    """The content of the tool result for ``tool_use_id`` in the last request."""
+    for r in reversed(requests):
+        for m in r.get("messages") or []:
+            for b in m.get("content") if isinstance(m.get("content"), list) else []:
+                if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") == tool_use_id:
+                    return "\n".join(_texts(b.get("content")))
+    return ""
+
+
 def summarise(run_dir: Path, condition: str) -> dict:
     variant = config.VARIANTS[condition]
     requests = [json.loads(p.read_text()) for p in sorted((run_dir / "mock").glob("request*.json"))]
@@ -86,6 +96,7 @@ def summarise(run_dir: Path, condition: str) -> dict:
         "init_api_key_source": (t.init or {}).get("apiKeySource") if t else None,
         "tool_calls": [(c["name"], c.get("parent")) for c in t.tool_calls] if t else None,
         "hook_events": len(t.hook_events) if t else None,
+        "bash_result": _tool_result_text(main, "toolu_probe_bash")[:400] or None,
     }
     problems = []
     if findings["user_claude_md_loaded"]:

@@ -40,12 +40,14 @@ the labels' own keys, so they are stable across re-exports.
 | `retrieval-test-seeking` | `real-repos/test-seeking.json` | same |
 | `graph-gold` | `graph-gold/<language>.json` | every symbol, CALLS edge, dynamic call and trap |
 | `graph-held-out` | `graph-gold/held-out/real-repos.json` | one per call site |
-| `agent-tasks`, `agent-tasks-hard`, `agent-tasks-hard-v1`, `agent-tasks-outcome` | `evals/agent/tasks/*.json` (#99, #125, #153) | every gold and optional answer, one "is the gold set complete?" per task |
+| `agent-tasks`, `agent-tasks-hard`, `agent-tasks-hard-v1`, `agent-tasks-outcome`, `agent-tasks-scale` | `evals/agent/tasks/*.json` (#99, #125, #153, #163) | every gold and optional answer, one "is the gold set complete?" per task |
 
 Snippets come from the pinned checkouts in `~/.cache/myceliums-eval-repos`
 (`real-repos/fetch.sh`) and `~/.cache/myceliums-agent-eval*/repos`
 (`evals/agent/agent_eval.py fetch`); a checkout at another commit is not used.
 `export.py --check` exits 1 when `items.jsonl` is out of date.
+
+`agent-tasks-scale` (#163) is exported for review only. It has no pre-screen yet, so its labels are unreviewed, and `apply.py`, with or without `--policy`, leaves it out (`common.NOT_APPLIED`) instead of refusing to run; `--reset-datasets-to` does not touch its file either. It joins the applied datasets once it has a complete pre-screen and a review.
 
 ## Pre-screen format
 

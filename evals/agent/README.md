@@ -48,9 +48,36 @@ without myceliums succeeded on 4 of 11 tasks (36 %), the agent with what
 p = 0.016), mean F1 +0.63 [+0.35, +0.90]. Every failure without myceliums
 was a session that ran out of turns before answering; in calibration with up
 to seven rounds (and an earlier, partly wrong budget text) it had solved 5
-of 6 of these tasks. Under the budget C also cost 35 % less [24 %, 46 %] and
-took half the wall time; without a budget, cost and time were not measured.
-A pilot: n = 11 tasks, wide intervals, one repository and model.
+of 6 of these tasks, so the success gain is a budget effect. Under the budget
+C also cost 35 % less [24 %, 46 %] and took half the wall time; these ratios
+hold under the budget only. A pilot: n = 11 tasks, wide intervals, one
+repository and model, no shell, static call-graph questions whose rules a call
+graph computes by construction; #163 below measures the same comparison with
+a shell, more turns and two repositories.
+
+**Outcome eval at scale, 22 November 2026** (#163; myc at `951d041ff9e0`,
+Claude Code 2.1.330, 180 graded sessions: 30 tasks over Django and Vue × 2
+conditions × 3 turn budgets, one repetition): [report](results/2026-11-22-scale/REPORT.md),
+[method and summary](#outcome-eval-at-scale-163). With `Bash` in both
+conditions, none (no myceliums) against C (what `myc setup-claude
+--no-agent` installs). Primary analysis: 27 tasks, without the three Django
+`tests` tasks, which the reused Django index (no `tests/`) cannot answer.
+Intervals and p-values are not corrected for the three budgets:
+
+| Budget | Success none → C | Δ success [95 % CI], McNemar | Mean F1 none → C (Δ [95 % CI]) | Cost C ÷ none | Wall time C ÷ none |
+|---|---:|---:|---:|---:|---:|
+| 4 turns | 22 % → 37 % | +15 pp [−4, +33], 6 : 2, p = 0.29 | 0.222 → 0.485 (+0.263 [+0.078, +0.452]) | 1.27× [0.99×, 1.59×] | 0.96× [0.78×, 1.18×] |
+| 10 turns | 85 % → 81 % | −4 pp [−15, +7], 1 : 2, p = 1 | 0.880 → 0.832 (−0.048 [−0.139, +0.017]) | 0.78× [0.63×, 0.93×] | 0.69× [0.55×, 0.83×] |
+| 40 turns, not stated | 96 % → 89 % | −7 pp [−19, +0], 0 : 2, p = 0.5 | 0.971 → 0.930 (−0.042 [−0.088, −0.008]) | 0.98× [0.83×, 1.13×] | 0.84× [0.71×, 0.97×] |
+
+With a shell and 10 or more turns, myceliums did not raise success: the agent
+without it, working with grep pipelines in Bash, solved 85-96 % of the tasks,
+and at 40 turns C was slightly lower (−7 pp, not significant; mean F1 −0.042).
+Under 4 turns the success gain is not significant and mean F1 rose by 0.263.
+C was faster from 10 turns on and cheaper at 10 turns. Over all 30 tasks:
+4 turns 23 % → 40 %, 10 turns 87 % → 83 %, 40 turns 97 % → 87 %. The agent
+called the MCP tools in 68 of 81 C sessions and never ran the `myc` CLI from
+Bash.
 
 ## What is measured
 
@@ -510,6 +537,197 @@ python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-outcome.json e
 python3 evals/agent/agent_eval.py report my-outcome
 ```
 
+## Outcome eval at scale (#163)
+
+The #153 pilot showed an outcome effect under one tight budget, on one
+repository, without a shell, and left open what happens with more turns. #163
+asks: does myceliums change outcomes when the agent has a shell and when the
+budget is not tight, and how does the effect depend on the budget?
+
+**Repositories.** Django 5.1.4 (as in #153) and Vue 3.5.46 (`vuejs/core` at
+`7de9e41b61b2`, the commit of the tag `v3.5.46`; MIT), a TypeScript monorepo
+of 13 packages with their tests in `packages/*/__tests__`. The Django index is
+the one #153 built (the same binary, so the same embedder fingerprint; it
+loads and reports 12,443 symbols, all embedded). That index covers only the
+`django/` package, not `tests/` (`index_exclude_extra` in its `meta.json`), so
+in C myceliums had no data for the three Django `tests` tasks: they are left
+out of the primary analysis (27 tasks), and the 30-task numbers are given
+alongside. The Vue index covers
+`packages/` with the tests and without `packages-private/` (playgrounds and
+type-only tests) and the changelogs: 15,750 symbols in 501 files, every one
+embedded (`myc analyze --strict-embeddings`, 1,163 s).
+
+**Tasks** ([`tasks/tasks-scale.json`](tasks/tasks-scale.json); sha256
+`fd0f92ee8148…` at the freeze): 30, 15 per repository. After the run, the #163
+review made one file optional in `vue-blast-to-raw` (`reactive.ts`, whose only
+call is `toRaw` calling itself; recursion is optional under the owner policy
+of #164/#168), and `agent_eval.py regrade` re-graded the stored answers: four
+sessions, both conditions, went from F1 0.97 to 1.00, no success changed. The
+labels are drafted by an agent and not reviewed: the #164 review tool exports
+this set (`agent-tasks-scale`), but it has no pre-screen, and `apply.py`
+leaves it out.
+
+| Type | Tasks | Answer |
+|---|---:|---|
+| `transitive_callers` | 6 | every caller two or three levels up (21 to 36 items) |
+| `blast_radius` | 4 | the files holding a call to X or to a direct caller of X (18 to 26 files) |
+| `ambiguous` | 6 | callers of one of several same-named functions (Django `make_style`, `get_template`, `format`; Vue reactivity's `warn` and `watch`, compiler-core's `warnDeprecation`) |
+| `flow` | 4 | every function on a call chain from A to B (10 to 27) |
+| `tests` | 6 | the test files that reach X (Django: directly or through one function in `django/`; Vue: through chains of any length) |
+| `config` | 4 | not about calls: Django's form widget classes (a class hierarchy across six files) and the settings Django reads that have no default; the Vue files that read `app.config` options and the interfaces extending the template compiler's AST `Node` |
+
+The gold sets come from [`groundtruth/scale_tasks.py`](groundtruth/scale_tasks.py)
+over Python's `ast` module ([`py_edges.py`](groundtruth/py_edges.py) as in
+#153, for the Django test questions over `django/` and every test app) and the
+TypeScript 6.0 checker ([`vue_edges.js`](groundtruth/vue_edges.js), the #125
+extraction with Vue's `@vue/*` path mapping; [`vue_config.js`](groundtruth/vue_config.js);
+[`vue_hierarchy.js`](groundtruth/vue_hierarchy.js)), never from myceliums.
+Each question spells out its rules; each gold item has an evidence line that
+`check-tasks` re-verifies. `scale_tasks.py build --calibration` reproduces the
+candidate file the calibration ran on byte for byte.
+
+**Conditions.** Both have `Bash` next to `Read`, `Grep` and `Glob`
+(`run --bash`); the session's PATH is the system's, so the shell has
+`python3`, `git` and `grep` but not `node` or `rg`. `none`: nothing of
+myceliums, and `MYCELIUMS_DATA_DIR` points to an empty directory in case the
+agent finds a `myc` binary on disk (none did). `C`: the MCP server with its 9
+core tools loaded up front, what `myc setup-claude --scope project --no-agent`
+writes (routing block, SessionStart context line, PostToolUse formatter, the
+grep hook, which also fires on `grep`/`rg` in Bash), and `myc` first on PATH,
+bound to the session's index copy, so the agent can also run the CLI from
+Bash. A myceliums call is either an MCP tool call or a Bash call that runs
+`myc`. `probe` (mock API, no model) confirmed for both repositories: in C the
+9 tool schemas, the routing block, the context line (`index: <commit> =
+HEAD`), the grep hint on a Grep and on a Bash `grep`, and `myc callers` from
+Bash answering from the session's index; in none no `myc` and none of the
+rest. Prompt, model (`claude-sonnet-5-5`), `--effort medium` and isolation as
+in #153.
+
+**Budgets.** `--max-turns` 4 and 10, stated in the prompt with #153's text,
+and 40 as the unlimited arm: a cap the prompt does not mention, so the agent
+works as it would without a budget; no session reached it. Timeouts 300, 360
+and 480 s; no session timed out. One run per budget
+(`2026-11-22-scale-t4`, `-t10`, `-t40`), merged by `export-scale`.
+
+**Calibration** (15 sessions, condition none, 10 turns, on 15 of the 35
+candidates; [report](results/2026-11-22-scale-calibration/REPORT.md)). With
+a shell the agent combined grep pipelines (once a Python `ast` script) and
+solved most call-graph candidates. All five candidates that are not about
+calls were solved in one or two Bash calls (5 to 11 s) and rejected as
+trivially solved; none was impossible. The four `config` tasks in the set
+replaced them afterwards and are not calibrated. Of the ten calibrated tasks
+in the set, eight succeeded (target 30-80 %); the other 20 tasks are not
+calibrated.
+
+**Tasks frozen before any myceliums output.** The task file was committed at
+10:04:05 UTC (the freeze commit's author date; first pushed as `9c53600`, rebased
+onto main without changes to the file), after the calibration (09:54-09:59 UTC, condition
+none only). The Vue index was built afterwards (indexed 10:24:08 UTC), the
+reused Django index was first opened after the freeze, the first session with
+myceliums (a mock-API probe) started at 10:24:52 UTC and the main run at
+10:25:18 UTC.
+
+**Results, 22 November 2026** (myc 0.3.2 at `951d041ff9e0`, Claude Code
+2.1.330; 180 graded sessions; [report](results/2026-11-22-scale/REPORT.md)).
+Primary analysis: means over the 27 tasks without the three Django `tests`
+tasks. Brackets: 95 % paired bootstrap intervals over tasks; per budget,
+success is compared with McNemar's exact test over the tasks that succeeded in
+one condition only. **No interval or p-value here is corrected for multiple
+comparisons** (three budgets, the pooled comparison, several metrics,
+repositories and task types).
+
+| Per session | 4 turns: none | C | 10 turns: none | C | 40 turns: none | C |
+|---|---:|---:|---:|---:|---:|---:|
+| Success (F1 ≥ 0.8) | 22 % | 37 % | 85 % | 81 % | 96 % | 89 % |
+| … C − none | | +15 pp [−4, +33] | | −4 pp [−15, +7] | | −7 pp [−19, +0] |
+| … McNemar (C better : none better) | | 6 : 2, p = 0.29 | | 1 : 2, p = 1 | | 0 : 2, p = 0.5 |
+| Mean F1 | 0.222 | 0.485 | 0.880 | 0.832 | 0.971 | 0.930 |
+| … C − none | | +0.263 [+0.078, +0.452] | | −0.048 [−0.139, +0.017] | | −0.042 [−0.088, −0.008] |
+| Sessions with ≥ 1 myceliums call | 0 % | 81 % | 0 % | 85 % | 0 % | 85 % |
+| Input tokens (C ÷ none) | 33,443 | 1.51× [1.32×, 1.70×] | 83,926 | 1.09× [0.88×, 1.29×] | 100,535 | 1.31× [1.13×, 1.52×] |
+| Output tokens (C ÷ none) | 1,354 | 1.00× [0.74×, 1.31×] | 3,745 | 0.64× [0.50×, 0.80×] | 4,147 | 0.87× [0.71×, 1.02×] |
+| Cost, USD, CLI estimate (C ÷ none) | 0.036 | 1.27× [0.99×, 1.59×] | 0.091 | 0.78× [0.63×, 0.93×] | 0.102 | 0.98× [0.83×, 1.13×] |
+| Wall time, s (C ÷ none) | 13.4 | 0.96× [0.78×, 1.18×] | 30.3 | 0.69× [0.55×, 0.83×] | 35.4 | 0.84× [0.71×, 0.97×] |
+
+Over all budgets (each task averaged over its three budgets; an exact sign test
+on those per-task differences, not McNemar): success 68 % → 69 % (+1 pp [−7,
++10], 6 : 4, p = 0.75), F1 +0.058 [−0.012, +0.126], cost 0.95× [0.82×, 1.07×],
+wall time 0.80× [0.70×, 0.90×].
+
+All 30 tasks, the three Django `tests` tasks included: success 23 % → 40 %
+(+17 pp [−3, +37], 7 : 2, p = 0.18) at 4 turns, 87 % → 83 % (−3 pp [−17, +7])
+at 10, 97 % → 87 % (−10 pp [−23, +0], 0 : 3, p = 0.25) at 40; mean F1 +0.268
+[+0.093, +0.445], −0.044 [−0.128, +0.013] and −0.049 [−0.096, −0.013].
+
+Exploratory, primary analysis (few tasks per group; uncorrected):
+
+| | 4 turns | 10 turns | 40 turns | All budgets: Δ success [95 % CI] |
+|---|---:|---:|---:|---:|
+| Django (12 tasks) | 25 % → 58 % | 92 % → 83 % | 100 % → 92 % | +6 pp [−14, +22] |
+| Vue (15 tasks) | 20 % → 20 % | 80 % → 80 % | 93 % → 87 % | −2 pp [−9, +4] |
+| ambiguous (6) | 0 % → 50 % | 83 % → 100 % | 100 % → 83 % | +17 pp [+6, +28] |
+| transitive callers (6) | 0 % → 33 % | 100 % → 100 % | 100 % → 100 % | +11 pp [+0, +22] |
+| blast radius (4) | 0 % → 25 % | 100 % → 100 % | 100 % → 100 % | +8 pp [+0, +25] |
+| tests (3, Vue) | 0 % → 0 % | 33 % → 0 % | 67 % → 67 % | −11 pp [−33, +0] |
+| flow (4) | 50 % → 25 % | 75 % → 50 % | 100 % → 75 % | −25 pp [−50, +0] |
+| config (4) | 100 % → 75 % | 100 % → 100 % | 100 % → 100 % | −8 pp [−25, +0] |
+
+* **With a shell and 10 or more turns, no success gain.** The agent without
+  myceliums solved 85 % of the tasks with 10 turns and 96 % with 40; C solved
+  81 % and 89 %, the 40-turn F1 difference −0.042 [−0.088, −0.008]
+  (uncorrected). At 4 turns C's success gain (+15 pp) is not significant
+  (McNemar p = 0.29); mean F1 rose by 0.263 [+0.078, +0.452]. #153's success
+  gain under 3 rounds of tool calls without a shell does not carry over to a
+  budget of 10 turns with a shell.
+* **Where C lost, it twice trusted the graph.** In the primary analysis C lost
+  four task-budget pairs at 10 or 40 turns that none solved. On the two Django
+  flow tasks it answered from one `trace_flow` result and wrote that it had not
+  checked the call sites; `trace_flow` lists chains up to a length limit, and
+  the longer chains were missing. Once it checked with grep and still added 18
+  names; once it ran out of turns. A fifth loss, `django-tests-number-format`
+  at 40 turns (5 test files missing), is one of the three tasks outside the
+  primary analysis: `find_callers` could only answer for `django/`, because the
+  index has no `tests/`. On Vue, myc links 3,682 of 16,397
+  call sites: imports between packages (`@vue/shared`, `@vue/reactivity`, ...)
+  count as library calls, so callers in other packages are missing
+  (`myc callers toRawType` reports none). C's Vue success equalled none's at
+  every budget but 40 turns (one task fewer).
+* **C was faster from 10 turns on, cheaper only at 10.** Wall time 0.69× and
+  0.84×; output tokens 0.64× at 10 turns. Input tokens rose (1.51× at 4 turns,
+  1.31× at 40); C's first request alone is 12,584 tokens against 7,165. Cost:
+  1.27× at 4 turns, 0.78× at 10, 0.98× at 40.
+* **MCP, not the CLI.** In C the agent called an MCP tool in 68 of 81 sessions
+  of the primary analysis (77 of all 90); over all 90
+  it called `find_callers` 143 times, `trace_flow` 14, `find_callees` 8,
+  `impact_of_change` once (14 calls returned an error, 13 of them because the
+  name was ambiguous), and it never ran `myc` from Bash, although the grep hook
+  put a `myc callers …` hint into 205 of the 341 greps it saw. The SessionStart context
+  line reached the model in 90 of 90 C sessions, naming the index current.
+* **Questions that are not about calls** stayed at or near the ceiling in both
+  conditions (one C session ran out of turns at 4).
+
+Session accounting: 180 main sessions, each graded on its first attempt (no
+retries), and 15 calibration sessions: 195 of the 195 approved. Five probe
+sessions against the mock API used no model.
+
+```bash
+export AEVAL_CACHE=~/.cache/myceliums-agent-eval-163 AEVAL_WORK_ROOT=/private/tmp/aeval153 TS_PATH=<typescript 6.0>
+python3 evals/agent/agent_eval.py fetch --repo django --repo vue
+python3 evals/agent/agent_eval.py index --repo vue        # ~20 min on CPU (the Django index of #153 is reused)
+python3 -I evals/agent/groundtruth/scale_tasks.py edges $AEVAL_CACHE/repos $AEVAL_CACHE/edges
+python3 -I evals/agent/groundtruth/scale_tasks.py build $AEVAL_CACHE/edges $AEVAL_CACHE/repos > evals/agent/tasks/tasks-scale.json
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json check-tasks
+for b in 4 10; do
+  python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json run --label my-scale-t$b \
+      --conditions none,C --reps 1 --max-turns $b --prompt-budget --bash --max-retries 0 --max-sessions 60
+done
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json run --label my-scale-t40 \
+    --conditions none,C --reps 1 --max-turns 40 --timeout 480 --bash --max-retries 0 --max-sessions 60
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json export-scale --label my-scale \
+    --runs my-scale-t4,my-scale-t10,my-scale-t40
+python3 evals/agent/agent_eval.py report my-scale
+```
+
 ## Tool-selection eval
 
 [`toolsel/intents.json`](toolsel/intents.json) holds 56 natural-language
@@ -530,7 +748,30 @@ passes and the most frequent confusions go to `TOOLSEL.md`.
 
 ## Limits
 
-* Outcome eval (#153): a pilot. One repetition, 11 paired tasks, one
+* Outcome eval at scale (#163): one repetition (each task, condition and
+  budget is one sample), 30 tasks, two repositories, one model and effort
+  level; per type at most six tasks, so the type rows are exploratory. No
+  interval or p-value is corrected for multiple comparisons (three budgets,
+  the pooled comparison, several metrics and subgroups). The reused Django
+  index has no `tests/`, so the three Django `tests` tasks do not compare the
+  conditions fairly; the primary analysis leaves them out (27 tasks).
+  The labels were derived from the AST and the type checker by an agent and
+  are not yet reviewed by a person (#164). The calibration covered 15 of the
+  35 candidates: 20 tasks of the set, the four `config` tasks among them, are
+  not calibrated, and with a shell the baseline at 10 turns (87 %) ended at
+  the top of the 30-80 % target. The call-graph questions spell out static
+  call rules a graph computes by construction; myc's own Vue graph misses the
+  calls between packages, so the Vue results measure myc as it is, not a
+  complete graph. The 40-turn arm is a cap the prompt does not state, not an
+  unlimited session. Two sessions (one per repository) ran at a time; their
+  scratch scripts shared `/tmp`. Bash reaches the whole machine: one none
+  session found a TypeScript package and node outside its PATH and built its
+  own call graph; no session read the eval's task files, gold sets or index
+  cache (every transcript was searched for those paths).
+* Outcome eval (#153): a pilot. #163 answers its open question with a shell
+  and more turns: with 10 or 40 turns myceliums did not raise success, and C
+  was faster (0.69× and 0.84× wall time, primary analysis) and at 10 turns
+  cheaper (0.78×). One repetition, 11 paired tasks, one
   repository, one language, one model: the intervals are wide and say
   direction and rough size. The effect is measured under a tight budget
   (three rounds of tool calls), chosen in calibration because the agent

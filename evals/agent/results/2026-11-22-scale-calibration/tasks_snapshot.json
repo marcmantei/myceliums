@@ -1,0 +1,282 @@
+[
+ {
+  "id": "django-tc-conditional-escape",
+  "repo": "django",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 36,
+  "question": "Which functions or methods in the `django/` package call `conditional_escape` (django/utils/html.py) directly, call such a caller - that is, every caller up to two levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `conditional_escape` itself."
+ },
+ {
+  "id": "django-tc-docs-version",
+  "repo": "django",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 29,
+  "question": "Which functions or methods in the `django/` package call `get_docs_version` (django/utils/version.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_docs_version` itself."
+ },
+ {
+  "id": "django-tc-default-renderer",
+  "repo": "django",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 22,
+  "question": "Which functions or methods in the `django/` package call `get_default_renderer` (django/forms/renderers.py) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_default_renderer` itself."
+ },
+ {
+  "id": "django-blast-protected-type",
+  "repo": "django",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 26,
+  "question": "Suppose the behaviour of `is_protected_type` (django/utils/encoding.py) changes. Which files in the `django/` package contain a call to `is_protected_type`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "django-blast-tree-node",
+  "repo": "django",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 26,
+  "question": "Suppose the constructor of `Node` (django/utils/tree.py) gains a required parameter. Which files in the `django/` package contain code that calls it - a call that resolves to `Node.__init__`, including `super().__init__(...)` and instantiating a class that inherits this `__init__` without defining its own - or a call to a function or method that does so directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "django-amb-color-make-style",
+  "repo": "django",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 18,
+  "question": "Two modules define a function named `make_style`. Which functions or methods in the `django/` package call `make_style` (django/core/management/color.py) directly (not the `make_style` in django/utils/termcolors.py), call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `make_style` itself."
+ },
+ {
+  "id": "django-amb-loader-get-template",
+  "repo": "django",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 18,
+  "question": "Django defines many functions and methods named `get_template`. Which functions or methods in the `django/` package call `get_template` (django/template/loader.py) directly (not `Engine.get_template`, a loader's or template backend's `get_template`, `BaseRenderer.get_template` or any other `get_template`), call such a caller - that is, every caller up to two levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `get_template` itself."
+ },
+ {
+  "id": "django-amb-numberformat-format",
+  "repo": "django",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 15,
+  "question": "Several functions and methods in Django are named `format`. Which functions or methods in the `django/` package call `format` (django/utils/numberformat.py) directly (not `format` in django/utils/dateformat.py, `ServerFormatter.format` or Python's built-in `format`/`str.format`), call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments. Do not list `format` itself."
+ },
+ {
+  "id": "django-flow-runserver-import-string",
+  "repo": "django",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 17,
+  "question": "Which functions or methods in the `django/` package lie on at least one chain of direct calls that starts at `Command.get_handler` (django/contrib/staticfiles/management/commands/runserver.py) and ends at `import_string` (django/utils/module_loading.py)? List every function on any such chain, `Command.get_handler` and `import_string` included. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "django-flow-translate-is-naive",
+  "repo": "django",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 10,
+  "question": "Which functions or methods in the `django/` package lie on at least one chain of direct calls that starts at `TranslateNode.render` (django/templatetags/i18n.py) and ends at `is_naive` (django/utils/timezone.py)? List every function on any such chain, `TranslateNode.render` and `is_naive` included. Consider only the `django/` package (not `tests/`, `docs/` or other top-level directories). Count direct calls by name: imported names and re-exports count (also imports inside a function body and `module.function(...)` after `from django.utils import formats`), and so do calls through `self`, `cls` or `super()`, which count for the method the enclosing class defines or inherits from its base classes (not for overrides in subclasses), and class instantiation by the class's name, which counts as a call of the `__init__` the class defines or inherits. A call inside a nested function, lambda or decorator wrapper counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `model_admin.get_queryset(request)`, `self.storage.path(name)`, `request.user.has_perm(...)`), instantiation through a variable (`redirect_class(url)`) and passing a function as a value (decorators applied with `@`, callbacks) do not count. Ignore docstrings and comments."
+ },
+ {
+  "id": "django-tests-import-string",
+  "repo": "django",
+  "type": "tests",
+  "answer_kind": "files",
+  "n_gold": 16,
+  "question": "Which test files under `tests/` exercise `import_string` (django/utils/module_loading.py), directly or through one function in `django/`? A test file counts if code anywhere in it calls the function directly, or calls a function or method in the `django/` package that calls it directly. Count calls by name (imported names and re-exports included, also imports inside a function body), calls through `self`, `cls` or `super()` that resolve to a method the enclosing class defines or inherits (for example a test case calling an assertion method it inherits from `django.test.TestCase`), and class instantiation by the class's name. Calls on other objects' attributes (for example `request.get_host()`, `self.client.get(...)`) and passing a function as a value do not count. Answer with paths of files under `tests/`."
+ },
+ {
+  "id": "django-tests-split-domain-port",
+  "repo": "django",
+  "type": "tests",
+  "answer_kind": "files",
+  "n_gold": 19,
+  "question": "Which test files under `tests/` exercise `split_domain_port` (django/http/request.py), directly or through one function or method in `django/`? A test file counts if code anywhere in it calls the function directly, or calls a function or method in the `django/` package that calls it directly. Count calls by name (imported names and re-exports included, also imports inside a function body), calls through `self`, `cls` or `super()` that resolve to a method the enclosing class defines or inherits (for example a test case calling an assertion method it inherits from `django.test.TestCase`), and class instantiation by the class's name. Calls on other objects' attributes (for example `request.get_host()`, `self.client.get(...)`) and passing a function as a value do not count. Answer with paths of files under `tests/`."
+ },
+ {
+  "id": "django-cfg-deploy-checks",
+  "repo": "django",
+  "type": "config",
+  "answer_kind": "symbols",
+  "n_gold": 20,
+  "question": "Which of Django's built-in system checks run only when `manage.py check --deploy` is used? Name the check functions in the `django/` package (not `tests/`)."
+ },
+ {
+  "id": "django-cfg-safe-filters",
+  "repo": "django",
+  "type": "config",
+  "answer_kind": "symbols",
+  "n_gold": 36,
+  "question": "Which built-in template filters in django/template/defaultfilters.py are registered with `is_safe=True`? Name the Python functions."
+ },
+ {
+  "id": "django-cfg-empty-strings",
+  "repo": "django",
+  "type": "config",
+  "answer_kind": "symbols",
+  "n_gold": 24,
+  "question": "Which model field classes defined in the django/db/models/fields/ package have `empty_strings_allowed` equal to `False`, whether they set it themselves or inherit it from a base class? Consider only classes defined in that package that are subclasses of `django.db.models.Field`; name the classes."
+ },
+ {
+  "id": "django-tests-number-format",
+  "repo": "django",
+  "type": "tests",
+  "answer_kind": "files",
+  "n_gold": 10,
+  "question": "Which test files under `tests/` exercise `number_format` (django/utils/formats.py), directly or through one function in `django/`? A test file counts if code anywhere in it calls the function directly, or calls a function or method in the `django/` package that calls it directly. Count calls by name (imported names and re-exports included, also imports inside a function body), calls through `self`, `cls` or `super()` that resolve to a method the enclosing class defines or inherits (for example a test case calling an assertion method it inherits from `django.test.TestCase`), and class instantiation by the class's name. Calls on other objects' attributes (for example `request.get_host()`, `self.client.get(...)`) and passing a function as a value do not count. Answer with paths of files under `tests/`."
+ },
+ {
+  "id": "django-cfg-suspicious-subclasses",
+  "repo": "django",
+  "type": "config",
+  "answer_kind": "symbols",
+  "n_gold": 11,
+  "question": "Which classes in the `django/` package are subclasses of `SuspiciousOperation` (django/core/exceptions.py), directly or indirectly? Name the classes."
+ },
+ {
+  "id": "vue-tc-to-raw-type",
+  "repo": "vue",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 24,
+  "question": "Which functions or methods in Vue's source (`packages/*/src`) call `toRawType` (packages/shared/src/general.ts) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count. Do not list `toRawType` itself."
+ },
+ {
+  "id": "vue-tc-parse-string-style",
+  "repo": "vue",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 21,
+  "question": "Which functions or methods in Vue's source (`packages/*/src`) call `parseStringStyle` (packages/shared/src/normalizeProp.ts) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count. Do not list `parseStringStyle` itself."
+ },
+ {
+  "id": "vue-tc-code-frame",
+  "repo": "vue",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 28,
+  "question": "Which functions or methods in Vue's source (`packages/*/src`) call `generateCodeFrame` (packages/shared/src/codeframe.ts) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count. Do not list `generateCodeFrame` itself."
+ },
+ {
+  "id": "vue-blast-handle-error",
+  "repo": "vue",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 22,
+  "question": "Suppose the signature of `handleError` (packages/runtime-core/src/errorHandling.ts) changes. Which files in Vue's source (`packages/*/src`) contain a call to `handleError`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count."
+ },
+ {
+  "id": "vue-blast-to-raw",
+  "repo": "vue",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 18,
+  "question": "Suppose the behaviour of `toRaw` (packages/reactivity/src/reactive.ts) changes. Which files in Vue's source (`packages/*/src`) contain a call to `toRaw`, or a call to a function or method that calls it directly (two levels)? Name the file that contains each such call; code at module level counts too. Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count."
+ },
+ {
+  "id": "vue-amb-reactivity-warn",
+  "repo": "vue",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 23,
+  "question": "Vue defines several functions named `warn`. Which functions or methods in Vue's source (`packages/*/src`) call `warn` (packages/reactivity/src/warning.ts) directly (not the `warn` of packages/runtime-core/src/warning.ts, of packages/compiler-sfc/src/warn.ts or any other `warn`), call such a caller - that is, every caller up to two levels up the call chain? Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count. Do not list `warn` itself."
+ },
+ {
+  "id": "vue-amb-compiler-warn-deprecation",
+  "repo": "vue",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 16,
+  "question": "Two packages define a function named `warnDeprecation`. Which functions or methods in Vue's source (`packages/*/src`) call `warnDeprecation` (packages/compiler-core/src/compat/compatConfig.ts) directly (not the `warnDeprecation` of packages/runtime-core/src/compat/compatConfig.ts), call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count. Do not list `warnDeprecation` itself."
+ },
+ {
+  "id": "vue-amb-reactivity-watch",
+  "repo": "vue",
+  "type": "ambiguous",
+  "answer_kind": "symbols",
+  "n_gold": 10,
+  "question": "Two packages define a function named `watch`. Which functions or methods in Vue's source (`packages/*/src`) call `watch` (packages/reactivity/src/watch.ts) directly (not the `watch` of packages/runtime-core/src/apiWatch.ts), call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count. Do not list `watch` itself."
+ },
+ {
+  "id": "vue-flow-ssr-escape-html",
+  "repo": "vue",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 27,
+  "question": "Which functions or methods in Vue's source (`packages/*/src`) lie on at least one chain of direct calls that starts at `renderToString` (packages/server-renderer/src/renderToString.ts) and ends at `escapeHtml` (packages/shared/src/escapeHtml.ts)? List every function on any such chain, `renderToString` and `escapeHtml` included. Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count."
+ },
+ {
+  "id": "vue-flow-sfc-type-reference",
+  "repo": "vue",
+  "type": "flow",
+  "answer_kind": "symbols",
+  "n_gold": 24,
+  "question": "Which functions or methods in Vue's source (`packages/*/src`) lie on at least one chain of direct calls that starts at `compileScript` (packages/compiler-sfc/src/compileScript.ts) and ends at `resolveTypeReference` (packages/compiler-sfc/src/script/resolveType.ts)? List every function on any such chain, `compileScript` and `resolveTypeReference` included. Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count."
+ },
+ {
+  "id": "vue-tests-queue-job",
+  "repo": "vue",
+  "type": "tests",
+  "answer_kind": "files",
+  "n_gold": 19,
+  "question": "Which test files exercise `queueJob` (packages/runtime-core/src/scheduler.ts), directly or through functions in `packages/*/src`? A test file is any file under a `packages/*/__tests__/` directory. It counts if code anywhere in it (inside `describe`/`test` callbacks, component definitions and helpers included) calls the function directly, or calls a function in `packages/*/src` from which the function is reachable through a chain of direct calls of any length. Count only direct calls (`new` included) that resolve to a declaration, following imports, re-exports (`@vue/*` and `vue` resolve to `packages/*/src`) and the static type of the receiver; inside non-test code a call in a nested function or callback counts for the outermost named function, method or `const`-bound function that contains it. Calls through callback parameters, interface-typed values or function values do not count (in particular, the `render`/`createApp` that `createRenderer` returns are function values). Answer with paths of test files."
+ },
+ {
+  "id": "vue-tests-transform-preset",
+  "repo": "vue",
+  "type": "tests",
+  "answer_kind": "files",
+  "n_gold": 18,
+  "question": "Which test files exercise `getBaseTransformPreset` (packages/compiler-core/src/compile.ts), directly or through functions in `packages/*/src`? A test file is any file under a `packages/*/__tests__/` directory. It counts if code anywhere in it (inside `describe`/`test` callbacks, component definitions and helpers included) calls the function directly, or calls a function in `packages/*/src` from which the function is reachable through a chain of direct calls of any length. Count only direct calls (`new` included) that resolve to a declaration, following imports, re-exports (`@vue/*` and `vue` resolve to `packages/*/src`) and the static type of the receiver; inside non-test code a call in a nested function or callback counts for the outermost named function, method or `const`-bound function that contains it. Calls through callback parameters, interface-typed values or function values do not count (in particular, the `render`/`createApp` that `createRenderer` returns are function values). Answer with paths of test files."
+ },
+ {
+  "id": "vue-cfg-app-config-files",
+  "repo": "vue",
+  "type": "config",
+  "answer_kind": "files",
+  "n_gold": 11,
+  "question": "Which source files in `packages/*/src` read an option of the application config - a member of the `AppConfig` interface (packages/runtime-core/src/apiCreateApp.ts), whether through a property access or a destructuring? Do not count apiCreateApp.ts itself, comments or strings, or members of other objects that happen to have the same name (such as compiler options). Answer with file paths."
+ },
+ {
+  "id": "vue-cfg-force-attrs",
+  "repo": "vue",
+  "type": "config",
+  "answer_kind": "symbols",
+  "n_gold": 10,
+  "question": "When Vue's DOM renderer (runtime-dom) patches a prop on an HTML element (not SVG), it normally sets a DOM property if the element has one. For which attribute names does it always use an attribute instead, either on every element or on specific element types? List the attribute names (keys)."
+ },
+ {
+  "id": "vue-cfg-array-merged",
+  "repo": "vue",
+  "type": "config",
+  "answer_kind": "symbols",
+  "n_gold": 14,
+  "question": "When Vue merges component options from mixins, `extends` and global mixins, which options are concatenated into an array (so that every version runs) rather than overwritten or merged as objects? List the option names."
+ },
+ {
+  "id": "vue-cfg-unused-error-codes",
+  "repo": "vue",
+  "type": "config",
+  "answer_kind": "symbols",
+  "n_gold": 10,
+  "question": "Which members of the `ErrorCodes` enum of the template compiler (packages/compiler-core/src/errors.ts) are never referenced in `packages/*/src` outside errors.ts itself, so the compiler can never report them? List the member names."
+ },
+ {
+  "id": "vue-tests-scope-dispose",
+  "repo": "vue",
+  "type": "tests",
+  "answer_kind": "files",
+  "n_gold": 16,
+  "question": "Which test files exercise `onScopeDispose` (packages/reactivity/src/effectScope.ts), directly or through functions in `packages/*/src`? A test file is any file under a `packages/*/__tests__/` directory. It counts if code anywhere in it (inside `describe`/`test` callbacks, component definitions and helpers included) calls the function directly, or calls a function in `packages/*/src` from which the function is reachable through a chain of direct calls of any length. Count only direct calls (`new` included) that resolve to a declaration, following imports, re-exports (`@vue/*` and `vue` resolve to `packages/*/src`) and the static type of the receiver; inside non-test code a call in a nested function or callback counts for the outermost named function, method or `const`-bound function that contains it. Calls through callback parameters, interface-typed values or function values do not count (in particular, the `render`/`createApp` that `createRenderer` returns are function values). Answer with paths of test files."
+ },
+ {
+  "id": "vue-tc-queue-job",
+  "repo": "vue",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 18,
+  "question": "Which functions or methods in Vue's source (`packages/*/src`) call `queueJob` (packages/runtime-core/src/scheduler.ts) directly, call such a caller, or call one of those - that is, every caller up to three levels up the call chain? Consider only the non-test source files in `packages/*/src/` (not `__tests__/`, `packages-private/` or build scripts). Count only direct calls (`new` included) that resolve to the function's declaration, following imports, re-exports (`@vue/*` imports resolve to `packages/*/src`) and the static type of the receiver (so `this.method()` and `obj.method()` on a typed object count). A call inside a nested function, arrow function, callback or object-literal method counts for the outermost named function, method or `const`-bound function that contains it (for example, the functions defined inside `baseCreateRenderer` count as `baseCreateRenderer`), and code inside an object literal or callback that initialises a `const` counts for that constant (`const handlers = { get() { ... } }` counts as `handlers`). Calls through callback parameters, interface-typed values (such as `context.onError(...)` on a `TransformContext`) or other function values do not count. Do not list `queueJob` itself."
+ }
+]

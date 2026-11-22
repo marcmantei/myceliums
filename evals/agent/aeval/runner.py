@@ -64,6 +64,12 @@ FORMAT_RULES = {
         "outermost enclosing named function or method. Items are names only: no file paths, "
         "signatures or explanations."
     ),
+    # #163: questions whose answers are classes, interfaces or settings.
+    "names": (
+        "Each answer item is one name of the kind the question asks for (a class, an interface, a setting, ...), "
+        "written as it appears in the code, for example `MyClass` or `MAX_SIZE`. Items are names only: no "
+        "file paths, signatures or explanations."
+    ),
     "files": (
         "Each answer item is a file path relative to the repository root, for example "
         "`src/server/handler.ts`. Items are paths only: no line numbers or explanations."
@@ -124,6 +130,7 @@ class RunConfig:
     extra_env: dict = field(default_factory=dict)  # `probe` only: the mock API
     stop_after_s: int | None = None  # start no session after this many seconds
     prompt_budget: bool = False  # state --max-turns in the prompt (#153's budgeted sessions)
+    bash: bool = False  # add the Bash tool in every condition (#163)
 
     def comparable(self) -> dict:
         """Fields that must not change when a run is resumed."""
@@ -141,6 +148,8 @@ class RunConfig:
             d.pop("tasks_file")
         if not d["prompt_budget"]:
             d.pop("prompt_budget")
+        if not d["bash"]:
+            d.pop("bash")
         return d
 
 
@@ -365,10 +374,13 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         mcp_path.write_text(json.dumps({"mcpServers": {config.MCP_SERVER_NAME: server}}, indent=2))
         return mcp_path, bin_dir
 
+    def _builtin_tools(self) -> tuple[str, ...]:
+        return config.BUILTIN_TOOLS + (("Bash",) if self.cfg.bash else ())
+
     def _command(self, item: WorkItem, mcp_path: Path) -> list[str]:
         variant = config.VARIANTS[item.condition]
-        tools = list(config.BUILTIN_TOOLS)
-        allowed = list(config.BUILTIN_TOOLS)
+        tools = list(self._builtin_tools())
+        allowed = list(self._builtin_tools())
         if variant.mcp:
             allowed.append(f"mcp__{config.MCP_SERVER_NAME}")
         if variant.agent:
@@ -424,6 +436,14 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             mcp_path, bin_dir = self._prepare_mcp(item, tmp, workdir, out_dir)
             (out_dir / "mcp.json").write_text(mcp_path.read_text())
             extra = dict(self.cfg.extra_env)
+            if self.cfg.bash:
+                # With a shell the agent could run a `myc` binary it finds on
+                # disk; this keeps any such run away from the user's data
+                # directory: the session's index copy in C, an empty
+                # directory without myceliums.
+                stray = tmp / "data" if variant.mcp else tmp / "no-myceliums"
+                stray.mkdir(exist_ok=True)
+                extra["MYCELIUMS_DATA_DIR"] = str(stray)
             if self.cfg.tool_search is not None:
                 extra["ENABLE_TOOL_SEARCH"] = self.cfg.tool_search
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
@@ -454,7 +474,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         t = parse_transcript(str(transcript))
         res = t.result or {}
         variant = config.VARIANTS[item.condition]
-        required = set(config.REQUIRED_TOOLS) | ({"Agent"} if variant.agent else set())
+        required = (set(config.REQUIRED_TOOLS) | ({"Agent"} if variant.agent else set())
+                    | ({"Bash"} if self.cfg.bash else set()))
         init = dict(t.init) if t.init else None
         if init:  # the init event names the Agent tool by its old name, Task
             init["tools"] = ["Agent" if x == "Task" else x for x in init.get("tools") or []]
@@ -488,6 +509,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
         counts = t.tool_counts
         mcp_calls = {k[len(MCP_PREFIX):]: v for k, v in counts.items() if k.startswith(MCP_PREFIX)}
+        cli = myc_cli_calls(t.tool_calls)
         usage = t.usage()
         row = {
             "run_id": item.run_id,
@@ -516,6 +538,10 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "mcp_tools_used": sorted(mcp_calls),
             "tool_errors": dict(t.tool_errors),
             "first_tool": t.tool_calls[0]["name"] if t.tool_calls else None,
+            # #163: with Bash, myceliums can also be reached through its CLI.
+            "bash_calls": counts.get("Bash", 0),
+            "myc_cli_calls": len(cli),
+            "myc_cli_subcommands": sorted({c for c in cli if c}),
             # Variant matrix (#125): who made the calls, and what the hooks did.
             "agent_calls": counts.get("Agent", 0),
             "subagent_tool_calls": sum(1 for c in t.tool_calls if c.get("parent")),
@@ -609,6 +635,27 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         if sched.stop_reason:
             print(f"STOPPED: {sched.stop_reason}", flush=True)
         return sched.stop_reason
+
+
+_SHELL_SPLIT = re.compile(r"[\s;&|()`$<>]+")
+
+
+def myc_cli_calls(tool_calls: list[dict]) -> list[str]:
+    """The ``myc`` CLI runs in a session's Bash calls: one entry per Bash call
+    that runs ``myc`` (any word whose basename is ``myc``), the subcommand
+    (the next word) or ``""``."""
+    out = []
+    for call in tool_calls:
+        if call.get("name") != "Bash":
+            continue
+        cmd = str((call.get("input") or {}).get("command") or "")
+        words = [w for w in _SHELL_SPLIT.split(cmd) if w]
+        for i, w in enumerate(words):
+            if w.rsplit("/", 1)[-1] == "myc":
+                nxt = words[i + 1] if i + 1 < len(words) else ""
+                out.append(nxt if re.fullmatch(r"[a-z][a-z-]*", nxt) else "")
+                break
+    return out
 
 
 def hook_stats(log_dir: Path) -> dict:

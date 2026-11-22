@@ -130,7 +130,9 @@ def index_meta() -> dict[str, dict]:
 
 TASK_TYPES = {"callers", "callees", "impact", "where", "dead_code", "flow",
               # multi-hop types of the hard set (#125)
-              "transitive_callers", "blast_radius", "ambiguous", "tests"}
+              "transitive_callers", "blast_radius", "ambiguous", "tests",
+              # questions that are not about calls (#163)
+              "config"}
 
 
 def check_tasks(tasks: list[dict], repos: dict[str, dict], check_evidence: bool = True) -> list[str]:
@@ -156,8 +158,8 @@ def check_tasks(tasks: list[dict], repos: dict[str, dict], check_evidence: bool 
             continue
         if t.get("type") not in TASK_TYPES:
             problems.append(f"{tid}: unknown type {t.get('type')}")
-        if t.get("answer_kind") not in ("symbols", "files"):
-            problems.append(f"{tid}: answer_kind must be symbols or files")
+        if t.get("answer_kind") not in ("symbols", "names", "files"):
+            problems.append(f"{tid}: answer_kind must be symbols, names or files")
         names = [g.get("name") for g in t.get("gold", [])]
         if len(names) != len(set(names)):
             problems.append(f"{tid}: duplicate gold names")

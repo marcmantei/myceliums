@@ -32,6 +32,8 @@ COMPACT_FIELDS = [
     # variant matrix (#125)
     "agent_calls", "subagent_tool_calls", "subagent_mcp_tool_calls", "first_mcp_call_index",
     "hook_grep_calls", "hook_grep_hints", "hook_grep_silent_reasons", "session_hook", "format_hook_calls",
+    # outcome eval at scale (#163): Bash in every condition
+    "bash_calls", "myc_cli_calls", "myc_cli_subcommands",
 ]
 
 METRICS = [
@@ -360,7 +362,10 @@ def regrade(label: str, note: str) -> int:
 
 def write_report(label: str, check: bool = False) -> bool:
     meta = config.load_json(config.RESULTS_DIR / label / "meta.json")
-    if meta.get("conditions") and set(meta["conditions"]) != {"with", "without"}:
+    if meta.get("budgets"):  # outcome eval at scale (#163): one directory, several budgets
+        from .report_scale import render as render_scale
+        text, summary = render_scale(label)
+    elif meta.get("conditions") and set(meta["conditions"]) != {"with", "without"}:
         from .report_variants import render as render_variants
         text, summary = render_variants(label)
     else:
