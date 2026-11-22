@@ -33,6 +33,13 @@
           "description": "Path to the project directory to analyze",
           "type": "string"
         },
+        "skip_communities": {
+          "description": "Skip community detection (default: false); only community tools need it",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "skip_embeddings": {
           "description": "Skip embedding generation for faster analysis (default: false)",
           "type": [

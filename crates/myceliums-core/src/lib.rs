@@ -165,6 +165,7 @@ pub mod wiki_export;
 // ── Internal modules (not part of the public API) ────────────────────
 
 pub(crate) mod content;
+pub(crate) mod leiden;
 pub(crate) mod resolver;
 pub use resolver::{
     language_family, CallResolution, CallResolutionStats, JsProject, UnlinkedCall, UnlinkedReason,
@@ -191,8 +192,10 @@ pub use codeowners::{
     compute_ownership, parse_codeowners, FileOwnership, OwnershipEntry, OwnershipReport,
 };
 pub use community::{
-    compute_community_metrics, compute_uid_to_community_label, CommunityCoupling,
-    CommunityDetector, CommunityMetrics,
+    community_membership, compute_community_metrics, compute_uid_to_community_label,
+    structural_modularity, CommunityBudget, CommunityCoupling, CommunityDetection,
+    CommunityDetector, CommunityMetrics, CommunityOptions, CommunityPlan, CommunityState,
+    CommunityStatus,
 };
 pub use config::ProjectConfig;
 pub use contracts::{detect_contracts, ContractsReport};

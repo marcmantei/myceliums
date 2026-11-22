@@ -321,6 +321,8 @@ pub struct AnalyzeParams {
     pub max_age_minutes: Option<u64>,
     /// Skip embedding generation for faster analysis (default: false)
     pub skip_embeddings: Option<bool>,
+    /// Skip community detection (default: false); only community tools need it
+    pub skip_communities: Option<bool>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]

@@ -63,8 +63,16 @@ skip_patterns = ["min.js", "min.css", "bundle.js", "map"]
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `min_community_size` | integer | `3` | Minimum number of symbols for a community to be reported |
-| `resolution` | float | `1.0` | Louvain resolution parameter. Higher values produce more (smaller) communities, lower values produce fewer (larger) communities |
+| `enabled` | bool | `true` | Run community detection during `myc analyze` and the MCP `analyze` tool. `false` skips it, as `myc analyze --skip-communities` (MCP: `skip_communities`) does: the index then has no communities and records them as `skipped`. Search, callers/callees, impact and flows do not use communities; only the community tools (`get_communities`, `get_community_detail`, `myc communities`) have nothing to list |
+| `time_budget_secs` | integer | `60` | Wall-clock budget of community detection, in seconds (`0` = no limit). When it runs out, detection stops and keeps the best partition found so far (every Leiden move only raises modularity); the index records the communities as `partial` with the reason (`index_meta` key `communities`), and `analyze`, `get_communities`, `get_community_detail` and `myc communities` say so |
+| `max_iterations` | integer | `100` | Most Leiden iterations (each one runs local moves, refinement and aggregation until the partition is stable at every level); detection repeats them until one changes nothing. Reaching the cap first also records the communities as `partial`. Django 5.1.4 with its tests converges after 23 iterations (0.4 s) |
+| `min_community_size` | integer | `3` | Minimum number of symbols for a community to be reported. Currently not applied: every community is stored |
+| `resolution` | float | `1.0` | Leiden modularity resolution. Higher values produce more (smaller) communities, lower values produce fewer (larger) communities |
+
+Community detection runs the Leiden algorithm (modularity, fixed random seed:
+the same graph gives the same communities) on the symbols joined by CALLS
+(weight 3), IMPORTS (2) and CONTAINED_BY (1) relationships. Each pass costs
+time linear in the number of edges; see #172 for measurements.
 
 ### `[embedding]`
 
@@ -229,6 +237,9 @@ embedding_batch_size = 256
 entry_points = ["main", "handleRequest", "app"]
 
 [community]
+enabled = true
+time_budget_secs = 60
+max_iterations = 100
 min_community_size = 3
 resolution = 1.0
 ```

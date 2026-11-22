@@ -138,14 +138,15 @@ async fn run(cli: Cli) -> Result<()> {
             max_age,
             skip_embeddings,
             strict_embeddings,
+            skip_communities,
             watch,
             no_git_check,
         } => {
             check_session_safeguards(&path, no_git_check)?;
             let embedding_policy = EmbeddingPolicy::from_flags(skip_embeddings, strict_embeddings);
-            cmd_analyze(&path, force, max_age, embedding_policy).await?;
+            cmd_analyze(&path, force, max_age, embedding_policy, skip_communities).await?;
             if watch {
-                cmd_watch(&path, skip_embeddings).await?;
+                cmd_watch(&path, skip_embeddings, skip_communities).await?;
             }
             Ok(())
         }

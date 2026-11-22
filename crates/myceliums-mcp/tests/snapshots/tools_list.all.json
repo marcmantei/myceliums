@@ -33,6 +33,13 @@
           "description": "Path to the project directory to analyze",
           "type": "string"
         },
+        "skip_communities": {
+          "description": "Skip community detection (default: false); only community tools need it",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "skip_embeddings": {
           "description": "Skip embedding generation for faster analysis (default: false)",
           "type": [
@@ -1717,6 +1724,13 @@
           },
           "type": "array"
         },
+        "communities_notice": {
+          "description": "Set when the index's communities are partial (the detection budget\nran out) or were skipped, and why.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "index_status": {
           "description": "Index freshness: analyzed commit vs current HEAD.",
           "type": "string"
@@ -1819,6 +1833,13 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
+        "communities_notice": {
+          "description": "Set when the index's communities are partial or were skipped.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "external_edge_count": {
           "format": "uint32",
           "minimum": 0,

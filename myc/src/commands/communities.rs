@@ -9,10 +9,22 @@ pub(crate) async fn cmd_communities(repo: &str) -> Result<()> {
     let graph = service.graph(&repo_info.id).await?;
 
     let communities = graph.communities().await?;
+    let notice = myceliums_core::CommunityStatus::load(&graph.store())
+        .await
+        .ok()
+        .flatten()
+        .and_then(|status| status.notice());
 
     if communities.is_empty() {
-        println!("No communities detected. Try re-analyzing with: myc analyze <path>");
+        match notice {
+            Some(notice) => println!("{notice}"),
+            None => println!("No communities detected. Try re-analyzing with: myc analyze <path>"),
+        }
         return Ok(());
+    }
+    if let Some(notice) = &notice {
+        println!("⚠ {notice}");
+        println!();
     }
 
     println!("Communities in {}:", repo_info.name);

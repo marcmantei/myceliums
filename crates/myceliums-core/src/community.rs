@@ -1,12 +1,382 @@
+//! Community detection: the Leiden algorithm on the structural graph
+//! (CALLS, IMPORTS, CONTAINED_BY), with a time and iteration budget (#172).
+
+use crate::config::CommunitySection;
 use crate::error::Result;
-use graphrs::algorithms::centrality::degree::degree_centrality;
-use graphrs::algorithms::community::leiden::{leiden, QualityFunction};
-use graphrs::{Edge, Graph, GraphSpecs, Node};
-use myceliums_storage::{CodeSymbol, Community, Relationship, RelationshipKind};
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-use tracing::info;
+use crate::leiden::{self, Limits, Stop, WeightedGraph};
+use myceliums_storage::{CodeSymbol, Community, Relationship, RelationshipKind, Store};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use tracing::{info, warn};
 use uuid::Uuid;
+
+/// Default time budget of one community detection run.
+pub const DEFAULT_TIME_BUDGET: Duration = Duration::from_secs(60);
+/// Default cap on Leiden iterations (each one runs local moves, refinement
+/// and aggregation until the partition is stable at every level).
+pub const DEFAULT_MAX_ITERATIONS: usize = 100;
+
+/// How long and how many iterations community detection may run.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CommunityBudget {
+    /// Wall-clock limit; `None` runs to convergence (or the iteration cap).
+    pub time: Option<Duration>,
+    /// Most Leiden iterations.
+    pub max_iterations: usize,
+}
+
+impl Default for CommunityBudget {
+    fn default() -> Self {
+        Self {
+            time: Some(DEFAULT_TIME_BUDGET),
+            max_iterations: DEFAULT_MAX_ITERATIONS,
+        }
+    }
+}
+
+/// Parameters of a community detection run.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CommunityOptions {
+    /// Time and iteration limits.
+    pub budget: CommunityBudget,
+    /// Modularity resolution (higher = more, smaller communities).
+    pub resolution: f64,
+}
+
+impl Default for CommunityOptions {
+    fn default() -> Self {
+        Self {
+            budget: CommunityBudget::default(),
+            resolution: 1.0,
+        }
+    }
+}
+
+impl CommunityOptions {
+    /// The options a project's `[community]` section asks for.
+    pub fn from_config(section: &CommunitySection) -> Self {
+        Self {
+            budget: CommunityBudget {
+                time: (section.time_budget_secs > 0)
+                    .then(|| Duration::from_secs(section.time_budget_secs)),
+                max_iterations: section.max_iterations.max(1),
+            },
+            resolution: if section.resolution > 0.0 {
+                section.resolution
+            } else {
+                1.0
+            },
+        }
+    }
+}
+
+/// Whether an index's communities are complete.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CommunityState {
+    /// Leiden converged.
+    Complete,
+    /// The budget ran out: the communities are the best partition found by
+    /// then.
+    Partial,
+    /// Community detection did not run.
+    Skipped,
+}
+
+impl std::fmt::Display for CommunityState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Complete => "complete",
+            Self::Partial => "partial",
+            Self::Skipped => "skipped",
+        })
+    }
+}
+
+/// How a community detection run ended; stored in the index metadata
+/// (`index_meta` key `communities`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CommunityStatus {
+    /// Complete, partial or skipped.
+    pub state: CommunityState,
+    /// Why the communities are partial or skipped.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    /// Wall time of the run, graph construction included.
+    #[serde(default)]
+    pub elapsed_ms: u64,
+    /// Leiden iterations started.
+    #[serde(default)]
+    pub iterations: usize,
+    /// Symbols in the structural graph.
+    #[serde(default)]
+    pub nodes: usize,
+    /// Distinct symbol pairs joined by a structural relationship.
+    #[serde(default)]
+    pub edges: usize,
+    /// Modularity (resolution 1) of the partition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modularity: Option<f64>,
+}
+
+impl CommunityStatus {
+    /// Key under which the status is stored in the `index_meta` table.
+    pub const META_KEY: &'static str = "communities";
+
+    /// Detection did not run, for `reason`.
+    pub fn skipped(reason: impl Into<String>) -> Self {
+        Self {
+            state: CommunityState::Skipped,
+            reason: Some(reason.into()),
+            elapsed_ms: 0,
+            iterations: 0,
+            nodes: 0,
+            edges: 0,
+            modularity: None,
+        }
+    }
+
+    fn empty(elapsed: Duration) -> Self {
+        Self {
+            state: CommunityState::Complete,
+            reason: None,
+            elapsed_ms: elapsed.as_millis() as u64,
+            iterations: 0,
+            nodes: 0,
+            edges: 0,
+            modularity: None,
+        }
+    }
+
+    /// True unless detection converged.
+    pub fn is_degraded(&self) -> bool {
+        self.state != CommunityState::Complete
+    }
+
+    /// One sentence for a reader of community results when they are partial
+    /// or skipped; `None` when complete.
+    pub fn notice(&self) -> Option<String> {
+        let reason = self.reason.as_deref().unwrap_or("no reason recorded");
+        match self.state {
+            CommunityState::Complete => None,
+            CommunityState::Partial => Some(format!(
+                "Communities are partial: {reason}. They are the best partition found by then; \
+                 a larger budget (`[community] time_budget_secs`, `max_iterations` in \
+                 .myceliums.toml) lets a re-analysis converge."
+            )),
+            CommunityState::Skipped => Some(format!(
+                "Communities were not detected ({reason}); community tools have nothing to \
+                 list. Re-analyze without it to detect them."
+            )),
+        }
+    }
+
+    /// Persists the status inside the index.
+    pub async fn record(&self, store: &Store) -> Result<()> {
+        let json = serde_json::to_string(self)?;
+        store.set_index_meta(Self::META_KEY, &json).await?;
+        Ok(())
+    }
+
+    /// Reads the status from an index, or `None` for an index analyzed
+    /// before it was recorded.
+    pub async fn load(store: &Store) -> Result<Option<Self>> {
+        match store.get_index_meta(Self::META_KEY).await? {
+            Some(json) => Ok(Some(serde_json::from_str(&json)?)),
+            None => Ok(None),
+        }
+    }
+}
+
+/// The communities of one run and how it ended.
+#[derive(Debug, Clone)]
+pub struct CommunityDetection {
+    /// Detected communities, largest first.
+    pub communities: Vec<Community>,
+    /// How the run ended.
+    pub status: CommunityStatus,
+}
+
+/// Whether an analysis runs community detection, and with which options.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CommunityPlan {
+    /// Detect communities with these options.
+    Run(CommunityOptions),
+    /// Do not detect communities, for this reason.
+    Skip(String),
+}
+
+impl CommunityPlan {
+    /// The plan for an analysis: skipped when the caller asks for it (`flag`
+    /// names the switch, e.g. `` `--skip-communities` ``) or the project
+    /// turns detection off, else run with the project's budget.
+    pub fn new(section: Option<&CommunitySection>, skip_requested: bool, flag: &str) -> Self {
+        let default_section = CommunitySection::default();
+        let section = section.unwrap_or(&default_section);
+        if skip_requested {
+            Self::Skip(flag.to_string())
+        } else if !section.enabled {
+            Self::Skip("`[community] enabled = false` in .myceliums.toml".to_string())
+        } else {
+            Self::Run(CommunityOptions::from_config(section))
+        }
+    }
+
+    /// Runs the plan: detects (or skips) communities, stores them and the
+    /// status in `store`, and returns them.
+    pub async fn execute(
+        &self,
+        store: &Store,
+        symbols: &[CodeSymbol],
+        relationships: &[Relationship],
+        repo_id: &str,
+    ) -> Result<CommunityDetection> {
+        let detection = match self {
+            Self::Skip(reason) => {
+                info!("Community detection skipped: {reason}");
+                CommunityDetection {
+                    communities: vec![],
+                    status: CommunityStatus::skipped(reason.clone()),
+                }
+            }
+            Self::Run(options) => {
+                CommunityDetector::detect_with(symbols, relationships, repo_id, options)?
+            }
+        };
+        store.store_communities(&detection.communities).await?;
+        detection.status.record(store).await?;
+        Ok(detection)
+    }
+}
+
+/// The structural graph: symbols joined by CALLS (weight 3), IMPORTS (2)
+/// and CONTAINED_BY (1), parallel relationships summed, self-loops dropped.
+struct StructuralGraph<'a> {
+    /// Symbol UID per node, sorted (node order is deterministic).
+    uids: Vec<&'a str>,
+    graph: WeightedGraph,
+}
+
+impl<'a> StructuralGraph<'a> {
+    fn build(relationships: &'a [Relationship]) -> Option<Self> {
+        let structural: Vec<(&Relationship, f64)> = relationships
+            .iter()
+            .filter_map(|r| match r.kind {
+                RelationshipKind::Calls => Some((r, 3.0)),
+                RelationshipKind::Imports => Some((r, 2.0)),
+                RelationshipKind::ContainedBy => Some((r, 1.0)),
+                _ => None,
+            })
+            .collect();
+        if structural.is_empty() {
+            return None;
+        }
+        let mut uids: Vec<&str> = structural
+            .iter()
+            .flat_map(|(r, _)| [r.source_uid.as_str(), r.target_uid.as_str()])
+            .collect();
+        uids.sort_unstable();
+        uids.dedup();
+        let index: HashMap<&str, usize> = uids.iter().enumerate().map(|(i, u)| (*u, i)).collect();
+        let edges: Vec<(usize, usize, f64)> = structural
+            .iter()
+            .map(|(r, w)| {
+                (
+                    index[r.source_uid.as_str()],
+                    index[r.target_uid.as_str()],
+                    *w,
+                )
+            })
+            .collect();
+        let graph = WeightedGraph::from_edges(uids.len(), &edges);
+        Some(Self { uids, graph })
+    }
+}
+
+/// A partition of a [`StructuralGraph`] and how the run ended.
+struct Partition {
+    /// Member nodes per community, largest community first; members in node
+    /// (UID) order.
+    groups: Vec<Vec<usize>>,
+    status: CommunityStatus,
+}
+
+fn partition(
+    structural: &StructuralGraph<'_>,
+    options: &CommunityOptions,
+    started: Instant,
+) -> Partition {
+    let graph = &structural.graph;
+    let limits = Limits {
+        deadline: options.budget.time.map(|t| started + t),
+        max_iterations: options.budget.max_iterations.max(1),
+    };
+    let outcome = leiden::leiden(graph, options.resolution, limits);
+    let count = outcome
+        .membership
+        .iter()
+        .copied()
+        .max()
+        .map_or(0, |m| m + 1);
+    let mut groups: Vec<Vec<usize>> = vec![Vec::new(); count];
+    for (v, &c) in outcome.membership.iter().enumerate() {
+        groups[c].push(v);
+    }
+    groups.sort_by(|a, b| b.len().cmp(&a.len()).then_with(|| a[0].cmp(&b[0])));
+    let elapsed = started.elapsed();
+    let (state, reason) = match outcome.stop {
+        Stop::Converged => (CommunityState::Complete, None),
+        Stop::Deadline => (
+            CommunityState::Partial,
+            Some(format!(
+                "the time budget of {} ran out during iteration {} of community detection",
+                format_budget(options.budget.time),
+                outcome.iterations.max(1)
+            )),
+        ),
+        Stop::IterationCap => (
+            CommunityState::Partial,
+            Some(format!(
+                "community detection stopped after {} iteration(s) (`[community] \
+                 max_iterations`) before the partition was stable",
+                outcome.iterations
+            )),
+        ),
+    };
+    let status = CommunityStatus {
+        state,
+        reason,
+        elapsed_ms: elapsed.as_millis() as u64,
+        iterations: outcome.iterations,
+        nodes: graph.node_count(),
+        edges: graph.edge_count(),
+        modularity: Some(leiden::modularity(graph, &outcome.membership, 1.0)),
+    };
+    if status.is_degraded() {
+        warn!(
+            "Community detection is partial: {}",
+            status.reason.as_deref().unwrap_or_default()
+        );
+    }
+    Partition { groups, status }
+}
+
+fn format_budget(time: Option<Duration>) -> String {
+    match time {
+        Some(t) if t.as_secs() >= 1 => format!("{} s", t.as_secs()),
+        Some(t) => format!("{} ms", t.as_millis()),
+        None => "unlimited".to_string(),
+    }
+}
+
+/// The member with the most distinct neighbours names a community.
+fn by_degree(structural: &StructuralGraph<'_>, group: &[usize]) -> Vec<usize> {
+    let mut members = group.to_vec();
+    // Stable: equal degrees keep UID order.
+    members.sort_by_key(|&v| std::cmp::Reverse(structural.graph.degree(v)));
+    members
+}
 
 /// Detects code communities using the Leiden algorithm on the call graph.
 ///
@@ -38,7 +408,7 @@ impl CommunityDetector {
         }
         let dominant_kind = kind_count
             .iter()
-            .max_by_key(|&(_, count)| count)
+            .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
             .map(|(kind, _)| kind.clone())
             .unwrap_or_else(|| "module".to_string());
 
@@ -58,7 +428,7 @@ impl CommunityDetector {
 
         let inferred_purpose = path_components
             .iter()
-            .max_by_key(|&(_, count)| count)
+            .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
             .map(|(kind, _)| kind.clone())
             .unwrap_or_else(|| "functionality".to_string());
 
@@ -80,149 +450,53 @@ impl CommunityDetector {
         )
     }
 
-    /// Detects communities in the symbol graph with the Leiden algorithm and labels each one from its members.
+    /// Detects communities with the default options (60 s budget).
     pub fn detect(
         symbols: &[CodeSymbol],
         relationships: &[Relationship],
         repo_id: &str,
     ) -> Result<Vec<Community>> {
-        // Build a graphrs undirected graph from structural relationships
-        // Use CALLS (weight 3.0), IMPORTS (weight 2.0), and CONTAINED_BY (weight 1.0)
-        // to give Leiden enough signal for partitioning
-        let structural_rels: Vec<(&Relationship, f64)> = relationships
-            .iter()
-            .filter_map(|r| match r.kind {
-                RelationshipKind::Calls => Some((r, 3.0)),
-                RelationshipKind::Imports => Some((r, 2.0)),
-                RelationshipKind::ContainedBy => Some((r, 1.0)),
-                _ => None,
-            })
-            .collect();
+        Ok(Self::detect_with(
+            symbols,
+            relationships,
+            repo_id,
+            &CommunityOptions::default(),
+        )?
+        .communities)
+    }
 
-        if structural_rels.is_empty() || symbols.len() < 2 {
-            info!("Not enough data for community detection");
-            return Ok(vec![]);
-        }
+    /// Detects communities in the symbol graph with the Leiden algorithm
+    /// within `options.budget`, labels each one from its members, and says
+    /// whether the partition converged.
+    pub fn detect_with(
+        symbols: &[CodeSymbol],
+        relationships: &[Relationship],
+        repo_id: &str,
+        options: &CommunityOptions,
+    ) -> Result<CommunityDetection> {
+        let started = Instant::now();
+        let structural = match StructuralGraph::build(relationships) {
+            Some(s) if symbols.len() >= 2 => s,
+            _ => {
+                info!("Not enough data for community detection");
+                return Ok(CommunityDetection {
+                    communities: vec![],
+                    status: CommunityStatus::empty(started.elapsed()),
+                });
+            }
+        };
+        let Partition { groups, status } = partition(&structural, options, started);
 
-        // Collect all symbol UIDs involved in structural relationships
-        let mut symbol_uids: HashSet<String> = HashSet::new();
-        for (rel, _) in &structural_rels {
-            symbol_uids.insert(rel.source_uid.clone());
-            symbol_uids.insert(rel.target_uid.clone());
-        }
-
-        // Build UID -> symbol index
         let uid_to_symbol: HashMap<&str, &CodeSymbol> =
             symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-
-        // Create graphrs nodes and edges with weighted relationships
-        let nodes: Vec<Arc<Node<String, ()>>> = symbol_uids
-            .iter()
-            .map(|uid| Node::from_name(uid.clone()))
-            .collect();
-
-        // Aggregate parallel edges by unordered endpoint pair. In an undirected
-        // graph, (a,b) and (b,a) are the same edge, and a codebase routinely has
-        // multiple relationships between the same pair of symbols (e.g. several
-        // CALLS). Passing duplicates to graphrs fails with `DuplicateEdge` and
-        // previously aborted detection silently. Summing weights is also the
-        // right semantics: more relationships between two symbols = stronger tie.
-        let mut edge_weights: HashMap<(String, String), f64> = HashMap::new();
-        for (rel, weight) in &structural_rels {
-            if rel.source_uid == rel.target_uid {
-                continue; // skip self-loops
-            }
-            let key = if rel.source_uid <= rel.target_uid {
-                (rel.source_uid.clone(), rel.target_uid.clone())
-            } else {
-                (rel.target_uid.clone(), rel.source_uid.clone())
-            };
-            *edge_weights.entry(key).or_insert(0.0) += *weight;
-        }
-
-        let edges: Vec<Arc<Edge<String, ()>>> = edge_weights
-            .into_iter()
-            .map(|((src, dst), weight)| Edge::with_weight(src, dst, weight))
-            .collect();
-
-        // Create undirected graph for Leiden (it requires undirected)
-        let graph =
-            Graph::<String, ()>::new_from_nodes_and_edges(nodes, edges, GraphSpecs::undirected());
-
-        let graph = match graph {
-            Ok(g) => g,
-            Err(e) => {
-                // Do not silently return zero communities — surface it.
-                tracing::warn!("Community detection: failed to build graph: {:?}", e);
-                return Ok(vec![]);
-            }
-        };
-
-        // Run Leiden algorithm with Modularity (better for sparse code graphs than CPM)
-        let partitions = leiden(
-            &graph,
-            true,                        // weighted
-            QualityFunction::Modularity, // Modularity works better for sparse call graphs
-            Some(1.0),                   // resolution
-            None,                        // theta
-            None,                        // gamma
-        );
-
-        let partitions = match partitions {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("Leiden failed: {:?}, falling back to single community", e);
-                let all_symbols: Vec<(&str, &CodeSymbol)> = symbols
-                    .iter()
-                    .take(5)
-                    .map(|s| (s.uid.as_str(), s))
-                    .collect();
-                let summary = Self::generate_summary(
-                    &all_symbols,
-                    &symbols.iter().map(|s| s.uid.clone()).collect::<Vec<_>>(),
-                    &uid_to_symbol,
-                );
-                return Ok(vec![Community {
-                    uid: Uuid::new_v4().to_string(),
-                    label: "all".to_string(),
-                    repo_id: repo_id.to_string(),
-                    member_count: symbols.len() as u32,
-                    top_symbols: symbols
-                        .iter()
-                        .take(5)
-                        .map(|s| s.name.clone())
-                        .collect::<Vec<_>>()
-                        .join(", "),
-                    summary,
-                }]);
-            }
-        };
-
-        // Compute degree centrality for labeling
-        let centrality = degree_centrality(&graph);
-
-        // Convert partitions to Community structs
-        let mut communities = Vec::new();
-        for (idx, partition) in partitions.iter().enumerate() {
-            if partition.is_empty() {
-                continue;
-            }
-
-            // Find top symbols by degree centrality within this community
-            let mut members_with_centrality: Vec<(&str, f64)> = partition
+        let mut communities = Vec::with_capacity(groups.len());
+        for (idx, group) in groups.iter().enumerate() {
+            let ranked = by_degree(&structural, group);
+            let top_symbols_with_info: Vec<(&str, &CodeSymbol)> = ranked
                 .iter()
-                .map(|uid| {
-                    let c = centrality.get(uid).copied().unwrap_or(0.0);
-                    (uid.as_str(), c)
-                })
-                .collect();
-            members_with_centrality
-                .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-
-            let top_symbols_with_info: Vec<(&str, &CodeSymbol)> = members_with_centrality
-                .iter()
+                .map(|&v| structural.uids[v])
+                .filter_map(|uid| uid_to_symbol.get(uid).map(|s| (uid, *s)))
                 .take(5)
-                .filter_map(|(uid, _)| uid_to_symbol.get(uid).map(|s| (*uid, *s)))
                 .collect();
 
             let top_names: Vec<String> = top_symbols_with_info
@@ -236,7 +510,10 @@ impl CommunityDetector {
                 top_names[0].clone()
             };
 
-            let partition_vec: Vec<String> = partition.iter().cloned().collect();
+            let partition_vec: Vec<String> = group
+                .iter()
+                .map(|&v| structural.uids[v].to_string())
+                .collect();
             let summary =
                 Self::generate_summary(&top_symbols_with_info, &partition_vec, &uid_to_symbol);
 
@@ -244,14 +521,23 @@ impl CommunityDetector {
                 uid: Uuid::new_v4().to_string(),
                 label,
                 repo_id: repo_id.to_string(),
-                member_count: partition.len() as u32,
+                member_count: group.len() as u32,
                 top_symbols: top_names.join(", "),
                 summary,
             });
         }
 
-        info!("Detected {} communities", communities.len());
-        Ok(communities)
+        info!(
+            "Detected {} communities ({}, {} ms, {} iteration(s))",
+            communities.len(),
+            status.state,
+            status.elapsed_ms,
+            status.iterations
+        );
+        Ok(CommunityDetection {
+            communities,
+            status,
+        })
     }
 }
 
@@ -266,6 +552,9 @@ pub struct CommunityMetrics {
     pub coupling: Vec<CommunityCoupling>,
     /// Total communities
     pub community_count: usize,
+    /// How the detection behind these metrics ended (partial when its
+    /// budget ran out).
+    pub status: CommunityStatus,
 }
 
 /// Edge count between a pair of communities.
@@ -279,194 +568,106 @@ pub struct CommunityCoupling {
     pub edge_count: u32,
 }
 
+/// Labels per community: the name of its highest-degree member.
+fn community_labels(
+    structural: &StructuralGraph<'_>,
+    groups: &[Vec<usize>],
+    uid_to_symbol: &HashMap<&str, &CodeSymbol>,
+) -> Vec<String> {
+    groups
+        .iter()
+        .enumerate()
+        .map(|(idx, group)| {
+            by_degree(structural, group)
+                .first()
+                .and_then(|&v| uid_to_symbol.get(structural.uids[v]))
+                .map(|sym| sym.name.clone())
+                .unwrap_or_else(|| format!("community-{}", idx))
+        })
+        .collect()
+}
+
 /// Compute quality metrics for the community partitioning.
 ///
-/// Runs Leiden to get partitions, then computes modularity, per-community
-/// cohesion, and inter-community coupling from the structural edges.
+/// Runs Leiden (default budget) to get partitions, then computes modularity,
+/// per-community cohesion, and inter-community coupling from the structural
+/// edges.
 pub fn compute_community_metrics(
     symbols: &[CodeSymbol],
     relationships: &[Relationship],
 ) -> Result<CommunityMetrics> {
-    let structural_rels: Vec<(&Relationship, f64)> = relationships
-        .iter()
-        .filter_map(|r| match r.kind {
-            RelationshipKind::Calls => Some((r, 3.0)),
-            RelationshipKind::Imports => Some((r, 2.0)),
-            RelationshipKind::ContainedBy => Some((r, 1.0)),
-            _ => None,
-        })
-        .collect();
-
-    if structural_rels.is_empty() || symbols.len() < 2 {
-        return Ok(CommunityMetrics {
-            modularity: 0.0,
-            cohesion: HashMap::new(),
-            coupling: vec![],
-            community_count: 0,
-        });
-    }
+    let started = Instant::now();
+    let structural = match StructuralGraph::build(relationships) {
+        Some(s) if symbols.len() >= 2 => s,
+        _ => {
+            return Ok(CommunityMetrics {
+                modularity: 0.0,
+                cohesion: HashMap::new(),
+                coupling: vec![],
+                community_count: 0,
+                status: CommunityStatus::empty(started.elapsed()),
+            })
+        }
+    };
+    let Partition { groups, status } =
+        partition(&structural, &CommunityOptions::default(), started);
 
     let uid_to_symbol: HashMap<&str, &CodeSymbol> =
         symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-
-    let mut symbol_uids: HashSet<String> = HashSet::new();
-    for (rel, _) in &structural_rels {
-        symbol_uids.insert(rel.source_uid.clone());
-        symbol_uids.insert(rel.target_uid.clone());
+    let community_labels = community_labels(&structural, &groups, &uid_to_symbol);
+    let mut community_of = vec![0usize; structural.uids.len()];
+    for (idx, group) in groups.iter().enumerate() {
+        for &v in group {
+            community_of[v] = idx;
+        }
     }
+    let graph = &structural.graph;
 
-    let nodes: Vec<Arc<Node<String, ()>>> = symbol_uids
+    // Cohesion: distinct internal symbol pairs over all possible pairs.
+    let mut internal_pairs = vec![0usize; groups.len()];
+    // Coupling: relationships whose endpoints sit in two communities.
+    let mut coupling_map: HashMap<(usize, usize), u32> = HashMap::new();
+    let index: HashMap<&str, usize> = structural
+        .uids
         .iter()
-        .map(|uid| Node::from_name(uid.clone()))
+        .enumerate()
+        .map(|(i, u)| (*u, i))
         .collect();
-
-    let edges: Vec<Arc<Edge<String, ()>>> = structural_rels
-        .iter()
-        .filter(|(rel, _)| rel.source_uid != rel.target_uid)
-        .map(|(rel, weight)| {
-            Edge::with_weight(rel.source_uid.clone(), rel.target_uid.clone(), *weight)
-        })
-        .collect();
-
-    let graph =
-        Graph::<String, ()>::new_from_nodes_and_edges(nodes, edges, GraphSpecs::undirected());
-
-    let graph = match graph {
-        Ok(g) => g,
-        Err(_) => {
-            return Ok(CommunityMetrics {
-                modularity: 0.0,
-                cohesion: HashMap::new(),
-                coupling: vec![],
-                community_count: 0,
-            })
-        }
-    };
-
-    let partitions = leiden(
-        &graph,
-        true,
-        QualityFunction::Modularity,
-        Some(1.0),
-        None,
-        None,
-    );
-
-    let partitions = match partitions {
-        Ok(p) => p,
-        Err(_) => {
-            return Ok(CommunityMetrics {
-                modularity: 0.0,
-                cohesion: HashMap::new(),
-                coupling: vec![],
-                community_count: 0,
-            })
-        }
-    };
-
-    let centrality = degree_centrality(&graph);
-
-    // Build UID -> community index + label
-    let mut uid_to_community: HashMap<&str, usize> = HashMap::new();
-    let mut community_labels: Vec<String> = Vec::new();
-
-    for (idx, partition) in partitions.iter().enumerate() {
-        let label = partition
-            .iter()
-            .max_by(|a, b| {
-                let ca = centrality.get(*a).copied().unwrap_or(0.0);
-                let cb = centrality.get(*b).copied().unwrap_or(0.0);
-                ca.partial_cmp(&cb).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .and_then(|uid| uid_to_symbol.get(uid.as_str()))
-            .map(|sym| sym.name.clone())
-            .unwrap_or_else(|| format!("community-{}", idx));
-
-        community_labels.push(label);
-        for uid in partition {
-            uid_to_community.insert(uid.as_str(), idx);
+    for v in 0..graph.node_count() {
+        for (u, _) in graph.neighbours(v) {
+            if v < u && community_of[u] == community_of[v] {
+                internal_pairs[community_of[v]] += 1;
+            }
         }
     }
-
-    // Compute modularity: Q = (1/2m) * sum_ij [ A_ij - (k_i * k_j)/(2m) ] * delta(c_i, c_j)
-    let total_weight: f64 = structural_rels
-        .iter()
-        .filter(|(rel, _)| rel.source_uid != rel.target_uid)
-        .map(|(_, w)| w)
-        .sum();
-    let two_m = total_weight * 2.0; // undirected: each edge counted once, but formula uses 2m
-
-    let mut modularity = 0.0;
-    if two_m > 0.0 {
-        // Strength of each node (weighted degree)
-        let mut strength: HashMap<&str, f64> = HashMap::new();
-        for (rel, weight) in &structural_rels {
-            if rel.source_uid != rel.target_uid {
-                *strength.entry(rel.source_uid.as_str()).or_insert(0.0) += weight;
-                *strength.entry(rel.target_uid.as_str()).or_insert(0.0) += weight;
-            }
-        }
-
-        for (rel, weight) in &structural_rels {
-            if rel.source_uid == rel.target_uid {
-                continue;
-            }
-            let ci = uid_to_community.get(rel.source_uid.as_str());
-            let cj = uid_to_community.get(rel.target_uid.as_str());
-            if ci == cj {
-                let ki = strength
-                    .get(rel.source_uid.as_str())
-                    .copied()
-                    .unwrap_or(0.0);
-                let kj = strength
-                    .get(rel.target_uid.as_str())
-                    .copied()
-                    .unwrap_or(0.0);
-                modularity += weight - (ki * kj) / two_m;
-            }
-        }
-        modularity /= two_m;
-    }
-
-    // Compute per-community cohesion (internal density)
-    let mut cohesion: HashMap<String, f64> = HashMap::new();
-    for (idx, partition) in partitions.iter().enumerate() {
-        let n = partition.len();
-        if n < 2 {
-            cohesion.insert(community_labels[idx].clone(), 1.0);
+    for rel in relationships.iter().filter(|r| {
+        matches!(
+            r.kind,
+            RelationshipKind::Calls | RelationshipKind::Imports | RelationshipKind::ContainedBy
+        ) && r.source_uid != r.target_uid
+    }) {
+        let (Some(&a), Some(&b)) = (
+            index.get(rel.source_uid.as_str()),
+            index.get(rel.target_uid.as_str()),
+        ) else {
             continue;
+        };
+        let (ci, cj) = (community_of[a], community_of[b]);
+        if ci != cj {
+            let key = if ci < cj { (ci, cj) } else { (cj, ci) };
+            *coupling_map.entry(key).or_insert(0) += 1;
         }
-        let max_edges = (n * (n - 1)) / 2;
-        let internal_edges = structural_rels
-            .iter()
-            .filter(|(rel, _)| {
-                rel.source_uid != rel.target_uid
-                    && uid_to_community.get(rel.source_uid.as_str()) == Some(&idx)
-                    && uid_to_community.get(rel.target_uid.as_str()) == Some(&idx)
-            })
-            .count();
-        let density = if max_edges > 0 {
-            internal_edges as f64 / max_edges as f64
+    }
+
+    let mut cohesion: HashMap<String, f64> = HashMap::new();
+    for (idx, group) in groups.iter().enumerate() {
+        let n = group.len();
+        let density = if n < 2 {
+            1.0
         } else {
-            0.0
+            internal_pairs[idx] as f64 / ((n * (n - 1)) / 2) as f64
         };
         cohesion.insert(community_labels[idx].clone(), density);
-    }
-
-    // Compute inter-community coupling
-    let mut coupling_map: HashMap<(usize, usize), u32> = HashMap::new();
-    for (rel, _) in &structural_rels {
-        if rel.source_uid == rel.target_uid {
-            continue;
-        }
-        let ci = uid_to_community.get(rel.source_uid.as_str()).copied();
-        let cj = uid_to_community.get(rel.target_uid.as_str()).copied();
-        if let (Some(ci), Some(cj)) = (ci, cj) {
-            if ci != cj {
-                let key = if ci < cj { (ci, cj) } else { (cj, ci) };
-                *coupling_map.entry(key).or_insert(0) += 1;
-            }
-        }
     }
 
     let mut coupling: Vec<CommunityCoupling> = coupling_map
@@ -480,113 +681,85 @@ pub fn compute_community_metrics(
     coupling.sort_by_key(|c| std::cmp::Reverse(c.edge_count));
 
     Ok(CommunityMetrics {
-        modularity,
+        modularity: status.modularity.unwrap_or(0.0),
         cohesion,
         coupling,
-        community_count: partitions.len(),
+        community_count: groups.len(),
+        status,
     })
+}
+
+/// Community id per symbol UID (`0..k`, largest community first) and how
+/// the run ended, for evaluations; `None` without structural relationships.
+pub fn community_membership(
+    relationships: &[Relationship],
+    options: &CommunityOptions,
+) -> Option<(HashMap<String, usize>, CommunityStatus)> {
+    let started = Instant::now();
+    let structural = StructuralGraph::build(relationships)?;
+    let Partition { groups, status } = partition(&structural, options, started);
+    let mut membership = HashMap::with_capacity(structural.uids.len());
+    for (idx, group) in groups.iter().enumerate() {
+        for &v in group {
+            membership.insert(structural.uids[v].to_string(), idx);
+        }
+    }
+    Some((membership, status))
+}
+
+/// Modularity (resolution 1) of a partition of the structural graph of
+/// `relationships`, for comparing partitions from different algorithms.
+/// Symbols missing from `membership` count as singletons.
+pub fn structural_modularity(
+    relationships: &[Relationship],
+    membership: &HashMap<String, usize>,
+) -> f64 {
+    let Some(structural) = StructuralGraph::build(relationships) else {
+        return 0.0;
+    };
+    let mut ids: HashMap<usize, usize> = HashMap::new();
+    let mut next = 0usize;
+    let mut dense = Vec::with_capacity(structural.uids.len());
+    for uid in &structural.uids {
+        let id = match membership.get(*uid) {
+            Some(&c) => *ids.entry(c).or_insert_with(|| {
+                next += 1;
+                next - 1
+            }),
+            None => {
+                next += 1;
+                next - 1
+            }
+        };
+        dense.push(id);
+    }
+    leiden::modularity(&structural.graph, &dense, 1.0)
 }
 
 /// Returns a map from symbol UID to community label for use in cross-community analysis.
 ///
 /// The label for each community is derived from the highest-degree symbol in that
 /// partition — matching the labelling logic in [`CommunityDetector::detect`].
-/// Returns an empty map when there are not enough CALLS edges for detection.
+/// Returns an empty map when there are not enough structural edges for detection.
 pub fn compute_uid_to_community_label(
     symbols: &[CodeSymbol],
     relationships: &[Relationship],
 ) -> crate::error::Result<HashMap<String, String>> {
-    // Use same structural relationships as detect(): CALLS + IMPORTS + CONTAINED_BY
-    let structural_rels: Vec<(&Relationship, f64)> = relationships
-        .iter()
-        .filter_map(|r| match r.kind {
-            RelationshipKind::Calls => Some((r, 3.0)),
-            RelationshipKind::Imports => Some((r, 2.0)),
-            RelationshipKind::ContainedBy => Some((r, 1.0)),
-            _ => None,
-        })
-        .collect();
-
-    if structural_rels.is_empty() || symbols.len() < 2 {
-        return Ok(HashMap::new());
-    }
-
-    let mut symbol_uids: HashSet<String> = HashSet::new();
-    for (rel, _) in &structural_rels {
-        symbol_uids.insert(rel.source_uid.clone());
-        symbol_uids.insert(rel.target_uid.clone());
-    }
-
+    let started = Instant::now();
+    let structural = match StructuralGraph::build(relationships) {
+        Some(s) if symbols.len() >= 2 => s,
+        _ => return Ok(HashMap::new()),
+    };
+    let Partition { groups, .. } = partition(&structural, &CommunityOptions::default(), started);
     let uid_to_symbol: HashMap<&str, &CodeSymbol> =
         symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-
-    let nodes: Vec<Arc<Node<String, ()>>> = symbol_uids
-        .iter()
-        .map(|uid| Node::from_name(uid.clone()))
-        .collect();
-
-    let edges: Vec<Arc<Edge<String, ()>>> = structural_rels
-        .iter()
-        .filter(|(rel, _)| rel.source_uid != rel.target_uid) // Filter self-loops
-        .map(|(rel, weight)| {
-            Edge::with_weight(rel.source_uid.clone(), rel.target_uid.clone(), *weight)
-        })
-        .collect();
-
-    let graph =
-        Graph::<String, ()>::new_from_nodes_and_edges(nodes, edges, GraphSpecs::undirected());
-
-    let graph = match graph {
-        Ok(g) => g,
-        Err(_) => return Ok(HashMap::new()),
-    };
-
-    let partitions = leiden(
-        &graph,
-        true,
-        QualityFunction::Modularity,
-        Some(1.0),
-        None,
-        None,
-    );
-
-    let partitions = match partitions {
-        Ok(p) => p,
-        Err(_) => {
-            // Single-community fallback: all symbols get label "all"
-            let membership = symbol_uids
-                .into_iter()
-                .map(|uid| (uid, "all".to_string()))
-                .collect();
-            return Ok(membership);
-        }
-    };
-
-    let centrality = degree_centrality(&graph);
-
+    let labels = community_labels(&structural, &groups, &uid_to_symbol);
     let mut membership: HashMap<String, String> = HashMap::new();
-    for (idx, partition) in partitions.iter().enumerate() {
-        if partition.is_empty() {
-            continue;
-        }
-
-        // Pick the highest-centrality member as the community label
-        let label = partition
-            .iter()
-            .max_by(|a, b| {
-                let ca = centrality.get(*a).copied().unwrap_or(0.0);
-                let cb = centrality.get(*b).copied().unwrap_or(0.0);
-                ca.partial_cmp(&cb).unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .and_then(|uid| uid_to_symbol.get(uid.as_str()))
-            .map(|sym| sym.name.clone())
-            .unwrap_or_else(|| format!("community-{}", idx));
-
-        for uid in partition {
-            membership.insert(uid.clone(), label.clone());
+    for (group, label) in groups.iter().zip(labels) {
+        for &v in group {
+            membership.insert(structural.uids[v].to_string(), label.clone());
         }
     }
-
     Ok(membership)
 }
 
@@ -726,12 +899,19 @@ mod tests {
         ];
 
         let metrics = compute_community_metrics(&symbols, &rels).unwrap();
+        assert_eq!(metrics.community_count, 2, "the two triangles");
+        // Two triangles joined by one edge: Q = 2 (6/14 - (7/14)^2) = 0.357.
         assert!(
-            metrics.community_count >= 1,
-            "Should detect at least 1 community"
+            (metrics.modularity - 0.357142857).abs() < 1e-6,
+            "modularity {}",
+            metrics.modularity
         );
-        // Modularity should be positive for well-separated clusters
-        // (exact value depends on Leiden's partitioning)
+        for density in metrics.cohesion.values() {
+            assert_eq!(*density, 1.0, "each triangle is complete");
+        }
+        assert_eq!(metrics.coupling.len(), 1);
+        assert_eq!(metrics.coupling[0].edge_count, 1);
+        assert_eq!(metrics.status.state, CommunityState::Complete);
     }
 
     #[test]
@@ -834,5 +1014,122 @@ mod tests {
             !communities.is_empty(),
             "duplicate edges must not collapse detection to zero communities"
         );
+    }
+
+    /// Two dense clusters of `size` functions, each cluster in its own file,
+    /// joined by one call.
+    fn two_clusters(size: usize) -> (Vec<CodeSymbol>, Vec<Relationship>) {
+        let mut symbols = Vec::new();
+        let mut rels = Vec::new();
+        for c in 0..2 {
+            for i in 0..size {
+                let uid = format!("c{c}_{i}");
+                symbols.push(make_symbol(&uid, &uid, &format!("src/m{c}.rs")));
+                for j in 0..i {
+                    rels.push(make_rel(
+                        &uid,
+                        &format!("c{c}_{j}"),
+                        RelationshipKind::Calls,
+                    ));
+                }
+            }
+        }
+        rels.push(make_rel("c0_0", "c1_0", RelationshipKind::Calls));
+        (symbols, rels)
+    }
+
+    #[test]
+    fn detection_converges_and_records_a_complete_status() {
+        let (symbols, rels) = two_clusters(6);
+        let detection =
+            CommunityDetector::detect_with(&symbols, &rels, "test", &CommunityOptions::default())
+                .unwrap();
+        assert_eq!(detection.communities.len(), 2);
+        assert_eq!(detection.status.state, CommunityState::Complete);
+        assert_eq!(detection.status.reason, None);
+        assert_eq!(detection.status.nodes, 12);
+        assert!(detection.status.modularity.unwrap() > 0.4);
+        assert!(detection.status.notice().is_none());
+    }
+
+    /// #172: an exhausted budget keeps the partition found so far and says
+    /// the communities are partial, and why.
+    #[test]
+    fn an_exhausted_time_budget_returns_partial_communities() {
+        let (symbols, rels) = two_clusters(6);
+        let options = CommunityOptions {
+            budget: CommunityBudget {
+                time: Some(Duration::ZERO),
+                max_iterations: 10,
+            },
+            resolution: 1.0,
+        };
+        let detection = CommunityDetector::detect_with(&symbols, &rels, "test", &options).unwrap();
+        assert_eq!(detection.status.state, CommunityState::Partial);
+        let reason = detection.status.reason.clone().unwrap();
+        assert!(reason.contains("time budget of 0 ms"), "{reason}");
+        // Every symbol of the graph is still in exactly one community.
+        let members: u32 = detection.communities.iter().map(|c| c.member_count).sum();
+        assert_eq!(members, 12);
+        let notice = detection.status.notice().unwrap();
+        assert!(notice.starts_with("Communities are partial"), "{notice}");
+        assert!(notice.contains("time_budget_secs"), "{notice}");
+    }
+
+    #[test]
+    fn the_iteration_cap_marks_communities_partial() {
+        let (symbols, rels) = two_clusters(6);
+        let options = CommunityOptions {
+            budget: CommunityBudget {
+                time: None,
+                max_iterations: 1,
+            },
+            resolution: 1.0,
+        };
+        let detection = CommunityDetector::detect_with(&symbols, &rels, "test", &options).unwrap();
+        assert_eq!(detection.status.state, CommunityState::Partial);
+        assert!(detection
+            .status
+            .reason
+            .as_deref()
+            .unwrap()
+            .contains("max_iterations"));
+        // One iteration already separates the two clusters.
+        assert_eq!(detection.communities.len(), 2);
+    }
+
+    #[test]
+    fn a_skipped_status_says_so_and_round_trips() {
+        let status = CommunityStatus::skipped("`--skip-communities`");
+        assert_eq!(status.state, CommunityState::Skipped);
+        let notice = status.notice().unwrap();
+        assert!(notice.contains("not detected"), "{notice}");
+        assert!(notice.contains("--skip-communities"), "{notice}");
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"state\":\"skipped\""), "{json}");
+        let back: CommunityStatus = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, status);
+    }
+
+    #[test]
+    fn detection_is_deterministic() {
+        let (symbols, rels) = two_clusters(8);
+        let a = CommunityDetector::detect(&symbols, &rels, "t").unwrap();
+        let b = CommunityDetector::detect(&symbols, &rels, "t").unwrap();
+        let shape = |cs: &[Community]| {
+            cs.iter()
+                .map(|c| (c.label.clone(), c.member_count, c.top_symbols.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(shape(&a), shape(&b));
+    }
+
+    #[test]
+    fn uid_labels_cover_every_structural_symbol() {
+        let (symbols, rels) = two_clusters(5);
+        let labels = compute_uid_to_community_label(&symbols, &rels).unwrap();
+        assert_eq!(labels.len(), 10);
+        assert_ne!(labels["c0_1"], labels["c1_1"]);
+        assert_eq!(labels["c0_1"], labels["c0_2"]);
     }
 }

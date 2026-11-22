@@ -275,6 +275,18 @@ pub struct AnalyzeOutput {
     pub files: usize,
     pub relationships: usize,
     pub communities: usize,
+    /// `complete`, `partial` (the time or iteration budget ran out; the best
+    /// partition found by then) or `skipped`. Absent for an index analyzed
+    /// before it was recorded.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub communities_state: Option<String>,
+    /// Why the communities are partial or skipped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub communities_notice: Option<String>,
+    /// Wall time per phase (discover, parse, resolve, communities,
+    /// processes, embed). Only for a fresh analysis.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phases: Option<String>,
     pub processes: usize,
     /// Number of symbols that received an embedding vector.
     pub symbols_embedded: usize,
@@ -422,6 +434,10 @@ pub struct ProcessItem {
 pub struct CommunitiesOutput {
     /// Index freshness: analyzed commit vs current HEAD.
     pub index_status: String,
+    /// Set when the index's communities are partial (the detection budget
+    /// ran out) or were skipped, and why.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub communities_notice: Option<String>,
     pub communities: Vec<CommunityItem>,
     pub total_count: usize,
     /// Set when results were cut: how to fetch the next page.
@@ -442,6 +458,9 @@ pub struct CommunityItem {
 pub struct CommunityDetailOutput {
     /// Index freshness: analyzed commit vs current HEAD.
     pub index_status: String,
+    /// Set when the index's communities are partial or were skipped.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub communities_notice: Option<String>,
     pub uid: String,
     pub label: String,
     pub member_count: u32,

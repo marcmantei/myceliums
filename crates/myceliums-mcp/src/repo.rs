@@ -319,6 +319,19 @@ impl Graph<'_> {
     }
 }
 
+/// Why the index's communities are partial or were skipped (#172); `None`
+/// when they are complete or the index predates the record.
+pub(crate) async fn communities_notice(graph: &Graph<'_>) -> Option<String> {
+    let store = graph.store();
+    match myceliums_core::CommunityStatus::load(&store).await {
+        Ok(status) => status.and_then(|s| s.notice()),
+        Err(e) => {
+            tracing::warn!("cannot read the community status: {e}");
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -31,6 +31,11 @@ pub(crate) enum Commands {
         /// vectors). Cannot be combined with --skip-embeddings.
         #[arg(long, conflicts_with = "skip_embeddings")]
         strict_embeddings: bool,
+        /// Skip community detection (as `[community] enabled = false` does).
+        /// Search, callers/callees, impact and flows do not need it; only the
+        /// community tools stay empty
+        #[arg(long)]
+        skip_communities: bool,
         /// Watch for file changes and re-index incrementally
         #[arg(long)]
         watch: bool,

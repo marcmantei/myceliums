@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use myceliums_core::analyzer::{self, Analyzer};
 use myceliums_core::cache::{self, CacheCheckConfig, CacheDecision};
 use myceliums_core::config::{self, ProjectConfig};
-use myceliums_core::{CommunityDetector, ProcessTracer};
+use myceliums_core::{CommunityPlan, ProcessTracer};
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
 use std::path::{Path, PathBuf};
 
@@ -247,6 +247,7 @@ pub(crate) async fn cmd_analyze(
     force: bool,
     max_age_minutes: u64,
     embedding_policy: EmbeddingPolicy,
+    skip_communities: bool,
 ) -> Result<()> {
     use myceliums_core::lock::{AnalysisLock, LockOutcome};
 
@@ -373,6 +374,11 @@ pub(crate) async fn cmd_analyze(
         }
     }
     store.delete_repo_data().await?;
+    let community_plan = CommunityPlan::new(
+        project_config.as_ref().map(|c| &c.community),
+        skip_communities,
+        "`--skip-communities`",
+    );
 
     let analyzer = if let Some(cfg) = project_config {
         Analyzer::with_config(store, abs_path.clone(), cfg)
@@ -424,25 +430,49 @@ pub(crate) async fn cmd_analyze(
         println!("  Mentions:      {}", result.mentions_count);
     }
 
-    // Display timing breakdown if available
-    if let Some(timing) = &result.timing {
-        println!();
-        println!("{}", timing.format_report());
-    }
-
-    // Phase 2: Community detection and process tracing
+    // Phase 2: community detection and process tracing, timed so a stall
+    // shows which phase it is in (#172).
     let store = Store::open(&db_path, &repo_id).await?;
     let symbols = store.get_symbols().await?;
     let relationships = store.get_relationships().await?;
 
-    let communities = CommunityDetector::detect(&symbols, &relationships, &repo_id)?;
-    let community_count = store.store_communities(&communities).await?;
+    if let CommunityPlan::Run(options) = &community_plan {
+        eprintln!(
+            "Detecting communities (budget {})...",
+            options
+                .budget
+                .time
+                .map_or("unlimited".to_string(), |t| format!("{} s", t.as_secs()))
+        );
+    }
+    let communities_started = std::time::Instant::now();
+    let detection = community_plan
+        .execute(&store, &symbols, &relationships, &repo_id)
+        .await?;
+    let communities_ms = communities_started.elapsed().as_secs_f64() * 1000.0;
 
+    let processes_started = std::time::Instant::now();
     let processes = ProcessTracer::trace(&symbols, &relationships, &repo_id)?;
     let process_count = store.store_processes(&processes).await?;
+    let processes_ms = processes_started.elapsed().as_secs_f64() * 1000.0;
 
-    println!("  Communities:   {}", community_count);
+    println!(
+        "  Communities:   {} ({})",
+        detection.communities.len(),
+        detection.status.state
+    );
+    if let Some(notice) = detection.status.notice() {
+        eprintln!("  ⚠ {notice}");
+    }
     println!("  Processes:     {}", process_count);
+
+    if let Some(timing) = result.timing.clone() {
+        let timing = timing.with_graph_phases(communities_ms, processes_ms);
+        let embed = skip_embeddings.then_some("skipped");
+        println!("  Phases:        {}", timing.phase_line(embed));
+        println!();
+        println!("{}", timing.format_report());
+    }
 
     // Get current git commit for cache tracking
     let analyzed_commit = cache::get_head_commit(&abs_path).ok();
@@ -536,6 +566,7 @@ pub(crate) async fn cmd_analyze_for_session(
         SESSION_FORCE_REANALYZE,
         SESSION_CACHE_MAX_AGE_MINUTES,
         embedding_policy,
+        false,
     )
     .await
 }
@@ -584,7 +615,11 @@ fn watched_config(abs_path: &Path) -> Option<ProjectConfig> {
         .flatten()
 }
 
-pub(crate) async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> {
+pub(crate) async fn cmd_watch(
+    path: &Path,
+    skip_embeddings: bool,
+    skip_communities: bool,
+) -> Result<()> {
     use myceliums_core::watch::start_watching;
 
     let abs_path = std::fs::canonicalize(path)
@@ -627,7 +662,7 @@ pub(crate) async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> 
                     "  A file that decides what is indexed or what imports bind changed: full re-analysis"
                 );
                 let policy = EmbeddingPolicy::from_flags(skip_embeddings, false);
-                if let Err(e) = cmd_analyze(&abs_path, true, 0, policy).await {
+                if let Err(e) = cmd_analyze(&abs_path, true, 0, policy, skip_communities).await {
                     eprintln!("    Error during full re-analysis: {e}");
                 }
                 project_config = watched_config(&abs_path);
@@ -925,6 +960,28 @@ mod tests {
             parsed.is_err(),
             "--skip-embeddings with --strict-embeddings must be rejected"
         );
+    }
+
+    /// #172: `--skip-communities` reaches the analyze command, and becomes a
+    /// skip plan that names the flag.
+    #[test]
+    fn skip_communities_flag_parses_into_a_skip_plan() {
+        let parsed = Cli::try_parse_from(["myc", "analyze", ".", "--skip-communities"]).unwrap();
+        let Commands::Analyze {
+            skip_communities, ..
+        } = parsed.command
+        else {
+            panic!("not analyze");
+        };
+        assert!(skip_communities);
+        assert_eq!(
+            CommunityPlan::new(None, skip_communities, "`--skip-communities`"),
+            CommunityPlan::Skip("`--skip-communities`".into())
+        );
+        assert!(matches!(
+            CommunityPlan::new(None, false, "`--skip-communities`"),
+            CommunityPlan::Run(_)
+        ));
     }
 
     /// The bug in one assertion: `myc session --strict-embeddings` must not

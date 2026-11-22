@@ -20,7 +20,7 @@ pub fn format_analyze(o: &AnalyzeOutput) -> String {
          Symbols:     {sym}\n\
          Files:       {files}\n\
          Relations:   {rels}\n\
-         Communities: {comm}\n\
+         Communities: {comm}{comm_state}\n\
          Processes:   {proc}\n\
          Embeddings:  {embedded}/{total} symbols",
         repo = o.repo_id,
@@ -28,6 +28,10 @@ pub fn format_analyze(o: &AnalyzeOutput) -> String {
         files = o.files,
         rels = o.relationships,
         comm = o.communities,
+        comm_state = match o.communities_state.as_deref() {
+            Some(state) if state != "complete" => format!(" ({state})"),
+            _ => String::new(),
+        },
         proc = o.processes,
         embedded = o.symbols_embedded,
         total = o.symbols_total,
@@ -40,6 +44,12 @@ pub fn format_analyze(o: &AnalyzeOutput) -> String {
     }
     if let Some(calls) = &o.calls {
         out.push_str(&format!("\nCalls:       {calls}"));
+    }
+    if let Some(phases) = &o.phases {
+        out.push_str(&format!("\nPhases:      {phases}"));
+    }
+    if let Some(notice) = &o.communities_notice {
+        out.push_str(&format!("\n⚠ {notice}"));
     }
     if let Some(skipped) = &o.skipped {
         out.push_str(&format!(
@@ -2081,6 +2091,57 @@ mod tests {
     use super::*;
     use crate::{CentralityNodeOutput, CohesionEntry, CycleItemOutput, ModuleCouplingEntry};
 
+    /// #172: partial or skipped communities and the phase timings are in
+    /// the analyze summary.
+    #[test]
+    fn analyze_output_shows_community_state_and_phases() {
+        let status = myceliums_core::CommunityStatus {
+            state: myceliums_core::CommunityState::Partial,
+            reason: Some("the time budget of 60 s ran out during iteration 1".into()),
+            elapsed_ms: 60_000,
+            iterations: 1,
+            nodes: 10,
+            edges: 20,
+            modularity: Some(0.5),
+        };
+        let mut output = AnalyzeOutput {
+            repo_id: "r".into(),
+            symbols: 3,
+            files: 1,
+            relationships: 0,
+            communities: 4,
+            communities_state: Some(status.state.to_string()),
+            communities_notice: status.notice(),
+            phases: Some(
+                "discover 0.0 s, parse 1.0 s, resolve 0.5 s, communities 60.0 s, \
+                          processes 0.1 s, embed skipped"
+                    .into(),
+            ),
+            processes: 0,
+            symbols_embedded: 3,
+            symbols_total: 3,
+            embedding_failures: 0,
+            embeddings_reused: 0,
+            embeddings_pending: 0,
+            embedding_model: None,
+            calls: None,
+            skipped: None,
+            cached: false,
+        };
+        let text = format_analyze(&output);
+        assert!(text.contains("Communities: 4 (partial)\n"), "{text}");
+        assert!(text.contains("\nPhases:      discover 0.0 s"), "{text}");
+        assert!(
+            text.contains("⚠ Communities are partial: the time budget of 60 s ran out"),
+            "{text}"
+        );
+        output.communities_state = Some("complete".into());
+        output.communities_notice = None;
+        let text = format_analyze(&output);
+        assert!(text.contains("Communities: 4\n"), "{text}");
+        assert!(!text.contains("partial"), "{text}");
+    }
+
     /// #118: a fresh analysis says which files it left out and why.
     #[test]
     fn analyze_output_shows_skipped_files() {
@@ -2090,6 +2151,9 @@ mod tests {
             files: 1,
             relationships: 0,
             communities: 0,
+            communities_state: None,
+            communities_notice: None,
+            phases: None,
             processes: 0,
             symbols_embedded: 3,
             symbols_total: 3,

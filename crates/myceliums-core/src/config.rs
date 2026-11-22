@@ -194,12 +194,24 @@ pub struct ProcessSection {
 /// The `[community]` section of `.myceliums.toml`: community detection.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CommunitySection {
+    /// Run community detection during analysis (`false` = skip it, as
+    /// `myc analyze --skip-communities` does).
+    #[serde(default = "CommunitySection::default_enabled")]
+    pub enabled: bool,
     /// Minimum number of symbols for a community to be reported.
     #[serde(default = "CommunitySection::default_min_community_size")]
     pub min_community_size: usize,
-    /// Louvain resolution parameter (higher = more communities).
+    /// Leiden modularity resolution (higher = more, smaller communities).
     #[serde(default = "CommunitySection::default_resolution")]
     pub resolution: f64,
+    /// Wall-clock budget of community detection in seconds (0 = no limit).
+    /// When it runs out the best partition so far is kept and the index
+    /// records the communities as partial.
+    #[serde(default = "CommunitySection::default_time_budget_secs")]
+    pub time_budget_secs: u64,
+    /// Most Leiden iterations before the partition is kept as partial.
+    #[serde(default = "CommunitySection::default_max_iterations")]
+    pub max_iterations: usize,
 }
 
 // ── Defaults ──────────────────────────────────────────────────────────
@@ -274,13 +286,28 @@ impl AnalysisSection {
 impl Default for CommunitySection {
     fn default() -> Self {
         Self {
+            enabled: Self::default_enabled(),
             min_community_size: Self::default_min_community_size(),
             resolution: Self::default_resolution(),
+            time_budget_secs: Self::default_time_budget_secs(),
+            max_iterations: Self::default_max_iterations(),
         }
     }
 }
 
 impl CommunitySection {
+    fn default_enabled() -> bool {
+        true
+    }
+
+    fn default_time_budget_secs() -> u64 {
+        crate::community::DEFAULT_TIME_BUDGET.as_secs()
+    }
+
+    fn default_max_iterations() -> usize {
+        crate::community::DEFAULT_MAX_ITERATIONS
+    }
+
     fn default_min_community_size() -> usize {
         3
     }
@@ -380,6 +407,31 @@ max_file_size_kb = 1024
         assert_eq!(cfg.analysis.max_file_size_kb, 1024);
         // defaults still apply for omitted fields
         assert_eq!(cfg.community.resolution, 1.0);
+    }
+
+    /// #172: community detection can be switched off and has a budget.
+    #[test]
+    fn community_switch_and_budget_parse() {
+        let defaults: ProjectConfig = toml::from_str("").unwrap();
+        assert!(defaults.community.enabled);
+        assert_eq!(defaults.community.time_budget_secs, 60);
+        assert_eq!(defaults.community.max_iterations, 100);
+
+        let cfg: ProjectConfig = toml::from_str(
+            "[community]\nenabled = false\ntime_budget_secs = 5\nmax_iterations = 3\n",
+        )
+        .unwrap();
+        assert!(!cfg.community.enabled);
+        assert_eq!(cfg.community.time_budget_secs, 5);
+        assert_eq!(cfg.community.max_iterations, 3);
+        let options = crate::community::CommunityOptions::from_config(&cfg.community);
+        assert_eq!(options.budget.time, Some(std::time::Duration::from_secs(5)));
+        assert_eq!(options.budget.max_iterations, 3);
+
+        let unlimited: ProjectConfig =
+            toml::from_str("[community]\ntime_budget_secs = 0\n").unwrap();
+        let options = crate::community::CommunityOptions::from_config(&unlimited.community);
+        assert_eq!(options.budget.time, None);
     }
 
     #[test]
