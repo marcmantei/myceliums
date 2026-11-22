@@ -727,7 +727,10 @@ passes and the most frequent confusions go to `TOOLSEL.md`.
   calls between packages, so the Vue results measure myc as it is, not a
   complete graph. The 40-turn arm is a cap the prompt does not state, not an
   unlimited session. Two sessions (one per repository) ran at a time; their
-  scratch scripts shared `/tmp`.
+  scratch scripts shared `/tmp`. Bash reaches the whole machine: one none
+  session found a TypeScript package and node outside its PATH and built its
+  own call graph; no session read the eval's task files, gold sets or index
+  cache (every transcript was searched for those paths).
 * Outcome eval (#153): a pilot. #163 answers its open question with a shell
   and more turns: with 10 or 40 turns myceliums did not change success, and C
   was faster (0.69× and 0.81× wall time) and at 10 turns cheaper (0.80×). One repetition, 11 paired tasks, one
