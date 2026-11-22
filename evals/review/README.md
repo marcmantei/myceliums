@@ -110,13 +110,95 @@ unit stays unreviewed.
   (sampled acceptance, <rule>)` when some confirmed items were accepted by the
   sample; `null` stays where an item is open, unsure or needs a hand fix. An
   existing `reviewed_by` is kept. (`human:<handle>` is the form the datasets'
-  own validation and `real-repo-review` use.)
+  own validation and `real-repo-review` use.) Retrieval queries are marked only
+  when every item was decided by the reviewer: `real-repo-eval` reports any
+  `reviewed_by` as a human review, which sampled acceptance is not.
 - corrected or removed labels, with a note in the query's or task's rationale;
 - the protocol and its numbers in each dataset's README, between
   `<!-- label-review:start -->` and `<!-- label-review:end -->`;
 - a list of baselines measured on the old labels. It re-records nothing. A
   changed `graph-gold/<language>.json` needs `graph-eval --update-baseline` in
   the same PR, or the Retrieval Quality gate fails.
+
+### Owner policy `owner-2026-11-22`
+
+```bash
+python3 evals/review/apply.py --policy owner-2026-11-22 --dry-run
+python3 evals/review/apply.py --policy owner-2026-11-22
+```
+
+Marc's policy for the items he did not decide himself:
+
+- pre-screen-confirmed items outside the sample are accepted as correct on
+  the strength of the sample he checked;
+- every other item he did not decide, and every item he marked unsure, is
+  decided by an independent second-check agent. Its decisions are in
+  `agent-check/decisions-*.jsonl`, one JSON object per line:
+  `{"id", "decision": correct|wrong|unsure, "reason", "evidence", "suggested_fix"?, "reviewer": "agent:second-check"}`.
+  A record whose reviewer is not an `agent:` identity is refused. Marc's own
+  correct or wrong decision always wins over an agent's.
+
+Every item gets one provenance class. `provenance.jsonl` records it per item
+as `{id, dataset, final, class, by}`:
+
+| class | `by` | meaning |
+|---|---|---|
+| human | `human:marc` | Marc decided the item |
+| prescreen | `agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: N checked, E errors` | accepted by the policy; no person looked at it. N and E are that dataset's own human sample, which can be 0 |
+| second-check | `agent:second-check, per marc's policy (owner-2026-11-22)` | decided by the second-check agent; no person looked at it |
+| rule | `policy owner-2026-11-22 consistency rule` | decided by the addendum's rule, whatever any single check said |
+| `<class>+restated` | `<class string>, wording restated by policy owner-2026-11-22` | decided as its class says; the policy then restated the wording (the three graph-gold traps) |
+
+Addendum (`policy/owner-2026-11-22.json`, the **rule** class,
+`policy owner-2026-11-22 consistency rule`):
+
+- An optional task answer that the task wording explicitly excludes is removed
+  from the optional list everywhere in the task set, not only where a second
+  check flagged it. Excluded means a Starlette or library call, a class
+  instantiation where the task excludes instantiations, a deprecated decoy
+  documented as not used internally, or a function passed as a value where
+  the task counts that as a reference.
+- Genuine near-misses stay optional: recursion and self-calls, thin wrappers,
+  callers on the real path.
+- A graph-gold trap whose call site has a real CALLS edge is restated as "must
+  not target X" instead of being deleted. The file lists each such item; a
+  `remove` override wins over every single-item decision.
+
+A wrong decision is applied as before, from Marc's comment or from the agent's
+`suggested_fix`. Fixes record their class in the rationale note. An item whose
+final decision is unsure, or that is still undecided, is listed and keeps its
+unit unreviewed.
+
+A unit's `reviewed_by` names the classes of its items:
+
+- `human:marc` only when Marc decided every item;
+- the single class string when the items share one class;
+- otherwise `mixed, policy owner-2026-11-22: n× <class string>; …`.
+
+Retrieval queries get the same provenance. `real-repo-eval` reports them per
+class: human-reviewed (`human:` only), agent-verified under owner policy (any
+provenance that names a known policy id, `OWNER_POLICIES` in
+`crates/myceliums-benchmarks/src/eval/real_repos.rs`: today `owner-2026-11-22`),
+and unreviewed. An `agent:` reviewer without such an id is still refused. Without `--policy`, `apply.py` never
+marks a retrieval query by sampled acceptance.
+
+The policy needs a complete pre-screen and the sample it was drawn from. To
+apply the review again after its first apply (for example after changing
+`apply.py`), start from the reviewed dataset files:
+`apply.py --policy owner-2026-11-22 --reset-datasets-to 91f028c`.
+The protocol written into the READMEs checks what was measured on the
+datasets against what is there now: the graph-gold baseline digest, every
+committed agent-eval run's grades, and `recorded-run.json`'s digest. It lists
+what is still to redo and, separately, what was checked and is current. The
+summary printed by `apply.py` and the protocol it writes into the dataset
+READMEs count items per class.
+
+The #164 review was applied once, on 2026-11-22. Its record (`prescreen/`,
+`sample.json`, `decisions.jsonl`, `agent-check/`, `provenance.jsonl`) refers to
+the items as exported from the datasets before that apply (main at `91f028c`).
+Afterwards the datasets differ (removed and moved answers, new
+"complete?" claims), so `serve.py` and `apply.py` refuse to reuse that sample.
+A later review starts a new record.
 
 Decisions are tied to the claim they were made on (`claim_digest`); a decision
 on a claim that has since changed is ignored and the item is open again.
@@ -126,7 +208,7 @@ on a claim that has since changed is ignored and the item is open again.
 | file | committed |
 |---|---|
 | `export.py`, `serve.py`, `apply.py`, `common.py`, `static/`, `tests/` | yes |
-| `prescreen/*.jsonl`, `sample.json`, `decisions.jsonl` | yes, once written: they are the review record |
+| `prescreen/*.jsonl`, `sample.json`, `decisions.jsonl`, `agent-check/`, `provenance.jsonl` | yes, once written: they are the review record |
 | `items.jsonl` | no (generated; contains third-party snippets) |
 
 Tests: `python3 -m unittest discover -s evals/review/tests -v` (run by the

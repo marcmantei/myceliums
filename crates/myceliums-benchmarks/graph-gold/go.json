@@ -2,7 +2,7 @@
   "language": "go",
   "fixture": "graph-accuracy/go",
   "labelled_by": "agent",
-  "reviewed_by": null,
+  "reviewed_by": "mixed, policy owner-2026-11-22: 14× human:marc; 1× human:marc, wording restated by policy owner-2026-11-22; 101× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 96 checked, 0 errors",
   "verified_with": "go vet + go build; go/types resolution of every call expression (verify/go_calls, see README)",
   "symbols": [
     {"id": "auth/auth.go::Token", "kind": "struct", "line": 12},
@@ -124,7 +124,7 @@
     {"in": "report/report.go::Join", "name": "Join", "line": 41, "why": "strings.Join; report.Join does not recurse"},
     {"in": "report/report.go::Render", "name": "ToUpper", "line": 36, "why": "strings.ToUpper"},
     {"in": "main.go::dispatch", "name": "handler", "line": 23, "why": "the local func literal `handler` shadows the package function handler"},
-    {"in": "report/report.go::Report.Render", "name": "RenderRow", "line": 58, "why": "static call on *Report: OrderReport.RenderRow is never the target"},
+    {"in": "report/report.go::Report.Render", "name": "RenderRow", "line": 58, "why": "must not target OrderReport.RenderRow: static call on *Report (the real edge to Report.RenderRow is in calls)"},
     {"in": "service/service.go::NewUserService", "name": "IsEmail", "line": 22, "why": "validation.IsEmail is passed as a value, not called"},
     {"in": "store/store.go::Repo.Find", "name": "predicate", "line": 28, "why": "calls its parameter"}
   ]

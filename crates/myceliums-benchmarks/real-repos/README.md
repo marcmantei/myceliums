@@ -1,11 +1,15 @@
 # Real-repository retrieval set (#95)
 
-> **The labels in this set are drafts.** Every query was labelled by an AI
-> agent (`"labelled_by": "agent:claude"`) and **no human has reviewed them yet**
-> (`"reviewed_by": null`). Until a person has checked them with the review
-> helper below, treat the set — and every number measured on it — as
-> provisional, not as ground truth. The evaluator prints how many queries are
-> still unreviewed on every run.
+> **The labels were drafted by an AI agent and checked in #164 under an owner
+> policy, mostly not by a human one by one.** Every query was labelled by an
+> agent (`"labelled_by": "agent:claude"`). In the #164 review Marc checked 111
+> of the 713 label items himself. The rest were accepted on the strength of
+> his sample in each set (queries: 94 checked, 0 errors; test-seeking: 13
+> checked, 0 errors) or decided by a second-check agent; see
+> [Review of the labels](#review-of-the-labels-164). `reviewed_by` records
+> this per query: 2 of the 168 queries are human-reviewed, 166 are
+> agent-verified under the owner policy. The evaluator prints these counts on
+> every run.
 
 168 labelled queries over four open-source repositories, split into a
 development half for tuning search parameters and a held-out half for
@@ -95,6 +99,16 @@ truncate it. An `agent:` identity (any letter case) and the query's own
 labeller are refused as reviewers — by the helper and, for hand edits, by the
 dataset validation every tool runs on load.
 
+`reviewed_by` records the provenance. `human:<handle>` is a human review. An
+agent check accepted under an owner policy (#164) is recorded with the policy's
+exact id, for example `agent:second-check, per marc's policy
+(owner-2026-11-22)`, or `mixed, policy owner-2026-11-22: 2× human:marc; 1×
+agent:prescreen, …`. Known ids are `OWNER_POLICIES` in
+`src/eval/real_repos.rs`. The evaluator counts such a query as "agent-verified
+under owner policy", never as human-reviewed, and the review helper still
+offers it for a human review. An `agent:` reviewer without a known policy id
+is refused.
+
 Ask, for each query: would I want to read exactly these symbols first to
 answer it? Is any labelled symbol only a caller, a test or a type that merely
 names the answer? Reviewing changes the dataset digest; re-run
@@ -146,3 +160,30 @@ Labelling rules, applied the same way in all four repositories:
 
 The labeller's own uncertainties are recorded in each query's `rationale`
 (what was deliberately left out, and why) — the place to start a review.
+
+<!-- label-review:start -->
+## Review of the labels (#164)
+
+Applied on 2026-11-22 with `evals/review` under policy `owner-2026-11-22`. An independent AI pre-screen marked every item confirmed, doubtful or wrong. Marc reviewed items one by one in the review page: the queue held every doubtful and wrong item and a seeded random sample of the confirmed ones (seed 164, 15 % per dataset; `evals/review/sample.json`). Over all datasets he decided 229 sampled confirmed items with 0 errors (`evals/review/decisions.jsonl`); the table gives each dataset's own human sample, which can be 0, and the prescreen provenance string names it. Marc's policy of 22 November 2026: pre-screen-confirmed items outside the sample are accepted as correct on the strength of the sample he checked; every other item he did not decide, and every item he marked unsure, is decided by an independent second-check agent (`evals/review/agent-check/decisions-*.jsonl`). An item whose final decision is unsure is not marked reviewed.
+
+Provenance, per item in `evals/review/provenance.jsonl`:
+
+- **human** — `human:marc`: Marc decided the item himself;
+- **prescreen** — `agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: N checked, E errors`: confirmed by the pre-screen, outside the sample, accepted by the policy — no person looked at this item;
+- **second-check** — `agent:second-check, per marc's policy (owner-2026-11-22)`: decided by the second-check agent (`evals/review/agent-check/`) — no person looked at this item;
+- **rule** — `policy owner-2026-11-22 consistency rule`: decided by the policy's consistency rule (`evals/review/policy/owner-2026-11-22.json`), whatever any single check said;
+- **restated** — `<class>, wording restated by policy owner-2026-11-22`: decided as its class says; the policy then restated its wording (a graph-gold trap now names the one target it must not have).
+
+Policy addendum: Consistency rule: an optional answer that the task wording explicitly excludes (a Starlette or library call, a class instantiation where the task excludes instantiations, a deprecated decoy documented as not used internally, a function passed as a value where the task counts that as a reference) is removed from the optional list everywhere in the task set, not only where a second check flagged it; genuine near-misses (recursion or self-calls, thin wrappers, callers on the real path) stay optional. A graph-gold trap whose call site has a real CALLS edge is restated as 'must not target <X>' instead of being deleted.
+
+`reviewed_by` of a unit (query, language file, held-out set, task) names the classes of its items: `human:marc` only when Marc decided every item, otherwise the class, or `mixed, policy owner-2026-11-22: …` with a count per class. It stays `null` where an item is unsure, open or needs a fix by hand. `real-repo-eval` reports retrieval queries as human-reviewed, agent-verified under owner policy, or unreviewed; only `human:` provenance counts as human.
+
+| dataset | items | human | prescreen | second-check | rule | restated | wrong: fixed / by hand | unsure | open | units marked | human sample in this dataset: checked / errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| retrieval-queries | 624 | 95 | 529 | 0 | 0 | 0 | 0 / 0 | 0 | 0 | 168 of 168 | 94 / 0 |
+| retrieval-test-seeking | 89 | 16 | 58 | 15 | 0 | 0 | 0 / 0 | 0 | 0 | 20 of 20 | 13 / 0 |
+
+Measured on the labels before this review (re-record before relying on them):
+
+- crates/myceliums-benchmarks/real-repos/recorded-run.json — measured on dataset 2026-11-12 (digest 0eeb0ba91cf3…), not on the current file; report-only. Re-run `cargo run -p myceliums-benchmarks --bin real-repo-eval -- --record` when its numbers should belong to the reviewed file
+<!-- label-review:end -->

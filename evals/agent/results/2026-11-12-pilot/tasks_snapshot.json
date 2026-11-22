@@ -148,7 +148,7 @@
   "repo": "hono",
   "type": "dead_code",
   "answer_kind": "symbols",
-  "n_gold": 7,
+  "n_gold": 6,
   "question": "Which exported functions defined directly in `src/utils/*.ts` files (not in subdirectories, not test files) are not used by any non-test code in the repository, so that only tests exercise them?"
  },
  {

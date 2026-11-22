@@ -116,12 +116,37 @@ impl RealQuery {
         }
     }
 
-    /// True once a reviewer is recorded. [`RealRepoSet::validate`] guarantees
-    /// that a recorded reviewer is neither an agent nor the labeller, so this
-    /// means "a person other than the labeller checked these labels".
-    pub fn is_reviewed(&self) -> bool {
-        self.reviewed_by.is_some()
+    /// How this query's labels were checked, read from `reviewed_by`.
+    pub fn review_class(&self) -> ReviewClass {
+        match self.reviewed_by.as_deref() {
+            None => ReviewClass::Unreviewed,
+            Some(r) if mentions_agent(r) || is_owner_policy(r) => ReviewClass::OwnerPolicy,
+            Some(_) => ReviewClass::Human,
+        }
     }
+
+    /// True when a person other than the labeller checked these labels.
+    /// [`RealRepoSet::validate`] guarantees that a recorded reviewer is not
+    /// the labeller; an agent's check accepted under an owner policy is not a
+    /// human review and does not count here.
+    pub fn is_reviewed(&self) -> bool {
+        self.review_class() == ReviewClass::Human
+    }
+}
+
+/// How a query's labels were checked (#164).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewClass {
+    /// `reviewed_by` is `null`.
+    Unreviewed,
+    /// A person other than the labeller checked every label (`human:<handle>`).
+    Human,
+    /// Agents checked some or all labels and the owner accepted that under a
+    /// policy named by its exact id ([`OWNER_POLICIES`]), e.g.
+    /// `agent:second-check, per marc's policy (owner-2026-11-22)` or
+    /// `mixed, policy owner-2026-11-22: 2× human:marc; 1× agent:prescreen, …`.
+    /// Never reported as a human review.
+    OwnerPolicy,
 }
 
 /// Which half of the set a query belongs to.
@@ -323,9 +348,34 @@ impl RealRepoSet {
             .collect()
     }
 
-    /// How many queries carry a reviewer.
+    /// How many queries a person other than the labeller reviewed.
     pub fn reviewed(&self) -> usize {
         self.queries.iter().filter(|q| q.is_reviewed()).count()
+    }
+
+    /// How many queries were checked by agents and accepted under an owner policy.
+    pub fn agent_verified(&self) -> usize {
+        self.queries
+            .iter()
+            .filter(|q| q.review_class() == ReviewClass::OwnerPolicy)
+            .count()
+    }
+
+    /// One line on the review state: human-reviewed, agent-verified under an
+    /// owner policy, unreviewed. Agent provenance is never called human.
+    pub fn review_summary(&self) -> String {
+        let total = self.queries.len();
+        let human = self.reviewed();
+        let policy = self.agent_verified();
+        if human == total {
+            return "every query's labels were reviewed by a human".to_string();
+        }
+        format!(
+            "{total} queries: human-reviewed {human}, agent-verified under owner policy {policy}, \
+             unreviewed {} — numbers rest on labels no human checked one by one where not \
+             human-reviewed (real-repos/README.md)",
+            total - human - policy
+        )
     }
 
     /// Record that `reviewer` checked the labels of query `id` and accepts them.
@@ -354,6 +404,24 @@ fn is_agent(identity: &str) -> bool {
     identity.trim().to_ascii_lowercase().starts_with("agent:")
 }
 
+/// True when `identity` mentions an agent anywhere (`agent:<name>`), in any
+/// letter case — a mixed provenance names one after a human.
+fn mentions_agent(identity: &str) -> bool {
+    identity.to_ascii_lowercase().contains("agent:")
+}
+
+/// Owner policies under which an agent's check may be recorded in
+/// `reviewed_by` (#164). Each id names a written policy
+/// (`evals/review/policy/<id>.json`, `evals/review/README.md`).
+pub const OWNER_POLICIES: &[&str] = &["owner-2026-11-22"];
+
+/// True when `identity` names one of the [`OWNER_POLICIES`] by its exact id,
+/// e.g. `agent:second-check, per marc's policy (owner-2026-11-22)`.
+fn is_owner_policy(identity: &str) -> bool {
+    let lower = identity.to_ascii_lowercase();
+    OWNER_POLICIES.iter().any(|id| lower.contains(id))
+}
+
 /// Why a query's `reviewed_by` does not count as a review, if it does not.
 ///
 /// `null` is fine (unreviewed). A recorded reviewer must be non-empty, must not
@@ -365,9 +433,10 @@ fn review_problem(query: &RealQuery) -> Option<String> {
     if reviewer.is_empty() {
         return Some("reviewed_by is empty — use null for unreviewed".to_string());
     }
-    if is_agent(reviewer) {
+    if (is_agent(reviewer) || mentions_agent(reviewer)) && !is_owner_policy(reviewer) {
         return Some(format!(
-            "reviewed_by '{reviewer}' is an agent; only a human review counts"
+            "reviewed_by '{reviewer}' is an agent; only a human review, or an agent check \
+             accepted under a named owner policy, counts"
         ));
     }
     if reviewer.eq_ignore_ascii_case(query.labelled_by.trim()) {
@@ -504,14 +573,21 @@ mod tests {
         for query in &shipped().queries {
             assert!(!query.labelled_by.trim().is_empty(), "{}", query.id);
             if query.labelled_by.starts_with("agent:") {
+                // An agent's check counts only under a named owner policy, and
+                // then never as a human review.
                 assert!(
-                    query
-                        .reviewed_by
-                        .as_deref()
-                        .is_none_or(|r| !r.starts_with("agent:")),
+                    query.reviewed_by.as_deref().is_none_or(|r| {
+                        !r.to_ascii_lowercase().contains("agent:") || is_owner_policy(r)
+                    }),
                     "{}: an agent cannot review its own labels",
                     query.id
                 );
+                if query.review_class() == ReviewClass::Human {
+                    assert!(query
+                        .reviewed_by
+                        .as_deref()
+                        .is_some_and(|r| !mentions_agent(r)));
+                }
             }
         }
     }
@@ -697,6 +773,55 @@ mod tests {
             break_it(&mut set);
             assert!(set.validate().is_err(), "{name} was accepted");
         }
+    }
+
+    #[test]
+    fn owner_policy_provenance_is_accepted_but_never_counted_as_human() {
+        let mut set = minimal();
+        for (reviewed_by, class) in [
+            ("human:marc", ReviewClass::Human),
+            (
+                "agent:prescreen, accepted by marc's policy (owner-2026-11-22); \
+                 human sample in this dataset: 94 checked, 0 errors",
+                ReviewClass::OwnerPolicy,
+            ),
+            (
+                "agent:second-check, per marc's policy (owner-2026-11-22)",
+                ReviewClass::OwnerPolicy,
+            ),
+            (
+                "mixed, policy owner-2026-11-22: 2× human:marc; \
+                 1× agent:second-check, per marc's policy (owner-2026-11-22)",
+                ReviewClass::OwnerPolicy,
+            ),
+        ] {
+            set.queries[0].reviewed_by = Some(reviewed_by.into());
+            set.validate().unwrap();
+            assert_eq!(set.queries[0].review_class(), class, "{reviewed_by}");
+            assert_eq!(set.reviewed(), usize::from(class == ReviewClass::Human));
+            assert_eq!(
+                set.agent_verified(),
+                usize::from(class == ReviewClass::OwnerPolicy)
+            );
+        }
+        assert!(set
+            .review_summary()
+            .contains("agent-verified under owner policy 1"));
+        assert!(!set.review_summary().contains("every query"));
+        // an agent without a known owner policy id is still refused, also when
+        // the string merely says "policy" or "accepted by"
+        for bad in [
+            "agent:claude",
+            "mixed: human:marc; agent:claude",
+            "agent:second-check, per marc's policy",
+            "agent:prescreen, accepted by marc",
+            "agent:x, per policy owner-2099-01-01",
+        ] {
+            set.queries[0].reviewed_by = Some(bad.into());
+            assert!(set.validate().is_err(), "{bad} was accepted");
+        }
+        set.queries[0].reviewed_by = None;
+        assert_eq!(set.queries[0].review_class(), ReviewClass::Unreviewed);
     }
 
     #[test]

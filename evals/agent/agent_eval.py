@@ -187,6 +187,21 @@ def cmd_export(args) -> int:
     return 0
 
 
+def cmd_regrade(args) -> int:
+    """Re-grade a committed run from its stored answers against the current gold (e.g. after #164)."""
+    label = args.label
+    res_dir = config.RESULTS_DIR / label
+    meta = config.load_json(res_dir / "meta.json")
+    used = meta.get("tasks_file", "tasks/tasks.json")
+    current = os.path.relpath(config.tasks_file(), config.EVAL_DIR)
+    if used != current:
+        sys.exit(f"{label} was run on {used}; pass --tasks evals/agent/{used}")
+    changed = report.regrade(label, args.note)
+    report.write_report(label)
+    print(f"{label}: {changed} sessions changed grade; REPORT.md regenerated")
+    return 0
+
+
 def cmd_report(args) -> int:
     ok = report.write_report(args.label, check=args.check)
     if args.check:
@@ -341,6 +356,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--myc-commit", help="commit the myc binary was built from (default: HEAD)")
     s.add_argument("--note", action="append")
     s.set_defaults(fn=cmd_export)
+
+    s = sub.add_parser("regrade", help="re-grade a committed run's stored answers with the current gold")
+    s.add_argument("label")
+    s.add_argument("--note", required=True, help="what changed in the gold; appended to the report's notes")
+    s.set_defaults(fn=cmd_regrade)
 
     s = sub.add_parser("report")
     s.add_argument("label")

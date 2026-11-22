@@ -30,9 +30,9 @@ Means over 20 tasks. Brackets: 95 % CI.
 | Sessions with ≥ 1 myceliums call | 80 % [62 %, 95 %] | 100 % [100 %, 100 %] | 98 % [92 %, 100 %] |
 | myceliums calls per session | 2.7 [1.8, 3.7] | 2.4 [1.4, 3.6] | 2.1 [1.4, 3.1] |
 | Success rate (F1 ≥ 0.8) | 100 % [100 %, 100 %] | 98 % [92 %, 100 %] | 100 % [100 %, 100 %] |
-| Mean F1 | 0.984 [0.969, 0.996] | 0.983 [0.963, 0.996] | 0.989 [0.980, 0.997] |
+| Mean F1 | 0.985 [0.969, 0.996] | 0.983 [0.963, 0.996] | 0.989 [0.980, 0.997] |
 | Mean precision | 0.985 [0.962, 1.000] | 0.986 [0.958, 1.000] | 0.990 [0.973, 1.000] |
-| Mean recall | 0.986 [0.972, 0.996] | 0.982 [0.970, 0.992] | 0.990 [0.983, 0.997] |
+| Mean recall | 0.987 [0.972, 0.997] | 0.983 [0.971, 0.993] | 0.990 [0.983, 0.997] |
 | Input tokens per session (incl. cache) | 166,868 [124,896, 216,984] | 159,638 [121,333, 203,256] | 160,217 [123,854, 199,638] |
 | Prompt size of the first model call (tokens) | 10,162 [10,133, 10,189] | 10,510 [10,481, 10,537] | 12,374 [12,345, 12,401] |
 | Output tokens per session | 4,664 [3,852, 5,514] | 4,455 [3,694, 5,210] | 4,301 [3,541, 5,075] |
@@ -50,9 +50,9 @@ Variant minus A per task, then averaged; ratio = mean(variant) / mean(A). Bracke
 | Sessions with ≥ 1 myceliums call | **+20 pp** [+5 pp, +38 pp] | **+18 pp** [+5 pp, +32 pp] | – | – |
 | myceliums calls per session | **−0.3** [−1.5, +1.0] | **−0.6** [−1.5, +0.4] | – | – |
 | Success rate (F1 ≥ 0.8) | **−2 pp** [−7 pp, +0 pp] | **+0 pp** [+0 pp, +0 pp] | – | – |
-| Mean F1 | **−0.001** [−0.027, +0.022] | **+0.005** [−0.009, +0.021] | – | – |
+| Mean F1 | **−0.001** [−0.027, +0.022] | **+0.005** [−0.010, +0.020] | – | – |
 | Mean precision | **+0.002** [−0.036, +0.033] | **+0.005** [−0.017, +0.031] | – | – |
-| Mean recall | **−0.004** [−0.022, +0.015] | **+0.005** [−0.007, +0.020] | – | – |
+| Mean recall | **−0.004** [−0.022, +0.015] | **+0.004** [−0.007, +0.019] | – | – |
 | Input tokens per session (incl. cache) | **−7,230** [−49,688, +35,908] | **−6,650** [−49,410, +34,505] | 0.96× [0.74×, 1.24×] | 0.96× [0.75×, 1.24×] |
 | Prompt size of the first model call (tokens) | **+348** [+348, +348] | **+2,212** [+2,212, +2,212] | 1.03× [1.03×, 1.03×] | 1.22× [1.22×, 1.22×] |
 | Output tokens per session | **−209** [−797, +394] | **−363** [−897, +178] | 0.96× [0.84×, 1.09×] | 0.92× [0.82×, 1.04×] |
@@ -71,7 +71,7 @@ Four tasks per type at most: read these as direction, not size.
 | blast_radius | 4 | 0.982 | 0.953 | 0.980 | 100 % | 88 % | 100 % | 88 % | 100 % | 100 % | −0.029 [−0.142, +0.054] | −0.002 [−0.060, +0.054] |
 | flow | 4 | 1.000 | 0.982 | 0.996 | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | −0.018 [−0.034, −0.004] | −0.004 [−0.012, +0.000] |
 | tests | 4 | 0.951 | 0.998 | 0.985 | 100 % | 100 % | 100 % | 100 % | 100 % | 100 % | +0.047 [+0.009, +0.098] | +0.034 [+0.005, +0.080] |
-| transitive_callers | 4 | 0.995 | 0.985 | 0.991 | 100 % | 100 % | 100 % | 38 % | 100 % | 100 % | −0.010 [−0.029, +0.000] | −0.004 [−0.019, +0.006] |
+| transitive_callers | 4 | 0.997 | 0.987 | 0.991 | 100 % | 100 % | 100 % | 38 % | 100 % | 100 % | −0.010 [−0.029, +0.000] | −0.006 [−0.019, +0.000] |
 
 ## Per task
 
@@ -94,7 +94,7 @@ F1 per repetition, in repetition order; myceliums calls summed over the repetiti
 | `hono-tests-req-header` | tests | 26 | 0.98 0.91 | 1.00 0.98 | 0.93 1.00 | 7 | 4 | 3 |
 | `hono-tests-trydecode` | tests | 22 | 0.88 0.88 | 1.00 | 0.98 | 2 | 1 | 1 |
 | `fastapi-tc-oauth-scopes-d5` | transitive_callers | 21 | 1.00 1.00 | 1.00 0.92 | 0.95 1.00 | 0 | 2 | 2 |
-| `fastapi-tc-annotation-sequence-d5` | transitive_callers | 31 | 1.00 0.98 | 0.98 1.00 | 1.00 1.00 | 0 | 2 | 2 |
+| `fastapi-tc-annotation-sequence-d5` | transitive_callers | 30 | 1.00 1.00 | 1.00 1.00 | 1.00 1.00 | 0 | 2 | 2 |
 | `fastapi-flow-openapi-lenient` | flow | 17 | 1.00 1.00 | 1.00 0.97 | 1.00 1.00 | 8 | 23 | 10 |
 | `fastapi-flow-route-state` | flow | 16 | 1.00 1.00 | 1.00 0.97 | 1.00 0.97 | 4 | 7 | 2 |
 | `fastapi-flow-websocket-app` | flow | 17 | 1.00 1.00 | 1.00 1.00 | 1.00 1.00 | 9 | 9 | 9 |
@@ -146,4 +146,5 @@ Built-in tool calls per session (mean): **A** `Bash` 0.0, `Glob` 0.0, `Grep` 6.1
 - What the agent saw, checked with agent_eval.py probe against a mock API (Claude Code 2.1.329): the 9 core tools are sent with full schemas in A, C and E (none deferred; ToolSearch not needed); the project CLAUDE.md with the routing block reaches the context in C and E, ~/.claude/CLAUDE.md in no condition; the grep hook's hint reaches the context; the SessionStart hook's output is a systemMessage, shown to the user and not to the model; in E the Agent tool offers code-explorer only and the subagent gets the myceliums tools and Read.
 - The sessions have no shell (as in the pilot), so the CLI commands that the routing block and the grep hook name (myc callers X, myc impact X) cannot be run; the routing block also names the MCP tools, which the agent used.
 - In C and E the working copy holds the files myc setup-claude writes (CLAUDE.md, .claude/, .mcp.json) after the index was built, as in the documented order (myc analyze, then myc setup-claude). They are uncommitted and newer than the index, so the MCP analyze tool's freshness check calls the index stale and re-indexes: it timed out after 300 s in hono-amb-ctx-header-d2__C__r1 and re-indexed without embeddings in hono-blast-createresponse-d3__E__r1. In A, analyze calls were cache hits. The SessionStart hook, which uses the commit-based cache check, reported the same index as ready.
+- Re-graded on 2026-11-22 from the stored answers after the #164 label review (policy owner-2026-11-22, see the README): in fastapi-tc-annotation-sequence-d5 _IncludedRouter._build_effective_context moved from gold to optional (reached only through a ClassName.classmethod() call that the question's wording does not clearly count).
 

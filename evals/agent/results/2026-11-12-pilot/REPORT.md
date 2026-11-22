@@ -22,9 +22,9 @@ Paired over 30 tasks. Brackets: 95 % CI.
 | Metric | without myceliums | with myceliums | with − without | with ÷ without |
 |---|---:|---:|---:|---:|
 | Success rate (F1 ≥ 0.8) | 100 % [100 %, 100 %] | 99 % [97 %, 100 %] | **−1 pp** [−3 pp, +0 pp] | – |
-| Mean F1 | 0.997 [0.992, 1.000] | 0.991 [0.979, 1.000] | **−0.006** [−0.018, +0.003] | – |
+| Mean F1 | 0.998 [0.994, 1.000] | 0.993 [0.981, 1.000] | **−0.005** [−0.017, +0.004] | – |
 | Mean precision | 0.998 [0.993, 1.000] | 1.000 [1.000, 1.000] | **+0.002** [+0.000, +0.007] | – |
-| Mean recall | 0.997 [0.990, 1.000] | 0.986 [0.969, 1.000] | **−0.010** [−0.027, +0.000] | – |
+| Mean recall | 0.998 [0.994, 1.000] | 0.990 [0.973, 1.000] | **−0.009** [−0.026, +0.004] | – |
 | Input tokens per run (incl. cache) | 24,344 [18,600, 32,554] | 30,456 [23,500, 41,243] | **+6,112** [+3,769, +9,250] | 1.25× [1.17×, 1.34×] |
 | Prompt size of the first model call (tokens) | 5,159 [5,148, 5,170] | 7,041 [7,030, 7,052] | **+1,882** [+1,882, +1,882] | 1.36× [1.36×, 1.37×] |
 | Output tokens per run | 795 [567, 1,111] | 807 [575, 1,144] | **+13** [−42, +69] | 1.02× [0.94×, 1.09×] |
@@ -41,7 +41,7 @@ Few tasks per type, so these intervals are wide; read them as direction, not siz
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | callees | 4 | 1.000 | 0.964 | −0.036 [−0.107, +0.000] | 100 % | 92 % | +5,280 | +0.3 |
 | callers | 8 | 1.000 | 1.000 | +0.000 [+0.000, +0.000] | 100 % | 100 % | +5,252 | −0.1 |
-| dead_code | 3 | 0.981 | 0.961 | −0.021 [−0.067, +0.004] | 100 % | 100 % | +17,270 | −0.4 |
+| dead_code | 3 | 0.990 | 0.978 | −0.012 [−0.067, +0.030] | 100 % | 100 % | +17,270 | −0.4 |
 | flow | 4 | 1.000 | 1.000 | +0.000 [+0.000, +0.000] | 100 % | 100 % | +6,483 | −0.1 |
 | impact | 5 | 0.993 | 1.000 | +0.007 [+0.000, +0.022] | 100 % | 100 % | +4,636 | +0.1 |
 | where | 6 | 1.000 | 1.000 | +0.000 [+0.000, +0.000] | 100 % | 100 % | +3,218 | −0.1 |
@@ -70,7 +70,7 @@ Mean over repetitions. F1 per repetition in brackets, in run order.
 | `hono-impact-resolve-callback` | impact | 4 | 1.00 (1.00 1.00 1.00) | 1.00 (1.00 1.00 1.00) | 1 → 1 | none |
 | `hono-where-cookie-serialize` | where | 1 | 1.00 (1.00 1.00 1.00) | 1.00 (1.00 1.00 1.00) | 2 → 2 | none |
 | `hono-where-etag-match` | where | 1 | 1.00 (1.00 1.00 1.00) | 1.00 (1.00 1.00 1.00) | 1 → 1 | none |
-| `hono-dead-utils` | dead_code | 7 | 0.94 (1.00 1.00 0.83) | 0.95 (0.92 0.92 1.00) | 9 → 9 | none |
+| `hono-dead-utils` | dead_code | 6 | 0.97 (1.00 1.00 0.91) | 1.00 (1.00 1.00 1.00) | 9 → 9 | none |
 | `hono-flow-fetch` | flow | 3 | 1.00 (1.00 1.00 1.00) | 1.00 (1.00 1.00 1.00) | 3 → 3 | none |
 | `fastapi-callers-jsonable-encoder` | callers | 9 | 1.00 (1.00 1.00 1.00) | 1.00 (1.00 1.00 1.00) | 4 → 4 | none |
 | `fastapi-callers-is-body-allowed` | callers | 4 | 1.00 (1.00 1.00 1.00) | 1.00 (1.00 1.00 1.00) | 4 → 4 | none |
@@ -110,4 +110,5 @@ No myceliums tool was called in any session (`ToolSearch`, which loads deferred 
 - Sessions ran in three batches by repository as the indexes became ready (fzf, then hono, then FastAPI); within a repository the order is repetition-major with the two conditions adjacent. The fzf batch stopped once at the account-utilisation guard (0.95) and was resumed with the guard at 0.97.
 - The benchmark machine was heavily loaded by unrelated builds (load average 300-500 on 10 cores); wall times include that.
 - `--effort medium` was fixed (the CLI default is served per model and would otherwise vary); `cost_usd` is the CLI's list-price estimate and depends on prompt caching across sessions.
+- Re-graded on 2026-11-22 from the stored answers after the #164 label review (policy owner-2026-11-22, see the README): in hono-dead-utils getQueryStrings moved from gold to optional (benchmark code outside src/ uses it); optional answers the questions exclude were removed (fastapi-callees-solve-dependencies: Response, run_in_threadpool, SecurityScopes, BackgroundTasks, SolvedDependency; fastapi-where-operation-id: generate_operation_id, generate_operation_id_for_path; fastapi-dead-deprecated: _frontend_dependency_endpoint; hono-flow-fetch: Hono.request). An answer naming a removed optional now counts as a false positive.
 

@@ -323,6 +323,41 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     return "\n".join(L) + "\n", summary
 
 
+def regrade(label: str, note: str) -> int:
+    """Re-grade ``results/<label>/results.jsonl`` from its stored answers with the
+    current task file, as ``export`` grades; update the snapshot's gold counts,
+    the task file's sha256 and the notes. Returns how many sessions changed."""
+    res_dir = config.RESULTS_DIR / label
+    meta = config.load_json(res_dir / "meta.json")
+    threshold = meta.get("success_threshold", 0.8)
+    tasks = {t["id"]: t for t in config.load_tasks()}
+    lines = (res_dir / "results.jsonl").read_text().splitlines()
+    rows = [json.loads(x) for x in lines if x.strip()]
+    changed = 0
+    out = []
+    for row in rows:
+        g = grade(tasks[row["task_id"]], row["answer"], threshold)
+        new = dict(row)
+        new.update(f1=round(g.f1, 4), precision=round(g.precision, 4), recall=round(g.recall, 4),
+                   success=is_success(g.f1, threshold), tp=g.tp, fp=g.fp, neutral=g.neutral,
+                   n_gold=g.n_gold, n_answer=g.n_answer, missed=g.missed,
+                   false_positives=g.false_positives)
+        changed += new != row
+        out.append(json.dumps(new, sort_keys=True) + "\n")
+    (res_dir / "results.jsonl").write_text("".join(out))
+    snap_path = res_dir / "tasks_snapshot.json"
+    snapshot = config.load_json(snap_path)
+    for t in snapshot:
+        if t["id"] in tasks:
+            t["n_gold"] = len(tasks[t["id"]]["gold"])
+    snap_path.write_text(json.dumps(snapshot, indent=1, ensure_ascii=False) + "\n")
+    meta["tasks_sha256"] = config.sha256_file(config.tasks_file())
+    if note not in meta.setdefault("notes", []):  # re-running with the same note does not repeat it
+        meta["notes"].append(note)
+    (res_dir / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n")
+    return changed
+
+
 def write_report(label: str, check: bool = False) -> bool:
     meta = config.load_json(config.RESULTS_DIR / label / "meta.json")
     if meta.get("conditions") and set(meta["conditions"]) != {"with", "without"}:

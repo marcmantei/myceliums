@@ -374,7 +374,10 @@ fn peak_rss_bytes() -> Option<u64> {
 #[derive(Serialize)]
 struct ReviewState {
     queries: usize,
+    /// Reviewed by a person other than the labeller.
     reviewed: usize,
+    /// Checked by agents, accepted under a named owner policy (#164).
+    agent_verified: usize,
     note: String,
 }
 
@@ -443,16 +446,7 @@ async fn main() -> Result<()> {
     }
     let dev_ids = ids_in(&set, Split::Dev);
     let held_ids = ids_in(&set, Split::HeldOut);
-    let review_note = if set.reviewed() == set.queries.len() {
-        "every query's labels were reviewed by a human".to_string()
-    } else {
-        format!(
-            "{} of {} queries carry agent-drafted labels no human has reviewed — \
-             the numbers are provisional until they are (real-repos/README.md)",
-            set.queries.len() - set.reviewed(),
-            set.queries.len()
-        )
-    };
+    let review_note = set.review_summary();
     println!(
         "real-repo set {}: {} queries over {} repositories — dev {} / held-out {}\n{review_note}",
         set.dataset_version,
@@ -844,6 +838,7 @@ async fn main() -> Result<()> {
         review: ReviewState {
             queries: set.queries.len(),
             reviewed: set.reviewed(),
+            agent_verified: set.agent_verified(),
             note: review_note,
         },
         repos: set

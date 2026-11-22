@@ -15,7 +15,7 @@ with `claude-sonnet-5-5` in Claude Code 2.1.329, 116 graded sessions:
 
 | Variant | What the session has | Sessions with ≥ 1 myceliums call | First tool (most common) | Success / mean F1 | Input tokens, cost vs A |
 |---|---|---:|---|---:|---:|
-| A | MCP server only, 9 core tools loaded up front (layer 2) | 80 % (32 of 40) | `Grep` | 100 % / 0.984 | – |
+| A | MCP server only, 9 core tools loaded up front (layer 2) | 80 % (32 of 40) | `Grep` | 100 % / 0.985 | – |
 | C | A + what `myc setup-claude --no-agent` installs: routing block, grep hook, SessionStart and result-format hooks (layers 1-3) | 100 % (38 of 38) | `find_callers` | 98 % / 0.983 | 0.96×, 0.98× |
 | E | C + the `code-explorer` subagent (layer 4) | 97 % (37 of 38) | `find_callers` | 100 % / 0.989 | 0.96×, 0.93× |
 

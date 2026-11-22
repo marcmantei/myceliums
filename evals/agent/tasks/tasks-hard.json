@@ -464,7 +464,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 38× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 4× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-blast-istty-d3",
@@ -610,7 +611,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 11× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 2× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-blast-mayfold-d4",
@@ -723,7 +725,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 8× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 2× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-amb-chars-length-d3",
@@ -1221,7 +1224,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 40× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 5× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-amb-merger-get-d3",
@@ -1576,7 +1580,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 27× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 5× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-tests-stringbytes",
@@ -1931,7 +1936,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 30× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 2× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-tests-chars-tostring",
@@ -2231,7 +2237,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 19× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 8× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-flow-newterminal-stringbytes",
@@ -2465,7 +2472,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 18× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 3× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-tc-trydecode-d3",
@@ -2666,7 +2674,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 15× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 3× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-blast-createresponse-d3",
@@ -2911,7 +2920,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 19× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 3× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-blast-httpexception-d3",
@@ -3090,7 +3100,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 12× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 4× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-amb-ctx-header-d2",
@@ -3291,7 +3302,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 14× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 4× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-tests-req-header",
@@ -3591,7 +3603,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 23× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 4× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-tests-trydecode",
@@ -3847,7 +3860,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 22× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-tc-oauth-scopes-d5",
@@ -4093,7 +4107,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 17× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 5× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-tc-annotation-sequence-d5",
@@ -4431,25 +4446,21 @@
       }
      ],
      "note": "level 5, via _FrontendRouteGroup._solve_dependencies"
-    },
-    {
-     "name": "_IncludedRouter._build_effective_context",
-     "evidence": [
-      {
-       "file": "fastapi/routing.py",
-       "line": 1716,
-       "contains": "from_api_route"
-      }
-     ],
-     "note": "level 5, via _EffectiveRouteContext.from_api_route"
     }
    ],
-   "rationale": "Computed as all callers up to 5 levels up the py_edges.py (`direct` edges), every name grepped for missed callers call graph; 31 functions. Each item's note gives its level and the function it calls on the way to the target. Callers import it through the fastapi._compat re-export.",
+   "rationale": "Computed as all callers up to 5 levels up the py_edges.py (`direct` edges), every name grepped for missed callers call graph; 31 functions. Each item's note gives its level and the function it calls on the way to the target. Callers import it through the fastapi._compat re-export. Label review (#164, policy owner-2026-11-22): made `_IncludedRouter._build_effective_context` optional [agent:second-check, per marc's policy (owner-2026-11-22)].",
    "verified_with": [
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "optional": [
+    {
+     "name": "_IncludedRouter._build_effective_context",
+     "why": "reached only via a ClassName.classmethod() call, which the task wording neither lists among counted calls nor clearly separates from the excluded attribute calls"
+    }
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 28× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 4× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-flow-openapi-lenient",
@@ -4651,7 +4662,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 13× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 5× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-flow-route-state",
@@ -4842,7 +4854,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 11× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 6× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-flow-websocket-app",
@@ -5044,7 +5057,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 17× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-amb-starlette-httpexception",
@@ -5235,7 +5249,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: 16× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   }
  ]
 }

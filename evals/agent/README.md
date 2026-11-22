@@ -5,7 +5,8 @@ headless Claude Code agent answers code-understanding questions about pinned
 open-source repositories, once with only its built-in read and search tools
 and once with the myceliums MCP server added. Answers are graded
 automatically against gold sets derived with grep, reading and compiler
-tooling and verified by an agent (human review still pending). A second, smaller eval checks
+tooling and verified by an agent, then checked in #164 under an owner policy
+(see [Review of the labels](#review-of-the-labels-164)). A second, smaller eval checks
 whether a model picks the right myceliums tool for a request.
 
 Results: [`results/`](results/). Each run directory holds the compact per-session
@@ -15,8 +16,9 @@ report (`REPORT.md`); raw transcripts stay in the git-ignored `runs/`.
 **Pilot, 12 November 2026** (myc 0.3.2, Claude Code 2.1.322 with
 `claude-sonnet-5-5` at medium effort, 180 graded sessions):
 [report](results/2026-11-12-pilot/REPORT.md). Both conditions were at the
-ceiling (success 100 % without, 99 % with myceliums; mean F1 0.997 vs 0.991,
-difference −0.006 [−0.018, +0.003]). The agent called a myceliums tool in 0
+ceiling (success 100 % without, 99 % with myceliums; mean F1 0.998 vs 0.993,
+difference −0.005 [−0.017, +0.004]; re-graded after the #164 label review,
+which moved F1 by at most +0.002 and no success). The agent called a myceliums tool in 0
 of 90 sessions that had the server; those sessions used 25 % more input
 tokens [+17 %, +34 %] and took 20 % longer [+13 %, +28 %]. Tool selection:
 [53 of 54 intents right in each of two passes](results/2026-11-12-toolsel/TOOLSEL.md)
@@ -30,6 +32,8 @@ of sessions with the MCP server alone (A), 100 % with what
 `myc setup-claude --no-agent` installs (C) and 97 % with the subagent added
 (E), which it never used. All three were near the ceiling (success
 98-100 %); accuracy, tokens and cost did not differ measurably between them.
+Re-graded after the #164 label review: six sessions changed grade, A's mean
+F1 rose from 0.984 to 0.985, and no success changed.
 
 **Outcome eval, 21 November 2026** (#153; myc at `951d041ff9e0`, Claude
 Code 2.1.330, 22 graded sessions on 11 multi-hop Django tasks, one repetition):
@@ -80,8 +84,12 @@ that `check-tasks` re-verifies, so a pin bump without relabelling fails
 loudly. Items an agent may defensibly add (thin wrappers, recursion) are listed
 as `optional` and are neutral in grading.
 
-The labels were written and verified by an AI agent (Claude), not reviewed by
-a human. Spot-check them before relying on a single task's result.
+The labels were written and verified by an AI agent (Claude), then checked in
+#164 under Marc's owner policy. Marc decided some items himself; the others
+were accepted on the strength of his sample or decided by a second-check
+agent. Counts per class are under
+[Review of the labels](#review-of-the-labels-164), and each task's
+`reviewed_by` names its classes.
 
 **Grading** ([`aeval/grading.py`](aeval/grading.py)): the agent must end with
 a fenced JSON block `{"answer": [...]}`. Items are normalised (paths made
@@ -298,7 +306,7 @@ tasks, brackets 95 % paired bootstrap intervals against A:
 | … difference to A | | +20 pp [+5, +38] | +18 pp [+5, +32] |
 | First tool called (most common) | `Grep` (27 of 40) | `find_callers` (28 of 38) | `find_callers` (28 of 38) |
 | Success (F1 ≥ 0.8) | 100 % | 98 % | 100 % |
-| Mean F1 (difference to A) | 0.984 | 0.983 (−0.001 [−0.027, +0.022]) | 0.989 (+0.005 [−0.009, +0.021]) |
+| Mean F1 (difference to A) | 0.985 | 0.983 (−0.001 [−0.027, +0.022]) | 0.989 (+0.005 [−0.010, +0.020]) |
 | Input tokens (ratio to A) | 166,868 | 159,638 (0.96× [0.74×, 1.24×]) | 160,217 (0.96× [0.75×, 1.24×]) |
 | Prompt of the first model call | 10,162 | +348 | +2,212 |
 | Cost, USD (ratio to A) | 0.147 | 0.144 (0.98× [0.82×, 1.18×]) | 0.136 (0.93× [0.78×, 1.13×]) |
@@ -548,8 +556,9 @@ passes and the most frequent confusions go to `TOOLSEL.md`.
   task type: read the per-type intervals as direction, not size.
 * Tasks are answerable with grep and reading; they were not chosen to favour
   either condition, but they are not a sample of real developer questions.
-* Gold sets were produced and checked by an agent with compiler tooling, not
-  by a human reviewer. One label was amended after the pilot started (an
+* Gold sets were produced and checked by an agent with compiler tooling, then
+  checked in #164 mostly by agents under Marc's owner policy, not item by item
+  by a human. One label was amended after the pilot started (an
   optional item for `hono-dead-utils`, see the report's notes); grades are
   always recomputed from the stored answers, so every session uses the same
   labels.
@@ -562,3 +571,37 @@ passes and the most frequent confusions go to `TOOLSEL.md`.
   CLI's own accounting; `cost_usd` is the CLI's estimate at list prices, not
   what a subscription is billed.
 * Wall time includes local CPU contention: the pilot ran on a busy machine.
+
+<!-- label-review:start -->
+## Review of the labels (#164)
+
+Applied on 2026-11-22 with `evals/review` under policy `owner-2026-11-22`. An independent AI pre-screen marked every item confirmed, doubtful or wrong. Marc reviewed items one by one in the review page: the queue held every doubtful and wrong item and a seeded random sample of the confirmed ones (seed 164, 15 % per dataset; `evals/review/sample.json`). Over all datasets he decided 229 sampled confirmed items with 0 errors (`evals/review/decisions.jsonl`); the table gives each dataset's own human sample, which can be 0, and the prescreen provenance string names it. Marc's policy of 22 November 2026: pre-screen-confirmed items outside the sample are accepted as correct on the strength of the sample he checked; every other item he did not decide, and every item he marked unsure, is decided by an independent second-check agent (`evals/review/agent-check/decisions-*.jsonl`). An item whose final decision is unsure is not marked reviewed.
+
+Provenance, per item in `evals/review/provenance.jsonl`:
+
+- **human** — `human:marc`: Marc decided the item himself;
+- **prescreen** — `agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: N checked, E errors`: confirmed by the pre-screen, outside the sample, accepted by the policy — no person looked at this item;
+- **second-check** — `agent:second-check, per marc's policy (owner-2026-11-22)`: decided by the second-check agent (`evals/review/agent-check/`) — no person looked at this item;
+- **rule** — `policy owner-2026-11-22 consistency rule`: decided by the policy's consistency rule (`evals/review/policy/owner-2026-11-22.json`), whatever any single check said;
+- **restated** — `<class>, wording restated by policy owner-2026-11-22`: decided as its class says; the policy then restated its wording (a graph-gold trap now names the one target it must not have).
+
+Policy addendum: Consistency rule: an optional answer that the task wording explicitly excludes (a Starlette or library call, a class instantiation where the task excludes instantiations, a deprecated decoy documented as not used internally, a function passed as a value where the task counts that as a reference) is removed from the optional list everywhere in the task set, not only where a second check flagged it; genuine near-misses (recursion or self-calls, thin wrappers, callers on the real path) stay optional. A graph-gold trap whose call site has a real CALLS edge is restated as 'must not target <X>' instead of being deleted.
+
+`reviewed_by` of a unit (query, language file, held-out set, task) names the classes of its items: `human:marc` only when Marc decided every item, otherwise the class, or `mixed, policy owner-2026-11-22: …` with a count per class. It stays `null` where an item is unsure, open or needs a fix by hand. `real-repo-eval` reports retrieval queries as human-reviewed, agent-verified under owner policy, or unreviewed; only `human:` provenance counts as human.
+
+| dataset | items | human | prescreen | second-check | rule | restated | wrong: fixed / by hand | unsure | open | units marked | human sample in this dataset: checked / errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| agent-tasks | 190 | 16 | 152 | 20 | 2 | 0 | 10 / 0 | 0 | 0 | 30 of 30 | 16 / 0 |
+| agent-tasks-hard | 470 | 0 | 398 | 72 | 0 | 0 | 1 / 0 | 0 | 0 | 20 of 20 | 0 / 0 |
+| agent-tasks-hard-v1 | 250 | 0 | 212 | 38 | 0 | 0 | 0 / 0 | 0 | 0 | 20 of 20 | 0 / 0 |
+| agent-tasks-outcome | 299 | 0 | 254 | 45 | 0 | 0 | 0 / 0 | 0 | 0 | 12 of 12 | 0 / 0 |
+
+Checked against the reviewed labels and current:
+
+- evals/agent/results/2026-11-20-calibration — grades checked against the reviewed tasks/tasks-hard-v1.json: unchanged (its meta records the sha256 of the file before review metadata was added)
+- evals/agent/results/2026-11-20-variants — graded against the reviewed tasks/tasks-hard.json
+- evals/agent/results/2026-11-21-outcome — grades checked against the reviewed tasks/tasks-outcome.json: unchanged (its meta records the sha256 of the file before review metadata was added)
+- evals/agent/results/2026-11-21-outcome-calibration — grades checked against the reviewed tasks/tasks-outcome.json: unchanged (its meta records the sha256 of the file before review metadata was added)
+- evals/agent/results/2026-11-21-outcome-calibration-t4 — grades checked against the reviewed tasks/tasks-outcome.json: unchanged (its meta records the sha256 of the file before review metadata was added)
+- evals/agent/results/2026-11-12-pilot — graded against the reviewed tasks/tasks.json
+<!-- label-review:end -->

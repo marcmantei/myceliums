@@ -2,7 +2,7 @@
   "language": "typescript",
   "fixture": "graph-accuracy/typescript",
   "labelled_by": "agent",
-  "reviewed_by": null,
+  "reviewed_by": "mixed, policy owner-2026-11-22: 14× human:marc; 111× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 96 checked, 0 errors",
   "verified_with": "tsc --strict --noEmit; TypeScript compiler API call resolution (getResolvedSignature) over every call and new expression (see README)",
   "symbols": [
     {"id": "src/auth.ts::Token", "kind": "interface", "line": 3},
