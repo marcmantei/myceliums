@@ -58,20 +58,24 @@ Claude Code 2.1.330, 180 graded sessions: 30 tasks over Django and Vue × 2
 conditions × 3 turn budgets, one repetition): [report](results/2026-11-22-scale/REPORT.md),
 [method and summary](#outcome-eval-at-scale-163). With `Bash` in both
 conditions, none (no myceliums) against C (what `myc setup-claude
---no-agent` installs):
+--no-agent` installs). Primary analysis: 27 tasks, without the three Django
+`tests` tasks, which the reused Django index (no `tests/`) cannot answer.
+Intervals and p-values are not corrected for the three budgets:
 
-| Budget | Success none → C | Δ success [95 % CI], sign test | Mean F1 none → C | Cost C ÷ none | Wall time C ÷ none |
+| Budget | Success none → C | Δ success [95 % CI], McNemar | Mean F1 none → C (Δ [95 % CI]) | Cost C ÷ none | Wall time C ÷ none |
 |---|---:|---:|---:|---:|---:|
-| 4 turns | 23 % → 40 % | +17 pp [−3, +37], 7 : 2, p = 0.18 | 0.233 → 0.501 | 1.34× [1.06×, 1.64×] | 0.97× [0.81×, 1.15×] |
-| 10 turns | 87 % → 83 % | −3 pp [−17, +7], 1 : 2, p = 1 | 0.885 → 0.840 | 0.80× [0.66×, 0.95×] | 0.69× [0.57×, 0.82×] |
-| 40 turns, not stated | 97 % → 87 % | −10 pp [−23, +0], 0 : 3, p = 0.25 | 0.971 → 0.923 | 0.97× [0.84×, 1.11×] | 0.81× [0.70×, 0.94×] |
+| 4 turns | 22 % → 37 % | +15 pp [−4, +33], 6 : 2, p = 0.29 | 0.222 → 0.485 (+0.263 [+0.078, +0.452]) | 1.27× [0.99×, 1.59×] | 0.96× [0.78×, 1.18×] |
+| 10 turns | 85 % → 81 % | −4 pp [−15, +7], 1 : 2, p = 1 | 0.880 → 0.832 (−0.048 [−0.139, +0.017]) | 0.78× [0.63×, 0.93×] | 0.69× [0.55×, 0.83×] |
+| 40 turns, not stated | 96 % → 89 % | −7 pp [−19, +0], 0 : 2, p = 0.5 | 0.971 → 0.930 (−0.042 [−0.088, −0.008]) | 0.98× [0.83×, 1.13×] | 0.84× [0.71×, 0.97×] |
 
-Myceliums raised F1 only under the tightest budget (+0.268 [+0.093,
-+0.445]); with 10 or more turns the agent without it, working with grep
-pipelines in Bash, solved 87-97 % of the tasks and C did not do better (at
-40 turns F1 −0.049 [−0.096, −0.013]). C was faster from 10 turns
-on and cheaper at 10 turns. The agent called the MCP tools in 77 of 90 C
-sessions and never ran the `myc` CLI from Bash.
+With a shell and 10 or more turns, myceliums did not raise success: the agent
+without it, working with grep pipelines in Bash, solved 85-96 % of the tasks,
+and at 40 turns C was slightly lower (−7 pp, not significant; mean F1 −0.042).
+Under 4 turns the success gain is not significant and mean F1 rose by 0.263.
+C was faster from 10 turns on and cheaper at 10 turns. Over all 30 tasks:
+4 turns 23 % → 40 %, 10 turns 87 % → 83 %, 40 turns 97 % → 87 %. The agent
+called the MCP tools in 68 of 81 C sessions and never ran the `myc` CLI from
+Bash.
 
 ## What is measured
 
@@ -542,7 +546,11 @@ budget is not tight, and how does the effect depend on the budget?
 `7de9e41b61b2`, the commit of the tag `v3.5.46`; MIT), a TypeScript monorepo
 of 13 packages with their tests in `packages/*/__tests__`. The Django index is
 the one #153 built (the same binary, so the same embedder fingerprint; it
-loads and reports 12,443 symbols, all embedded). The Vue index covers
+loads and reports 12,443 symbols, all embedded). That index covers only the
+`django/` package, not `tests/` (`index_exclude_extra` in its `meta.json`), so
+in C myceliums had no data for the three Django `tests` tasks: they are left
+out of the primary analysis (27 tasks), and the 30-task numbers are given
+alongside. The Vue index covers
 `packages/` with the tests and without `packages-private/` (playgrounds and
 type-only tests) and the changelogs: 15,750 symbols in 501 files, every one
 embedded (`myc analyze --strict-embeddings`, 1,163 s).
@@ -612,63 +620,79 @@ myceliums (a mock-API probe) started at 10:24:52 UTC and the main run at
 
 **Results, 22 November 2026** (myc 0.3.2 at `951d041ff9e0`, Claude Code
 2.1.330; 180 graded sessions; [report](results/2026-11-22-scale/REPORT.md)).
-Means over the 30 tasks; brackets 95 % paired bootstrap intervals over
-tasks; the sign test counts the tasks that succeeded in one condition only.
+Primary analysis: means over the 27 tasks without the three Django `tests`
+tasks. Brackets: 95 % paired bootstrap intervals over tasks; per budget,
+success is compared with McNemar's exact test over the tasks that succeeded in
+one condition only. **No interval or p-value here is corrected for multiple
+comparisons** (three budgets, the pooled comparison, several metrics,
+repositories and task types).
 
 | Per session | 4 turns: none | C | 10 turns: none | C | 40 turns: none | C |
 |---|---:|---:|---:|---:|---:|---:|
-| Success (F1 ≥ 0.8) | 23 % | 40 % | 87 % | 83 % | 97 % | 87 % |
-| … C − none | | +17 pp [−3, +37] | | −3 pp [−17, +7] | | −10 pp [−23, +0] |
-| … sign test (C better : none better) | | 7 : 2, p = 0.18 | | 1 : 2, p = 1 | | 0 : 3, p = 0.25 |
-| Mean F1 | 0.233 | 0.501 | 0.885 | 0.840 | 0.971 | 0.923 |
-| … C − none | | +0.268 [+0.093, +0.445] | | −0.044 [−0.128, +0.013] | | −0.049 [−0.096, −0.013] |
-| Sessions with ≥ 1 myceliums call | 0 % | 83 % | 0 % | 87 % | 0 % | 87 % |
-| Input tokens (C ÷ none) | 33,433 | 1.58× [1.38×, 1.78×] | 83,330 | 1.09× [0.90×, 1.28×] | 100,048 | 1.28× [1.11×, 1.49×] |
-| Output tokens (C ÷ none) | 1,391 | 1.03× [0.79×, 1.30×] | 3,747 | 0.65× [0.51×, 0.80×] | 4,136 | 0.85× [0.70×, 0.99×] |
-| Cost, USD, CLI estimate (C ÷ none) | 0.036 | 1.34× [1.06×, 1.64×] | 0.089 | 0.80× [0.66×, 0.95×] | 0.101 | 0.97× [0.84×, 1.11×] |
-| Wall time, s (C ÷ none) | 14.0 | 0.97× [0.81×, 1.15×] | 31.0 | 0.69× [0.57×, 0.82×] | 35.6 | 0.81× [0.70×, 0.94×] |
+| Success (F1 ≥ 0.8) | 22 % | 37 % | 85 % | 81 % | 96 % | 89 % |
+| … C − none | | +15 pp [−4, +33] | | −4 pp [−15, +7] | | −7 pp [−19, +0] |
+| … McNemar (C better : none better) | | 6 : 2, p = 0.29 | | 1 : 2, p = 1 | | 0 : 2, p = 0.5 |
+| Mean F1 | 0.222 | 0.485 | 0.880 | 0.832 | 0.971 | 0.930 |
+| … C − none | | +0.263 [+0.078, +0.452] | | −0.048 [−0.139, +0.017] | | −0.042 [−0.088, −0.008] |
+| Sessions with ≥ 1 myceliums call | 0 % | 81 % | 0 % | 85 % | 0 % | 85 % |
+| Input tokens (C ÷ none) | 33,443 | 1.51× [1.32×, 1.70×] | 83,926 | 1.09× [0.88×, 1.29×] | 100,535 | 1.31× [1.13×, 1.52×] |
+| Output tokens (C ÷ none) | 1,354 | 1.00× [0.74×, 1.31×] | 3,745 | 0.64× [0.50×, 0.80×] | 4,147 | 0.87× [0.71×, 1.02×] |
+| Cost, USD, CLI estimate (C ÷ none) | 0.036 | 1.27× [0.99×, 1.59×] | 0.091 | 0.78× [0.63×, 0.93×] | 0.102 | 0.98× [0.83×, 1.13×] |
+| Wall time, s (C ÷ none) | 13.4 | 0.96× [0.78×, 1.18×] | 30.3 | 0.69× [0.55×, 0.83×] | 35.4 | 0.84× [0.71×, 0.97×] |
 
-Over all budgets (each task averaged over its three budgets): success 69 % →
-70 % (+1 pp [−8, +9], sign test 7 : 5, p = 0.77), F1 +0.058 [−0.008, +0.124],
-cost 0.96× [0.85×, 1.07×], wall time 0.79× [0.70×, 0.89×].
+Over all budgets (each task averaged over its three budgets; an exact sign test
+on those per-task differences, not McNemar): success 68 % → 69 % (+1 pp [−7,
++10], 6 : 4, p = 0.75), F1 +0.058 [−0.012, +0.126], cost 0.95× [0.82×, 1.07×],
+wall time 0.80× [0.70×, 0.90×].
+
+All 30 tasks, the three Django `tests` tasks included: success 23 % → 40 %
+(+17 pp [−3, +37], 7 : 2, p = 0.18) at 4 turns, 87 % → 83 % (−3 pp [−17, +7])
+at 10, 97 % → 87 % (−10 pp [−23, +0], 0 : 3, p = 0.25) at 40; mean F1 +0.268
+[+0.093, +0.445], −0.044 [−0.128, +0.013] and −0.049 [−0.096, −0.013].
+
+Exploratory, primary analysis (few tasks per group; uncorrected):
 
 | | 4 turns | 10 turns | 40 turns | All budgets: Δ success [95 % CI] |
 |---|---:|---:|---:|---:|
-| Django (15 tasks) | 27 % → 60 % | 93 % → 87 % | 100 % → 87 % | +4 pp [−11, +18] |
+| Django (12 tasks) | 25 % → 58 % | 92 % → 83 % | 100 % → 92 % | +6 pp [−14, +22] |
 | Vue (15 tasks) | 20 % → 20 % | 80 % → 80 % | 93 % → 87 % | −2 pp [−9, +4] |
 | ambiguous (6) | 0 % → 50 % | 83 % → 100 % | 100 % → 83 % | +17 pp [+6, +28] |
 | transitive callers (6) | 0 % → 33 % | 100 % → 100 % | 100 % → 100 % | +11 pp [+0, +22] |
 | blast radius (4) | 0 % → 25 % | 100 % → 100 % | 100 % → 100 % | +8 pp [+0, +25] |
-| tests (6) | 17 % → 33 % | 67 % → 50 % | 83 % → 67 % | −6 pp [−22, +11] |
+| tests (3, Vue) | 0 % → 0 % | 33 % → 0 % | 67 % → 67 % | −11 pp [−33, +0] |
 | flow (4) | 50 % → 25 % | 75 % → 50 % | 100 % → 75 % | −25 pp [−50, +0] |
 | config (4) | 100 % → 75 % | 100 % → 100 % | 100 % → 100 % | −8 pp [−25, +0] |
 
-* **The outcome effect is a tight-budget effect.** At 4 turns C doubled the
-  mean F1 (+0.268 [+0.093, +0.445]); the success gain (+17 pp) has an interval
-  that includes zero (sign test p = 0.18). With 10 turns the agent without
-  myceliums solved 87 % of the tasks, with 40 turns 97 %, and C was not
-  better: −3 pp and −10 pp, the 40-turn F1 difference −0.049 [−0.096,
-  −0.013]. #153's success gain under 3 rounds of tool calls without a shell
-  does not carry over to a budget of 10 turns with a shell.
-* **Where C lost, it twice trusted the graph.** C lost five task-budget
-  pairs at 10 or 40 turns that none solved. On the two Django flow tasks it
-  answered from one `trace_flow` result and wrote that it had not checked the
-  call sites; `trace_flow` lists chains up to a length limit, and the longer
-  chains were missing. In two others it checked with grep and still missed 5
-  files or added 18 names; the fifth ran out of turns. On Vue, myc links 3,682 of 16,397
+* **With a shell and 10 or more turns, no success gain.** The agent without
+  myceliums solved 85 % of the tasks with 10 turns and 96 % with 40; C solved
+  81 % and 89 %, the 40-turn F1 difference −0.042 [−0.088, −0.008]
+  (uncorrected). At 4 turns C's success gain (+15 pp) is not significant
+  (McNemar p = 0.29); mean F1 rose by 0.263 [+0.078, +0.452]. #153's success
+  gain under 3 rounds of tool calls without a shell does not carry over to a
+  budget of 10 turns with a shell.
+* **Where C lost, it twice trusted the graph.** In the primary analysis C lost
+  four task-budget pairs at 10 or 40 turns that none solved. On the two Django
+  flow tasks it answered from one `trace_flow` result and wrote that it had not
+  checked the call sites; `trace_flow` lists chains up to a length limit, and
+  the longer chains were missing. Once it checked with grep and still added 18
+  names; once it ran out of turns. A fifth loss, `django-tests-number-format`
+  at 40 turns (5 test files missing), is one of the three tasks outside the
+  primary analysis: `find_callers` could only answer for `django/`, because the
+  index has no `tests/`. On Vue, myc links 3,682 of 16,397
   call sites: imports between packages (`@vue/shared`, `@vue/reactivity`, ...)
   count as library calls, so callers in other packages are missing
   (`myc callers toRawType` reports none). C's Vue success equalled none's at
   every budget but 40 turns (one task fewer).
 * **C was faster from 10 turns on, cheaper only at 10.** Wall time 0.69× and
-  0.81×, output tokens 0.65× and 0.85×. Input tokens rose (1.58× at 4 turns,
-  1.28× at 40); C's first request alone is 12,584 tokens against 7,165. Cost: 1.34× at 4 turns, 0.80× at 10, 0.97× at
-  40.
-* **MCP, not the CLI.** In C the agent called an MCP tool in 77 of 90 sessions
-  (`find_callers` 143 times, `trace_flow` 14, `find_callees` 8,
-  `impact_of_change` once; 14 calls returned an error, 13 of them because the
-  name was ambiguous) and never ran `myc` from Bash, although the grep hook put a `myc
-  callers …` hint into 205 of the 341 greps it saw. The SessionStart context
+  0.84×; output tokens 0.64× at 10 turns. Input tokens rose (1.51× at 4 turns,
+  1.31× at 40); C's first request alone is 12,584 tokens against 7,165. Cost:
+  1.27× at 4 turns, 0.78× at 10, 0.98× at 40.
+* **MCP, not the CLI.** In C the agent called an MCP tool in 68 of 81 sessions
+  of the primary analysis (77 of all 90); over all 90
+  it called `find_callers` 143 times, `trace_flow` 14, `find_callees` 8,
+  `impact_of_change` once (14 calls returned an error, 13 of them because the
+  name was ambiguous), and it never ran `myc` from Bash, although the grep hook
+  put a `myc callers …` hint into 205 of the 341 greps it saw. The SessionStart context
   line reached the model in 90 of 90 C sessions, naming the index current.
 * **Questions that are not about calls** stayed at or near the ceiling in both
   conditions (one C session ran out of turns at 4).
@@ -717,7 +741,11 @@ passes and the most frequent confusions go to `TOOLSEL.md`.
 
 * Outcome eval at scale (#163): one repetition (each task, condition and
   budget is one sample), 30 tasks, two repositories, one model and effort
-  level; per type at most six tasks, so the type rows are direction only.
+  level; per type at most six tasks, so the type rows are exploratory. No
+  interval or p-value is corrected for multiple comparisons (three budgets,
+  the pooled comparison, several metrics and subgroups). The reused Django
+  index has no `tests/`, so the three Django `tests` tasks do not compare the
+  conditions fairly; the primary analysis leaves them out (27 tasks).
   The labels were derived from the AST and the type checker by an agent and
   are not yet reviewed by a person (#164). The calibration covered 15 of the
   35 candidates: 20 tasks of the set, the four `config` tasks among them, are
@@ -732,8 +760,9 @@ passes and the most frequent confusions go to `TOOLSEL.md`.
   own call graph; no session read the eval's task files, gold sets or index
   cache (every transcript was searched for those paths).
 * Outcome eval (#153): a pilot. #163 answers its open question with a shell
-  and more turns: with 10 or 40 turns myceliums did not change success, and C
-  was faster (0.69× and 0.81× wall time) and at 10 turns cheaper (0.80×). One repetition, 11 paired tasks, one
+  and more turns: with 10 or 40 turns myceliums did not raise success, and C
+  was faster (0.69× and 0.84× wall time, primary analysis) and at 10 turns
+  cheaper (0.78×). One repetition, 11 paired tasks, one
   repository, one language, one model: the intervals are wide and say
   direction and rough size. The effect is measured under a tight budget
   (three rounds of tool calls), chosen in calibration because the agent

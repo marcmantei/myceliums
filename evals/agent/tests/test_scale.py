@@ -176,9 +176,24 @@ class ScaleReport(unittest.TestCase):
                 self.assertIn("6 : 0 (ties 0), p = 0.0312", text)  # 4 turns: C wins every task
                 self.assertIn("2 : 0 (ties 4), p = 0.5", text)  # 10 and 40 turns
                 self.assertIn("| 4 turns | 6 | 6 | 3 | 3 |", text)  # myc used: MCP or CLI
+                self.assertIn("No interval or p-value is corrected for multiple comparisons", text)
+                self.assertIn("## By task type (exploratory)", text)
+                self.assertNotIn("**+", text)  # no bold differences
                 summary = json.loads((d / "summary.json").read_text())
                 self.assertEqual(summary["analysis"]["overall"]["sign_test"]["c_better"], 6)
                 self.assertTrue(report.write_report("scale", check=True))
+                # a primary analysis without one task, the full numbers alongside
+                meta = json.loads((d / "meta.json").read_text())
+                meta["primary_exclude"] = {tasks[0]["id"]: "Not comparable."}
+                (d / "meta.json").write_text(json.dumps(meta))
+                self.assertTrue(report.write_report("scale"))
+                text = (d / "REPORT.md").read_text()
+                self.assertIn(f"the 5 tasks without `{tasks[0]['id']}`. Not comparable.", text)
+                self.assertIn("5 : 0 (ties 0), p = 0.0625", text)  # 4 turns, primary
+                self.assertIn("All 6 tasks: success 0 % → 100 %", text)
+                self.assertIn(f"`{tasks[0]['id']}` †", text)
+                summary = json.loads((d / "summary.json").read_text())
+                self.assertEqual(summary["analysis_all_tasks"]["overall"]["sign_test"]["c_better"], 6)
             finally:
                 config.RESULTS_DIR = old
 

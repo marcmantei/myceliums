@@ -454,6 +454,25 @@ def vue_symbols(repos, g, target, depth):
     return gold
 
 
+def self_call_files(edges: str, repo: str, target) -> dict[str, int]:
+    """Files holding a recursive call of ``target`` inside itself (the call
+    graph drops self-edges): file -> first line."""
+    out: dict[str, int] = {}
+    if repo == VUE:
+        for line in open(os.path.join(edges, VUE, "edges.tsv")):
+            a, b, site, kind, bfile = line.rstrip("\n").split("\t")
+            f, ln = site.rsplit(":", 1)
+            if kind == "direct" and (f, a) == target and (bfile, b) == target:
+                out.setdefault(f, int(ln))
+    else:
+        for line in open(os.path.join(edges, DJ, "edges.tsv")):
+            a, b, site, kind = line.rstrip("\n").split("\t")
+            f, ln = site.rsplit(":", 1)
+            if kind == "direct" and a == b == target:
+                out.setdefault(f, int(ln))
+    return out
+
+
 def vue_files(repos, g, target, depth):
     c = g.callers_upto(target, depth)
     files = {}
@@ -1044,6 +1063,20 @@ def build(edges: str, repos: str, only: list[str] | None = None, mode: str = "fi
                 "question": spec["question"], "gold": gold,
                 "rationale": f"{spec['rationale']} {how}; {len(gold)} items.",
                 "verified_with": [TOOLS[spec["repo"]] if spec["type"] != "config" else how, "reading the code"]}
+        if mode == "final" and spec["type"] == "blast_radius":
+            # Amended after the run (#163 review): under the owner policy of
+            # #164/#168, recursion and self-calls are optional, and the call
+            # graph drops self-edges, so a file whose only call is the target
+            # calling itself was missing from both lists.
+            names = {x["name"] for x in gold} | {x["name"] for x in optional}
+            for f, ln in sorted(self_call_files(edges, spec["repo"], args[0]).items()):
+                if f not in names:
+                    want = args[0][1] if spec["repo"] == VUE else args[0].split(":", 1)[1].split(".")[-1]
+                    optional.append({"name": f, "evidence": [find_line(repos, spec["repo"], f, want, ln)],
+                                     "note": "only a recursive call of the target inside itself (optional: "
+                                             "recursion and self-calls, owner policy of #164/#168)"})
+                    task["rationale"] += (f" Amended after the run (#163 review): {f} is optional, its only call "
+                                          "is the target's recursive call of itself.")
         if optional:
             task["optional"] = optional
         if mode == "final":

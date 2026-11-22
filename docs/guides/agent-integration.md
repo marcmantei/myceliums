@@ -48,36 +48,43 @@ prompt), Claude Code 2.1.330, one repetition:
 > same-name task (7 discordant tasks, all in C's favour: exact sign test
 > p = 0.016). The budget was chosen in calibration because the agent without
 > myceliums failed at it; with up to seven rounds of tool calls (and an
-> earlier, partly wrong budget text) it had solved 5 of 6 of these tasks. The
-> cost and time ratios hold under that budget only, where the failed sessions
-> were cut off. Input tokens did not change measurably (0.93× [0.74×, 1.17×]).
-> Neither condition had a shell (`Read`, `Grep`, `Glob`). A pilot: n = 11, one
-> repository, one model.
+> earlier, partly wrong budget text) it had solved 5 of 6 of these tasks. So
+> the success gain is a budget effect, and the cost and time ratios hold under
+> the budget only, where the failed sessions were cut off. Input tokens did not
+> change measurably (0.93× [0.74×, 1.17×]). Neither condition had a shell
+> (`Read`, `Grep`, `Glob`). A pilot: n = 11, one repository, one model, and
+> static call-graph questions, whose rules a call graph computes by
+> construction.
 
 The outcome eval at scale ([#163](../../evals/agent/README.md#outcome-eval-at-scale-163),
 22 November 2026, [report](../../evals/agent/results/2026-11-22-scale/REPORT.md))
-answered the pilot's open question with `Bash` in both conditions, 30 tasks
-over Django and Vue 3.5.46 (TypeScript) and three budgets, Claude Code
-2.1.330, one repetition, 180 graded sessions:
+measured the same comparison with `Bash` in both conditions, 30 tasks over
+Django and Vue 3.5.46 (TypeScript) and three budgets, Claude Code 2.1.330,
+one repetition, 180 graded sessions. The primary analysis leaves out the three
+Django `tests` tasks: the reused Django index has no `tests/`, so myceliums had
+no data for them. Primary analysis, 27 tasks:
 
-| Budget | Success none → C (Δ [95 % CI], sign test) | Mean F1 none → C | Cost C ÷ none | Wall time C ÷ none |
+| Budget | Success none → C (Δ [95 % CI], McNemar) | Mean F1 none → C (Δ [95 % CI]) | Cost C ÷ none | Wall time C ÷ none |
 |---|---:|---:|---:|---:|
-| 4 turns, stated | 23 % → 40 % (+17 pp [−3, +37], p = 0.18) | 0.233 → 0.501 | 1.34× [1.06×, 1.64×] | 0.97× [0.81×, 1.15×] |
-| 10 turns, stated | 87 % → 83 % (−3 pp [−17, +7], p = 1) | 0.885 → 0.840 | 0.80× [0.66×, 0.95×] | 0.69× [0.57×, 0.82×] |
-| 40 turns, not stated | 97 % → 87 % (−10 pp [−23, +0], p = 0.25) | 0.971 → 0.923 | 0.97× [0.84×, 1.11×] | 0.81× [0.70×, 0.94×] |
+| 4 turns, stated | 22 % → 37 % (+15 pp [−4, +33], p = 0.29) | 0.222 → 0.485 (+0.263 [+0.078, +0.452]) | 1.27× [0.99×, 1.59×] | 0.96× [0.78×, 1.18×] |
+| 10 turns, stated | 85 % → 81 % (−4 pp [−15, +7], p = 1) | 0.880 → 0.832 (−0.048 [−0.139, +0.017]) | 0.78× [0.63×, 0.93×] | 0.69× [0.55×, 0.83×] |
+| 40 turns, not stated | 96 % → 89 % (−7 pp [−19, +0], p = 0.5) | 0.971 → 0.930 (−0.042 [−0.088, −0.008]) | 0.98× [0.83×, 1.13×] | 0.84× [0.71×, 0.97×] |
 
 > **What the numbers say, and what they do not.** With a shell and 10 or more
-> turns, the agent without myceliums solved 87-97 % of these tasks, and
-> layers 1-3 did not raise success; at 40 turns mean F1 was 0.049 lower
-> [−0.096, −0.013]. Two of C's losses were answers taken from a `trace_flow`
-> result that the agent had not checked against the source. Myceliums helped
-> under the tightest budget (mean F1 +0.268 [+0.093, +0.445] at 4 turns) and
-> made sessions with 10 or more turns faster. The agent used the MCP tools
-> (77 of 90 C sessions) and never the `myc` CLI from Bash, although the grep
-> hook suggested it. myc's Vue graph misses the calls between the monorepo's
-> packages, which is part of what was measured. One repetition, one model,
-> labels derived by an agent and not yet reviewed by a person, 20 of the 30
-> tasks not calibrated.
+> turns, the agent without myceliums solved 85-96 % of these tasks, and layers
+> 1-3 did not raise success; at 40 turns success was slightly lower (−7 pp,
+> not significant) and mean F1 0.042 lower [−0.088, −0.008]. Two of C's losses
+> were answers taken from a `trace_flow` result that the agent had not checked
+> against the source. At 4 turns the success gain is not significant; mean F1
+> rose by 0.263. Sessions with 10 or more turns were faster in C. None of these
+> intervals or p-values is corrected for the three budgets and several metrics.
+> Over all 30 tasks the numbers are close (4 turns +17 pp, F1 +0.268; 40 turns
+> −10 pp, F1 −0.049). The agent used the MCP tools (68 of 81 C sessions) and
+> never the `myc` CLI from Bash, although the grep hook suggested it. myc's Vue
+> graph misses the calls between the monorepo's packages, which is part of what
+> was measured. One repetition, one model, labels derived by an agent and not
+> yet reviewed by a person, 20 of the 30 tasks not calibrated, and again static
+> call-graph questions for 26 of the 30 tasks.
 
 This guide describes five ways to route an agent to myceliums, from soft to
 hard, and what `myc setup-claude` installs for each.

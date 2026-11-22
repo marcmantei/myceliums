@@ -176,7 +176,7 @@ def _cell(s: dict, kind: str, side: str) -> str:
 def _diff(s: dict, kind: str, ratio: bool) -> str:
     if ratio and s["ratio_mean"] == s["ratio_mean"]:
         return f"{_fmt_ratio(s['ratio_mean'])} [{_fmt_ratio(s['ratio_lo'])}, {_fmt_ratio(s['ratio_hi'])}]"
-    return f"**{_fmt_diff(s['diff_mean'], kind)}** [{_fmt_diff(s['diff_lo'], kind)}, {_fmt_diff(s['diff_hi'], kind)}]"
+    return f"{_fmt_diff(s['diff_mean'], kind)} [{_fmt_diff(s['diff_lo'], kind)}, {_fmt_diff(s['diff_hi'], kind)}]"
 
 
 def _sign(st: dict) -> str:
@@ -198,8 +198,15 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     tasks = [t for t in tasks if t["id"] in ran]
     budgets = meta["budgets"]
     thr = meta.get("success_threshold", 0.8)
-    a = analyse(rows, tasks, budgets, n_resamples)
+    # The primary analysis leaves out tasks that do not compare the conditions
+    # fairly (meta["primary_exclude"]: task id -> reason); every table also
+    # gives the numbers over all tasks.
+    excluded = {k: v for k, v in (meta.get("primary_exclude") or {}).items() if k in ran}
+    primary = [t for t in tasks if t["id"] not in excluded]
+    a = analyse([r for r in rows if r["task_id"] not in excluded], primary, budgets, n_resamples)
+    a_all = analyse(rows, tasks, budgets, n_resamples) if excluded else a
     bnames = {b: _budget_name(b, meta) for b in budgets}
+    np_, na = len(primary), len(tasks)
     L: list[str] = []
     L.append(f"# Agent benchmark: {label}")
     L.append("")
@@ -223,7 +230,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     L.append(f"- **myceliums:** `{meta.get('myc_version')}` built from commit `{meta.get('myc_commit')}` (binary sha256 "
              f"`{str(meta.get('myc_sha256'))[:16]}…`)"
              + (f"; {meta['mcp_tools_offered']} MCP tools offered" if meta.get("mcp_tools_offered") else ""))
-    L.append(f"- **Tasks:** {len(tasks)} from `{meta.get('tasks_file')}` (sha256 `{str(meta.get('tasks_sha256'))[:16]}…`) "
+    L.append(f"- **Tasks:** {na} from `{meta.get('tasks_file')}` (sha256 `{str(meta.get('tasks_sha256'))[:16]}…`) "
              f"over {len({t['repo'] for t in tasks})} pinned repositories, {meta.get('reps')} repetition per task, "
              f"condition and budget; {len(rows)} graded sessions.")
     for name in sorted({t["repo"] for t in tasks}):
@@ -232,16 +239,25 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
         n = sum(1 for t in tasks if t["repo"] == name)
         L.append(f"  - `{name}` {r.get('ref')} (`{r.get('commit', '')[:12]}`, {r.get('language_name')}): {n} tasks; "
                  + (f"index {idx['symbols']:,} symbols in {idx.get('files', 0):,} files, "
-                    f"{idx.get('embedded', 0):,} embedded" if isinstance(idx.get("symbols"), int) else "no index"))
+                    f"{idx.get('embedded', 0):,} embedded" if isinstance(idx.get("symbols"), int) else "no index")
+                 + (f" (not indexed: {', '.join('`' + x + '`' for x in idx['index_exclude_extra'])})"
+                    if idx.get("index_exclude_extra") else ""))
+    if excluded:
+        L.append(f"- **Primary analysis:** the {np_} tasks without " + ", ".join(f"`{k}`" for k in sorted(excluded))
+                 + ". " + " ".join(sorted(set(excluded.values()))) + f" Every table gives the {na}-task numbers "
+                 "alongside.")
     L.append("- **Same in every condition:** prompt, model, effort, turn limit, timeout; built-in tools `Read`, `Grep`, "
              "`Glob`, `Bash` (+ `ToolSearch`); `--setting-sources project`; a fresh working copy (and in C a fresh "
              "index copy) per session; every transcript checked for the expected tools and MCP server.")
     L.append(f"- **Grading:** set-based precision / recall / F1 against gold sets derived with Python's `ast` module "
              f"and the TypeScript checker, never from myceliums; success = F1 ≥ {thr}.")
     L.append(f"- **Statistics:** tasks are the unit. Means over tasks with 95 % percentile bootstrap intervals "
-             f"({n_resamples:,} resamples over tasks, paired); for success an exact two-sided sign test (McNemar) over "
-             "the tasks whose outcome differs between the conditions. *All budgets* averages each task over its "
-             "budgets first, so a task still counts once.")
+             f"({n_resamples:,} resamples over tasks, paired). Per budget, success is compared with an exact two-sided "
+             "McNemar test (a sign test over the tasks that succeeded in one condition only). *All budgets* averages "
+             "each task over its budgets first, so a task still counts once, and compares success with an exact "
+             "two-sided sign test on those per-task differences. **No interval or p-value is corrected for multiple "
+             "comparisons** (three budgets, the pooled comparison, several metrics, repositories and task types); "
+             "the repository and task-type tables are exploratory.")
     L.append("")
     L.append("| Condition | What the session has |")
     L.append("|---|---|")
@@ -252,11 +268,13 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     # ---- headline per budget
     L.append("## Per budget")
     L.append("")
-    L.append(f"Means over {len(tasks)} tasks; brackets: 95 % CI. Differences are C − none (percentage points or "
-             "absolute), ratios C ÷ none.")
+    L.append(f"Means over the {np_} tasks of the primary analysis; brackets: 95 % CI (uncorrected). Differences are "
+             "C − none (percentage points or absolute), ratios C ÷ none."
+             + (f" Below each table the same comparison over all {na} tasks." if excluded else ""))
     L.append("")
     for b in [*budgets, "all"]:
         s = a["overall"] if b == "all" else a["by_budget"][str(b)]
+        s_all = a_all["overall"] if b == "all" else a_all["by_budget"][str(b)]
         L.append(f"### {'All budgets' if b == 'all' else bnames[b]}")
         L.append("")
         L.append("| Metric | none | C | C − none or C ÷ none |")
@@ -266,29 +284,39 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
                 continue
             L.append(f"| {lab.format(thr=thr)} | {_cell(s[key], kind, BASE)} | {_cell(s[key], kind, ARM)} | "
                      f"{_diff(s[key], kind, ratio)} |")
-        L.append(f"| Success, sign test (tasks C better : none better) | | | {_sign(s['sign_test'])} |")
+        test = "sign test" if b == "all" else "McNemar"
+        L.append(f"| Success, {test} (tasks C better : none better) | | | {_sign(s['sign_test'])} |")
         L.append("")
+        if excluded:
+            L.append(f"All {na} tasks: success {_fmt(s_all['success']['b_mean'], 'pct')} → "
+                     f"{_fmt(s_all['success']['a_mean'], 'pct')} ({_diff(s_all['success'], 'pct', False)}; "
+                     f"{test} {_sign(s_all['sign_test'])}), mean F1 {s_all['f1']['b_mean']:.3f} → "
+                     f"{s_all['f1']['a_mean']:.3f} ({_diff(s_all['f1'], 'f3', False)}), cost "
+                     f"{_diff(s_all['cost_usd'], 'usd', True)}, wall time {_diff(s_all['wall_s'], 'f1', True)}.")
+            L.append("")
 
     # ---- budget curve
     L.append("## Budget curve")
     L.append("")
-    L.append("| Budget | Success none | Success C | Δ success [95 % CI] | Mean F1 none | Mean F1 C | Δ F1 [95 % CI] | "
-             "Sign test |")
-    L.append("|---|---:|---:|---:|---:|---:|---:|---|")
-    for b in budgets:
-        s = a["by_budget"][str(b)]
-        L.append(f"| {bnames[b]} | {_fmt(s['success']['b_mean'], 'pct')} | {_fmt(s['success']['a_mean'], 'pct')} | "
-                 f"{_diff(s['success'], 'pct', False)} | {s['f1']['b_mean']:.3f} | {s['f1']['a_mean']:.3f} | "
-                 f"{_diff(s['f1'], 'f3', False)} | {_sign(s['sign_test'])} |")
+    L.append("| Tasks | Budget | Success none | Success C | Δ success [95 % CI] | Mean F1 none | Mean F1 C | "
+             "Δ F1 [95 % CI] | McNemar |")
+    L.append("|---|---|---:|---:|---:|---:|---:|---:|---|")
+    for tag, an in ((f"{np_} (primary)", a), *([(f"all {na}", a_all)] if excluded else [])):
+        for b in budgets:
+            s = an["by_budget"][str(b)]
+            L.append(f"| {tag} | {bnames[b]} | {_fmt(s['success']['b_mean'], 'pct')} | "
+                     f"{_fmt(s['success']['a_mean'], 'pct')} | {_diff(s['success'], 'pct', False)} | "
+                     f"{s['f1']['b_mean']:.3f} | {s['f1']['a_mean']:.3f} | {_diff(s['f1'], 'f3', False)} | "
+                     f"{_sign(s['sign_test'])} |")
     L.append("")
 
     # ---- per repo and per type
-    for dim, title, note in (("by_repo", "By repository", ""),
-                             ("by_type", "By task type", " Few tasks per type: read these as direction, not size.")):
-        L.append(f"## {title}")
+    for dim, title in (("by_repo", "By repository"), ("by_type", "By task type")):
+        L.append(f"## {title} (exploratory)")
         L.append("")
-        L.append("Success none → C per budget, then the difference over all budgets with its 95 % CI and sign test."
-                 + note)
+        L.append(f"Primary analysis ({np_} tasks). Success none → C per budget, then the difference over all budgets "
+                 "with its 95 % CI and sign test, uncorrected; few tasks per group, so read these as direction, not "
+                 "size.")
         L.append("")
         L.append("| " + ("Repository" if dim == "by_repo" else "Type") + " | Tasks | "
                  + " | ".join(f"{b} turns" for b in budgets) + " | All budgets: Δ success | Δ F1 | Sign test |")
@@ -304,7 +332,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     # ---- per task
     L.append("## Per task")
     L.append("")
-    L.append("F1 none / C at each budget; myceliums calls (MCP + CLI) in C summed over the budgets.")
+    L.append("F1 none / C at each budget; myceliums calls (MCP + CLI) in C summed over the budgets."
+             + (" Tasks marked † are not in the primary analysis." if excluded else ""))
     L.append("")
     L.append("| Task | Type | Gold | " + " | ".join(f"{b} turns" for b in budgets) + " | myc calls C | Calibration |")
     L.append("|---|---|---:|" + "---|" * len(budgets) + "---:|---|")
@@ -315,7 +344,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
             n, c = idx.get((t["id"], BASE, b)), idx.get((t["id"], ARM, b))
             cells.append(f"{n['f1']:.2f} / {c['f1']:.2f}" if n and c else "–")
         calls = sum(myc_calls(r) for r in rows if r["task_id"] == t["id"] and r["condition"] == ARM)
-        L.append(f"| `{t['id']}` | {t['type']} | {t['n_gold']} | " + " | ".join(cells) + f" | {calls} | "
+        mark = " †" if t["id"] in excluded else ""
+        L.append(f"| `{t['id']}`{mark} | {t['type']} | {t['n_gold']} | " + " | ".join(cells) + f" | {calls} | "
                  f"{t.get('calibration', '–')} |")
     L.append("")
 
@@ -398,6 +428,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
         for n in meta["notes"]:
             L.append(f"- {n}")
     L.append("")
-    summary = {"label": label, "threshold": thr, "budgets": budgets, "analysis": a, "n_rows": len(rows),
+    summary = {"label": label, "threshold": thr, "budgets": budgets, "analysis": a,
+               **({"primary_exclude": excluded, "analysis_all_tasks": a_all} if excluded else {}), "n_rows": len(rows),
                "statuses": {f"{b}/{c}/{s}": n for (b, c, s), n in sorted(st.items())}}
     return "\n".join(L) + "\n", summary
