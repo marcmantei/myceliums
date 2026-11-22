@@ -1,0 +1,154 @@
+{
+  "bash": true,
+  "budgets": [
+    4,
+    10,
+    40
+  ],
+  "claude_version": "2.1.330",
+  "conditions": [
+    "none",
+    "C"
+  ],
+  "date": "2026-11-22",
+  "effort": "medium",
+  "index": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "communities": 325,
+      "embedded": 12443,
+      "files": 828,
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_seconds": 1446.7,
+      "indexed_at": "2026-11-21T20:59:17.411273+00:00",
+      "myc_sha256": "4ef9e803790e41b4010695dc34c3dc75a391047296a56459de8319dfbbed9a33",
+      "myc_version": "myc 0.3.2",
+      "processes": 2922,
+      "relationships": 31408,
+      "repo": "django",
+      "repo_id": "django-f980c747",
+      "symbols": 12443,
+      "work_path": "/private/tmp/aeval153/django"
+    },
+    "vue": {
+      "commit": "7de9e41b61b2d890fd4be408068da75cbeb05709",
+      "communities": 338,
+      "embedded": 15750,
+      "files": 501,
+      "index_exclude_extra": [
+        "packages-private/**",
+        "changelogs/**",
+        "CHANGELOG.md"
+      ],
+      "index_seconds": 1163.0,
+      "indexed_at": "2026-11-22T10:24:08.966224+00:00",
+      "myc_sha256": "4ef9e803790e41b4010695dc34c3dc75a391047296a56459de8319dfbbed9a33",
+      "myc_version": "myc 0.3.2",
+      "processes": 453,
+      "relationships": 19544,
+      "repo": "vue",
+      "repo_id": "vue-2b84db6b",
+      "symbols": 15750,
+      "work_path": "/private/tmp/aeval153/vue"
+    }
+  },
+  "label": "2026-11-22-scale",
+  "mcp_tools_offered": 9,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "951d041ff9e0",
+  "myc_sha256": "4ef9e803790e41b4010695dc34c3dc75a391047296a56459de8319dfbbed9a33",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Session accounting: 180 main sessions (30 tasks x 2 conditions x 3 budgets x 1 repetition), every one graded on its first attempt (no retries, no timeouts; the longest took 127 s), plus 15 calibration sessions (results/2026-11-22-scale-calibration): 195 of the 195 approved. Five probe sessions against the mock API (one before the freeze in condition none, four after it) used no model.",
+    "Tasks frozen before any myceliums output: tasks/tasks-scale.json (sha256 fd0f92ee81485d3e..., the tasks_sha256 above) was committed in 9c53600 at 2026-11-22T10:04:05Z after the calibration (09:54-09:59Z, condition none only, on tasks/tasks-scale-candidates.json). The Vue index was built afterwards (10:04:45-10:24:08Z); the reused Django index was first opened after the freeze, to check that it loads. The first session with myceliums (a mock-API probe) started at 10:24:52Z, the main run at 10:25:18Z.",
+    "Calibration (15 none sessions at 10 turns): the five questions that are not about calls were solved in one or two Bash calls and rejected as trivially solved; the four in the frozen set replaced them after the calibration and are not calibrated. Of the 10 calibrated tasks in the set, 8 succeeded (the target was 30-80 %); 20 tasks are not calibrated, because the allowance covered 15 of 35 candidates.",
+    "Budgets: 4 and 10 turns are stated in the prompt (the #153 text); 40 is the unlimited arm, a cap the prompt does not mention. No session reached 40 turns.",
+    "Indexes: Django is the #153 index (built 2026-11-21 by the same binary, sha256 4ef9e803...; 12,443 of 12,443 symbols embedded with jina-embeddings-v2-base-code, template 2, chunking), reused because the binary and therefore the embedder fingerprint are identical. Vue: packages/ without packages-private/ and the changelogs, tests included; 15,750 of 15,750 symbols embedded in 1,163 s. myc linked 3,682 of Vue's 16,397 call sites: imports between packages (@vue/shared, @vue/reactivity, ...) count as library calls, so cross-package callers are missing (myc callers toRawType: 0). The questions were fixed before this was seen.",
+    "The binary is the #153 build of commit 951d041ff9e0. The branch's base, d3de363, differs from it only in evals and docs (no Rust or Cargo file), so it was not rebuilt (the benchmark machine had about 12 GB of free disk).",
+    "In C the agent called a myceliums MCP tool in 77 of 90 sessions and never ran the myc CLI from Bash, although the grep hook added a myc callers hint to 205 of the 341 greps it saw. No none session ran myc. One C session called a tool named bash (lower case), which does not exist; it is counted as an errored tool call.",
+    "C lost five task-budget pairs at 10 or 40 turns that none solved. In two (the Django flow tasks django-flow-translate-is-naive at 10 turns, django-flow-runserver-import-string at 40) it answered from a trace_flow result and wrote that it had not checked the call sites in the source; trace_flow lists chains up to a length limit, and the longer chains were missing. In two it checked with grep and still missed 5 test files (django-tests-number-format) or added 18 names (vue-amb-reactivity-warn); one (vue-tests-scope-dispose, 10 turns) ran out of turns.",
+    "Gold labels were derived by an agent from the AST and the type checker and are not yet reviewed by a person (#164). One repetition: per-task outcomes are single samples. Sessions of the two repositories ran in parallel (two at a time), so wall times include that contention, equally in both conditions."
+  ],
+  "repos": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "display_name": "Django",
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_note": "Only the django/ package is indexed (12,443 symbols, 828 files): with tests/ and docs/ included, `myc analyze` produced 41,842 symbols and 328,884 relationships and its community detection had not finished after 9 minutes on the benchmark machine. The agent still sees the whole checkout; every #153 question is about the django/ package.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "django",
+      "ref": "5.1.4",
+      "url": "https://github.com/django/django.git"
+    },
+    "vue": {
+      "commit": "7de9e41b61b2d890fd4be408068da75cbeb05709",
+      "display_name": "Vue",
+      "index_exclude_extra": [
+        "packages-private/**",
+        "changelogs/**",
+        "CHANGELOG.md"
+      ],
+      "index_note": "packages-private/ (playgrounds and type-only tests) and the changelogs are not indexed; every #163 question is about packages/*/src or packages/*/__tests__, which are. The agent still sees the whole checkout.",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "vue",
+      "ref": "v3.5.46",
+      "url": "https://github.com/vuejs/core.git"
+    }
+  },
+  "reps": 1,
+  "runs": {
+    "10": {
+      "attempts_total": 60,
+      "bash": true,
+      "label": "2026-11-22-scale-t10",
+      "max_turns": 10,
+      "prompt_budget": true,
+      "retried_runs": [],
+      "runs_final": 60,
+      "sessions_launched_ledger": 60,
+      "timeout_s": 360
+    },
+    "4": {
+      "attempts_total": 60,
+      "bash": true,
+      "label": "2026-11-22-scale-t4",
+      "max_turns": 4,
+      "prompt_budget": true,
+      "retried_runs": [],
+      "runs_final": 60,
+      "sessions_launched_ledger": 60,
+      "timeout_s": 300
+    },
+    "40": {
+      "attempts_total": 60,
+      "bash": true,
+      "label": "2026-11-22-scale-t40",
+      "max_turns": 40,
+      "prompt_budget": false,
+      "retried_runs": [],
+      "runs_final": 60,
+      "sessions_launched_ledger": 60,
+      "timeout_s": 480
+    }
+  },
+  "runs_final": 180,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-scale.json",
+  "tasks_sha256": "fd0f92ee81485d3edf1cd3ed8287debea3075188804a47cd4de04f657bc9e416",
+  "tool_search": null
+}

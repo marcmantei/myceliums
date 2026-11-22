@@ -107,3 +107,15 @@ def paired_bootstrap(
         ratio_lo=percentile(ratios, lo_q),
         ratio_hi=percentile(ratios, hi_q),
     )
+
+
+def exact_sign_test(wins: int, losses: int) -> float:
+    """Two-sided exact sign test (McNemar's exact test on paired binary
+    outcomes): ``wins`` and ``losses`` are the discordant pairs in each
+    direction; ties are left out. Returns the p-value."""
+    n = wins + losses
+    if n == 0:
+        return 1.0
+    k = min(wins, losses)
+    tail = sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n
+    return min(1.0, 2 * tail)

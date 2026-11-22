@@ -1,5 +1,5 @@
 {
-  "description": "Pinned target repositories. Fetched into the cache (agent_eval.py fetch), never vendored. Chosen as mid-size, actively maintained projects in three languages myceliums parses: an application (fzf, Go), a library with many small modules (hono, TypeScript) and a library whose repository is dominated by docs and tests (fastapi, Python). Django (Python) was added for the outcome eval (#153): a large framework with many same-named methods across apps.",
+  "description": "Pinned target repositories. Fetched into the cache (agent_eval.py fetch), never vendored. Chosen as mid-size, actively maintained projects in three languages myceliums parses: an application (fzf, Go), a library with many small modules (hono, TypeScript) and a library whose repository is dominated by docs and tests (fastapi, Python). Django (Python) was added for the outcome eval (#153): a large framework with many same-named methods across apps. Vue (vuejs/core, TypeScript) was added for the outcome eval at scale (#163): a large TypeScript monorepo with its tests.",
   "repos": [
     {
       "name": "fzf",
@@ -56,7 +56,13 @@
       "language_name": "TypeScript",
       "url": "https://github.com/vuejs/core.git",
       "ref": "v3.5.46",
-      "commit": "7de9e41b61b2d890fd4be408068da75cbeb05709"
+      "commit": "7de9e41b61b2d890fd4be408068da75cbeb05709",
+      "index_exclude_extra": [
+        "packages-private/**",
+        "changelogs/**",
+        "CHANGELOG.md"
+      ],
+      "index_note": "packages-private/ (playgrounds and type-only tests) and the changelogs are not indexed; every #163 question is about packages/*/src or packages/*/__tests__, which are. The agent still sees the whole checkout."
     }
   ]
 }

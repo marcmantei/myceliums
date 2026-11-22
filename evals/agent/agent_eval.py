@@ -201,6 +201,49 @@ def cmd_regrade(args) -> int:
     changed = report.regrade(label, args.note)
     report.write_report(label)
     print(f"{label}: {changed} sessions changed grade; REPORT.md regenerated")
+
+def cmd_export_scale(args) -> int:
+    """Merge the per-budget runs of the outcome eval at scale (#163) into one
+    results directory (rows tagged with their budget)."""
+    from aeval import report_scale
+    runs = args.runs.split(",")
+    cfgs = [config.load_json(config.RUNS_DIR / r / "config.json") for r in runs]
+    first = None
+    for r in runs:
+        for x in (config.RUNS_DIR / r / "results.jsonl").read_text().splitlines():
+            row = json.loads(x) if x.strip() else {}
+            if row.get("model"):
+                first = row
+                break
+        if first:
+            break
+    with_rows = [json.loads(x) for r in runs for x in (config.RUNS_DIR / r / "results.jsonl").read_text().splitlines()
+                 if x.strip() and json.loads(x).get("n_mcp_tools_offered")]
+    keep = ("model", "effort", "reps", "success_threshold", "tool_search", "myc", "conditions", "tasks_file", "bash")
+    for k in keep:
+        vals = {json.dumps(c.get(k)) for c in cfgs}
+        if len(vals) > 1:
+            sys.exit(f"runs differ in {k}: {vals}")
+    cfg = cfgs[0]
+    meta = {
+        "label": args.label, "date": args.date or (first or {}).get("finished_at", "")[:10],
+        "model_alias": cfg["model"], "model": (first or {}).get("model"), "effort": cfg["effort"],
+        "reps": cfg["reps"], "success_threshold": cfg["success_threshold"], "tool_search": cfg["tool_search"],
+        "bash": bool(cfg.get("bash")), "conditions": cfg["conditions"],
+        "claude_version": (first or {}).get("claude_version"),
+        "myc_version": config.tool_version([cfg["myc"], "--version"]),
+        "myc_sha256": config.sha256_file(Path(cfg["myc"])),
+        "myc_commit": args.myc_commit or _git_head(config.EVAL_DIR),
+        "mcp_tools_offered": with_rows[0]["n_mcp_tools_offered"] if with_rows else None,
+        "repos": {k: v for k, v in config.load_repos().items()
+                  if k in {t["repo"] for t in config.load_tasks()}},
+        "index": {k: v for k, v in prep.index_meta().items()
+                  if k in {t["repo"] for t in config.load_tasks()}},
+        "tasks_file": os.path.relpath(config.tasks_file(), config.EVAL_DIR),
+        "notes": args.note or [],
+    }
+    out = report_scale.export(args.label, runs, meta)
+    print(f"exported to {out}")
     return 0
 
 
@@ -367,6 +410,14 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("label")
     s.add_argument("--note", required=True, help="what changed in the gold; appended to the report's notes")
     s.set_defaults(fn=cmd_regrade)
+
+    s = sub.add_parser("export-scale", help="merge the per-budget runs of #163 into one results directory")
+    s.add_argument("--label", required=True)
+    s.add_argument("--runs", required=True, help="comma-separated run labels, one per budget")
+    s.add_argument("--date")
+    s.add_argument("--myc-commit")
+    s.add_argument("--note", action="append")
+    s.set_defaults(fn=cmd_export_scale)
 
     s = sub.add_parser("report")
     s.add_argument("label")

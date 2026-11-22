@@ -362,7 +362,10 @@ def regrade(label: str, note: str) -> int:
 
 def write_report(label: str, check: bool = False) -> bool:
     meta = config.load_json(config.RESULTS_DIR / label / "meta.json")
-    if meta.get("conditions") and set(meta["conditions"]) != {"with", "without"}:
+    if meta.get("budgets"):  # outcome eval at scale (#163): one directory, several budgets
+        from .report_scale import render as render_scale
+        text, summary = render_scale(label)
+    elif meta.get("conditions") and set(meta["conditions"]) != {"with", "without"}:
         from .report_variants import render as render_variants
         text, summary = render_variants(label)
     else:

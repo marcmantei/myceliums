@@ -48,13 +48,36 @@ prompt), Claude Code 2.1.330, one repetition:
 > same-name task (7 discordant tasks, all in C's favour: exact sign test
 > p = 0.016). The budget was chosen in calibration because the agent without
 > myceliums failed at it; with up to seven rounds of tool calls (and an
-> earlier, partly wrong budget text) it had solved 5 of 6 of these tasks. So
-> the success gain is a budget effect, and the cost and time ratios hold under
-> the budget only, where the failed sessions were cut off; without a budget
-> they were not measured. Input tokens did not change measurably (0.93×
-> [0.74×, 1.17×]). Neither condition had a shell (`Read`, `Grep`, `Glob`).
-> A pilot: n = 11, one repository, one model, and static call-graph
-> questions, whose rules a call graph computes by construction.
+> earlier, partly wrong budget text) it had solved 5 of 6 of these tasks. The
+> cost and time ratios hold under that budget only, where the failed sessions
+> were cut off. Input tokens did not change measurably (0.93× [0.74×, 1.17×]).
+> Neither condition had a shell (`Read`, `Grep`, `Glob`). A pilot: n = 11, one
+> repository, one model.
+
+The outcome eval at scale ([#163](../../evals/agent/README.md#outcome-eval-at-scale-163),
+22 November 2026, [report](../../evals/agent/results/2026-11-22-scale/REPORT.md))
+answered the pilot's open question with `Bash` in both conditions, 30 tasks
+over Django and Vue 3.5.46 (TypeScript) and three budgets, Claude Code
+2.1.330, one repetition, 180 graded sessions:
+
+| Budget | Success none → C (Δ [95 % CI], sign test) | Mean F1 none → C | Cost C ÷ none | Wall time C ÷ none |
+|---|---:|---:|---:|---:|
+| 4 turns, stated | 23 % → 40 % (+17 pp [−3, +37], p = 0.18) | 0.233 → 0.501 | 1.34× [1.06×, 1.64×] | 0.97× [0.81×, 1.15×] |
+| 10 turns, stated | 87 % → 83 % (−3 pp [−17, +7], p = 1) | 0.885 → 0.840 | 0.80× [0.66×, 0.95×] | 0.69× [0.57×, 0.82×] |
+| 40 turns, not stated | 97 % → 87 % (−10 pp [−23, +0], p = 0.25) | 0.971 → 0.923 | 0.97× [0.84×, 1.11×] | 0.81× [0.70×, 0.94×] |
+
+> **What the numbers say, and what they do not.** With a shell and 10 or more
+> turns, the agent without myceliums solved 87-97 % of these tasks, and
+> layers 1-3 did not raise success; at 40 turns mean F1 was 0.049 lower
+> [−0.096, −0.013]. Two of C's losses were answers taken from a `trace_flow`
+> result that the agent had not checked against the source. Myceliums helped
+> under the tightest budget (mean F1 +0.268 [+0.093, +0.445] at 4 turns) and
+> made sessions with 10 or more turns faster. The agent used the MCP tools
+> (77 of 90 C sessions) and never the `myc` CLI from Bash, although the grep
+> hook suggested it. myc's Vue graph misses the calls between the monorepo's
+> packages, which is part of what was measured. One repetition, one model,
+> labels derived by an agent and not yet reviewed by a person, 20 of the 30
+> tasks not calibrated.
 
 This guide describes five ways to route an agent to myceliums, from soft to
 hard, and what `myc setup-claude` installs for each.
@@ -65,7 +88,7 @@ hard, and what `myc setup-claude` installs for each.
 |---|---|---|---|---|
 | 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | together with layer 3 (variant C): myceliums used in 100 % of sessions instead of 80 %, first call a graph query; not measured alone | +348 tokens per request | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | variant A: myceliums used in 80 % of sessions (pilot with 54 deferred tools: 0 %; not a controlled comparison) | the schemas are in every request (A's first prompt: 10,162 tokens) | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
-| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see. Since #152 it adds a context line: in #153 it reached the model in 11 of 11 C sessions, and the grep hook added a hint to 14 of 17 Grep calls | a few ms per Grep (400 ms cap) | `myc setup-claude` |
+| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see. Since #152 it adds a context line: in #153 it reached the model in 11 of 11 C sessions, and the grep hook added a hint to 14 of 17 Grep calls; in #163 (with Bash) the context line reached 90 of 90 C sessions and the hook added a hint to 205 of 341 Grep or Bash `grep` calls, but the agent never ran the suggested `myc` command | a few ms per Grep (400 ms cap) | `myc setup-claude` |
 | 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | never called (0 of 38 sessions): with the tools in the main context the agent queries them itself | about 1,860 tokens per request more than C (Agent tool and its agent list) | `myc setup-claude` |
 | 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | not measured | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
 
