@@ -1,0 +1,50 @@
+:root { --fg: #1d1f23; --muted: #6b7078; --bg: #fafafa; --card: #fff; --line: #e3e5e8;
+        --ok: #1f7a3a; --bad: #b42318; --warn: #a15c00; --focus: #fff4c2; --accent: #2457c5; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+       color: var(--fg); background: var(--bg); }
+header { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 8px 20px; z-index: 2; }
+#progress { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; }
+#bar { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+#status { margin-top: 6px; color: var(--muted); font-size: 13px; display: flex; gap: 16px; flex-wrap: wrap; }
+#status a { color: var(--accent); }
+main { max-width: 1100px; margin: 16px auto 70px; padding: 0 20px; }
+footer { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card); border-top: 1px solid var(--line);
+         padding: 8px 20px; color: var(--muted); font-size: 13px; text-align: center; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px 20px; margin-bottom: 14px; }
+.meta { color: var(--muted); font-size: 13px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.claim { font-size: 19px; margin: 10px 0 6px; font-weight: 600; }
+.label { font-size: 14px; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
+.v-confirmed, .d-correct { color: var(--ok); }
+.v-doubtful, .d-unsure { color: var(--warn); }
+.v-wrong, .d-wrong { color: var(--bad); }
+.v-none { color: var(--muted); }
+dl.ctx { display: grid; grid-template-columns: 130px 1fr; gap: 4px 12px; margin: 10px 0 0; font-size: 14px; }
+dl.ctx dt { color: var(--muted); }
+dl.ctx dd { margin: 0; white-space: pre-wrap; word-break: break-word; }
+.pre-title { font-weight: 600; margin-bottom: 4px; }
+.reason { white-space: pre-wrap; }
+.fix { margin-top: 6px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; white-space: pre-wrap; }
+.comment-show { margin-top: 8px; white-space: pre-wrap; border-left: 3px solid var(--accent); padding-left: 8px; }
+.ev-head { font-size: 13px; color: var(--muted); margin-bottom: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ev-note { font-size: 12px; color: var(--warn); margin-bottom: 4px; }
+pre.code { margin: 0; background: #f6f8fa; border: 1px solid var(--line); border-radius: 6px; padding: 6px 0; overflow-x: auto;
+           font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ln { display: block; padding: 0 12px 0 0; white-space: pre; }
+.ln.focus { background: var(--focus); }
+.no { display: inline-block; width: 4.5em; text-align: right; color: #9aa0a6; padding-right: 12px; user-select: none; }
+.t-kw { color: #8a2be2; } .t-str { color: #0a7d3b; } .t-com { color: #8a8f98; font-style: italic; } .t-num { color: #b35c00; }
+#comment-box { position: fixed; inset: 0; background: rgba(0,0,0,.25); display: flex; align-items: center; justify-content: center; z-index: 5; }
+#comment-box[hidden] { display: none; }
+.comment-inner { background: var(--card); border-radius: 8px; padding: 14px; width: min(760px, 92vw); }
+.comment-title { font-weight: 600; margin-bottom: 4px; }
+.comment-hint { color: var(--muted); font-size: 13px; margin-bottom: 6px; white-space: pre-wrap; }
+#comment { width: 100%; font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+table.sum { border-collapse: collapse; width: 100%; background: var(--card); font-size: 14px; }
+table.sum th, table.sum td { border: 1px solid var(--line); padding: 6px 8px; text-align: right; }
+table.sum th:first-child, table.sum td:first-child, table.sum td.st { text-align: left; }
+.st-accepted, .st-all-confirmed-reviewed { color: var(--ok); font-weight: 600; }
+.st-widen { color: var(--bad); font-weight: 600; }
+.st-sample-open, .st-prescreen-incomplete, .st-sample-stale { color: var(--warn); }
+.done { font-size: 18px; color: var(--ok); }

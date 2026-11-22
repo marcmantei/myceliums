@@ -17,3 +17,7 @@ __pycache__/
 
 # Per-run graph-eval output; graph-gold/baseline.json is the reference.
 crates/myceliums-benchmarks/graph-gold/report.json
+
+# Label review (#164): generated item list with snippets of the pinned
+# third-party checkouts; rebuild with evals/review/export.py.
+evals/review/items.jsonl
