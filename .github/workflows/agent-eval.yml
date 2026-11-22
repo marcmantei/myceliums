@@ -10,11 +10,17 @@ on:
     branches: [main]
     paths:
       - 'evals/agent/**'
+      - 'evals/review/**'
+      - 'crates/myceliums-benchmarks/real-repos/*.json'
+      - 'crates/myceliums-benchmarks/graph-gold/**/*.json'
       - '.github/workflows/agent-eval.yml'
   push:
     branches: [main]
     paths:
       - 'evals/agent/**'
+      - 'evals/review/**'
+      - 'crates/myceliums-benchmarks/real-repos/*.json'
+      - 'crates/myceliums-benchmarks/graph-gold/**/*.json'
       - '.github/workflows/agent-eval.yml'
   workflow_dispatch:
 
@@ -29,6 +35,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Unit tests
         run: python3 -m unittest discover -s evals/agent/tests -v
+      - name: Label review tests (#164)
+        run: python3 -m unittest discover -s evals/review/tests -v
       - name: Task schema
         run: |
           set -e

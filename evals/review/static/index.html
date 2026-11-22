@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="review-token" content="__TOKEN__">
+<title>Label review</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header id="top">
+  <div id="progress"><div id="bar"></div></div>
+  <div id="status"></div>
+</header>
+<main id="main"></main>
+<div id="comment-box" hidden>
+  <div class="comment-inner">
+    <div class="comment-title">Comment — Enter saves, Shift+Enter new line, Esc cancels</div>
+    <div class="comment-hint" id="comment-hint"></div>
+    <textarea id="comment" rows="5" spellcheck="true"></textarea>
+  </div>
+</div>
+<footer id="keys">J correct · N wrong · U unsure · K comment · ← → navigate · S summary</footer>
+</body>
+</html>
