@@ -36,7 +36,7 @@ Repository ID: my-project-a1b2c3
 | No notion of the code's structure | Community detection groups related code |
 | Impact analysis by hand | `myc impact` traces the blast radius of a diff (with confidence flags) |
 
-These are capabilities, not measured outcomes. Measured on 30 code-understanding questions, a Claude Code agent with grep and file reading alone answered as accurately as with myceliums added, and never called myceliums when it had it. On 20 harder multi-hop questions, with the current core tools loaded up front, it called myceliums in 80-100 % of sessions depending on the integration, without a measurable change in accuracy, tokens or cost between integrations. On questions about Django and Vue with a shell in both conditions (27 in the primary analysis), what `myc setup-claude` installs did not raise success with 10 or 40 turns, where the agent without it already solved 85-96 % (at 40 turns 7 pp fewer, not significant), and it made those sessions faster; under 4 turns its success gain was not significant (+15 pp) and mean F1 rose by 0.26 (uncorrected intervals): [results](#does-it-help-an-agent).
+These are capabilities, not measured outcomes. Measured on 30 code-understanding questions, a Claude Code agent with grep and file reading alone answered as accurately as with myceliums added, and never called myceliums when it had it. On 20 harder multi-hop questions, with the current core tools loaded up front, it called myceliums in 80-100 % of sessions depending on the integration, without a measurable change in accuracy, tokens or cost between integrations. On questions about Django and Vue with a shell in both conditions (27 in the primary analysis), what `myc setup-claude` installs did not raise success with 10 or 40 turns, where the agent without it already solved 85-96 %; re-run after #169 it solved 89 % at both budgets (10 turns +4 pp, 40 turns −7 pp against the agent without it, neither significant), and it made the 10-turn sessions faster; under 4 turns (measured before #169 only) its success gain was not significant (+15 pp) and mean F1 rose by 0.26 (uncorrected intervals): [results](#does-it-help-an-agent).
 
 ### Key capabilities
 
@@ -389,7 +389,11 @@ Django and Vue in the primary analysis): with 10 or 40 turns layers 1-3 did
 not raise success, where the agent without them solved 85 % and 96 % (C: 81 %
 and 89 %, not significant), and they cut wall time to 0.69× and 0.84×; with 4
 turns the success gain was not significant (+15 pp [−4, +33]) and mean F1 rose
-by +0.26 [+0.08, +0.45] (intervals not corrected for the three budgets). The
+by +0.26 [+0.08, +0.45] (intervals not corrected for the three budgets).
+Re-run with myc after #169 ([#171](evals/agent/README.md#re-run-of-c-after-169-171),
+C only, against the same sessions without myceliums): 89 % at 10 turns
+(+4 pp [−7, +15], p = 1) and 89 % at 40 (−7 pp [−19, +0], p = 0.5); wall time
+0.74× at 10 turns and 1.01× at 40. The
 earlier pilot without a shell ([#153](evals/agent/README.md#outcome-eval-153),
 11 static call-graph questions about Django, three rounds of tool calls)
 measured +64 pp in success; with up to seven rounds the agent without
@@ -541,6 +545,33 @@ Limits: one repetition, one model, labels derived by an agent from the AST and
 the type checker and not yet reviewed by a person (#164), 20 of the 30 tasks
 not calibrated. [Report](evals/agent/results/2026-11-22-scale/REPORT.md),
 [method](evals/agent/README.md#outcome-eval-at-scale-163).
+
+**Re-run of C after #169, 22 November 2026 (#171):** condition C again at 10
+and 40 turns (60 sessions, one repetition, no retries) with myc built from
+main after #169 (graph walks name what they did not follow in an `Incomplete`
+block with a `Next` step; Vue's workspace packages resolve; the routing block
+says graph answers are heuristic) and freshly built indexes, compared, paired
+by task, with the #163 sessions of both conditions. The Django index again
+has no `tests/` (with it, the analysis did not finish, #172), so the primary
+analysis is the same 27 tasks:
+
+| Budget | Success without / C (#163) / C (#171) | C (#171) − without, McNemar | C (#171) − C (#163), McNemar | Mean F1 without / C (#163) / C (#171) | Cost C (#171) ÷ without | Wall time C (#171) ÷ without |
+|---|---:|---:|---:|---:|---:|---:|
+| 10 turns | 85 % / 81 % / 89 % | +4 pp [−7, +15], 2 : 1, p = 1 | +7 pp [−7, +22], 3 : 1, p = 0.63 | 0.880 / 0.832 / 0.927 | 0.88× [0.72×, 1.05×] | 0.74× [0.62×, 0.86×] |
+| 40 turns (not stated) | 96 % / 89 % / 89 % | −7 pp [−19, +0], 0 : 2, p = 0.5 | +0 pp, no discordant task | 0.971 / 0.930 / 0.942 | 1.04× [0.88×, 1.21×] | 1.01× [0.77×, 1.30×] |
+
+At 10 turns the #163 shortfall did not recur: C solved 89 % against 85 %
+without myceliums (not significant). At 40 turns C still solved two tasks
+fewer than the agent without myceliums, the same two as in #163 (a Django call
+chain and the callers of Vue's reactivity `warn`); its mean F1 difference was
+−0.030 [−0.069, +0.003] (#163: −0.042 [−0.088, −0.008]). In 45 of 60 sessions a
+graph result carried an `Incomplete` block; a later call took one of the
+named `Next` steps for 39 of those 63 results. The arms without myceliums and
+the old C ran about nine hours earlier, not interleaved, so a drift of the
+model or service counts into the differences; one repetition; labels not
+reviewed. All 30 tasks: 10 turns 87 % / 83 % / 90 %, 40 turns 97 % / 87 % / 90 %.
+[Report](evals/agent/results/2026-11-22-rerun-c/REPORT.md),
+[method](evals/agent/README.md#re-run-of-c-after-169-171).
 
 ---
 

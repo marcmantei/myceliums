@@ -52,7 +52,8 @@ def cmd_fetch(args) -> int:
 
 def cmd_index(args) -> int:
     only = set(args.repo) if args.repo else None
-    prep.index(config.load_repos(), args.myc, args.models_dir, only, record_only=args.record_only)
+    prep.index(config.load_repos(), args.myc, args.models_dir, only, record_only=args.record_only,
+               default_config=set(args.default_config or []))
     return 0
 
 
@@ -242,6 +243,14 @@ def cmd_export_scale(args) -> int:
         "tasks_file": os.path.relpath(config.tasks_file(), config.EVAL_DIR),
         "notes": args.note or [],
     }
+    if args.rerun_of:
+        # #171: these runs re-run one condition of a committed run; the report
+        # compares them with that run's rows, paired by task.
+        base = config.load_json(config.RESULTS_DIR / args.rerun_of / "meta.json")
+        meta["rerun_of"] = args.rerun_of
+        meta["continuity_exclude"] = base.get("primary_exclude") or {}
+        if args.primary_exclude_reason:  # the base run's confound still holds: keep its primary analysis
+            meta["primary_exclude"] = {k: args.primary_exclude_reason for k in meta["continuity_exclude"]}
     out = report_scale.export(args.label, runs, meta)
     print(f"exported to {out}")
     return 0
@@ -346,6 +355,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--repo", action="append")
     s.add_argument("--record-only", action="store_true",
                    help="describe an existing index (needs its analyze.log) instead of rebuilding it")
+    s.add_argument("--default-config", action="append", metavar="REPO",
+                   help="index this repository with myceliums' default configuration, ignoring its "
+                        "index_exclude_extra in repos.json (#171: Django with tests/)")
     s.set_defaults(fn=cmd_index)
 
     s = sub.add_parser("check-tasks")
@@ -414,6 +426,10 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("export-scale", help="merge the per-budget runs of #163 into one results directory")
     s.add_argument("--label", required=True)
     s.add_argument("--runs", required=True, help="comma-separated run labels, one per budget")
+    s.add_argument("--rerun-of", help="committed results label whose rows these runs are compared with (#171)")
+    s.add_argument("--primary-exclude-reason",
+                   help="with --rerun-of: leave the base run's primary_exclude tasks out of the primary analysis "
+                        "too, for this reason")
     s.add_argument("--date")
     s.add_argument("--myc-commit")
     s.add_argument("--note", action="append")

@@ -79,6 +79,17 @@ C was faster from 10 turns on and cheaper at 10 turns. Over all 30 tasks:
 called the MCP tools in 68 of 81 C sessions and never ran the `myc` CLI from
 Bash.
 
+**Re-run of C after #169, 22 November 2026** (#171; myc at `d1edc390e0c4`,
+Claude Code 2.1.330, 60 graded sessions: condition C on the 30 tasks of #163
+at 10 and 40 turns, one repetition, fresh indexes):
+[report](results/2026-11-22-rerun-c/REPORT.md), [method and
+summary](#re-run-of-c-after-169-171). Compared, paired by task, with the #163
+sessions of none and of the old C. Primary analysis: the same 27 tasks, because
+the Django index again has no `tests/` (#172). At 10 turns C solved 89 %
+(none 85 %, old C 81 %; +4 pp [−7, +15], p = 1 against none); at 40 turns 89 %
+(none 96 %, old C 89 %; −7 pp [−19, +0], p = 0.5). The arms ran about nine
+hours apart.
+
 ## What is measured
 
 **Tasks** ([`tasks/tasks.json`](tasks/tasks.json)): 30 questions over three
@@ -672,7 +683,9 @@ Exploratory, primary analysis (few tasks per group; uncorrected):
 | flow (4) | 50 % → 25 % | 75 % → 50 % | 100 % → 75 % | −25 pp [−50, +0] |
 | config (4) | 100 % → 75 % | 100 % → 100 % | 100 % → 100 % | −8 pp [−25, +0] |
 
-* **With a shell and 10 or more turns, no success gain.** The agent without
+* **With a shell and 10 or more turns, no success gain.** (Re-run after #169
+  in [#171](#re-run-of-c-after-169-171): C at 89 % at both budgets, +4 pp at
+  10 turns and −7 pp at 40 against none, neither significant.) The agent without
   myceliums solved 85 % of the tasks with 10 turns and 96 % with 40; C solved
   81 % and 89 %, the 40-turn F1 difference −0.042 [−0.088, −0.008]
   (uncorrected). At 4 turns C's success gain (+15 pp) is not significant
@@ -728,6 +741,127 @@ python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json exp
 python3 evals/agent/agent_eval.py report my-scale
 ```
 
+## Re-run of C after #169 (#171)
+
+#163 measured C slightly below none at 10 and 40 turns (81 % and 89 % against
+85 % and 96 %, primary analysis, not significant), and two of C's losses were
+answers taken from a partial `trace_flow` result. #169 (PR #170) made every
+graph walk that stops early say so: `trace_flow`, `find_callers` /
+`find_callees` with a depth, `impact_of_change` and `myc callers/callees/impact`
+end a cut result in an `Incomplete (N branch(es) not followed)` block whose
+`Next:` line names the step that continues it (a deeper or wider call, "read
+the source at the lines listed above", "search the source for `X(`"); Vue's
+workspace packages and tsconfig paths now resolve, so calls between its
+packages get edges; the routing block (v3), the server instructions and the
+subagent say graph answers are heuristic. #171 asks whether the #163 shortfall
+disappears.
+
+**Design.** Condition C only, at 10 and 40 turns, 30 tasks × 2 budgets × 1
+repetition = 60 sessions (the approved budget; up to 5 retries for technical
+failures, none needed). Everything else as in #163: `tasks/tasks-scale.json`
+(sha256 `5c5164668ae6…`, the file the #163 results are graded against; it
+differs from the freeze `fd0f92ee8148…` only by the optional item of the #163
+review), the #153 prompt with the budget stated at 10 turns and an unstated
+cap at 40, timeouts 360 and 480 s, `claude-sonnet-5-5` at `--effort medium`,
+Claude Code 2.1.330, `Read`/`Grep`/`Glob`/`Bash`, the isolation, and
+`myc setup-claude --scope project --no-agent`, at the same working paths. Per
+session the prompt was compared byte for byte with the #163 one (identical in
+60 of 60), and the command line differed only in temporary paths. The `none`
+and old `C` rows are the committed #163 sessions, paired by task; no session of
+#163 was re-run. `report` reads them from `results/2026-11-22-scale/`.
+
+**Binary and indexes.** `myc` built in release mode from `d1edc390e0c4`
+(sha256 `4f59a4b2ada3…`). Both indexes were built fresh by it
+(`myc analyze --strict-embeddings`): Vue with the #163 configuration (15,750
+symbols, all embedded; 20,566 relationships against 19,544), Django with the
+#153/#163 one, without `tests/` (12,443 symbols, all embedded). The plan was a
+Django index with `tests/`, in myceliums' default configuration
+(`index --default-config django`): it parsed 41,842 symbols, embedded all of
+them in 8,386 s, and then community detection had not finished after more than
+1.5 hours; the build was stopped and the problem filed as #172. So the confound
+of #163 remains: in C myceliums had no data for the three Django `tests`
+tasks, and the primary analysis is the same 27 tasks; the 30-task numbers are
+given alongside. Index fingerprints (sha256 over the sorted sha256 of every
+index file) are in the report's notes.
+
+**Hints.** `aeval/hints.py` reads each C transcript: the myceliums results (MCP
+calls and `myc` runs in Bash) that carry an `Incomplete` block or a structured
+`incomplete`, and whether a tool call made after the result arrived takes one
+of the `Next` steps, judged by the kind of call (the same myceliums tool; a
+`Read`, `Grep` or non-`myc` Bash call for "read the source"; a `Grep` or Bash
+call containing `X` for "search the source for `X(`"), not by its exact
+arguments. Run over the 90 C transcripts of #163 it finds no block, as
+expected for the old binary.
+
+**Results, 22 November 2026** ([report](results/2026-11-22-rerun-c/REPORT.md)).
+Primary analysis, 27 tasks; brackets: 95 % paired bootstrap intervals over
+tasks; McNemar's exact test per budget; **nothing corrected for multiple
+comparisons** (two budgets, two baselines, two task views, several metrics):
+
+| Per session | 10 turns: none (#163) | C (#163) | C (#171) | 40 turns: none (#163) | C (#163) | C (#171) |
+|---|---:|---:|---:|---:|---:|---:|
+| Success (F1 ≥ 0.8) | 85 % | 81 % | 89 % | 96 % | 89 % | 89 % |
+| … C (#171) − none, McNemar | | | +4 pp [−7, +15], 2 : 1, p = 1 | | | −7 pp [−19, +0], 0 : 2, p = 0.5 |
+| … C (#171) − C (#163), McNemar | | | +7 pp [−7, +22], 3 : 1, p = 0.63 | | | +0 pp, no discordant task |
+| Mean F1 | 0.880 | 0.832 | 0.927 | 0.971 | 0.930 | 0.942 |
+| … C (#171) − none | | | +0.047 [−0.026, +0.144] | | | −0.030 [−0.069, +0.003] |
+| Sessions with ≥ 1 myceliums call | 0 % | 85 % | 85 % | 0 % | 85 % | 81 % |
+| Input tokens (C (#171) ÷ none) | 83,926 | 91,192 | 1.04× [0.84×, 1.27×] | 100,535 | 132,074 | 1.39× [1.05×, 1.79×] |
+| Output tokens (C (#171) ÷ none) | 3,745 | 2,412 | 0.73× [0.59×, 0.87×] | 4,147 | 3,619 | 0.86× [0.74×, 0.98×] |
+| Cost, USD, CLI estimate (C (#171) ÷ none) | 0.091 | 0.071 | 0.88× [0.72×, 1.05×] | 0.102 | 0.100 | 1.04× [0.88×, 1.21×] |
+| Wall time, s (C (#171) ÷ none) | 30.3 | 20.9 | 0.74× [0.62×, 0.86×] | 35.4 | 29.6 | 1.01× [0.77×, 1.30×] |
+
+All 30 tasks: success 87 % / 83 % / 90 % at 10 turns (C (#171) − none +3 pp
+[−7, +13]) and 97 % / 87 % / 90 % at 40 (−7 pp [−17, +0]).
+
+* **At 10 turns the shortfall did not recur.** C solved 89 % against none's
+  85 % and the old C's 81 %; neither difference is significant (2 : 1 and
+  3 : 1 discordant tasks). C was faster than none (0.74× wall time).
+* **At 40 turns C still solved two tasks fewer than none**, the same two as in
+  #163: `django-flow-runserver-import-string` (F1 0.64; it read the source
+  after the hint and still missed 8 functions of the exception-handling
+  branch) and `vue-amb-reactivity-warn` (F1 0.68, 22 names too many). Mean F1
+  −0.030 [−0.069, +0.003] against #163's −0.042 [−0.088, −0.008]. At 40 turns
+  C was neither faster (1.01×) nor cheaper (1.04×) than none, unlike #163
+  (0.84× wall time).
+* **The hints reached the agent, and it often took them.** 45 of 60 sessions
+  received at least one result with an `Incomplete` block (63 results); for 39
+  of them a later call took a named `Next` step, and 39 of the 45 sessions read
+  the source after a hint. In the 10-turn loss on
+  `django-flow-runserver-import-string` it did not: it answered from two
+  `trace_flow` calls although the block said three calls had no edge and
+  named "read the source at the lines listed above", and gave the #163 answer
+  (F1 0.48). The `myc` CLI was again never run from Bash.
+* **Exploratory, per type** (primary analysis, uncorrected): the 3 Vue `tests`
+  tasks went from 0 % (old C) to 67 % at 10 turns; `flow` at 10 turns from
+  50 % to 75 % (none 75 %); one `transitive_callers` task fell below 0.8 at 10
+  turns (`vue-tc-code-frame`, F1 0.76).
+
+Caveats: the arms without myceliums and the old C ran on the same day about
+nine hours earlier (10:34-11:12 UTC against 20:06-20:24 UTC), not interleaved,
+so any drift of the model behind the alias or of the service counts into the
+differences. One repetition; the gold labels of `tasks-scale` were derived by
+an agent and are not reviewed (#164 left this set out). The 4-turn budget was
+not re-run.
+
+Session accounting: 60 sessions, every one graded on its first attempt (no
+retries, no timeouts, no turn-limit hits); two probe sessions against the
+mock API used no model.
+
+```bash
+export AEVAL_CACHE=~/.cache/myceliums-agent-eval-171 AEVAL_WORK_ROOT=/private/tmp/aeval153
+python3 evals/agent/agent_eval.py index --repo vue
+python3 evals/agent/agent_eval.py index --repo django   # --default-config django: with tests/, did not finish (#172)
+for b in 10 40; do
+  python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json run --label my-rerun-t$b \
+      --conditions C --reps 1 --max-turns $b --timeout $([ $b = 10 ] && echo 360 || echo 480) \
+      $([ $b = 10 ] && echo --prompt-budget) --bash --max-retries 0 --max-sessions 30
+done
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json export-scale --label my-rerun \
+    --runs my-rerun-t10,my-rerun-t40 --rerun-of 2026-11-22-scale --primary-exclude-reason "..."
+python3 evals/agent/agent_eval.py report my-rerun
+```
+
 ## Tool-selection eval
 
 [`toolsel/intents.json`](toolsel/intents.json) holds 56 natural-language
@@ -768,6 +902,12 @@ passes and the most frequent confusions go to `TOOLSEL.md`.
   session found a TypeScript package and node outside its PATH and built its
   own call graph; no session read the eval's task files, gold sets or index
   cache (every transcript was searched for those paths).
+* Re-run of C (#171): one condition, two budgets, one repetition; the
+  baselines are the #163 sessions from about nine hours earlier, so time drift
+  is not controlled. The Django index still has no `tests/` (#172), so the
+  three Django `tests` tasks stay out of the primary analysis. Following a
+  `Next` step is judged by the kind of the later call, not by its arguments
+  or by whether it changed the answer. The labels are not reviewed.
 * Outcome eval (#153): a pilot. #163 answers its open question with a shell
   and more turns: with 10 or 40 turns myceliums did not raise success, and C
   was faster (0.69× and 0.84× wall time, primary analysis) and at 10 turns

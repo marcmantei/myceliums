@@ -86,6 +86,30 @@ no data for them. Primary analysis, 27 tasks:
 > yet reviewed by a person, 20 of the 30 tasks not calibrated, and again static
 > call-graph questions for 26 of the 30 tasks.
 
+A re-run of C after #169 ([#171](../../evals/agent/README.md#re-run-of-c-after-169-171),
+22 November 2026, [report](../../evals/agent/results/2026-11-22-rerun-c/REPORT.md))
+repeated condition C at 10 and 40 turns (60 sessions, one repetition) with
+myc built from main after #169 and fresh indexes, and compared it, paired by
+task, with the #163 sessions. The Django index again has no `tests/` (with
+it, the analysis did not finish: #172), so the primary analysis is the same 27
+tasks:
+
+| Budget | Success none / C (#163) / C (#171) | C (#171) − none (95 % CI, McNemar) | C (#171) − C (#163) | Mean F1 none / C (#163) / C (#171) | Cost C (#171) ÷ none | Wall time C (#171) ÷ none |
+|---|---:|---:|---:|---:|---:|---:|
+| 10 turns, stated | 85 % / 81 % / 89 % | +4 pp [−7, +15], p = 1 | +7 pp [−7, +22], p = 0.63 | 0.880 / 0.832 / 0.927 | 0.88× [0.72×, 1.05×] | 0.74× [0.62×, 0.86×] |
+| 40 turns, not stated | 96 % / 89 % / 89 % | −7 pp [−19, +0], p = 0.5 | +0 pp, no discordant task | 0.971 / 0.930 / 0.942 | 1.04× [0.88×, 1.21×] | 1.01× [0.77×, 1.30×] |
+
+> At 10 turns the #163 shortfall did not recur (89 % against 85 % without
+> myceliums, not significant). At 40 turns C still solved the same two tasks
+> fewer than the agent without it; the mean F1 difference was −0.030 [−0.069,
+> +0.003]. The `Incomplete` block reached the agent in 45 of 60 sessions, and a
+> later call took one of the named `Next` steps for 39 of its 63 results; in the
+> 10-turn Django call-chain loss the agent answered without the "read the
+> source" step it was given. None of this is corrected for multiple
+> comparisons, the arms ran about nine hours apart (time drift), there is one
+> repetition, and the labels are not reviewed. The 4-turn budget was not
+> re-run.
+
 This guide describes five ways to route an agent to myceliums, from soft to
 hard, and what `myc setup-claude` installs for each.
 
@@ -95,7 +119,7 @@ hard, and what `myc setup-claude` installs for each.
 |---|---|---|---|---|
 | 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | together with layer 3 (variant C): myceliums used in 100 % of sessions instead of 80 %, first call a graph query; not measured alone | +348 tokens per request | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | variant A: myceliums used in 80 % of sessions (pilot with 54 deferred tools: 0 %; not a controlled comparison) | the schemas are in every request (A's first prompt: 10,162 tokens) | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
-| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see. Since #152 it adds a context line: in #153 it reached the model in 11 of 11 C sessions, and the grep hook added a hint to 14 of 17 Grep calls; in #163 (with Bash) the context line reached 90 of 90 C sessions and the hook added a hint to 205 of 341 Grep or Bash `grep` calls, but the agent never ran the suggested `myc` command | a few ms per Grep (400 ms cap) | `myc setup-claude` |
+| 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see. Since #152 it adds a context line: in #153 it reached the model in 11 of 11 C sessions, and the grep hook added a hint to 14 of 17 Grep calls; in #163 (with Bash) the context line reached 90 of 90 C sessions and the hook added a hint to 205 of 341 Grep or Bash `grep` calls, but the agent never ran the suggested `myc` command; in the #171 re-run: 60 of 60 sessions, hints on 172 of 266 calls, again no `myc` run from Bash | a few ms per Grep (400 ms cap) | `myc setup-claude` |
 | 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | never called (0 of 38 sessions): with the tools in the main context the agent queries them itself | about 1,860 tokens per request more than C (Agent tool and its agent list) | `myc setup-claude` |
 | 5. Custom harness | Your own agent loop prefetches a context pack (`myc context --json`) and injects it before the model call | not measured | you maintain it | [`examples/agent-sdk-prefetch/`](../../examples/agent-sdk-prefetch/) |
 
@@ -226,7 +250,10 @@ values, log messages and non-code files. One line says graph answers are
 heuristic: when completeness matters, or a result says `Incomplete` or lists
 calls without an edge, read the source before answering (#169, after the
 #163 sessions that answered from one partial `trace_flow` result; the MCP
-server instructions and the `code-explorer` subagent say the same). The
+server instructions and the `code-explorer` subagent say the same). In the
+#171 re-run the same 10-turn Django call-chain question was again answered
+from `trace_flow` alone, without the "read the source" step its `Incomplete`
+block named, with the #163 answer (F1 0.48). The
 block is versioned (`v3` in its first comment line); everything between the markers is replaced on re-run,
 and text outside them is never touched. Put your own rules outside the
 markers.
