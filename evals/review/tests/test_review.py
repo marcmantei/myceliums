@@ -388,6 +388,128 @@ class Apply(unittest.TestCase):
         self.assertIn("real call", gg.manual[0])
 
 
+class OwnerPolicy(Apply):
+    """--policy owner-2026-11-22: truthful provenance per item and per unit."""
+
+    POLICY = "owner-2026-11-22"
+
+    def agent(self, item_id, decision, fix=None, reviewer="agent:second-check"):
+        rec = {"id": item_id, "decision": decision, "reason": "checked the code", "evidence": [],
+               "reviewer": reviewer}
+        if fix:
+            rec["suggested_fix"] = fix
+        self.agent_recs[item_id] = rec
+
+    def setUp(self):
+        super().setUp()
+        self.agent_recs: dict[str, dict] = {}
+        self.pre = confirmed(self.items)
+        q = json.loads((export.REAL_REPOS / "queries.json").read_text())["queries"]
+        self.q_human, self.q_mixed = q[0]["id"], q[1]["id"]
+        tasks = json.loads((export.AGENT / "tasks" / "tasks.json").read_text())["tasks"]
+        self.t_unsure, self.t_fix = tasks[0]["id"], tasks[1]["id"]
+        self.flagged = [it for it in self.items if any(
+            it["id"].startswith(f"{ds}:{u}:") for ds, u in
+            (("retrieval-queries", self.q_human), ("agent-tasks", self.t_unsure), ("agent-tasks", self.t_fix)))]
+        self.pre.update(doubtful(self.flagged))
+        self.sample = common.Sample({"seed": 164, "rate": 0.15, "datasets": {}})
+        self.sample.sync(self.items, self.pre)
+
+    def run_policy(self):
+        plan = apply.Plan(self.items, self.pre, self.store, self.sample, "human:marc",
+                          policy=self.POLICY, agent_decisions=self.agent_recs)
+        out = apply.run(plan, self.items, write=True, today="2026-11-22",
+                        provenance_path=self.root / "provenance.jsonl")
+        return plan, out
+
+    def test_provenance_classes(self):
+        for it in self.flagged:
+            if it["id"].startswith(f"retrieval-queries:{self.q_human}:"):
+                self.decide(it["id"], "correct")  # Marc decided this query in full
+        t_unsure = [it for it in self.flagged if it["id"].startswith(f"agent-tasks:{self.t_unsure}:")]
+        for n, it in enumerate(t_unsure):
+            self.agent(it["id"], "unsure" if n == 0 else "correct")
+        t_fix = [it for it in self.flagged if it["id"].startswith(f"agent-tasks:{self.t_fix}:")]
+        gold = next(it for it in t_fix if it["kind"] == "task-gold")
+        for it in t_fix:
+            self.agent(it["id"], "correct")
+        self.agent(gold["id"], "wrong", fix="optional — a thin wrapper")
+        held = self.sample.ids("graph-held-out")
+        for n, rid in enumerate(held):
+            if n % 2:
+                self.decide(rid, "correct")
+            else:
+                self.agent(rid, "correct")
+        self.decide(held[1], "correct")
+        self.agent(held[1], "wrong")  # a human decision wins over an agent's
+        q_mixed = [it for it in self.items if it["id"].startswith(f"retrieval-queries:{self.q_mixed}:")]
+        for it in q_mixed:
+            if it["id"] in set(self.sample.ids("retrieval-queries")):
+                self.agent(it["id"], "correct")
+
+        plan, (outcomes, _, _) = self.run_policy()
+        queries = {q["id"]: q for q in json.loads((export.REAL_REPOS / "queries.json").read_text())["queries"]}
+        self.assertEqual(queries[self.q_human]["reviewed_by"], "human:marc")
+        self.assertIsNone(queries[self.q_mixed]["reviewed_by"])  # not all human: real-repo-eval would say "human"
+        tasks = {t["id"]: t for t in json.loads((export.AGENT / "tasks" / "tasks.json").read_text())["tasks"]}
+        self.assertIsNone(tasks[self.t_unsure].get("reviewed_by"))
+        self.assertEqual(tasks[self.t_fix]["reviewed_by"], "agent:second-check, per marc's policy")
+        name = gold["id"].split(":gold:")[1]
+        self.assertIn(name, [o["name"] for o in tasks[self.t_fix]["optional"]])
+        self.assertIn("[agent:second-check, per marc's policy]", tasks[self.t_fix]["rationale"])
+        ho = json.loads((export.GRAPH_GOLD / "held-out" / "real-repos.json").read_text())
+        n_h, n_a = len(held) // 2, len(held) - len(held) // 2
+        self.assertEqual(ho["reviewed_by"], (
+            f"mixed, policy {self.POLICY}: human:marc ×{n_h}; agent:prescreen, accepted by marc "
+            f"(sample: {plan.sample_checked} human-checked confirmed items, 0 errors) ×{52 - len(held)}; "
+            f"agent:second-check, per marc's policy ×{n_a}"))
+        unsure = [i for o in outcomes for i in o.unsure_ids]
+        self.assertEqual(unsure, [t_unsure[0]["id"]])
+
+        prov = {r["id"]: r for r in common.read_jsonl(self.root / "provenance.jsonl")}
+        self.assertEqual(len(prov), len(self.items))
+        decided_by_marc = {rid for rid, rec in self.store.state.items() if rec["decision"] in ("correct", "wrong")}
+        self.assertEqual({rid for rid, r in prov.items() if r["class"] == "human"}, decided_by_marc)
+        self.assertEqual(prov[held[1]]["final"], "correct")
+        self.assertEqual(prov[t_unsure[0]["id"]]["final"], "unsure")
+        self.assertEqual(prov[t_unsure[0]["id"]]["class"], "second-check")  # who said unsure
+        for r in prov.values():
+            if r["class"] == "prescreen":
+                self.assertNotIn(r["id"], set(plan.review.sampled))
+                self.assertTrue(r["by"].startswith("agent:prescreen, accepted by marc"))
+        readme = (export.AGENT / "README.md").read_text()
+        self.assertIn(f"policy `{self.POLICY}`", readme)
+        self.assertIn("no person looked at this item", readme)
+
+    def test_unsure_by_marc_without_second_check_stays_unsure(self):
+        it = self.flagged[0]
+        self.decide(it["id"], "unsure")
+        _, (outcomes, _, _) = self.run_policy()
+        self.assertIn(it["id"], [i for o in outcomes for i in o.unsure_ids])
+
+    def test_policy_needs_a_complete_prescreen(self):
+        partial = {k: v for k, v in self.pre.items() if not k.startswith("graph-gold:")}
+        sample = common.Sample({"seed": 164, "rate": 0.15, "datasets": {}})
+        sample.sync(self.items, partial)
+        with self.assertRaises(SystemExit):
+            apply.Plan(self.items, partial, self.store, sample, "human:marc", policy=self.POLICY)
+        with self.assertRaises(SystemExit):
+            apply.Plan(self.items, self.pre, self.store, self.sample, "human:marc", policy="no-such-policy")
+
+    def test_agent_file_validation(self):
+        d = self.root / "agent-check"
+        d.mkdir()
+        ids = [it["id"] for it in self.items[:3]]
+        lines = [{"id": ids[0], "decision": "correct", "reviewer": "agent:second-check"},
+                 {"id": ids[1], "decision": "correct", "reviewer": "marc"},
+                 {"id": ids[2], "decision": "maybe", "reviewer": "agent:second-check"},
+                 {"id": "nope", "decision": "correct", "reviewer": "agent:second-check"}]
+        (d / "decisions-1.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+        recs, warnings = apply.load_agent_decisions(d, self.by_id)
+        self.assertEqual(list(recs), [ids[0]])
+        self.assertEqual(len(warnings), 3)
+
+
 class Writers(unittest.TestCase):
     def test_dataset_writers_round_trip(self):
         for lang in export.GRAPH_LANGUAGES:

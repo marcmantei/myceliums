@@ -118,6 +118,53 @@ unit stays unreviewed.
   changed `graph-gold/<language>.json` needs `graph-eval --update-baseline` in
   the same PR, or the Retrieval Quality gate fails.
 
+### Owner policy `owner-2026-11-22`
+
+```bash
+python3 evals/review/apply.py --policy owner-2026-11-22 --dry-run
+python3 evals/review/apply.py --policy owner-2026-11-22
+```
+
+Marc's policy for the items he did not decide himself:
+
+- pre-screen-confirmed items outside the sample are accepted as correct on
+  the strength of the sample he checked;
+- every other item he did not decide, and every item he marked unsure, is
+  decided by an independent second-check agent. Its decisions are in
+  `agent-check/decisions-*.jsonl`, one JSON object per line:
+  `{"id", "decision": correct|wrong|unsure, "reason", "evidence", "suggested_fix"?, "reviewer": "agent:second-check"}`.
+  A record whose reviewer is not an `agent:` identity is refused. Marc's own
+  correct or wrong decision always wins over an agent's.
+
+Every item gets one provenance class. `provenance.jsonl` records it per item
+as `{id, dataset, final, class, by}`:
+
+| class | `by` | meaning |
+|---|---|---|
+| human | `human:marc` | Marc decided the item |
+| prescreen | `agent:prescreen, accepted by marc (sample: N human-checked confirmed items, E errors)` | accepted by the policy; no person looked at it |
+| second-check | `agent:second-check, per marc's policy` | decided by the second-check agent; no person looked at it |
+
+A wrong decision is applied as before, from Marc's comment or from the agent's
+`suggested_fix`. Fixes record their class in the rationale note. An item whose
+final decision is unsure, or that is still undecided, is listed and keeps its
+unit unreviewed.
+
+A unit's `reviewed_by` names the classes of its items:
+
+- `human:marc` only when Marc decided every item;
+- the single class string when the items share one class;
+- otherwise `mixed, policy owner-2026-11-22: <class> ×n; …`.
+
+Retrieval queries are the exception. `real-repo-eval` reports any
+`reviewed_by` as "reviewed by a human" and refuses agent reviewers, so a query
+is marked only when Marc decided all of its items; otherwise its provenance
+lives only in `provenance.jsonl`.
+
+The policy needs a complete pre-screen and the sample it was drawn from. The
+summary printed by `apply.py` and the protocol it writes into the dataset
+READMEs count items per class.
+
 Decisions are tied to the claim they were made on (`claim_digest`); a decision
 on a claim that has since changed is ignored and the item is open again.
 
@@ -126,7 +173,7 @@ on a claim that has since changed is ignored and the item is open again.
 | file | committed |
 |---|---|
 | `export.py`, `serve.py`, `apply.py`, `common.py`, `static/`, `tests/` | yes |
-| `prescreen/*.jsonl`, `sample.json`, `decisions.jsonl` | yes, once written: they are the review record |
+| `prescreen/*.jsonl`, `sample.json`, `decisions.jsonl`, `agent-check/`, `provenance.jsonl` | yes, once written: they are the review record |
 | `items.jsonl` | no (generated; contains third-party snippets) |
 
 Tests: `python3 -m unittest discover -s evals/review/tests -v` (run by the
