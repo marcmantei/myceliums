@@ -276,6 +276,8 @@ def apply_graph_gold(plan: Plan, items: list[dict]) -> tuple[dict[Path, str], Ou
         unit = Unit(plan, out, lang)
         mine = [it for it in items if local_id(it).startswith(f"{lang}:")]
         remove_symbols, remove_calls, retarget = set(), set(), {}
+        symbol_ids = {sym["id"] for sym in data["symbols"]}
+        edges = {(c["from"], c["to"]) for c in data["calls"]}
         for it in mine:
             if unit.take(it) != "wrong":
                 continue
@@ -294,8 +296,14 @@ def apply_graph_gold(plan: Plan, items: list[dict]) -> tuple[dict[Path, str], Ou
                 frm, to = kind_key.split("->", 1)
                 rep = [d for d in parse_directives(plan.comment(it)) if d[0] == "replace" and "::" in d[1]]
                 if rep:
-                    retarget[(frm, to)] = rep[0][1]
-                    unit.fixed(f"retargeted {frm} -> {rep[0][1]}")
+                    new_to = rep[0][1]
+                    if new_to not in symbol_ids:
+                        unit.manual(it, f"replace target {new_to} is not a gold symbol of {lang}.json")
+                    elif (frm, new_to) in edges or (frm, new_to) in {(a, b) for (a, _), b in retarget.items()}:
+                        unit.manual(it, f"the edge {frm} -> {new_to} is already in the gold set")
+                    else:
+                        retarget[(frm, to)] = new_to
+                        unit.fixed(f"retargeted {frm} -> {new_to}")
                 else:
                     remove_calls.add((frm, to))
                     unit.fixed(f"removed edge {frm} -> {to}")
@@ -482,7 +490,10 @@ def protocol_section(plan: Plan, outcomes: list[Outcome], todo: list[str], today
         "marked every item confirmed, doubtful or wrong (no pre-screen counts as doubtful). The reviewer "
         "decided every doubtful and wrong item and a seeded random sample of the confirmed ones per dataset "
         f"(seed {s.seed}, {round(s.rate * 100)} % per round, widened while the rule failed; `evals/review/sample.json` "
-        f"lists the drawn ids). Rule: {plan.rule}; an unsure decision counts as an error. Labels decided wrong "
+        f"lists the drawn ids; a sample is drawn only once the pre-screen covers the whole dataset). "
+        f"Rule: {plan.rule}; an unsure decision counts as an error. The sample is widened after looking at "
+        "its result, so the rule is a sequential check and the reported Wilson bound is not an exact "
+        "95 % guarantee. Labels decided wrong "
         "were removed or corrected as the reviewer's comment says (`evals/review/decisions.jsonl`). "
         f"`reviewed_by` is `{plan.reviewer}` where every item was decided, "
         f"`{plan.reviewer} (sampled acceptance, …)` where confirmed items were accepted by the sample, and "
@@ -593,6 +604,10 @@ def main(argv: list[str] | None = None) -> int:
         sample = common.Sample(json.loads(args.sample.read_text(encoding="utf-8")))
     else:
         sample = common.Sample({"seed": common.DEFAULT_SEED, "rate": common.SAMPLE_RATE, "datasets": {}})
+    try:  # the same population check the review page makes; nothing is saved here
+        sample.sync(items, prescreen, lambda rid: decisions.effective(by_id[rid]) is not None)
+    except common.SampleConflict as err:
+        raise SystemExit(f"error: {err}")
     stale = decisions.stale(by_id)
     if stale:
         print(f"note: {len(stale)} decisions refer to claims that changed or vanished; ignored", file=sys.stderr)

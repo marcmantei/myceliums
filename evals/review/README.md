@@ -64,7 +64,12 @@ as doubtful. A later line for the same id replaces an earlier one.
 ## Queue, sample and acceptance rule
 
 The queue holds every doubtful and wrong item plus a seeded random 15 % sample
-of the confirmed items of each dataset. `sample.json` records the seed
+of the confirmed items of each dataset. A dataset's sample is drawn only once
+its pre-screen covers every item; until then the summary shows it as
+"pre-screen incomplete" and nothing in it can be accepted by sample. If the
+confirmed items change after the draw (a re-run pre-screen), the sample is
+redrawn when none of its items has a decision yet; when some have,
+`serve.py` and `apply.py` refuse to run and say how to start that sample over. `sample.json` records the seed
 (default 164), the rate and the drawn ids; the sample is a prefix of a seeded
 permutation of the confirmed ids, so it is reproducible.
 
@@ -74,19 +79,22 @@ interval of its error rate is below 10 %. Unsure counts as an error. If the
 bound is 10 % or more, the page widens the sample by another 15 % of the
 confirmed items and they appear in the queue. With no errors the bound drops
 below 10 % at 35 decided items, so a small dataset is in effect reviewed in
-full. The summary page (S) shows per dataset reviewed/total, the sample's
+full. Widening after looking at the result makes this a sequential check: the
+Wilson bound is a guide, not an exact 95 % guarantee. The summary page (S) shows per dataset reviewed/total, the sample's
 error rate with its Wilson interval and the status.
 
 ## Comment directives (how N becomes a fix)
 
-N alone removes a list entry (a retrieval label, a CALLS edge, a gold symbol,
-a task answer). A comment line in one of these forms corrects instead:
+N without a comment (Esc in the comment box) removes a list entry (a
+retrieval label, a CALLS edge, a gold symbol, a task answer). A pre-filled
+`suggested_fix` is applied only if it is kept and saved with Enter; Esc
+discards it. A comment line in one of these forms corrects instead:
 
 | item kind | directive |
 |---|---|
 | retrieval label | `replace: path/file.py::Class.method — why` |
 | retrieval "missing?" | `add: path/file.py::Class.method — why` (one line each) |
-| graph CALLS edge | `replace: path/file::Symbol` (the right target) |
+| graph CALLS edge | `replace: path/file::Symbol` (the right target; must be a gold symbol of the same file set, and the new edge must not exist yet) |
 | held-out call site | `targets: path/file.py::name:LINE, …` or `targets: none` |
 | task gold answer | `optional — why` (move it to the optional answers) |
 

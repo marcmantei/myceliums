@@ -20,6 +20,7 @@ Python 3.10+ standard library only.
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import secrets
 import sys
@@ -46,8 +47,10 @@ class App:
         by_id = {it["id"]: it for it in items}
         prescreen, self.warnings = common.load_prescreen(prescreen_dir, by_id)
         self.sample_file = sample_file
-        sample = common.Sample.load_or_create(sample_file, items, prescreen, seed, rate)
         decisions = common.DecisionStore(decisions_file)
+        sample = common.Sample.load_or_create(
+            sample_file, items, prescreen, seed, rate,
+            decided=lambda rid: rid in by_id and decisions.effective(by_id[rid]) is not None)
         self.review = common.Review(items, prescreen, decisions, sample, max_upper)
         self.reviewer = reviewer
         self.token = secrets.token_urlsafe(24)
@@ -154,7 +157,7 @@ def make_handler(app: App, port_ref: list[int]):
         def do_POST(self):
             if not self._host_ok():
                 return self._send(403, b"forbidden", "text/plain")
-            if self.headers.get("X-Review-Token") != app.token:
+            if not hmac.compare_digest(self.headers.get("X-Review-Token", "").encode(), app.token.encode()):
                 return self._json(403, {"error": "bad token"})
             if not self.headers.get("Content-Type", "").startswith("application/json"):
                 return self._json(415, {"error": "json only"})
@@ -187,8 +190,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--reviewer", default="marc")
     args = ap.parse_args(argv)
 
-    app = App(args.items, args.prescreen, args.decisions, args.sample, args.seed, args.rate,
-              args.max_upper, args.reviewer)
+    try:
+        app = App(args.items, args.prescreen, args.decisions, args.sample, args.seed, args.rate,
+                  args.max_upper, args.reviewer)
+    except common.SampleConflict as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 2
     port_ref = [0]
     server = HTTPServer(("127.0.0.1", args.port), make_handler(app, port_ref))
     port_ref[0] = server.server_address[1]

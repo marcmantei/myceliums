@@ -33,6 +33,10 @@ def confirmed(items: list[dict]) -> dict[str, dict]:
     return {it["id"]: {"id": it["id"], "verdict": "confirmed", "reason": "", "evidence": []} for it in items}
 
 
+def doubtful(items: list[dict]) -> dict[str, dict]:
+    return {it["id"]: {"id": it["id"], "verdict": "doubtful", "reason": "", "evidence": []} for it in items}
+
+
 class Export(unittest.TestCase):
     def test_deterministic_and_unique(self):
         co = export.Checkouts(fixed={})  # no checkouts: real-repo snippets are marked missing
@@ -92,7 +96,9 @@ class Export(unittest.TestCase):
 class Sampling(unittest.TestCase):
     def setUp(self):
         self.items = fake_items("graph-held-out", 100) + fake_items("agent-tasks", 20)
-        self.pre = confirmed(self.items[:80])  # 80 confirmed, the rest unscreened
+        # graph-held-out fully pre-screened (80 confirmed, 20 doubtful); agent-tasks unscreened
+        self.pre = confirmed(self.items[:80])
+        self.pre.update(doubtful(self.items[80:100]))
 
     def test_seeded_and_recorded(self):
         with tempfile.TemporaryDirectory() as d:
@@ -114,9 +120,9 @@ class Sampling(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             s = common.Sample.load_or_create(Path(d, "s.json"), self.items, self.pre)
             r = common.Review(self.items, self.pre, common.DecisionStore(Path(d, "d.jsonl")), s)
-            unscreened = [it["id"] for it in self.items[80:]]
-            self.assertTrue(all(common.verdict_of(i, self.pre) == "doubtful" for i in unscreened))
-            self.assertEqual(set(r.queue), set(unscreened) | set(s.ids("graph-held-out")))
+            flagged = [it["id"] for it in self.items[80:]]
+            self.assertTrue(all(common.verdict_of(i, self.pre) == "doubtful" for i in flagged))
+            self.assertEqual(set(r.queue), set(flagged) | set(s.ids("graph-held-out")))
             self.assertEqual(len(r.queue), 40 + 12)
 
     def test_widening_extends_the_same_permutation(self):
@@ -151,6 +157,51 @@ class Sampling(unittest.TestCase):
             self.assertLess(row["wilson95"][1], 0.10)
             store.record(r.by_id[ids[0]], "unsure")  # unsure counts as an error
             self.assertEqual(r.dataset_summary("graph-gold")["sample_errors"], 1)
+
+    def test_no_sample_until_prescreen_covers_the_dataset(self):
+        items = fake_items("graph-gold", 100)
+        partial = confirmed(items[:50])
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d, "s.json")
+            s = common.Sample.load_or_create(path, items, partial)
+            self.assertNotIn("graph-gold", json.loads(path.read_text())["datasets"])
+            r = common.Review(items, partial, common.DecisionStore(Path(d, "d.jsonl")), s)
+            self.assertEqual(r.dataset_summary("graph-gold")["status"], "prescreen-incomplete")
+            self.assertEqual(r.dataset_summary("graph-gold")["sample_size"], 0)
+            self.assertEqual(len(r.queue), 50)  # only the unscreened (doubtful) items
+            full = dict(partial, **confirmed(items[50:]))
+            s = common.Sample.load_or_create(path, items, full)
+            self.assertEqual(len(s.ids("graph-gold")), 15)
+            self.assertEqual(json.loads(path.read_text())["datasets"]["graph-gold"]["confirmed_when_drawn"], 100)
+
+    def test_prescreen_that_changes_after_the_draw(self):
+        items = fake_items("graph-gold", 100)
+        pre = dict(confirmed(items[:80]), **doubtful(items[80:]))
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d, "s.json")
+            store = common.DecisionStore(Path(d, "d.jsonl"))
+            by_id = {it["id"]: it for it in items}
+            decided = lambda rid: store.effective(by_id[rid]) is not None  # noqa: E731
+            s = common.Sample.load_or_create(path, items, pre, decided=decided)
+            first = s.ids("graph-gold")
+            self.assertEqual(len(first), 12)
+            # a re-run pre-screen confirms ten more items: no decisions yet, so the sample is redrawn
+            grown = dict(pre, **confirmed(items[80:90]))
+            s = common.Sample.load_or_create(path, items, grown, decided=decided)
+            redrawn = s.ids("graph-gold")
+            perm = common.permutation([it["id"] for it in items[:90]], 164, "graph-gold")
+            self.assertEqual(redrawn, perm[:14])  # ceil(0.15 * 90), drawn from all 90
+            self.assertEqual(json.loads(path.read_text())["datasets"]["graph-gold"]["confirmed_when_drawn"], 90)
+            # once a sampled item is decided, a further change is refused
+            store.record(by_id[redrawn[0]], "correct")
+            more = dict(grown, **confirmed(items[90:]))
+            with self.assertRaises(common.SampleConflict):
+                common.Sample.load_or_create(path, items, more, decided=decided)
+            # and a sample that no longer matches its population accepts nothing
+            stale = common.Sample(json.loads(path.read_text()))
+            r = common.Review(items, more, store, stale)
+            self.assertEqual(r.dataset_summary("graph-gold")["status"], "sample-stale")
+            self.assertFalse(r.sampled)
 
     def test_wilson(self):
         lo, hi = common.wilson(0, 35)
@@ -305,6 +356,28 @@ class Apply(unittest.TestCase):
         self.assertNotIn(name, [g["name"] for g in task["gold"]])
         self.assertIn({"name": name, "why": "reached only through a decorator"}, task["optional"])
         self.assertTrue(any("2026-11-21-outcome" in t and "re-grade" in t for t in todo))
+
+    def test_graph_call_replace_is_validated(self):
+        data = json.loads((export.GRAPH_GOLD / "python.json").read_text())
+        calls = [it for it in self.items if it["kind"] == "graph-call" and it["id"].startswith("graph-gold:python:")]
+        a, b, c = calls[0], calls[1], calls[2]
+        frm_b = b["id"].split(":call:", 1)[1].split("->")[0]
+        existing = next(x["to"] for x in data["calls"] if x["from"] == frm_b)  # an edge frm_b already has
+        frm_c, to_c = c["id"].split(":call:", 1)[1].split("->")
+        free = next(sym["id"] for sym in data["symbols"]
+                    if (frm_c, sym["id"]) not in {(x["from"], x["to"]) for x in data["calls"]})
+        self.decide(a["id"], "wrong", "replace: shop/nowhere.py::ghost")
+        self.decide(b["id"], "wrong", f"replace: {existing}")
+        self.decide(c["id"], "wrong", f"replace: {free}")
+        outcomes, _, _ = self.run_apply()
+        gg = next(o for o in outcomes if o.dataset == "graph-gold")
+        self.assertEqual(gg.wrong_manual, 2)
+        self.assertEqual(gg.wrong_fixed, 1)
+        self.assertTrue(any("not a gold symbol" in m for m in gg.manual))
+        self.assertTrue(any("already in the gold set" in m for m in gg.manual))
+        after = json.loads((export.GRAPH_GOLD / "python.json").read_text())
+        self.assertIn((frm_c, free), {(x["from"], x["to"]) for x in after["calls"]})
+        self.assertNotIn((frm_c, to_c), {(x["from"], x["to"]) for x in after["calls"]})
 
     def test_manual_fix_blocks_review(self):
         trap = next(it for it in self.items if it["kind"] == "graph-trap")

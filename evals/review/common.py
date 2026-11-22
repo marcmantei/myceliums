@@ -230,13 +230,29 @@ def sample_step(n_confirmed: int, rate: float) -> int:
     return math.ceil(n_confirmed * rate) if n_confirmed else 0
 
 
+class SampleConflict(Exception):
+    """The confirmed population changed after part of its sample was decided."""
+
+
+def population_digest(ids: list[str]) -> str:
+    return hashlib.sha256("\n".join(sorted(ids)).encode("utf-8")).hexdigest()[:16]
+
+
 class Sample:
     """The seeded sample of pre-screen-confirmed items, per dataset.
 
-    Stored in ``sample.json``: the seed, the rate, and per dataset the number
-    of confirmed items when it was drawn, the sampled ids and every round
-    (the initial draw and each widening). Widening takes the next items of
-    the same seeded permutation, so the sample is reproducible from the seed.
+    Stored in ``sample.json``: the seed, the rate, and per dataset the
+    population it was drawn from (number and digest of the confirmed ids), the
+    sampled ids and every round (the initial draw and each widening). Widening
+    takes the next items of the same seeded permutation, so the sample is
+    reproducible from the seed.
+
+    A dataset's sample is drawn only once the pre-screen covers every item of
+    the dataset; until then the dataset is "pre-screen incomplete" and nothing
+    is accepted by sample. If the confirmed population later differs from the
+    drawn one, the sample is redrawn when none of its items has a decision
+    yet, and :class:`SampleConflict` is raised when some have: a sample must
+    not be stretched over items that had no chance of being drawn.
     """
 
     def __init__(self, data: dict):
@@ -252,12 +268,13 @@ class Sample:
 
     @classmethod
     def load_or_create(cls, path: Path, items: list[dict], prescreen: dict[str, dict],
-                       seed: int = DEFAULT_SEED, rate: float = SAMPLE_RATE) -> "Sample":
+                       seed: int = DEFAULT_SEED, rate: float = SAMPLE_RATE,
+                       decided=None) -> "Sample":
         if path.exists():
             sample = cls(json.loads(path.read_text(encoding="utf-8")))
         else:
             sample = cls({"seed": seed, "rate": rate, "datasets": {}})
-        changed = sample.sync(items, prescreen)
+        changed = sample.sync(items, prescreen, decided)
         if changed or not path.exists():
             sample.save(path)
         return sample
@@ -269,16 +286,51 @@ class Sample:
                 out.setdefault(it["dataset"], []).append(it["id"])
         return out
 
-    def sync(self, items: list[dict], prescreen: dict[str, dict]) -> bool:
-        """Draw the initial sample for datasets that have none yet. True if changed."""
+    @staticmethod
+    def covered(items: list[dict], prescreen: dict[str, dict]) -> dict[str, bool]:
+        """Per dataset: does the pre-screen cover every item?"""
+        out: dict[str, bool] = {}
+        for it in items:
+            out[it["dataset"]] = out.get(it["dataset"], True) and it["id"] in prescreen
+        return out
+
+    def matches(self, dataset: str, confirmed_ids: list[str]) -> bool:
+        entry = self.data["datasets"].get(dataset)
+        return bool(entry) and entry.get("population_digest") == population_digest(confirmed_ids)
+
+    def sync(self, items: list[dict], prescreen: dict[str, dict], decided=None) -> bool:
+        """Draw, redraw or drop each dataset's sample to match the pre-screen. True if changed.
+
+        ``decided(id) -> bool`` says whether an item has a decision; a
+        population change under a sample with decisions raises SampleConflict.
+        """
+        decided = decided or (lambda _id: False)
+        confirmed = self.confirmed_by_dataset(items, prescreen)
         changed = False
-        for ds, ids in self.confirmed_by_dataset(items, prescreen).items():
-            if ds in self.data["datasets"]:
+        for ds, full in sorted(self.covered(items, prescreen).items()):
+            ids = confirmed.get(ds, [])
+            entry = self.data["datasets"].get(ds)
+            if entry is not None and full and self.matches(ds, ids):
+                continue
+            if entry is not None:
+                done = [i for i in entry["ids"] if decided(i)]
+                if done:
+                    why = ("its pre-screen no longer covers every item" if not full else
+                           f"its confirmed items changed ({entry.get('confirmed_when_drawn')} when drawn, "
+                           f"{len(ids)} now)")
+                    raise SampleConflict(
+                        f"{ds}: the sample was drawn and {len(done)} of its items were decided, but {why}. "
+                        f"Restore the pre-screen the sample was drawn from, or remove the {ds} entry from "
+                        f"sample.json and its sample decisions from decisions.jsonl to start the sample over.")
+                del self.data["datasets"][ds]
+                changed = True
+            if not full or not ids:
                 continue
             k = sample_step(len(ids), self.rate)
             chosen = permutation(ids, self.seed, ds)[:k]
             self.data["datasets"][ds] = {
                 "confirmed_when_drawn": len(ids),
+                "population_digest": population_digest(ids),
                 "ids": chosen,
                 "rounds": [{"added": len(chosen), "at": _now()}],
             }
@@ -292,7 +344,7 @@ class Sample:
     def widen(self, dataset: str, confirmed_ids: list[str]) -> int:
         """Add the next step of the permutation; returns how many were added."""
         entry = self.data["datasets"].get(dataset)
-        if entry is None:
+        if entry is None or not self.matches(dataset, confirmed_ids):
             return 0
         have = set(entry["ids"])
         step = sample_step(len(confirmed_ids), self.rate)
@@ -340,9 +392,12 @@ class Review:
 
     def rebuild(self) -> None:
         self.confirmed = self.sample.confirmed_by_dataset(self.items, self.prescreen)
+        self.covered = Sample.covered(self.items, self.prescreen)
         self.sampled: set[str] = set()
         for ds, ids in self.confirmed.items():
-            self.sampled.update(self.sample.ids(ds, set(ids)))
+            # a sample counts only for the full, unchanged population it was drawn from
+            if self.covered.get(ds) and self.sample.matches(ds, ids):
+                self.sampled.update(self.sample.ids(ds, set(ids)))
         self.queue = [it["id"] for it in self.items
                       if verdict_of(it["id"], self.prescreen) != "confirmed" or it["id"] in self.sampled]
 
@@ -369,7 +424,8 @@ class Review:
             d = self.decision(rid)
             if d:
                 decided[d] += 1
-        sample_ids = [rid for rid in self.sample.ids(ds, set(self.confirmed.get(ds, [])))]
+        sample_ids = [rid for rid in self.sample.ids(ds, set(self.confirmed.get(ds, [])))
+                      if rid in self.sampled]
         s_decided = [self.decision(rid) for rid in sample_ids]
         s_n = sum(d is not None for d in s_decided)
         # Unsure counts as an error: the rule must not accept what the reviewer doubted.
@@ -377,8 +433,12 @@ class Review:
         lo, hi = wilson(s_err, s_n)
         n_confirmed = len(self.confirmed.get(ds, []))
         unsampled = n_confirmed - len(sample_ids)
-        if n_confirmed == 0:
+        if not self.covered.get(ds):
+            status = "prescreen-incomplete"
+        elif n_confirmed == 0:
             status = "no-confirmed"
+        elif not self.sample.matches(ds, self.confirmed[ds]):
+            status = "sample-stale"
         elif s_n < len(sample_ids):
             status = "sample-open"
         elif unsampled == 0:

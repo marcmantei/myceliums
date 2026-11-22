@@ -185,7 +185,9 @@ function renderSummary() {
   cols.forEach(c => tr.appendChild(el("th", null, c)));
   table.appendChild(tr);
   const pct = x => (100 * x).toFixed(1) + " %";
-  const STATUS = { "no-confirmed": "nothing to accept by sample", "sample-open": "sample not fully reviewed",
+  const STATUS = { "prescreen-incomplete": "pre-screen incomplete: no sample drawn yet",
+                   "sample-stale": "pre-screen changed since the sample was drawn: restart the server",
+                   "no-confirmed": "nothing to accept by sample", "sample-open": "sample not fully reviewed",
                    "accepted": "unsampled confirmed items accepted", "widen": "rule failed: sample widened",
                    "all-confirmed-reviewed": "every confirmed item reviewed" };
   for (const d of s.datasets) {

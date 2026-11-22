@@ -46,5 +46,5 @@ table.sum th, table.sum td { border: 1px solid var(--line); padding: 6px 8px; te
 table.sum th:first-child, table.sum td:first-child, table.sum td.st { text-align: left; }
 .st-accepted, .st-all-confirmed-reviewed { color: var(--ok); font-weight: 600; }
 .st-widen { color: var(--bad); font-weight: 600; }
-.st-sample-open { color: var(--warn); }
+.st-sample-open, .st-prescreen-incomplete, .st-sample-stale { color: var(--warn); }
 .done { font-size: 18px; color: var(--ok); }
