@@ -5240,10 +5240,23 @@
      "note": "level 2: initDev -> initCustomFormatter"
     }
    ],
-   "rationale": "Reactivity's unwrap helper: level 1 spans reactivity's handlers and refs and runtime-core; level 2 their callers across runtime-core and runtime-dom. Computed from the vue_edges.js (TypeScript 6.0 type checker, `direct` edges) call graph; 18 items.",
+   "rationale": "Reactivity's unwrap helper: level 1 spans reactivity's handlers and refs and runtime-core; level 2 their callers across runtime-core and runtime-dom. Computed from the vue_edges.js (TypeScript 6.0 type checker, `direct` edges) call graph; 18 items. Amended after the run (#163 review): packages/reactivity/src/reactive.ts is optional, its only call is the target's recursive call of itself.",
    "verified_with": [
     "vue_edges.js (TypeScript 6.0 type checker, `direct` edges)",
     "reading the code"
+   ],
+   "optional": [
+    {
+     "name": "packages/reactivity/src/reactive.ts",
+     "evidence": [
+      {
+       "file": "packages/reactivity/src/reactive.ts",
+       "line": 393,
+       "contains": "toRaw"
+      }
+     ],
+     "note": "only a recursive call of the target inside itself (optional: recursion and self-calls, owner policy of #164/#168)"
+    }
    ],
    "calibration": "not calibrated"
   },

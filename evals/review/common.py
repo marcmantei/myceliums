@@ -35,6 +35,11 @@ DATASETS = (
     "agent-tasks-outcome",
     "agent-tasks-scale",
 )
+# Exported for review, never applied (#163): no pre-screen exists for these
+# datasets, so their labels are unreviewed, and apply.py (with or without
+# --policy) leaves them out instead of refusing to run. A dataset leaves this
+# list once it has a complete pre-screen and a review.
+NOT_APPLIED = ("agent-tasks-scale",)
 
 VERDICTS = ("confirmed", "doubtful", "wrong")
 DECISIONS = ("correct", "wrong", "unsure")

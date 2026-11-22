@@ -48,9 +48,11 @@ without myceliums succeeded on 4 of 11 tasks (36 %), the agent with what
 p = 0.016), mean F1 +0.63 [+0.35, +0.90]. Every failure without myceliums
 was a session that ran out of turns before answering; in calibration with up
 to seven rounds (and an earlier, partly wrong budget text) it had solved 5
-of 6 of these tasks. Under the budget C also cost 35 % less [24 %, 46 %] and
-took half the wall time. A pilot: n = 11 tasks, wide intervals, one
-repository and model, no shell; #163 below measures the same comparison with
+of 6 of these tasks, so the success gain is a budget effect. Under the budget
+C also cost 35 % less [24 %, 46 %] and took half the wall time; these ratios
+hold under the budget only. A pilot: n = 11 tasks, wide intervals, one
+repository and model, no shell, static call-graph questions whose rules a call
+graph computes by construction; #163 below measures the same comparison with
 a shell, more turns and two repositories.
 
 **Outcome eval at scale, 22 November 2026** (#163; myc at `951d041ff9e0`,
@@ -555,8 +557,15 @@ alongside. The Vue index covers
 type-only tests) and the changelogs: 15,750 symbols in 501 files, every one
 embedded (`myc analyze --strict-embeddings`, 1,163 s).
 
-**Tasks** ([`tasks/tasks-scale.json`](tasks/tasks-scale.json), sha256
-`fd0f92ee8148…`): 30, 15 per repository.
+**Tasks** ([`tasks/tasks-scale.json`](tasks/tasks-scale.json); sha256
+`fd0f92ee8148…` at the freeze): 30, 15 per repository. After the run, the #163
+review made one file optional in `vue-blast-to-raw` (`reactive.ts`, whose only
+call is `toRaw` calling itself; recursion is optional under the owner policy
+of #164/#168), and `agent_eval.py regrade` re-graded the stored answers: four
+sessions, both conditions, went from F1 0.97 to 1.00, no success changed. The
+labels are drafted by an agent and not reviewed: the #164 review tool exports
+this set (`agent-tasks-scale`), but it has no pre-screen, and `apply.py`
+leaves it out.
 
 | Type | Tasks | Answer |
 |---|---:|---|

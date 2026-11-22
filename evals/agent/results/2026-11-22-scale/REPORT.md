@@ -8,7 +8,7 @@ Does myceliums change the outcome of a coding agent's work, and how does the eff
 - **Agent:** Claude Code 2.1.330, `--model sonnet` (resolved: `claude-sonnet-5-5`), `--effort medium`
 - **Budgets:** `--max-turns 4` (stated in the prompt, timeout 300 s); `--max-turns 10` (stated in the prompt, timeout 360 s); `--max-turns 40` (a safety cap, not stated in the prompt, timeout 480 s). A turn is one reply of the agent; a reply with tool calls (parallel calls included) is one turn, so N turns allow N − 1 rounds of tool calls before the answer.
 - **myceliums:** `myc 0.3.2` built from commit `951d041ff9e0` (binary sha256 `4ef9e803790e41b4…`); 9 MCP tools offered
-- **Tasks:** 30 from `tasks/tasks-scale.json` (sha256 `fd0f92ee81485d3e…`) over 2 pinned repositories, 1 repetition per task, condition and budget; 180 graded sessions.
+- **Tasks:** 30 from `tasks/tasks-scale.json` (sha256 `5c5164668ae63dee…`) over 2 pinned repositories, 1 repetition per task, condition and budget; 180 graded sessions.
   - `django` 5.1.4 (`2d4add11fd57`, Python): 15 tasks; index 12,443 symbols in 828 files, 12,443 embedded (not indexed: `tests/**`, `docs/**`, `js_tests/**`, `scripts/**`, `extras/**`)
   - `vue` v3.5.46 (`7de9e41b61b2`, TypeScript): 15 tasks; index 15,750 symbols in 501 files, 15,750 embedded (not indexed: `packages-private/**`, `changelogs/**`, `CHANGELOG.md`)
 - **Primary analysis:** the 27 tasks without `django-tests-import-string`, `django-tests-number-format`, `django-tests-split-domain-port`. The reused Django index of #153 does not cover tests/ (index_exclude_extra tests/**), so in C myceliums had no data for the three Django tests tasks; they are left out of the primary analysis. Every table gives the 30-task numbers alongside.
@@ -45,7 +45,7 @@ All 30 tasks: success 23 % → 40 % (+17 pp [−3 pp, +37 pp]; McNemar 7 : 2 (ti
 | Metric | none | C | C − none or C ÷ none |
 |---|---:|---:|---:|
 | Success (F1 ≥ 0.8) | 85 % [70 %, 96 %] | 81 % [67 %, 96 %] | −4 pp [−15 pp, +7 pp] |
-| Mean F1 | 0.879 [0.769, 0.965] | 0.831 [0.703, 0.936] | −0.048 [−0.139, +0.017] |
+| Mean F1 | 0.880 [0.770, 0.965] | 0.832 [0.703, 0.937] | −0.048 [−0.139, +0.017] |
 | Sessions with ≥ 1 myceliums call (MCP or CLI) | 0 % [0 %, 0 %] | 85 % [70 %, 96 %] | +85 pp [+70 pp, +96 pp] |
 | Input tokens (incl. cache) | 83,926 [67,892, 99,670] | 91,192 [69,455, 114,596] | 1.09× [0.88×, 1.29×] |
 | Output tokens | 3,745 [3,040, 4,470] | 2,412 [1,803, 3,082] | 0.64× [0.50×, 0.80×] |
@@ -53,14 +53,14 @@ All 30 tasks: success 23 % → 40 % (+17 pp [−3 pp, +37 pp]; McNemar 7 : 2 (ti
 | Wall time, s | 30.3 [25.1, 35.7] | 20.9 [16.3, 25.9] | 0.69× [0.55×, 0.83×] |
 | Success, McNemar (tasks C better : none better) | | | 1 : 2 (ties 24), p = 1 |
 
-All 30 tasks: success 87 % → 83 % (−3 pp [−17 pp, +7 pp]; McNemar 1 : 2 (ties 27), p = 1), mean F1 0.885 → 0.840 (−0.044 [−0.128, +0.013]), cost 0.80× [0.66×, 0.95×], wall time 0.69× [0.57×, 0.82×].
+All 30 tasks: success 87 % → 83 % (−3 pp [−17 pp, +7 pp]; McNemar 1 : 2 (ties 27), p = 1), mean F1 0.886 → 0.841 (−0.044 [−0.128, +0.013]), cost 0.80× [0.66×, 0.95×], wall time 0.69× [0.57×, 0.82×].
 
 ### 40 turns (cap; no budget stated)
 
 | Metric | none | C | C − none or C ÷ none |
 |---|---:|---:|---:|
 | Success (F1 ≥ 0.8) | 96 % [89 %, 100 %] | 89 % [78 %, 100 %] | −7 pp [−19 pp, +0 pp] |
-| Mean F1 | 0.970 [0.932, 0.995] | 0.929 [0.874, 0.974] | −0.042 [−0.088, −0.008] |
+| Mean F1 | 0.971 [0.932, 0.996] | 0.930 [0.875, 0.975] | −0.042 [−0.088, −0.008] |
 | Sessions with ≥ 1 myceliums call (MCP or CLI) | 0 % [0 %, 0 %] | 85 % [70 %, 96 %] | +85 pp [+70 pp, +96 pp] |
 | Input tokens (incl. cache) | 100,535 [79,432, 123,685] | 132,074 [100,906, 164,849] | 1.31× [1.13×, 1.52×] |
 | Output tokens | 4,147 [3,451, 4,877] | 3,619 [2,676, 4,654] | 0.87× [0.71×, 1.02×] |
@@ -68,14 +68,14 @@ All 30 tasks: success 87 % → 83 % (−3 pp [−17 pp, +7 pp]; McNemar 1 : 2 (t
 | Wall time, s | 35.4 [28.2, 44.4] | 29.6 [22.6, 37.2] | 0.84× [0.71×, 0.97×] |
 | Success, McNemar (tasks C better : none better) | | | 0 : 2 (ties 25), p = 0.5 |
 
-All 30 tasks: success 97 % → 87 % (−10 pp [−23 pp, +0 pp]; McNemar 0 : 3 (ties 27), p = 0.25), mean F1 0.971 → 0.923 (−0.049 [−0.096, −0.013]), cost 0.97× [0.84×, 1.11×], wall time 0.81× [0.70×, 0.94×].
+All 30 tasks: success 97 % → 87 % (−10 pp [−23 pp, +0 pp]; McNemar 0 : 3 (ties 27), p = 0.25), mean F1 0.972 → 0.924 (−0.049 [−0.096, −0.013]), cost 0.97× [0.84×, 1.11×], wall time 0.81× [0.70×, 0.94×].
 
 ### All budgets
 
 | Metric | none | C | C − none or C ÷ none |
 |---|---:|---:|---:|
 | Success (F1 ≥ 0.8) | 68 % [59 %, 77 %] | 69 % [58 %, 79 %] | +1 pp [−7 pp, +10 pp] |
-| Mean F1 | 0.691 [0.616, 0.764] | 0.748 [0.661, 0.832] | +0.058 [−0.012, +0.126] |
+| Mean F1 | 0.691 [0.617, 0.765] | 0.749 [0.662, 0.832] | +0.058 [−0.012, +0.126] |
 | Sessions with ≥ 1 myceliums call (MCP or CLI) | 0 % [0 %, 0 %] | 84 % [69 %, 96 %] | +84 pp [+69 pp, +96 pp] |
 | Input tokens (incl. cache) | 72,635 [60,516, 85,183] | 91,229 [73,830, 109,262] | 1.26× [1.11×, 1.40×] |
 | Output tokens | 3,082 [2,620, 3,555] | 2,461 [1,935, 3,028] | 0.80× [0.67×, 0.92×] |
@@ -83,18 +83,18 @@ All 30 tasks: success 97 % → 87 % (−10 pp [−23 pp, +0 pp]; McNemar 0 : 3 (
 | Wall time, s | 26.4 [22.3, 31.0] | 21.1 [17.1, 25.4] | 0.80× [0.70×, 0.90×] |
 | Success, sign test (tasks C better : none better) | | | 6 : 4 (ties 17), p = 0.754 |
 
-All 30 tasks: success 69 % → 70 % (+1 pp [−8 pp, +9 pp]; sign test 7 : 5 (ties 18), p = 0.774), mean F1 0.696 → 0.755 (+0.058 [−0.008, +0.124]), cost 0.96× [0.85×, 1.07×], wall time 0.79× [0.70×, 0.89×].
+All 30 tasks: success 69 % → 70 % (+1 pp [−8 pp, +9 pp]; sign test 7 : 5 (ties 18), p = 0.774), mean F1 0.697 → 0.755 (+0.058 [−0.008, +0.124]), cost 0.96× [0.85×, 1.07×], wall time 0.79× [0.70×, 0.89×].
 
 ## Budget curve
 
 | Tasks | Budget | Success none | Success C | Δ success [95 % CI] | Mean F1 none | Mean F1 C | Δ F1 [95 % CI] | McNemar |
 |---|---|---:|---:|---:|---:|---:|---:|---|
 | 27 (primary) | 4 turns | 22 % | 37 % | +15 pp [−4 pp, +33 pp] | 0.222 | 0.485 | +0.263 [+0.078, +0.452] | 6 : 2 (ties 19), p = 0.289 |
-| 27 (primary) | 10 turns | 85 % | 81 % | −4 pp [−15 pp, +7 pp] | 0.879 | 0.831 | −0.048 [−0.139, +0.017] | 1 : 2 (ties 24), p = 1 |
-| 27 (primary) | 40 turns (cap; no budget stated) | 96 % | 89 % | −7 pp [−19 pp, +0 pp] | 0.970 | 0.929 | −0.042 [−0.088, −0.008] | 0 : 2 (ties 25), p = 0.5 |
+| 27 (primary) | 10 turns | 85 % | 81 % | −4 pp [−15 pp, +7 pp] | 0.880 | 0.832 | −0.048 [−0.139, +0.017] | 1 : 2 (ties 24), p = 1 |
+| 27 (primary) | 40 turns (cap; no budget stated) | 96 % | 89 % | −7 pp [−19 pp, +0 pp] | 0.971 | 0.930 | −0.042 [−0.088, −0.008] | 0 : 2 (ties 25), p = 0.5 |
 | all 30 | 4 turns | 23 % | 40 % | +17 pp [−3 pp, +37 pp] | 0.233 | 0.501 | +0.268 [+0.093, +0.445] | 7 : 2 (ties 21), p = 0.18 |
-| all 30 | 10 turns | 87 % | 83 % | −3 pp [−17 pp, +7 pp] | 0.885 | 0.840 | −0.044 [−0.128, +0.013] | 1 : 2 (ties 27), p = 1 |
-| all 30 | 40 turns (cap; no budget stated) | 97 % | 87 % | −10 pp [−23 pp, +0 pp] | 0.971 | 0.923 | −0.049 [−0.096, −0.013] | 0 : 3 (ties 27), p = 0.25 |
+| all 30 | 10 turns | 87 % | 83 % | −3 pp [−17 pp, +7 pp] | 0.886 | 0.841 | −0.044 [−0.128, +0.013] | 1 : 2 (ties 27), p = 1 |
+| all 30 | 40 turns (cap; no budget stated) | 97 % | 87 % | −10 pp [−23 pp, +0 pp] | 0.972 | 0.924 | −0.049 [−0.096, −0.013] | 0 : 3 (ties 27), p = 0.25 |
 
 ## By repository (exploratory)
 
@@ -143,7 +143,7 @@ F1 none / C at each budget; myceliums calls (MCP + CLI) in C summed over the bud
 | `vue-tc-to-raw-type` | transitive_callers | 24 | 0.00 / 0.00 | 1.00 / 1.00 | 1.00 / 1.00 | 17 | not calibrated |
 | `vue-tc-parse-string-style` | transitive_callers | 21 | 0.00 / 0.00 | 1.00 / 0.98 | 1.00 / 1.00 | 3 | not calibrated |
 | `vue-blast-handle-error` | blast_radius | 22 | 0.00 / 0.00 | 1.00 / 0.98 | 1.00 / 0.95 | 5 | F1 1.00, 6 tool calls |
-| `vue-blast-to-raw` | blast_radius | 18 | 0.00 / 0.00 | 0.97 / 0.97 | 0.97 / 0.97 | 3 | not calibrated |
+| `vue-blast-to-raw` | blast_radius | 18 | 0.00 / 0.00 | 1.00 / 1.00 | 1.00 / 1.00 | 3 | not calibrated |
 | `vue-amb-reactivity-warn` | ambiguous | 23 | 0.00 / 1.00 | 0.72 / 0.95 | 1.00 / 0.72 | 13 | F1 1.00, 6 tool calls |
 | `vue-amb-compiler-warn-deprecation` | ambiguous | 16 | 0.00 / 0.77 | 1.00 / 1.00 | 0.94 / 0.90 | 3 | not calibrated |
 | `vue-amb-reactivity-watch` | ambiguous | 10 | 0.00 / 0.00 | 0.84 / 0.95 | 1.00 / 1.00 | 10 | not calibrated |
@@ -189,7 +189,7 @@ MCP tool calls in C over all budgets (errors in brackets): `find_callees` 8 (3),
 
 - Primary analysis: 27 tasks. The reused Django index of #153 does not cover tests/ (index_exclude_extra tests/**), so in C myceliums had no data for the three Django tests tasks; they are left out of the primary analysis. The 30-task numbers are reported next to every table.
 - Session accounting: 180 main sessions (30 tasks x 2 conditions x 3 budgets x 1 repetition), every one graded on its first attempt (no retries, no timeouts; the longest took 127 s), plus 15 calibration sessions (results/2026-11-22-scale-calibration): 195 of the 195 approved. Five probe sessions against the mock API (one before the freeze in condition none, four after it) used no model.
-- Tasks frozen before any myceliums output: tasks/tasks-scale.json (sha256 fd0f92ee81485d3e..., the tasks_sha256 above) was committed at 2026-11-22T10:04:05Z (author date of the freeze commit, first pushed as 9c53600 and rebased onto main without changing the file) after the calibration (09:54-09:59Z, condition none only, on tasks/tasks-scale-candidates.json). The Vue index was built afterwards (10:04:45-10:24:08Z); the reused Django index was first opened after the freeze, to check that it loads. The first session with myceliums (a mock-API probe) started at 10:24:52Z, the main run at 10:25:18Z.
+- Tasks frozen before any myceliums output: tasks/tasks-scale.json (sha256 fd0f92ee81485d3e... at the freeze; amended after the run by one optional item, see the last note) was committed at 2026-11-22T10:04:05Z (author date of the freeze commit, first pushed as 9c53600 and rebased onto main without changing the file) after the calibration (09:54-09:59Z, condition none only, on tasks/tasks-scale-candidates.json). The Vue index was built afterwards (10:04:45-10:24:08Z); the reused Django index was first opened after the freeze, to check that it loads. The first session with myceliums (a mock-API probe) started at 10:24:52Z, the main run at 10:25:18Z.
 - Calibration (15 none sessions at 10 turns): the five questions that are not about calls were solved in one or two Bash calls and rejected as trivially solved; the four in the frozen set replaced them after the calibration and are not calibrated. Of the 10 calibrated tasks in the set, 8 succeeded (the target was 30-80 %); 20 tasks are not calibrated, because the allowance covered 15 of 35 candidates.
 - Budgets: 4 and 10 turns are stated in the prompt (the #153 text); 40 is the unlimited arm, a cap the prompt does not mention. No session reached 40 turns.
 - Indexes: Django is the #153 index (built 2026-11-21 by the same binary, sha256 4ef9e803...; 12,443 of 12,443 symbols embedded with jina-embeddings-v2-base-code, template 2, chunking), reused because the binary and therefore the embedder fingerprint are identical. Vue: packages/ without packages-private/ and the changelogs, tests included; 15,750 of 15,750 symbols embedded in 1,163 s. myc linked 3,682 of Vue's 16,397 call sites: imports between packages (@vue/shared, @vue/reactivity, ...) count as library calls, so cross-package callers are missing (myc callers toRawType: 0). The questions were fixed before this was seen.
@@ -198,4 +198,5 @@ MCP tool calls in C over all budgets (errors in brackets): `find_callees` 8 (3),
 - C lost five task-budget pairs at 10 or 40 turns that none solved. In two (the Django flow tasks django-flow-translate-is-naive at 10 turns, django-flow-runserver-import-string at 40) it answered from a trace_flow result and wrote that it had not checked the call sites in the source; trace_flow lists chains up to a length limit, and the longer chains were missing. In two it checked with grep and still missed 5 test files (django-tests-number-format, a tests task the Django index cannot answer because it has no tests/, outside the primary analysis) or added 18 names (vue-amb-reactivity-warn); one (vue-tests-scope-dispose, 10 turns) ran out of turns.
 - Gold labels were derived by an agent from the AST and the type checker and are not yet reviewed by a person (#164). One repetition: per-task outcomes are single samples. Sessions of the two repositories ran in parallel (two at a time), so wall times include that contention, equally in both conditions.
 - Bash reaches the whole machine. One none session (vue-tests-queue-job, 40 turns) searched the file system, found a TypeScript package and node outside the session's PATH and wrote its own type-checked call graph (F1 0.55). No session read the eval's task files, gold sets, edges or index cache: every transcript was searched for those paths.
+- Re-graded on 2026-11-22 after the #163 review: packages/reactivity/src/reactive.ts is optional in vue-blast-to-raw (its only call is toRaw's recursive call of itself, which the call graph drops; recursion and self-calls are optional under the owner policy of #164/#168). The frozen task file had sha256 fd0f92ee81485d3e...; the amended one is the tasks_sha256 above. Four sessions (both conditions at 10 and 40 turns) changed F1 from 0.973 to 1.00; no success changed.
 

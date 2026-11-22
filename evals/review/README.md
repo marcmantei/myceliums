@@ -47,6 +47,8 @@ Snippets come from the pinned checkouts in `~/.cache/myceliums-eval-repos`
 (`evals/agent/agent_eval.py fetch`); a checkout at another commit is not used.
 `export.py --check` exits 1 when `items.jsonl` is out of date.
 
+`agent-tasks-scale` (#163) is exported for review only. It has no pre-screen yet, so its labels are unreviewed, and `apply.py`, with or without `--policy`, leaves it out (`common.NOT_APPLIED`) instead of refusing to run; `--reset-datasets-to` does not touch its file either. It joins the applied datasets once it has a complete pre-screen and a review.
+
 ## Pre-screen format
 
 `prescreen/<dataset>.jsonl`, one JSON object per line, written by an agent

@@ -871,6 +871,8 @@ def run(plan: Plan, items: list[dict], write: bool, today: str,
     writes[export.GRAPH_GOLD / "held-out" / "real-repos.json"] = text
     outcomes.append(o)
     for ds, filename, _ in export.TASK_FILES:
+        if ds in common.NOT_APPLIED:  # exported for review only, see common.NOT_APPLIED
+            continue
         path = export.AGENT / "tasks" / filename
         text, o = apply_tasks(plan, ds, path, by_ds.get(ds, []))
         writes[path] = text
@@ -956,11 +958,16 @@ def dataset_files() -> list[Path]:
     return ([export.REAL_REPOS / "queries.json", export.REAL_REPOS / "test-seeking.json"]
             + [export.GRAPH_GOLD / f"{lang}.json" for lang in export.GRAPH_LANGUAGES]
             + [export.GRAPH_GOLD / "held-out" / "real-repos.json"]
-            + [export.AGENT / "tasks" / name for _, name, _ in export.TASK_FILES])
+            + [export.AGENT / "tasks" / name for ds, name, _ in export.TASK_FILES if ds not in common.NOT_APPLIED])
+
+
+def applied_items(items: list[dict]) -> list[dict]:
+    """The items apply.py acts on: every dataset except ``common.NOT_APPLIED``."""
+    return [it for it in items if it["dataset"] not in common.NOT_APPLIED]
 
 
 def _main(args, reviewer: str) -> int:
-    items = export.build_items(snippets=False)
+    items = applied_items(export.build_items(snippets=False))
     by_id = {it["id"]: it for it in items}
     prescreen, warnings = common.load_prescreen(args.prescreen, by_id)
     for w in warnings[:10]:

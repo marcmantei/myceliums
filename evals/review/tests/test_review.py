@@ -527,7 +527,7 @@ class OwnerPolicy(ApplyBase):
         self.assertEqual(unsure, [t_unsure[0]["id"]])
 
         prov = {r["id"]: r for r in common.read_jsonl(self.root / "provenance.jsonl")}
-        self.assertEqual(len(prov), len(self.items))
+        self.assertEqual(len(prov), len(apply.applied_items(self.items)))  # not common.NOT_APPLIED
         decided_by_marc = {rid for rid, rec in self.store.state.items() if rec["decision"] in ("correct", "wrong")}
         self.assertEqual({rid for rid, r in prov.items() if r["class"] == "human"}, decided_by_marc)
         self.assertEqual(prov[held[1]]["final"], "correct")
@@ -610,6 +610,22 @@ class OwnerPolicy(ApplyBase):
             apply.Plan(self.items, partial, self.store, sample, "human:marc", policy=self.POLICY)
         with self.assertRaises(SystemExit):
             apply.Plan(self.items, self.pre, self.store, self.sample, "human:marc", policy="no-such-policy")
+
+    def test_unreviewed_dataset_is_left_out_of_apply(self):
+        # #163: agent-tasks-scale is exported for review but has no pre-screen
+        self.assertTrue(any(it["dataset"] == "agent-tasks-scale" for it in self.items))
+        items = apply.applied_items(self.items)
+        self.assertFalse(any(it["dataset"] in common.NOT_APPLIED for it in items))
+        pre = {k: v for k, v in self.pre.items() if not k.startswith("agent-tasks-scale:")}
+        sample = common.Sample({"seed": 164, "rate": 0.15, "datasets": {}})
+        sample.sync(items, pre)
+        scale = export.AGENT / "tasks" / "tasks-scale.json"
+        before = scale.read_bytes()
+        plan = apply.Plan(items, pre, self.store, sample, "human:marc", policy=self.POLICY,
+                          agent_decisions=self.agent_recs)  # no SystemExit: the dataset is not in the plan
+        apply.run(plan, items, write=True, today="2026-11-22", provenance_path=self.root / "provenance.jsonl")
+        self.assertEqual(scale.read_bytes(), before)
+        self.assertNotIn(scale, apply.dataset_files())
 
     def test_agent_file_validation(self):
         d = self.root / "agent-check"
