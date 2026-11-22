@@ -467,6 +467,7 @@ pub(crate) async fn cmd_analyze(
         analyzed_commit,
         vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
         classification_version: myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION,
+        call_record_version: myceliums_storage::schema::CALL_RECORD_VERSION,
     });
     registry.save()?;
 
@@ -584,6 +585,19 @@ pub(crate) async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> 
                     Analyzer::new(store, abs_path.clone())
                 }
                 .set_skip_embeddings(skip_embeddings);
+
+                // `analyze_files` reads source files only: a change to a
+                // file that decides what imports bind (package.json, a
+                // tsconfig, `.myceliums.toml`) needs a full analysis (#169).
+                if a.needs_full_analysis(&paths).await {
+                    drop(a);
+                    println!("    A resolution config changed: full re-analysis");
+                    let policy = EmbeddingPolicy::from_flags(skip_embeddings, false);
+                    if let Err(e) = cmd_analyze(&abs_path, true, 0, policy).await {
+                        eprintln!("    Error during full re-analysis: {e}");
+                    }
+                    continue;
+                }
 
                 match a.analyze_files(&paths).await {
                     Ok(result) => {

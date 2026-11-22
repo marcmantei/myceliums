@@ -216,7 +216,8 @@ edge resolution), ordered by depth, then file and line, plus `total_count`,
 `notice` and, when the list is not the whole answer, `incomplete` (#169):
 `reasons` (the depth limit of a transitive walk, the page, call sites named
 like a listed symbol that got no CALLS edge), `branches_cut` and `next`, the
-exact call that continues (`find_callers(symbol_name="x", depth=3)`). Direct
+exact call that continues (`find_callers(repo_id="r", symbol_name="x",
+depth=3)`). Direct
 callers are the whole answer to `depth` 1, so its depth limit is no reason.
 See [walks that stop early](../guides/call-resolution-limitations.md#walks-that-stop-early).
 The symbols, depths, `via` names and order are those `myc callers --json`
@@ -257,8 +258,9 @@ What could break if I change this? Give at most one of `symbol_name`,
 When the walk stopped short, an `Incomplete (N branch(es) not followed)`
 block follows the first line: the depth limit (how many dependents one more
 step adds) and unlinked call sites named like the changed symbols or their
-dependents, with a `Next:` line (`impact_of_change(symbol_name="x",
-depth=3)`).
+dependents, with a `Next:` line (`impact_of_change(repo_id="r",
+symbol_name="x", depth=3)`; for the uncommitted diff the call without a
+diff, which reads `git diff HEAD` again).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -280,12 +282,16 @@ the start. When `to_symbol` is not reachable within `max_depth` calls the
 result says so, with how many symbols were reached, and suggests what to try
 (swap the ends, a larger `max_depth`, `find_callers`). A cut flow is never
 presented as complete (#169): an `Incomplete (N branch(es) not followed)`
-block right under the first line names chains longer than the listed window
-(within `max_depth`), the page, the depth limit when no chain was found,
-calls made on the walk that got no CALLS edge (with file and line) and
-unlinked call sites named like `to_symbol`, then a `Next:` line with the
-exact call (`trace_flow(from_symbol="a", to_symbol="b", max_depth=12,
-extra_calls=3)`). The same symbol at both ends is `invalid_params`.
+block right under the first line names symbols on chains `extra_calls` could
+still list (up to 5 calls longer than the shortest), the page, the depth
+limit when no chain was found (with the length of the shortest chain past
+it, searched up to 30 calls), calls made on the walk that got no CALLS edge
+(with file and line), unlinked call sites named like `to_symbol`, and calls
+that are unknown because the index predates their record or a file changed
+since the last full analysis; then a `Next:` line with the exact call that
+lifts the cut (`trace_flow(repo_id="r", from_symbol="a", to_symbol="b",
+max_depth=12, extra_calls=3)`, `analyze(repo_id="r", force=true)`). The same
+symbol at both ends is `invalid_params`.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|

@@ -488,19 +488,27 @@ impl CallResolver {
                     return Some(files);
                 }
             }
-            if let Some(base) = &aliases.base_url {
-                if let Some(files) = self.js_file(&js_project::join(base, specifier)) {
+            if let Some(path) = aliases
+                .base_url
+                .as_deref()
+                .and_then(|base| js_project::join(base, specifier))
+            {
+                if let Some(files) = self.js_file(&path) {
                     return Some(files);
                 }
             }
         }
         let (package, subpath) = self.js.package_for(importer, specifier)?;
-        let in_package = |path: &str| js_project::join(&package.dir, path);
+        // A path inside the package; `None` when it climbs out of the
+        // repository.
+        let in_package = |path: &str| -> Option<Vec<String>> {
+            self.js_file(&js_project::join(&package.dir, path)?)
+        };
         // A declared file, or the source a build output was made from.
         let declared = |entry: &str| -> Option<Vec<String>> {
             match js_project::source_for_build_path(entry) {
-                Some(source) => self.js_file(&in_package(&source)),
-                None => self.js_file(&in_package(entry)),
+                Some(source) => in_package(&source),
+                None => in_package(entry),
             }
         };
         if subpath.is_empty() {
@@ -514,29 +522,15 @@ impl CallResolver {
                 .iter()
                 .filter(nested)
                 .find_map(|e| declared(e))
-                .or_else(|| self.js_file(&in_package("src")))
-                .or_else(|| {
-                    package
-                        .entries
-                        .iter()
-                        .find_map(|e| self.js_file(&in_package(e)))
-                })
+                .or_else(|| in_package("src"))
+                .or_else(|| package.entries.iter().find_map(|e| in_package(e)))
                 .or_else(|| self.js_file(&package.dir));
         }
-        let wanted = format!("./{subpath}");
-        let exported = package.subpaths.iter().find_map(|(key, targets)| {
-            let captured = match key.split_once('*') {
-                None => (key == &wanted).then_some(""),
-                Some((prefix, suffix)) => wanted
-                    .strip_prefix(prefix)
-                    .and_then(|rest| rest.strip_suffix(suffix)),
-            }?;
-            targets
-                .iter()
-                .find_map(|target| declared(&target.replacen('*', captured, 1)))
-        });
-        exported
-            .or_else(|| self.js_file(&in_package(&format!("src/{subpath}"))))
+        package
+            .subpath_targets(subpath)
+            .iter()
+            .find_map(|target| declared(target))
+            .or_else(|| in_package(&format!("src/{subpath}")))
             .or_else(|| declared(subpath))
     }
 

@@ -24,7 +24,7 @@
 use crate::navigation::DepthCut;
 use crate::resolver::{CallResolutionStats, UnlinkedCall, UnlinkedReason};
 use myceliums_storage::CodeSymbol;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Examples listed per reason.
 const EXAMPLES: usize = 5;
@@ -42,6 +42,12 @@ pub struct Gaps<'a> {
     pub unlinked_out: Vec<(&'a CodeSymbol, &'a UnlinkedCall)>,
     /// Unlinked call sites named like walked symbols: name → count.
     pub unlinked_in: Vec<(String, usize)>,
+    /// The index holds no record of unlinked calls (written before #169,
+    /// or not at all): the calls this walk cannot follow are unknown.
+    pub record_missing: bool,
+    /// Walked symbols in files re-indexed incrementally since the last full
+    /// analysis: their unlinked calls are unknown.
+    pub unknown: BTreeSet<&'a str>,
 }
 
 impl<'a> Gaps<'a> {
@@ -59,10 +65,15 @@ impl<'a> Gaps<'a> {
         stats: Option<&'a CallResolutionStats>,
         symbols: impl IntoIterator<Item = &'a CodeSymbol>,
     ) {
-        let Some(stats) = stats else {
+        let Some(stats) = stats.filter(|s| s.records_unlinked_calls()) else {
+            self.record_missing = true;
             return;
         };
         for symbol in symbols {
+            if stats.is_stale(&symbol.file_path) {
+                self.unknown.insert(&symbol.uid);
+                continue;
+            }
             for call in stats.unlinked_from(&symbol.file_path, &symbol.qualified_name) {
                 self.unlinked_out.push((symbol, call));
             }
@@ -77,6 +88,7 @@ impl<'a> Gaps<'a> {
         symbols: impl IntoIterator<Item = &'a CodeSymbol>,
     ) {
         let Some(stats) = stats else {
+            self.record_missing = true;
             return;
         };
         let mut seen: BTreeMap<(&str, &str), usize> = BTreeMap::new();
@@ -103,6 +115,8 @@ impl<'a> Gaps<'a> {
             && self.depth.is_none()
             && self.unlinked_out.is_empty()
             && self.unlinked_in.is_empty()
+            && !self.record_missing
+            && self.unknown.is_empty()
     }
 
     /// Places the walk did not follow: symbols one more hop would add,
@@ -176,7 +190,28 @@ impl<'a> Gaps<'a> {
                 more(self.unlinked_in.len())
             ));
         }
+        if self.record_missing {
+            out.push(
+                "the calls this walk cannot follow are unknown: the index predates their record \
+                 (a full analysis records them)"
+                    .to_string(),
+            );
+        }
+        if !self.unknown.is_empty() {
+            out.push(format!(
+                "unlinked calls unknown for {} symbol(s) in files changed since the last full \
+                 analysis (a full analysis records them)",
+                self.unknown.len()
+            ));
+        }
         out
+    }
+
+    /// Whether only a full analysis can say what this walk could not follow
+    /// ([`record_missing`](Self::record_missing) or
+    /// [`unknown`](Self::unknown)).
+    pub fn needs_full_analysis(&self) -> bool {
+        self.record_missing || !self.unknown.is_empty()
     }
 
     /// The `Incomplete:` block of a text result, with `next` as the last
@@ -239,6 +274,33 @@ mod tests {
     }
 
     #[test]
+    fn a_missing_or_stale_record_is_a_reason_not_silence() {
+        let a = sym("a", "src/a.ts");
+        let mut gaps = Gaps::default();
+        gaps.unlinked_out_of(None, [&a]);
+        assert!(gaps.needs_full_analysis() && !gaps.is_empty());
+        assert!(gaps.reasons("callees")[0].contains("the index predates their record"));
+
+        let old = CallResolutionStats::default();
+        let mut gaps = Gaps::default();
+        gaps.unlinked_out_of(Some(&old), [&a]);
+        assert!(gaps.record_missing, "a record from before #169");
+
+        let mut stale = CallResolutionStats {
+            version: myceliums_storage::schema::CALL_RECORD_VERSION,
+            ..Default::default()
+        };
+        stale.forget_files(["src/a.ts"], []);
+        let mut gaps = Gaps::default();
+        gaps.unlinked_out_of(Some(&stale), [&a]);
+        assert!(!gaps.record_missing);
+        assert_eq!(
+            gaps.reasons("callees"),
+            ["unlinked calls unknown for 1 symbol(s) in files changed since the last full analysis (a full analysis records them)"]
+        );
+    }
+
+    #[test]
     fn nothing_cut_says_nothing() {
         let gaps = Gaps::default();
         assert!(gaps.is_empty());
@@ -248,7 +310,10 @@ mod tests {
     #[test]
     fn every_reason_is_counted_and_named() {
         let (a, b) = (sym("a", "src/a.ts"), sym("b", "src/b.ts"));
-        let mut stats = CallResolutionStats::default();
+        let mut stats = CallResolutionStats {
+            version: myceliums_storage::schema::CALL_RECORD_VERSION,
+            ..Default::default()
+        };
         stats
             .unlinked_by_caller
             .entry("src/a.ts".into())

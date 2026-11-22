@@ -61,6 +61,7 @@ pub(crate) fn register_repo_with(
         analyzed_commit: None,
         vector_geometry_version: 0,
         classification_version,
+        call_record_version: 0,
     });
     registry.save().unwrap();
 }

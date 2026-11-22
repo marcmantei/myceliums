@@ -5,7 +5,7 @@ use crate::errors::ToolError;
 use myceliums_core::git_read::git_read;
 use myceliums_core::index_scope::{
     blanks_managed_blocks, indexed_text, same_outside_managed_blocks, text_fingerprint, IndexScope,
-    INDEXED_TEXT_META_KEY, MANAGED_BLOCK_BEGIN,
+    INDEXED_TEXT_META_KEY, MANAGED_BLOCK_BEGIN, RESOLUTION_CONFIGS_META_KEY,
 };
 use myceliums_storage::{FileNode, RepoInfo, Store};
 use std::collections::BTreeMap;
@@ -229,6 +229,25 @@ pub(crate) async fn freshness(
                 .iter()
                 .any(|rel| scope.language(rel).is_some_and(blanks_managed_blocks))
         });
+    // A changed JSON file that is no config by name may be an `extends`
+    // base the analysis read (#169): count it when the index recorded it.
+    let maybe_base = git
+        .as_ref()
+        .and_then(|git| git.changed.as_ref())
+        .is_some_and(|changed| {
+            changed.iter().any(|rel| {
+                rel.extension().is_some_and(|ext| ext == "json") && !scope.is_resolution_config(rel)
+            })
+        });
+    let scope = if maybe_base {
+        let recorded: Vec<String> = match store.get_index_meta(RESOLUTION_CONFIGS_META_KEY).await {
+            Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
+            _ => Vec::new(),
+        };
+        scope.with_resolution_configs(recorded)
+    } else {
+        scope
+    };
     let fingerprints: BTreeMap<String, String> = if blanked_change {
         match store.get_index_meta(INDEXED_TEXT_META_KEY).await {
             Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
@@ -492,6 +511,7 @@ mod tests {
             analyzed_commit: commit.map(str::to_string),
             vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
             classification_version: myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: myceliums_storage::schema::CALL_RECORD_VERSION,
         }
     }
 
@@ -702,6 +722,44 @@ mod tests {
             state.line().contains("2 files changed since indexing"),
             "{state:?}"
         );
+    }
+
+    /// An uncommitted edit to a file that decides what JS/TS imports bind
+    /// makes the index stale (#169): a tsconfig or package.json by name, an
+    /// `extends` base when the index recorded it; other JSON does not.
+    #[test]
+    fn resolution_config_edits_make_the_index_stale() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("cfg")).unwrap();
+        for rel in [
+            "tsconfig.json",
+            "packages/a/package.json",
+            "cfg/base.json",
+            "data.json",
+        ] {
+            if let Some(parent) = Path::new(rel).parent() {
+                std::fs::create_dir_all(root.join(parent)).unwrap();
+            }
+            std::fs::write(root.join(rel), "{}").unwrap();
+        }
+        let path = root.to_string_lossy();
+        let built = "2001-01-01T00:00:00Z";
+        let edited = |rels: &[&str], scope: &IndexScope| {
+            let changed = rels.iter().map(PathBuf::from).collect();
+            assess_with(
+                &info(Some(HEAD), built, &path),
+                Some(&at_head(Some(changed))),
+                &nothing_indexed,
+                scope,
+            )
+        };
+        let plain = IndexScope::default();
+        assert!(edited(&["tsconfig.json"], &plain).is_stale());
+        assert!(edited(&["packages/a/package.json"], &plain).is_stale());
+        assert!(!edited(&["data.json", "cfg/base.json"], &plain).is_stale());
+        let recorded = IndexScope::default().with_resolution_configs(["cfg/base.json".to_string()]);
+        assert!(edited(&["cfg/base.json"], &recorded).is_stale());
     }
 
     /// Runs git in `dir` for test setup; panics on failure.

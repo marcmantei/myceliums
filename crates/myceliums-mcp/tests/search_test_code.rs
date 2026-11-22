@@ -88,6 +88,7 @@ async fn setup() {
                     analyzed_commit: None,
                     vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
                     classification_version,
+                    call_record_version: 0,
                 });
             }
             registry.save().unwrap();

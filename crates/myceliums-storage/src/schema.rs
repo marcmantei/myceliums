@@ -24,6 +24,16 @@ pub const VECTOR_GEOMETRY_VERSION: u32 = 2;
 /// classification rules change what an existing index would hold.
 pub const SYMBOL_CLASSIFICATION_VERSION: u32 = 1;
 
+/// Version of the call-resolution record written at index time.
+///
+/// `1`: every caller's unlinked call sites are recorded (#169), so graph walks
+/// can name the calls they cannot follow. An index recorded under an older
+/// version ([`crate::RepoInfo::call_record_version`], `0` before #169) has no
+/// such record, so its walks would look complete; the cache check
+/// re-analyzes it instead of reusing it. Bump whenever the record changes what
+/// an existing index would hold.
+pub const CALL_RECORD_VERSION: u32 = 1;
+
 /// L2-normalize a vector in place to unit length.
 ///
 /// This is the function that *establishes* the geometry

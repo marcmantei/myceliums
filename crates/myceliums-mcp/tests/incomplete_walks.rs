@@ -47,6 +47,44 @@ export function poll(worker): void {
 }
 "#;
 
+/// A second route into `finish`, 8 calls long: past what `extra_calls`
+/// can list from a 1-call shortest chain, so no cut.
+const FAR: &str = r#"import { finish } from "./flow";
+
+export function origin(): void {
+  o1();
+  finish();
+}
+
+function o1(): void {
+  o2();
+}
+
+function o2(): void {
+  o3();
+}
+
+function o3(): void {
+  o4();
+}
+
+function o4(): void {
+  o5();
+}
+
+function o5(): void {
+  o6();
+}
+
+function o6(): void {
+  o7();
+}
+
+function o7(): void {
+  finish();
+}
+"#;
+
 const JOBS: &str = r#"export class Job {
   run(): void {}
 }
@@ -147,6 +185,7 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     std::fs::create_dir_all(project.join("src")).unwrap();
     std::fs::write(project.join("src/flow.ts"), FLOW).unwrap();
     std::fs::write(project.join("src/jobs.ts"), JOBS).unwrap();
+    std::fs::write(project.join("src/far.ts"), FAR).unwrap();
     git(&project, &["init", "-q"]);
     git(&project, &["add", "."]);
     git(&project, &["commit", "-q", "-m", "init"]);
@@ -177,7 +216,7 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     // The cut is stated right under the first line, before the chain.
     assert!(lines[2].starts_with("Incomplete ("), "{flow}");
     assert!(
-        flow.contains("3 more symbol(s) lie on longer chains of 4-4 calls"),
+        flow.contains("3 more symbol(s) lie on chains of 4-4 calls, not listed"),
         "{flow}"
     );
     // The callback call made on the chain is named with its line.
@@ -188,6 +227,7 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     let next = next_line(&flow);
     let mut args = next_args(next, "trace_flow");
     assert_eq!(args["extra_calls"], 3, "{next}");
+    assert_eq!(args["repo_id"], json!(repo), "{next}");
     args["repo_id"] = json!(repo);
     let (wider, _) = call(&client, "trace_flow", args).await;
     assert!(!wider.contains("longer chains"), "{wider}");
@@ -196,6 +236,17 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     }
     // The callback is still a place the flow may go on unseen.
     assert!(wider.contains("`entry` -> `cb` ("), "{wider}");
+
+    // A chain longer than extra_calls can reach is outside the window the
+    // header names: no cut, no Incomplete block.
+    let (far, _) = call(
+        &client,
+        "trace_flow",
+        json!({"repo_id": repo, "from_symbol": "origin", "to_symbol": "finish"}),
+    )
+    .await;
+    assert!(body(&far).starts_with("Shortest call chain"), "{far}");
+    assert!(!far.contains("Incomplete"), "{far}");
 
     // ── trace_flow: no chain within max_depth ────────────────────────────
     let (none, _) = call(
@@ -209,8 +260,13 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
         none.contains("depth limit 2: 1 more symbols one step further, through 1 symbol(s) at depth 2: `step2`"),
         "{none}"
     );
+    assert!(
+        none.contains("a chain of 3 calls exists past max_depth=2"),
+        "{none}"
+    );
+    // The next call lifts the cut exactly.
     let mut args = next_args(next_line(&none), "trace_flow");
-    assert_eq!(args["max_depth"], 4);
+    assert_eq!(args["max_depth"], 3);
     args["repo_id"] = json!(repo);
     let (found, _) = call(&client, "trace_flow", args).await;
     assert!(body(&found).starts_with("Shortest call chain"), "{found}");
@@ -235,7 +291,9 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     assert_eq!(incomplete["branches_cut"], 2);
     let next = incomplete["next"].as_str().unwrap();
     assert!(
-        next.starts_with(r#"find_callees(symbol_name="entry", depth=3)"#),
+        next.starts_with(&format!(
+            r#"find_callees(repo_id="{repo}", symbol_name="entry", depth=3)"#
+        )),
         "{next}"
     );
     let (_, deeper) = call(
@@ -262,7 +320,9 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     let first = first.unwrap();
     let next = first["incomplete"]["next"].as_str().unwrap();
     assert!(
-        next.starts_with(r#"find_callees(symbol_name="entry", depth=3, offset=2)"#),
+        next.starts_with(&format!(
+            r#"find_callees(repo_id="{repo}", symbol_name="entry", depth=3, offset=2)"#
+        )),
         "{next}"
     );
 
@@ -294,7 +354,10 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     )
     .await;
     let callers = callers.unwrap();
-    assert_eq!(callers["total_count"], 2);
+    assert_eq!(
+        callers["total_count"], 4,
+        "entry, step3, origin, o7: {callers}"
+    );
     assert!(callers.get("incomplete").is_none(), "{callers}");
     let (_, run) = call(
         &client,
@@ -327,7 +390,7 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     );
     assert!(lines[2].starts_with("Incomplete ("), "{impact}");
     assert!(
-        impact.contains("depth limit 1: 1 more dependents"),
+        impact.contains("depth limit 1: 2 more dependents"),
         "{impact}"
     );
     let mut args = next_args(next_line(&impact), "impact_of_change");
@@ -338,4 +401,26 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
         deeper.contains("step2") && !deeper.contains("depth limit 1"),
         "{deeper}"
     );
+
+    // ── impact_of_change on the uncommitted diff: its Next repeats the
+    // call without a diff (the tool reads `git diff HEAD` again) ─────────
+    let edited = FLOW.replacen(
+        "function step3(): void {\n  finish();",
+        "function step3(): void {\n  finish(); // edited",
+        1,
+    );
+    assert_ne!(edited, FLOW);
+    std::fs::write(project.join("src/flow.ts"), edited).unwrap();
+    let (diff, _) = call(
+        &client,
+        "impact_of_change",
+        json!({"repo_id": repo, "depth": 1}),
+    )
+    .await;
+    let next = next_line(&diff);
+    assert!(
+        next.starts_with(&format!(r#"impact_of_change(repo_id="{repo}", depth=2)"#)),
+        "{diff}"
+    );
+    assert!(!next.contains("diff="), "{next}");
 }

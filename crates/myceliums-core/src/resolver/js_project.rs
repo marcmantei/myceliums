@@ -16,13 +16,19 @@
 //! under a build directory (`dist/index.js`) stands for the same path under
 //! `src/` (`src/index.ts`), since build output is not indexed; then
 //! `src/index.*`, then the declared entries as they are, then the package's
-//! own `index.*`. A config file's aliases apply to the files under its
-//! directory; the nearest directory with a `tsconfig.json`/`jsconfig.json`
-//! (or another `tsconfig.*.json`) that sets `paths` or `baseUrl` wins.
+//! own `index.*`. A subpath goes through `exports` the way Node matches it:
+//! an exact key first, then the pattern with the longest prefix.
+//!
+//! A config file's aliases apply to the files under its directory: the
+//! nearest directory with a `tsconfig*.json`/`jsconfig*.json` decides, with
+//! the `paths`/`baseUrl` its files declare or inherit through `extends` — a
+//! nearer config without them gives no aliases, it does not fall back to an
+//! ancestor's.
 //!
 //! Only names the repository declares are resolved here; any other bare
 //! specifier stays a library. The files are read once per analysis; a
-//! missing or unreadable file is skipped.
+//! missing or unreadable file, a symlink, and a path that leaves the
+//! repository are skipped.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -50,11 +56,12 @@ const BUILD_DIRS: &[&str] = &[
 pub(super) struct Package {
     /// Repository-relative directory (`packages/shared`).
     pub(super) dir: String,
-    /// Declared entry files, package-relative, most specific first
-    /// (`source`, `exports["."]`, `module`, `main`, `browser`, `types`).
+    /// Declared entry files, package-relative, most specific first:
+    /// `source`, `exports["."]` (conditions in [`CONDITIONS`] order),
+    /// `module`, `main`, `browser`, `types`, `typings`.
     pub(super) entries: Vec<String>,
     /// `exports` subpaths other than `.`: `("./memory", ["./src/memory.ts"])`;
-    /// a key may hold one `*`.
+    /// a key may hold one `*`. Matched by [`Package::subpath_targets`].
     pub(super) subpaths: Vec<(String, Vec<String>)>,
 }
 
@@ -67,7 +74,9 @@ pub(super) struct PathAliases {
     /// The directory `paths` targets are relative to: `baseUrl`, else the
     /// directory of the config file that declares `paths`.
     pub(super) paths_base: String,
-    /// `paths`: pattern (at most one `*`) → targets, in file order.
+    /// `paths`: pattern (at most one `*`) → targets in file order; the
+    /// patterns are sorted by key (only ties between equally long prefixes
+    /// depend on it).
     pub(super) paths: Vec<(String, Vec<String>)>,
 }
 
@@ -110,8 +119,39 @@ impl PathAliases {
         };
         targets
             .iter()
-            .map(|target| join(&self.paths_base, &target.replacen('*', captured, 1)))
+            .filter_map(|target| join(&self.paths_base, &target.replacen('*', captured, 1)))
             .collect()
+    }
+}
+
+impl Package {
+    /// The `exports` targets of a subpath (`sub/x`), in the order Node
+    /// matches keys: an exact key (`./sub/x`), else the pattern key with the
+    /// longest prefix before its `*` (then the longest key), its `*`
+    /// replaced by what it matched.
+    pub(super) fn subpath_targets(&self, subpath: &str) -> Vec<String> {
+        let wanted = format!("./{subpath}");
+        if let Some((_, targets)) = self.subpaths.iter().find(|(key, _)| *key == wanted) {
+            return targets.clone();
+        }
+        let best = self
+            .subpaths
+            .iter()
+            .filter_map(|(key, targets)| {
+                let (prefix, suffix) = key.split_once('*')?;
+                let captured = wanted
+                    .strip_prefix(prefix)
+                    .and_then(|rest| rest.strip_suffix(suffix))?;
+                Some(((prefix.len(), key.len()), captured, targets))
+            })
+            .max_by_key(|(rank, _, _)| *rank);
+        best.map(|(_, captured, targets)| {
+            targets
+                .iter()
+                .map(|t| t.replacen('*', captured, 1))
+                .collect()
+        })
+        .unwrap_or_default()
     }
 }
 
@@ -120,8 +160,11 @@ impl PathAliases {
 pub struct JsProject {
     /// Workspace packages by `name`; several when two members share one.
     pub(super) packages: BTreeMap<String, Vec<Package>>,
-    /// Directory → the aliases of its config file.
+    /// Directory with a config file → the aliases it gives (empty: none).
     pub(super) aliases: BTreeMap<String, PathAliases>,
+    /// Config files read only because an `extends` names them (their file
+    /// names are not config names: `base.json`), repository-relative.
+    extra_configs: Vec<String>,
 }
 
 impl JsProject {
@@ -135,10 +178,14 @@ impl JsProject {
             .sort_by_file_name()
             .follow_links(false)
             .into_iter()
-            .filter_entry(|e| !IndexScope::skips_name(&e.file_name().to_string_lossy()))
+            .filter_entry(|e| {
+                // The root itself may have any name (a temporary `.tmpXXXX`).
+                e.depth() == 0 || !IndexScope::skips_name(&e.file_name().to_string_lossy())
+            })
             .filter_map(Result::ok)
         {
-            if !entry.file_type().is_file() {
+            // A symlink may point out of the repository: not followed.
+            if entry.path_is_symlink() || !entry.file_type().is_file() {
                 continue;
             }
             let name = entry.file_name().to_string_lossy();
@@ -163,14 +210,27 @@ impl JsProject {
             files.push((rel, text));
         }
         // A base config `extends` names may have any file name
-        // (`@repo/typescript-config/base.json`): read it on demand.
+        // (`@repo/typescript-config/base.json`): read it on demand, but
+        // never through a symlink or outside the repository (`join` already
+        // refuses a path that climbs above it).
         Self::from_files_with(files, |rel| {
             let path = root.join(rel);
-            let meta = std::fs::metadata(&path).ok()?;
+            let meta = std::fs::symlink_metadata(&path).ok()?;
             if !meta.is_file() || meta.len() > MAX_CONFIG_BYTES {
                 return None;
             }
-            std::fs::read_to_string(path).ok()
+            if Path::new(rel).components().any(|c| {
+                matches!(c, std::path::Component::Normal(name)
+                    if IndexScope::skips_name(&name.to_string_lossy()))
+            }) {
+                return None;
+            }
+            let canonical = path.canonicalize().ok()?;
+            let root = root.canonicalize().ok()?;
+            if !canonical.starts_with(&root) {
+                return None;
+            }
+            std::fs::read_to_string(canonical).ok()
         })
     }
 
@@ -293,6 +353,7 @@ impl JsProject {
                     if let Some(config) = read(&candidate).as_deref().and_then(parse_jsonc) {
                         loaded += 1;
                         configs.insert(candidate.clone(), config);
+                        project.extra_configs.push(candidate.clone());
                         pending.push(candidate);
                         break;
                     }
@@ -301,7 +362,9 @@ impl JsProject {
         }
 
         // Config files by directory, the preferred one first. A base read
-        // only because `extends` names it gives its directory nothing.
+        // only because `extends` names it gives its directory nothing. A
+        // directory with a config file that sets no aliases still has an
+        // entry: its files do not inherit an ancestor's aliases.
         let mut by_dir: BTreeMap<String, Vec<&String>> = BTreeMap::new();
         for path in &named {
             by_dir
@@ -321,34 +384,58 @@ impl JsProject {
             let chosen = paths
                 .into_iter()
                 .map(|path| project.effective_aliases(path, &configs))
-                .find(|aliases| !aliases.is_empty());
-            if let Some(aliases) = chosen {
-                project.aliases.insert(dir, aliases);
-            }
+                .find(|aliases| !aliases.is_empty())
+                .unwrap_or_default();
+            project.aliases.insert(dir, chosen);
         }
+        project.extra_configs.sort();
+        project.extra_configs.dedup();
         project
     }
 
     /// Whether the repository declares nothing this resolver uses.
     pub fn is_empty(&self) -> bool {
-        self.packages.is_empty() && self.aliases.is_empty()
+        self.packages.is_empty() && self.aliases.values().all(PathAliases::is_empty)
     }
 
     /// Number of workspace packages and of directories with path aliases.
     pub fn counts(&self) -> (usize, usize) {
         (
             self.packages.values().map(Vec::len).sum(),
-            self.aliases.len(),
+            self.aliases.values().filter(|a| !a.is_empty()).count(),
         )
     }
 
+    /// Config files read only because an `extends` names them, under file
+    /// names that are not config names (`packages/tsconfig/base.json`):
+    /// the index records them so that editing one marks it stale.
+    pub fn extra_config_files(&self) -> &[String] {
+        &self.extra_configs
+    }
+
+    /// Package names two workspace members share, with their directories:
+    /// an import of such a name resolves only where one of them is nearer
+    /// to the importer (or the other is an example or fixture).
+    pub fn duplicate_packages(&self) -> Vec<(String, Vec<String>)> {
+        self.packages
+            .iter()
+            .filter(|(_, members)| members.len() > 1)
+            .map(|(name, members)| {
+                (
+                    name.clone(),
+                    members.iter().map(|m| m.dir.clone()).collect(),
+                )
+            })
+            .collect()
+    }
+
     /// The aliases that apply to `file`: those of the nearest directory
-    /// above it that has any.
+    /// above it with a config file, if that config sets any.
     pub(super) fn aliases_for(&self, file: &str) -> Option<&PathAliases> {
         let mut dir = parent_dir(file);
         loop {
             if let Some(aliases) = self.aliases.get(dir) {
-                return Some(aliases);
+                return (!aliases.is_empty()).then_some(aliases);
             }
             if dir.is_empty() {
                 return None;
@@ -360,7 +447,9 @@ impl JsProject {
     /// The workspace package a bare specifier names, with the subpath after
     /// the package name (`@scope/pkg/sub/x` → `sub/x`). Of two packages of
     /// one name, the one sharing the most leading directories with
-    /// `importer`.
+    /// `importer`, then the one outside an example, fixture or test
+    /// directory; `None` when that still leaves a tie (the name is
+    /// ambiguous).
     pub(super) fn package_for<'a>(
         &'a self,
         importer: &str,
@@ -387,9 +476,11 @@ impl JsProject {
                 .take_while(|(a, b)| a == b)
                 .count()
         };
-        let best = candidates
-            .iter()
-            .max_by_key(|p| (shared(p), std::cmp::Reverse(p.dir.clone())))?;
+        let rank = |p: &Package| (shared(p), !is_example_dir(&p.dir));
+        let best = candidates.iter().max_by_key(|p| rank(p))?;
+        if candidates.iter().filter(|p| rank(p) == rank(best)).count() > 1 {
+            return None;
+        }
         Some((best, rest.trim_start_matches('/')))
     }
 
@@ -430,7 +521,7 @@ impl JsProject {
                     .and_then(|o| o.get("baseUrl"))
                     .and_then(Value::as_str)
                 {
-                    aliases.base_url = Some(join(dir, base));
+                    aliases.base_url = join(dir, base);
                 }
             }
             if paths.is_none() {
@@ -462,13 +553,17 @@ impl JsProject {
     /// `node_modules` is not followed.
     fn extends_candidates(&self, dir: &str, base: &str) -> Vec<String> {
         if base.starts_with("./") || base.starts_with("../") {
-            let path = join(dir, base);
+            let Some(path) = join(dir, base) else {
+                return Vec::new();
+            };
             return vec![path.clone(), format!("{path}.json")];
         }
         let Some((package, rest)) = self.package_for(dir, base) else {
             return Vec::new();
         };
-        let path = join(&package.dir, rest);
+        let Some(path) = join(&package.dir, rest) else {
+            return Vec::new();
+        };
         if rest.is_empty() {
             vec![format!("{path}/tsconfig.json")]
         } else {
@@ -486,8 +581,39 @@ fn extends_of(config: &Value) -> Vec<String> {
     }
 }
 
-/// Whether a file name is one this module reads.
-fn is_config_file(name: &str) -> bool {
+/// Directory names that mark example, fixture and test packages: of two
+/// workspace members with one name, one inside such a directory loses.
+const EXAMPLE_DIRS: &[&str] = &[
+    "example",
+    "examples",
+    "fixture",
+    "fixtures",
+    "__fixtures__",
+    "test",
+    "tests",
+    "__tests__",
+    "e2e",
+    "demo",
+    "demos",
+    "playground",
+    "playgrounds",
+    "sandbox",
+    "sample",
+    "samples",
+    "template",
+    "templates",
+];
+
+/// Whether a package directory lies in an example, fixture or test tree.
+fn is_example_dir(dir: &str) -> bool {
+    dir.split('/')
+        .any(|segment| EXAMPLE_DIRS.contains(&segment))
+}
+
+/// Whether a file name is one the resolver reads to resolve bare JS/TS
+/// specifiers (#169): `package.json`, `pnpm-workspace.yaml`, `lerna.json`,
+/// `tsconfig*.json`, `jsconfig*.json`. Editing one can change the index.
+pub(crate) fn is_config_file(name: &str) -> bool {
     matches!(
         name,
         "package.json" | "pnpm-workspace.yaml" | "pnpm-workspace.yml" | "lerna.json"
@@ -573,19 +699,41 @@ fn package(dir: &str, manifest: &Value) -> Package {
     }
 }
 
-/// The file paths an `exports` target names, a `source` condition first.
+/// The order conditions of an `exports` target are tried in. JSON objects
+/// are read without their key order, so it is fixed here: the source first,
+/// then what a bundler or Node would pick, types last; any other condition
+/// after these, by name.
+const CONDITIONS: &[&str] = &[
+    "source",
+    "import",
+    "module",
+    "default",
+    "browser",
+    "node",
+    "require",
+    "development",
+    "production",
+    "types",
+    "typings",
+];
+
+/// The file paths an `exports` target names, conditions in [`CONDITIONS`]
+/// order, array fallbacks in order.
 fn export_leaves(target: &Value, out: &mut Vec<String>) {
     match target {
         Value::String(path) => out.push(path.clone()),
         Value::Array(items) => items.iter().for_each(|item| export_leaves(item, out)),
         Value::Object(conditions) => {
-            if let Some(source) = conditions.get("source") {
-                export_leaves(source, out);
-            }
-            for (condition, inner) in conditions {
-                if condition != "source" {
-                    export_leaves(inner, out);
-                }
+            let rank = |name: &str| {
+                CONDITIONS
+                    .iter()
+                    .position(|c| *c == name)
+                    .unwrap_or(CONDITIONS.len())
+            };
+            let mut ordered: Vec<(&String, &Value)> = conditions.iter().collect();
+            ordered.sort_by(|a, b| (rank(a.0), a.0).cmp(&(rank(b.0), b.0)));
+            for (_, inner) in ordered {
+                export_leaves(inner, out);
             }
         }
         _ => {}
@@ -593,19 +741,20 @@ fn export_leaves(target: &Value, out: &mut Vec<String>) {
 }
 
 /// `dir` joined with a relative path, `.` and `..` folded; a leading `/`
-/// counts as relative to `dir` too.
-pub(super) fn join(dir: &str, relative: &str) -> String {
+/// counts as relative to `dir` too. `None` when `..` climbs above the
+/// repository root: such a path is not the repository's.
+pub(super) fn join(dir: &str, relative: &str) -> Option<String> {
     let mut parts: Vec<&str> = dir.split('/').filter(|p| !p.is_empty()).collect();
     for part in relative.split('/') {
         match part {
             "" | "." => {}
             ".." => {
-                parts.pop();
+                parts.pop()?;
             }
             part => parts.push(part),
         }
     }
-    parts.join("/")
+    Some(parts.join("/"))
 }
 
 /// The path a declared entry may have in the indexed source: one under a
@@ -797,6 +946,144 @@ mod tests {
         );
         assert_eq!(source_for_build_path("index.js"), None);
         assert_eq!(source_for_build_path("src/a.ts"), None);
+    }
+
+    #[test]
+    fn exports_match_an_exact_key_first_then_the_longest_pattern_prefix() {
+        let p = project(&[
+            ("package.json", r#"{"workspaces": ["p/*"]}"#),
+            (
+                "p/a/package.json",
+                r#"{"name": "a", "exports": {
+                    "./*": "./*",
+                    "./features/*": "./src/features/*.ts",
+                    "./features/*.css": "./styles/*.css",
+                    "./features/special": "./src/special.ts",
+                    ".": {"require": "./dist/a.cjs", "import": "./dist/a.mjs", "source": "./src/a.ts"}
+                }}"#,
+            ),
+        ]);
+        let a = &p.packages["a"][0];
+        // Conditions in a fixed order, whatever the file order.
+        assert_eq!(a.entries, ["./src/a.ts", "./dist/a.mjs", "./dist/a.cjs"]);
+        assert_eq!(a.subpath_targets("features/special"), ["./src/special.ts"]);
+        assert_eq!(a.subpath_targets("features/x"), ["./src/features/x.ts"]);
+        // Of two patterns with one prefix, the longer key.
+        assert_eq!(a.subpath_targets("features/x.css"), ["./styles/x.css"]);
+        assert_eq!(a.subpath_targets("lib/y"), ["./lib/y"]);
+        assert!(project(&[]).packages.is_empty());
+    }
+
+    #[test]
+    fn a_path_that_climbs_above_the_repository_is_none() {
+        assert_eq!(join("a/b", "../c").as_deref(), Some("a/c"));
+        assert_eq!(join("a", "../../outside"), None);
+        assert_eq!(join("", "..").as_deref(), None);
+        let aliases = PathAliases {
+            base_url: None,
+            paths_base: "app".into(),
+            paths: vec![("#/*".into(), vec!["../../*".into(), "./src/*".into()])],
+        };
+        assert_eq!(aliases.targets("#/x"), ["app/src/x"]);
+        let p = project(&[("app/tsconfig.json", r#"{"extends": "../../base.json"}"#)]);
+        assert!(p.extra_config_files().is_empty());
+    }
+
+    #[test]
+    fn same_named_packages_prefer_the_nearer_then_the_non_example_else_none() {
+        let p = project(&[
+            (
+                "package.json",
+                r#"{"workspaces": ["packages/*", "examples/*", "apps/*/packages/*"]}"#,
+            ),
+            ("packages/ui/package.json", r#"{"name": "ui"}"#),
+            ("examples/ui/package.json", r#"{"name": "ui"}"#),
+            ("packages/x/package.json", r#"{"name": "x"}"#),
+            ("apps/b/packages/x/package.json", r#"{"name": "x"}"#),
+            ("apps/c/packages/x/package.json", r#"{"name": "x"}"#),
+        ]);
+        let dir = |importer: &str, name: &'static str| {
+            p.package_for(importer, name)
+                .map(|(pkg, _)| pkg.dir.clone())
+        };
+        // Equally far: the example loses.
+        assert_eq!(dir("src/m.ts", "ui").as_deref(), Some("packages/ui"));
+        // Equally far, neither an example: ambiguous.
+        assert_eq!(dir("apps/d/m.ts", "x"), None);
+        assert_eq!(
+            dir("apps/b/src/m.ts", "x").as_deref(),
+            Some("apps/b/packages/x")
+        );
+        assert_eq!(p.duplicate_packages().len(), 2);
+    }
+
+    #[test]
+    fn a_nearer_config_without_aliases_does_not_inherit_an_ancestors() {
+        let p = project(&[
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions": {"paths": {"@/*": ["src/*"]}}}"#,
+            ),
+            (
+                "tools/tsconfig.json",
+                r#"{"compilerOptions": {"strict": true}}"#,
+            ),
+            (
+                "apps/web/tsconfig.json",
+                r#"{"extends": "../../tsconfig.json"}"#,
+            ),
+        ]);
+        assert!(p.aliases_for("src/a.ts").is_some());
+        assert!(p.aliases_for("tools/build.ts").is_none());
+        // Extending the ancestor inherits its aliases, relative to it.
+        let web = p.aliases_for("apps/web/src/a.ts").unwrap();
+        assert_eq!(web.targets("@/x"), ["src/x"]);
+    }
+
+    #[test]
+    fn load_reads_no_symlink_and_nothing_outside_the_repository() {
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(
+            outside.path().join("evil.json"),
+            r#"{"compilerOptions": {"paths": {"@evil/*": ["*"]}}}"#,
+        )
+        .unwrap();
+        let repo = tempfile::tempdir().unwrap();
+        let root = repo.path();
+        std::fs::create_dir_all(root.join("app")).unwrap();
+        std::fs::create_dir_all(root.join("cfg")).unwrap();
+        std::fs::write(
+            root.join("cfg/base.json"),
+            r#"{"compilerOptions": {"paths": {"~/*": ["src/*"]}}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("app/tsconfig.json"),
+            r#"{"extends": ["../cfg/base.json", "../cfg/linked.json"]}"#,
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(
+                outside.path().join("evil.json"),
+                root.join("cfg/linked.json"),
+            )
+            .unwrap();
+            std::os::unix::fs::symlink(
+                outside.path().join("evil.json"),
+                root.join("tsconfig.json"),
+            )
+            .unwrap();
+        }
+        let p = JsProject::load(root);
+        let app = p.aliases_for("app/x.ts").unwrap();
+        assert_eq!(app.targets("~/y"), ["cfg/src/y"]);
+        assert!(app.targets("@evil/z").is_empty());
+        assert_eq!(p.extra_config_files(), ["cfg/base.json"]);
+        assert!(
+            p.aliases_for("x.ts").is_none(),
+            "the symlinked root config is not read"
+        );
     }
 
     #[test]

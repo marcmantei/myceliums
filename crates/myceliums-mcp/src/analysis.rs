@@ -469,6 +469,7 @@ impl Rebuild {
             analyzed_commit: analyzed_commit.clone(),
             vector_geometry_version: myceliums_storage::schema::VECTOR_GEOMETRY_VERSION,
             classification_version: myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: myceliums_storage::schema::CALL_RECORD_VERSION,
         });
         registry
             .save()

@@ -212,6 +212,12 @@ async fn call_stats(graph: &Graph) -> Option<myceliums_core::CallResolutionStats
         .flatten()
 }
 
+/// `myc analyze <path> --force`: what records what only a full analysis can
+/// (#169).
+fn full_analysis(info: &RepoInfo) -> String {
+    format!("myc analyze {} --force", shell_word(&info.path))
+}
+
 /// `name` quoted for a shell command line when it needs it.
 fn shell_word(name: &str) -> String {
     if name
@@ -267,15 +273,16 @@ fn render_calls(
         "{label} of {}: {total} {scope}\n",
         ref_line(&SymbolRef::of(target))
     );
+    // Right under the first line: a cut answer never reads as complete.
+    if let Some(incomplete) = &incomplete {
+        out.push_str(&incomplete.block);
+    }
     for h in &shown {
         out.push_str(&hit_line(h, show_depth));
         out.push('\n');
     }
     if omitted > 0 {
         out.push_str(&format!("  +{omitted} more (raise --budget)\n"));
-    }
-    if let Some(incomplete) = &incomplete {
-        out.push_str(&incomplete.block);
     }
     out.push_str(&freshness.summary());
     out.push('\n');
@@ -309,11 +316,12 @@ pub async fn cmd_calls(
     };
     let mut gaps = Gaps::default();
     let mut next = Vec::new();
+    let repo_flag = format!("--repo {}", shell_word(&graph.info.id));
     if depth > 1 {
         gaps.depth_cut(depth, walk.cut.clone());
         if gaps.depth.is_some() {
             next.push(format!(
-                "myc {command} {} --depth {}",
+                "myc {command} {} --depth {} {repo_flag}",
                 shell_word(symbol),
                 depth + 1
             ));
@@ -328,6 +336,9 @@ pub async fn cmd_calls(
     match direction {
         CallDirection::Callers => gaps.unlinked_into(stats.as_ref(), walked),
         CallDirection::Callees => gaps.unlinked_out_of(stats.as_ref(), walked),
+    }
+    if gaps.needs_full_analysis() {
+        next.push(full_analysis(&graph.info));
     }
     if let Some(read) = gaps.read_the_source() {
         next.push(read);
@@ -412,9 +423,10 @@ pub async fn cmd_impact_target(
     gaps.depth_cut(depth, walk.cut.clone());
     if gaps.depth.is_some() {
         next.push(format!(
-            "myc impact {} --depth {}",
+            "myc impact {} --depth {} --repo {}",
             shell_word(target),
-            depth + 1
+            depth + 1,
+            shell_word(&graph.info.id)
         ));
     }
     gaps.unlinked_into(
@@ -426,6 +438,9 @@ pub async fn cmd_impact_target(
                 .map(|h| h.symbol),
         ),
     );
+    if gaps.needs_full_analysis() {
+        next.push(full_analysis(&graph.info));
+    }
     if let Some(read) = gaps.read_the_source() {
         next.push(read);
     }
@@ -466,6 +481,9 @@ pub async fn cmd_impact_target(
         "impact of {subject}, depth <= {depth}: {total} dependents in {} files\n",
         radius.files.len()
     );
+    if let Some(incomplete) = &incomplete {
+        out.push_str(&incomplete.block);
+    }
     for h in &shown {
         out.push_str(&hit_line(h, true));
         out.push('\n');
@@ -475,9 +493,6 @@ pub async fn cmd_impact_target(
     }
     out.push_str(&files_line);
     out.push('\n');
-    if let Some(incomplete) = &incomplete {
-        out.push_str(&incomplete.block);
-    }
     out.push_str(&freshness.summary());
     out.push('\n');
     print!("{out}");
@@ -566,6 +581,7 @@ mod tests {
             analyzed_commit: Some("abcdef0123".into()),
             vector_geometry_version: 0,
             classification_version: 0,
+            call_record_version: 0,
         }
     }
 
@@ -670,7 +686,7 @@ mod tests {
     }
 
     #[test]
-    fn a_cut_walk_says_so_before_the_freshness_line() {
+    fn a_cut_walk_says_so_right_under_the_first_line() {
         let fresh = IndexFreshness::compare("t", Some("abcdef0123"), Some("abcdef0123"));
         let mid = sym("mid", "mid", "src/m.rs", 4);
         let mut gaps = Gaps::default();
@@ -699,16 +715,16 @@ mod tests {
             opts(false, 2000),
         );
         let lines: Vec<&str> = out.lines().collect();
-        let n = lines.len();
         assert_eq!(
-            lines[n - 4..],
+            lines[1..4],
             [
                 "Incomplete (3 branch(es) not followed):",
                 "  - depth limit 2: 3 more callers one step further, through 1 symbol(s) at depth 2: `mid`",
                 "Next: myc callers target --depth 3",
-                "index: abcdef0 = HEAD",
             ]
         );
+        assert_eq!(lines[4], "  [1] m::a  src/x.rs:3");
+        assert_eq!(lines.last().copied(), Some("index: abcdef0 = HEAD"));
         let json = render_calls(
             &info(),
             &fresh,

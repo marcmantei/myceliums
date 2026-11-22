@@ -34,7 +34,7 @@ mod imports;
 mod js_project;
 mod types;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use myceliums_storage::{
     CodeSymbol, Relationship, RelationshipKind, Store, SymbolKind, SymbolMetadata,
@@ -46,6 +46,7 @@ use crate::parser::{
     CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, TypeBinding,
 };
 use imports::Bound;
+pub(crate) use js_project::is_config_file as is_resolution_config_name;
 pub use js_project::JsProject;
 use types::Ty;
 
@@ -155,6 +156,18 @@ pub struct CallResolutionStats {
     /// not recorded.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub unlinked_by_caller: BTreeMap<String, BTreeMap<String, Vec<UnlinkedCall>>>,
+    /// Version of the per-caller record
+    /// ([`myceliums_storage::schema::CALL_RECORD_VERSION`]); `0` in a record
+    /// written before [`unlinked_by_caller`](Self::unlinked_by_caller)
+    /// existed, whose callers' unlinked calls are unknown, not absent.
+    #[serde(default)]
+    pub version: u32,
+    /// Files re-indexed incrementally since the last full analysis: their
+    /// entries in [`unlinked_by_caller`](Self::unlinked_by_caller) were
+    /// dropped, so their callers' unlinked calls are unknown until the next
+    /// full analysis (#169).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub stale_files: BTreeSet<String>,
 }
 
 /// A call site that got no CALLS edge though it may reach project code
@@ -229,6 +242,37 @@ impl CallResolutionStats {
             .and_then(|names| names.get(name))
             .copied()
             .unwrap_or(0)
+    }
+
+    /// Whether the record holds every caller's unlinked calls: written by an
+    /// analysis that records them ([`version`](Self::version)).
+    pub fn records_unlinked_calls(&self) -> bool {
+        self.version >= myceliums_storage::schema::CALL_RECORD_VERSION
+    }
+
+    /// Whether `file`'s unlinked calls are unknown: re-indexed incrementally
+    /// since the last full analysis.
+    pub fn is_stale(&self, file: &str) -> bool {
+        self.stale_files.contains(file)
+    }
+
+    /// After re-indexing `changed` incrementally: their unlinked calls are
+    /// no longer known (the incremental resolver sees only the changed
+    /// files, so what it leaves unlinked is not comparable), and `deleted`
+    /// files have none.
+    pub fn forget_files<'a>(
+        &mut self,
+        changed: impl IntoIterator<Item = &'a str>,
+        deleted: impl IntoIterator<Item = &'a str>,
+    ) {
+        for file in changed {
+            self.unlinked_by_caller.remove(file);
+            self.stale_files.insert(file.to_string());
+        }
+        for file in deleted {
+            self.unlinked_by_caller.remove(file);
+            self.stale_files.remove(file);
+        }
     }
 
     /// The call sites the symbol `qualified_name` in `file` makes that got
@@ -692,6 +736,7 @@ impl CallResolver {
                 calls.dedup();
             }
         }
+        stats.version = myceliums_storage::schema::CALL_RECORD_VERSION;
         self.stats = stats;
         edges
             .into_iter()
@@ -2828,6 +2873,17 @@ mod tests {
             serde_json::from_str(r#"{"linked":1,"too_many_candidates":0,"library":0,"through_variable":0,"unresolved":0,"no_caller":0}"#)
                 .unwrap();
         assert!(old.unlinked_by_caller.is_empty());
+        // An old record says so, rather than looking complete.
+        assert!(!old.records_unlinked_calls());
+        assert!(stats.records_unlinked_calls());
+
+        // Incremental re-indexing forgets what it cannot know.
+        let mut recorded = stats.clone();
+        recorded.forget_files(["app.py"], []);
+        assert!(recorded.unlinked_from("app.py", "main").is_empty());
+        assert!(recorded.is_stale("app.py"));
+        recorded.forget_files([], ["app.py"]);
+        assert!(!recorded.is_stale("app.py"));
     }
 
     // --- re-check of #144: bases the resolver cannot see -------------------

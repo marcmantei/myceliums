@@ -278,6 +278,7 @@ mod tests {
                 analyzed_commit: None,
                 vector_geometry_version: 0,
                 classification_version: 0,
+                call_record_version: 0,
             });
         }
         registry
@@ -467,6 +468,7 @@ mod tests {
             analyzed_commit: None,
             vector_geometry_version: 0,
             classification_version: 0,
+            call_record_version: 0,
         }
     }
 

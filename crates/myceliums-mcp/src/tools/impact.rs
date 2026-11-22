@@ -528,6 +528,7 @@ fn impact_gaps<'a>(
     cut: navigation::DepthCut<'a>,
     depth: u32,
     stats: Option<&myceliums_core::CallResolutionStats>,
+    repo_id: &str,
     again: &str,
 ) -> String {
     let mut gaps = crate::incomplete::Gaps::default();
@@ -545,6 +546,9 @@ fn impact_gaps<'a>(
         .copied()
         .chain(hits.iter().filter(|h| h.depth < depth).map(|h| h.symbol));
     gaps.unlinked_into(stats, walked);
+    if gaps.needs_full_analysis() {
+        next.push(super::graph::full_analysis(repo_id));
+    }
     if let Some(read) = gaps.read_the_source() {
         next.push(read);
     }
@@ -571,10 +575,19 @@ impl MyceliumsMcp {
 
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
-        let again = match (&params.symbol_name, &params.file_path) {
-            (Some(name), _) => format!("impact_of_change(symbol_name={name:?}, "),
-            (None, Some(path)) => format!("impact_of_change(file_path={path:?}, "),
-            (None, None) => "impact_of_change(diff=<the same diff>, ".to_string(),
+        // The call that repeats this one with another depth. Without a
+        // diff the tool reads `git diff HEAD` again, so none is named.
+        let again = match (&params.symbol_name, &params.file_path, &params.diff) {
+            (Some(name), _, _) => {
+                format!("impact_of_change(repo_id={repo_id:?}, symbol_name={name:?}, ")
+            }
+            (None, Some(path), _) => {
+                format!("impact_of_change(repo_id={repo_id:?}, file_path={path:?}, ")
+            }
+            (None, None, Some(_)) => {
+                format!("impact_of_change(repo_id={repo_id:?}, diff=<the same diff>, ")
+            }
+            (None, None, None) => format!("impact_of_change(repo_id={repo_id:?}, "),
         };
         let stats = crate::index_status::call_resolution(&graph.store()).await;
         let (subject, roots) = match (params.symbol_name, params.file_path) {
@@ -624,14 +637,15 @@ impl MyceliumsMcp {
                         .collect();
                     let (hits, cut) =
                         navigation::dependents_bounded(&symbols, &relationships, &roots, depth);
-                    let block = impact_gaps(&roots, &hits, cut, depth, stats.as_ref(), &again);
+                    let block =
+                        impact_gaps(&roots, &hits, cut, depth, stats.as_ref(), &repo_id, &again);
                     with_gaps(format::format_impact_report(&report, page), &block)
                 };
                 return self.graph_text(&graph, body).await;
             }
         };
         let (hits, cut) = navigation::dependents_bounded(&symbols, &relationships, &roots, depth);
-        let block = impact_gaps(&roots, &hits, cut, depth, stats.as_ref(), &again);
+        let block = impact_gaps(&roots, &hits, cut, depth, stats.as_ref(), &repo_id, &again);
         let body = with_gaps(
             format::format_dependents(&subject, &hits, depth, page),
             &block,
