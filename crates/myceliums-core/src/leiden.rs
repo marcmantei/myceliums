@@ -736,15 +736,14 @@ mod tests {
         assert_eq!(outcome.iterations, 1);
     }
 
-    #[test]
-    fn every_community_is_connected() {
-        // Leiden's guarantee: no community falls apart into pieces.
-        let graph = ring_of_cliques(15, 4);
-        let outcome = leiden(&graph, 1.0, unlimited());
-        let k = count_communities(&outcome.membership);
+    /// Panics unless every community of `membership` is connected in `graph`
+    /// (Leiden's guarantee) and the ids are `0..k`.
+    fn assert_connected_communities(graph: &WeightedGraph, membership: &[usize], what: &str) {
+        let k = count_communities(membership);
+        assert_eq!(membership.iter().copied().max().map_or(0, |m| m + 1), k);
         for c in 0..k {
             let nodes: Vec<usize> = (0..graph.node_count())
-                .filter(|&v| outcome.membership[v] == c)
+                .filter(|&v| membership[v] == c)
                 .collect();
             let mut seen = vec![false; graph.node_count()];
             let mut stack = vec![nodes[0]];
@@ -752,14 +751,161 @@ mod tests {
             let mut reached = 1;
             while let Some(v) = stack.pop() {
                 for (u, _) in graph.neighbours(v) {
-                    if outcome.membership[u] == c && !seen[u] {
+                    if membership[u] == c && !seen[u] {
                         seen[u] = true;
                         reached += 1;
                         stack.push(u);
                     }
                 }
             }
-            assert_eq!(reached, nodes.len(), "community {c} is disconnected");
+            assert_eq!(
+                reached,
+                nodes.len(),
+                "{what}: community {c} is disconnected"
+            );
+        }
+    }
+
+    #[test]
+    fn every_community_is_connected() {
+        let graph = ring_of_cliques(15, 4);
+        let outcome = leiden(&graph, 1.0, unlimited());
+        assert_connected_communities(&graph, &outcome.membership, "ring of cliques");
+    }
+
+    /// Zachary's karate club (34 members, 78 ties, 1-indexed as published).
+    fn karate_club() -> WeightedGraph {
+        const TIES: [(usize, usize); 78] = [
+            (1, 2),
+            (1, 3),
+            (1, 4),
+            (1, 5),
+            (1, 6),
+            (1, 7),
+            (1, 8),
+            (1, 9),
+            (1, 11),
+            (1, 12),
+            (1, 13),
+            (1, 14),
+            (1, 18),
+            (1, 20),
+            (1, 22),
+            (1, 32),
+            (2, 3),
+            (2, 4),
+            (2, 8),
+            (2, 14),
+            (2, 18),
+            (2, 20),
+            (2, 22),
+            (2, 31),
+            (3, 4),
+            (3, 8),
+            (3, 9),
+            (3, 10),
+            (3, 14),
+            (3, 28),
+            (3, 29),
+            (3, 33),
+            (4, 8),
+            (4, 13),
+            (4, 14),
+            (5, 7),
+            (5, 11),
+            (6, 7),
+            (6, 11),
+            (6, 17),
+            (7, 17),
+            (9, 31),
+            (9, 33),
+            (9, 34),
+            (10, 34),
+            (14, 34),
+            (15, 33),
+            (15, 34),
+            (16, 33),
+            (16, 34),
+            (19, 33),
+            (19, 34),
+            (20, 34),
+            (21, 33),
+            (21, 34),
+            (23, 33),
+            (23, 34),
+            (24, 26),
+            (24, 28),
+            (24, 30),
+            (24, 33),
+            (24, 34),
+            (25, 26),
+            (25, 28),
+            (25, 32),
+            (26, 32),
+            (27, 30),
+            (27, 34),
+            (28, 34),
+            (29, 32),
+            (29, 34),
+            (30, 33),
+            (30, 34),
+            (31, 33),
+            (31, 34),
+            (32, 33),
+            (32, 34),
+            (33, 34),
+        ];
+        let edges: Vec<(usize, usize, f64)> =
+            TIES.iter().map(|&(a, b)| (a - 1, b - 1, 1.0)).collect();
+        WeightedGraph::from_edges(34, &edges)
+    }
+
+    /// The karate club's best known modularity is 0.4198 (four communities).
+    #[test]
+    fn reaches_the_known_optimum_on_the_karate_club() {
+        let graph = karate_club();
+        assert_eq!(graph.edge_count(), 78);
+        let outcome = leiden(&graph, 1.0, unlimited());
+        assert_eq!(outcome.stop, Stop::Converged);
+        let q = modularity(&graph, &outcome.membership, 1.0);
+        assert!((q - 0.4198).abs() < 0.005, "modularity {q}");
+        assert_connected_communities(&graph, &outcome.membership, "karate club");
+    }
+
+    /// Property: on seeded random graphs (planted groups plus noise, varied
+    /// size and density, isolated nodes included) every community is
+    /// connected, the run converges, and a second run gives the same result.
+    #[test]
+    fn random_graphs_give_connected_deterministic_communities() {
+        for seed in 0..40u64 {
+            let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9) + 1);
+            let n = 20 + rng.below(180);
+            let groups = 1 + rng.below(8);
+            let p_in = 0.05 + rng.next_f64() * 0.4;
+            let p_out = rng.next_f64() * 0.03;
+            let mut edges = Vec::new();
+            for a in 0..n {
+                for b in (a + 1)..n {
+                    let p = if a % groups == b % groups {
+                        p_in
+                    } else {
+                        p_out
+                    };
+                    if rng.next_f64() < p {
+                        edges.push((a, b, 1.0 + rng.below(3) as f64));
+                    }
+                }
+            }
+            let graph = WeightedGraph::from_edges(n, &edges);
+            let first = leiden(&graph, 1.0, unlimited());
+            let second = leiden(&graph, 1.0, unlimited());
+            assert_eq!(first.stop, Stop::Converged, "seed {seed}");
+            assert_eq!(first.membership, second.membership, "seed {seed}");
+            assert_connected_communities(&graph, &first.membership, &format!("seed {seed}"));
+            assert!(
+                modularity(&graph, &first.membership, 1.0) >= -1e-12,
+                "seed {seed}"
+            );
         }
     }
 

@@ -209,7 +209,8 @@ pub struct CommunitySection {
     /// records the communities as partial.
     #[serde(default = "CommunitySection::default_time_budget_secs")]
     pub time_budget_secs: u64,
-    /// Most Leiden iterations before the partition is kept as partial.
+    /// Most Leiden iterations before the partition is kept as partial
+    /// (`0` counts as 1: one iteration always runs).
     #[serde(default = "CommunitySection::default_max_iterations")]
     pub max_iterations: usize,
 }

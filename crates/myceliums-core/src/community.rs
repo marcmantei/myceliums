@@ -54,7 +54,10 @@ impl Default for CommunityOptions {
 }
 
 impl CommunityOptions {
-    /// The options a project's `[community]` section asks for.
+    /// The options a project's `[community]` section asks for:
+    /// `time_budget_secs = 0` means no limit, `max_iterations = 0` counts as
+    /// 1, a resolution ≤ 0 as 1.0. Only `analyze` uses them; the on-demand
+    /// recomputations use [`CommunityOptions::default`].
     pub fn from_config(section: &CommunitySection) -> Self {
         Self {
             budget: CommunityBudget {
