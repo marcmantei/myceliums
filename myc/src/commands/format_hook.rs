@@ -88,16 +88,26 @@ fn format_hook_message(
                 "callees"
             };
             let name = tool_input["symbol_name"].as_str().unwrap_or("?");
+            let cut = if json["incomplete"].is_object() {
+                " (incomplete)"
+            } else {
+                ""
+            };
             match json["total_count"].as_u64() {
-                Some(n) => format!("[myceliums] {n} {what} of {}", truncate(name, 40)),
-                None => format!("[myceliums] {what} of {}", truncate(name, 40)),
+                Some(n) => format!("[myceliums] {n} {what} of {}{cut}", truncate(name, 40)),
+                None => format!("[myceliums] {what} of {}{cut}", truncate(name, 40)),
             }
         }
         "trace_flow" => {
-            if first_line.starts_with("Shortest") || first_line.starts_with("No call chain") {
-                format!("[myceliums] {}", truncate(first_line, 100))
+            let cut = if result_text.contains("\nIncomplete (") {
+                " (incomplete)"
             } else {
-                "[myceliums] Call chain traced".to_string()
+                ""
+            };
+            if first_line.starts_with("Shortest") || first_line.starts_with("No call chain") {
+                format!("[myceliums] {}{cut}", truncate(first_line, 100))
+            } else {
+                format!("[myceliums] Call chain traced{cut}")
             }
         }
         "search_code" | "context_search" | "search_documents" | "semantic_search" => {

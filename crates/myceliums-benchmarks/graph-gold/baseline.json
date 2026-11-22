@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
   "regenerate_with": "cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline",
-  "timestamp": "2026-11-22T11:47:48Z",
-  "commit_sha": "d0f0f277ba55f5626ac92b3407aa4a9f13ba7bb0",
-  "dataset_digest": "3ad580be10c65ef0d7f3acbde6d06ce9a58b4770ed341262336a80a2aee1c0c8",
+  "timestamp": "2026-11-22T14:56:31Z",
+  "commit_sha": "7392be9797b32c876c057d4021bf61d17ed134ba",
+  "dataset_digest": "4bec0f3546d4feb5113544a493407780cb9e47003adc13d99b9aa24a20f32a33",
   "labelled_by": "agent",
   "reviewed_by": null,
   "platform": "macos-aarch64",
@@ -11,28 +11,28 @@
     "isolated": {
       "overall": {
         "symbols": {
-          "gold": 337,
-          "predicted": 338,
-          "true_positives": 337,
+          "gold": 359,
+          "predicted": 360,
+          "true_positives": 359,
           "false_positives": 1,
           "false_negatives": 0
         },
         "symbol_rates": {
-          "precision": 0.997,
+          "precision": 0.9972,
           "recall": 1.0,
-          "f1": 0.9985
+          "f1": 0.9986
         },
         "calls": {
-          "gold": 249,
-          "predicted": 248,
-          "true_positives": 248,
+          "gold": 274,
+          "predicted": 273,
+          "true_positives": 273,
           "false_positives": 0,
           "false_negatives": 1
         },
         "call_rates": {
           "precision": 1.0,
-          "recall": 0.996,
-          "f1": 0.998
+          "recall": 0.9964,
+          "f1": 0.9982
         },
         "wrong_caller": 0
       },
@@ -171,29 +171,56 @@
             "f1": 1.0
           },
           "wrong_caller": 0
+        },
+        "typescript-monorepo": {
+          "symbols": {
+            "gold": 22,
+            "predicted": 22,
+            "true_positives": 22,
+            "false_positives": 0,
+            "false_negatives": 0
+          },
+          "symbol_rates": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "calls": {
+            "gold": 25,
+            "predicted": 25,
+            "true_positives": 25,
+            "false_positives": 0,
+            "false_negatives": 0
+          },
+          "call_rates": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "wrong_caller": 0
         }
       },
       "by_label": {
         "exact": {
-          "predicted": 161,
-          "true_positives": 161,
+          "predicted": 172,
+          "true_positives": 172,
           "false_positives": 0,
           "precision": 1.0,
-          "recall_share": 0.6466
+          "recall_share": 0.6277
         },
         "import": {
-          "predicted": 47,
-          "true_positives": 47,
+          "predicted": 56,
+          "true_positives": 56,
           "false_positives": 0,
           "precision": 1.0,
-          "recall_share": 0.1888
+          "recall_share": 0.2044
         },
         "name-match": {
-          "predicted": 40,
-          "true_positives": 40,
+          "predicted": 45,
+          "true_positives": 45,
           "false_positives": 0,
           "precision": 1.0,
-          "recall_share": 0.1606
+          "recall_share": 0.1642
         }
       },
       "by_language_label": {
@@ -311,12 +338,35 @@
             "precision": 1.0,
             "recall_share": 0.16
           }
+        },
+        "typescript-monorepo": {
+          "exact": {
+            "predicted": 11,
+            "true_positives": 11,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall_share": 0.44
+          },
+          "import": {
+            "predicted": 9,
+            "true_positives": 9,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall_share": 0.36
+          },
+          "name-match": {
+            "predicted": 5,
+            "true_positives": 5,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall_share": 0.2
+          }
         }
       },
       "by_tag": {
         "alias": {
-          "gold": 6,
-          "found": 6
+          "gold": 11,
+          "found": 11
         },
         "arrow-function": {
           "gold": 3,
@@ -327,12 +377,16 @@
           "found": 10
         },
         "constructor": {
-          "gold": 51,
-          "found": 51
+          "gold": 55,
+          "found": 55
         },
         "cross-file": {
-          "gold": 27,
-          "found": 27
+          "gold": 29,
+          "found": 29
+        },
+        "cross-package": {
+          "gold": 14,
+          "found": 14
         },
         "dispatch": {
           "gold": 3,
@@ -355,12 +409,12 @@
           "found": 4
         },
         "method-vs-function": {
-          "gold": 10,
-          "found": 10
+          "gold": 11,
+          "found": 11
         },
         "module-qualified": {
-          "gold": 9,
-          "found": 9
+          "gold": 10,
+          "found": 10
         },
         "overload": {
           "gold": 3,
@@ -370,17 +424,21 @@
           "gold": 22,
           "found": 22
         },
+        "re-export": {
+          "gold": 2,
+          "found": 2
+        },
         "recursion": {
           "gold": 5,
           "found": 5
         },
         "same-file": {
-          "gold": 29,
-          "found": 29
+          "gold": 34,
+          "found": 34
         },
         "same-name": {
-          "gold": 102,
-          "found": 101
+          "gold": 104,
+          "found": 103
         },
         "self-call": {
           "gold": 25,
@@ -399,8 +457,8 @@
           "found": 3
         },
         "typed-receiver": {
-          "gold": 64,
-          "found": 63
+          "gold": 71,
+          "found": 70
         }
       },
       "detail": {
@@ -954,6 +1012,93 @@
               "typed-receiver": {
                 "gold": 13,
                 "found": 13
+              }
+            },
+            "false_positives": [],
+            "false_negatives": []
+          }
+        },
+        "typescript-monorepo": {
+          "symbols": {
+            "counts": {
+              "gold": 22,
+              "predicted": 22,
+              "true_positives": 22,
+              "false_positives": 0,
+              "false_negatives": 0
+            },
+            "false_positives": [],
+            "false_negatives": [],
+            "kind_mismatches": []
+          },
+          "calls": {
+            "counts": {
+              "gold": 25,
+              "predicted": 25,
+              "true_positives": 25,
+              "false_positives": 0,
+              "false_negatives": 0
+            },
+            "redundant": 0,
+            "dynamic": 0,
+            "wrong_caller": 0,
+            "by_label": {
+              "exact": {
+                "predicted": 11,
+                "true_positives": 11,
+                "false_positives": 0
+              },
+              "import": {
+                "predicted": 9,
+                "true_positives": 9,
+                "false_positives": 0
+              },
+              "name-match": {
+                "predicted": 5,
+                "true_positives": 5,
+                "false_positives": 0
+              }
+            },
+            "by_tag": {
+              "alias": {
+                "gold": 5,
+                "found": 5
+              },
+              "constructor": {
+                "gold": 4,
+                "found": 4
+              },
+              "cross-file": {
+                "gold": 2,
+                "found": 2
+              },
+              "cross-package": {
+                "gold": 14,
+                "found": 14
+              },
+              "method-vs-function": {
+                "gold": 1,
+                "found": 1
+              },
+              "module-qualified": {
+                "gold": 1,
+                "found": 1
+              },
+              "re-export": {
+                "gold": 2,
+                "found": 2
+              },
+              "same-file": {
+                "gold": 5,
+                "found": 5
+              },
+              "same-name": {
+                "gold": 2,
+                "found": 2
+              },
+              "typed-receiver": {
+                "gold": 7,
+                "found": 7
               }
             },
             "false_positives": [],
@@ -965,28 +1110,28 @@
     "polyglot": {
       "overall": {
         "symbols": {
-          "gold": 337,
-          "predicted": 338,
-          "true_positives": 337,
+          "gold": 359,
+          "predicted": 360,
+          "true_positives": 359,
           "false_positives": 1,
           "false_negatives": 0
         },
         "symbol_rates": {
-          "precision": 0.997,
+          "precision": 0.9972,
           "recall": 1.0,
-          "f1": 0.9985
+          "f1": 0.9986
         },
         "calls": {
-          "gold": 249,
-          "predicted": 248,
-          "true_positives": 248,
+          "gold": 274,
+          "predicted": 273,
+          "true_positives": 273,
           "false_positives": 0,
           "false_negatives": 1
         },
         "call_rates": {
           "precision": 1.0,
-          "recall": 0.996,
-          "f1": 0.998
+          "recall": 0.9964,
+          "f1": 0.9982
         },
         "wrong_caller": 0
       },
@@ -1125,29 +1270,56 @@
             "f1": 1.0
           },
           "wrong_caller": 0
+        },
+        "typescript-monorepo": {
+          "symbols": {
+            "gold": 22,
+            "predicted": 22,
+            "true_positives": 22,
+            "false_positives": 0,
+            "false_negatives": 0
+          },
+          "symbol_rates": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "calls": {
+            "gold": 25,
+            "predicted": 25,
+            "true_positives": 25,
+            "false_positives": 0,
+            "false_negatives": 0
+          },
+          "call_rates": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "wrong_caller": 0
         }
       },
       "by_label": {
         "exact": {
-          "predicted": 161,
-          "true_positives": 161,
+          "predicted": 172,
+          "true_positives": 172,
           "false_positives": 0,
           "precision": 1.0,
-          "recall_share": 0.6466
+          "recall_share": 0.6277
         },
         "import": {
-          "predicted": 47,
-          "true_positives": 47,
+          "predicted": 56,
+          "true_positives": 56,
           "false_positives": 0,
           "precision": 1.0,
-          "recall_share": 0.1888
+          "recall_share": 0.2044
         },
         "name-match": {
-          "predicted": 40,
-          "true_positives": 40,
+          "predicted": 45,
+          "true_positives": 45,
           "false_positives": 0,
           "precision": 1.0,
-          "recall_share": 0.1606
+          "recall_share": 0.1642
         }
       },
       "by_language_label": {
@@ -1265,12 +1437,35 @@
             "precision": 1.0,
             "recall_share": 0.16
           }
+        },
+        "typescript-monorepo": {
+          "exact": {
+            "predicted": 11,
+            "true_positives": 11,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall_share": 0.44
+          },
+          "import": {
+            "predicted": 9,
+            "true_positives": 9,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall_share": 0.36
+          },
+          "name-match": {
+            "predicted": 5,
+            "true_positives": 5,
+            "false_positives": 0,
+            "precision": 1.0,
+            "recall_share": 0.2
+          }
         }
       },
       "by_tag": {
         "alias": {
-          "gold": 6,
-          "found": 6
+          "gold": 11,
+          "found": 11
         },
         "arrow-function": {
           "gold": 3,
@@ -1281,12 +1476,16 @@
           "found": 10
         },
         "constructor": {
-          "gold": 51,
-          "found": 51
+          "gold": 55,
+          "found": 55
         },
         "cross-file": {
-          "gold": 27,
-          "found": 27
+          "gold": 29,
+          "found": 29
+        },
+        "cross-package": {
+          "gold": 14,
+          "found": 14
         },
         "dispatch": {
           "gold": 3,
@@ -1309,12 +1508,12 @@
           "found": 4
         },
         "method-vs-function": {
-          "gold": 10,
-          "found": 10
+          "gold": 11,
+          "found": 11
         },
         "module-qualified": {
-          "gold": 9,
-          "found": 9
+          "gold": 10,
+          "found": 10
         },
         "overload": {
           "gold": 3,
@@ -1324,17 +1523,21 @@
           "gold": 22,
           "found": 22
         },
+        "re-export": {
+          "gold": 2,
+          "found": 2
+        },
         "recursion": {
           "gold": 5,
           "found": 5
         },
         "same-file": {
-          "gold": 29,
-          "found": 29
+          "gold": 34,
+          "found": 34
         },
         "same-name": {
-          "gold": 102,
-          "found": 101
+          "gold": 104,
+          "found": 103
         },
         "self-call": {
           "gold": 25,
@@ -1353,8 +1556,8 @@
           "found": 3
         },
         "typed-receiver": {
-          "gold": 64,
-          "found": 63
+          "gold": 71,
+          "found": 70
         }
       },
       "detail": {
@@ -1908,6 +2111,93 @@
               "typed-receiver": {
                 "gold": 13,
                 "found": 13
+              }
+            },
+            "false_positives": [],
+            "false_negatives": []
+          }
+        },
+        "typescript-monorepo": {
+          "symbols": {
+            "counts": {
+              "gold": 22,
+              "predicted": 22,
+              "true_positives": 22,
+              "false_positives": 0,
+              "false_negatives": 0
+            },
+            "false_positives": [],
+            "false_negatives": [],
+            "kind_mismatches": []
+          },
+          "calls": {
+            "counts": {
+              "gold": 25,
+              "predicted": 25,
+              "true_positives": 25,
+              "false_positives": 0,
+              "false_negatives": 0
+            },
+            "redundant": 0,
+            "dynamic": 0,
+            "wrong_caller": 0,
+            "by_label": {
+              "exact": {
+                "predicted": 11,
+                "true_positives": 11,
+                "false_positives": 0
+              },
+              "import": {
+                "predicted": 9,
+                "true_positives": 9,
+                "false_positives": 0
+              },
+              "name-match": {
+                "predicted": 5,
+                "true_positives": 5,
+                "false_positives": 0
+              }
+            },
+            "by_tag": {
+              "alias": {
+                "gold": 5,
+                "found": 5
+              },
+              "constructor": {
+                "gold": 4,
+                "found": 4
+              },
+              "cross-file": {
+                "gold": 2,
+                "found": 2
+              },
+              "cross-package": {
+                "gold": 14,
+                "found": 14
+              },
+              "method-vs-function": {
+                "gold": 1,
+                "found": 1
+              },
+              "module-qualified": {
+                "gold": 1,
+                "found": 1
+              },
+              "re-export": {
+                "gold": 2,
+                "found": 2
+              },
+              "same-file": {
+                "gold": 5,
+                "found": 5
+              },
+              "same-name": {
+                "gold": 2,
+                "found": 2
+              },
+              "typed-receiver": {
+                "gold": 7,
+                "found": 7
               }
             },
             "false_positives": [],

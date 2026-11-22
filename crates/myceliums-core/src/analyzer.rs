@@ -202,6 +202,112 @@ impl Analyzer {
         }
     }
 
+    /// When the analysis has JavaScript or TypeScript files: give the
+    /// resolver the repository's workspace packages and tsconfig/jsconfig
+    /// path aliases, so `import … from '@scope/pkg'` of a package in this
+    /// repository resolves like a relative import (#169).
+    ///
+    /// Returns the config files it read only because an `extends` names them
+    /// (see [`index_scope::RESOLUTION_CONFIGS_META_KEY`]).
+    fn register_js_project(
+        &self,
+        resolver: &mut CallResolver,
+        files: &[(PathBuf, SourceLanguage)],
+    ) -> Vec<String> {
+        let has_js = files.iter().any(|(path, _)| {
+            crate::resolver::language_family(&path.to_string_lossy()) == Some("js")
+        });
+        if !has_js {
+            return Vec::new();
+        }
+        let project = crate::resolver::JsProject::load(&self.repo_path);
+        if !project.is_empty() {
+            let (packages, aliased) = project.counts();
+            info!(
+                "JS/TS project: {packages} workspace packages, path aliases in {aliased} directories"
+            );
+        }
+        for (name, dirs) in project.duplicate_packages() {
+            warn!(
+                "Workspace packages share the name {name}: {}; an import of it resolves only \
+                 where one is nearer to the importer or the others are examples or fixtures",
+                dirs.join(", ")
+            );
+        }
+        let extra = project.extra_config_files().to_vec();
+        resolver.set_js_project(project);
+        extra
+    }
+
+    /// Records the `extends` bases the resolver read under names that are
+    /// not config names, so freshness counts edits to them (#169). Best
+    /// effort: without the record those edits go unnoticed until the next
+    /// analysis, as before.
+    async fn record_resolution_configs(&self, extra: &[String]) {
+        match serde_json::to_string(extra) {
+            Ok(json) => {
+                if let Err(e) = self
+                    .store
+                    .set_index_meta(index_scope::RESOLUTION_CONFIGS_META_KEY, &json)
+                    .await
+                {
+                    warn!("cannot record the resolution config files: {e}");
+                }
+            }
+            Err(e) => warn!("cannot record the resolution config files: {e}"),
+        }
+    }
+
+    /// The `extends` bases the last full analysis recorded.
+    async fn recorded_resolution_configs(&self) -> Vec<String> {
+        match self
+            .store
+            .get_index_meta(index_scope::RESOLUTION_CONFIGS_META_KEY)
+            .await
+        {
+            Ok(Some(json)) => serde_json::from_str(&json).unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Whether re-indexing `changed` (absolute or repository-relative paths)
+    /// needs a full analysis rather than [`analyze_files`](Self::analyze_files):
+    /// one of them is `.myceliums.toml` or a file that decides what JS/TS
+    /// imports bind (`package.json`, a tsconfig, a recorded `extends` base;
+    /// #169). `analyze_files` reads source files only, so it would leave
+    /// every edge through such an import as it was.
+    pub async fn needs_full_analysis(&self, changed: &[PathBuf]) -> bool {
+        let scope = match IndexScope::new(self.config.as_ref()) {
+            Ok(scope) => scope,
+            Err(_) => return true,
+        }
+        .with_resolution_configs(self.recorded_resolution_configs().await);
+        changed.iter().any(|path| {
+            let rel = path.strip_prefix(&self.repo_path).unwrap_or(path);
+            rel == Path::new(crate::config::CONFIG_FILENAME) || scope.is_resolution_config(rel)
+        })
+    }
+
+    /// After an incremental re-index of `changed` files (repository-relative)
+    /// or the removal of `deleted` ones: drop their callers' unlinked calls
+    /// from the recorded statistics and mark the changed files as unknown
+    /// until the next full analysis (#169). Best effort, like the record.
+    async fn forget_unlinked_calls(&self, changed: &[String], deleted: &[String]) {
+        match crate::resolver::CallResolutionStats::load(&self.store).await {
+            Ok(Some(mut stats)) => {
+                stats.forget_files(
+                    changed.iter().map(String::as_str),
+                    deleted.iter().map(String::as_str),
+                );
+                if let Err(e) = stats.record(&self.store).await {
+                    warn!("cannot update the call resolution statistics: {e}");
+                }
+            }
+            Ok(None) => {}
+            Err(e) => warn!("cannot read the call resolution statistics: {e}"),
+        }
+    }
+
     /// Run a full analysis of the repository.
     ///
     /// Walks all source files, parses them, builds the call graph, and
@@ -640,6 +746,8 @@ impl Analyzer {
 
         let source_files = self.discover_files()?;
         self.check_cancelled()?;
+        let resolution_configs = self.register_js_project(&mut resolver, &source_files);
+        self.record_resolution_configs(&resolution_configs).await;
         let file_discovery_ms = file_discovery_timer.elapsed_ms();
         info!(
             "Discovered {} source files ({:.2}ms)",
@@ -1600,6 +1708,8 @@ impl Analyzer {
             })
             .collect();
 
+        self.register_js_project(&mut resolver, &source_files);
+
         if source_files.is_empty() {
             return Ok(AnalysisResult {
                 symbol_count: 0,
@@ -1625,6 +1735,16 @@ impl Analyzer {
         // graph rows behind an apparently-successful re-index.
         // The changed files' indexed-text fingerprints are replaced below.
         let mut fingerprints = self.load_fingerprints().await;
+        let changed_rel: Vec<String> = source_files
+            .iter()
+            .map(|(path, _)| {
+                path.strip_prefix(&self.repo_path)
+                    .unwrap_or(path)
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+        self.forget_unlinked_calls(&changed_rel, &[]).await;
         for (path, _) in &source_files {
             let rel_path = path
                 .strip_prefix(&self.repo_path)
@@ -1982,7 +2102,8 @@ impl Analyzer {
         email_rels.extend(conversation_rels);
 
         // Resolve calls. The statistics cover only the changed files, so
-        // they are reported but not recorded over the full run's.
+        // they are reported but not recorded over the full run's; the
+        // changed files' callers were marked unknown in the record above.
         let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
         let call_resolution = resolver.stats().clone();
 
@@ -2187,6 +2308,8 @@ impl Analyzer {
             .to_string_lossy()
             .to_string();
         self.store.delete_file_data(&rel_path).await?;
+        self.forget_unlinked_calls(&[], std::slice::from_ref(&rel_path))
+            .await;
         info!("Removed data for deleted file: {}", rel_path);
         Ok(())
     }
@@ -2963,6 +3086,91 @@ mod tests {
             budget_skip_reason(&wrapped),
             Some(FileSkipReason::TooDeeplyNested)
         );
+    }
+
+    /// #169: a change to a file that decides what imports bind needs a full
+    /// analysis — by name, a recorded `extends` base, `.myceliums.toml` —
+    /// and an incremental re-index marks its files' unlinked calls unknown
+    /// instead of keeping a record that no longer matches them.
+    #[tokio::test]
+    async fn config_changes_need_a_full_analysis_and_incremental_runs_forget_unlinked_calls() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        fs::create_dir_all(root.join("app")).unwrap();
+        fs::create_dir_all(root.join("cfg")).unwrap();
+        fs::write(root.join("cfg/base.json"), r#"{"compilerOptions": {}}"#).unwrap();
+        fs::write(
+            root.join("app/tsconfig.json"),
+            r#"{"extends": "../cfg/base.json"}"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("app/main.ts"),
+            "export function main(cb: () => void) {\n  cb();\n}\n",
+        )
+        .unwrap();
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::new(store, root.clone()).set_skip_embeddings(true);
+        analyzer.analyze().await.unwrap();
+
+        let stats = crate::resolver::CallResolutionStats::load(analyzer.store())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(stats.records_unlinked_calls());
+        assert_eq!(stats.unlinked_from("app/main.ts", "main").len(), 1);
+        assert_eq!(
+            analyzer.recorded_resolution_configs().await,
+            ["cfg/base.json"]
+        );
+
+        for (path, full) in [
+            ("app/main.ts", false),
+            ("notes.md", false),
+            ("data.json", false),
+            ("package.json", true),
+            ("app/tsconfig.json", true),
+            ("cfg/base.json", true),
+            (crate::config::CONFIG_FILENAME, true),
+            ("node_modules/x/package.json", false),
+        ] {
+            assert_eq!(
+                analyzer.needs_full_analysis(&[root.join(path)]).await,
+                full,
+                "{path}"
+            );
+        }
+
+        analyzer
+            .analyze_files(&[root.join("app/main.ts")])
+            .await
+            .unwrap();
+        let stats = crate::resolver::CallResolutionStats::load(analyzer.store())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(stats.unlinked_from("app/main.ts", "main").is_empty());
+        assert!(stats.is_stale("app/main.ts"));
+        analyzer
+            .handle_file_deleted(&root.join("app/main.ts"))
+            .await
+            .unwrap();
+        let stats = crate::resolver::CallResolutionStats::load(analyzer.store())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!stats.is_stale("app/main.ts"));
+        // A full analysis starts a fresh record.
+        fs::write(root.join("app/main.ts"), "export function main() {}\n").unwrap();
+        analyzer.store().delete_repo_data().await.unwrap();
+        analyzer.analyze().await.unwrap();
+        let stats = crate::resolver::CallResolutionStats::load(analyzer.store())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(stats.stale_files.is_empty());
     }
 
     /// #127: a file tree-sitter cannot parse within `parse_timeout_secs`, or

@@ -222,8 +222,12 @@ A block of under 15 lines between `<!-- BEGIN myceliums -->` and
 `<!-- END myceliums -->`. It is loaded on every turn, so it is short: it
 names the commands above, the MCP tools and the subagent as the place for
 structural questions, and grep/rg as the place for string literals, config
-values, log messages and non-code files. The block is versioned (`v2` in its
-first comment line); everything between the markers is replaced on re-run,
+values, log messages and non-code files. One line says graph answers are
+heuristic: when completeness matters, or a result says `Incomplete` or lists
+calls without an edge, read the source before answering (#169, after the
+#163 sessions that answered from one partial `trace_flow` result; the MCP
+server instructions and the `code-explorer` subagent say the same). The
+block is versioned (`v3` in its first comment line); everything between the markers is replaced on re-run,
 and text outside them is never touched. Put your own rules outside the
 markers.
 

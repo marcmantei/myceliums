@@ -509,14 +509,23 @@ pub struct CallersOutput {
     pub callers: Vec<CallerItem>,
     pub total_count: u32,
     pub depth_limited: bool,
-    /// Call sites with this symbol's name that got no CALLS edge (more
-    /// candidates than the resolver links, or nothing in scope): callers
-    /// that may exist but are not counted above.
+    /// Set when this is not the whole answer: why, and the call that continues.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub unlinked_call_sites: Option<String>,
+    pub incomplete: Option<Incomplete>,
     /// Set when results were cut: how to fetch the next page.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notice: Option<String>,
+}
+
+/// Why a graph walk is not the whole answer.
+#[derive(Serialize, schemars::JsonSchema)]
+pub struct Incomplete {
+    /// One per cut: depth limit, page, calls or call sites without a CALLS edge.
+    pub reasons: Vec<String>,
+    /// Places not followed: symbols one more step would add, plus unlinked call sites.
+    pub branches_cut: u32,
+    /// The call that continues the walk.
+    pub next: String,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -546,6 +555,9 @@ pub struct CalleesOutput {
     pub callees: Vec<CalleeItem>,
     pub total_count: u32,
     pub depth_limited: bool,
+    /// Set when this is not the whole answer: why, and the call that continues.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub incomplete: Option<Incomplete>,
     /// Set when results were cut: how to fetch the next page.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub notice: Option<String>,

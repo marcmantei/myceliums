@@ -1,0 +1,397 @@
+{
+  "language": "typescript-monorepo",
+  "fixture": "graph-accuracy/ts-monorepo",
+  "labelled_by": "agent",
+  "reviewed_by": null,
+  "verified_with": "tsc --strict --noEmit with the fixture's tsconfig.base.json (paths, baseUrl) and each workspace package mapped to its source entry; TypeScript compiler API call resolution (getResolvedSignature) over every call and new expression (verify/ts_calls.cjs typescript-monorepo)",
+  "symbols": [
+    {
+      "id": "packages/core/src/text.ts::parse",
+      "kind": "function",
+      "line": 1
+    },
+    {
+      "id": "packages/core/src/text.ts::normalize",
+      "kind": "function",
+      "line": 5
+    },
+    {
+      "id": "packages/core/src/text.ts::format",
+      "kind": "function",
+      "line": 9
+    },
+    {
+      "id": "packages/core/src/math.ts::sum",
+      "kind": "function",
+      "line": 1
+    },
+    {
+      "id": "packages/core/src/math.ts::Counter",
+      "kind": "class",
+      "line": 7
+    },
+    {
+      "id": "packages/core/src/math.ts::Counter.add",
+      "kind": "method",
+      "line": 10
+    },
+    {
+      "id": "packages/core/src/math.ts::Counter.reset",
+      "kind": "method",
+      "line": 15
+    },
+    {
+      "id": "packages/store/src/index.ts::Store",
+      "kind": "class",
+      "line": 3
+    },
+    {
+      "id": "packages/store/src/index.ts::Store.constructor",
+      "kind": "method",
+      "line": 7
+    },
+    {
+      "id": "packages/store/src/index.ts::Store.load",
+      "kind": "method",
+      "line": 11
+    },
+    {
+      "id": "packages/store/src/index.ts::Store.all",
+      "kind": "method",
+      "line": 19
+    },
+    {
+      "id": "packages/store/src/index.ts::Store.clear",
+      "kind": "method",
+      "line": 23
+    },
+    {
+      "id": "packages/store/src/memory.ts::createMemory",
+      "kind": "function",
+      "line": 3
+    },
+    {
+      "id": "shared/utils/strings.ts::slugify",
+      "kind": "function",
+      "line": 1
+    },
+    {
+      "id": "shared/utils/strings.ts::truncate",
+      "kind": "function",
+      "line": 5
+    },
+    {
+      "id": "shared/utils/timing.ts::debounce",
+      "kind": "function",
+      "line": 1
+    },
+    {
+      "id": "shared/config/index.ts::readFlag",
+      "kind": "function",
+      "line": 1
+    },
+    {
+      "id": "apps/web/src/render.ts::format",
+      "kind": "function",
+      "line": 4
+    },
+    {
+      "id": "apps/web/src/render.ts::render",
+      "kind": "function",
+      "line": 8
+    },
+    {
+      "id": "apps/web/src/render.ts::renderList",
+      "kind": "function",
+      "line": 12
+    },
+    {
+      "id": "apps/web/src/config.ts::loadConfig",
+      "kind": "function",
+      "line": 3
+    },
+    {
+      "id": "apps/web/src/main.ts::start",
+      "kind": "function",
+      "line": 10
+    }
+  ],
+  "calls": [
+    {
+      "from": "packages/core/src/text.ts::parse",
+      "to": "packages/core/src/text.ts::normalize",
+      "line": 2,
+      "tags": [
+        "same-file"
+      ],
+      "why": "module-local function"
+    },
+    {
+      "from": "packages/core/src/text.ts::format",
+      "to": "packages/core/src/text.ts::normalize",
+      "line": 10,
+      "tags": [
+        "same-file"
+      ],
+      "why": "module-local function"
+    },
+    {
+      "from": "packages/core/src/math.ts::Counter.add",
+      "to": "packages/core/src/math.ts::sum",
+      "line": 11,
+      "tags": [
+        "same-file",
+        "method-vs-function"
+      ],
+      "why": "bare call from a method to the module's free function sum"
+    },
+    {
+      "from": "packages/store/src/index.ts::Store.constructor",
+      "to": "packages/core/src/math.ts::Counter",
+      "line": 8,
+      "tags": [
+        "constructor",
+        "cross-package"
+      ],
+      "why": "new Counter() imported from @acme/core: a workspace package whose package.json names an unbuilt dist/ entry; its source entry src/index.ts re-exports math.ts (export *)"
+    },
+    {
+      "from": "packages/store/src/index.ts::Store.load",
+      "to": "packages/core/src/text.ts::parse",
+      "line": 12,
+      "tags": [
+        "cross-package",
+        "re-export"
+      ],
+      "why": "parse imported from @acme/core, re-exported by its src/index.ts from text.ts"
+    },
+    {
+      "from": "packages/store/src/index.ts::Store.load",
+      "to": "packages/core/src/math.ts::Counter.add",
+      "line": 14,
+      "tags": [
+        "typed-receiver",
+        "cross-package"
+      ],
+      "why": "this.counter is declared Counter (imported from @acme/core)"
+    },
+    {
+      "from": "packages/store/src/index.ts::Store.clear",
+      "to": "packages/core/src/math.ts::Counter.reset",
+      "line": 25,
+      "tags": [
+        "typed-receiver",
+        "cross-package"
+      ],
+      "why": "this.counter is declared Counter (imported from @acme/core)"
+    },
+    {
+      "from": "packages/store/src/memory.ts::createMemory",
+      "to": "packages/store/src/index.ts::Store",
+      "also_accept": [
+        "packages/store/src/index.ts::Store.constructor"
+      ],
+      "line": 4,
+      "tags": [
+        "constructor",
+        "cross-file"
+      ],
+      "why": "new Store() imported from the package's own ./index barrel"
+    },
+    {
+      "from": "packages/store/src/memory.ts::createMemory",
+      "to": "packages/store/src/index.ts::Store.load",
+      "line": 5,
+      "tags": [
+        "typed-receiver"
+      ],
+      "why": "store is constructed as a Store"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/store/src/index.ts::Store",
+      "also_accept": [
+        "packages/store/src/index.ts::Store.constructor"
+      ],
+      "line": 11,
+      "tags": [
+        "constructor",
+        "cross-package"
+      ],
+      "why": "Store imported from @acme/store, whose package.json exports '.' as ./src/index.ts"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/store/src/index.ts::Store.load",
+      "line": 12,
+      "tags": [
+        "typed-receiver",
+        "cross-package"
+      ],
+      "why": "store is constructed as a Store from @acme/store"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/store/src/memory.ts::createMemory",
+      "line": 13,
+      "tags": [
+        "cross-package"
+      ],
+      "why": "createMemory imported from the subpath @acme/store/memory, which the package exports as ./src/memory.ts"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "shared/utils/strings.ts::slugify",
+      "line": 14,
+      "tags": [
+        "alias"
+      ],
+      "why": "imported through the tsconfig paths alias ~utils/* -> shared/utils/* (inherited from tsconfig.base.json through extends)"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/core/src/text.ts::format",
+      "line": 14,
+      "tags": [
+        "alias",
+        "same-name",
+        "cross-package"
+      ],
+      "why": "format imported from @acme/core as formatText; not the app's own render.ts format"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/store/src/index.ts::Store.all",
+      "line": 14,
+      "tags": [
+        "typed-receiver",
+        "cross-package"
+      ],
+      "why": "store is a Store; memory.all() on line 16 is the same edge (createMemory returns Store)"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/core/src/math.ts::Counter",
+      "line": 15,
+      "tags": [
+        "constructor",
+        "cross-package"
+      ],
+      "why": "Counter imported from @acme/core; the class declares no constructor"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/core/src/math.ts::Counter.add",
+      "line": 16,
+      "tags": [
+        "typed-receiver",
+        "cross-package"
+      ],
+      "why": "counter is constructed as a Counter"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/core/src/math.ts::sum",
+      "line": 16,
+      "tags": [
+        "module-qualified",
+        "cross-package",
+        "re-export"
+      ],
+      "why": "namespace import of @acme/core; sum comes from math.ts through export *"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "shared/config/index.ts::readFlag",
+      "line": 17,
+      "tags": [
+        "alias"
+      ],
+      "why": "imported through the exact tsconfig paths alias @shared/config -> shared/config (a directory: its index.ts)"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "packages/store/src/index.ts::Store.clear",
+      "line": 18,
+      "tags": [
+        "typed-receiver",
+        "cross-package"
+      ],
+      "why": "store is constructed as a Store"
+    },
+    {
+      "from": "apps/web/src/main.ts::start",
+      "to": "apps/web/src/render.ts::render",
+      "line": 20,
+      "tags": [
+        "cross-file"
+      ],
+      "why": "relative import; first called inside the arrow passed to debounce, which belongs to start"
+    },
+    {
+      "from": "apps/web/src/render.ts::render",
+      "to": "apps/web/src/render.ts::format",
+      "line": 9,
+      "tags": [
+        "same-file",
+        "same-name"
+      ],
+      "why": "the module-local format, not @acme/core's format"
+    },
+    {
+      "from": "apps/web/src/render.ts::render",
+      "to": "shared/utils/strings.ts::truncate",
+      "line": 9,
+      "tags": [
+        "alias"
+      ],
+      "why": "imported through the tsconfig paths alias ~utils/*"
+    },
+    {
+      "from": "apps/web/src/render.ts::renderList",
+      "to": "packages/core/src/text.ts::parse",
+      "line": 13,
+      "tags": [
+        "alias",
+        "cross-package"
+      ],
+      "why": "parse imported from @acme/core as parseList"
+    },
+    {
+      "from": "apps/web/src/render.ts::renderList",
+      "to": "apps/web/src/render.ts::render",
+      "line": 13,
+      "tags": [
+        "same-file"
+      ],
+      "why": "module-local function"
+    }
+  ],
+  "dynamic": [],
+  "traps": [
+    {
+      "in": "apps/web/src/main.ts::start",
+      "name": "debounce",
+      "line": 20,
+      "why": "lodash's debounce, an external package; not shared/utils/timing.ts's debounce, which nothing imports"
+    },
+    {
+      "in": "apps/web/src/main.ts::start",
+      "name": "later",
+      "line": 21,
+      "why": "a call through the function value debounce returned"
+    },
+    {
+      "in": "apps/web/src/config.ts::loadConfig",
+      "name": "parse",
+      "line": 4,
+      "why": "parse from the external package yaml, not @acme/core's parse"
+    },
+    {
+      "in": "packages/core/src/text.ts::parse",
+      "name": "map",
+      "line": 2,
+      "why": "Array.prototype.map"
+    }
+  ]
+}

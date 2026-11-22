@@ -94,6 +94,19 @@ pub fn check_cache(
         };
     }
 
+    // An index written before every caller's unlinked calls were recorded
+    // (#169) would let graph walks look complete; re-analyze it.
+    if repo_info.call_record_version != schema::CALL_RECORD_VERSION {
+        return CacheDecision::ReanalyzeNeeded {
+            reason: format!(
+                "Call record version {} is stale (current: {}) — the calls graph walks cannot \
+                 follow must be recorded",
+                repo_info.call_record_version,
+                schema::CALL_RECORD_VERSION
+            ),
+        };
+    }
+
     // Check age
     let analyzed_at = match chrono::DateTime::parse_from_rfc3339(&repo_info.analyzed_at) {
         Ok(dt) => dt,
@@ -145,10 +158,25 @@ pub fn check_cache(
         };
     }
 
-    // Check for structural file changes
+    // Check for structural file changes: build manifests, and every file
+    // that decides what a bare JS/TS import binds (#169) — by name, or an
+    // `extends` base under another name (read only when a JSON file that is
+    // not a config by name changed).
+    let scope = crate::index_scope::IndexScope::for_project(repo_path).unwrap_or_default();
+    let scope = if changed_files
+        .iter()
+        .any(|f| f.ends_with(".json") && !scope.is_resolution_config(Path::new(f)))
+    {
+        scope.with_resolution_configs(extends_bases(repo_path))
+    } else {
+        scope
+    };
     let structural_changed: Vec<&str> = changed_files
         .iter()
-        .filter(|f| STRUCTURAL_FILES.iter().any(|sf| f.ends_with(sf)))
+        .filter(|f| {
+            STRUCTURAL_FILES.iter().any(|sf| f.ends_with(sf))
+                || scope.is_resolution_config(Path::new(f))
+        })
         .map(|s| s.as_str())
         .collect();
 
@@ -213,7 +241,9 @@ fn check_cache_by_mtime(
     // as the analyzer's walk, so files it never reads — `.mcp.json`,
     // `.claude/`, build output — cannot force a re-analysis. The project
     // config decides that selection, so it counts too.
-    let scope = crate::index_scope::IndexScope::for_project(repo_path).unwrap_or_default();
+    let scope = crate::index_scope::IndexScope::for_project(repo_path)
+        .unwrap_or_default()
+        .with_resolution_configs(extends_bases(repo_path));
     if newer(&repo_path.join(crate::config::CONFIG_FILENAME)) {
         changed_count += 1;
     }
@@ -280,6 +310,18 @@ pub fn get_head_commit(repo_path: &Path) -> Result<String> {
 }
 
 /// Get list of files changed between a commit and HEAD.
+/// The config files the resolver reads only because an `extends` names them
+/// (`packages/tsconfig/base.json`), as the repository holds them now. The
+/// analysis records the same list in the index
+/// ([`crate::index_scope::RESOLUTION_CONFIGS_META_KEY`]); the cache check runs
+/// without the index, so it derives it. An edit that adds or drops such a
+/// base changes a config file that counts by name anyway.
+fn extends_bases(repo_path: &Path) -> Vec<String> {
+    crate::resolver::JsProject::load(repo_path)
+        .extra_config_files()
+        .to_vec()
+}
+
 fn get_changed_files(repo_path: &Path, since_commit: &str) -> Result<Vec<String>> {
     let output = Command::new("git")
         .args(["diff", "--name-only", since_commit, "HEAD"])
@@ -424,6 +466,7 @@ mod tests {
             analyzed_commit: Some("abc123".to_string()),
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
             classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: schema::CALL_RECORD_VERSION,
         };
         let config = CacheCheckConfig::default();
         let decision = check_cache(&repo_info, Path::new("/tmp/test"), &config);
@@ -445,6 +488,7 @@ mod tests {
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
             classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: schema::CALL_RECORD_VERSION,
         };
         let config = CacheCheckConfig::default();
         // Empty dir + recent analysis → cache is fresh
@@ -482,6 +526,7 @@ mod tests {
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
             classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: schema::CALL_RECORD_VERSION,
         };
         let config = CacheCheckConfig {
             max_age_minutes: 120,
@@ -528,6 +573,7 @@ mod tests {
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
             classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: schema::CALL_RECORD_VERSION,
         };
         let config = CacheCheckConfig {
             max_age_minutes: 120,
@@ -567,6 +613,7 @@ mod tests {
             // Legacy index: written before embeddings were L2-normalized.
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION - 1,
             classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: schema::CALL_RECORD_VERSION,
         };
         let config = CacheCheckConfig::default();
 
@@ -596,6 +643,7 @@ mod tests {
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
             classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: schema::CALL_RECORD_VERSION,
         };
         let config = CacheCheckConfig::default();
         assert!(matches!(
@@ -619,6 +667,7 @@ mod tests {
             analyzed_commit: None,
             vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
             classification_version: 0,
+            call_record_version: 0,
         };
         match check_cache(&repo_info, tmp.path(), &CacheCheckConfig::default()) {
             CacheDecision::ReanalyzeNeeded { reason } => {
@@ -626,6 +675,79 @@ mod tests {
             }
             other => panic!("a stale classification must force re-analysis, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_record_without_per_call_entries_forces_reanalysis() {
+        // An index from before #169 records no caller's unlinked calls, so
+        // its walks would look complete: it is rebuilt.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo_info = RepoInfo {
+            id: "test-call-record".to_string(),
+            name: "test".to_string(),
+            path: tmp.path().to_string_lossy().to_string(),
+            analyzed_at: chrono::Utc::now().to_rfc3339(),
+            symbol_count: 10,
+            file_count: 5,
+            analyzed_commit: None,
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: 0,
+        };
+        match check_cache(&repo_info, tmp.path(), &CacheCheckConfig::default()) {
+            CacheDecision::ReanalyzeNeeded { reason } => {
+                assert!(reason.contains("Call record version 0"), "{reason}");
+            }
+            other => panic!("a stale call record must force re-analysis, got: {other:?}"),
+        }
+    }
+
+    /// An edit to a file that decides what a JS/TS import binds — a
+    /// tsconfig, a package.json, or an `extends` base under another name —
+    /// forces a re-analysis (#169); other JSON does not.
+    #[test]
+    fn resolution_config_edits_force_reanalysis() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        std::fs::create_dir_all(root.join("cfg")).unwrap();
+        std::fs::write(root.join("cfg/base.json"), r#"{"compilerOptions": {}}"#).unwrap();
+        std::fs::write(root.join("data.json"), "{}").unwrap();
+        let past = chrono::Utc::now() - chrono::Duration::hours(1);
+        let repo_info = RepoInfo {
+            id: "test-resolution".to_string(),
+            name: "test".to_string(),
+            path: root.to_string_lossy().to_string(),
+            analyzed_at: past.to_rfc3339(),
+            symbol_count: 0,
+            file_count: 0,
+            analyzed_commit: None,
+            vector_geometry_version: schema::VECTOR_GEOMETRY_VERSION,
+            classification_version: schema::SYMBOL_CLASSIFICATION_VERSION,
+            call_record_version: schema::CALL_RECORD_VERSION,
+        };
+        let config = CacheCheckConfig {
+            max_age_minutes: 120,
+            ..Default::default()
+        };
+        // Only non-config JSON changed since: cached.
+        assert!(
+            matches!(
+                check_cache_by_mtime(&repo_info, root, &config),
+                CacheDecision::UseCached { .. }
+            ),
+            "data.json and an unreferenced base.json do not count"
+        );
+        // A tsconfig that extends the base: both count.
+        std::fs::write(
+            root.join("tsconfig.json"),
+            r#"{"extends": "./cfg/base.json"}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            check_cache_by_mtime(&repo_info, root, &config),
+            CacheDecision::ReanalyzeNeeded { .. }
+        ));
+        assert_eq!(extends_bases(root), ["cfg/base.json"]);
     }
 
     // ── QueryCache tests ────────────────────────────────────────────

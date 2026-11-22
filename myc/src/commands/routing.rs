@@ -18,7 +18,7 @@ pub const BEGIN: &str = myceliums_core::index_scope::MANAGED_BLOCK_BEGIN;
 /// Last line of the managed block.
 pub const END: &str = myceliums_core::index_scope::MANAGED_BLOCK_END;
 /// Version of the block's wording; bump it when the text changes.
-pub const ROUTING_VERSION: u32 = 2;
+pub const ROUTING_VERSION: u32 = 3;
 
 /// Which agent the block is written for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +58,7 @@ pub fn routing_block(flavor: Flavor) -> String {
          - what breaks if X or a file changes: `myc impact X`, `myc impact path/to/file`\n\
          - where or how something is implemented: `myc context \"<question>\"`\n\
          {also}\n\
+         Graph answers are heuristic: when completeness matters, or a result says `Incomplete` or lists calls without an edge, read the source before answering.\n\
          grep/rg stay right for string literals, config values, log messages and non-code files.\n\
          {END}\n"
     )

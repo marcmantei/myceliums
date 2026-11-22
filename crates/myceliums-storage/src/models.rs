@@ -401,6 +401,13 @@ pub struct RepoInfo {
     /// (#146): search cannot rank its test code lower until it is re-analyzed.
     #[serde(default)]
     pub classification_version: u32,
+    /// Version of the call-resolution record the index was built with (see
+    /// [`crate::schema::CALL_RECORD_VERSION`]). `0` means an index written
+    /// before every caller's unlinked calls were recorded (#169): its graph
+    /// walks cannot say which calls they did not follow until it is
+    /// re-analyzed.
+    #[serde(default)]
+    pub call_record_version: u32,
 }
 
 // --- Symbol Metadata ---

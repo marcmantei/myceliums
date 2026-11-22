@@ -29,6 +29,7 @@ mod embedding_jobs;
 mod errors;
 mod format;
 pub mod http_security;
+mod incomplete;
 mod index_status;
 mod navigation;
 mod observe;

@@ -44,6 +44,12 @@ pub const MANAGED_BLOCK_BEGIN: &str = "<!-- BEGIN myceliums -->";
 /// Last line of that block.
 pub const MANAGED_BLOCK_END: &str = "<!-- END myceliums -->";
 
+/// Key of the `index_meta` record listing the config files the resolver
+/// read only because an `extends` names them (`packages/tsconfig/base.json`,
+/// #169), as a JSON array of repository-relative paths. Editing one of them
+/// can change the index like editing a `tsconfig.json` can.
+pub const RESOLUTION_CONFIGS_META_KEY: &str = "resolution_config_files";
+
 /// The files an analysis indexes, decided by path (and size).
 #[derive(Debug, Clone)]
 pub struct IndexScope {
@@ -51,6 +57,9 @@ pub struct IndexScope {
     exclude: Option<GlobSet>,
     skip_patterns: Vec<String>,
     max_size: Option<u64>,
+    /// Config files the resolver read under names that are not config
+    /// names (see [`RESOLUTION_CONFIGS_META_KEY`]), forward-slashed.
+    resolution_configs: std::collections::BTreeSet<String>,
 }
 
 impl Default for IndexScope {
@@ -63,6 +72,7 @@ impl Default for IndexScope {
             // `[analysis]` skip rules.
             skip_patterns: AnalysisSection::default().skip_patterns,
             max_size: Some(DEFAULT_MAX_FILE_SIZE_BYTES),
+            resolution_configs: Default::default(),
         }
     }
 }
@@ -83,7 +93,40 @@ impl IndexScope {
                 0 => None,
                 kb => Some(kb * 1024),
             },
+            resolution_configs: Default::default(),
         })
+    }
+
+    /// The same scope, also counting `paths` (repository-relative) as
+    /// resolution config files: the `extends` bases an index recorded under
+    /// [`RESOLUTION_CONFIGS_META_KEY`].
+    pub fn with_resolution_configs(mut self, paths: impl IntoIterator<Item = String>) -> Self {
+        self.resolution_configs
+            .extend(paths.into_iter().map(|p| p.replace('\\', "/")));
+        self
+    }
+
+    /// Whether `rel` is a file the resolver reads to resolve bare JS/TS
+    /// imports (#169) — `package.json`, `pnpm-workspace.yaml`, `lerna.json`,
+    /// `tsconfig*.json`, `jsconfig*.json`, or a recorded `extends` base —
+    /// outside the directories the walk skips. A change to one can change
+    /// every edge through an import, so it calls for a full analysis.
+    pub fn is_resolution_config(&self, rel: &Path) -> bool {
+        let walked = rel.components().all(|component| match component {
+            Component::Normal(name) => !Self::skips_name(&name.to_string_lossy()),
+            Component::CurDir => true,
+            _ => false,
+        });
+        if !walked {
+            return false;
+        }
+        let named = rel.file_name().is_some_and(|name| {
+            crate::resolver::is_resolution_config_name(&name.to_string_lossy())
+        });
+        named
+            || self
+                .resolution_configs
+                .contains(&rel.to_string_lossy().replace('\\', "/"))
     }
 
     /// The scope of the project rooted at `root`: its `.myceliums.toml` when
@@ -148,9 +191,11 @@ impl IndexScope {
     /// Whether a change to `rel` (relative to `root`, the analyzed
     /// directory) can change the index: the analyzer would index the file —
     /// or indexed it before it was deleted — or it is `.myceliums.toml`,
-    /// which decides what is indexed.
+    /// which decides what is indexed, or a resolution config
+    /// ([`is_resolution_config`](Self::is_resolution_config)), which decides
+    /// what imports bind.
     pub fn affects_index(&self, root: &Path, rel: &Path) -> bool {
-        if rel == Path::new(CONFIG_FILENAME) {
+        if rel == Path::new(CONFIG_FILENAME) || self.is_resolution_config(rel) {
             return true;
         }
         if self.language(rel).is_none() {
@@ -337,6 +382,40 @@ mod tests {
         assert!(!scope.affects_index(dir.path(), Path::new(".mcp.json")));
         std::fs::write(dir.path().join("big.ts"), vec![b'a'; 600 * 1024]).unwrap();
         assert!(!scope.affects_index(dir.path(), Path::new("big.ts")));
+    }
+
+    /// The files that decide what a bare JS/TS import binds count (#169):
+    /// by name, and the `extends` bases an index recorded — but not inside
+    /// the directories the walk skips.
+    #[test]
+    fn resolution_configs_affect_the_index() {
+        let dir = tempfile::tempdir().unwrap();
+        let scope = IndexScope::default();
+        for path in [
+            "package.json",
+            "packages/core/package.json",
+            "pnpm-workspace.yaml",
+            "lerna.json",
+            "tsconfig.json",
+            "apps/web/tsconfig.app.json",
+            "tsconfig.base.json",
+            "jsconfig.json",
+        ] {
+            assert!(scope.affects_index(dir.path(), Path::new(path)), "{path}");
+        }
+        for path in [
+            "node_modules/x/package.json",
+            ".changeset/package.json",
+            "dist/package.json",
+            "packages/tsconfig/base.json",
+            "data.json",
+        ] {
+            assert!(!scope.affects_index(dir.path(), Path::new(path)), "{path}");
+        }
+        let recorded = IndexScope::default()
+            .with_resolution_configs(["packages/tsconfig/base.json".to_string()]);
+        assert!(recorded.affects_index(dir.path(), Path::new("packages/tsconfig/base.json")));
+        assert!(!recorded.affects_index(dir.path(), Path::new("data.json")));
     }
 
     #[test]

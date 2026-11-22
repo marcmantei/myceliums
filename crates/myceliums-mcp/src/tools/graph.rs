@@ -5,6 +5,7 @@
 //! their deprecated aliases answer alike.
 
 use super::prelude::*;
+use crate::incomplete::Gaps;
 
 /// Callers/callees listed inline by `explain_symbol` before pointing at
 /// `find_callers` / `find_callees` for the rest.
@@ -54,7 +55,7 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "find_callers",
-        description = "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones.",
+        description = "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones. `incomplete` says what the walk did not follow (depth limit, unlinked call sites) and the call that continues it.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -82,7 +83,7 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "find_callees",
-        description = "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous).",
+        description = "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous). `incomplete` lists calls the graph could not link (callbacks, ambiguous names) and the depth cut, with the call that continues.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -110,7 +111,7 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "trace_flow",
-        description = "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line.",
+        description = "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line. An `Incomplete:` block names what is not listed (longer chains, depth limit, calls without a CALLS edge) and the next call; read the source before calling a flow complete.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -136,7 +137,28 @@ impl MyceliumsMcp {
         let extra = params.extra_calls.unwrap_or(0).min(5);
         let page = Page::new(params.limit, params.offset, Budget::LIST);
         let chains = navigation::call_chains(&symbols, &relationships, from, to, max_depth, extra);
-        let body = format::format_call_chains(from, to, chains.as_ref(), max_depth, page);
+        // No chain, but the depth limit cut the search: how long the
+        // shortest chain is, if one exists within the hard limit, so that
+        // the next call lifts the cut instead of guessing.
+        let deeper = match &chains {
+            Err(none) if none.cut.is_cut() && max_depth < MAX_TRACE_DEPTH => {
+                navigation::call_chains(&symbols, &relationships, from, to, MAX_TRACE_DEPTH, 0)
+                    .ok()
+                    .map(|c| c.len())
+            }
+            _ => None,
+        };
+        let stats = crate::index_status::call_resolution(&graph.store()).await;
+        let call = TraceCall {
+            repo_id: graph.repo_id(),
+            from: &params.from_symbol,
+            to: &params.to_symbol,
+            max_depth,
+            extra,
+            page,
+        };
+        let block = trace_gaps(&call, from, to, chains.as_ref(), deeper, stats.as_ref());
+        let body = format::format_call_chains(from, to, chains.as_ref(), max_depth, page, &block);
         self.graph_text(&graph, body).await
     }
 
@@ -736,6 +758,134 @@ impl MyceliumsMcp {
     }
 }
 
+/// The arguments of one `trace_flow` call, for the call that continues it.
+struct TraceCall<'a> {
+    repo_id: &'a str,
+    from: &'a str,
+    to: &'a str,
+    max_depth: u32,
+    extra: u32,
+    page: Page,
+}
+
+/// The largest `max_depth` `trace_flow` accepts.
+const MAX_TRACE_DEPTH: u32 = 30;
+/// The largest `extra_calls` `trace_flow` accepts.
+const MAX_EXTRA_CALLS: u32 = 5;
+
+impl TraceCall<'_> {
+    /// `trace_flow(...)` with these arguments and `changes`.
+    fn again(&self, changes: &str) -> String {
+        format!(
+            "trace_flow(repo_id={:?}, from_symbol={:?}, to_symbol={:?}, {changes})",
+            self.repo_id, self.from, self.to
+        )
+    }
+}
+
+/// `analyze(...)` that records what only a full analysis can (#169).
+pub(crate) fn full_analysis(repo_id: &str) -> String {
+    format!("analyze(repo_id={repo_id:?}, force=true)")
+}
+
+/// The `Incomplete:` block of a `trace_flow` result (#169): symbols on
+/// chains `extra_calls` could still list, the page, the depth limit when no
+/// chain was found (with the length of the chain past it, `deeper`, when one
+/// exists within [`MAX_TRACE_DEPTH`]), calls on the walk that got no edge,
+/// unlinked call sites named like `to`. Each `Next` step lifts the cut it
+/// names. Chains longer than shortest + [`MAX_EXTRA_CALLS`] are outside
+/// what `trace_flow` lists, and the result's header names its window, so
+/// they are no cut. Empty when nothing was cut.
+fn trace_gaps(
+    call: &TraceCall,
+    from: &myceliums_storage::CodeSymbol,
+    to: &myceliums_storage::CodeSymbol,
+    chains: Result<&navigation::CallChains, &navigation::NoChain>,
+    deeper: Option<u32>,
+    stats: Option<&myceliums_core::CallResolutionStats>,
+) -> String {
+    let mut gaps = Gaps::default();
+    let mut next = Vec::new();
+    match chains {
+        Ok(chains) => {
+            let shown = chains.on_chains.len();
+            if shown > call.page.offset + call.page.limit {
+                let offset = call.page.offset + call.page.limit;
+                gaps.other.push(format!(
+                    "page: symbols {}-{offset} of {shown} on these chains are listed",
+                    call.page.offset + 1
+                ));
+                gaps.other_branches += shown - offset;
+                next.push(call.again(&format!(
+                    "max_depth={}, extra_calls={}, offset={offset}",
+                    call.max_depth, call.extra
+                )));
+            }
+            let shortest = chains.len();
+            let reach = shortest + MAX_EXTRA_CALLS;
+            let listable: Vec<u32> = chains
+                .longer
+                .iter()
+                .map(|s| s.chain_len)
+                .filter(|len| *len <= reach)
+                .collect();
+            if let (Some(&first), Some(&longest)) = (listable.iter().min(), listable.iter().max()) {
+                gaps.other.push(format!(
+                    "{} more symbol(s) lie on chains of {first}-{longest} calls, not listed",
+                    listable.len()
+                ));
+                gaps.other_branches += listable.len();
+                next.push(call.again(&format!(
+                    "max_depth={}, extra_calls={}",
+                    call.max_depth,
+                    longest - shortest
+                )));
+            }
+            let on_chains = chains
+                .shortest
+                .iter()
+                .map(|(s, _)| *s)
+                .filter(|s| s.uid != to.uid)
+                .chain(chains.on_chains.iter().map(|c| c.symbol));
+            gaps.unlinked_out_of(stats, on_chains);
+        }
+        Err(none) => {
+            gaps.depth_cut(call.max_depth, none.cut.clone());
+            if gaps.depth.is_some() {
+                match deeper {
+                    Some(length) => {
+                        gaps.other.push(format!(
+                            "a chain of {length} calls exists past max_depth={}",
+                            call.max_depth
+                        ));
+                        next.push(call.again(&format!("max_depth={length}")));
+                    }
+                    None if call.max_depth < MAX_TRACE_DEPTH => gaps
+                        .other
+                        .push(format!("no chain within {MAX_TRACE_DEPTH} calls either")),
+                    None => {}
+                }
+            }
+            let reached = std::iter::once(from).chain(none.reached.iter().map(|(s, _)| *s));
+            gaps.unlinked_out_of(stats, reached);
+        }
+    }
+    gaps.unlinked_into(stats, [to]);
+    if gaps.needs_full_analysis() {
+        next.push(full_analysis(call.repo_id));
+    }
+    if let Some(read) = gaps.read_the_source() {
+        next.push(read);
+    }
+    if next.is_empty() {
+        next.push(format!(
+            "find_callers(repo_id={:?}, symbol_name={:?}, depth=2)",
+            call.repo_id, call.to
+        ));
+    }
+    gaps.block("symbols", &next.join("; or "))
+}
+
 /// One page of callers or callees, before it becomes the tool's output type.
 pub(crate) struct CallList {
     index_status: String,
@@ -744,8 +894,8 @@ pub(crate) struct CallList {
     total_count: u32,
     depth_limited: bool,
     notice: Option<String>,
-    /// Callers only: call sites of the name that got no edge.
-    unlinked: Option<String>,
+    /// What the walk did not follow, and the call that continues it.
+    incomplete: Option<crate::output::Incomplete>,
 }
 
 impl CallList {
@@ -757,7 +907,7 @@ impl CallList {
             total_count: self.total_count,
             depth_limited: self.depth_limited,
             notice: self.notice,
-            unlinked_call_sites: self.unlinked,
+            incomplete: self.incomplete,
         }
     }
 
@@ -783,6 +933,7 @@ impl CallList {
             total_count: self.total_count,
             depth_limited: self.depth_limited,
             notice: self.notice,
+            incomplete: self.incomplete,
         }
     }
 }
@@ -802,18 +953,67 @@ impl MyceliumsMcp {
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
         let start = navigation::resolve(&symbols, name)?;
-        let unlinked = match direction {
-            navigation::Direction::Callers => {
-                let stats = crate::index_status::call_resolution(&graph.store()).await;
-                crate::index_status::unlinked_note(stats.as_ref(), start)
-            }
-            navigation::Direction::Callees => None,
-        };
+        let stats = crate::index_status::call_resolution(&graph.store()).await;
         let max_depth = depth.clamp(1, 10);
-        let hits = navigation::walk_calls(&symbols, &relationships, start, direction, max_depth);
+        let (hits, cut) =
+            navigation::walk_calls_bounded(&symbols, &relationships, start, direction, max_depth);
         let total_count = hits.len() as u32;
-        let depth_limited = hits.iter().any(|h| h.depth >= max_depth);
-        let page = Page::new(limit, offset, Budget::LIST).take(hits);
+        let depth_limited = cut.is_cut();
+
+        // What the walk did not follow (#169). The depth limit counts only
+        // when a transitive walk was asked for: direct callers are the
+        // whole answer to "who calls X".
+        let (tool, noun) = match direction {
+            navigation::Direction::Callers => ("find_callers", "callers"),
+            navigation::Direction::Callees => ("find_callees", "callees"),
+        };
+        let mut gaps = Gaps::default();
+        let mut next = Vec::new();
+        let request = Page::new(limit, offset, Budget::LIST);
+        let shown_to = (request.offset + request.limit).min(hits.len());
+        if hits.len() > request.offset + request.limit {
+            gaps.other.push(format!(
+                "page: {}-{shown_to} of {} listed",
+                request.offset + 1,
+                hits.len()
+            ));
+            gaps.other_branches += hits.len() - shown_to;
+            next.push(format!(
+                "{tool}(repo_id={repo_id:?}, symbol_name={name:?}, depth={max_depth}, offset={shown_to})"
+            ));
+        }
+        if max_depth > 1 {
+            gaps.depth_cut(max_depth, cut.clone());
+            if gaps.depth.is_some() {
+                next.push(if max_depth < 10 {
+                    format!(
+                        "{tool}(repo_id={repo_id:?}, symbol_name={name:?}, depth={})",
+                        max_depth + 1
+                    )
+                } else {
+                    format!("{tool} on the symbols at depth {max_depth}")
+                });
+            }
+        }
+        // Symbols whose own edges the list shows: the start and every hit
+        // short of the depth limit.
+        let walked = std::iter::once(start).chain(
+            hits.iter()
+                .filter(|h| h.depth < max_depth)
+                .map(|h| h.symbol),
+        );
+        match direction {
+            navigation::Direction::Callers => gaps.unlinked_into(stats.as_ref(), walked),
+            navigation::Direction::Callees => gaps.unlinked_out_of(stats.as_ref(), walked),
+        }
+        if gaps.needs_full_analysis() {
+            next.push(full_analysis(repo_id));
+        }
+        if let Some(read) = gaps.read_the_source() {
+            next.push(read);
+        }
+        let incomplete = crate::incomplete::structured(&gaps, noun, next.join("; then "));
+        let page = request.take(hits);
         let items = page
             .items
             .iter()
@@ -837,7 +1037,7 @@ impl MyceliumsMcp {
             total_count,
             depth_limited,
             notice: page.notice,
-            unlinked,
+            incomplete,
         })
     }
 

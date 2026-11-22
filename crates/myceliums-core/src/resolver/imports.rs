@@ -7,7 +7,7 @@
 //! | family | specifier | resolved against |
 //! |---|---|---|
 //! | Python | `shop.models`, `.models` | a `.py` file or a package's `__init__.py`; relative to the importer when dotted |
-//! | JS/TS | `./models`, `../x/index`, `@/x` | the importer's directory (`@/`, `~/`: a path suffix); a bare package name is a library |
+//! | JS/TS | `./models`, `../x/index`, `@scope/pkg`, `~utils/x`, `@/x` | the importer's directory; a bare specifier through the importer's tsconfig `paths`/`baseUrl`, then the repository's workspace packages ([`super::JsProject`]), then `@/`, `~/` as a path suffix; any other bare name is a library |
 //! | Go | `example.com/shop/store` | the project directory whose path ends with the import path's tail |
 //! | Rust | `crate::store::Repo`, `model::f`, `super::x` | the longest leading path that is a module file; the rest is an item in it |
 //! | Java | `shop.store.Repository`, `static shop.auth.Auth.parse` | the class's file; a static import's member |
@@ -24,7 +24,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use super::{language_family, parent_dir, CallResolver, Def, DefId, Site};
+use super::{js_project, language_family, parent_dir, CallResolver, Def, DefId, Site};
 use crate::parser::ImportInfo;
 
 /// What an import binds.
@@ -69,6 +69,20 @@ pub(super) struct PathIndex {
 /// The suffixes of a `/`-separated path: `a/b/c` → `c`, `b/c`, `a/b/c`.
 fn suffixes(path: &str) -> impl Iterator<Item = &str> {
     std::iter::once(path).chain(path.match_indices('/').map(move |(i, _)| &path[i + 1..]))
+}
+
+/// A JS/TS path without a module file extension (`a/b.d.ts` → `a/b`); a
+/// directory name with a dot (`v1.2`) is kept.
+fn js_stem(path: &str) -> &str {
+    const EXTENSIONS: &[&str] = &[
+        ".d.ts", ".d.mts", ".d.cts", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs",
+        ".vue", ".svelte", ".json",
+    ];
+    EXTENSIONS
+        .iter()
+        .find_map(|ext| path.strip_suffix(ext))
+        .filter(|rest| !rest.is_empty() && !rest.ends_with('/'))
+        .unwrap_or(path)
 }
 
 /// A path without its file extension.
@@ -428,9 +442,20 @@ impl CallResolver {
     }
 
     /// The file a JS/TS module specifier names, `None` for a package.
+    ///
+    /// A bare specifier is tried, in order, against the importer's
+    /// tsconfig/jsconfig `paths` and `baseUrl`, the repository's workspace
+    /// packages (#169), and the `@/x` / `~/x` source-root convention; any
+    /// other bare specifier is a library.
     fn js_module(&self, importer: &str, specifier: &str) -> Option<Vec<String>> {
-        let key = if specifier.starts_with("./") || specifier.starts_with("../") || specifier == "."
-        {
+        let relative =
+            specifier.starts_with("./") || specifier.starts_with("../") || specifier == ".";
+        if !relative {
+            if let Some(files) = self.js_declared_module(importer, specifier) {
+                return Some(files);
+            }
+        }
+        let key = if relative {
             join_relative(parent_dir(importer), specifier)
         } else {
             // `@/x`, `~/x`: a path alias for the source root; any other
@@ -451,6 +476,82 @@ impl CallResolver {
             .collect();
         let files = closest(importer, &key, files);
         (!files.is_empty()).then_some(files)
+    }
+
+    /// A bare specifier the repository declares: a `paths` alias or a path
+    /// under `baseUrl` of the importer's config file, else a workspace
+    /// package (its entry, or a subpath of it).
+    fn js_declared_module(&self, importer: &str, specifier: &str) -> Option<Vec<String>> {
+        if let Some(aliases) = self.js.aliases_for(importer) {
+            for target in aliases.targets(specifier) {
+                if let Some(files) = self.js_file(&target) {
+                    return Some(files);
+                }
+            }
+            if let Some(path) = aliases
+                .base_url
+                .as_deref()
+                .and_then(|base| js_project::join(base, specifier))
+            {
+                if let Some(files) = self.js_file(&path) {
+                    return Some(files);
+                }
+            }
+        }
+        let (package, subpath) = self.js.package_for(importer, specifier)?;
+        // A path inside the package; `None` when it climbs out of the
+        // repository.
+        let in_package = |path: &str| -> Option<Vec<String>> {
+            self.js_file(&js_project::join(&package.dir, path)?)
+        };
+        // A declared file, or the source a build output was made from.
+        let declared = |entry: &str| -> Option<Vec<String>> {
+            match js_project::source_for_build_path(entry) {
+                Some(source) => in_package(&source),
+                None => in_package(entry),
+            }
+        };
+        if subpath.is_empty() {
+            // Declared entries under `src/` (or standing for a file there),
+            // then `src/index`, then the declared entries as they are (a
+            // root `index.js` may be a shim that loads `dist/`), then the
+            // package's own `index`.
+            let nested = |e: &&String| e.trim_start_matches("./").contains('/');
+            return package
+                .entries
+                .iter()
+                .filter(nested)
+                .find_map(|e| declared(e))
+                .or_else(|| in_package("src"))
+                .or_else(|| package.entries.iter().find_map(|e| in_package(e)))
+                .or_else(|| self.js_file(&package.dir));
+        }
+        package
+            .subpath_targets(subpath)
+            .iter()
+            .find_map(|target| declared(target))
+            .or_else(|| in_package(&format!("src/{subpath}")))
+            .or_else(|| declared(subpath))
+    }
+
+    /// The indexed JS/TS file a repository-relative path names, with or
+    /// without its extension (`./x.js` may be `x.ts`), or the `index` file
+    /// of the directory it names.
+    fn js_file(&self, path: &str) -> Option<Vec<String>> {
+        let key = js_stem(path);
+        let files: Vec<String> = self
+            .index
+            .modules(key, "js")
+            .into_iter()
+            .filter(|f| stem(f) == key || parent_dir(stem(f)) == key)
+            .collect();
+        // The file itself before a directory of the same name's index.
+        let exact: Vec<String> = files.iter().filter(|f| stem(f) == key).cloned().collect();
+        match (exact.is_empty(), files.is_empty()) {
+            (false, _) => Some(exact),
+            (true, false) => Some(files),
+            (true, true) => None,
+        }
     }
 
     // --- Go ---------------------------------------------------------------
