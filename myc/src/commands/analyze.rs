@@ -308,8 +308,6 @@ pub(crate) async fn cmd_analyze(
         }
     }
 
-    std::fs::create_dir_all(&db_path)?;
-
     // Acquire analysis lock — prevents concurrent indexing of the same repo
     let _lock = match AnalysisLock::acquire(&data_dir(), &repo_id)? {
         LockOutcome::Acquired(lock) => lock,
@@ -347,22 +345,22 @@ pub(crate) async fn cmd_analyze(
         println!("Analyzing {} ...", abs_path.display());
     }
 
-    let store = Store::open(&db_path, &repo_id).await?;
     // Unchanged symbols keep their vectors: a run that does not embed
     // (--skip-embeddings, the session default, or a model that fails) must
     // not drop the embeddings of the index it replaces (#151).
-    // Only at the current vector geometry, as the registry records it.
+    // Only at the current vector geometry, as the registry records it, and
+    // only from an index that exists (read, never created here).
     let geometry = RepoRegistry::load(&registry_path())?
         .get(&repo_id)
         .map(|info| info.vector_geometry_version);
-    let previous = match geometry {
-        Some(geometry) => myceliums_core::PreviousVectors::load(&store, geometry)
+    let previous = match (geometry, Store::open_existing(&db_path, &repo_id).await) {
+        (Some(geometry), Ok(live)) => myceliums_core::PreviousVectors::load(&live, geometry)
             .await
             .unwrap_or_else(|e| {
                 eprintln!("Warning: cannot read the previous index's vectors: {e}");
                 None
             }),
-        None => None,
+        _ => None,
     };
     if !skip_embeddings {
         let section = project_config
@@ -373,7 +371,12 @@ pub(crate) async fn cmd_analyze(
             println!("{notice}");
         }
     }
-    store.delete_repo_data().await?;
+    // The new index is built next to the live one and swapped in once it is
+    // complete (#175), as the MCP `analyze` tool does: readers keep the
+    // previous index, whole, until the swap, and a failed run leaves it as
+    // it was. It used to be emptied and rebuilt in place.
+    let staged = myceliums_core::StagedIndex::create(&db_path)?;
+    let store = Store::open(staged.path(), &repo_id).await?;
     let community_plan = CommunityPlan::new(
         project_config.as_ref().map(|c| &c.community),
         skip_communities,
@@ -389,6 +392,7 @@ pub(crate) async fn cmd_analyze(
     .with_previous_vectors(previous)
     .with_progress(progress_reporter);
     let result = analyzer.analyze().await?;
+    drop(analyzer);
 
     println!("  Symbols:       {}", result.symbol_count);
     println!("  Files:         {}", result.file_count);
@@ -432,7 +436,7 @@ pub(crate) async fn cmd_analyze(
 
     // Phase 2: community detection and process tracing, timed so a stall
     // shows which phase it is in (#172).
-    let store = Store::open(&db_path, &repo_id).await?;
+    let store = Store::open(staged.path(), &repo_id).await?;
     let symbols = store.get_symbols().await?;
     let relationships = store.get_relationships().await?;
 
@@ -455,6 +459,9 @@ pub(crate) async fn cmd_analyze(
     let processes = ProcessTracer::trace(&symbols, &relationships, &repo_id)?;
     let process_count = store.store_processes(&processes).await?;
     let processes_ms = processes_started.elapsed().as_secs_f64() * 1000.0;
+    // The swap: the complete new index replaces the previous one.
+    drop(store);
+    staged.commit()?;
 
     println!(
         "  Communities:   {} ({})",

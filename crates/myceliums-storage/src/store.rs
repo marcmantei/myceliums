@@ -204,14 +204,20 @@ impl DirIdentity {
     }
 }
 
+/// The directory below `data/` that holds the index generations (#175):
+/// one directory per rebuild, each reached through the link at
+/// `data/<repo-id>`.
+pub const GENERATIONS_DIR: &str = ".generations";
+
 /// The directory an index path stands for.
 ///
 /// A rebuild builds every new index in a directory of its own (an index
 /// *generation*, below `data/.generations/`) and then atomically points the
 /// repository's index path `data/<repo-id>` — a symbolic link — at it
-/// (#175). A generation's files never change their content under a path:
-/// Lance only adds files, and a generation is deleted as a whole once it is
-/// replaced. Opening the link's target instead of the link keeps a reader
+/// (#175). A generation is never rebuilt or truncated in place (see
+/// [`Store::is_published_generation`]): appends add Lance versions under new
+/// file names, and a generation is deleted as a whole once it is replaced,
+/// so an existing file below it keeps its content while it exists. Opening the link's target instead of the link keeps a reader
 /// on one generation for as long as it reads, where a path through the
 /// link could resolve to one generation for a manifest's listing and to the
 /// next for its bytes.
@@ -274,8 +280,15 @@ impl Store {
     /// [`resolve_index_dir`]), the store is bound to that generation: a
     /// rebuild that later points the link at a new generation does not
     /// change what this store reads, file by file, half-way through a read.
+    ///
+    /// A link whose generation is gone is [`StorageError::NoIndex`]: opening
+    /// it would create an empty directory in its place.
     pub async fn open(db_path: &Path, repo_id: &str) -> Result<Self> {
-        Self::open_dir(resolve_index_dir(db_path), repo_id).await
+        let dir = resolve_index_dir(db_path);
+        if dir != db_path && !dir.is_dir() {
+            return Err(StorageError::NoIndex(db_path.to_path_buf()));
+        }
+        Self::open_dir(dir, repo_id).await
     }
 
     async fn open_dir(path: PathBuf, repo_id: &str) -> Result<Self> {
@@ -325,6 +338,40 @@ impl Store {
         &self.path
     }
 
+    /// Whether this store is bound to a published index generation (a
+    /// directory in `data/.generations/`), which readers trust not to be
+    /// rebuilt in place.
+    ///
+    /// Appends are safe there: every Lance commit — an insert, a delete,
+    /// a merge, a compaction — writes a new manifest with a higher version
+    /// number and never changes an existing file. Dropping and recreating a
+    /// table is not: version numbers restart, so the new table's manifests
+    /// take the names of the old one's under a reader (#175). Truncating it
+    /// in place is not either: a reader would see an empty or half-written
+    /// index. Those operations refuse such a store; a full rebuild builds a
+    /// new generation instead.
+    pub fn is_published_generation(&self) -> bool {
+        self.path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|dir| dir == GENERATIONS_DIR)
+    }
+
+    /// Errors if this store is bound to a published generation (see
+    /// [`Store::is_published_generation`]); `what` names the refused
+    /// operation.
+    fn refuse_in_published_generation(&self, what: &str) -> Result<()> {
+        if self.is_published_generation() {
+            return Err(StorageError::InvalidData(format!(
+                "refusing to {what} in place in the published index {}: readers \
+                 rely on it not being rebuilt; run a full analysis, which builds \
+                 a new index and swaps it in",
+                self.path.display()
+            )));
+        }
+        Ok(())
+    }
+
     /// Replace the ANN index policy. Production code never calls this; it
     /// exists so the recall benchmarks can measure alternative settings
     /// through the same write and search paths that ship.
@@ -361,12 +408,17 @@ impl Store {
     /// (i.e. a different embedding model), it is dropped and recreated —
     /// vectors from one model are meaningless in another model's space.
     /// Returns `true` if the table was rebuilt.
+    ///
+    /// Refused (an error) for a store bound to a published generation when
+    /// a table would have to be dropped (see
+    /// [`Store::is_published_generation`]).
     pub async fn ensure_symbols_dim(&self) -> Result<bool> {
         let tables = self.table_names().await?;
         // Chunk vectors (#157) share the symbols' vector space.
         if tables.contains(&"chunks".to_string()) {
             let table = self.db.open_table("chunks").execute().await?;
             if vector_dim(table.schema().await?.as_ref()) != Some(self.embedding_dim()) {
+                self.refuse_in_published_generation("drop and recreate the chunks table")?;
                 self.db.drop_table("chunks", &[]).await?;
             }
         }
@@ -385,6 +437,7 @@ impl Store {
         let want = self.embedding_dim();
         if let Some(have) = existing_dim {
             if have != want {
+                self.refuse_in_published_generation("drop and recreate the symbols table")?;
                 info!(
                     "Embedding dimension changed ({} -> {}); rebuilding symbols table",
                     have, want
@@ -984,7 +1037,11 @@ impl Store {
     }
 
     /// Deletes all data (symbols, files, relationships, ...) for this repository.
+    ///
+    /// Refused (an error) for a store bound to a published generation (see
+    /// [`Store::is_published_generation`]).
     pub async fn delete_repo_data(&self) -> Result<()> {
+        self.refuse_in_published_generation("delete every row")?;
         let tables = self.table_names().await?;
         let escaped_repo_id = escape_lance_str(&self.repo_id);
         for table_name in [
@@ -1944,6 +2001,67 @@ mod tests {
         drop(Store::open(&db, "r").await.unwrap());
         Store::open_existing(&db, "r").await.unwrap();
         assert!(db.is_dir());
+    }
+
+    /// #175: a published generation (reached through `data/<repo-id>`) is
+    /// never dropped, recreated or truncated in place; appends still work.
+    /// The same operations on a plain directory (a staging build, an index
+    /// of the layout before #175) are unchanged.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_published_generation_is_never_rebuilt_in_place() {
+        let dir = tempfile::tempdir().unwrap();
+        let generation = dir.path().join(GENERATIONS_DIR).join("1-1-0");
+        std::fs::create_dir_all(&generation).unwrap();
+        let live = dir.path().join("repo");
+        std::os::unix::fs::symlink(Path::new(GENERATIONS_DIR).join("1-1-0"), &live).unwrap();
+
+        let store = Store::open(&live, "test-repo").await.unwrap();
+        assert!(store.is_published_generation());
+        store
+            .store_symbols(&[make_symbol("a", None)])
+            .await
+            .unwrap();
+        // Appends add versions.
+        store
+            .store_symbols(&[make_symbol("b", None)])
+            .await
+            .unwrap();
+        assert!(!store.ensure_symbols_dim().await.unwrap(), "same dim");
+
+        store.set_embedding_dim(768);
+        let err = store.ensure_symbols_dim().await.expect_err("would drop");
+        assert!(err.to_string().contains("refusing"), "{err}");
+        let err = store.delete_repo_data().await.expect_err("would truncate");
+        assert!(err.to_string().contains("refusing"), "{err}");
+        assert_eq!(store.get_symbols().await.unwrap().len(), 2, "untouched");
+
+        let plain = dir.path().join("plain");
+        let store = Store::open(&plain, "test-repo").await.unwrap();
+        assert!(!store.is_published_generation());
+        store
+            .store_symbols(&[make_symbol("a", None)])
+            .await
+            .unwrap();
+        store.delete_repo_data().await.unwrap();
+    }
+
+    /// Opening a link whose generation was deleted does not create an empty
+    /// directory in its place.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn opening_a_link_to_a_deleted_generation_creates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("repo");
+        std::os::unix::fs::symlink(Path::new(GENERATIONS_DIR).join("gone"), &live).unwrap();
+        for result in [
+            Store::open(&live, "r").await.err(),
+            Store::open_existing(&live, "r").await.err(),
+        ] {
+            let err = result.expect("no index");
+            assert!(matches!(err, StorageError::NoIndex(_)), "{err:?}");
+        }
+        assert!(!dir.path().join(GENERATIONS_DIR).exists());
     }
 
     /// #118: an index removed between the check and LanceDB's `connect`

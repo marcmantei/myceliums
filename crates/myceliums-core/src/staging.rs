@@ -26,16 +26,21 @@
 //! symbolic link to it (target `.generations/<suffix>`, relative to `data/`)
 //! takes its place; the swap then puts that link at the live path. A reader
 //! opens the link's target ([`myceliums_storage::resolve_index_dir`]), so it
-//! reads one generation from start to end: a path below it never changes
-//! its content, it only disappears when the generation is deleted. Before,
+//! reads one generation from start to end. A generation is never rebuilt or
+//! truncated in place (`Store` refuses to drop, recreate or empty its
+//! tables, see [`myceliums_storage::Store::is_published_generation`]); only
+//! appends — incremental updates, background embeddings, compaction — add
+//! new Lance versions, which take new file names. So an existing file below
+//! a generation keeps its content until the generation is deleted. Before,
 //! a reader resolved every file through the live path, and a swap between
 //! Lance listing a manifest and reading it handed Lance the size of one
 //! generation's manifest and the bytes of the next one's (a panic in debug
 //! builds, garbage in release builds). An index built before #175 (a
 //! directory at the live path) is replaced by a link at its next rebuild;
-//! until then it is read as before. Where no link can be made (not Unix, or
-//! the file system refuses), the build directory itself is swapped in, as
-//! before. The previous generation is deleted after the swap, with its
+//! until then it is read as before, and a reader that opened it before that
+//! first rebuild can still meet the old race once. Where no link can be
+//! made (not Unix, or the file system refuses), the build directory itself
+//! is swapped in, as before, with the old race. The previous generation is deleted after the swap, with its
 //! link; a read still on it fails (the files are gone) and, the index
 //! having changed, is retried on the new one.
 //!
@@ -73,7 +78,7 @@ pub const STAGING_DIR: &str = ".staging";
 
 /// The directory below `data/` that holds the index generations, one
 /// directory per rebuild, named by the rebuild's suffix.
-pub const GENERATIONS_DIR: &str = ".generations";
+pub const GENERATIONS_DIR: &str = myceliums_storage::GENERATIONS_DIR;
 
 const BUILD_PREFIX: &str = "build-";
 const OLD_PREFIX: &str = "old-";
@@ -1163,8 +1168,8 @@ mod tests {
         assert!(target.is_relative(), "{target:?}: the data dir can move");
     }
 
-    /// The invariant #175 rests on: a path below the generation a reader
-    /// resolved never changes its content — a swap can only make it
+    /// The invariant #175 rests on: a swap never changes the content of a
+    /// path below the generation a reader resolved — it can only make it
     /// disappear. Before, a reader resolved every file through the live
     /// path, so the same manifest path served the next generation's bytes
     /// (and Lance, holding the size listed for the previous one, panicked).
