@@ -262,7 +262,7 @@ pub use snapshot::{
     snapshot_dir, snapshot_path, DiffEntry, GraphDiff, GraphSnapshot, SnapshotSummary,
     SNAPSHOTS_KEPT,
 };
-pub use staging::{is_internal_entry, recover_leftovers, Recovered, StagedIndex};
+pub use staging::{is_internal_entry, recover_leftovers, remove_index, Recovered, StagedIndex};
 pub use surprising_connections::{compute_surprising_connections, SurprisingConnectionItem};
 pub use timing::{Timer, TimingReport};
 pub use wiki_export::{export_wiki, WikiExportConfig, WikiExportResult};

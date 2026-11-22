@@ -20,6 +20,25 @@
 //! `.staging/old-…`, staging → live, the first undone if the second fails),
 //! so for an instant the live path does not exist.
 //!
+//! **Generations (#175).** The swap does not move the new index directory
+//! to the live path itself. The finished build first moves to a directory
+//! of its own, `data/.generations/<suffix>` — an index *generation* — and a
+//! symbolic link to it (target `.generations/<suffix>`, relative to `data/`)
+//! takes its place; the swap then puts that link at the live path. A reader
+//! opens the link's target ([`myceliums_storage::resolve_index_dir`]), so it
+//! reads one generation from start to end: a path below it never changes
+//! its content, it only disappears when the generation is deleted. Before,
+//! a reader resolved every file through the live path, and a swap between
+//! Lance listing a manifest and reading it handed Lance the size of one
+//! generation's manifest and the bytes of the next one's (a panic in debug
+//! builds, garbage in release builds). An index built before #175 (a
+//! directory at the live path) is replaced by a link at its next rebuild;
+//! until then it is read as before. Where no link can be made (not Unix, or
+//! the file system refuses), the build directory itself is swapped in, as
+//! before. The previous generation is deleted after the swap, with its
+//! link; a read still on it fails (the files are gone) and, the index
+//! having changed, is retried on the new one.
+//!
 //! **The journal.** Before the swap, `.staging/swap-…` records the live
 //! directory's name; once the new index is in place (and the renames are
 //! flushed), a second line `committed` is added, and only then is the
@@ -37,8 +56,10 @@
 //! Otherwise `old-` is the last index known to be complete: whatever is at
 //! the live path (nothing, an empty directory a reader recreated, or an
 //! unconfirmed new index) is moved to `.staging/displaced-…` and `old-` is
-//! renamed back. Everything else is deleted. Rebuilds still running are
-//! never touched.
+//! renamed back. Everything else is deleted — a link together with the
+//! generation it points at. A generation no link in `data/` or
+//! `.staging/` points at, and whose rebuild no longer runs, is deleted too.
+//! Rebuilds still running are never touched.
 
 use crate::error::Result;
 use anyhow::Context;
@@ -49,6 +70,10 @@ use std::sync::{LazyLock, Mutex};
 
 /// The directory below `data/` that holds every rebuild's entries.
 pub const STAGING_DIR: &str = ".staging";
+
+/// The directory below `data/` that holds the index generations, one
+/// directory per rebuild, named by the rebuild's suffix.
+pub const GENERATIONS_DIR: &str = ".generations";
 
 const BUILD_PREFIX: &str = "build-";
 const OLD_PREFIX: &str = "old-";
@@ -73,7 +98,77 @@ static ACTIVE: LazyLock<Mutex<HashSet<String>>> = LazyLock::new(Default::default
 /// Whether `name` (an entry of `data/`) belongs to Myceliums itself — the
 /// rebuild directory or the lock directory — rather than to a repository.
 pub fn is_internal_entry(name: &str) -> bool {
-    name == STAGING_DIR || name == crate::lock::LOCKS_DIR
+    name == STAGING_DIR || name == GENERATIONS_DIR || name == crate::lock::LOCKS_DIR
+}
+
+/// Whether something — a directory, a file or a link, dangling or not — is
+/// at `path`. (`Path::exists` follows links: a link moved into `.staging/`
+/// dangles there, its target being relative to `data/`.)
+fn present(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
+}
+
+fn is_link(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
+}
+
+/// The generation directory the link at `link` points at: a target of the
+/// form `.generations/<name>`, relative to `data_root`. Any other target is
+/// not ours and never deleted.
+fn generation_of(link: &Path, data_root: &Path) -> Option<PathBuf> {
+    let target = std::fs::read_link(link).ok()?;
+    let mut parts = target.components();
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(Component::Normal(dir)), Some(Component::Normal(name)), None)
+            if dir == GENERATIONS_DIR =>
+        {
+            Some(data_root.join(GENERATIONS_DIR).join(name))
+        }
+        _ => None,
+    }
+}
+
+/// What a generation being deleted is renamed to first.
+const DELETED_SUFFIX: &str = ".deleted";
+
+/// Deletes a generation directory. It is renamed first, so that a reader
+/// still bound to it finds it complete or not at all: deleted in place, file
+/// by file, a table whose newest manifest is already gone would show it an
+/// older version of itself.
+fn delete_generation(generation: &Path) -> std::io::Result<()> {
+    let mut doomed = generation.as_os_str().to_owned();
+    doomed.push(DELETED_SUFFIX);
+    let doomed = PathBuf::from(doomed);
+    match std::fs::rename(generation, &doomed) {
+        Ok(()) => std::fs::remove_dir_all(&doomed),
+        Err(_) => std::fs::remove_dir_all(generation),
+    }
+}
+
+/// Deletes an index entry below `data_root`: a directory, or a link to a
+/// generation together with that generation.
+fn remove_entry(path: &Path, data_root: &Path) -> std::io::Result<()> {
+    if is_link(path) {
+        if let Some(generation) = generation_of(path, data_root) {
+            if present(&generation) {
+                delete_generation(&generation)?;
+            }
+        }
+        std::fs::remove_file(path)
+    } else {
+        std::fs::remove_dir_all(path)
+    }
+}
+
+/// Deletes a repository's index at `live` (`data/<repo-id>`): the directory,
+/// or the link and the generation it points at. Nothing at `live` is not an
+/// error.
+pub fn remove_index(live: &Path) -> std::io::Result<()> {
+    if !present(live) {
+        return Ok(());
+    }
+    let data_root = live.parent().unwrap_or(Path::new("."));
+    remove_entry(live, data_root)
 }
 
 /// The `<pid>-…` suffix of a `build-`, `old-` or `swap-` entry.
@@ -114,6 +209,9 @@ pub struct StagedIndex {
 struct SwapOps<'a> {
     rename: &'a dyn Fn(&Path, &Path) -> std::io::Result<()>,
     exchange: &'a dyn Fn(&Path, &Path) -> std::io::Result<()>,
+    /// Creates a symbolic link at the second path to the first (a target
+    /// relative to the link's final directory, `data/`).
+    link: &'a dyn Fn(&Path, &Path) -> std::io::Result<()>,
     /// Writes the journal durably.
     write: &'a dyn Fn(&Path, &[u8]) -> std::io::Result<()>,
 }
@@ -121,8 +219,21 @@ struct SwapOps<'a> {
 const REAL_OPS: SwapOps<'static> = SwapOps {
     rename: &|from, to| std::fs::rename(from, to),
     exchange: &exchange,
+    link: &symlink,
     write: &write_durable,
 };
+
+#[cfg(unix)]
+fn symlink(target: &Path, link: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(target, link)
+}
+
+/// Directory links need privileges on Windows: the build directory itself
+/// is swapped in.
+#[cfg(not(unix))]
+fn symlink(_target: &Path, _link: &Path) -> std::io::Result<()> {
+    Err(std::io::ErrorKind::Unsupported.into())
+}
 
 /// Writes `bytes` to `path` and flushes the file and its directory entry to
 /// disk before returning.
@@ -209,8 +320,10 @@ impl StagedIndex {
     fn commit_with(mut self, ops: &SwapOps<'_>) -> Result<()> {
         let journal = self.entry(SWAP_PREFIX);
         let old = self.entry(OLD_PREFIX);
-        let data_root = self.live.parent().expect("checked in create").to_path_buf();
+        let data_root = self.data_root();
         let live_name = self.live.file_name().expect("checked in create");
+        // 0. The build becomes a generation, a link to it takes its place.
+        self.link_generation(&data_root, ops)?;
         // 1. The journal is on disk before anything moves.
         (ops.write)(&journal, live_name.as_encoded_bytes())
             .context("cannot write the swap journal")?;
@@ -242,17 +355,54 @@ impl StagedIndex {
                 )
                 .into());
         }
-        // 4. Only now the previous index goes.
+        // 4. Only now the previous index goes (a link with its generation).
         if let Some(previous) = previous {
-            remove_best_effort(&previous, "previous index");
+            remove_best_effort(&previous, &data_root, "previous index");
         }
         self.forget_journal_unless_old_remains(&journal, &old);
         Ok(())
     }
 
+    fn data_root(&self) -> PathBuf {
+        self.live.parent().expect("checked in create").to_path_buf()
+    }
+
+    /// Moves the finished build to `data/.generations/<suffix>` and puts a
+    /// link to it at the staging path, so that the swap puts a link at the
+    /// live path. Where the move or the link fails, the build directory
+    /// stays where it is and is swapped in itself (the layout before #175).
+    /// Errors only if the build cannot be put back after a failed link.
+    fn link_generation(&self, data_root: &Path, ops: &SwapOps<'_>) -> Result<()> {
+        let generations = data_root.join(GENERATIONS_DIR);
+        let generation = generations.join(&self.suffix);
+        let moved = std::fs::create_dir_all(&generations)
+            .and_then(|()| std::fs::rename(&self.staging, &generation));
+        if let Err(e) = moved {
+            tracing::debug!("cannot make the new index a generation ({e}); swapping it in itself");
+            return Ok(());
+        }
+        let target = Path::new(GENERATIONS_DIR).join(&self.suffix);
+        if let Err(e) = (ops.link)(&target, &self.staging) {
+            tracing::debug!("cannot link the new index ({e}); swapping it in itself");
+            return std::fs::rename(&generation, &self.staging)
+                .with_context(|| {
+                    format!(
+                        "cannot move the new index back from {}",
+                        generation.display()
+                    )
+                })
+                .map_err(Into::into);
+        }
+        // The journal write flushes `.staging/`, where the link is.
+        if let Err(e) = sync_dir(&generations) {
+            tracing::warn!("cannot flush {} to disk: {e}", generations.display());
+        }
+        Ok(())
+    }
+
     /// Deletes the journal unless an `old-` directory still needs it.
     fn forget_journal_unless_old_remains(&self, journal: &Path, old: &Path) {
-        if old.exists() {
+        if present(old) {
             tracing::warn!(
                 "{} is kept with its journal {} for recovery",
                 old.display(),
@@ -268,7 +418,7 @@ impl StagedIndex {
     /// Moves the staged index to the live path. Returns where the previous
     /// index now sits, if there was one.
     fn swap(&self, old: &Path, ops: &SwapOps<'_>) -> Result<Option<PathBuf>> {
-        if !self.live.exists() {
+        if !present(&self.live) {
             (ops.rename)(&self.staging, &self.live).with_context(|| {
                 format!("cannot move the new index into {}", self.live.display())
             })?;
@@ -315,8 +465,8 @@ fn journal_dir(journal: &Path) -> PathBuf {
 
 impl Drop for StagedIndex {
     fn drop(&mut self) {
-        if !self.committed && self.staging.exists() {
-            remove_best_effort(&self.staging, "unfinished index");
+        if !self.committed && present(&self.staging) {
+            remove_best_effort(&self.staging, &self.data_root(), "unfinished index");
         }
         ACTIVE
             .lock()
@@ -325,9 +475,10 @@ impl Drop for StagedIndex {
     }
 }
 
-fn remove_best_effort(dir: &Path, what: &str) {
-    if let Err(e) = std::fs::remove_dir_all(dir) {
-        tracing::warn!("cannot delete the {what} {}: {e}", dir.display());
+/// [`remove_entry`], logging a failure.
+fn remove_best_effort(entry: &Path, data_root: &Path, what: &str) {
+    if let Err(e) = remove_entry(entry, data_root) {
+        tracing::warn!("cannot delete the {what} {}: {e}", entry.display());
     }
 }
 
@@ -434,10 +585,16 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
             .map(|name| data_root.join(name));
         let committed = lines.any(|l| l == COMMITTED);
 
-        if old.exists() {
+        // A link whose generation is gone holds no index to restore.
+        if generation_of(&old, data_root).is_some_and(|g| !present(&g)) {
+            tracing::warn!("{} points at no index any more; deleting it", old.display());
+            remove_best_effort(&old, data_root, "dangling link");
+            done.push(Recovered::Removed(old.clone()));
+        }
+        if present(&old) {
             match &live {
                 Some(_) if committed => {
-                    remove_best_effort(&old, "previous index");
+                    remove_best_effort(&old, data_root, "previous index");
                     done.push(Recovered::Removed(old.clone()));
                 }
                 Some(live) => {
@@ -452,9 +609,9 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
                             0 => displaced.clone(),
                             n => root.join(format!("{DISPLACED_PREFIX}{suffix}-{n}")),
                         })
-                        .find(|p| !p.exists())
+                        .find(|p| !present(p))
                         .expect("an unused name exists");
-                    if live.exists() {
+                    if present(live) {
                         if let Err(e) = std::fs::rename(live, &displaced) {
                             tracing::error!(
                                 "cannot move {} aside to restore {}: {e}",
@@ -480,8 +637,8 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
                         live.display()
                     );
                     done.push(Recovered::Restored(live.clone()));
-                    if displaced.exists() {
-                        remove_best_effort(&displaced, "replaced directory");
+                    if present(&displaced) {
+                        remove_best_effort(&displaced, data_root, "replaced directory");
                         done.push(Recovered::Removed(displaced));
                     }
                 }
@@ -495,20 +652,94 @@ fn recover_leftovers_where(data_root: &Path, running: &dyn Fn(&str) -> bool) -> 
                 }
             }
         }
-        if build.exists() {
-            remove_best_effort(&build, "unfinished index");
+        if present(&build) {
+            remove_best_effort(&build, data_root, "unfinished index");
             done.push(Recovered::Removed(build));
         }
-        if displaced.exists() && !old.exists() {
-            remove_best_effort(&displaced, "replaced directory");
+        if present(&displaced) && !present(&old) {
+            remove_best_effort(&displaced, data_root, "replaced directory");
             done.push(Recovered::Removed(displaced));
         }
         // The journal goes once its old index is dealt with.
-        if journal.exists() && !old.exists() && std::fs::remove_file(&journal).is_ok() {
+        if journal.exists() && !present(&old) && std::fs::remove_file(&journal).is_ok() {
             done.push(Recovered::Removed(journal));
         }
     }
+    remove_unused_generations(data_root, running, &mut done);
     done
+}
+
+/// Deletes the generations no link points at — neither a live index in
+/// `data/` nor an entry of `.staging/` — whose rebuild no longer runs: what
+/// a deletion that removed only the link, or a crash, left behind. And the
+/// remains of a deletion that did not finish.
+fn remove_unused_generations(
+    data_root: &Path,
+    running: &dyn Fn(&str) -> bool,
+    done: &mut Vec<Recovered>,
+) {
+    let Ok(entries) = std::fs::read_dir(data_root.join(GENERATIONS_DIR)) else {
+        return;
+    };
+    let entries: Vec<_> = entries.filter_map(|e| e.ok()).collect();
+    for e in &entries {
+        let deleted = e
+            .file_name()
+            .to_str()
+            .is_some_and(|name| name.ends_with(DELETED_SUFFIX));
+        if deleted && std::fs::remove_dir_all(e.path()).is_ok() {
+            done.push(Recovered::Removed(e.path()));
+        }
+    }
+    let unused: Vec<PathBuf> = entries
+        .iter()
+        .filter(|e| {
+            e.file_name().to_str().is_some_and(|name| {
+                !name.ends_with(DELETED_SUFFIX) && suffix_pid(name).is_some() && !running(name)
+            })
+        })
+        .map(|e| e.path())
+        .collect();
+    if unused.is_empty() {
+        return;
+    }
+    let staging = data_root.join(STAGING_DIR);
+    let mut linked = HashSet::new();
+    for dir in [data_root, staging.as_path()] {
+        for entry in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            if let Some(generation) = generation_of(&entry.path(), data_root) {
+                linked.insert(generation);
+            }
+        }
+    }
+    // A running swap moves links between `.staging/` and `data/` (between
+    // the two listings above): while one has its journal, nothing goes.
+    let swapping = std::fs::read_dir(&staging)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|e| {
+            e.file_name()
+                .to_str()
+                .and_then(|name| name.strip_prefix(SWAP_PREFIX))
+                .is_some_and(running)
+        });
+    if swapping {
+        return;
+    }
+    for generation in unused {
+        if linked.contains(&generation) {
+            continue;
+        }
+        if let Err(e) = delete_generation(&generation) {
+            tracing::warn!(
+                "cannot delete the unused index generation {}: {e}",
+                generation.display()
+            );
+            continue;
+        }
+        done.push(Recovered::Removed(generation));
+    }
 }
 
 #[cfg(test)]
@@ -599,6 +830,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &no_exchange,
+            link: &symlink,
             write: &write_durable,
         };
         staged.commit_with(&ops).unwrap();
@@ -620,6 +852,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &no_exchange,
+            link: &symlink,
             write: &write_durable,
         };
         let err = staged.commit_with(&ops).unwrap_err();
@@ -644,6 +877,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &no_exchange,
+            link: &symlink,
             write: &write_durable,
         };
         staged.commit_with(&ops).unwrap_err();
@@ -678,6 +912,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &no_exchange,
+            link: &symlink,
             write: &write_durable,
         };
         staged.commit_with(&ops).unwrap_err();
@@ -712,6 +947,7 @@ mod tests {
         let ops = SwapOps {
             rename: &rename,
             exchange: &exchange,
+            link: &symlink,
             write: &fail_marker,
         };
         let err = staged.commit_with(&ops).unwrap_err();
@@ -866,5 +1102,230 @@ mod tests {
         assert!(!root.join(".locks").exists());
         assert!(st.join(format!("old-{DEAD}-1-0")).exists());
         assert!(st.join(format!("old-{DEAD}-2-0")).exists());
+    }
+
+    /// Every file below `dir`, with its content.
+    fn files(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+        let mut out = Vec::new();
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(&d).unwrap().flatten() {
+                if e.file_type().unwrap().is_dir() {
+                    stack.push(e.path());
+                } else {
+                    out.push((e.path(), std::fs::read(e.path()).unwrap()));
+                }
+            }
+        }
+        out
+    }
+
+    /// Builds and commits an index whose one manifest — same name in every
+    /// generation, as Lance's version numbering restarts — holds `text`.
+    fn rebuild(live: &Path, text: &str) {
+        let staged = StagedIndex::create(live).unwrap();
+        write(
+            &staged.path().join("symbols.lance/_versions/1.manifest"),
+            text,
+        );
+        staged.commit().unwrap();
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
+    #[test]
+    fn commit_links_the_live_path_to_a_generation_and_deletes_the_previous_one() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let live = root.join("repo");
+        // An index built before #175: a directory.
+        write(&live.join("symbols.lance/_versions/1.manifest"), "legacy");
+
+        rebuild(&live, "first");
+        assert!(is_link(&live), "the legacy directory is replaced by a link");
+        let first = myceliums_storage::resolve_index_dir(&live);
+        assert_eq!(first.parent().unwrap(), root.join(GENERATIONS_DIR));
+        assert_eq!(
+            read(&live.join("symbols.lance/_versions/1.manifest")),
+            "first"
+        );
+
+        rebuild(&live, "second");
+        let second = myceliums_storage::resolve_index_dir(&live);
+        assert_ne!(first, second);
+        assert!(!first.exists(), "the previous generation is deleted");
+        assert_eq!(
+            read(&live.join("symbols.lance/_versions/1.manifest")),
+            "second"
+        );
+        assert_eq!(entries(&root.join(GENERATIONS_DIR)).len(), 1);
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
+        let target = std::fs::read_link(&live).unwrap();
+        assert!(target.is_relative(), "{target:?}: the data dir can move");
+    }
+
+    /// The invariant #175 rests on: a path below the generation a reader
+    /// resolved never changes its content — a swap can only make it
+    /// disappear. Before, a reader resolved every file through the live
+    /// path, so the same manifest path served the next generation's bytes
+    /// (and Lance, holding the size listed for the previous one, panicked).
+    #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
+    #[test]
+    fn files_below_a_resolved_generation_never_change_across_a_swap() {
+        let data = tempfile::tempdir().unwrap();
+        let live = data.path().join("data").join("repo");
+        rebuild(&live, "generation 0, a longer manifest");
+        let reader = myceliums_storage::resolve_index_dir(&live);
+        let seen = files(&reader);
+        assert!(!seen.is_empty());
+
+        rebuild(&live, "generation 1");
+        for (path, bytes) in seen {
+            if let Ok(now) = std::fs::read(&path) {
+                assert_eq!(now, bytes, "{} changed under a reader", path.display());
+            }
+        }
+        // The live path itself serves the new generation.
+        assert_eq!(
+            read(&live.join("symbols.lance/_versions/1.manifest")),
+            "generation 1"
+        );
+    }
+
+    #[test]
+    fn without_links_the_build_directory_itself_is_swapped_in() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let live = root.join("repo");
+        write(&live.join("symbols.lance"), "old");
+        let staged = StagedIndex::create(&live).unwrap();
+        write(&staged.path().join("symbols.lance"), "new");
+        let no_link = |_: &Path, _: &Path| Err(std::io::ErrorKind::Unsupported.into());
+        let rename = refusing(&[]);
+        let ops = SwapOps {
+            rename: &rename,
+            exchange: &exchange,
+            link: &no_link,
+            write: &write_durable,
+        };
+        staged.commit_with(&ops).unwrap();
+        assert!(!is_link(&live));
+        assert_eq!(read(&live.join("symbols.lance")), "new");
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
+        assert!(entries(&root.join(GENERATIONS_DIR)).is_empty());
+    }
+
+    /// The marker fails after a link was swapped in over a link: recovery
+    /// puts the previous link back, and its generation is still there.
+    #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
+    #[test]
+    fn an_unmarked_swap_of_links_restores_the_previous_generation() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let live = root.join("repo");
+        rebuild(&live, "first");
+        let first = myceliums_storage::resolve_index_dir(&live);
+
+        let staged = StagedIndex::create(&live).unwrap();
+        write(
+            &staged.path().join("symbols.lance/_versions/1.manifest"),
+            "second",
+        );
+        let rename = refusing(&[]);
+        let fail_marker = |path: &Path, bytes: &[u8]| {
+            if String::from_utf8_lossy(bytes).contains(COMMITTED) {
+                Err(std::io::Error::other("disk full"))
+            } else {
+                write_durable(path, bytes)
+            }
+        };
+        let ops = SwapOps {
+            rename: &rename,
+            exchange: &exchange,
+            link: &symlink,
+            write: &fail_marker,
+        };
+        staged.commit_with(&ops).unwrap_err();
+        assert_eq!(
+            read(&live.join("symbols.lance/_versions/1.manifest")),
+            "second"
+        );
+        assert!(first.exists(), "kept for recovery");
+
+        let next = StagedIndex::create(&live).unwrap();
+        assert_eq!(myceliums_storage::resolve_index_dir(&live), first);
+        assert_eq!(
+            read(&live.join("symbols.lance/_versions/1.manifest")),
+            "first"
+        );
+        drop(next);
+        assert!(entries(&root.join(STAGING_DIR)).is_empty());
+        assert_eq!(
+            entries(&root.join(GENERATIONS_DIR)),
+            vec![first.file_name().unwrap().to_string_lossy().into_owned()],
+            "the unconfirmed generation is deleted"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unused_generations_of_finished_rebuilds_are_deleted() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let gens = root.join(GENERATIONS_DIR);
+        let link = |name: &str, target: &str| {
+            std::fs::create_dir_all(root.join(STAGING_DIR)).unwrap();
+            std::os::unix::fs::symlink(Path::new(GENERATIONS_DIR).join(target), root.join(name))
+                .unwrap();
+        };
+        // Live, linked from data/: kept.
+        write(&gens.join(format!("{DEAD}-1-0/t")), "live");
+        link("repo", &format!("{DEAD}-1-0"));
+        // Linked from .staging/ (a running rebuild's link): kept.
+        write(&gens.join(format!("{DEAD}-2-0/t")), "linked");
+        link(
+            &format!("{STAGING_DIR}/build-7-2-0"),
+            &format!("{DEAD}-2-0"),
+        );
+        // Its link was deleted alone: garbage.
+        write(&gens.join(format!("{DEAD}-3-0/t")), "orphan");
+        // Not a rebuild's name: never ours to delete.
+        write(&gens.join("notes/t"), "x");
+        // A deletion that did not finish.
+        write(&gens.join(format!("{DEAD}-5-0{DELETED_SUFFIX}/t")), "half");
+
+        let done = recover_leftovers_where(&root, &|s| s == "7-2-0");
+        assert!(done.contains(&Recovered::Removed(gens.join(format!("{DEAD}-3-0")))));
+        assert_eq!(
+            entries(&gens),
+            vec![
+                format!("{DEAD}-1-0"),
+                format!("{DEAD}-2-0"),
+                "notes".to_string()
+            ]
+        );
+
+        // While a running rebuild swaps, no generation goes.
+        write(&gens.join(format!("{DEAD}-4-0/t")), "orphan");
+        write(&root.join(STAGING_DIR).join("swap-7-1-0"), "repo");
+        recover_leftovers_where(&root, &|s| s == "7-1-0" || s == "7-2-0");
+        assert!(gens.join(format!("{DEAD}-4-0")).exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn remove_index_deletes_the_link_and_its_generation() {
+        let data = tempfile::tempdir().unwrap();
+        let root = data.path().join("data");
+        let live = root.join("repo");
+        rebuild(&live, "first");
+        let generation = myceliums_storage::resolve_index_dir(&live);
+        remove_index(&live).unwrap();
+        assert!(!present(&live));
+        assert!(!generation.exists());
+        // A directory (an index built before #175), and nothing at all.
+        write(&live.join("symbols.lance"), "legacy");
+        remove_index(&live).unwrap();
+        assert!(!present(&live));
+        remove_index(&live).unwrap();
     }
 }

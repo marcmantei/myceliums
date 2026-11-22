@@ -125,10 +125,10 @@ impl MyceliumsMcp {
             .save()
             .map_err(|e| ToolError::internal("cannot save the repository registry", e))?;
         self.service.invalidate(&params.repo_id);
-        if db_path.exists() {
-            std::fs::remove_dir_all(&db_path)
-                .map_err(|e| ToolError::internal("cannot remove the index directory", e))?;
-        }
+        // The index directory, or the link to its generation with the
+        // generation (#175).
+        myceliums_core::remove_index(&db_path)
+            .map_err(|e| ToolError::internal("cannot remove the index directory", e))?;
         text(format!("Deleted: {} ({})", info.name, params.repo_id))
     }
 }

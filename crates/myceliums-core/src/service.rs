@@ -5,7 +5,8 @@
 //!
 //! * **Store lifecycle** — one [`Store`] handle per cached repository, opened
 //!   lazily so a burst of tool calls does not repeatedly re-open the same
-//!   LanceDB database.
+//!   LanceDB database, and bound to one index generation: a rebuild that
+//!   swaps in a new generation gets a new handle (#175).
 //! * **Graph cache** — the graph tables (symbols, relationships, files,
 //!   communities, processes) are read from disk once per repository and kept
 //!   in memory, shared as [`Arc`]s. The cache is dropped by
@@ -37,8 +38,8 @@ use std::time::SystemTime;
 use tokio::sync::OnceCell;
 
 use myceliums_storage::{
-    CodeSymbol, Community, FileNode, Process, Relationship, RelationshipKind, RepoInfo,
-    RepoRegistry, StorageError, Store,
+    resolve_index_dir, CodeSymbol, Community, FileNode, Process, Relationship, RelationshipKind,
+    RepoInfo, RepoRegistry, StorageError, Store,
 };
 
 use crate::error::MyceliumError;
@@ -352,13 +353,22 @@ fn table_bytes<T: HeapSize>(rows: &[T]) -> u64 {
 /// reused inode — but Lance stamps every manifest with its commit time in
 /// nanoseconds, so the content differs.
 ///
+/// The fingerprint is taken of the index *generation* the database path
+/// names at the time (see [`myceliums_storage::resolve_index_dir`]) and
+/// records that generation's directory: a rebuild that points the path at a
+/// new generation changes it.
+///
 /// Tables no graph table is read from are left out ([`UNCACHED_TABLES`]):
 /// the body-chunk and staged vectors and the index metadata, which a
 /// background embedding of the live index writes every few seconds (#157).
 /// Their writes are not new generations of the graph — cached tables stay,
 /// and a running read does not fail with [`MyceliumError::IndexChanged`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IndexFingerprint(Vec<TableStamp>);
+pub struct IndexFingerprint {
+    /// The generation directory the stamps were read from.
+    generation: PathBuf,
+    stamps: Vec<TableStamp>,
+}
 
 /// Table directories of an index that no graph table is read from, and that
 /// therefore do not count towards its [`IndexFingerprint`]: vector search
@@ -455,9 +465,12 @@ impl TableStamp {
 }
 
 impl IndexFingerprint {
-    /// Reads the fingerprint of the database at `db_path`. A missing
-    /// directory yields a fingerprint with no tables.
+    /// Reads the fingerprint of the database at `db_path` — of the index
+    /// generation it names now. A missing directory yields a fingerprint
+    /// with no tables.
     pub fn read(db_path: &Path) -> Self {
+        let generation = resolve_index_dir(db_path);
+        let db_path = generation.as_path();
         let meta = std::fs::metadata(db_path).ok();
         let mut stamps = vec![TableStamp {
             name: String::new(),
@@ -481,7 +494,13 @@ impl IndexFingerprint {
             }
         }
         stamps.sort();
-        Self(stamps)
+        Self { generation, stamps }
+    }
+
+    /// The index generation (database directory) this fingerprint was read
+    /// from.
+    pub fn generation(&self) -> &Path {
+        &self.generation
     }
 }
 
@@ -490,6 +509,9 @@ impl IndexFingerprint {
 struct CachedGraph {
     /// On-disk state every table below was read at.
     fingerprint: IndexFingerprint,
+    /// The store the tables are read through, bound to
+    /// `fingerprint.generation()`.
+    store: Arc<Store>,
     /// Estimated heap bytes of the tables loaded so far.
     bytes: AtomicU64,
     symbols: OnceCell<GraphTable<CodeSymbol>>,
@@ -500,9 +522,10 @@ struct CachedGraph {
 }
 
 impl CachedGraph {
-    fn new(fingerprint: IndexFingerprint) -> Self {
+    fn new(fingerprint: IndexFingerprint, store: Arc<Store>) -> Self {
         Self {
             fingerprint,
+            store,
             bytes: AtomicU64::new(0),
             symbols: OnceCell::new(),
             relationships: OnceCell::new(),
@@ -533,6 +556,11 @@ struct Generation {
     /// `graph`. Once set, the snapshot never moves to another generation.
     pinned: bool,
 }
+
+/// A store for the generation a stale load observed, when that is another
+/// generation than the one the load read: `None` for the same generation,
+/// an error if its store could not be opened.
+type NextStore = Option<Result<Arc<Store>>>;
 
 /// What a table read does after its load attempt.
 enum Settled<T> {
@@ -571,7 +599,6 @@ pub struct RepoGraph<'a> {
     repo_id: String,
     info: RepoInfo,
     db_path: PathBuf,
-    store: Arc<Store>,
     state: Mutex<Generation>,
     /// Test hook: the first table read to reach it waits there between its
     /// load and its hand-out decision.
@@ -595,7 +622,7 @@ impl RepoGraph<'_> {
     /// not cover (vector search, embeddings, index metadata). Call
     /// [`RepoGraph::verify`] after such a read.
     pub fn store(&self) -> Arc<Store> {
-        Arc::clone(&self.store)
+        Arc::clone(&lock(&self.state).graph.store)
     }
 
     /// Checks that the index on disk is still the generation this snapshot
@@ -677,7 +704,7 @@ impl RepoGraph<'_> {
             let loaded = AtomicBool::new(false);
             let result = cell(&graph)
                 .get_or_try_init(|| async {
-                    let read = read(Arc::clone(&self.store)).await;
+                    let read = guard_panics(read(Arc::clone(&graph.store))).await;
                     // The snapshot's fingerprint was read before this load
                     // started; unchanged now means no commit landed in
                     // between, so the rows belong to that generation.
@@ -694,9 +721,22 @@ impl RepoGraph<'_> {
                     Ok(GraphTable(Arc::new(rows)))
                 })
                 .await;
+            // A newer generation needs its own store.
+            let next = match &result {
+                Err(LoadError::Stale(now))
+                    if now.generation() != graph.fingerprint.generation() =>
+                {
+                    Some(
+                        self.service
+                            .store_for(&self.repo_id, &self.db_path, now.generation())
+                            .await,
+                    )
+                }
+                _ => None,
+            };
             #[cfg(test)]
             self.test_pause().await;
-            match self.settle(&graph, result, &mut repins) {
+            match self.settle(&graph, result, next, &mut repins) {
                 Settled::Done(result) => {
                     if result.is_ok() && loaded.load(Ordering::Relaxed) {
                         self.service.loaded(&self.repo_id);
@@ -716,6 +756,7 @@ impl RepoGraph<'_> {
         &self,
         graph: &Arc<CachedGraph>,
         result: std::result::Result<&GraphTable<T>, LoadError>,
+        next: NextStore,
         repins: &mut usize,
     ) -> Settled<T> {
         let mut state = lock(&self.state);
@@ -734,8 +775,18 @@ impl RepoGraph<'_> {
                 Settled::Done(Ok(table.clone()))
             }
             Err(LoadError::Stale(now)) if !state.pinned && *repins < MAX_REPINS => {
+                let store = match next {
+                    None => Arc::clone(&graph.store),
+                    Some(Ok(store)) => store,
+                    // The newer generation is gone again already.
+                    Some(Err(_)) => {
+                        return Settled::Done(Err(MyceliumError::IndexChanged(
+                            self.repo_id.clone(),
+                        )))
+                    }
+                };
                 *repins += 1;
-                state.graph = self.service.pin(&self.repo_id, now);
+                state.graph = self.service.pin(&self.repo_id, now, store);
                 Settled::Retry
             }
             Err(LoadError::Stale(_)) => {
@@ -751,6 +802,36 @@ impl RepoGraph<'_> {
         if let Some(pause) = pause {
             pause.reached.notify_one();
             pause.release.notified().await;
+        }
+    }
+}
+
+/// Runs a table read, turning a panic inside it into an error.
+///
+/// A safeguard, not the protection against torn reads (that is the
+/// generation layout, see [`crate::staging`]): Lance panics on a manifest
+/// whose bytes do not match the size it listed (#175), which a read can
+/// still meet in an index of the layout before #175 during its first
+/// rebuild, or in one changed in place by other means. As an
+/// error, the caller's fingerprint check decides: an index that changed
+/// meanwhile makes it `IndexChanged`, otherwise it is a storage error — never
+/// a panic of the server task.
+async fn guard_panics<T, Fut>(read: Fut) -> std::result::Result<T, StorageError>
+where
+    Fut: std::future::Future<Output = std::result::Result<T, StorageError>>,
+{
+    use futures::FutureExt;
+    match std::panic::AssertUnwindSafe(read).catch_unwind().await {
+        Ok(result) => result,
+        Err(panic) => {
+            let message = panic
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            Err(StorageError::InvalidData(format!(
+                "the storage engine panicked while reading the index: {message}"
+            )))
         }
     }
 }
@@ -891,31 +972,83 @@ impl GraphService {
     /// every call, also when a handle is already cached, so a repository
     /// removed from the registry (by `delete` or by another process) is
     /// rejected even before its cache entry is invalidated.
+    ///
+    /// The handle is bound to the index generation the repository's path
+    /// names (see [`myceliums_storage::resolve_index_dir`]); once a rebuild
+    /// has swapped in a new generation, the next call opens a handle on it.
     pub async fn open_store(&self, repo_id: &str) -> Result<Arc<Store>> {
         let db_path = self.db_path(repo_id)?;
-        self.open_store_at(repo_id, &db_path).await
+        let generation = resolve_index_dir(&db_path);
+        self.store_for(repo_id, &db_path, &generation).await
     }
 
-    /// [`GraphService::open_store`] for a `db_path` the caller has already
-    /// obtained from [`GraphService::db_path`] (which validated `repo_id`).
-    async fn open_store_at(&self, repo_id: &str, db_path: &Path) -> Result<Arc<Store>> {
-        if let Some(existing) = lock(&self.cache).touch(repo_id).store.clone() {
+    /// The shared store handle of `repo_id` bound to the index generation
+    /// `generation` (a directory `db_path`, which [`GraphService::db_path`]
+    /// validated, names or named), opened on first use.
+    async fn store_for(
+        &self,
+        repo_id: &str,
+        db_path: &Path,
+        generation: &Path,
+    ) -> Result<Arc<Store>> {
+        let cached = lock(&self.cache).touch(repo_id).store.clone();
+        if let Some(existing) = cached.filter(|s| s.path() == generation) {
             return Ok(existing);
         }
         // A registered repository's index exists; never create an empty one
         // here (a read during a rebuild's swap would otherwise leave one).
-        let store = Store::open_existing(db_path, repo_id).await?;
+        let store = Store::open_existing(generation, repo_id)
+            .await
+            .map_err(|e| match e {
+                StorageError::NoIndex(_) => StorageError::NoIndex(db_path.to_path_buf()),
+                e => e,
+            })?;
         // Two callers can both miss the cache above and both open the
         // database, because `Store::open` is awaited outside the lock. The
         // first to re-lock publishes its handle; the other adopts it, so every
         // caller receives the same `Arc<Store>`. The loser's handle is dropped
         // here — wasted work on a cold-start race, never a second live handle
-        // in the cache.
+        // of one generation in the cache. A handle of another generation is
+        // replaced.
         let mut cache = lock(&self.cache);
         let slot = cache.touch(repo_id);
-        let handle = slot.store.get_or_insert_with(|| Arc::new(store)).clone();
+        let handle = match &slot.store {
+            Some(existing) if existing.path() == store.path() => Arc::clone(existing),
+            _ => {
+                let fresh = Arc::new(store);
+                slot.store = Some(Arc::clone(&fresh));
+                fresh
+            }
+        };
         cache.enforce(&self.limits, repo_id);
         Ok(handle)
+    }
+
+    /// The fingerprint of the index generation `db_path` names now, with a
+    /// store bound to that same generation. A generation replaced (and
+    /// deleted) between the two is followed to the next one.
+    async fn current_generation(
+        &self,
+        repo_id: &str,
+        db_path: &Path,
+    ) -> Result<(IndexFingerprint, Arc<Store>)> {
+        let mut attempts = 0;
+        loop {
+            let fingerprint = self.read_fingerprint(db_path);
+            match self
+                .store_for(repo_id, db_path, fingerprint.generation())
+                .await
+            {
+                Ok(store) => return Ok((fingerprint, store)),
+                Err(_)
+                    if attempts < MAX_REPINS
+                        && resolve_index_dir(db_path) != fingerprint.generation() =>
+                {
+                    attempts += 1;
+                }
+                Err(e) => return Err(e),
+            }
+        }
     }
 
     // ── Cached graph tables ──────────────────────────────────────────
@@ -938,15 +1071,13 @@ impl GraphService {
     /// once.
     pub async fn graph_in(&self, registry: &RepoRegistry, repo_id: &str) -> Result<RepoGraph<'_>> {
         let (db_path, info) = self.registered_in(registry, repo_id)?;
-        let store = self.open_store_at(repo_id, &db_path).await?;
-        let fingerprint = self.read_fingerprint(&db_path);
-        let graph = self.pin(repo_id, fingerprint);
+        let (fingerprint, store) = self.current_generation(repo_id, &db_path).await?;
+        let graph = self.pin(repo_id, fingerprint, store);
         Ok(RepoGraph {
             service: self,
             repo_id: repo_id.to_string(),
             info,
             db_path,
-            store,
             state: Mutex::new(Generation {
                 graph,
                 pinned: false,
@@ -962,18 +1093,25 @@ impl GraphService {
     }
 
     /// The cached graph of `repo_id` for the generation `fingerprint`
-    /// describes, replacing a cached graph of another generation.
+    /// describes, replacing a cached graph of another generation. `store`
+    /// must be bound to `fingerprint.generation()`; a new entry reads
+    /// through it.
     ///
     /// Concurrent callers that observe the same new fingerprint share one
     /// fresh entry (and one load per table) instead of replacing each
     /// other's: the compare-and-replace happens under the cache lock.
-    fn pin(&self, repo_id: &str, fingerprint: IndexFingerprint) -> Arc<CachedGraph> {
+    fn pin(
+        &self,
+        repo_id: &str,
+        fingerprint: IndexFingerprint,
+        store: Arc<Store>,
+    ) -> Arc<CachedGraph> {
         let mut cache = lock(&self.cache);
         let slot = cache.touch(repo_id);
         let graph = match &slot.graph {
             Some(graph) if graph.fingerprint == fingerprint => Arc::clone(graph),
             _ => {
-                let fresh = Arc::new(CachedGraph::new(fingerprint));
+                let fresh = Arc::new(CachedGraph::new(fingerprint, store));
                 slot.graph = Some(Arc::clone(&fresh));
                 fresh
             }
@@ -1713,6 +1851,161 @@ mod tests {
         // Afterwards the service serves the last generation.
         let graph = svc.graph("r").await.unwrap();
         assert!(graph.symbols().await.unwrap()[0].name.starts_with("g8"));
+    }
+
+    /// #175: a store is bound to the generation it was opened on. A store
+    /// opened through the live path used to read every file through it, so
+    /// after a swap it read the next generation's files — and a swap between
+    /// Lance listing a manifest and reading it tore that read. Now it reads
+    /// its own generation or, once that is deleted, fails; never the next.
+    #[cfg(any(target_os = "linux", target_os = "android", target_os = "macos"))]
+    #[tokio::test]
+    async fn a_store_never_reads_a_generation_swapped_in_after_it_opened() {
+        let (_svc, dir) = service_with_repos(&["r"]);
+        let live = RepoRegistry::repo_db_path(dir.path(), "r");
+        rebuild(dir.path(), "r", &["g0a", "g0b"]).await;
+        let store = Store::open_existing(&live, "r").await.unwrap();
+        assert_ne!(store.path(), live, "bound to the generation");
+
+        rebuild(dir.path(), "r", &["g1a", "g1b", "g1c"]).await;
+        if let Ok(symbols) = store.get_symbols().await {
+            let names: Vec<&str> = symbols.iter().map(|s| s.name.as_str()).collect();
+            assert_eq!(names, ["g0a", "g0b"], "read the next generation");
+        }
+        let fresh = Store::open_existing(&live, "r").await.unwrap();
+        assert_eq!(fresh.get_symbols().await.unwrap().len(), 3);
+    }
+
+    /// A snapshot follows a rebuild to the new generation's store, and a
+    /// panic in a table read is an error, not a panic of the caller.
+    #[tokio::test]
+    async fn a_panicking_table_read_is_an_error() {
+        let (svc, dir) = service_with_symbols(&["alpha"]).await;
+        /// What Lance did on a torn manifest read in a debug build.
+        fn lance_overflow() -> StorageError {
+            panic!("attempt to subtract with overflow")
+        }
+        let panicking = |_: Arc<Store>| async { Err(lance_overflow()) };
+        let graph = svc.graph("r").await.unwrap();
+        let err = graph
+            .table::<Relationship, _, _>(|g| &g.relationships, panicking)
+            .await
+            .expect_err("the read fails");
+        assert!(matches!(err, MyceliumError::Store(_)), "{err:?}");
+
+        // The same panic while a rebuild swaps the index: IndexChanged.
+        let graph = svc.graph("r").await.unwrap();
+        graph.symbols().await.unwrap();
+        let data_dir = dir.path();
+        let swapping = |_: Arc<Store>| async move {
+            rebuild(data_dir, "r", &["gamma"]).await;
+            Err(lance_overflow())
+        };
+        let err = graph
+            .table::<Relationship, _, _>(|g| &g.relationships, swapping)
+            .await
+            .expect_err("the read fails");
+        assert!(matches!(err, MyceliumError::IndexChanged(_)), "{err:?}");
+        // The next snapshot reads the new generation through a new store.
+        let fresh = svc.graph("r").await.unwrap();
+        assert_eq!(fresh.symbols().await.unwrap()[0].name, "gamma");
+        assert_ne!(fresh.store().path(), graph.store().path());
+    }
+
+    /// Stress variant of the test above (#175): many rebuilds whose tables
+    /// differ in commit count and manifest size, readers that open tables
+    /// as fast as they can. Every read either serves one generation or fails
+    /// with `IndexChanged`; a Lance panic (a torn manifest read) or any
+    /// other error fails the test. `MYC_SWAP_STRESS_ROUNDS` sets the number
+    /// of rebuilds (default 40).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn reads_racing_many_rebuilds_never_panic_or_tear() {
+        let rounds: usize = std::env::var("MYC_SWAP_STRESS_ROUNDS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(40);
+        let (svc, dir) = service_with_symbols(&["g0a", "g0b"]).await;
+        let svc = Arc::new(svc);
+        let data_dir = dir.path().to_path_buf();
+        let stop = Arc::new(AtomicBool::new(false));
+
+        let readers: Vec<_> = (0..6)
+            .map(|_| {
+                let (svc, stop) = (Arc::clone(&svc), Arc::clone(&stop));
+                tokio::spawn(async move {
+                    let (mut consistent, mut changed) = (0usize, 0usize);
+                    while !stop.load(Ordering::Relaxed) {
+                        let read = async {
+                            // A fresh service per call: every read opens the
+                            // tables from disk, so it can straddle a swap.
+                            let fresh = GraphService::new(svc.data_dir());
+                            let graph = fresh.graph("r").await?;
+                            let symbols = graph.symbols().await?;
+                            let relationships = graph.relationships().await?;
+                            Ok::<_, MyceliumError>((symbols, relationships))
+                        };
+                        match read.await {
+                            Ok((symbols, relationships)) => {
+                                let names: Vec<&str> =
+                                    symbols.iter().map(|s| s.name.as_str()).collect();
+                                let names = names.join(",");
+                                assert!(
+                                    relationships.iter().all(|r| r.metadata == names),
+                                    "one call mixed two index generations"
+                                );
+                                consistent += 1;
+                            }
+                            Err(MyceliumError::IndexChanged(_)) => changed += 1,
+                            Err(e) => panic!("only IndexChanged may fail a read: {e:?}"),
+                        }
+                    }
+                    (consistent, changed)
+                })
+            })
+            .collect();
+
+        for generation in 1..=rounds {
+            let live = RepoRegistry::repo_db_path(&data_dir, "r");
+            let staged = crate::StagedIndex::create(&live).unwrap();
+            let store = Store::open(staged.path(), "r").await.unwrap();
+            // 1–4 commits per table: the newest manifest's name and size
+            // differ from one generation to the next.
+            let batches = 1 + generation % 4;
+            let mut names = Vec::new();
+            for batch in 0..batches {
+                let symbols: Vec<CodeSymbol> = (0..1 + batch)
+                    .map(|i| {
+                        let name = format!("g{generation}b{batch}s{i}");
+                        names.push(name.clone());
+                        CodeSymbol {
+                            repo_id: "r".to_string(),
+                            ..symbol(&format!("u{batch}-{i}"), &name)
+                        }
+                    })
+                    .collect();
+                store.store_symbols(&symbols).await.unwrap();
+            }
+            for _ in 0..batches {
+                let edge = myceliums_storage::Relationship {
+                    repo_id: "r".to_string(),
+                    metadata: names.join(","),
+                    ..calls_edge("u0-0", "u1-0")
+                };
+                store.store_relationships(&[edge]).await.unwrap();
+            }
+            drop(store);
+            staged.commit().unwrap();
+            tokio::task::yield_now().await;
+        }
+        stop.store(true, Ordering::Relaxed);
+        let (mut consistent, mut changed) = (0, 0);
+        for reader in readers {
+            let (c, f) = reader.await.expect("a reader panicked");
+            consistent += c;
+            changed += f;
+        }
+        eprintln!("{rounds} rebuilds: {consistent} consistent reads, {changed} IndexChanged");
+        assert!(consistent > 0);
     }
 
     /// Two reads of one snapshot run concurrently. The first has its

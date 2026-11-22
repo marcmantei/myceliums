@@ -8,7 +8,7 @@ use arrow_schema::{DataType, Field, Schema};
 use futures::TryStreamExt;
 use lancedb::query::{ExecutableQuery, QueryBase};
 use lancedb::{connect, Connection};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::info;
 
@@ -204,6 +204,34 @@ impl DirIdentity {
     }
 }
 
+/// The directory an index path stands for.
+///
+/// A rebuild builds every new index in a directory of its own (an index
+/// *generation*, below `data/.generations/`) and then atomically points the
+/// repository's index path `data/<repo-id>` — a symbolic link — at it
+/// (#175). A generation's files never change their content under a path:
+/// Lance only adds files, and a generation is deleted as a whole once it is
+/// replaced. Opening the link's target instead of the link keeps a reader
+/// on one generation for as long as it reads, where a path through the
+/// link could resolve to one generation for a manifest's listing and to the
+/// next for its bytes.
+///
+/// `path` itself where it is not a link (an index built before #175, a
+/// staging directory, any plain database directory). Only one level of
+/// link is followed, relative targets relative to the link's directory.
+pub fn resolve_index_dir(path: &Path) -> PathBuf {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => match std::fs::read_link(path) {
+            Ok(target) if target.is_relative() => path
+                .parent()
+                .map_or_else(|| target.clone(), |parent| parent.join(&target)),
+            Ok(target) => target,
+            Err(_) => path.to_path_buf(),
+        },
+        _ => path.to_path_buf(),
+    }
+}
+
 /// Whether `path` is now an empty directory other than the one `before`
 /// identified: the index was removed after it was checked, and `connect`
 /// created an empty directory in its place. Always `false` where the
@@ -225,6 +253,10 @@ fn recreated_empty(path: &Path, before: DirIdentity) -> bool {
 /// communities, processes, and their embeddings.
 pub struct Store {
     db: Connection,
+    /// The directory the connection reads and writes: the index generation
+    /// the path given to [`Store::open`] named when the store was opened
+    /// (see [`resolve_index_dir`]).
+    path: PathBuf,
     repo_id: String,
     /// Dimension of the `vector` column when (re)creating the symbols table.
     /// Defaults to the legacy 384; set from the resolved embedding model
@@ -237,13 +269,23 @@ pub struct Store {
 
 impl Store {
     /// Opens (creating if needed) the LanceDB-backed store for a repository.
+    ///
+    /// Where `db_path` is a link to an index generation (see
+    /// [`resolve_index_dir`]), the store is bound to that generation: a
+    /// rebuild that later points the link at a new generation does not
+    /// change what this store reads, file by file, half-way through a read.
     pub async fn open(db_path: &Path, repo_id: &str) -> Result<Self> {
-        let db = connect(crate::error::db_uri(db_path)?)
+        Self::open_dir(resolve_index_dir(db_path), repo_id).await
+    }
+
+    async fn open_dir(path: PathBuf, repo_id: &str) -> Result<Self> {
+        let db = connect(crate::error::db_uri(&path)?)
             .execute()
             .await
             .context("Failed to open LanceDB")?;
         Ok(Self {
             db,
+            path,
             repo_id: repo_id.to_string(),
             embedding_dim: std::sync::atomic::AtomicI32::new(schema::DEFAULT_EMBEDDING_DIM),
             ann: AnnSettings::PRODUCTION,
@@ -262,18 +304,25 @@ impl Store {
     /// `connect` just created, and is removed again (#118).
     pub async fn open_existing(db_path: &Path, repo_id: &str) -> Result<Self> {
         let no_index = || StorageError::NoIndex(db_path.to_path_buf());
-        let before = match std::fs::metadata(db_path) {
+        let dir = resolve_index_dir(db_path);
+        let before = match std::fs::metadata(&dir) {
             Ok(meta) if meta.is_dir() => DirIdentity::of(&meta),
             _ => return Err(no_index()),
         };
-        let store = Self::open(db_path, repo_id).await?;
-        if recreated_empty(db_path, before) {
+        let store = Self::open_dir(dir.clone(), repo_id).await?;
+        if recreated_empty(&dir, before) {
             drop(store);
             // Only removes an empty directory, never an index.
-            let _ = std::fs::remove_dir(db_path);
+            let _ = std::fs::remove_dir(&dir);
             return Err(no_index());
         }
         Ok(store)
+    }
+
+    /// The directory this store reads and writes: the index generation it
+    /// is bound to (see [`Store::open`]).
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     /// Replace the ANN index policy. Production code never calls this; it
@@ -313,7 +362,7 @@ impl Store {
     /// vectors from one model are meaningless in another model's space.
     /// Returns `true` if the table was rebuilt.
     pub async fn ensure_symbols_dim(&self) -> Result<bool> {
-        let tables = self.db.table_names().execute().await?;
+        let tables = self.table_names().await?;
         // Chunk vectors (#157) share the symbols' vector space.
         if tables.contains(&"chunks".to_string()) {
             let table = self.db.open_table("chunks").execute().await?;
@@ -349,7 +398,7 @@ impl Store {
 
     /// Read a value from the per-index key-value metadata table.
     pub async fn get_index_meta(&self, key: &str) -> Result<Option<String>> {
-        let tables = self.db.table_names().execute().await?;
+        let tables = self.table_names().await?;
         if !tables.contains(&"index_meta".to_string()) {
             return Ok(None);
         }
@@ -393,7 +442,7 @@ impl Store {
 
     async fn ensure_table(&self, name: &str, schema: Schema) -> Result<lancedb::Table> {
         let arc_schema = Arc::new(schema);
-        let tables = self.db.table_names().execute().await?;
+        let tables = self.table_names().await?;
         if tables.contains(&name.to_string()) {
             Ok(self.db.open_table(name).execute().await?)
         } else {
@@ -542,8 +591,21 @@ impl Store {
         )?)
     }
 
-    async fn query_table(&self, table_name: &str) -> Result<Vec<RecordBatch>> {
+    /// The tables of this store's index. Errors with
+    /// [`StorageError::NoIndex`] once the index directory is gone (the
+    /// generation this store is bound to was replaced by a rebuild and
+    /// deleted): its tables did not become empty, this store just cannot
+    /// read them any more.
+    async fn table_names(&self) -> Result<Vec<String>> {
         let tables = self.db.table_names().execute().await?;
+        if tables.is_empty() && !self.path.is_dir() {
+            return Err(StorageError::NoIndex(self.path.clone()));
+        }
+        Ok(tables)
+    }
+
+    async fn query_table(&self, table_name: &str) -> Result<Vec<RecordBatch>> {
+        let tables = self.table_names().await?;
         if !tables.contains(&table_name.to_string()) {
             return Ok(vec![]);
         }
@@ -610,9 +672,15 @@ impl Store {
 
     /// Opens `name`, or `None` when the table does not exist yet. One call
     /// instead of listing the tables first, for latency-bound readers.
+    ///
+    /// A missing table of an index that is itself gone is
+    /// [`StorageError::NoIndex`], as in `table_names`.
     async fn open_table_if_exists(&self, name: &str) -> Result<Option<lancedb::Table>> {
         match self.db.open_table(name).execute().await {
             Ok(table) => Ok(Some(table)),
+            Err(lancedb::Error::TableNotFound { .. }) if !self.path.is_dir() => {
+                Err(StorageError::NoIndex(self.path.clone()))
+            }
             Err(lancedb::Error::TableNotFound { .. }) => Ok(None),
             Err(e) => Err(e.into()),
         }
@@ -829,7 +897,7 @@ impl Store {
     /// Delete all data associated with a specific file path (symbols, file node,
     /// and relationships that reference symbols in that file).
     pub async fn delete_file_data(&self, file_path: &str) -> Result<()> {
-        let tables = self.db.table_names().execute().await?;
+        let tables = self.table_names().await?;
 
         // Collect UIDs of symbols in this file so we can delete related relationships
         let symbol_uids: Vec<String> = self
@@ -917,7 +985,7 @@ impl Store {
 
     /// Deletes all data (symbols, files, relationships, ...) for this repository.
     pub async fn delete_repo_data(&self) -> Result<()> {
-        let tables = self.db.table_names().execute().await?;
+        let tables = self.table_names().await?;
         let escaped_repo_id = escape_lance_str(&self.repo_id);
         for table_name in [
             "symbols",
@@ -1413,7 +1481,7 @@ impl Store {
             });
         }
 
-        let tables = self.db.table_names().execute().await?;
+        let tables = self.table_names().await?;
         if !tables.contains(&"symbols".to_string()) {
             return Ok(AnnIndexBuild::SkippedNoTable);
         }
@@ -1463,7 +1531,7 @@ impl Store {
     /// `Some(threshold)` only when the `symbols` table holds fewer rows than
     /// that. See [`Store::create_ann_index`].
     async fn drop_vector_indexes(&self, only_below: Option<usize>) -> Result<()> {
-        let tables = self.db.table_names().execute().await?;
+        let tables = self.table_names().await?;
         if !tables.contains(&"symbols".to_string()) {
             return Ok(());
         }
@@ -1629,7 +1697,7 @@ impl Store {
         query_vector: &[f32],
         limit: usize,
     ) -> Result<Vec<(CodeSymbol, f32)>> {
-        let tables = self.db.table_names().execute().await?;
+        let tables = self.table_names().await?;
         if !tables.contains(&"symbols".to_string()) {
             return Ok(vec![]);
         }
