@@ -21,6 +21,22 @@ Everything except semantic search and hybrid search will still work:
 
 You can always generate embeddings later with `myc analyze --force` when you need semantic search.
 
+## Community detection has a budget
+
+Community detection runs after parsing and call resolution, on one thread.
+It stops after `[community] time_budget_secs` (default 60 s) and keeps the
+best partition found by then; `analyze` then reports `Communities: N
+(partial)` with the reason, and the community tools say the same. To give it
+more time, or none at all:
+
+```toml
+[community]
+time_budget_secs = 300   # 0 = no limit
+# enabled = false        # skip it: same as `myc analyze --skip-communities`
+```
+
+The `Phases:` line of the analyze summary shows how long each phase took.
+
 ## Session start does not wait for the analysis
 
 The Claude Code hook, `myc session . --yes`, returns at once. A missing or

@@ -160,6 +160,7 @@ impl MyceliumsMcp {
         let repo_name = analyzer::repo_name_from_path(&abs_path);
         let force = params.force.unwrap_or(false);
         let skip_embeddings = params.skip_embeddings.unwrap_or(false);
+        let skip_communities = params.skip_communities.unwrap_or(false);
 
         // Honor the project's .myceliums.toml (analysis filters, embedding
         // model) the same way the CLI does.
@@ -221,6 +222,10 @@ impl MyceliumsMcp {
                         let calls = crate::index_status::call_resolution(&store)
                             .await
                             .map(|stats| stats.summary());
+                        let community_status = myceliums_core::CommunityStatus::load(&store)
+                            .await
+                            .ok()
+                            .flatten();
                         // The two reads above bypassed the tables: check they
                         // come from the generation the counts do.
                         graph.verify()?;
@@ -230,6 +235,11 @@ impl MyceliumsMcp {
                             files: files.len(),
                             relationships: relationships.len(),
                             communities: communities.len(),
+                            communities_state: community_status
+                                .as_ref()
+                                .map(|s| s.state.to_string()),
+                            communities_notice: community_status.as_ref().and_then(|s| s.notice()),
+                            phases: None,
                             processes: processes.len(),
                             symbols_embedded: embedding_stats.symbols_embedded,
                             symbols_total: embedding_stats.symbols_total,
@@ -317,6 +327,7 @@ impl MyceliumsMcp {
             project: abs_path,
             config,
             skip_embeddings,
+            skip_communities,
             data_dir,
             service: self.service.clone(),
             started_at,

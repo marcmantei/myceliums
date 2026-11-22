@@ -186,6 +186,17 @@ impl MyceliumsMcp {
             .map_err(|e| e.message())
     }
 
+    /// Invoke the `get_communities` handler (rendered as JSON).
+    pub async fn get_communities_for_test(
+        &self,
+        params: GetCommunitiesParams,
+    ) -> Result<String, String> {
+        self.get_communities(Parameters(params))
+            .await
+            .map(|json| serde_json::to_string(&json.0).expect("serialize"))
+            .map_err(|e| e.message())
+    }
+
     /// Invoke the `get_stats` handler (rendered as JSON).
     pub async fn get_stats_for_test(&self, params: GetStatsParams) -> Result<String, String> {
         self.get_stats(Parameters(params))

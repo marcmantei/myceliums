@@ -414,10 +414,20 @@ impl MyceliumsMcp {
             coupling: coupling.into_iter().flatten().collect(),
             totals,
         };
-        let body = with_notice(
+        let mut body = with_notice(
             format::format_community_metrics(&output),
             notice.or(coupling_notice).as_deref(),
         );
+        if metrics.status.is_degraded() {
+            body.push_str(&format!(
+                "\n⚠ These metrics come from a partial partition: {}.",
+                metrics
+                    .status
+                    .reason
+                    .as_deref()
+                    .unwrap_or("detection stopped early")
+            ));
+        }
         self.graph_text(&graph, body).await
     }
 

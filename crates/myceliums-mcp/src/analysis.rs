@@ -27,7 +27,7 @@ use crate::output::AnalyzeOutput;
 use myceliums_core::analyzer::Analyzer;
 use myceliums_core::config::ProjectConfig;
 use myceliums_core::{
-    build_snapshot, AnalysisLock, AnalysisPhase, CommunityDetector, GraphService, LockOutcome,
+    build_snapshot, AnalysisLock, AnalysisPhase, CommunityPlan, GraphService, LockOutcome,
     PreviousVectors, ProcessTracer, ProgressReporter, StagedIndex,
 };
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
@@ -284,6 +284,8 @@ pub(crate) struct Rebuild {
     pub project: PathBuf,
     pub config: Option<ProjectConfig>,
     pub skip_embeddings: bool,
+    /// Skip community detection (the `skip_communities` parameter).
+    pub skip_communities: bool,
     pub data_dir: PathBuf,
     pub service: Arc<GraphService>,
     /// Recorded as the index time.
@@ -331,6 +333,7 @@ impl Rebuild {
             project,
             config,
             skip_embeddings,
+            skip_communities,
             data_dir,
             service,
             started_at,
@@ -383,6 +386,11 @@ impl Rebuild {
                 )
             })
             .unwrap_or_default();
+        let community_plan = CommunityPlan::new(
+            config.as_ref().map(|c| &c.community),
+            skip_communities,
+            "`skip_communities`",
+        );
         let analyzer = match config {
             Some(cfg) => Analyzer::with_config(store, project.clone(), cfg),
             None => Analyzer::new(store, project.clone()),
@@ -427,23 +435,26 @@ impl Rebuild {
             .map_err(|e| ToolError::internal("cannot read relationships", e))?;
 
         step(AnalysisPhase::DetectingCommunities);
-        let communities = CommunityDetector::detect(&symbols, &relationships, &repo_id)
-            .map_err(|e| ToolError::internal("community detection failed", e))?;
-        let community_count = store
-            .store_communities(&communities)
+        let communities_started = std::time::Instant::now();
+        let detection = community_plan
+            .execute(&store, &symbols, &relationships, &repo_id)
             .await
-            .map_err(|e| ToolError::internal("cannot store communities", e))?;
+            .map_err(|e| ToolError::internal("community detection failed", e))?;
+        let communities_ms = communities_started.elapsed().as_secs_f64() * 1000.0;
+        let community_count = detection.communities.len();
         if let Some(e) = cancelled() {
             return Err(e);
         }
 
         step(AnalysisPhase::TracingProcesses);
+        let processes_started = std::time::Instant::now();
         let processes = ProcessTracer::trace(&symbols, &relationships, &repo_id)
             .map_err(|e| ToolError::internal("process tracing failed", e))?;
         let process_count = store
             .store_processes(&processes)
             .await
             .map_err(|e| ToolError::internal("cannot store processes", e))?;
+        let processes_ms = processes_started.elapsed().as_secs_f64() * 1000.0;
         drop(store);
         if let Some(e) = cancelled() {
             return Err(e);
@@ -505,12 +516,26 @@ impl Rebuild {
             sink.send(100, "done");
         }
         let embedding_stats = result.embedding_stats();
+        let embed_phase = if skip_embeddings {
+            Some("skipped")
+        } else if embedding_model.is_some() {
+            Some("in background")
+        } else {
+            None
+        };
+        let phases = result.timing.clone().map(|t| {
+            t.with_graph_phases(communities_ms, processes_ms)
+                .phase_line(embed_phase)
+        });
         Ok(AnalyzeOutput {
             repo_id,
             symbols: result.symbol_count,
             files: result.file_count,
             relationships: result.relationship_count,
             communities: community_count,
+            communities_state: Some(detection.status.state.to_string()),
+            communities_notice: detection.status.notice(),
+            phases,
             processes: process_count,
             symbols_embedded: embedding_stats.symbols_embedded,
             symbols_total: embedding_stats.symbols_total,

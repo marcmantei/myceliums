@@ -213,13 +213,14 @@ impl MyceliumsMcp {
             open_world_hint = false
         )
     )]
-    async fn get_communities(
+    pub(crate) async fn get_communities(
         &self,
         Parameters(params): Parameters<GetCommunitiesParams>,
     ) -> Result<Json<CommunitiesOutput>, ToolError> {
         let graph = self.graph(&params.repo_id).await?;
         let communities = graph.communities().await?;
         let index_status = self.index_status(&graph).await?;
+        let communities_notice = crate::repo::communities_notice(&graph).await;
 
         let total_count = communities.len();
         let page = Page::new(params.limit, params.offset, Budget::LIST)
@@ -238,6 +239,7 @@ impl MyceliumsMcp {
 
         Ok(Json(CommunitiesOutput {
             index_status,
+            communities_notice,
             communities: items,
             total_count,
             notice: page.notice,
@@ -264,13 +266,18 @@ impl MyceliumsMcp {
         let symbols = graph.symbols().await?;
 
         let relationships = graph.relationships().await?;
+        let communities_notice = crate::repo::communities_notice(&graph).await;
 
         let community = communities
             .iter()
             .find(|c| c.uid == params.community_id || c.label == params.community_id)
             .ok_or_else(|| {
+                let message = format!("Community `{}` not found.", params.community_id);
                 ToolError::recoverable(
-                    format!("Community `{}` not found.", params.community_id),
+                    match &communities_notice {
+                        Some(notice) => format!("{message} {notice}"),
+                        None => message,
+                    },
                     "pass a uid or label listed by get_communities",
                 )
             })?;
@@ -322,6 +329,7 @@ impl MyceliumsMcp {
 
         Ok(Json(CommunityDetailOutput {
             index_status: self.index_status(&graph).await?,
+            communities_notice,
             uid: community.uid.clone(),
             label: community.label.clone(),
             member_count: community.member_count,

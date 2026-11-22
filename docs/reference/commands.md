@@ -6,7 +6,7 @@ Complete reference for all `myc` CLI commands. Run `myc --help` or `myc <command
 
 ### `myc analyze`
 
-Analyze a codebase and build its knowledge graph. Parses source files, extracts symbols, resolves call relationships, detects communities (Louvain/Leiden), and traces execution flows.
+Analyze a codebase and build its knowledge graph. Parses source files, extracts symbols, resolves call relationships, detects communities (Leiden, within `[community] time_budget_secs`, default 60 s), and traces execution flows. The summary ends with the wall time of every phase (`Phases: discover …, parse …, resolve …, communities …, processes …, embed …`) and a timing breakdown, so a slow phase is visible.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
@@ -15,6 +15,7 @@ Analyze a codebase and build its knowledge graph. Parses source files, extracts 
 | `--max-age` | integer (minutes) | `60` | Maximum cache age in minutes before triggering re-analysis |
 | `--skip-embeddings` | bool | `false` | Skip embedding generation (much faster, BM25 and Cypher still work). Symbols the previous index embedded keep their vectors; new and changed ones have none |
 | `--strict-embeddings` | bool | `false` | Exit non-zero unless the index is fully embedded (for CI — see [Embedding accounting](#embedding-accounting)). Conflicts with `--skip-embeddings` |
+| `--skip-communities` | bool | `false` | Skip community detection (as `[community] enabled = false` does). Search, callers/callees, impact and flows do not need it; the community tools have nothing to list and say why |
 | `--watch` | bool | `false` | Watch for file changes and re-index incrementally |
 | `--no-git-check` | bool | `false` | Allow analyzing directories without a `.git` repository |
 

@@ -7,6 +7,8 @@ use std::time::{Duration, Instant};
 /// - **Parsing**: AST parsing and symbol extraction (tree-sitter)
 /// - **Graph Construction**: Resolving calls, building relationships
 /// - **Embedding Generation**: Creating vectors for semantic search
+/// - **Communities** and **Processes**: run after the analyzer, by `myc
+///   analyze` and the MCP `analyze` tool ([`TimingReport::with_graph_phases`])
 #[derive(Debug, Clone)]
 pub struct TimingReport {
     /// Time to discover all source files
@@ -17,6 +19,10 @@ pub struct TimingReport {
     pub graph_construction_ms: f64,
     /// Time to generate and store embeddings
     pub embedding_generation_ms: f64,
+    /// Time to detect and store communities (0 until recorded)
+    pub communities_ms: f64,
+    /// Time to trace and store processes (0 until recorded)
+    pub processes_ms: f64,
     /// Total time (sum of all phases)
     pub total_ms: f64,
 }
@@ -37,8 +43,43 @@ impl TimingReport {
             parsing_ms,
             graph_construction_ms,
             embedding_generation_ms,
+            communities_ms: 0.0,
+            processes_ms: 0.0,
             total_ms,
         }
+    }
+
+    /// Adds the community detection and process tracing phases.
+    pub fn with_graph_phases(mut self, communities_ms: f64, processes_ms: f64) -> Self {
+        self.communities_ms = communities_ms;
+        self.processes_ms = processes_ms;
+        self.total_ms = self.file_discovery_ms
+            + self.parsing_ms
+            + self.graph_construction_ms
+            + self.embedding_generation_ms
+            + communities_ms
+            + processes_ms;
+        self
+    }
+
+    /// The phases on one line, in seconds: `discover 0.1 s, parse 12.3 s,
+    /// resolve 4.5 s, communities 2.1 s, processes 0.4 s, embed 30.2 s`.
+    /// `embed` replaces the embedding time when the run did not embed
+    /// itself (e.g. `"in background"`, `"skipped"`).
+    pub fn phase_line(&self, embed: Option<&str>) -> String {
+        let s = |ms: f64| format!("{:.1} s", ms / 1000.0);
+        let embed = embed
+            .map(str::to_string)
+            .unwrap_or_else(|| s(self.embedding_generation_ms));
+        format!(
+            "discover {}, parse {}, resolve {}, communities {}, processes {}, embed {}",
+            s(self.file_discovery_ms),
+            s(self.parsing_ms),
+            s(self.graph_construction_ms),
+            s(self.communities_ms),
+            s(self.processes_ms),
+            embed
+        )
     }
 
     /// Format the timing report as a pretty-printed string with percentages.
@@ -51,6 +92,8 @@ impl TimingReport {
         let p_pct = (self.parsing_ms / self.total_ms) * 100.0;
         let gc_pct = (self.graph_construction_ms / self.total_ms) * 100.0;
         let eg_pct = (self.embedding_generation_ms / self.total_ms) * 100.0;
+        let cd_pct = (self.communities_ms / self.total_ms) * 100.0;
+        let pt_pct = (self.processes_ms / self.total_ms) * 100.0;
 
         format!(
             "Timing breakdown:\n  \
@@ -58,6 +101,8 @@ impl TimingReport {
              AST parsing:         {:>7.2}ms ({:>5.1}%)\n  \
              Graph construction:  {:>7.2}ms ({:>5.1}%)\n  \
              Embedding generation:{:>7.2}ms ({:>5.1}%)\n  \
+             Communities:         {:>7.2}ms ({:>5.1}%)\n  \
+             Processes:           {:>7.2}ms ({:>5.1}%)\n  \
              ─────────────────────────────────\n  \
              Total time:          {:>7.2}ms",
             self.file_discovery_ms,
@@ -68,6 +113,10 @@ impl TimingReport {
             gc_pct,
             self.embedding_generation_ms,
             eg_pct,
+            self.communities_ms,
+            cd_pct,
+            self.processes_ms,
+            pt_pct,
             self.total_ms
         )
     }
@@ -124,6 +173,21 @@ mod tests {
         assert!(formatted.contains("Graph construction"));
         assert!(formatted.contains("Embedding generation"));
         assert!(formatted.contains("10000.00"));
+    }
+
+    #[test]
+    fn graph_phases_join_the_report_and_the_total() {
+        let report = TimingReport::new(100.0, 500.0, 200.0, 0.0).with_graph_phases(1200.0, 300.0);
+        assert_eq!(report.total_ms, 2300.0);
+        let formatted = report.format_report();
+        assert!(formatted.contains("Communities:"), "{formatted}");
+        assert!(formatted.contains("Processes:"), "{formatted}");
+        assert_eq!(
+            report.phase_line(Some("skipped")),
+            "discover 0.1 s, parse 0.5 s, resolve 0.2 s, communities 1.2 s, processes 0.3 s, \
+             embed skipped"
+        );
+        assert!(report.phase_line(None).ends_with("embed 0.0 s"));
     }
 
     #[test]

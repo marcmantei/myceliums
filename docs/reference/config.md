@@ -63,8 +63,33 @@ skip_patterns = ["min.js", "min.css", "bundle.js", "map"]
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `min_community_size` | integer | `3` | Minimum number of symbols for a community to be reported |
-| `resolution` | float | `1.0` | Louvain resolution parameter. Higher values produce more (smaller) communities, lower values produce fewer (larger) communities |
+| `enabled` | bool | `true` | Run community detection during `myc analyze` and the MCP `analyze` tool. `false` skips it, as `myc analyze --skip-communities` (MCP: `skip_communities`) does: the index then has no communities and records them as `skipped`. Search, callers/callees, impact and flows do not use communities; only the community tools (`get_communities`, `get_community_detail`, `myc communities`) have nothing to list |
+| `time_budget_secs` | integer | `60` | Wall-clock budget of community detection, in seconds (`0` = no limit). When it runs out, detection stops and keeps the best partition found so far (every Leiden move only raises modularity); the index records the communities as `partial` with the reason (`index_meta` key `communities`), and `analyze`, `get_communities`, `get_community_detail` and `myc communities` say so |
+| `max_iterations` | integer | `100` | Most Leiden iterations (each one runs local moves, refinement and aggregation until the partition is stable at every level); detection repeats them until one changes nothing. Reaching the cap first also records the communities as `partial`. `0` counts as `1` (one iteration always runs). Django 5.1.4 with its tests converges after 11 to 23 iterations (0.2 to 0.4 s) |
+| `min_community_size` | integer | `3` | Minimum number of symbols for a community to be reported. Currently not applied: every community is stored |
+| `resolution` | float | `1.0` | Leiden modularity resolution for the communities stored by `analyze`. Higher values produce more (smaller) communities, lower values produce fewer (larger) communities. Values ≤ 0 count as `1.0` |
+
+Community detection runs the Leiden algorithm for modularity on the symbols
+joined by CALLS (weight 3), IMPORTS (2) and CONTAINED_BY (1) relationships.
+Each pass costs time linear in the number of edges; see #172 for
+measurements.
+
+- **Determinism.** The random seed is fixed and nodes are ordered by UID,
+  so the same index always gives the same communities. A re-analysis of an
+  unchanged tree can give slightly different ones: file nodes get new random
+  UUIDs on every analysis, which changes the node order (Django 5.1.4 with
+  its tests: 654 to 658 communities over three analyses).
+- **Which settings apply where.** `enabled`, `time_budget_secs`,
+  `max_iterations` and `resolution` apply to the communities `analyze`
+  stores (read by `get_communities`, `get_community_detail`, `myc
+  communities`). The tools that recompute communities on demand —
+  `get_community_metrics`, the HTTP community metrics and graph views, wiki
+  export, the architecture diagram and surprising connections — always use
+  the defaults: a 60 s budget, 100 iterations and resolution 1.0. Only
+  `get_community_metrics` says when such a run is partial.
+- **Recorded modularity.** The `modularity` in the `index_meta` record and in
+  `get_community_metrics` is computed at resolution 1.0 (standard
+  Newman–Girvan modularity), whatever `resolution` is set to.
 
 ### `[embedding]`
 
@@ -229,6 +254,9 @@ embedding_batch_size = 256
 entry_points = ["main", "handleRequest", "app"]
 
 [community]
+enabled = true
+time_budget_secs = 60
+max_iterations = 100
 min_community_size = 3
 resolution = 1.0
 ```
