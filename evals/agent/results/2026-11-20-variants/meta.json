@@ -119,7 +119,7 @@
   "sessions_launched_ledger": 123,
   "success_threshold": 0.8,
   "tasks_file": "tasks/tasks-hard.json",
-  "tasks_sha256": "813bb2af324a8a0bc246efa03f0951d6cd76024b87700689fc11b8788fc262ef",
+  "tasks_sha256": "1870d37e9db7461f60346947ac0f385252a1e1d0f93f38a98b40ad774348a08e",
   "timeout_s": 900,
   "tool_search": null
 }

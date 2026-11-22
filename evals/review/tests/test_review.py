@@ -290,6 +290,8 @@ class ApplyBase(unittest.TestCase):
             dest = root / meta.relative_to(REPO)
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(meta, dest)
+            if (meta.parent / "results.jsonl").exists():
+                shutil.copy(meta.parent / "results.jsonl", dest.parent / "results.jsonl")
         self.root = root
         export.set_root(root)
         reset_review_state()
@@ -403,7 +405,7 @@ class Apply(ApplyBase):
         task = next(t for t in tasks if t["id"] == tid)
         self.assertNotIn(name, [g["name"] for g in task["gold"]])
         self.assertIn({"name": name, "why": "reached only through a decorator"}, task["optional"])
-        self.assertTrue(any("2026-11-21-outcome" in t and "re-grade" in t for t in todo))
+        self.assertTrue(any("2026-11-21-outcome" in t and "regrade" in t for t in todo), todo)
 
     def test_graph_call_replace_is_validated(self):
         data = json.loads((export.GRAPH_GOLD / "python.json").read_text())
@@ -507,16 +509,20 @@ class OwnerPolicy(ApplyBase):
         self.assertFalse(mixed.startswith("human:"))
         tasks = {t["id"]: t for t in json.loads((export.AGENT / "tasks" / "tasks.json").read_text())["tasks"]}
         self.assertIsNone(tasks[self.t_unsure].get("reviewed_by"))
-        self.assertEqual(tasks[self.t_fix]["reviewed_by"], "agent:second-check, per marc's policy")
+        self.assertEqual(tasks[self.t_fix]["reviewed_by"], f"agent:second-check, per marc's policy ({self.POLICY})")
         name = gold["id"].split(":gold:")[1]
         self.assertIn(name, [o["name"] for o in tasks[self.t_fix]["optional"]])
-        self.assertIn("[agent:second-check, per marc's policy]", tasks[self.t_fix]["rationale"])
+        self.assertIn(f"[agent:second-check, per marc's policy ({self.POLICY})]", tasks[self.t_fix]["rationale"])
         ho = json.loads((export.GRAPH_GOLD / "held-out" / "real-repos.json").read_text())
         n_h, n_a = len(held) // 2, len(held) - len(held) // 2
         self.assertEqual(ho["reviewed_by"], (
-            f"mixed, policy {self.POLICY}: human:marc ×{n_h}; agent:prescreen, accepted by marc "
-            f"(sample: {plan.sample_checked} human-checked confirmed items, 0 errors) ×{52 - len(held)}; "
-            f"agent:second-check, per marc's policy ×{n_a}"))
+            f"mixed, policy {self.POLICY}: {n_h}× human:marc; {52 - len(held)}× agent:prescreen, accepted by "
+            f"marc's policy ({self.POLICY}); human sample in this dataset: {n_h} checked, 0 errors; "
+            f"{n_a}× agent:second-check, per marc's policy ({self.POLICY})"))
+        # a dataset in which Marc checked nothing says so (agent-tasks-hard: no human decisions here)
+        hard = json.loads((export.AGENT / "tasks" / "tasks-hard.json").read_text())["tasks"]
+        self.assertTrue(any("human sample in this dataset: 0 checked, 0 errors" in (t.get("reviewed_by") or "")
+                            for t in hard))
         unsure = [i for o in outcomes for i in o.unsure_ids]
         self.assertEqual(unsure, [t_unsure[0]["id"]])
 
@@ -530,7 +536,8 @@ class OwnerPolicy(ApplyBase):
         for r in prov.values():
             if r["class"] == "prescreen":
                 self.assertNotIn(r["id"], set(plan.review.sampled))
-                self.assertTrue(r["by"].startswith("agent:prescreen, accepted by marc"))
+                self.assertTrue(r["by"].startswith(f"agent:prescreen, accepted by marc's policy ({self.POLICY}); "
+                                                   "human sample in this dataset: "))
         readme = (export.AGENT / "README.md").read_text()
         self.assertIn(f"policy `{self.POLICY}`", readme)
         self.assertIn("no person looked at this item", readme)
@@ -554,8 +561,40 @@ class OwnerPolicy(ApplyBase):
         self.assertEqual(prov[opt]["class"], "rule")
         self.assertEqual(prov[opt]["final"], "wrong")
         self.assertIn("restated", prov[trap]["edit"])
+        self.assertTrue(prov[trap]["class"].endswith("+restated"))
+        self.assertTrue(prov[trap]["by"].endswith(f", wording restated by policy {self.POLICY}"))
+        go_by = go["reviewed_by"] or ""
+        self.assertNotEqual(go_by, "human:marc")  # a restated trap is never plain human provenance
         self.assertFalse(any("call-resolution" in x for x in todo))  # traps are not scored
         self.assertIn("consistency rule text", (export.AGENT / "README.md").read_text())
+
+    def test_done_baselines_are_not_listed_again(self):
+        """The protocol checks the graph-gold digest and the runs' grades instead of assuming."""
+        trap = "graph-gold:go:trap:report/report.go::Report.Render:RenderRow@58"
+        overrides = [{"id": trap, "action": "restate", "why": "must not target OrderReport.RenderRow"}]
+        reviewed = {p: p.read_bytes() for p in apply.dataset_files()}  # the state the review was made on
+        plan, (_, todo, writes) = self.run_policy(overrides=overrides)
+        self.assertTrue(any("baseline.json — REQUIRED" in t for t in todo))
+        # record a baseline whose digest matches the written labels: no longer to redo
+        base = export.GRAPH_GOLD / "baseline.json"
+        data = json.loads(base.read_text())
+        data["dataset_digest"] = apply.graph_gold_digest(lambda p: p.read_bytes())
+        base.write_text(json.dumps(data))
+        for path, data_ in reviewed.items():  # what --reset-datasets-to does
+            path.write_bytes(data_)
+        plan, (_, todo, _) = self.run_policy(overrides=overrides)
+        self.assertFalse(any("baseline.json" in t for t in todo), todo)
+        self.assertTrue(any("baseline.json — re-recorded" in c for c in plan.current_baselines))
+        readme = (export.GRAPH_GOLD / "README.md").read_text()
+        self.assertNotIn("REQUIRED before merge", readme)
+        # a run's grades are checked from its stored answers
+        pilot = export.AGENT / "results" / "2026-11-12-pilot"
+        tasks_text = (export.AGENT / "tasks" / "tasks.json").read_text()
+        self.assertEqual(apply.stale_grades(pilot, tasks_text), 0)
+        data = json.loads(tasks_text)
+        task = next(t for t in data["tasks"] if t["id"] == "hono-dead-utils")
+        task["gold"] = task["gold"][1:]  # drop one required answer: every session's recall moves
+        self.assertGreater(apply.stale_grades(pilot, json.dumps(data)), 0)
 
     def test_unsure_by_marc_without_second_check_stays_unsure(self):
         it = self.flagged[0]

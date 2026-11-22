@@ -60,7 +60,7 @@
     "grep",
     "x/tools CHA call graph"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 4× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-callers-item-asstring",
@@ -158,7 +158,7 @@
     "grep",
     "x/tools CHA call graph"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 7× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-callees-pattern-match",
@@ -223,7 +223,7 @@
     "reading",
     "x/tools CHA call graph"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-impact-istty",
@@ -287,7 +287,7 @@
    "verified_with": [
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 5× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-impact-tochars",
@@ -341,7 +341,7 @@
    "verified_with": [
     "grep"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-where-tiebreak",
@@ -376,7 +376,7 @@
    "verified_with": [
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 2× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-where-keychords",
@@ -419,7 +419,7 @@
     "reading",
     "grep"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-dead-util",
@@ -464,7 +464,7 @@
     "go/types uses across GOOS",
     "grep"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-flow-default-command",
@@ -533,7 +533,7 @@
    "verified_with": [
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 4× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fzf-flow-matcher",
@@ -618,7 +618,7 @@
     "reading",
     "x/tools CHA call graph"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 5× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-callers-cookie-parse",
@@ -658,7 +658,7 @@
     "TypeScript findReferences",
     "TypeScript call hierarchy"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-callers-check-optional-parameter",
@@ -703,7 +703,7 @@
     "TypeScript call hierarchy",
     "grep"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-callers-parse-accept",
@@ -759,7 +759,7 @@
     "TypeScript call hierarchy",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×3; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 3× human:marc; 2× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-callees-parse-form-data",
@@ -813,7 +813,7 @@
    "verified_with": [
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 3× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-impact-http-exception",
@@ -948,7 +948,7 @@
     "grep",
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×11"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 2× human:marc; 11× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-impact-resolve-callback",
@@ -1002,7 +1002,7 @@
    "verified_with": [
     "TypeScript findReferences"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 4× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-where-cookie-serialize",
@@ -1057,7 +1057,7 @@
    "verified_with": [
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 7× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-where-etag-match",
@@ -1096,7 +1096,7 @@
    "verified_with": [
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 3× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "hono-dead-utils",
@@ -1176,12 +1176,12 @@
      "why": "only use outside tests is the benchmark benchmarks/query-param/src/bench.mts:2,43; required only under a src/-only reading"
     }
    ],
-   "rationale": "For every exported function in src/utils/*.ts, TypeScript findReferences was run over all of src/; these seven have no reference outside tests (other than their own declaration). A grep over the whole repository (runtime-tests, benchmarks, perf-measures included) finds no other use. They remain public API through the `hono/utils/*` export, but nothing in the repository uses them. getFilePathWithoutDefaultDocument is reached only through the unused getFilePath; it is optional because the question admits both readings. Label review (#164, policy owner-2026-11-22): made `getQueryStrings` optional [agent:second-check, per marc's policy].",
+   "rationale": "For every exported function in src/utils/*.ts, TypeScript findReferences was run over all of src/; these seven have no reference outside tests (other than their own declaration). A grep over the whole repository (runtime-tests, benchmarks, perf-measures included) finds no other use. They remain public API through the `hono/utils/*` export, but nothing in the repository uses them. getFilePathWithoutDefaultDocument is reached only through the unused getFilePath; it is optional because the question admits both readings. Label review (#164, policy owner-2026-11-22): made `getQueryStrings` optional [agent:second-check, per marc's policy (owner-2026-11-22)].",
    "verified_with": [
     "TypeScript findReferences",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 1× human:marc; 7× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-flow-fetch",
@@ -1244,11 +1244,11 @@
     }
    ],
    "optional": [],
-   "rationale": "`fetch` (hono-base.ts:499-504) calls `this.#dispatch`; with more than one matched handler #dispatch calls `compose(...)` (line 469) and invokes the returned function; that closure's inner `dispatch(i)` calls each handler with a `next` that dispatches i+1 (compose.ts:52). Label review (#164, policy owner-2026-11-22): removed optional `Hono.request` [agent:second-check, per marc's policy].",
+   "rationale": "`fetch` (hono-base.ts:499-504) calls `this.#dispatch`; with more than one matched handler #dispatch calls `compose(...)` (line 469) and invokes the returned function; that closure's inner `dispatch(i)` calls each handler with a `next` that dispatches i+1 (compose.ts:52). Label review (#164, policy owner-2026-11-22): removed optional `Hono.request` [agent:second-check, per marc's policy (owner-2026-11-22)].",
    "verified_with": [
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 4× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-callers-jsonable-encoder",
@@ -1368,7 +1368,7 @@
    "verified_with": [
     "python ast"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×8; agent:second-check, per marc's policy ×3"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 8× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 3× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-callers-is-body-allowed",
@@ -1428,7 +1428,7 @@
    "verified_with": [
     "python ast"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 4× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-callers-auth-scheme-param",
@@ -1503,7 +1503,7 @@
     "python ast",
     "grep"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fastapi-callees-get-openapi",
@@ -1612,7 +1612,7 @@
     "reading",
     "python ast"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 9× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-callees-solve-dependencies",
@@ -1725,12 +1725,12 @@
      "why": "recursive self-call"
     }
    ],
-   "rationale": "Read off the body of solve_dependencies (fastapi/dependencies/utils.py:643-792) and resolved each callee's definition: _get_oauth_scopes, _get_cache_key and the _is_*_callable helpers are in fastapi/dependencies/models.py, the rest in fastapi/dependencies/utils.py. `run_in_threadpool` comes from Starlette. Label review (#164, policy owner-2026-11-22): removed optional `run_in_threadpool` [agent:second-check, per marc's policy]; removed optional `BackgroundTasks` [policy owner-2026-11-22 consistency rule]; removed optional `SecurityScopes` [agent:second-check, per marc's policy]; removed optional `SolvedDependency` [policy owner-2026-11-22 consistency rule]; removed optional `Response` [agent:second-check, per marc's policy].",
+   "rationale": "Read off the body of solve_dependencies (fastapi/dependencies/utils.py:643-792) and resolved each callee's definition: _get_oauth_scopes, _get_cache_key and the _is_*_callable helpers are in fastapi/dependencies/models.py, the rest in fastapi/dependencies/utils.py. `run_in_threadpool` comes from Starlette. Label review (#164, policy owner-2026-11-22): removed optional `run_in_threadpool` [agent:second-check, per marc's policy (owner-2026-11-22)]; removed optional `BackgroundTasks` [policy owner-2026-11-22 consistency rule]; removed optional `SecurityScopes` [agent:second-check, per marc's policy (owner-2026-11-22)]; removed optional `SolvedDependency` [policy owner-2026-11-22 consistency rule]; removed optional `Response` [agent:second-check, per marc's policy (owner-2026-11-22)].",
    "verified_with": [
     "reading",
     "python ast"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7; agent:second-check, per marc's policy ×7; policy owner-2026-11-22 consistency rule ×2"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 7× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 7× agent:second-check, per marc's policy (owner-2026-11-22); 2× policy owner-2026-11-22 consistency rule"
   },
   {
    "id": "fastapi-impact-lenient-issubclass",
@@ -1791,7 +1791,7 @@
     "python ast",
     "grep"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors"
   },
   {
    "id": "fastapi-where-validation-422",
@@ -1830,7 +1830,7 @@
    "verified_with": [
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 3× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-where-operation-id",
@@ -1869,12 +1869,12 @@
      "why": "constructs the route"
     }
    ],
-   "rationale": "`generate_unique_id` (fastapi/utils.py:95) is the default `generate_unique_id_function` (routing.py:1042-1044); `_populate_api_route_state` sets `route.unique_id = route.operation_id or generator(route)` (routing.py:1081) and get_openapi_operation_metadata emits it (openapi/utils.py:288). The older generate_operation_id* functions are deprecated and not called. Label review (#164, policy owner-2026-11-22): removed optional `generate_operation_id` [agent:second-check, per marc's policy]; removed optional `generate_operation_id_for_path` [agent:second-check, per marc's policy].",
+   "rationale": "`generate_unique_id` (fastapi/utils.py:95) is the default `generate_unique_id_function` (routing.py:1042-1044); `_populate_api_route_state` sets `route.unique_id = route.operation_id or generator(route)` (routing.py:1081) and get_openapi_operation_metadata emits it (openapi/utils.py:288). The older generate_operation_id* functions are deprecated and not called. Label review (#164, policy owner-2026-11-22): removed optional `generate_operation_id` [agent:second-check, per marc's policy (owner-2026-11-22)]; removed optional `generate_operation_id_for_path` [agent:second-check, per marc's policy (owner-2026-11-22)].",
    "verified_with": [
     "reading",
     "python ast"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5; agent:second-check, per marc's policy ×2"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 5× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 2× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-dead-deprecated",
@@ -1922,12 +1922,12 @@
     }
    ],
    "optional": [],
-   "rationale": "An `ast` pass counting Name/Attribute references (not string mentions) inside fastapi/ for every module-level function of the three files: generate_operation_id and _iter_included_route_candidates have none; generate_operation_id_for_path is referenced only from generate_operation_id. Every other function has at least one reference from live code. Two functions are referenced but never called directly: generate_unique_id (the default `generate_unique_id_function`, called through that variable) and _frontend_dependency_endpoint (passed as `call=`); the question counts references, so neither is in the gold set. Label review (#164, policy owner-2026-11-22): removed optional `_frontend_dependency_endpoint` [agent:second-check, per marc's policy].",
+   "rationale": "An `ast` pass counting Name/Attribute references (not string mentions) inside fastapi/ for every module-level function of the three files: generate_operation_id and _iter_included_route_candidates have none; generate_operation_id_for_path is referenced only from generate_operation_id. Every other function has at least one reference from live code. Two functions are referenced but never called directly: generate_unique_id (the default `generate_unique_id_function`, called through that variable) and _frontend_dependency_endpoint (passed as `call=`); the question counts references, so neither is in the gold set. Label review (#164, policy owner-2026-11-22): removed optional `_frontend_dependency_endpoint` [agent:second-check, per marc's policy (owner-2026-11-22)].",
    "verified_with": [
     "python ast",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 4× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-flow-query-validation",
@@ -1996,7 +1996,7 @@
    "verified_with": [
     "reading"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3; agent:second-check, per marc's policy ×2"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 3× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 16 checked, 0 errors; 2× agent:second-check, per marc's policy (owner-2026-11-22)"
   }
  ]
 }

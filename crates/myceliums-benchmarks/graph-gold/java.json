@@ -2,7 +2,7 @@
   "language": "java",
   "fixture": "graph-accuracy/java",
   "labelled_by": "agent",
-  "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×31; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×124; agent:second-check, per marc's policy ×1",
+  "reviewed_by": "mixed, policy owner-2026-11-22: 30× human:marc; 1× human:marc, wording restated by policy owner-2026-11-22; 124× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 96 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22), wording restated by policy owner-2026-11-22",
   "verified_with": "javac -Xlint:all (compiles clean); every invoke instruction in `javap -c -p` checked against the gold (verify/java_bytecode.py, see README)",
   "symbols": [
     {"id": "src/shop/Main.java::Main", "kind": "class", "line": 17},

@@ -142,8 +142,9 @@ pub enum ReviewClass {
     /// A person other than the labeller checked every label (`human:<handle>`).
     Human,
     /// Agents checked some or all labels and the owner accepted that under a
-    /// named policy, e.g. `agent:second-check, per marc's policy` or
-    /// `mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, …`.
+    /// policy named by its exact id ([`OWNER_POLICIES`]), e.g.
+    /// `agent:second-check, per marc's policy (owner-2026-11-22)` or
+    /// `mixed, policy owner-2026-11-22: 2× human:marc; 1× agent:prescreen, …`.
     /// Never reported as a human review.
     OwnerPolicy,
 }
@@ -409,11 +410,16 @@ fn mentions_agent(identity: &str) -> bool {
     identity.to_ascii_lowercase().contains("agent:")
 }
 
-/// True when `identity` records an owner's acceptance: it names a policy or
-/// says who accepted it (`… per marc's policy`, `… accepted by marc …`).
+/// Owner policies under which an agent's check may be recorded in
+/// `reviewed_by` (#164). Each id names a written policy
+/// (`evals/review/policy/<id>.json`, `evals/review/README.md`).
+pub const OWNER_POLICIES: &[&str] = &["owner-2026-11-22"];
+
+/// True when `identity` names one of the [`OWNER_POLICIES`] by its exact id,
+/// e.g. `agent:second-check, per marc's policy (owner-2026-11-22)`.
 fn is_owner_policy(identity: &str) -> bool {
     let lower = identity.to_ascii_lowercase();
-    lower.contains("policy") || lower.contains("accepted by")
+    OWNER_POLICIES.iter().any(|id| lower.contains(id))
 }
 
 /// Why a query's `reviewed_by` does not count as a review, if it does not.
@@ -775,15 +781,17 @@ mod tests {
         for (reviewed_by, class) in [
             ("human:marc", ReviewClass::Human),
             (
-                "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)",
+                "agent:prescreen, accepted by marc's policy (owner-2026-11-22); \
+                 human sample in this dataset: 94 checked, 0 errors",
                 ReviewClass::OwnerPolicy,
             ),
             (
-                "agent:second-check, per marc's policy",
+                "agent:second-check, per marc's policy (owner-2026-11-22)",
                 ReviewClass::OwnerPolicy,
             ),
             (
-                "mixed, policy owner-2026-11-22: human:marc ×2; agent:second-check, per marc's policy ×1",
+                "mixed, policy owner-2026-11-22: 2× human:marc; \
+                 1× agent:second-check, per marc's policy (owner-2026-11-22)",
                 ReviewClass::OwnerPolicy,
             ),
         ] {
@@ -800,8 +808,15 @@ mod tests {
             .review_summary()
             .contains("agent-verified under owner policy 1"));
         assert!(!set.review_summary().contains("every query"));
-        // an agent without an owner's acceptance is still refused
-        for bad in ["agent:claude", "mixed: human:marc; agent:claude"] {
+        // an agent without a known owner policy id is still refused, also when
+        // the string merely says "policy" or "accepted by"
+        for bad in [
+            "agent:claude",
+            "mixed: human:marc; agent:claude",
+            "agent:second-check, per marc's policy",
+            "agent:prescreen, accepted by marc",
+            "agent:x, per policy owner-2099-01-01",
+        ] {
             set.queries[0].reviewed_by = Some(bad.into());
             assert!(set.validate().is_err(), "{bad} was accepted");
         }

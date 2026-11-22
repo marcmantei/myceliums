@@ -2,7 +2,7 @@
   "language": "rust",
   "fixture": "graph-accuracy/rust",
   "labelled_by": "agent",
-  "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×22; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×113",
+  "reviewed_by": "mixed, policy owner-2026-11-22: 22× human:marc; 113× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 96 checked, 0 errors",
   "verified_with": "rustc --edition 2021 (compiles); every call checked against rustc's MIR (verify/rust_mir.py, see README)",
   "symbols": [
     {"id": "src/auth.rs::Token", "kind": "struct", "line": 4},

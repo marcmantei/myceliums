@@ -114,7 +114,7 @@
   "runs_final": 180,
   "sessions_launched_ledger": 180,
   "success_threshold": 0.8,
-  "tasks_sha256": "24335dd912853b95ac9fd187771890726c7c5b9e35328c7da79e6e75575188db",
+  "tasks_sha256": "1ba2f37375b2d49650f09e6818b4ddb2bd4ce157d07eacedc17be012991bcda4",
   "timeout_s": 900,
   "tool_search": null
 }

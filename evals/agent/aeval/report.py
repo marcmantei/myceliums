@@ -352,7 +352,8 @@ def regrade(label: str, note: str) -> int:
             t["n_gold"] = len(tasks[t["id"]]["gold"])
     snap_path.write_text(json.dumps(snapshot, indent=1, ensure_ascii=False) + "\n")
     meta["tasks_sha256"] = config.sha256_file(config.tasks_file())
-    meta.setdefault("notes", []).append(note)
+    if note not in meta.setdefault("notes", []):  # re-running with the same note does not repeat it
+        meta["notes"].append(note)
     (res_dir / "meta.json").write_text(json.dumps(meta, indent=2, sort_keys=True) + "\n")
     return changed
 

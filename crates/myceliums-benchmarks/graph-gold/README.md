@@ -181,25 +181,26 @@ still records the platform, and the comparison flags a mismatch.
 <!-- label-review:start -->
 ## Review of the labels (#164)
 
-Applied on 2026-11-22 with `evals/review` under policy `owner-2026-11-22`. An independent AI pre-screen marked every item confirmed, doubtful or wrong. Marc reviewed items one by one in the review page: the queue held every doubtful and wrong item and a seeded random sample of the confirmed ones (seed 164, 15 % per dataset; `evals/review/sample.json`). He decided 229 sampled confirmed items with 0 errors (`evals/review/decisions.jsonl`). Marc's policy of 22 November 2026: pre-screen-confirmed items outside the sample are accepted as correct on the strength of the sample he checked; every other item he did not decide, and every item he marked unsure, is decided by an independent second-check agent (`evals/review/agent-check/decisions-*.jsonl`). An item whose final decision is unsure is not marked reviewed.
+Applied on 2026-11-22 with `evals/review` under policy `owner-2026-11-22`. An independent AI pre-screen marked every item confirmed, doubtful or wrong. Marc reviewed items one by one in the review page: the queue held every doubtful and wrong item and a seeded random sample of the confirmed ones (seed 164, 15 % per dataset; `evals/review/sample.json`). Over all datasets he decided 229 sampled confirmed items with 0 errors (`evals/review/decisions.jsonl`); the table gives each dataset's own human sample, which can be 0, and the prescreen provenance string names it. Marc's policy of 22 November 2026: pre-screen-confirmed items outside the sample are accepted as correct on the strength of the sample he checked; every other item he did not decide, and every item he marked unsure, is decided by an independent second-check agent (`evals/review/agent-check/decisions-*.jsonl`). An item whose final decision is unsure is not marked reviewed.
 
 Provenance, per item in `evals/review/provenance.jsonl`:
 
 - **human** — `human:marc`: Marc decided the item himself;
-- **prescreen** — `agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)`: confirmed by the pre-screen, outside the sample, accepted by the policy — no person looked at this item;
-- **second-check** — `agent:second-check, per marc's policy`: decided by the second-check agent (`evals/review/agent-check/`) — no person looked at this item;
-- **rule** — `policy owner-2026-11-22 consistency rule`: decided by the policy's consistency rule (`evals/review/policy/owner-2026-11-22.json`), whatever any single check said.
+- **prescreen** — `agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: N checked, E errors`: confirmed by the pre-screen, outside the sample, accepted by the policy — no person looked at this item;
+- **second-check** — `agent:second-check, per marc's policy (owner-2026-11-22)`: decided by the second-check agent (`evals/review/agent-check/`) — no person looked at this item;
+- **rule** — `policy owner-2026-11-22 consistency rule`: decided by the policy's consistency rule (`evals/review/policy/owner-2026-11-22.json`), whatever any single check said;
+- **restated** — `<class>, wording restated by policy owner-2026-11-22`: decided as its class says; the policy then restated its wording (a graph-gold trap now names the one target it must not have).
 
 Policy addendum: Consistency rule: an optional answer that the task wording explicitly excludes (a Starlette or library call, a class instantiation where the task excludes instantiations, a deprecated decoy documented as not used internally, a function passed as a value where the task counts that as a reference) is removed from the optional list everywhere in the task set, not only where a second check flagged it; genuine near-misses (recursion or self-calls, thin wrappers, callers on the real path) stay optional. A graph-gold trap whose call site has a real CALLS edge is restated as 'must not target <X>' instead of being deleted.
 
 `reviewed_by` of a unit (query, language file, held-out set, task) names the classes of its items: `human:marc` only when Marc decided every item, otherwise the class, or `mixed, policy owner-2026-11-22: …` with a count per class. It stays `null` where an item is unsure, open or needs a fix by hand. `real-repo-eval` reports retrieval queries as human-reviewed, agent-verified under owner policy, or unreviewed; only `human:` provenance counts as human.
 
-| dataset | items | human | prescreen | second-check | rule | wrong: fixed / by hand | unsure | open | units marked | sample errors / n (Marc) |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| graph-gold | 640 | 98 | 541 | 1 | 0 | 0 / 0 | 0 | 0 | 5 of 5 | 0 / 96 |
-| graph-held-out | 52 | 10 | 36 | 6 | 0 | 0 / 0 | 0 | 0 | 1 of 1 | 0 / 10 |
+| dataset | items | human | prescreen | second-check | rule | restated | wrong: fixed / by hand | unsure | open | units marked | human sample in this dataset: checked / errors |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| graph-gold | 640 | 96 | 541 | 0 | 0 | 3 | 0 / 0 | 0 | 0 | 5 of 5 | 96 / 0 |
+| graph-held-out | 52 | 10 | 36 | 6 | 0 | 0 | 0 / 0 | 0 | 0 | 1 of 1 | 10 / 0 |
 
-Measured on the labels before this review (re-record before relying on them):
+Checked against the reviewed labels and current:
 
-- crates/myceliums-benchmarks/graph-gold/baseline.json — REQUIRED before merge: the gate refuses a baseline recorded against other labels; re-run `cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline`
+- crates/myceliums-benchmarks/graph-gold/baseline.json — re-recorded on the reviewed labels (digest 3ad580be10c6…)
 <!-- label-review:end -->

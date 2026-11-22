@@ -144,8 +144,10 @@ as `{id, dataset, final, class, by}`:
 | class | `by` | meaning |
 |---|---|---|
 | human | `human:marc` | Marc decided the item |
-| prescreen | `agent:prescreen, accepted by marc (sample: N human-checked confirmed items, E errors)` | accepted by the policy; no person looked at it |
-| second-check | `agent:second-check, per marc's policy` | decided by the second-check agent; no person looked at it |
+| prescreen | `agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: N checked, E errors` | accepted by the policy; no person looked at it. N and E are that dataset's own human sample, which can be 0 |
+| second-check | `agent:second-check, per marc's policy (owner-2026-11-22)` | decided by the second-check agent; no person looked at it |
+| rule | `policy owner-2026-11-22 consistency rule` | decided by the addendum's rule, whatever any single check said |
+| `<class>+restated` | `<class string>, wording restated by policy owner-2026-11-22` | decided as its class says; the policy then restated the wording (the three graph-gold traps) |
 
 Addendum (`policy/owner-2026-11-22.json`, the **rule** class,
 `policy owner-2026-11-22 consistency rule`):
@@ -171,15 +173,23 @@ A unit's `reviewed_by` names the classes of its items:
 
 - `human:marc` only when Marc decided every item;
 - the single class string when the items share one class;
-- otherwise `mixed, policy owner-2026-11-22: <class> ×n; …`.
+- otherwise `mixed, policy owner-2026-11-22: n× <class string>; …`.
 
 Retrieval queries get the same provenance. `real-repo-eval` reports them per
 class: human-reviewed (`human:` only), agent-verified under owner policy (any
-`agent:` provenance that names a policy or who accepted it), and unreviewed. A
-bare `agent:` reviewer is still refused. Without `--policy`, `apply.py` never
+provenance that names a known policy id, `OWNER_POLICIES` in
+`crates/myceliums-benchmarks/src/eval/real_repos.rs`: today `owner-2026-11-22`),
+and unreviewed. An `agent:` reviewer without such an id is still refused. Without `--policy`, `apply.py` never
 marks a retrieval query by sampled acceptance.
 
-The policy needs a complete pre-screen and the sample it was drawn from. The
+The policy needs a complete pre-screen and the sample it was drawn from. To
+apply the review again after its first apply (for example after changing
+`apply.py`), start from the reviewed dataset files:
+`apply.py --policy owner-2026-11-22 --reset-datasets-to 91f028c`.
+The protocol written into the READMEs checks what was measured on the
+datasets against what is there now: the graph-gold baseline digest, every
+committed agent-eval run's grades, and `recorded-run.json`'s digest. It lists
+what is still to redo and, separately, what was checked and is current. The
 summary printed by `apply.py` and the protocol it writes into the dataset
 READMEs count items per class.
 

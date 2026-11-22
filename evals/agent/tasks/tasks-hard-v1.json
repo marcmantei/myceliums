@@ -201,7 +201,7 @@
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×14; agent:second-check, per marc's policy ×4"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 14× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 4× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-blast-istty",
@@ -326,7 +326,7 @@
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×10; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 10× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-blast-stringbytes",
@@ -429,7 +429,7 @@
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×8; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 8× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-amb-chars-length",
@@ -609,7 +609,7 @@
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×13; agent:second-check, per marc's policy ×3"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 13× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 3× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-amb-noseparatorline",
@@ -701,7 +701,7 @@
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors"
   },
   {
    "id": "fzf-tests-awktokenizer",
@@ -837,7 +837,7 @@
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9; agent:second-check, per marc's policy ×3"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 9× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 3× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-tests-splitnth",
@@ -995,7 +995,7 @@
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×11; agent:second-check, per marc's policy ×3"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 11× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 3× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fzf-flow-ansi",
@@ -1109,7 +1109,7 @@
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
    ],
-   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
+   "reviewed_by": "agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors"
   },
   {
    "id": "hono-tc-decodebase64",
@@ -1267,7 +1267,7 @@
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×13; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 13× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-blast-newresponse",
@@ -1392,7 +1392,7 @@
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×10; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 10× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-blast-httpexception",
@@ -1572,7 +1572,7 @@
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×15; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 15× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-amb-req-header",
@@ -1719,7 +1719,7 @@
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9; agent:second-check, per marc's policy ×4"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 9× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 4× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-tests-buffertoformdata",
@@ -1844,7 +1844,7 @@
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×8; agent:second-check, per marc's policy ×3"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 8× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 3× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-tests-serialize",
@@ -2013,7 +2013,7 @@
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×13; agent:second-check, per marc's policy ×2"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 13× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 2× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "hono-flow-validator",
@@ -2149,7 +2149,7 @@
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×8; agent:second-check, per marc's policy ×4"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 8× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 4× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-tc-oauth-scopes",
@@ -2308,7 +2308,7 @@
     "py_refs.py",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×12; agent:second-check, per marc's policy ×2"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 12× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 2× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-tc-annotation-sequence",
@@ -2522,7 +2522,7 @@
     "py_refs.py",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×18; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 18× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-flow-openapi-path",
@@ -2626,7 +2626,7 @@
     "py_refs.py",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7; agent:second-check, per marc's policy ×2"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 7× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 2× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-flow-openapi-cache-key",
@@ -2719,7 +2719,7 @@
     "py_refs.py",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 7× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   },
   {
    "id": "fastapi-amb-httpexception",
@@ -2834,7 +2834,7 @@
     "py_refs.py",
     "grep"
    ],
-   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9; agent:second-check, per marc's policy ×1"
+   "reviewed_by": "mixed, policy owner-2026-11-22: 9× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 0 checked, 0 errors; 1× agent:second-check, per marc's policy (owner-2026-11-22)"
   }
  ]
 }

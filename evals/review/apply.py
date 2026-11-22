@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
@@ -168,6 +169,7 @@ class Plan:
         self.policy = policy
         self.agent = agent_decisions or {}
         self.provenance: list[dict] = []
+        self.current_baselines: list[str] = []
         self.addendum = load_policy(policy, policy_dir) if policy else {"addendum": "", "overrides": []}
         by_id = {it["id"] for it in items}
         unknown = [o["id"] for o in self.addendum["overrides"] if o["id"] not in by_id]
@@ -185,6 +187,12 @@ class Plan:
             human = [rid for rid in self.review.sampled if self._human(rid)]
             self.sample_checked = len(human)
             self.sample_errors = sum(self._human(rid)["decision"] in ("wrong", "unsure") for rid in human)
+            # per dataset: how many of its sampled confirmed items Marc decided, and his errors there
+            self.sample_by_ds: dict[str, tuple[int, int]] = {}
+            for ds in self.summary:
+                mine = [rid for rid in human if self.review.by_id[rid]["dataset"] == ds]
+                self.sample_by_ds[ds] = (len(mine), sum(self._human(rid)["decision"] in ("wrong", "unsure")
+                                                        for rid in mine))
 
     def _human(self, rid: str) -> dict | None:
         return self.decisions.effective(self.review.by_id[rid])
@@ -192,8 +200,15 @@ class Plan:
     def resolve(self, it: dict) -> tuple[str, str | None, str]:
         """(status, provenance class, comment) of an item.
 
-        status: reviewed | wrong | unsure | accepted | open.
+        status: reviewed | wrong | unsure | accepted | open. An item whose wording the
+        policy restated gets the mixed class ``<class>+restated``.
         """
+        st, cls, comment = self._resolve(it)
+        if cls and it["id"] in self.restates:
+            cls += "+restated"
+        return st, cls, comment
+
+    def _resolve(self, it: dict) -> tuple[str, str | None, str]:
         rec = self.decisions.effective(it)
         if not self.policy:
             if rec:
@@ -227,24 +242,28 @@ class Plan:
     def comment(self, it: dict) -> str:
         return self.resolve(it)[2]
 
-    def label(self, cls: str) -> str:
-        """The provenance string of one class."""
+    def label(self, cls: str, dataset: str | None = None) -> str:
+        """The provenance string of one class (the prescreen class names its dataset's human sample)."""
+        if cls.endswith("+restated"):
+            return f"{self.label(cls[:-len('+restated')], dataset)}, wording restated by policy {self.policy}"
         if cls == "human":
             return self.reviewer
         if cls == "sample":
             return f"{self.reviewer} (sampled acceptance, {self.rule})"
         if cls == "prescreen":
-            return (f"agent:prescreen, accepted by {self.handle} (sample: {self.sample_checked} "
-                    f"human-checked confirmed items, {self.sample_errors} errors)")
+            n, e = self.sample_by_ds.get(dataset or "", (0, 0))
+            return (f"agent:prescreen, accepted by {self.handle}'s policy ({self.policy}); "
+                    f"human sample in this dataset: {n} checked, {e} errors")
         if cls == "second-check":
-            return f"agent:second-check, per {self.handle}'s policy"
+            return f"agent:second-check, per {self.handle}'s policy ({self.policy})"
         if cls == "rule":
             return f"policy {self.policy} consistency rule"
         raise ValueError(cls)
 
     def unit_reviewed_by(self, classes: dict[str, int], dataset: str) -> str | None:
         """reviewed_by of a unit whose items were all decided; None: leave it null."""
-        used = [c for c in CLASS_ORDER if classes.get(c)]
+        used = sorted((c for c in classes if classes[c]),
+                      key=lambda c: (CLASS_ORDER.index(c.split("+")[0]), c))
         if not self.policy:
             if "sample" in used and dataset in HUMAN_ONLY_DATASETS:
                 return None  # accepted by sample is not a human review of this query
@@ -254,8 +273,9 @@ class Plan:
         if not used:
             return None
         if len(used) == 1:
-            return self.label(used[0])
-        return f"mixed, policy {self.policy}: " + "; ".join(f"{self.label(c)} ×{classes[c]}" for c in used)
+            return self.label(used[0], dataset)
+        return f"mixed, policy {self.policy}: " + "; ".join(f"{classes[c]}× {self.label(c, dataset)}"
+                                                           for c in used)
 
 
 class Unit:
@@ -290,7 +310,7 @@ class Unit:
         if self.plan.policy:
             rec = {"id": it["id"], "dataset": it["dataset"],
                    "final": {"reviewed": "correct", "accepted": "correct"}.get(st, st),
-                   "class": cls, "by": self.plan.label(cls) if cls else None}
+                   "class": cls, "by": self.plan.label(cls, it["dataset"]) if cls else None}
             if it["id"] in self.plan.restates:
                 rec["edit"] = f"restated by policy {self.plan.policy}: {self.plan.restates[it['id']]['why']}"
             self.plan.provenance.append(rec)
@@ -300,13 +320,13 @@ class Unit:
         self.out.wrong_manual += 1
         self.blocked = True
         text = free_text(self.plan.comment(it)) or "(no comment)"
-        by = f" [{self.plan.label(self.cls)}]" if self.plan.policy and self.cls else ""
+        by = f" [{self.plan.label(self.cls, self.dataset)}]" if self.plan.policy and self.cls else ""
         self.out.manual.append(f"{it['id']}: {why}.{by} Comment: {text}")
 
     def fixed(self, note: str) -> None:
         self.out.wrong_fixed += 1
         if self.plan.policy and self.cls:
-            note += f" [{self.plan.label(self.cls)}]"
+            note += f" [{self.plan.label(self.cls, self.dataset)}]"
         self.notes.append(note)
 
     def finish(self, holder: dict, key: str = "reviewed_by") -> bool:
@@ -600,13 +620,84 @@ def apply_tasks(plan: Plan, ds: str, path: Path, items: list[dict]) -> tuple[str
 
 # ----------------------------------------------------------------- baselines
 
-def baselines(changed: dict[str, str]) -> list[str]:
-    """What was measured on a file that changed, and how to re-record it."""
-    todo = []
+def graph_gold_digest(read) -> str:
+    """The Rust ``GoldSet::digest`` (graph_eval/gold.rs), computed from ``read(path) -> bytes``:
+    each language's name and gold JSON, then every fixture file, all length-prefixed."""
+    import hashlib
+    import os
+    import struct
+
+    h = hashlib.sha256()
+
+    def feed(data: bytes) -> None:
+        h.update(struct.pack("<Q", len(data)))
+        h.update(data)
+
+    for lang in export.GRAPH_LANGUAGES:
+        feed(lang.encode())
+        feed(read(export.GRAPH_GOLD / f"{lang}.json"))
+    base = export.FIXTURES / "graph-accuracy"
+
+    def walk(d: Path):
+        for name in sorted(os.listdir(d), key=lambda n: n.encode()):
+            p = d / name
+            if p.is_dir() and not p.is_symlink():
+                yield from walk(p)
+            elif p.is_file():
+                yield p
+
+    for p in walk(base):
+        feed(p.relative_to(base).as_posix().encode())
+        feed(p.read_bytes())
+    return h.hexdigest()
+
+
+def stale_grades(res_dir: Path, task_text: str) -> int:
+    """How many stored sessions of a run grade differently against ``task_text`` (agent_eval's grading)."""
+    code = str(Path(__file__).resolve().parents[1] / "agent")  # the grading code of this checkout
+    if code not in sys.path:
+        sys.path.insert(0, code)
+    from aeval.grading import grade, is_success  # noqa: E402
+
+    meta = json.loads((res_dir / "meta.json").read_text(encoding="utf-8"))
+    threshold = meta.get("success_threshold", 0.8)
+    tasks = {t["id"]: t for t in json.loads(task_text)["tasks"]}
+    n = 0
+    for line in (res_dir / "results.jsonl").read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        g = grade(tasks[row["task_id"]], row["answer"], threshold)
+        now = dict(f1=round(g.f1, 4), precision=round(g.precision, 4), recall=round(g.recall, 4),
+                   success=is_success(g.f1, threshold), tp=g.tp, fp=g.fp, neutral=g.neutral,
+                   n_gold=g.n_gold, missed=g.missed, false_positives=g.false_positives)
+        n += any(row.get(k) != v for k, v in now.items())
+    return n
+
+
+def baselines(changed: dict[str, str], writes: dict[Path, str] | None = None) -> tuple[list[str], list[str]]:
+    """(to redo, checked and current): what was measured on the datasets, checked against the
+    content this apply leaves behind (``writes`` over the files on disk)."""
+    writes = writes or {}
+
+    def read(path: Path) -> bytes:
+        return writes[path].encode("utf-8") if path in writes else path.read_bytes()
+
+    import hashlib
+
+    todo: list[str] = []
+    current: list[str] = []
     rr = "crates/myceliums-benchmarks/real-repos/"
     if rr + "queries.json" in changed or rr + "test-seeking.json" in changed:
-        todo.append(f"{rr}recorded-run.json — the dataset digest changed: re-run "
-                    "`cargo run -p myceliums-benchmarks --bin real-repo-eval -- --record` (report-only CI)")
+        rec = json.loads((export.REAL_REPOS / "recorded-run.json").read_text(encoding="utf-8"))
+        digest = hashlib.sha256(read(export.REAL_REPOS / "queries.json")).hexdigest()
+        if rec.get("dataset_digest") == digest:
+            current.append(f"{rr}recorded-run.json — recorded on the current queries.json")
+        else:
+            todo.append(f"{rr}recorded-run.json — measured on dataset {rec.get('dataset_version')} "
+                        f"(digest {str(rec.get('dataset_digest'))[:12]}…), not on the current file; report-only. "
+                        "Re-run `cargo run -p myceliums-benchmarks --bin real-repo-eval -- --record` when its "
+                        "numbers should belong to the reviewed file")
     if changed.get(rr + "queries.json") == "labels":
         todo.append(f"{rr}exact-vs-ann-hono.json, {rr}embedding-variants.json and the numbers in "
                     "crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md (real-repository sections) "
@@ -616,35 +707,48 @@ def baselines(changed: dict[str, str]) -> list[str]:
                     "test-seeking labels — re-run the demotion sweep")
     gg = [p for p in changed if p.startswith("crates/myceliums-benchmarks/graph-gold/") and "held-out" not in p]
     if gg:
-        todo.append("crates/myceliums-benchmarks/graph-gold/baseline.json — REQUIRED before merge: the gate "
-                    "refuses a baseline recorded against other labels; re-run "
-                    "`cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline`")
+        base = json.loads((export.GRAPH_GOLD / "baseline.json").read_text(encoding="utf-8"))
+        digest = graph_gold_digest(read)
+        if base.get("dataset_digest") == digest:
+            current.append(f"crates/myceliums-benchmarks/graph-gold/baseline.json — re-recorded on the reviewed "
+                           f"labels (digest {digest[:12]}…)")
+        else:
+            todo.append("crates/myceliums-benchmarks/graph-gold/baseline.json — REQUIRED before merge: the gate "
+                        "refuses a baseline recorded against other labels; re-run "
+                        "`cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline`")
         if any(changed[p] == "labels" for p in gg):
             todo.append("docs/guides/call-resolution-limitations.md — fixture numbers measured on the old labels")
     if changed.get("crates/myceliums-benchmarks/graph-gold/held-out/real-repos.json") == "labels":
         todo.append("docs/guides/call-resolution-limitations.md — held-out numbers (printed by graph-eval) "
                     "measured on the old labels")
-    for path, how in sorted(changed.items()):
+    for path in sorted(changed):
         if not path.startswith("evals/agent/tasks/"):
             continue
         name = path.split("/", 2)[2]
+        text = read(common.REPO_ROOT / path).decode("utf-8")
+        sha = hashlib.sha256(text.encode("utf-8")).hexdigest()
         for meta in sorted((export.AGENT / "results").glob("*/meta.json")):
             m = json.loads(meta.read_text(encoding="utf-8"))
             tf = m.get("tasks_file") or ("tasks/tasks.json" if "tasks_sha256" in m else None)
-            if tf != name:
+            if tf != name or not (meta.parent / "results.jsonl").exists():
                 continue
             run = meta.parent.relative_to(common.REPO_ROOT).as_posix()
-            if how == "labels":
-                todo.append(f"{run} — graded against the old gold of {name}: re-grade its sessions "
-                            f"and regenerate REPORT.md")
+            n = stale_grades(meta.parent, text)
+            if n:
+                todo.append(f"{run} — {n} sessions grade differently against the reviewed {name}: "
+                            f"`agent_eval.py regrade` and regenerate REPORT.md")
+            elif m.get("tasks_sha256") == sha:
+                current.append(f"{run} — graded against the reviewed {name}")
             else:
-                todo.append(f"{run} — records the old sha256 of {name} (review metadata only; grading unchanged)")
-    return todo
+                current.append(f"{run} — grades checked against the reviewed {name}: unchanged (its meta "
+                               f"records the sha256 of the file before review metadata was added)")
+    return todo, current
 
 
 # ------------------------------------------------------------------- READMEs
 
-def protocol_section(plan: Plan, outcomes: list[Outcome], todo: list[str], today: str) -> str:
+def protocol_section(plan: Plan, outcomes: list[Outcome], todo: list[str], today: str,
+                     current: list[str] | None = None) -> str:
     s = plan.review.sample
     lines = [
         START,
@@ -680,6 +784,9 @@ def protocol_section(plan: Plan, outcomes: list[Outcome], todo: list[str], today
     if todo:
         lines += ["", "Measured on the labels before this review (re-record before relying on them):", ""]
         lines += [f"- {t}" for t in todo]
+    if current:
+        lines += ["", "Checked against the reviewed labels and current:", ""]
+        lines += [f"- {c}" for c in current]
     lines.append(END)
     return "\n".join(lines) + "\n"
 
@@ -694,19 +801,23 @@ def policy_section(plan: Plan, outcomes: list[Outcome], today: str) -> list[str]
         f"Applied on {today} with `evals/review` under policy `{plan.policy}`. An independent AI pre-screen "
         "marked every item confirmed, doubtful or wrong. Marc reviewed items one by one in the review page: "
         f"the queue held every doubtful and wrong item and a seeded random sample of the confirmed ones "
-        f"(seed {s.seed}, {round(s.rate * 100)} % per dataset; `evals/review/sample.json`). He decided "
-        f"{plan.sample_checked} sampled confirmed items with {plan.sample_errors} errors "
-        "(`evals/review/decisions.jsonl`). " + POLICIES[plan.policy],
+        f"(seed {s.seed}, {round(s.rate * 100)} % per dataset; `evals/review/sample.json`). Over all datasets he "
+        f"decided {plan.sample_checked} sampled confirmed items with {plan.sample_errors} errors "
+        "(`evals/review/decisions.jsonl`); the table gives each dataset's own human sample, which can be 0, "
+        "and the prescreen provenance string names it. " + POLICIES[plan.policy],
         "",
         "Provenance, per item in `evals/review/provenance.jsonl`:",
         "",
         f"- **human** — `{plan.label('human')}`: Marc decided the item himself;",
-        f"- **prescreen** — `{plan.label('prescreen')}`: confirmed by the pre-screen, outside the sample, "
-        "accepted by the policy — no person looked at this item;",
+        f"- **prescreen** — `agent:prescreen, accepted by {plan.handle}'s policy ({plan.policy}); human sample "
+        "in this dataset: N checked, E errors`: confirmed by the pre-screen, outside the sample, accepted by "
+        "the policy — no person looked at this item;",
         f"- **second-check** — `{plan.label('second-check')}`: decided by the second-check agent "
         "(`evals/review/agent-check/`) — no person looked at this item;",
         f"- **rule** — `{plan.label('rule')}`: decided by the policy's consistency rule "
-        f"(`evals/review/policy/{plan.policy}.json`), whatever any single check said.",
+        f"(`evals/review/policy/{plan.policy}.json`), whatever any single check said;",
+        f"- **restated** — `<class>, wording restated by policy {plan.policy}`: decided as its class says; "
+        "the policy then restated its wording (a graph-gold trap now names the one target it must not have).",
         "",
         *([f"Policy addendum: {plan.addendum['addendum']}", ""] if plan.addendum.get("addendum") else []),
         "`reviewed_by` of a unit (query, language file, held-out set, task) names the classes of its items: "
@@ -715,18 +826,19 @@ def policy_section(plan: Plan, outcomes: list[Outcome], today: str) -> list[str]
         "open or needs a fix by hand. `real-repo-eval` reports retrieval queries as human-reviewed, "
         "agent-verified under owner policy, or unreviewed; only `human:` provenance counts as human.",
         "",
-        "| dataset | items | human | prescreen | second-check | rule | wrong: fixed / by hand | unsure | open | "
-        "units marked | sample errors / n (Marc) |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| dataset | items | human | prescreen | second-check | rule | restated | wrong: fixed / by hand | "
+        "unsure | open | units marked | human sample in this dataset: checked / errors |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for o in outcomes:
         row = plan.summary.get(o.dataset, {})
         c = o.classes
+        n, e = plan.sample_by_ds.get(o.dataset, (0, 0))
+        restated = sum(v for k, v in c.items() if k.endswith("+restated"))
         lines.append(f"| {o.dataset} | {row.get('items', 0)} | {c.get('human', 0)} | {c.get('prescreen', 0)} | "
-                     f"{c.get('second-check', 0)} | {c.get('rule', 0)} | {o.wrong_fixed} / {o.wrong_manual} | "
-                     f"{o.unsure} | {o.open} | "
-                     f"{o.units_reviewed} of {o.units_total} | {row.get('sample_errors', 0)} / "
-                     f"{row.get('sample_reviewed', 0)} |")
+                     f"{c.get('second-check', 0)} | {c.get('rule', 0)} | {restated} | "
+                     f"{o.wrong_fixed} / {o.wrong_manual} | {o.unsure} | {o.open} | "
+                     f"{o.units_reviewed} of {o.units_total} | {n} / {e} |")
     return lines
 
 
@@ -766,7 +878,8 @@ def run(plan: Plan, items: list[dict], write: bool, today: str,
     changed: dict[str, str] = {}
     for o in outcomes:
         changed.update(o.changed_files)
-    todo = baselines(changed)
+    todo, current = baselines(changed, writes)
+    plan.current_baselines = current
     readmes: dict[Path, list[Outcome]] = {}
     for o in outcomes:
         readmes.setdefault(readme_of(o.dataset), []).append(o)
@@ -774,7 +887,8 @@ def run(plan: Plan, items: list[dict], write: bool, today: str,
         if not any(o.reviewed or o.accepted or o.wrong_fixed or o.wrong_manual or o.unsure for o in outs):
             continue  # nothing reviewed yet: no protocol to record
         writes[path] = with_section(path.read_text(encoding="utf-8"),
-                                    protocol_section(plan, outs, [t for t in todo if _relevant(t, outs)], today))
+                                    protocol_section(plan, outs, [t for t in todo if _relevant(t, outs)], today,
+                                                     [c for c in current if _relevant(c, outs)]))
     writes = {p: t for p, t in writes.items() if p.read_text(encoding="utf-8") != t}
     if plan.policy:
         path = provenance_path or common.REVIEW_DIR / "provenance.jsonl"
@@ -809,6 +923,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="second-check agent decisions (with --policy)")
     ap.add_argument("--provenance", type=Path, default=common.REVIEW_DIR / "provenance.jsonl",
                     help="per-item provenance written under --policy")
+    ap.add_argument("--reset-datasets-to", metavar="REV",
+                    help="start from the dataset files as of git revision REV (the reviewed state), so a "
+                         "review can be applied again after its first apply; READMEs are not reset")
     args = ap.parse_args(argv)
     reviewer = args.reviewer.strip()
     if not reviewer or reviewer.lower().startswith("agent:"):
@@ -816,6 +933,33 @@ def main(argv: list[str] | None = None) -> int:
     if ":" not in reviewer:
         reviewer = f"human:{reviewer}"
 
+    restore: dict[Path, bytes] = {}
+    if args.reset_datasets_to:
+        for path in dataset_files():
+            rel = path.relative_to(common.REPO_ROOT).as_posix()
+            old = subprocess.run(["git", "-C", str(common.REPO_ROOT), "show", f"{args.reset_datasets_to}:{rel}"],
+                                 capture_output=True)
+            if old.returncode:
+                raise SystemExit(f"cannot read {rel} at {args.reset_datasets_to}: {old.stderr.decode().strip()}")
+            restore[path] = path.read_bytes()
+            path.write_bytes(old.stdout)
+    try:
+        return _main(args, reviewer)
+    finally:
+        if args.dry_run:  # a dry run leaves the files as they were
+            for path, data in restore.items():
+                path.write_bytes(data)
+
+
+def dataset_files() -> list[Path]:
+    """Every dataset file apply.py writes."""
+    return ([export.REAL_REPOS / "queries.json", export.REAL_REPOS / "test-seeking.json"]
+            + [export.GRAPH_GOLD / f"{lang}.json" for lang in export.GRAPH_LANGUAGES]
+            + [export.GRAPH_GOLD / "held-out" / "real-repos.json"]
+            + [export.AGENT / "tasks" / name for _, name, _ in export.TASK_FILES])
+
+
+def _main(args, reviewer: str) -> int:
     items = export.build_items(snippets=False)
     by_id = {it["id"]: it for it in items}
     prescreen, warnings = common.load_prescreen(args.prescreen, by_id)
@@ -849,16 +993,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.policy:
         print(f"policy {args.policy}: Marc checked {plan.sample_checked} sampled confirmed items, "
               f"{plan.sample_errors} errors\n")
-        print(f"{'dataset':<24}{'human':>7}{'prescreen':>10}{'2nd-check':>10}{'rule':>6}{'fixed':>7}{'by hand':>8}"
-              f"{'unsure':>7}{'open':>6}  units marked")
+        print(f"{'dataset':<24}{'human':>7}{'prescreen':>10}{'2nd-check':>10}{'rule':>6}{'restated':>9}"
+              f"{'fixed':>7}{'by hand':>8}{'unsure':>7}{'open':>6}{'sample n/err':>13}  units marked")
         for o in outcomes:
             c = o.classes
+            restated = sum(v for k, v in c.items() if k.endswith("+restated"))
+            n, e = plan.sample_by_ds.get(o.dataset, (0, 0))
             kept = f" ({o.units_human_only_kept} kept null: not all human)" if o.units_human_only_kept else ""
             print(f"{o.dataset:<24}{c.get('human', 0):>7}{c.get('prescreen', 0):>10}{c.get('second-check', 0):>10}"
-                  f"{c.get('rule', 0):>6}{o.wrong_fixed:>7}{o.wrong_manual:>8}{o.unsure:>7}{o.open:>6}  "
-                  f"{o.units_reviewed} of {o.units_total}{kept}")
-        total = {k: sum(o.classes.get(k, 0) for o in outcomes) for k in ("human", "prescreen", "second-check", "rule")}
-        print("total by provenance: " + ", ".join(f"{k} {v}" for k, v in total.items()))
+                  f"{c.get('rule', 0):>6}{restated:>9}{o.wrong_fixed:>7}{o.wrong_manual:>8}{o.unsure:>7}{o.open:>6}"
+                  f"{f'{n}/{e}':>13}  {o.units_reviewed} of {o.units_total}{kept}")
+        total: dict[str, int] = {}
+        for o in outcomes:
+            for k, v in o.classes.items():
+                total[k] = total.get(k, 0) + v
+        print("total by provenance: " + ", ".join(f"{k} {total[k]}" for k in sorted(
+            total, key=lambda k: (CLASS_ORDER.index(k.split("+")[0]), k))))
     else:
         print(f"{'dataset':<24}{'reviewed':>9}{'accepted':>9}{'fixed':>7}{'by hand':>8}{'unsure':>7}{'open':>7}"
               "  units reviewed")
@@ -880,6 +1030,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n{verb} {len(writes)} files:")
     for p in sorted(writes):
         print(f"  {export.rel(p)}")
+    if plan.current_baselines:
+        print("\nChecked and current:")
+        for c in plan.current_baselines:
+            print(f"  - {c}")
     if todo:
         print("\nBaselines to re-record (not done here):")
         for t in todo:

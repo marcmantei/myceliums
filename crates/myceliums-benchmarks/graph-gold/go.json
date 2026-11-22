@@ -2,7 +2,7 @@
   "language": "go",
   "fixture": "graph-accuracy/go",
   "labelled_by": "agent",
-  "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×15; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×101",
+  "reviewed_by": "mixed, policy owner-2026-11-22: 14× human:marc; 1× human:marc, wording restated by policy owner-2026-11-22; 101× agent:prescreen, accepted by marc's policy (owner-2026-11-22); human sample in this dataset: 96 checked, 0 errors",
   "verified_with": "go vet + go build; go/types resolution of every call expression (verify/go_calls, see README)",
   "symbols": [
     {"id": "auth/auth.go::Token", "kind": "struct", "line": 12},
