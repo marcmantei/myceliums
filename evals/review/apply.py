@@ -220,6 +220,8 @@ class Plan:
         """reviewed_by of a unit whose items were all decided; None: leave it null."""
         used = [c for c in CLASS_ORDER if classes.get(c)]
         if not self.policy:
+            if "sample" in used and dataset in HUMAN_ONLY_DATASETS:
+                return None  # accepted by sample is not a human review of this query
             return self.label("sample") if "sample" in used else self.reviewer
         if used == ["human"]:
             return self.reviewer

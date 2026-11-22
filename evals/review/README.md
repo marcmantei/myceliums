@@ -110,7 +110,9 @@ unit stays unreviewed.
   (sampled acceptance, <rule>)` when some confirmed items were accepted by the
   sample; `null` stays where an item is open, unsure or needs a hand fix. An
   existing `reviewed_by` is kept. (`human:<handle>` is the form the datasets'
-  own validation and `real-repo-review` use.)
+  own validation and `real-repo-review` use.) Retrieval queries are marked only
+  when every item was decided by the reviewer: `real-repo-eval` reports any
+  `reviewed_by` as a human review, which sampled acceptance is not.
 - corrected or removed labels, with a note in the query's or task's rationale;
 - the protocol and its numbers in each dataset's README, between
   `<!-- label-review:start -->` and `<!-- label-review:end -->`;

@@ -251,7 +251,7 @@ class Decisions(unittest.TestCase):
                 common.DecisionStore(Path(d, "d.jsonl")).record(fake_items("x", 1)[0], "maybe")
 
 
-class Apply(unittest.TestCase):
+class ApplyBase(unittest.TestCase):
     """Runs apply on a copy of the datasets in a temporary repository root."""
 
     def setUp(self):
@@ -286,6 +286,9 @@ class Apply(unittest.TestCase):
         plan = apply.Plan(self.items, prescreen, self.store, sample, "human:marc", max_upper)
         return apply.run(plan, self.items, write=True, today="2026-11-22")
 
+
+
+class Apply(ApplyBase):
     def test_nothing_decided_changes_nothing(self):
         before = {p: p.read_bytes() for p in self.root.rglob("*.json")}
         _, _, writes = self.run_apply()
@@ -320,6 +323,26 @@ class Apply(unittest.TestCase):
         # re-applying replaces the section rather than adding a second one
         self.run_apply()
         self.assertEqual((export.REAL_REPOS / "README.md").read_text().count(apply.START), 1)
+
+    def test_sampled_acceptance_never_marks_a_retrieval_query(self):
+        rq = [it for it in self.items if it["dataset"] == "retrieval-queries"]
+        pre = confirmed(rq)
+        pre.update(confirmed([it for it in self.items if it["dataset"] != "retrieval-queries"]))
+        sample = common.Sample({"seed": 164, "rate": 0.15, "datasets": {}})
+        sample.sync(self.items, pre)
+        for rid in sample.ids("retrieval-queries"):
+            self.decide(rid, "correct")
+        outcomes, _, _ = self.run_apply(prescreen=pre, max_upper=0.5, sample=sample)
+        queries = json.loads((export.REAL_REPOS / "queries.json").read_text())["queries"]
+        decided = set(sample.ids("retrieval-queries"))
+        marked = [q for q in queries if q["reviewed_by"] is not None]
+        for q in marked:  # only queries whose every item Marc decided
+            self.assertEqual(q["reviewed_by"], "human:marc")
+            mine = [it["id"] for it in rq if it["id"].startswith(f"retrieval-queries:{q['id']}:")]
+            self.assertTrue(set(mine) <= decided, q["id"])
+        o = next(o for o in outcomes if o.dataset == "retrieval-queries")
+        self.assertEqual(o.units_human_only_kept, len(queries) - len(marked))
+        self.assertGreater(o.units_human_only_kept, 100)
 
     def test_graph_gold_edge_removed_and_baseline_listed(self):
         call = next(it for it in self.items if it["kind"] == "graph-call" and it["id"].startswith("graph-gold:python:"))
@@ -388,7 +411,7 @@ class Apply(unittest.TestCase):
         self.assertIn("real call", gg.manual[0])
 
 
-class OwnerPolicy(Apply):
+class OwnerPolicy(ApplyBase):
     """--policy owner-2026-11-22: truthful provenance per item and per unit."""
 
     POLICY = "owner-2026-11-22"
