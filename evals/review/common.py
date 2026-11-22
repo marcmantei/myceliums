@@ -33,6 +33,7 @@ DATASETS = (
     "agent-tasks-hard",
     "agent-tasks-hard-v1",
     "agent-tasks-outcome",
+    "agent-tasks-scale",
 )
 
 VERDICTS = ("confirmed", "doubtful", "wrong")

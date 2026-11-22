@@ -602,8 +602,9 @@ replaced them afterwards and are not calibrated. Of the ten calibrated tasks
 in the set, eight succeeded (target 30-80 %); the other 20 tasks are not
 calibrated.
 
-**Tasks frozen before any myceliums output.** The task file was committed in
-`9c53600` at 10:04:05 UTC, after the calibration (09:54-09:59 UTC, condition
+**Tasks frozen before any myceliums output.** The task file was committed at
+10:04:05 UTC (the freeze commit's author date; first pushed as `9c53600`, rebased
+onto main without changes to the file), after the calibration (09:54-09:59 UTC, condition
 none only). The Vue index was built afterwards (indexed 10:24:08 UTC), the
 reused Django index was first opened after the freeze, the first session with
 myceliums (a mock-API probe) started at 10:24:52 UTC and the main run at
