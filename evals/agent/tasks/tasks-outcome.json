@@ -410,7 +410,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×31; agent:second-check, per marc's policy ×6"
   },
   {
    "id": "django-tc-get-format",
@@ -821,7 +822,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×32; agent:second-check, per marc's policy ×5"
   },
   {
    "id": "django-tc-safe-join",
@@ -1199,7 +1201,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×29; agent:second-check, per marc's policy ×5"
   },
   {
    "id": "django-tc-resolve-url",
@@ -1489,7 +1492,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×23; agent:second-check, per marc's policy ×3"
   },
   {
    "id": "django-blast-iri-to-uri",
@@ -1691,7 +1695,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×16; agent:second-check, per marc's policy ×2"
   },
   {
    "id": "django-blast-current-timezone",
@@ -1970,7 +1975,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×22; agent:second-check, per marc's policy ×3"
   },
   {
    "id": "django-blast-template-does-not-exist",
@@ -2161,7 +2167,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×15; agent:second-check, per marc's policy ×2"
   },
   {
    "id": "django-blast-script-prefix",
@@ -2407,7 +2414,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×17; agent:second-check, per marc's policy ×5"
   },
   {
    "id": "django-amb-transaction-get-connection",
@@ -2675,7 +2683,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×20; agent:second-check, per marc's policy ×4"
   },
   {
    "id": "django-amb-migrations-resolve-relation",
@@ -2866,7 +2875,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×15; agent:second-check, per marc's policy ×2"
   },
   {
    "id": "django-amb-urls-resolve",
@@ -3079,7 +3089,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×15; agent:second-check, per marc's policy ×4"
   },
   {
    "id": "django-amb-auth-load-backend",
@@ -3336,7 +3347,8 @@
     "py_edges.py --local-imports --star-imports (import-aware AST, `direct` edges)",
     "grep audit of every name on each chain (outcome_tasks.py --audit)",
     "reading the call sites"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×19; agent:second-check, per marc's policy ×4"
   }
  ]
 }

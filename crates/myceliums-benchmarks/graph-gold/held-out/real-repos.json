@@ -1,7 +1,7 @@
 {
   "description": "Held-out CALLS gold set: call sites drawn at random from four real repositories (sample_sites.py, seed 139), each traced to its target by reading the code at the pinned commit, never from myceliums output. Not used to develop the resolver. Scored per (caller, callee name) pair; reported by graph-eval next to the fixture gate, never gated.",
   "labelled_by": "agent",
-  "reviewed_by": null,
+  "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×10; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×36; agent:second-check, per marc's policy ×6",
   "rules": "In order of the draw, a site is skipped when it is not a call made inside a named function or method (a definition, a string, a regex, a comment, module-level code) or when its innermost function is a local closure or an anonymous function expression (callers differ by convention there). The caller is the innermost named function or method containing the call; calls in nested lambdas and callbacks belong to it. A pair lists every target the caller's calls of that name bind to; an empty list means none is a project symbol (a built-in, a library method, a call through a parameter or variable). Instantiation targets the class; its constructor is accepted too. Sites are taken until each repository has 13.",
   "repos": {
     "flask": "22d924701a6ae2e4cd01e9a15bbaf3946094af65",

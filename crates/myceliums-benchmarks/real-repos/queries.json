@@ -50,7 +50,7 @@
       ],
       "rationale": "Only one definition carries this name. Session.send drives the generator and the many redirect tests in tests/test_requests.py exercise it, but they call it rather than define it, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-exact-name-httpadapter-send",
@@ -66,7 +66,7 @@
       ],
       "rationale": "The query names the HTTPAdapter method explicitly. BaseAdapter.send only raises NotImplementedError and Session.send is a different class's method that delegates to the adapter, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-exact-name-case-insensitive-dict",
@@ -82,7 +82,7 @@
       ],
       "rationale": "The class definition is the answer and covers its dunder methods. The TestCaseInsensitiveDict test class in tests/test_requests.py and the tests in tests/test_structures.py only exercise it, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-exact-name-raise-for-status",
@@ -98,7 +98,7 @@
       ],
       "rationale": "Single definition. Response.ok and Response.__bool__ call raise_for_status to compute truthiness, so they use the answer rather than implement it and were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-exact-name-super-len",
@@ -114,7 +114,7 @@
       ],
       "rationale": "Single definition in utils.py. Its callers PreparedRequest.prepare_body and PreparedRequest.prepare_content_length were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-exact-name-build-digest-header",
@@ -130,7 +130,7 @@
       ],
       "rationale": "The nested hash helpers (md5_utf8, sha_utf8, sha256_utf8, sha512_utf8, KD) are separate inventory rows inside this method, but they are fragments of it and not the symbol the query names. handle_401 and __call__ only call it.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-exact-name-cookiejar-from-dict",
@@ -146,7 +146,7 @@
       ],
       "rationale": "One label covers the three overload rows. add_dict_to_cookiejar (a utils wrapper with a different name) and the inverse dict_from_cookiejar were not labelled because the query names this function.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "requests-exact-name-dispatch-hook",
@@ -162,7 +162,7 @@
       ],
       "rationale": "Single definition in hooks.py. Session.send calls it for the 'response' event and tests/test_hooks.py exercises it. Neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-exact-name-response-iter-lines",
@@ -178,7 +178,7 @@
       ],
       "rationale": "One label covers the overload rows. Response.iter_content, which it builds on, and the test_response_iter_lines tests were not labelled because the query names iter_lines.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "requests-paraphrase-forget-credentials-on-cross-site-redirect",
@@ -199,7 +199,7 @@
       ],
       "rationale": "The decision and the deletion live in two adjacent methods, and both are equally good to read first. resolve_redirects only calls rebuild_auth, and tests such as test_auth_is_retained_for_redirect_on_host were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-paraphrase-downgrade-post-to-get-after-redirect",
@@ -215,7 +215,7 @@
       ],
       "rationale": "A single method holds the rule. resolve_redirects only calls it and test_HTTP_302_ALLOW_REDIRECT_GET tests it. Neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-paraphrase-reset-upload-stream-before-resending",
@@ -231,7 +231,7 @@
       ],
       "rationale": "rewind_body is the redirect-time rewind. PreparedRequest.prepare_body only records _body_position, and HTTPDigestAuth.handle_401 does its own seek for digest retries, not redirects, so neither was labelled. The test_rewind_body* tests were also excluded.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-paraphrase-stored-login-from-home-credentials-file",
@@ -247,7 +247,7 @@
       ],
       "rationale": "Single implementation. Session.prepare_request and SessionRedirectMixin.rebuild_auth call it, and TestRequests.get_netrc_auth_mock is a test stub. None of them were labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-paraphrase-detect-json-utf-width-from-null-bytes",
@@ -263,7 +263,7 @@
       ],
       "rationale": "The name is not obvious from the query. Response.json calls it when no encoding is set, but it only uses the result, so it was not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-paraphrase-pick-installed-charset-sniffing-library",
@@ -279,7 +279,7 @@
       ],
       "rationale": "This compat helper is the only code that chooses the library. Response.apparent_encoding uses the chosen module and __init__.check_compatibility only validates its version, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "human:marc"
     },
     {
       "id": "requests-paraphrase-convert-http-cookies-entry-to-jar-cookie",
@@ -295,7 +295,7 @@
       ],
       "rationale": "create_cookie is the generic builder it delegates to, and RequestsCookieJar.set only sends Morsel values to this function. Both were left unlabelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-paraphrase-numeric-status-codes-to-friendly-names",
@@ -311,7 +311,7 @@
       ],
       "rationale": "_init is where names like codes.ok are registered. LookupDict is only the generic container and the nested doc() helper only formats docstring lines, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-paraphrase-host-and-tls-params-for-urllib3-pool",
@@ -332,7 +332,7 @@
       ],
       "rationale": "The method is a thin public wrapper over the module function that does the work, so both are labelled. get_connection_with_tls_context uses the result to fetch a pool and was not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "requests-paraphrase-base64-user-password-for-authorization",
@@ -348,7 +348,7 @@
       ],
       "rationale": "HTTPBasicAuth.__call__, HTTPProxyAuth.__call__, HTTPAdapter.proxy_headers and rebuild_proxies all call this helper to set headers, but none of them do the encoding, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "requests-behavioural-content-length-for-request-body",
@@ -369,7 +369,7 @@
       ],
       "rationale": "These two methods write the header. super_len only measures objects, prepare_auth only calls prepare_content_length again, and HTTPAdapter.send only reads the header to choose chunked mode, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-behavioural-digest-retry-after-401-challenge",
@@ -385,7 +385,7 @@
       ],
       "rationale": "handle_401 is the code that resends. build_digest_header only computes the header value and __call__ only registers the hook. The test_DIGEST* and test_digestauth* tests were also excluded.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-behavioural-invalid-json-response-error",
@@ -406,7 +406,7 @@
       ],
       "rationale": "Response.json shows when the error is raised and JSONDecodeError defines what it is. InvalidJSONError is the parent class, and prepare_body raises it for request bodies that cannot be serialised, not when parsing a response, so it was not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "requests-behavioural-choose-transport-adapter-for-url",
@@ -427,7 +427,7 @@
       ],
       "rationale": "The match happens in get_adapter, but it is only correct because mount keeps the longest prefixes first, so both are labelled. Session.send only calls get_adapter and Session.__init__ only mounts the two default adapters.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-behavioural-guess-text-encoding-without-charset",
@@ -453,7 +453,7 @@
       ],
       "rationale": "The header defaults, the detection and the fallback decision are split across these three symbols. HTTPAdapter.build_response only assigns the header-derived encoding, and the deprecated get_unicode_from_response and get_encodings_from_content helpers are not on the normal code path, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
     },
     {
       "id": "requests-behavioural-record-set-cookie-from-response",
@@ -469,7 +469,7 @@
       ],
       "rationale": "This is the single function that parses Set-Cookie into a jar. Its callers (HTTPAdapter.build_response, Session.send, resolve_redirects, handle_401) and the MockRequest/MockResponse shims were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-behavioural-no-proxy-match-against-host",
@@ -485,7 +485,7 @@
       ],
       "rationale": "All no_proxy matching happens here. get_environ_proxies and resolve_proxies only call it, and the Windows-only proxy_bypass_registry handles registry overrides rather than the environment variable, so none of them were labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-behavioural-reject-headers-with-newlines",
@@ -506,7 +506,7 @@
       ],
       "rationale": "The public checker is a thin wrapper over the private validator, so both are labelled. PreparedRequest.prepare_headers only calls the checker and InvalidHeader only defines the error, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-behavioural-ca-bundle-env-var",
@@ -522,7 +522,7 @@
       ],
       "rationale": "Only this method reads the CA bundle variables. HTTPAdapter.cert_verify uses the resulting verify path and Session.request calls the method. Neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "requests-behavioural-non-ascii-hostname-to-punycode",
@@ -543,7 +543,7 @@
       ],
       "rationale": "The encoding and the decision to apply it are in these two methods. unicode_is_ascii is only a predicate, and the idna-related tests in tests/test_help.py and tests/test_packages.py were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-behavioural-request-line-url-via-http-proxy",
@@ -559,7 +559,7 @@
       ],
       "rationale": "request_url decides between the path and the absolute URL. urldefragauth is a generic URL-trimming helper and RequestEncodingMixin.path_url only builds the path, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "requests-behavioural-multipart-body-for-file-uploads",
@@ -575,7 +575,7 @@
       ],
       "rationale": "prepare_body only calls _encode_files when files are given and guess_filename only derives a filename, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "requests-behavioural-import-time-dependency-version-checks",
@@ -591,7 +591,7 @@
       ],
       "rationale": "_check_cryptography only warns about old cryptography versions and help.info only reports versions, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-behavioural-tests-local-socket-server",
@@ -607,7 +607,7 @@
       ],
       "rationale": "The query is explicitly about test infrastructure, so the test server class is the answer. TLSServer is a TLS-specific subclass and tests/test_testserver.py only tests Server, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-conceptual-authentication-handlers",
@@ -643,7 +643,7 @@
       ],
       "rationale": "These define the auth handlers and the place where they are applied. _basic_auth_str is a low-level encoding helper and get_netrc_auth is a credential source rather than a handler, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4"
     },
     {
       "id": "requests-conceptual-session-cookie-persistence",
@@ -694,7 +694,7 @@
       ],
       "rationale": "Cookie persistence spans the session (cookies merged in before sending and saved back after), request preparation and the cookie helpers. MockRequest/MockResponse are cookielib adapters and create_cookie/cookiejar_from_dict only build cookies, so they were not labelled. SessionRedirectMixin.resolve_redirects was added in review (2026-11-19): it carries cookies across redirect hops and was missed in the first draft.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×8"
     },
     {
       "id": "requests-conceptual-proxy-configuration-and-selection",
@@ -745,7 +745,7 @@
       ],
       "rationale": "These make up the proxy pipeline from environment variables to the connection. HTTPAdapter.request_url only touches proxies when choosing the URL form, and HTTPProxyAuth is an auth handler, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×4; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
     },
     {
       "id": "requests-conceptual-network-failure-exception-types",
@@ -791,7 +791,7 @@
       ],
       "rationale": "These form the connection and timeout branch of the exception hierarchy. HTTPAdapter.send raises them but does not define them, and exceptions in other branches such as InvalidURL, RetryError or ChunkedEncodingError were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×3; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
     },
     {
       "id": "requests-conceptual-redirect-following",
@@ -837,7 +837,7 @@
       ],
       "rationale": "These are the redirect mechanics. Session.send only starts resolve_redirects, rewind_body is a generic body helper, and the many redirect tests were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-conceptual-response-event-hooks",
@@ -878,7 +878,7 @@
       ],
       "rationale": "These define, register, merge and fire hooks. Session.send and HTTPDigestAuth.__call__ use hooks, and tests/test_hooks.py exercises them, so none of those were labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×6"
     },
     {
       "id": "requests-conceptual-tls-verification-and-client-certs",
@@ -914,7 +914,7 @@
       ],
       "rationale": "These are the places where verify and cert are interpreted. SSLError only defines the error and help.info only reports OpenSSL versions, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
     },
     {
       "id": "requests-conceptual-streaming-response-body",
@@ -950,7 +950,7 @@
       ],
       "rationale": "These implement reading the body chunk by chunk. Response.content reads the whole body at once and iter_slices only replays content that is already buffered, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "requests-conceptual-connection-pooling",
@@ -991,7 +991,7 @@
       ],
       "rationale": "These create, select, release and dispose of pools. Session.close only calls each adapter's close, and the deprecated HTTPAdapter.get_connection does the same job as get_connection_with_tls_context on an old code path, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-exact-name-url-for",
@@ -1012,7 +1012,7 @@
       ],
       "rationale": "Both symbols carry the exact name; the helper is the public entry point and Flask.url_for has the logic, so an agent typing the name wants either. App.inject_url_defaults and App.handle_url_build_error are only called from it, and TestUrlFor.* tests are distractors, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-exact-name-blueprint-register",
@@ -1028,7 +1028,7 @@
       ],
       "rationale": "Only the sansio Blueprint defines register; the WSGI flask.blueprints.Blueprint inherits it. App.register_blueprint (one line calling blueprint.register) and Blueprint.register_blueprint (only appends to _blueprints for nesting) look similar but are not this method, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "flask-exact-name-secure-cookie-session-interface",
@@ -1044,7 +1044,7 @@
       ],
       "rationale": "The query names the class itself; its methods sit inside its span. SecureCookieSession (the session dict class) and SessionInterface (the abstract base) have similar names but are different symbols, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-exact-name-tagged-json-serializer",
@@ -1060,7 +1060,7 @@
       ],
       "rationale": "Loosely spaced lower-case form of the class name. The individual JSONTag subclasses (TagTuple, TagBytes, etc.) and the generic json/__init__ dumps/loads are related but not the named symbol, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-exact-name-config-from-prefixed-env",
@@ -1076,7 +1076,7 @@
       ],
       "rationale": "One method carries this name. Config.from_envvar also reads the environment but only to locate a config file, and tests/test_config.py::test_from_prefixed_env* are test distractors, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "flask-exact-name-stream-with-context",
@@ -1092,7 +1092,7 @@
       ],
       "rationale": "The inventory lists three overload rows for stream_with_context; one label covers them. Its nested 'generator' and 'decorator' closures lie inside its span and are not labelled separately; templating._stream only calls it.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-exact-name-method-view",
@@ -1108,7 +1108,7 @@
       ],
       "rationale": "The class itself is named; its two methods are inside its span. The base View class and test classes such as tests/test_async.py::AsyncMethodView are distractors and are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "flask-exact-name-flask-group",
@@ -1124,7 +1124,7 @@
       ],
       "rationale": "The query names the class. AppGroup is its parent (it wraps commands in with_appcontext) and is easily confused with it, but it is not FlaskGroup, so it is not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-exact-name-session-transaction",
@@ -1140,7 +1140,7 @@
       ],
       "rationale": "Only one library symbol has this name. tests/test_testing.py::test_session_transactions* call it and are test distractors, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "flask-paraphrase-one-off-response-callback-in-view",
@@ -1156,7 +1156,7 @@
       ],
       "rationale": "after_this_request is the per-request version of the hook. Scaffold.after_request registers for every request, and Flask.process_response only runs the stored callbacks, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-paraphrase-app-context-scratch-namespace",
@@ -1172,7 +1172,7 @@
       ],
       "rationale": "The answer has a non-obvious private name. The 'g' proxy itself is a module-level LocalProxy in globals.py with no inventory row. AppContext.__init__ only creates the instance, and tests/test_basic.py::test_g_iteration_protocol only tests it, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-paraphrase-config-subset-by-key-prefix",
@@ -1188,7 +1188,7 @@
       ],
       "rationale": "Config.from_prefixed_env also deals with key prefixes, but it loads from environment variables, not from existing config, so it is deliberately not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-paraphrase-class-into-routable-function",
@@ -1204,7 +1204,7 @@
       ],
       "rationale": "View.as_view is the converter. The inventory also has two nested 'View.view' closures inside its span; they are part of as_view and are not labelled separately. MethodView.dispatch_request handles dispatch, not the conversion.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-paraphrase-safe-file-download-from-folder",
@@ -1220,7 +1220,7 @@
       ],
       "rationale": "send_file is explicitly documented as unsafe for user-supplied paths. Flask/Blueprint.send_static_file only use this helper for the static folder, and _prepare_send_file_kwargs only fills arguments, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-paraphrase-log-destination-server-error-channel",
@@ -1236,7 +1236,7 @@
       ],
       "rationale": "Only this function chooses the stream. create_logger only attaches the module-level default_handler that uses it, and tests/test_logging.py::test_wsgi_errors_stream is a test, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-paraphrase-cli-table-of-url-rules",
@@ -1252,7 +1252,7 @@
       ],
       "rationale": "routes_command is the only implementation. FlaskGroup.__init__ only registers it, and tests/test_cli.py::TestRoutes.* are test distractors, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-paraphrase-html-escaping-by-template-extension",
@@ -1268,7 +1268,7 @@
       ],
       "rationale": "The decision lives in the sansio App. Flask.create_jinja_environment only passes it as the 'autoescape' option, so it is not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "flask-paraphrase-queue-one-time-user-notice",
@@ -1284,7 +1284,7 @@
       ],
       "rationale": "The query is about queueing, which flash does. get_flashed_messages is the read side (it pops the messages for display), so it is deliberately not labelled; tests/test_basic.py::test_flashes is a test distractor.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-paraphrase-json-fallback-encoder",
@@ -1300,7 +1300,7 @@
       ],
       "rationale": "_default is the encoder, under a non-obvious name. DefaultJSONProvider only stores it as its 'default' attribute, and the session TaggedJSONSerializer tags are a separate mechanism, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "flask-behavioural-session-cookie-loaded-and-verified",
@@ -1321,7 +1321,7 @@
       ],
       "rationale": "Loading happens in open_session and verification keys come from get_signing_serializer. RequestContext.push only calls open_session, SessionInterface.open_session is abstract, and tests/test_reqctx.py::FailingSessionInterface.open_session is a test stub, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "flask-behavioural-error-handler-selection",
@@ -1337,7 +1337,7 @@
       ],
       "rationale": "The lookup order lives only in _find_error_handler. Flask.handle_user_exception and handle_http_exception call it, and Scaffold._get_exc_class_and_code only maps a class to (class, code); tests/test_basic.py::test_errorhandler_precedence is a test distractor. None of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "human:marc"
     },
     {
       "id": "flask-behavioural-unhandled-exception-to-500",
@@ -1353,7 +1353,7 @@
       ],
       "rationale": "handle_exception owns the whole fallback path. Flask.log_exception is a one-line logger call, and Flask.wsgi_app only invokes handle_exception, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-behavioural-after-request-and-session-save",
@@ -1369,7 +1369,7 @@
       ],
       "rationale": "Both steps happen in process_response. Scaffold.after_request only registers functions, and SecureCookieSessionInterface.save_session is the cookie writer, not the place where after-request code runs, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "flask-behavioural-cli-discovers-app-without-option",
@@ -1395,7 +1395,7 @@
       ],
       "rationale": "These three form the discovery chain; locate_app's overload rows are covered by one label. prepare_import only converts a path to a module name, and find_app_by_string runs only when a name is given, so neither is labelled; tests/test_cli.py::test_find_best_app is a test.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-behavioural-dotenv-files-into-environ",
@@ -1411,7 +1411,7 @@
       ],
       "rationale": "load_dotenv does the reading. _env_file_callback and Flask.run only call it, and helpers.get_load_dotenv only checks FLASK_SKIP_DOTENV, so none of them is labelled; tests/test_cli.py::test_load_dotenv is a test.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-behavioural-blueprint-url-prefix-and-endpoint-name",
@@ -1432,7 +1432,7 @@
       ],
       "rationale": "The setup state computes and applies the prefix and endpoint name. Blueprint.add_url_rule only defers via record, and Blueprint.register only composes prefixes for nested blueprints, so neither is labelled; tests/test_blueprints.py::test_blueprint_prefix_slash is a test.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "flask-behavioural-debug-error-on-post-slash-redirect",
@@ -1453,7 +1453,7 @@
       ],
       "rationale": "The trigger and the exception are both needed; FormDataRoutingRedirect.__init__ is inside the labelled class span. Flask.dispatch_request only calls raise_routing_exception, and tests/test_basic.py::test_routing_redirect_debugging is a test, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-behavioural-template-context-processors-run",
@@ -1474,7 +1474,7 @@
       ],
       "rationale": "These are the runner and the default processor. templating._render/_stream only call update_template_context, and Scaffold.context_processor only registers functions, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-behavioural-template-lookup-across-blueprints",
@@ -1500,7 +1500,7 @@
       ],
       "rationale": "Lookup order and the per-folder loader together answer the question. DispatchingJinjaLoader.get_source only chooses between the fast and explained paths, and _get_source_explained / explain_template_loading_attempts are the EXPLAIN_TEMPLATE_LOADING debug variant, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
     },
     {
       "id": "flask-behavioural-async-views-under-wsgi",
@@ -1521,7 +1521,7 @@
       ],
       "rationale": "Both methods do the conversion. Callers such as Flask.dispatch_request and View.as_view only call ensure_sync, and tests/test_async.py::* are test distractors, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-behavioural-request-body-size-limit",
@@ -1537,7 +1537,7 @@
       ],
       "rationale": "The getter and setter share one name, so one label covers both. Request.max_form_memory_size and max_form_parts limit multipart form fields rather than the whole body, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "flask-behavioural-missing-multipart-enctype-error",
@@ -1563,7 +1563,7 @@
       ],
       "rationale": "The trigger, the patch and the error class together form the answer. The nested newcls.__getitem__ is inside attach_enctype_error_multidict and not labelled separately; tests/test_basic.py::test_enctype_debug_helper is a test distractor.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
     },
     {
       "id": "flask-behavioural-logger-default-handler",
@@ -1584,7 +1584,7 @@
       ],
       "rationale": "These two decide when the handler is attached. App.logger is a cached_property that only returns create_logger(self), and tests/test_logging.py::test_existing_handler is a test, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "flask-conceptual-app-and-request-context-lifecycle",
@@ -1630,7 +1630,7 @@
       ],
       "rationale": "Push/pop on both context classes, the WSGI driver and the two teardown runners cover the lifecycle. Flask.app_context/request_context only construct objects, __enter__/__exit__ only delegate to push/pop, and globals.py proxies have no inventory rows; none of these is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-conceptual-json-provider-serialisation",
@@ -1681,7 +1681,7 @@
       ],
       "rationale": "The provider classes, their key methods and the module-level dispatch functions make up the concept. DefaultJSONProvider.loads and JSONProvider.dump/load are trivial pass-throughs, TaggedJSONSerializer is the separate session-cookie serialiser, and tests/test_json.py::CustomProvider is a test, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-conceptual-signals-emitted-during-request",
@@ -1742,7 +1742,7 @@
       ],
       "rationale": "signals.py holds only module-level Namespace.signal() assignments with no inventory rows, so the answer is every function that calls .send(); a grep of src/ finds exactly these ten. The nested templating 'generate' closure lies inside _stream, and tests/test_signals.py::* only connect to signals, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9"
     },
     {
       "id": "flask-conceptual-before-after-teardown-request-hooks",
@@ -1783,7 +1783,7 @@
       ],
       "rationale": "Three registration decorators and their three executors. The Blueprint.before_app_request/after_app_request/teardown_app_request variants and Blueprint._merge_blueprint_funcs only feed the same dicts, and after_this_request is per-request, so none of them is labelled; test_* teardown functions are distractors.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-conceptual-url-routing-register-and-match",
@@ -1819,7 +1819,7 @@
       ],
       "rationale": "These cover registration, binding, matching and dispatch. Scaffold.add_url_rule only raises NotImplementedError (docstring only), the get/post/put shortcuts go through _method_route to route, and Blueprint.add_url_rule defers to the setup state, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
     },
     {
       "id": "flask-conceptual-session-interface-and-cookie-backend",
@@ -1855,7 +1855,7 @@
       ],
       "rationale": "The abstraction and default backend live entirely in sessions.py. Callers (RequestContext.push opening the session, Flask.process_response saving it) and test stubs such as tests/test_reqctx.py::FailingSessionInterface are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
     },
     {
       "id": "flask-conceptual-testing-without-a-server",
@@ -1901,7 +1901,7 @@
       ],
       "rationale": "Library testing utilities and their app factories. The query is not about the test suite, so pytest fixtures in tests/conftest.py and examples/*/tests/conftest.py are deliberately not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "flask-conceptual-blueprint-deferred-setup",
@@ -1942,7 +1942,7 @@
       ],
       "rationale": "These make up the record-then-replay mechanism. Users of it (Blueprint.add_url_rule, app_template_filter, before_app_request, ...) only call record/record_once, and App.register_blueprint just forwards to register, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×6"
     },
     {
       "id": "flask-conceptual-static-files-and-cache-max-age",
@@ -1983,7 +1983,7 @@
       ],
       "rationale": "The view, the cache lookup and the path properties make up static serving. The static route is registered by a few lines inside Flask.__init__ (and Blueprint.register for blueprints); both are large methods mostly about other things, so neither is labelled, and send_from_directory is the generic helper. tests/test_basic.py::test_static_* are tests.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×6"
     },
     {
       "id": "gin-exact-name-should-bind-body-with",
@@ -1999,7 +1999,7 @@
       ],
       "rationale": "The query names the method exactly. The ShouldBindBodyWithJSON/XML/YAML/TOML/Plain shortcuts only forward to it with a fixed binding, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-exact-name-abort-with-status-json",
@@ -2015,7 +2015,7 @@
       ],
       "rationale": "A single method matches the name. AbortWithStatusPureJSON, AbortWithStatus and AbortWithError are siblings with different names and behaviour, so they are left out.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-exact-name-logger-with-config",
@@ -2031,7 +2031,7 @@
       ],
       "rationale": "Exact function name. Logger, LoggerWithFormatter and LoggerWithWriter are thin wrappers that build a LoggerConfig and call it, and the LoggerConfig struct is only its input, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-exact-name-engine-handle-context",
@@ -2047,7 +2047,7 @@
       ],
       "rationale": "The query names one method. handleHTTPRequest does the actual routing but is a different symbol that the method calls, so it is not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-exact-name-set-trusted-proxies",
@@ -2063,7 +2063,7 @@
       ],
       "rationale": "Exact method name. parseTrustedProxies and prepareTrustedCIDRs are internal helpers it calls, and test functions with the name in them are distractors.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-exact-name-basic-auth-for-proxy",
@@ -2079,7 +2079,7 @@
       ],
       "rationale": "A loosely spaced version of the function name. BasicAuth and BasicAuthForRealm handle the normal Authorization header with 401 and are deliberately excluded.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-exact-name-find-case-insensitive-path",
@@ -2100,7 +2100,7 @@
       ],
       "rationale": "The named method is a thin wrapper over its recursive helper, so both are equally good answers. redirectFixedPath only calls it and is not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "gin-exact-name-map-form-with-tag",
@@ -2121,7 +2121,7 @@
       ],
       "rationale": "MapFormWithTag is a one-line public wrapper of mapFormByTag, so both are labelled. mapForm and mapURI are fixed-tag wrappers with other names and are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "gin-exact-name-render-write-json",
@@ -2137,7 +2137,7 @@
       ],
       "rationale": "Exact function name in the render package. JSON.Render only forwards to it, and WriteString and WriteMsgPack are similarly named helpers for other formats.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "gin-paraphrase-stop-remaining-handlers",
@@ -2153,7 +2153,7 @@
       ],
       "rationale": "Abort is the primitive that skips pending handlers. The AbortWith* variants also write a status or body and only call Abort, and IsAborted only reads the state, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-paraphrase-context-safe-for-goroutine",
@@ -2169,7 +2169,7 @@
       ],
       "rationale": "Copy is the one function for this purpose. reset and the context.Context methods (Deadline/Done/Value) are about request lifecycle, not detaching, and are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-paraphrase-url-param-with-fallback",
@@ -2185,7 +2185,7 @@
       ],
       "rationale": "DefaultQuery is the only query accessor that takes a fallback. Query and GetQuery return an empty string or a bool instead. DefaultPostForm does the same thing for form bodies, not the URL, so it is excluded.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "gin-paraphrase-adapt-net-http-handler",
@@ -2206,7 +2206,7 @@
       ],
       "rationale": "Both adapters answer the query equally: one is for http.Handler and one for http.HandlerFunc. gin.Bind in the same file builds binding middleware, not an adapter, so it is not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-paraphrase-anti-hijacking-json-prefix",
@@ -2222,7 +2222,7 @@
       ],
       "rationale": "The prefixing logic lives only in SecureJSON.Render. Context.SecureJSON just passes the engine's prefix in, and Engine.SecureJsonPrefix only sets it, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-paraphrase-canonicalise-url-path",
@@ -2238,7 +2238,7 @@
       ],
       "rationale": "cleanPath is the URL version of path.Clean. removeRepeatedChar only collapses repeated characters and does not resolve dot segments, and bufApp is a buffer helper, so both are excluded.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "gin-paraphrase-switch-run-mode",
@@ -2254,7 +2254,7 @@
       ],
       "rationale": "SetMode is the switch. Mode only reads the stored name, IsDebugging only checks the code, and the mode.go init only calls SetMode with GIN_MODE, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "gin-paraphrase-constant-time-credential-compare",
@@ -2270,7 +2270,7 @@
       ],
       "rationale": "The constant-time comparison happens only in searchCredential, whose name does not suggest it. BasicAuthForRealm and BasicAuthForProxy call it, and processAccounts and authorizationHeader only precompute header values, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-paraphrase-zero-copy-string-bytes",
@@ -2291,7 +2291,7 @@
       ],
       "rationale": "The two internal helpers cover the two directions and are equally relevant. Callers such as SecureJSON.Render or searchCredential use them but are not the answer.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-paraphrase-hide-directory-indexes",
@@ -2317,7 +2317,7 @@
       ],
       "rationale": "These three form the mechanism: Dir chooses the wrapper, Open applies it and Readdir disables listing. The bare OnlyFilesFS struct only holds a field, and RouterGroup.Static/createStaticHandler only consume the filesystem, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-match-path-capture-params",
@@ -2333,7 +2333,7 @@
       ],
       "rationale": "getValue is the lookup routine. Engine.handleHTTPRequest only calls it for the right method tree, and Params.ByName/Context.Param only read the captured values afterwards, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-route-wildcard-conflict-panic",
@@ -2354,7 +2354,7 @@
       ],
       "rationale": "The conflict panics are raised in these two tree functions. findWildcard only panics on an invalid escape, and Engine.addRoute only asserts basic preconditions, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-method-not-allowed-allow-header",
@@ -2375,7 +2375,7 @@
       ],
       "rationale": "The Allow header is built in handleHTTPRequest and the response is written in serveError. Engine.NoMethod and rebuild405Handlers only register handlers, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "gin-behavioural-trailing-slash-redirect",
@@ -2396,7 +2396,7 @@
       ],
       "rationale": "These two functions perform the redirect. node.getValue only sets the tsr hint, and handleHTTPRequest only decides to call redirectTrailingSlash, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-context-pool-reuse",
@@ -2422,7 +2422,7 @@
       ],
       "rationale": "These three cover get/put, allocation and clearing. New only installs pool.New, and CreateTestContext is a test helper that reuses allocateContext, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-client-ip-behind-proxies",
@@ -2448,7 +2448,7 @@
       ],
       "rationale": "These three hold the resolution logic. SetTrustedProxies/prepareTrustedCIDRs only configure the CIDR list, and RemoteIP just splits RemoteAddr, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-bind-failure-status-code",
@@ -2464,7 +2464,7 @@
       ],
       "rationale": "MustBindWith alone maps bind errors to status codes. Bind/BindJSON etc. only forward to it, and ShouldBindWith returns the error without writing a status, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "gin-behavioural-broken-pipe-no-stack-trace",
@@ -2480,7 +2480,7 @@
       ],
       "rationale": "The broken-pipe branch lives only in CustomRecoveryWithWriter. Recovery/RecoveryWithWriter/CustomRecovery are wrappers, and stack() is the trace it skips, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "gin-behavioural-time-field-form-binding",
@@ -2496,7 +2496,7 @@
       ],
       "rationale": "setTimeField does all time parsing. setWithProperType only dispatches to it for time.Time, and setTimeDuration handles time.Duration rather than timestamps, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-customise-route-debug-output",
@@ -2517,7 +2517,7 @@
       ],
       "rationale": "The route log line and its override hook are these two symbols. Engine.addRoute only calls debugPrintRoute, and DebugPrintFunc/debugPrint are the generic debug logger rather than route-specific, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-default-listen-port",
@@ -2533,7 +2533,7 @@
       ],
       "rationale": "The defaulting logic sits in a helper whose name does not suggest it. Engine.Run only calls resolveAddress, and ginS.Run wraps Engine.Run, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-status-override-after-write",
@@ -2549,7 +2549,7 @@
       ],
       "rationale": "Only WriteHeader contains the warning. WriteHeaderNow flushes the stored status, and Context.Status only calls WriteHeader, so neither is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "gin-behavioural-group-middleware-merge",
@@ -2565,7 +2565,7 @@
       ],
       "rationale": "combineHandlers does the merge. RouterGroup.handle and Group only call it, and RouterGroup.Use only appends to the group's own list, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-behavioural-default-access-log-format",
@@ -2581,7 +2581,7 @@
       ],
       "rationale": "The default format is a function stored in a variable, so its symbol kind is not obvious. LoggerWithConfig only falls back to it, and the LogFormatterParams colour methods supply pieces of it, so none of them is labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-conceptual-request-binding-validation",
@@ -2657,7 +2657,7 @@
       ],
       "rationale": "Covers the interfaces, binder selection, validation hook and the two context entry points. binding_nomsgpack.go is the build-tag variant of binding.go (compiled with -tags nomsgpack) and defines the same symbols, so its copies are labelled too (same-implementation copies rule). Format binders (jsonBinding.Bind etc.) and the per-format ShouldBindX shortcuts are many thin variants and are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×13"
     },
     {
       "id": "gin-conceptual-response-render-formats",
@@ -2728,7 +2728,7 @@
       ],
       "rationale": "Labels the interface, the dispatcher and one Render per distinct format. The JSON flavours (Indented/Secure/Jsonp/Ascii/Pure) are variants of the JSON format, and Reader/Redirect are not serialisation formats, so they are left out. The Context.JSON/XML shortcuts only build render values and are also excluded.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×4; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9"
     },
     {
       "id": "gin-conceptual-radix-tree-routing",
@@ -2774,7 +2774,7 @@
       ],
       "rationale": "Covers the node type, insertion, wildcard parsing, lookup and per-method roots. Helpers like longestCommonPrefix, incrementChildPrio and the case-insensitive lookup are secondary details, and RouterGroup.handle is only a caller, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
     },
     {
       "id": "gin-conceptual-request-error-collection",
@@ -2825,7 +2825,7 @@
       ],
       "rationale": "Covers attaching errors, the error type, querying and serialising the list, and the reporting middleware. AbortWithError and MustBindWith only call Context.Error, and the MarshalJSON/String methods are thin wrappers, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
     },
     {
       "id": "gin-conceptual-html-template-rendering",
@@ -2881,7 +2881,7 @@
       ],
       "rationale": "Covers loading (three loaders plus SetHTMLTemplate), the production and debug renderers, and execution. Delims/SetFuncMap only set options, and the ginS wrappers forward to Engine, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9"
     },
     {
       "id": "gin-conceptual-static-file-serving",
@@ -2927,7 +2927,7 @@
       ],
       "rationale": "Covers the RouterGroup static API and the filesystem it uses. Context.File/FileFromFS are generic per-request file writers and the ginS wrappers only forward, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
     },
     {
       "id": "gin-conceptual-server-startup-transports",
@@ -2968,7 +2968,7 @@
       ],
       "rationale": "All six Run variants are equally relevant. Engine.Handler (h2c wrapping), resolveAddress and the ginS Run* wrappers only support or forward to them, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×6"
     },
     {
       "id": "gin-conceptual-pluggable-json-codec",
@@ -3009,7 +3009,7 @@
       ],
       "rationale": "Covers the abstraction, the global hook and the four backends. The per-backend Marshal/NewDecoder methods and init functions are one-line forwarders, and the Encoder/Decoder sub-interfaces are secondary, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
     },
     {
       "id": "gin-conceptual-panic-recovery-middleware",
@@ -3055,7 +3055,7 @@
       ],
       "rationale": "Covers the middleware family, the default handler and the logging helpers. readNthLine/function/timeFormat are lower-level helpers of stack and the log line, and test helpers are distractors, so they are not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
     },
     {
       "id": "hono-exact-name-regexprouter-class",
@@ -3071,7 +3071,7 @@
       ],
       "rationale": "Only the class the query names is labelled. PreparedRegExpRouter, the reg-exp-router Trie/Node helpers and matcher.ts::match support or derive from it but are not the named class.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-exact-name-jsx-renderer-middleware",
@@ -3087,7 +3087,7 @@
       ],
       "rationale": "jsxRenderer is the exported middleware the query names. createRenderer (internal function that builds the HTML/streamed response) and useRequestContext live in the same file but are not the named symbol.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-exact-name-get-runtime-key",
@@ -3103,7 +3103,7 @@
       ],
       "rationale": "Single exact match. env() calls it and checkUserAgentEquals is a small helper it uses; neither is the named function.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-exact-name-httpexception-class",
@@ -3119,7 +3119,7 @@
       ],
       "rationale": "The class row covers its constructor and getResponse. The many middlewares that throw HTTPException (bodyLimit, basicAuth, timeout, csrf...) only use it and were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-exact-name-hc-client",
@@ -3135,7 +3135,7 @@
       ],
       "rationale": "hc is the named entry point. createProxy and ClientRequestImpl are its internals, and testClient wraps hc, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-exact-name-secure-headers-middleware",
@@ -3151,7 +3151,7 @@
       ],
       "rationale": "Only the middleware factory is labelled. getCSPDirectives, getFilteredHeaders and setHeaders are its internals, and SecureHeadersOptions is a type.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-exact-name-compose-middleware-function",
@@ -3167,7 +3167,7 @@
       ],
       "rationale": "compose.ts::compose is the named function. The combine middleware (some/every/except) also combines middleware, but under other names, and every() only calls compose.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-exact-name-errorboundary-component",
@@ -3188,7 +3188,7 @@
       ],
       "rationale": "The two rows are separate implementations: server string rendering and client DOM rendering. Suspense uses the same pattern but is a different component.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-exact-name-testclient-helper",
@@ -3204,7 +3204,7 @@
       ],
       "rationale": "Single named helper. hc is the client it wraps and is not the named symbol; the *.test.ts files that call testClient are distractors.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-paraphrase-allow-browsers-other-origins",
@@ -3220,7 +3220,7 @@
       ],
       "rationale": "The CORS middleware is the only implementation. csrf also reads the Origin header, but it blocks cross-site requests instead of allowing them. CORSOptions is a type and the query asks about behaviour.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-paraphrase-reject-oversized-request-payloads",
@@ -3236,7 +3236,7 @@
       ],
       "rationale": "bodyLimit is the only code that limits body size. The cache middleware's maxQueryBodySize and the nesting limits in utils/body.ts also look like limits, but they limit other things.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-paraphrase-skip-middleware-on-some-paths",
@@ -3252,7 +3252,7 @@
       ],
       "rationale": "except is the helper for this, and its name gives no hint of paths. some and every in the same file are the combinators it uses. Path arguments to app.use() choose where middleware runs, not where it is skipped.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-paraphrase-compare-secrets-safely",
@@ -3278,7 +3278,7 @@
       ],
       "rationale": "These three buffer.ts functions together are the constant-time comparison. basicAuth and bearerAuth only call timingSafeEqual. utils/buffer.ts::equal exits early, so it is not timing-safe.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
     },
     {
       "id": "hono-paraphrase-detect-visitor-preferred-locale",
@@ -3299,7 +3299,7 @@
       ],
       "rationale": "These are the middleware and its main detection loop. The per-source detectors (detectFromHeader, detectFromCookie...) and normalizeLanguage are lower-level steps. parseAcceptLanguage only parses the header.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-paraphrase-reach-current-request-anywhere",
@@ -3325,7 +3325,7 @@
       ],
       "rationale": "These three functions are the whole feature. jsx-renderer's useRequestContext gives the context only inside JSX components, and jsx/context.ts holds JSX contexts, so neither was labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-paraphrase-print-all-registered-endpoints",
@@ -3346,7 +3346,7 @@
       ],
       "rationale": "showRoutes prints the table and inspectRoutes supplies its data. getRouterName in the same file and HonoRequest.matchedRoutes give other route information.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-paraphrase-read-env-vars-any-runtime",
@@ -3362,7 +3362,7 @@
       ],
       "rationale": "env is the portable accessor. getRuntimeKey only detects the runtime. The test constants named env are distractors.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-paraphrase-mark-string-trusted-markup",
@@ -3378,7 +3378,7 @@
       ],
       "rationale": "raw has a single definition. helper/html only re-exports it. escapeToBuffer does the escaping that raw prevents.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-paraphrase-prerender-pages-to-disk",
@@ -3404,7 +3404,7 @@
       ],
       "rationale": "These three functions are the core static generator. The Bun and Deno toSSG wrappers only pass a filesystem module to the helper. ssgParams and disableSSG are per-route controls, not the generator.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-head-request-without-head-route",
@@ -3420,7 +3420,7 @@
       ],
       "rationale": "The HEAD handling is the first branch of #dispatch. methodNotAllowed only adds HEAD to the Allow header, and etag, cache and compress only test for HEAD, so they were not labelled.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-behavioural-thrown-httpexception-response",
@@ -3441,7 +3441,7 @@
       ],
       "rationale": "These two functions decide the response. compose and Hono.#handleError only send the caught error to errorHandler.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-headers-kept-when-response-replaced",
@@ -3457,7 +3457,7 @@
       ],
       "rationale": "The headers are merged in the Context.res setter; one label covers the getter and setter rows. Context.#newResponse also starts from the existing headers, but only on the c.body/c.json path, not when c.res is replaced.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-default-router-selection",
@@ -3478,7 +3478,7 @@
       ],
       "rationale": "The constructor sets the candidates and SmartRouter.match makes the choice. The quick and tiny preset constructors choose other routers but are not the default app. The RegExpRouter and TrieRouter internals do not make the decision.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "hono-behavioural-when-304-not-modified-sent",
@@ -3499,7 +3499,7 @@
       ],
       "rationale": "These two functions contain the 304 decision. generateDigest only hashes the body to make the ETag and does not decide about the 304.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-why-response-not-cached",
@@ -3525,7 +3525,7 @@
       ],
       "rationale": "These three functions hold all the skip conditions. createCacheKey and createQueryDigest build cache keys and do not decide whether to store. The etag middleware is a different kind of HTTP caching.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-route-params-percent-decoded",
@@ -3551,7 +3551,7 @@
       ],
       "rationale": "The routers return raw captures. The decoding happens on access in these HonoRequest methods through tryDecodeURIComponent. getPath decodes the whole path with decodeURI, which is a different step.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-validator-malformed-json-400",
@@ -3567,7 +3567,7 @@
       ],
       "rationale": "Only validator contains this check. HonoRequest.json only parses the cached text with JSON.parse and throws a plain error. getMediaType only strips the content-type parameters.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-sse-message-wire-format",
@@ -3583,7 +3583,7 @@
       ],
       "rationale": "The wire format is only in writeSSE. streamSSE sets the text/event-stream headers and runs the callback, and StreamingApi.write only encodes bytes.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-lambda-event-type-detection",
@@ -3634,7 +3634,7 @@
       ],
       "rationale": "The adapters/aws-lambda package has its own copy of handler.ts with the same code, so both copies are labelled. The EventV1/V2/ALB/Lattice processor classes convert an event after it is detected, and handle() only calls getProcessor.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-behavioural-dotted-form-fields-nested-objects",
@@ -3655,7 +3655,7 @@
       ],
       "rationale": "These two functions do the nesting. parseBody and parseFormData only send the request to them, and handleParsingAllValues handles repeated and [] keys, not dots.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "hono-behavioural-cookie-host-secure-prefix-rules",
@@ -3681,7 +3681,7 @@
       ],
       "rationale": "_serialize checks the rules and the two generate* helpers apply them. getCookie and getSignedCookie only add the prefix to the name they look up.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
     },
     {
       "id": "hono-behavioural-jwt-exp-nbf-claims-checked",
@@ -3697,7 +3697,7 @@
       ],
       "rationale": "Only utils/jwt verify checks the claims. middleware/jwt/jwt.ts::verify is a re-export constant with no implementation of its own, verifyWithJwks hands over to verify, and the JwtTokenExpired classes only define the errors.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-behavioural-escape-html-special-characters",
@@ -3713,7 +3713,7 @@
       ],
       "rationale": "escapeToBuffer is the only escaping routine. html, stringBufferToString and the JSX attribute serialiser call it but do not replace characters themselves, and raw prevents escaping.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-conceptual-routing-algorithms",
@@ -3754,7 +3754,7 @@
       ],
       "rationale": "Each class implements the Router interface with a different matching strategy. Internals such as the reg-exp-router Trie and Node and trie-router Node.search were left out, as was the Router interface type.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-conceptual-jwt-create-validate",
@@ -3790,7 +3790,7 @@
       ],
       "rationale": "utils/jwt contains the token logic and the jws functions do the cryptographic signing and checking. decode only decodes the token and does not validate it. The jwt and jwk middlewares and the re-export constants in middleware/jwt only call these functions.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
     },
     {
       "id": "hono-conceptual-request-authentication-middleware",
@@ -3821,7 +3821,7 @@
       ],
       "rationale": "These are the four built-in authentication middlewares. utils/basic-auth.ts::auth and the utils/jwt functions are building blocks. csrf and ipRestriction restrict access but do not identify the caller.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-conceptual-reading-request-body",
@@ -3872,7 +3872,7 @@
       ],
       "rationale": "These are the body readers of HonoRequest, which all use the body cache, plus the form parser behind parseBody. The validator also reads the body, but to validate it, and bodyLimit only counts bytes.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
     },
     {
       "id": "hono-conceptual-streaming-responses",
@@ -3908,7 +3908,7 @@
       ],
       "rationale": "These are the three helpers and the two writer classes. jsx/streaming.ts::renderToReadableStream only streams JSX output with Suspense, so it was not labelled for this general query. isOldBunVersion is a small workaround.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-conceptual-websocket-across-runtimes",
@@ -3969,7 +3969,7 @@
       ],
       "rationale": "The shared helper plus each runtime's upgrade code, including the copies in the adapters/ packages, which have their own implementation. createBunWebSocket only returns upgradeWebSocket and websocket together, and createWSContext is a Bun-specific helper.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9"
     },
     {
       "id": "hono-conceptual-client-ip-per-platform",
@@ -4055,7 +4055,7 @@
       ],
       "rationale": "Every adapter's getConnInfo is labelled, both in src/adapter and in the copy in its adapters/ package (cloudflare-pages has no copy). The ConnInfo and GetConnInfo types and ipRestriction, which only uses the result, were left out. The getConnInfo test mock in ip-restriction is a distractor.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×3; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×13"
     },
     {
       "id": "hono-conceptual-jsx-hooks-state-effects",
@@ -4106,7 +4106,7 @@
       ],
       "rationale": "These are the core state, effect and memo hooks. useTransition, useViewTransition and the form hooks in jsx/dom/hooks cover other concerns. isDepsChanged is only a helper of the effect and memo hooks.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
     },
     {
       "id": "hono-conceptual-cookie-read-write-sign",
@@ -4162,7 +4162,7 @@
       ],
       "rationale": "These are the public helper API and the utils parse/serialize functions behind it. generateCookie, _serialize, getCryptoKey, makeSignature and verifySignature are internal steps. The client's use of serialize for request cookies is a caller.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9"
     }
   ]
 }

@@ -52,15 +52,18 @@ built-in, a library method or a value, so any edge from them is wrong.
 (`../real-repos/fetch.sh`, `$MYC_EVAL_REPOS_DIR`), per (caller, callee name)
 pair — recall over the pairs with a project target, precision over the edges
 from those callers to symbols of that name — and prints it after the gate.
-**It is never gated**: the pairs are few, and an agent labelled them (not yet
-reviewed). Numbers: `docs/guides/call-resolution-limitations.md`.
+**It is never gated**: the pairs are few, and an agent labelled them (checked
+in #164 under an owner policy; see "Review status"). Numbers: `docs/guides/call-resolution-limitations.md`.
 
 ## Review status
 
-**Labelled by an agent, not yet reviewed by a human.** Every file says
-`"labelled_by": "agent", "reviewed_by": null`. Until a human has gone through
-the labels, treat the numbers as provisional. A reviewer who signs off sets
-`reviewed_by` and re-records the baseline.
+**Labelled by an agent; checked in #164 under an owner policy, mostly not by
+a human one by one.** Every file says `"labelled_by": "agent"`. Its
+`reviewed_by` names who checked its items, with a count per class: Marc
+himself, the pre-screen accepted on the strength of his sample, or a
+second-check agent. The per-item record is `evals/review/provenance.jsonl`,
+and the counts are under [Review of the labels](#review-of-the-labels-164)
+below. A change of labels or `reviewed_by` re-records the baseline.
 
 The labels were written from reading the code, never from myceliums output,
 and then cross-checked with the language's own tooling (below). Those checks
@@ -85,10 +88,13 @@ Each gold file has:
   rationale. `also_accept` lists other targets that count as the same edge.
 - `dynamic`: calls that happen at run time but have no static target (a call
   through a function value). They are not scored.
-- `traps`: call sites that must *not* produce an edge to a fixture symbol, with
-  the reason. Documentation only: scoring needs no list of negatives, because
-  any extracted edge not in `calls` is a false positive. The report annotates
-  a false positive that falls into a listed trap.
+- `traps`: call sites where a resolver is tempted into a wrong edge, with the
+  reason. Most must not produce an edge to any fixture symbol (a built-in or
+  library call). Where the site also makes a real call that is in `calls`, the
+  trap names only the wrong target: "must not target `OrderReport.RenderRow`"
+  (#164). Documentation only: scoring needs no list of negatives, because any
+  extracted edge not in `calls` is a false positive. The report annotates a
+  false positive that falls into a listed trap.
 
 ## Labelling rules
 
@@ -171,3 +177,29 @@ with that label (the shares add up to the overall recall).
 The analyzer walks files in name order, and the resolver no longer lets that
 order pick among same-named symbols (#139): a run is deterministic. The report
 still records the platform, and the comparison flags a mismatch.
+
+<!-- label-review:start -->
+## Review of the labels (#164)
+
+Applied on 2026-11-22 with `evals/review` under policy `owner-2026-11-22`. An independent AI pre-screen marked every item confirmed, doubtful or wrong. Marc reviewed items one by one in the review page: the queue held every doubtful and wrong item and a seeded random sample of the confirmed ones (seed 164, 15 % per dataset; `evals/review/sample.json`). He decided 229 sampled confirmed items with 0 errors (`evals/review/decisions.jsonl`). Marc's policy of 22 November 2026: pre-screen-confirmed items outside the sample are accepted as correct on the strength of the sample he checked; every other item he did not decide, and every item he marked unsure, is decided by an independent second-check agent (`evals/review/agent-check/decisions-*.jsonl`). An item whose final decision is unsure is not marked reviewed.
+
+Provenance, per item in `evals/review/provenance.jsonl`:
+
+- **human** — `human:marc`: Marc decided the item himself;
+- **prescreen** — `agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)`: confirmed by the pre-screen, outside the sample, accepted by the policy — no person looked at this item;
+- **second-check** — `agent:second-check, per marc's policy`: decided by the second-check agent (`evals/review/agent-check/`) — no person looked at this item;
+- **rule** — `policy owner-2026-11-22 consistency rule`: decided by the policy's consistency rule (`evals/review/policy/owner-2026-11-22.json`), whatever any single check said.
+
+Policy addendum: Consistency rule: an optional answer that the task wording explicitly excludes (a Starlette or library call, a class instantiation where the task excludes instantiations, a deprecated decoy documented as not used internally, a function passed as a value where the task counts that as a reference) is removed from the optional list everywhere in the task set, not only where a second check flagged it; genuine near-misses (recursion or self-calls, thin wrappers, callers on the real path) stay optional. A graph-gold trap whose call site has a real CALLS edge is restated as 'must not target <X>' instead of being deleted.
+
+`reviewed_by` of a unit (query, language file, held-out set, task) names the classes of its items: `human:marc` only when Marc decided every item, otherwise the class, or `mixed, policy owner-2026-11-22: …` with a count per class. It stays `null` where an item is unsure, open or needs a fix by hand. `real-repo-eval` reports retrieval queries as human-reviewed, agent-verified under owner policy, or unreviewed; only `human:` provenance counts as human.
+
+| dataset | items | human | prescreen | second-check | rule | wrong: fixed / by hand | unsure | open | units marked | sample errors / n (Marc) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| graph-gold | 640 | 98 | 541 | 1 | 0 | 0 / 0 | 0 | 0 | 5 of 5 | 0 / 96 |
+| graph-held-out | 52 | 10 | 36 | 6 | 0 | 0 / 0 | 0 | 0 | 1 of 1 | 0 / 10 |
+
+Measured on the labels before this review (re-record before relying on them):
+
+- crates/myceliums-benchmarks/graph-gold/baseline.json — REQUIRED before merge: the gate refuses a baseline recorded against other labels; re-run `cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline`
+<!-- label-review:end -->

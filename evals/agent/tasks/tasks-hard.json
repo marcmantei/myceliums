@@ -464,7 +464,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×38; agent:second-check, per marc's policy ×4"
   },
   {
    "id": "fzf-blast-istty-d3",
@@ -610,7 +611,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×11; agent:second-check, per marc's policy ×2"
   },
   {
    "id": "fzf-blast-mayfold-d4",
@@ -723,7 +725,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×8; agent:second-check, per marc's policy ×2"
   },
   {
    "id": "fzf-amb-chars-length-d3",
@@ -1221,7 +1224,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×40; agent:second-check, per marc's policy ×5"
   },
   {
    "id": "fzf-amb-merger-get-d3",
@@ -1576,7 +1580,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×27; agent:second-check, per marc's policy ×5"
   },
   {
    "id": "fzf-tests-stringbytes",
@@ -1931,7 +1936,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×30; agent:second-check, per marc's policy ×2"
   },
   {
    "id": "fzf-tests-chars-tostring",
@@ -2231,7 +2237,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×19; agent:second-check, per marc's policy ×8"
   },
   {
    "id": "fzf-flow-newterminal-stringbytes",
@@ -2465,7 +2472,8 @@
    "verified_with": [
     "gotool edges (go/packages + SSA, GOOS darwin/linux/windows)",
     "gotool refs (type-checked uses)"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×18; agent:second-check, per marc's policy ×3"
   },
   {
    "id": "hono-tc-trydecode-d3",
@@ -2666,7 +2674,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×15; agent:second-check, per marc's policy ×3"
   },
   {
    "id": "hono-blast-createresponse-d3",
@@ -2911,7 +2920,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×19; agent:second-check, per marc's policy ×3"
   },
   {
    "id": "hono-blast-httpexception-d3",
@@ -3090,7 +3100,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×12; agent:second-check, per marc's policy ×4"
   },
   {
    "id": "hono-amb-ctx-header-d2",
@@ -3291,7 +3302,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×14; agent:second-check, per marc's policy ×4"
   },
   {
    "id": "hono-tests-req-header",
@@ -3591,7 +3603,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×23; agent:second-check, per marc's policy ×4"
   },
   {
    "id": "hono-tests-trydecode",
@@ -3847,7 +3860,8 @@
    "verified_with": [
     "ts_edges.js (TypeScript 5.9 type checker)",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×22; agent:second-check, per marc's policy ×1"
   },
   {
    "id": "fastapi-tc-oauth-scopes-d5",
@@ -4093,7 +4107,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×17; agent:second-check, per marc's policy ×5"
   },
   {
    "id": "fastapi-tc-annotation-sequence-d5",
@@ -4431,25 +4446,21 @@
       }
      ],
      "note": "level 5, via _FrontendRouteGroup._solve_dependencies"
-    },
-    {
-     "name": "_IncludedRouter._build_effective_context",
-     "evidence": [
-      {
-       "file": "fastapi/routing.py",
-       "line": 1716,
-       "contains": "from_api_route"
-      }
-     ],
-     "note": "level 5, via _EffectiveRouteContext.from_api_route"
     }
    ],
-   "rationale": "Computed as all callers up to 5 levels up the py_edges.py (`direct` edges), every name grepped for missed callers call graph; 31 functions. Each item's note gives its level and the function it calls on the way to the target. Callers import it through the fastapi._compat re-export.",
+   "rationale": "Computed as all callers up to 5 levels up the py_edges.py (`direct` edges), every name grepped for missed callers call graph; 31 functions. Each item's note gives its level and the function it calls on the way to the target. Callers import it through the fastapi._compat re-export. Label review (#164, policy owner-2026-11-22): made `_IncludedRouter._build_effective_context` optional [agent:second-check, per marc's policy].",
    "verified_with": [
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "optional": [
+    {
+     "name": "_IncludedRouter._build_effective_context",
+     "why": "reached only via a ClassName.classmethod() call, which the task wording neither lists among counted calls nor clearly separates from the excluded attribute calls"
+    }
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×28; agent:second-check, per marc's policy ×4"
   },
   {
    "id": "fastapi-flow-openapi-lenient",
@@ -4651,7 +4662,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×13; agent:second-check, per marc's policy ×5"
   },
   {
    "id": "fastapi-flow-route-state",
@@ -4842,7 +4854,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×11; agent:second-check, per marc's policy ×6"
   },
   {
    "id": "fastapi-flow-websocket-app",
@@ -5044,7 +5057,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×17; agent:second-check, per marc's policy ×1"
   },
   {
    "id": "fastapi-amb-starlette-httpexception",
@@ -5235,7 +5249,8 @@
     "py_edges.py (import-aware AST)",
     "py_refs.py",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×16; agent:second-check, per marc's policy ×1"
   }
  ]
 }

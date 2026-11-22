@@ -87,7 +87,19 @@ POLICIES = {
 # Datasets whose evaluator reports any non-null reviewed_by as a human review and refuses agent
 # reviewers (real-repo-eval): there a unit is marked only when every item was decided by a person.
 HUMAN_ONLY_DATASETS = ("retrieval-queries", "retrieval-test-seeking")
-CLASS_ORDER = ("human", "sample", "prescreen", "second-check")
+CLASS_ORDER = ("human", "sample", "prescreen", "second-check", "rule")
+
+
+def load_policy(policy: str, directory: Path | None = None) -> dict:
+    """The policy's addendum file (``policy/<name>.json``): its text and per-item overrides."""
+    path = (directory or common.REVIEW_DIR / "policy") / f"{policy}.json"
+    if not path.exists():
+        return {"policy": policy, "addendum": "", "overrides": []}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    for o in data.get("overrides", []):
+        if o.get("action") not in ("remove", "restate"):
+            raise SystemExit(f"{path}: override {o.get('id')}: action must be remove or restate")
+    return data
 
 
 def load_agent_decisions(directory: Path, by_id: dict[str, dict]) -> tuple[dict[str, dict], list[str]]:
@@ -142,7 +154,8 @@ class Plan:
 
     def __init__(self, items, prescreen, decisions: common.DecisionStore, sample: common.Sample,
                  reviewer: str, max_upper: float = common.ACCEPT_MAX_UPPER,
-                 policy: str | None = None, agent_decisions: dict[str, dict] | None = None):
+                 policy: str | None = None, agent_decisions: dict[str, dict] | None = None,
+                 policy_dir: Path | None = None):
         self.review = common.Review(items, prescreen, decisions, sample, max_upper)
         self.decisions = decisions
         self.summary = {row["dataset"]: row for row in self.review.summary()["datasets"]}
@@ -155,6 +168,14 @@ class Plan:
         self.policy = policy
         self.agent = agent_decisions or {}
         self.provenance: list[dict] = []
+        self.addendum = load_policy(policy, policy_dir) if policy else {"addendum": "", "overrides": []}
+        by_id = {it["id"] for it in items}
+        unknown = [o["id"] for o in self.addendum["overrides"] if o["id"] not in by_id]
+        if unknown:  # removed by an earlier apply, or a typo: either way nothing to do here
+            print(f"note: policy {policy}: {len(unknown)} overrides name items not in the datasets "
+                  f"(already applied?): {', '.join(unknown)}", file=sys.stderr)
+        self.removals = {o["id"]: o for o in self.addendum["overrides"] if o["action"] == "remove"}
+        self.restates = {o["id"]: o for o in self.addendum["overrides"] if o["action"] == "restate"}
         if policy:
             bad = [row["dataset"] for row in self.summary.values()
                    if row["status"] in ("prescreen-incomplete", "sample-stale")]
@@ -183,6 +204,9 @@ class Plan:
                     and ds.get("status") == "accepted"):
                 return "accepted", "sample", ""
             return "open", None, ""
+        rule = self.removals.get(it["id"])
+        if rule:  # the policy's consistency rule overrides every single-item decision
+            return "wrong", "rule", rule.get("reason", "")
         if rec and rec["decision"] in ("correct", "wrong"):
             return ("reviewed" if rec["decision"] == "correct" else "wrong"), "human", rec.get("comment") or ""
         agent = self.agent.get(it["id"])
@@ -214,6 +238,8 @@ class Plan:
                     f"human-checked confirmed items, {self.sample_errors} errors)")
         if cls == "second-check":
             return f"agent:second-check, per {self.handle}'s policy"
+        if cls == "rule":
+            return f"policy {self.policy} consistency rule"
         raise ValueError(cls)
 
     def unit_reviewed_by(self, classes: dict[str, int], dataset: str) -> str | None:
@@ -225,7 +251,7 @@ class Plan:
             return self.label("sample") if "sample" in used else self.reviewer
         if used == ["human"]:
             return self.reviewer
-        if dataset in HUMAN_ONLY_DATASETS or not used:
+        if not used:
             return None
         if len(used) == 1:
             return self.label(used[0])
@@ -262,10 +288,12 @@ class Unit:
             self.classes[cls] = self.classes.get(cls, 0) + 1
             self.out.classes[cls] = self.out.classes.get(cls, 0) + 1
         if self.plan.policy:
-            self.plan.provenance.append({
-                "id": it["id"], "dataset": it["dataset"],
-                "final": {"reviewed": "correct", "accepted": "correct"}.get(st, st),
-                "class": cls, "by": self.plan.label(cls) if cls else None})
+            rec = {"id": it["id"], "dataset": it["dataset"],
+                   "final": {"reviewed": "correct", "accepted": "correct"}.get(st, st),
+                   "class": cls, "by": self.plan.label(cls) if cls else None}
+            if it["id"] in self.plan.restates:
+                rec["edit"] = f"restated by policy {self.plan.policy}: {self.plan.restates[it['id']]['why']}"
+            self.plan.provenance.append(rec)
         return st
 
     def manual(self, it: dict, why: str) -> None:
@@ -453,6 +481,10 @@ def apply_graph_gold(plan: Plan, items: list[dict]) -> tuple[dict[Path, str], Ou
                 c["to"] = retarget[key]
             calls.append(c)
         data["calls"] = calls
+        for t in data.get("traps", []):
+            restate = plan.restates.get(f"graph-gold:{lang}:trap:{t['in']}:{t['name']}@{t['line']}")
+            if restate and t["why"] != restate["why"]:
+                t["why"] = restate["why"]  # traps are not scored: documentation only
         unit.finish(data)
         text = dump_lines(data)
         if text != original:
@@ -672,23 +704,27 @@ def policy_section(plan: Plan, outcomes: list[Outcome], today: str) -> list[str]
         f"- **prescreen** — `{plan.label('prescreen')}`: confirmed by the pre-screen, outside the sample, "
         "accepted by the policy — no person looked at this item;",
         f"- **second-check** — `{plan.label('second-check')}`: decided by the second-check agent "
-        "(`evals/review/agent-check/`) — no person looked at this item.",
+        "(`evals/review/agent-check/`) — no person looked at this item;",
+        f"- **rule** — `{plan.label('rule')}`: decided by the policy's consistency rule "
+        f"(`evals/review/policy/{plan.policy}.json`), whatever any single check said.",
         "",
+        *([f"Policy addendum: {plan.addendum['addendum']}", ""] if plan.addendum.get("addendum") else []),
         "`reviewed_by` of a unit (query, language file, held-out set, task) names the classes of its items: "
         f"`{plan.label('human')}` only when Marc decided every item, otherwise the class, or "
         f"`mixed, policy {plan.policy}: …` with a count per class. It stays `null` where an item is unsure, "
-        "open or needs a fix by hand — and for every retrieval query not decided entirely by Marc, because "
-        "`real-repo-eval` reports any `reviewed_by` there as a human review.",
+        "open or needs a fix by hand. `real-repo-eval` reports retrieval queries as human-reviewed, "
+        "agent-verified under owner policy, or unreviewed; only `human:` provenance counts as human.",
         "",
-        "| dataset | items | human | prescreen | second-check | wrong: fixed / by hand | unsure | open | "
+        "| dataset | items | human | prescreen | second-check | rule | wrong: fixed / by hand | unsure | open | "
         "units marked | sample errors / n (Marc) |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for o in outcomes:
         row = plan.summary.get(o.dataset, {})
         c = o.classes
         lines.append(f"| {o.dataset} | {row.get('items', 0)} | {c.get('human', 0)} | {c.get('prescreen', 0)} | "
-                     f"{c.get('second-check', 0)} | {o.wrong_fixed} / {o.wrong_manual} | {o.unsure} | {o.open} | "
+                     f"{c.get('second-check', 0)} | {c.get('rule', 0)} | {o.wrong_fixed} / {o.wrong_manual} | "
+                     f"{o.unsure} | {o.open} | "
                      f"{o.units_reviewed} of {o.units_total} | {row.get('sample_errors', 0)} / "
                      f"{row.get('sample_reviewed', 0)} |")
     return lines
@@ -813,15 +849,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.policy:
         print(f"policy {args.policy}: Marc checked {plan.sample_checked} sampled confirmed items, "
               f"{plan.sample_errors} errors\n")
-        print(f"{'dataset':<24}{'human':>7}{'prescreen':>10}{'2nd-check':>10}{'fixed':>7}{'by hand':>8}"
+        print(f"{'dataset':<24}{'human':>7}{'prescreen':>10}{'2nd-check':>10}{'rule':>6}{'fixed':>7}{'by hand':>8}"
               f"{'unsure':>7}{'open':>6}  units marked")
         for o in outcomes:
             c = o.classes
             kept = f" ({o.units_human_only_kept} kept null: not all human)" if o.units_human_only_kept else ""
             print(f"{o.dataset:<24}{c.get('human', 0):>7}{c.get('prescreen', 0):>10}{c.get('second-check', 0):>10}"
-                  f"{o.wrong_fixed:>7}{o.wrong_manual:>8}{o.unsure:>7}{o.open:>6}  "
+                  f"{c.get('rule', 0):>6}{o.wrong_fixed:>7}{o.wrong_manual:>8}{o.unsure:>7}{o.open:>6}  "
                   f"{o.units_reviewed} of {o.units_total}{kept}")
-        total = {k: sum(o.classes.get(k, 0) for o in outcomes) for k in ("human", "prescreen", "second-check")}
+        total = {k: sum(o.classes.get(k, 0) for o in outcomes) for k in ("human", "prescreen", "second-check", "rule")}
         print("total by provenance: " + ", ".join(f"{k} {v}" for k, v in total.items()))
     else:
         print(f"{'dataset':<24}{'reviewed':>9}{'accepted':>9}{'fixed':>7}{'by hand':>8}{'unsure':>7}{'open':>7}"

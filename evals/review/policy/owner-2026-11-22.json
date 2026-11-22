@@ -1,0 +1,16 @@
+{
+  "policy": "owner-2026-11-22",
+  "addendum": "Consistency rule: an optional answer that the task wording explicitly excludes (a Starlette or library call, a class instantiation where the task excludes instantiations, a deprecated decoy documented as not used internally, a function passed as a value where the task counts that as a reference) is removed from the optional list everywhere in the task set, not only where a second check flagged it; genuine near-misses (recursion or self-calls, thin wrappers, callers on the real path) stay optional. A graph-gold trap whose call site has a real CALLS edge is restated as 'must not target <X>' instead of being deleted.",
+  "overrides": [
+    {"id": "agent-tasks:fastapi-callees-solve-dependencies:optional:BackgroundTasks", "action": "remove",
+     "reason": "class instantiation; the question excludes class instantiations"},
+    {"id": "agent-tasks:fastapi-callees-solve-dependencies:optional:SolvedDependency", "action": "remove",
+     "reason": "dataclass instantiation; the question excludes class instantiations"},
+    {"id": "graph-gold:go:trap:report/report.go::Report.Render:RenderRow@58", "action": "restate",
+     "why": "must not target OrderReport.RenderRow: static call on *Report (the real edge to Report.RenderRow is in calls)"},
+    {"id": "graph-gold:java:trap:src/shop/Main.java::Main.Worker.run:handler@28", "action": "restate",
+     "why": "must not target Main.handler: Worker.handler hides it (the real edge to Main.Worker.handler is in calls)"},
+    {"id": "graph-gold:java:trap:src/shop/Main.java::Main.run:run@42", "action": "restate",
+     "why": "must not target Main.run (no recursive self-edge): `.run` is Worker.run (the real edge to Main.Worker.run is in calls)"}
+  ]
+}

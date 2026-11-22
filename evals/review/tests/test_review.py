@@ -251,6 +251,30 @@ class Decisions(unittest.TestCase):
                 common.DecisionStore(Path(d, "d.jsonl")).record(fake_items("x", 1)[0], "maybe")
 
 
+def reset_review_state() -> None:
+    """Clear reviewed_by in the copied datasets: the tests start from unreviewed labels."""
+    for name in ("queries.json", "test-seeking.json"):
+        path = export.REAL_REPOS / name
+        data = json.loads(path.read_text())
+        for q in data["queries"]:
+            q["reviewed_by"] = None
+        path.write_text(apply.dump_indent(data, 2))
+    for path in [export.GRAPH_GOLD / f"{lang}.json" for lang in export.GRAPH_LANGUAGES]:
+        data = json.loads(path.read_text())
+        data["reviewed_by"] = None
+        path.write_text(apply.dump_lines(data))
+    path = export.GRAPH_GOLD / "held-out" / "real-repos.json"
+    data = json.loads(path.read_text())
+    data["reviewed_by"] = None
+    path.write_text(apply.dump_lines(data, group_by="repo"))
+    for _, name, _ in export.TASK_FILES:
+        path = export.AGENT / "tasks" / name
+        data = json.loads(path.read_text())
+        for t in data["tasks"]:
+            t.pop("reviewed_by", None)
+        path.write_text(apply.dump_indent(data, 1))
+
+
 class ApplyBase(unittest.TestCase):
     """Runs apply on a copy of the datasets in a temporary repository root."""
 
@@ -268,6 +292,7 @@ class ApplyBase(unittest.TestCase):
             shutil.copy(meta, dest)
         self.root = root
         export.set_root(root)
+        reset_review_state()
         self.items = export.build_items(snippets=False)
         self.by_id = {it["id"]: it for it in self.items}
         self.store = common.DecisionStore(root / "decisions.jsonl")
@@ -438,9 +463,13 @@ class OwnerPolicy(ApplyBase):
         self.sample = common.Sample({"seed": 164, "rate": 0.15, "datasets": {}})
         self.sample.sync(self.items, self.pre)
 
-    def run_policy(self):
+    def run_policy(self, overrides=None, addendum=""):
+        pdir = self.root / "policy"
+        pdir.mkdir(exist_ok=True)
+        (pdir / f"{self.POLICY}.json").write_text(json.dumps(
+            {"policy": self.POLICY, "addendum": addendum, "overrides": overrides or []}))
         plan = apply.Plan(self.items, self.pre, self.store, self.sample, "human:marc",
-                          policy=self.POLICY, agent_decisions=self.agent_recs)
+                          policy=self.POLICY, agent_decisions=self.agent_recs, policy_dir=pdir)
         out = apply.run(plan, self.items, write=True, today="2026-11-22",
                         provenance_path=self.root / "provenance.jsonl")
         return plan, out
@@ -473,7 +502,9 @@ class OwnerPolicy(ApplyBase):
         plan, (outcomes, _, _) = self.run_policy()
         queries = {q["id"]: q for q in json.loads((export.REAL_REPOS / "queries.json").read_text())["queries"]}
         self.assertEqual(queries[self.q_human]["reviewed_by"], "human:marc")
-        self.assertIsNone(queries[self.q_mixed]["reviewed_by"])  # not all human: real-repo-eval would say "human"
+        mixed = queries[self.q_mixed]["reviewed_by"]  # not all human: agent provenance, never "human:"
+        self.assertIn("agent:", mixed)
+        self.assertFalse(mixed.startswith("human:"))
         tasks = {t["id"]: t for t in json.loads((export.AGENT / "tasks" / "tasks.json").read_text())["tasks"]}
         self.assertIsNone(tasks[self.t_unsure].get("reviewed_by"))
         self.assertEqual(tasks[self.t_fix]["reviewed_by"], "agent:second-check, per marc's policy")
@@ -503,6 +534,28 @@ class OwnerPolicy(ApplyBase):
         readme = (export.AGENT / "README.md").read_text()
         self.assertIn(f"policy `{self.POLICY}`", readme)
         self.assertIn("no person looked at this item", readme)
+
+    def test_addendum_rule_and_restatement(self):
+        opt = "agent-tasks:fastapi-callees-solve-dependencies:optional:solve_dependencies"
+        trap = "graph-gold:go:trap:report/report.go::Report.Render:RenderRow@58"
+        self.agent(opt, "correct")  # the rule overrides a single check
+        _, (outcomes, todo, _) = self.run_policy(
+            overrides=[{"id": opt, "action": "remove", "reason": "class instantiation"},
+                       {"id": trap, "action": "restate", "why": "must not target OrderReport.RenderRow"}],
+            addendum="consistency rule text")
+        task = next(t for t in json.loads((export.AGENT / "tasks" / "tasks.json").read_text())["tasks"]
+                    if t["id"] == "fastapi-callees-solve-dependencies")
+        self.assertNotIn("solve_dependencies", [o["name"] for o in task["optional"]])
+        self.assertIn(f"[policy {self.POLICY} consistency rule]", task["rationale"])
+        go = json.loads((export.GRAPH_GOLD / "go.json").read_text())
+        t = next(t for t in go["traps"] if t["in"] == "report/report.go::Report.Render" and t["line"] == 58)
+        self.assertEqual(t["why"], "must not target OrderReport.RenderRow")
+        prov = {r["id"]: r for r in common.read_jsonl(self.root / "provenance.jsonl")}
+        self.assertEqual(prov[opt]["class"], "rule")
+        self.assertEqual(prov[opt]["final"], "wrong")
+        self.assertIn("restated", prov[trap]["edit"])
+        self.assertFalse(any("call-resolution" in x for x in todo))  # traps are not scored
+        self.assertIn("consistency rule text", (export.AGENT / "README.md").read_text())
 
     def test_unsure_by_marc_without_second_check_stays_unsure(self):
         it = self.flagged[0]

@@ -401,13 +401,13 @@ something is implemented, dead code, call chains — about pinned checkouts of
 fzf (Go), hono (TypeScript) and FastAPI (Python). Each question ran three
 times with the agent's own read and search tools only, and three times with
 the myceliums MCP server added; nothing else differed. Answers were graded
-against gold sets derived with grep, reading and compiler tooling and verified by an agent (not yet reviewed by a person). Brackets are 95 % paired bootstrap intervals
+against gold sets derived with grep, reading and compiler tooling and verified by an agent, then checked in #164 mostly by agents under the owner's policy (re-graded on 2026-11-22; see `evals/agent/README.md`). Brackets are 95 % paired bootstrap intervals
 over the 30 tasks.
 
 | Per session | without myceliums | with myceliums | with − without |
 |---|---:|---:|---:|
 | Success rate (F1 ≥ 0.8) | 100 % | 99 % | −1 pp [−3 pp, 0 pp] |
-| Mean F1 | 0.997 | 0.991 | −0.006 [−0.018, +0.003] |
+| Mean F1 | 0.998 | 0.993 | −0.005 [−0.017, +0.004] |
 | Input tokens (incl. cache reads) | 24,344 | 30,456 | +6,112 [+3,769, +9,250] (+25 %) |
 | Output tokens | 795 | 807 | +13 [−42, +69] |
 | Cost, USD (CLI list-price estimate) | 0.026 | 0.027 | +0.001 [−0.001, +0.003] |
@@ -448,7 +448,7 @@ in three integrations, 116 graded sessions:
 |---|---:|---:|---:|
 | Sessions with ≥ 1 myceliums call | 80 % | 100 % (+20 pp [+5, +38]) | 97 % (+18 pp [+5, +32]) |
 | Success (F1 ≥ 0.8) | 100 % | 98 % | 100 % |
-| Mean F1 | 0.984 | 0.983 | 0.989 |
+| Mean F1 | 0.985 | 0.983 | 0.989 |
 | Input tokens (ratio to A) | 166,868 | 0.96× [0.74×, 1.24×] | 0.96× [0.75×, 1.24×] |
 | Cost, USD (ratio to A) | 0.147 | 0.98× [0.82×, 1.18×] | 0.93× [0.78×, 1.13×] |
 

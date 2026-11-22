@@ -2,7 +2,7 @@
   "language": "java",
   "fixture": "graph-accuracy/java",
   "labelled_by": "agent",
-  "reviewed_by": null,
+  "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×31; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×124; agent:second-check, per marc's policy ×1",
   "verified_with": "javac -Xlint:all (compiles clean); every invoke instruction in `javap -c -p` checked against the gold (verify/java_bytecode.py, see README)",
   "symbols": [
     {"id": "src/shop/Main.java::Main", "kind": "class", "line": 17},
@@ -164,8 +164,8 @@
     {"in": "src/shop/model/Order.java::Order.total", "name": "map", "line": 23, "why": "Stream.map, not Utils.map"},
     {"in": "src/shop/report/Report.java::Report.render", "name": "join", "line": 24, "why": "String.join, not Formatting.join"},
     {"in": "src/shop/report/Formatting.java::Formatting.join", "name": "join", "line": 12, "why": "String.join; Formatting.join does not recurse"},
-    {"in": "src/shop/Main.java::Main.Worker.run", "name": "handler", "line": 28, "why": "Worker.handler hides Main.handler"},
-    {"in": "src/shop/Main.java::Main.run", "name": "run", "line": 42, "why": "Worker.run, not a recursive Main.run"},
+    {"in": "src/shop/Main.java::Main.Worker.run", "name": "handler", "line": 28, "why": "must not target Main.handler: Worker.handler hides it (the real edge to Main.Worker.handler is in calls)"},
+    {"in": "src/shop/Main.java::Main.run", "name": "run", "line": 42, "why": "must not target Main.run (no recursive self-edge): `.run` is Worker.run (the real edge to Main.Worker.run is in calls)"},
     {"in": "src/shop/service/UserService.java::UserService.UserService", "name": "isEmail", "line": 22, "why": "a method reference, not a call"}
   ]
 }

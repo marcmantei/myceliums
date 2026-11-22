@@ -73,7 +73,8 @@
     "Gold amended after the run started: hono-dead-utils gained getFilePathWithoutDefaultDocument as an optional (neutral) item, because the question admits a transitive reading (it is called only by the unused getFilePath). Every session is re-graded from its stored answer. The fastapi-dead-deprecated question was reworded (called -> referenced) before any FastAPI session ran.",
     "Sessions ran in three batches by repository as the indexes became ready (fzf, then hono, then FastAPI); within a repository the order is repetition-major with the two conditions adjacent. The fzf batch stopped once at the account-utilisation guard (0.95) and was resumed with the guard at 0.97.",
     "The benchmark machine was heavily loaded by unrelated builds (load average 300-500 on 10 cores); wall times include that.",
-    "`--effort medium` was fixed (the CLI default is served per model and would otherwise vary); `cost_usd` is the CLI's list-price estimate and depends on prompt caching across sessions."
+    "`--effort medium` was fixed (the CLI default is served per model and would otherwise vary); `cost_usd` is the CLI's list-price estimate and depends on prompt caching across sessions.",
+    "Re-graded on 2026-11-22 from the stored answers after the #164 label review (policy owner-2026-11-22, see the README): in hono-dead-utils getQueryStrings moved from gold to optional (benchmark code outside src/ uses it); optional answers the questions exclude were removed (fastapi-callees-solve-dependencies: Response, run_in_threadpool, SecurityScopes, BackgroundTasks, SolvedDependency; fastapi-where-operation-id: generate_operation_id, generate_operation_id_for_path; fastapi-dead-deprecated: _frontend_dependency_endpoint; hono-flow-fetch: Hono.request). An answer naming a removed optional now counts as a false positive."
   ],
   "repos": {
     "fastapi": {
@@ -113,7 +114,7 @@
   "runs_final": 180,
   "sessions_launched_ledger": 180,
   "success_threshold": 0.8,
-  "tasks_sha256": "8f4472a54350f0d75316f74005790289ebdea422e92e2be5bb971decb8f71808",
+  "tasks_sha256": "24335dd912853b95ac9fd187771890726c7c5b9e35328c7da79e6e75575188db",
   "timeout_s": 900,
   "tool_search": null
 }

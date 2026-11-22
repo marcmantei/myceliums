@@ -80,7 +80,7 @@
       ],
       "rationale": "Every test function named for should_bypass_proxies in tests/test_utils.py. TestUtils' bypass-keyword tests exercise no_proxy too but test get_environ_proxies; left out.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×6; agent:second-check, per marc's policy ×1"
     },
     {
       "id": "requests-conceptual-tests-rewind-body",
@@ -116,7 +116,7 @@
       ],
       "rationale": "The five TestRequests methods that call requests.utils.rewind_body.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2; agent:second-check, per marc's policy ×3"
     },
     {
       "id": "requests-conceptual-tests-cookies-on-redirect",
@@ -137,7 +137,7 @@
       ],
       "rationale": "The two tests whose subject is cookies across a redirect hop.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "requests-conceptual-tests-netrc",
@@ -173,7 +173,7 @@
       ],
       "rationale": "The TestGetNetrcAuth tests and the two TestRequests netrc tests. get_netrc_auth_mock is a fixture helper, not a test; left out.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4; agent:second-check, per marc's policy ×2"
     },
     {
       "id": "requests-conceptual-tests-super-len",
@@ -229,7 +229,7 @@
       ],
       "rationale": "Every method of TestSuperLen.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×3; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5; agent:second-check, per marc's policy ×2"
     },
     {
       "id": "flask-conceptual-tests-url-for",
@@ -265,7 +265,7 @@
       ],
       "rationale": "The TestUrlFor methods about anchors, schemes and arguments.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×3; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
     },
     {
       "id": "flask-conceptual-tests-nested-blueprints",
@@ -296,7 +296,7 @@
       ],
       "rationale": "The four tests in test_blueprints.py about nesting.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1; agent:second-check, per marc's policy ×2"
     },
     {
       "id": "flask-conceptual-tests-teardown-request",
@@ -337,7 +337,7 @@
       ],
       "rationale": "Test functions about request teardown. The nested teardown_request callbacks they define are fixtures, not tests; left out.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×6; agent:second-check, per marc's policy ×1"
     },
     {
       "id": "flask-conceptual-tests-session-cookie-attributes",
@@ -358,7 +358,7 @@
       ],
       "rationale": "The two tests that assert the session cookie's attributes.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "flask-conceptual-tests-json-key-sorting",
@@ -374,7 +374,7 @@
       ],
       "rationale": "One test is about key sorting.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-conceptual-tests-basic-auth-proxy",
@@ -395,7 +395,7 @@
       ],
       "rationale": "The two tests of BasicAuthForProxy.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "gin-conceptual-tests-client-ip",
@@ -421,7 +421,7 @@
       ],
       "rationale": "The three TestContextClientIP* tests.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-conceptual-tests-cookies",
@@ -452,7 +452,7 @@
       ],
       "rationale": "The cookie tests in context_test.go.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "gin-conceptual-tests-custom-recovery",
@@ -478,7 +478,7 @@
       ],
       "rationale": "The three tests of the custom-recovery entry points; the plain panic tests use the default handler.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2; agent:second-check, per marc's policy ×2"
     },
     {
       "id": "gin-conceptual-tests-abort-with-status",
@@ -504,7 +504,7 @@
       ],
       "rationale": "The AbortWithStatus* tests.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-conceptual-tests-basic-auth",
@@ -520,7 +520,7 @@
       ],
       "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/basic-auth/index.test.ts.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
     },
     {
       "id": "hono-conceptual-tests-cors",
@@ -536,7 +536,7 @@
       ],
       "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/cors/index.test.ts.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-conceptual-tests-jwt",
@@ -552,7 +552,7 @@
       ],
       "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/jwt/index.test.ts.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×1"
     },
     {
       "id": "hono-conceptual-tests-cache",
@@ -573,7 +573,7 @@
       ],
       "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/cache/index.test.ts.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
     },
     {
       "id": "hono-conceptual-tests-csrf",
@@ -599,7 +599,7 @@
       ],
       "rationale": "hono's tests are describe/it callbacks the parser does not extract; the test file's symbols are local constants, so the app under test (first one counted) and named helpers stand for src/middleware/csrf/index.test.ts.",
       "labelled_by": "agent:claude",
-      "reviewed_by": null
+      "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2; agent:second-check, per marc's policy ×2"
     }
   ]
 }

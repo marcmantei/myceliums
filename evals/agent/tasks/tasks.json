@@ -59,7 +59,8 @@
    "verified_with": [
     "grep",
     "x/tools CHA call graph"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4"
   },
   {
    "id": "fzf-callers-item-asstring",
@@ -156,7 +157,8 @@
    "verified_with": [
     "grep",
     "x/tools CHA call graph"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
   },
   {
    "id": "fzf-callees-pattern-match",
@@ -220,7 +222,8 @@
    "verified_with": [
     "reading",
     "x/tools CHA call graph"
-   ]
+   ],
+   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
   },
   {
    "id": "fzf-impact-istty",
@@ -283,7 +286,8 @@
    "rationale": "`grep -rn \"util.IsTty(\" --include=*.go .` outside tests; no other references (the name is not passed as a value; `IsTty` is only used qualified as `util.IsTty`).",
    "verified_with": [
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
   },
   {
    "id": "fzf-impact-tochars",
@@ -336,7 +340,8 @@
    "rationale": "`grep -rn \"util.ToChars(\" --include=*.go .` outside tests lists call sites in exactly these four files; there are no unqualified uses outside src/util.",
    "verified_with": [
     "grep"
-   ]
+   ],
+   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
   },
   {
    "id": "fzf-where-tiebreak",
@@ -370,7 +375,8 @@
    "rationale": "`buildResultFromBounds` loops over `sortCriteria` (the parsed --tiebreak list) and fills `result.points` per criterion (byScore, byChunk, byLength, byPathname, byBegin, byEnd). `buildResult` only prepares the bounds.",
    "verified_with": [
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
   },
   {
    "id": "fzf-where-keychords",
@@ -412,7 +418,8 @@
    "verified_with": [
     "reading",
     "grep"
-   ]
+   ],
+   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
   },
   {
    "id": "fzf-dead-util",
@@ -456,7 +463,8 @@
    "verified_with": [
     "go/types uses across GOOS",
     "grep"
-   ]
+   ],
+   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
   },
   {
    "id": "fzf-flow-default-command",
@@ -524,7 +532,8 @@
    "rationale": "Run starts `reader.ReadSource` (core.go:210); with stdin a TTY and FZF_DEFAULT_COMMAND set, ReadSource calls `readFromCommand` (reader.go:144), which pipes the command's stdout into `feed` (reader.go:409); feed splits the stream into lines and pushes items.",
    "verified_with": [
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4"
   },
   {
    "id": "fzf-flow-matcher",
@@ -608,7 +617,8 @@
    "verified_with": [
     "reading",
     "x/tools CHA call graph"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5"
   },
   {
    "id": "hono-callers-cookie-parse",
@@ -647,7 +657,8 @@
    "verified_with": [
     "TypeScript findReferences",
     "TypeScript call hierarchy"
-   ]
+   ],
+   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
   },
   {
    "id": "hono-callers-check-optional-parameter",
@@ -691,7 +702,8 @@
    "verified_with": [
     "TypeScript call hierarchy",
     "grep"
-   ]
+   ],
+   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
   },
   {
    "id": "hono-callers-parse-accept",
@@ -746,7 +758,8 @@
    "verified_with": [
     "TypeScript call hierarchy",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×3; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×2"
   },
   {
    "id": "hono-callees-parse-form-data",
@@ -799,7 +812,8 @@
    "rationale": "Read off the body of parseFormData (src/utils/body.ts:125-150). `request.arrayBuffer()` is the Fetch API; `bufferToFormData` is defined in src/utils/buffer.ts.",
    "verified_with": [
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
   },
   {
    "id": "hono-impact-http-exception",
@@ -933,7 +947,8 @@
    "verified_with": [
     "grep",
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×2; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×11"
   },
   {
    "id": "hono-impact-resolve-callback",
@@ -986,7 +1001,8 @@
    "rationale": "TypeScript findReferences on resolveCallback: outside its own file and tests it is imported and called in exactly these four files. `resolveCallbackSync` is a different function.",
    "verified_with": [
     "TypeScript findReferences"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4"
   },
   {
    "id": "hono-where-cookie-serialize",
@@ -1040,7 +1056,8 @@
    "rationale": "All attribute handling and prefix checks live in `_serialize` (src/utils/cookie.ts:174-260); the exported functions are wrappers.",
    "verified_with": [
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7"
   },
   {
    "id": "hono-where-etag-match",
@@ -1078,7 +1095,8 @@
    "rationale": "`etagMatches` (src/middleware/etag/index.ts:32) compares each tag in If-None-Match with the weak-stripped ETag; the middleware returns 304 when it matches.",
    "verified_with": [
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3"
   },
   {
    "id": "hono-dead-utils",
@@ -1146,29 +1164,24 @@
        "contains": "export const expandIPv6 = "
       }
      ]
-    },
-    {
-     "name": "getQueryStrings",
-     "evidence": [
-      {
-       "file": "src/utils/url.ts",
-       "line": 156,
-       "contains": "export const getQueryStrings = "
-      }
-     ]
     }
    ],
    "optional": [
     {
      "name": "getFilePathWithoutDefaultDocument",
      "why": "called only by getFilePath, which is itself unused, so only tests exercise it; the question does not say whether such transitive cases count (amended after the first pilot session surfaced it)"
+    },
+    {
+     "name": "getQueryStrings",
+     "why": "only use outside tests is the benchmark benchmarks/query-param/src/bench.mts:2,43; required only under a src/-only reading"
     }
    ],
-   "rationale": "For every exported function in src/utils/*.ts, TypeScript findReferences was run over all of src/; these seven have no reference outside tests (other than their own declaration). A grep over the whole repository (runtime-tests, benchmarks, perf-measures included) finds no other use. They remain public API through the `hono/utils/*` export, but nothing in the repository uses them. getFilePathWithoutDefaultDocument is reached only through the unused getFilePath; it is optional because the question admits both readings.",
+   "rationale": "For every exported function in src/utils/*.ts, TypeScript findReferences was run over all of src/; these seven have no reference outside tests (other than their own declaration). A grep over the whole repository (runtime-tests, benchmarks, perf-measures included) finds no other use. They remain public API through the `hono/utils/*` export, but nothing in the repository uses them. getFilePathWithoutDefaultDocument is reached only through the unused getFilePath; it is optional because the question admits both readings. Label review (#164, policy owner-2026-11-22): made `getQueryStrings` optional [agent:second-check, per marc's policy].",
    "verified_with": [
     "TypeScript findReferences",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×1; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7; agent:second-check, per marc's policy ×1"
   },
   {
    "id": "hono-flow-fetch",
@@ -1230,19 +1243,12 @@
      "note": "the inner `dispatch` function of the closure compose returns calls each handler"
     }
    ],
-   "optional": [
-    {
-     "name": "Hono.request",
-     "why": "test helper that also calls fetch",
-     "aliases": [
-      "HonoBase.request"
-     ]
-    }
-   ],
-   "rationale": "`fetch` (hono-base.ts:499-504) calls `this.#dispatch`; with more than one matched handler #dispatch calls `compose(...)` (line 469) and invokes the returned function; that closure's inner `dispatch(i)` calls each handler with a `next` that dispatches i+1 (compose.ts:52).",
+   "optional": [],
+   "rationale": "`fetch` (hono-base.ts:499-504) calls `this.#dispatch`; with more than one matched handler #dispatch calls `compose(...)` (line 469) and invokes the returned function; that closure's inner `dispatch(i)` calls each handler with a `next` that dispatches i+1 (compose.ts:52). Label review (#164, policy owner-2026-11-22): removed optional `Hono.request` [agent:second-check, per marc's policy].",
    "verified_with": [
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4; agent:second-check, per marc's policy ×1"
   },
   {
    "id": "fastapi-callers-jsonable-encoder",
@@ -1361,7 +1367,8 @@
    "rationale": "An `ast` walk over fastapi/ for `Call` nodes whose callee is named jsonable_encoder (helper script in evals/agent/groundtruth/py_refs.py) gives these sites; jsonable_encoder is never passed as a value. Calls inside nested functions are attributed to the outermost function, as the prompt instructs.",
    "verified_with": [
     "python ast"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×8; agent:second-check, per marc's policy ×3"
   },
   {
    "id": "fastapi-callers-is-body-allowed",
@@ -1420,7 +1427,8 @@
    "rationale": "python `ast` walk over fastapi/ for calls named is_body_allowed_for_status_code; four enclosing top-level functions.",
    "verified_with": [
     "python ast"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4; agent:second-check, per marc's policy ×1"
   },
   {
    "id": "fastapi-callers-auth-scheme-param",
@@ -1494,7 +1502,8 @@
    "verified_with": [
     "python ast",
     "grep"
-   ]
+   ],
+   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
   },
   {
    "id": "fastapi-callees-get-openapi",
@@ -1602,7 +1611,8 @@
    "verified_with": [
     "reading",
     "python ast"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×9; agent:second-check, per marc's policy ×1"
   },
   {
    "id": "fastapi-callees-solve-dependencies",
@@ -1713,33 +1723,14 @@
     {
      "name": "solve_dependencies",
      "why": "recursive self-call"
-    },
-    {
-     "name": "run_in_threadpool",
-     "why": "imported from starlette.concurrency"
-    },
-    {
-     "name": "BackgroundTasks",
-     "why": "class instantiation"
-    },
-    {
-     "name": "SecurityScopes",
-     "why": "class instantiation"
-    },
-    {
-     "name": "SolvedDependency",
-     "why": "dataclass instantiation"
-    },
-    {
-     "name": "Response",
-     "why": "Starlette class instantiation"
     }
    ],
-   "rationale": "Read off the body of solve_dependencies (fastapi/dependencies/utils.py:643-792) and resolved each callee's definition: _get_oauth_scopes, _get_cache_key and the _is_*_callable helpers are in fastapi/dependencies/models.py, the rest in fastapi/dependencies/utils.py. `run_in_threadpool` comes from Starlette.",
+   "rationale": "Read off the body of solve_dependencies (fastapi/dependencies/utils.py:643-792) and resolved each callee's definition: _get_oauth_scopes, _get_cache_key and the _is_*_callable helpers are in fastapi/dependencies/models.py, the rest in fastapi/dependencies/utils.py. `run_in_threadpool` comes from Starlette. Label review (#164, policy owner-2026-11-22): removed optional `run_in_threadpool` [agent:second-check, per marc's policy]; removed optional `BackgroundTasks` [policy owner-2026-11-22 consistency rule]; removed optional `SecurityScopes` [agent:second-check, per marc's policy]; removed optional `SolvedDependency` [policy owner-2026-11-22 consistency rule]; removed optional `Response` [agent:second-check, per marc's policy].",
    "verified_with": [
     "reading",
     "python ast"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×7; agent:second-check, per marc's policy ×7; policy owner-2026-11-22 consistency rule ×2"
   },
   {
    "id": "fastapi-impact-lenient-issubclass",
@@ -1799,7 +1790,8 @@
    "verified_with": [
     "python ast",
     "grep"
-   ]
+   ],
+   "reviewed_by": "agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors)"
   },
   {
    "id": "fastapi-where-validation-422",
@@ -1837,7 +1829,8 @@
    "rationale": "`request_validation_exception_handler` (fastapi/exception_handlers.py:20) returns `JSONResponse(status_code=422, content={\"detail\": ...})`; FastAPI.__init__ registers it as the default handler for RequestValidationError (applications.py:1001-1003).",
    "verified_with": [
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3; agent:second-check, per marc's policy ×1"
   },
   {
    "id": "fastapi-where-operation-id",
@@ -1874,21 +1867,14 @@
     {
      "name": "APIRoute.__init__",
      "why": "constructs the route"
-    },
-    {
-     "name": "generate_operation_id",
-     "why": "deprecated and unused"
-    },
-    {
-     "name": "generate_operation_id_for_path",
-     "why": "deprecated and unused"
     }
    ],
-   "rationale": "`generate_unique_id` (fastapi/utils.py:95) is the default `generate_unique_id_function` (routing.py:1042-1044); `_populate_api_route_state` sets `route.unique_id = route.operation_id or generator(route)` (routing.py:1081) and get_openapi_operation_metadata emits it (openapi/utils.py:288). The older generate_operation_id* functions are deprecated and not called.",
+   "rationale": "`generate_unique_id` (fastapi/utils.py:95) is the default `generate_unique_id_function` (routing.py:1042-1044); `_populate_api_route_state` sets `route.unique_id = route.operation_id or generator(route)` (routing.py:1081) and get_openapi_operation_metadata emits it (openapi/utils.py:288). The older generate_operation_id* functions are deprecated and not called. Label review (#164, policy owner-2026-11-22): removed optional `generate_operation_id` [agent:second-check, per marc's policy]; removed optional `generate_operation_id_for_path` [agent:second-check, per marc's policy].",
    "verified_with": [
     "reading",
     "python ast"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×5; agent:second-check, per marc's policy ×2"
   },
   {
    "id": "fastapi-dead-deprecated",
@@ -1935,17 +1921,13 @@
      "note": "only used by tests"
     }
    ],
-   "optional": [
-    {
-     "name": "_frontend_dependency_endpoint",
-     "why": "never called directly and marked `pragma: no cover`, but passed as `call=` in two places, so it is referenced"
-    }
-   ],
-   "rationale": "An `ast` pass counting Name/Attribute references (not string mentions) inside fastapi/ for every module-level function of the three files: generate_operation_id and _iter_included_route_candidates have none; generate_operation_id_for_path is referenced only from generate_operation_id. Every other function has at least one reference from live code. Two functions are referenced but never called directly: generate_unique_id (the default `generate_unique_id_function`, called through that variable) and _frontend_dependency_endpoint (passed as `call=`); the question counts references, so neither is in the gold set.",
+   "optional": [],
+   "rationale": "An `ast` pass counting Name/Attribute references (not string mentions) inside fastapi/ for every module-level function of the three files: generate_operation_id and _iter_included_route_candidates have none; generate_operation_id_for_path is referenced only from generate_operation_id. Every other function has at least one reference from live code. Two functions are referenced but never called directly: generate_unique_id (the default `generate_unique_id_function`, called through that variable) and _frontend_dependency_endpoint (passed as `call=`); the question counts references, so neither is in the gold set. Label review (#164, policy owner-2026-11-22): removed optional `_frontend_dependency_endpoint` [agent:second-check, per marc's policy].",
    "verified_with": [
     "python ast",
     "grep"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×4; agent:second-check, per marc's policy ×1"
   },
   {
    "id": "fastapi-flow-query-validation",
@@ -2013,7 +1995,8 @@
    "rationale": "solve_dependencies calls request_params_to_args for query params (utils.py:741); for a non-model field it calls _validate_value_with_model_field (948), which returns `field.validate(...)` (803), i.e. ModelField.validate in fastapi/_compat/v2.py:173.",
    "verified_with": [
     "reading"
-   ]
+   ],
+   "reviewed_by": "mixed, policy owner-2026-11-22: agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×3; agent:second-check, per marc's policy ×2"
   }
  ]
 }

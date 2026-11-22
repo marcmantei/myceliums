@@ -124,7 +124,7 @@
   "repo": "fastapi",
   "type": "transitive_callers",
   "answer_kind": "symbols",
-  "n_gold": 31,
+  "n_gold": 30,
   "question": "Which functions or methods call `field_annotation_is_sequence` (fastapi/_compat/shared.py) directly, or call a function that does, and so on up to five levels up the call chain? Consider only the `fastapi/` package. Count direct calls by name (imported names and re-exports included), calls through `self`, `cls` or `super()`, and class instantiation by the class's name; a call inside a nested function counts for the outermost enclosing function or method. Calls on other objects' attributes (for example `route.handle(...)`, `self.router.add_api_route(...)`, `original_route.get_route_handler()`), instantiation through a variable (`route_class(...)`) and calls through function values do not count. Ignore docstrings and comments. Do not list `field_annotation_is_sequence` itself."
  },
  {

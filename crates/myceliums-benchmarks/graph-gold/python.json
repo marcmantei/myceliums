@@ -2,7 +2,7 @@
   "language": "python",
   "fixture": "graph-accuracy/python",
   "labelled_by": "agent",
-  "reviewed_by": null,
+  "reviewed_by": "mixed, policy owner-2026-11-22: human:marc ×16; agent:prescreen, accepted by marc (sample: 229 human-checked confirmed items, 0 errors) ×92",
   "verified_with": "python3 -m py_compile; ast symbol listing; sys.setprofile call trace over a driver that exercises every function (see README)",
   "symbols": [
     {"id": "shop/auth.py::parse", "kind": "function", "line": 6},
