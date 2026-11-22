@@ -577,27 +577,39 @@ fn heuristic_mark(resolved: Option<&str>) -> String {
 }
 
 /// Renders `trace_flow`: the shortest call chain from `from` to `to`, then
-/// one page of every symbol on a chain within the widened length.
+/// one page of every symbol on a chain within the widened length. `gaps` is
+/// the `Incomplete:` block (#169), right under the first line so a cut flow
+/// never reads as complete; empty when nothing was cut.
 pub fn format_call_chains(
     from: &myceliums_storage::CodeSymbol,
     to: &myceliums_storage::CodeSymbol,
-    chains: Option<&crate::navigation::CallChains>,
+    chains: Result<&crate::navigation::CallChains, &crate::navigation::NoChain>,
     max_depth: u32,
     page: Page,
+    gaps: &str,
 ) -> String {
-    let Some(chains) = chains else {
-        return format!(
-            "No call chain from {} to {} within {max_depth} calls (CALLS edges, followed from \
-             from_symbol towards to_symbol).\n\nCalls the resolver cannot see (callbacks, \
-             dynamic dispatch, reflection) break chains: try the symbols swapped, a larger \
-             max_depth, or find_callers of {}.",
-            symbol_line(from),
-            symbol_line(to),
-            to.name
-        );
+    let gaps = if gaps.is_empty() {
+        String::new()
+    } else {
+        format!("{gaps}\n")
+    };
+    let chains = match chains {
+        Ok(chains) => chains,
+        Err(none) => {
+            return format!(
+                "No call chain from {} to {} within {max_depth} calls (CALLS edges, followed from \
+                 from_symbol towards to_symbol; {} symbols reached).\n\n{gaps}Calls the resolver \
+                 cannot see (callbacks, dynamic dispatch, reflection) break chains: try the symbols \
+                 swapped, a larger max_depth, or find_callers of {}.",
+                symbol_line(from),
+                symbol_line(to),
+                none.reached.len(),
+                to.name
+            );
+        }
     };
     let mut out = format!(
-        "Shortest call chain from {} to {}: {} calls.\n\n",
+        "Shortest call chain from {} to {}: {} calls.\n\n{gaps}",
         from.qualified_name,
         to.qualified_name,
         chains.len()

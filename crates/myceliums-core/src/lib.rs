@@ -118,6 +118,7 @@ pub mod embedding_stats;
 pub mod embeddings;
 pub mod error;
 pub mod file_guard;
+pub mod gaps;
 pub mod git_metadata;
 pub mod git_read;
 pub mod global_config;
@@ -165,7 +166,10 @@ pub mod wiki_export;
 
 pub(crate) mod content;
 pub(crate) mod resolver;
-pub use resolver::{language_family, CallResolution, CallResolutionStats, MAX_AMBIGUOUS_TARGETS};
+pub use resolver::{
+    language_family, CallResolution, CallResolutionStats, JsProject, UnlinkedCall, UnlinkedReason,
+    MAX_AMBIGUOUS_TARGETS,
+};
 #[allow(dead_code)]
 pub(crate) mod ssa;
 

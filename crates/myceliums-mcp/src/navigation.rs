@@ -18,6 +18,7 @@
 use crate::errors::ToolError;
 use crate::repo::{located_name, CallLabels};
 use myceliums_core::navigation::{self as core_nav, Reached, Resolution};
+pub(crate) use myceliums_core::navigation::{ChainStep, DepthCut, NoChain};
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind};
 
 pub(crate) use core_nav::CallDirection as Direction;
@@ -180,19 +181,40 @@ pub(crate) fn walk_calls<'a>(
     )
 }
 
+/// [`walk_calls`], with what the depth limit cut (#169).
+pub(crate) fn walk_calls_bounded<'a>(
+    symbols: &'a [CodeSymbol],
+    relationships: &'a [Relationship],
+    start: &'a CodeSymbol,
+    direction: Direction,
+    max_depth: u32,
+) -> (Vec<Hit<'a>>, DepthCut<'a>) {
+    let walk = core_nav::walk_calls_bounded(symbols, relationships, start, direction, max_depth);
+    (labelled(symbols, walk.hits), walk.cut)
+}
+
 /// Symbols that call or import any of `roots`, transitively up to
 /// `max_depth` (core's blast radius): the code a change to the roots can
 /// break. Roots themselves are not reported.
+#[cfg(test)]
 pub(crate) fn dependents<'a>(
     symbols: &'a [CodeSymbol],
     relationships: &'a [Relationship],
     roots: &[&'a CodeSymbol],
     max_depth: u32,
 ) -> Vec<Hit<'a>> {
-    labelled(
-        symbols,
-        core_nav::dependents_reached(symbols, relationships, roots, max_depth),
-    )
+    dependents_bounded(symbols, relationships, roots, max_depth).0
+}
+
+/// [`dependents`], with what the depth limit cut (#169).
+pub(crate) fn dependents_bounded<'a>(
+    symbols: &'a [CodeSymbol],
+    relationships: &'a [Relationship],
+    roots: &[&'a CodeSymbol],
+    max_depth: u32,
+) -> (Vec<Hit<'a>>, DepthCut<'a>) {
+    let walk = core_nav::dependents_bounded(symbols, relationships, roots, max_depth);
+    (labelled(symbols, walk.hits), walk.cut)
 }
 
 /// The definitions in the indexed file `path` (core's matching: exact path,
@@ -210,7 +232,10 @@ pub(crate) struct CallChains<'a> {
     pub(crate) shortest: Vec<(&'a CodeSymbol, Option<&'static str>)>,
     /// Every symbol strictly between the ends on a chain within the widened
     /// length (see [`core_nav::call_chains`]).
-    pub(crate) on_chains: Vec<core_nav::ChainStep<'a>>,
+    pub(crate) on_chains: Vec<ChainStep<'a>>,
+    /// Symbols on longer chains within `max_depth` that `on_chains` leaves
+    /// out.
+    pub(crate) longer: Vec<ChainStep<'a>>,
 }
 
 impl CallChains<'_> {
@@ -220,8 +245,8 @@ impl CallChains<'_> {
     }
 }
 
-/// Call chains from `from` to `to`, or `None` when `to` is not reachable
-/// within `max_depth` calls (see [`core_nav::call_chains`]).
+/// Call chains from `from` to `to`, or what the search reached when `to` is
+/// not reachable within `max_depth` calls (see [`core_nav::call_chains`]).
 pub(crate) fn call_chains<'a>(
     symbols: &'a [CodeSymbol],
     relationships: &'a [Relationship],
@@ -229,16 +254,17 @@ pub(crate) fn call_chains<'a>(
     to: &'a CodeSymbol,
     max_depth: u32,
     extra: u32,
-) -> Option<CallChains<'a>> {
+) -> Result<CallChains<'a>, NoChain<'a>> {
     let chains = core_nav::call_chains(symbols, relationships, from, to, max_depth, extra)?;
     let labels = CallLabels::new(symbols);
-    Some(CallChains {
+    Ok(CallChains {
         shortest: chains
             .shortest
             .into_iter()
             .map(|(symbol, edge)| (symbol, edge.map(|e| labels.label(e, &symbol.name))))
             .collect(),
         on_chains: chains.on_chains,
+        longer: chains.longer,
     })
 }
 

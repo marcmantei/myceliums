@@ -1,7 +1,8 @@
 # Graph-accuracy gold set
 
 Hand-labelled symbols and CALLS edges for the fixture projects in
-`tests/fixtures/graph-accuracy/` (Python, TypeScript, Go, Rust, Java). The
+`tests/fixtures/graph-accuracy/` (Python, TypeScript, Go, Rust, Java, and a
+small TypeScript monorepo). The
 `graph-eval` binary runs the production analyzer over those fixtures and
 scores what it extracts against these labels.
 
@@ -23,19 +24,42 @@ The Retrieval Quality workflow runs `graph-eval --check-baseline` on every
 push and pull request (since #139). It fails the build when
 
 - overall CALLS precision or recall, in either setup, drops by at least
-  **0.02** (about five of the 249 gold edges) **and** the paired bootstrap 95%
+  **0.02** (about five of the 274 gold edges) **and** the paired bootstrap 95%
   interval of the drop lies wholly below zero — the retrieval gate's rule
   (`benchmarks/METHODOLOGY.md`, "The CI gate"); recall pairs the gold edges,
   precision the union of the edges either run extracted
   (`src/graph_eval/gate.rs`);
-- any CALLS edge in the `polyglot` run connects two languages: the resolver
-  never links across language families, so one such edge is a bug;
+- any CALLS edge in the `polyglot` run connects two language families: the
+  resolver never links across them, so one such edge is a bug (an edge
+  between the two TypeScript fixtures is a false positive, not a crossing);
 - the baseline was recorded against other labels or fixtures, or lacks a
   setup.
 
 Per-language and per-label numbers are reported, not gated: 43–59 edges per
-language are too few. An intended drop is accepted by re-recording the
+language (25 in the monorepo set) are too few. An intended drop is accepted by re-recording the
 baseline in the same PR and saying why.
+
+## The monorepo set (#169)
+
+`typescript-monorepo.json` labels `ts-monorepo/`: a root `package.json` with
+`workspaces: ["packages/*", "apps/*"]`; `@acme/core`, whose package.json names
+an unbuilt `dist/` entry (its source entry is `src/index.ts`, a barrel with
+`export { … } from` and `export *`); `@acme/store`, which exports `.` and
+`./memory` as source files; an app whose `tsconfig.json` extends
+`tsconfig.base.json` with `baseUrl` and `paths` (`~utils/*`, and the exact
+`@shared/config` naming a directory). 14 of its 25 edges cross a package
+boundary, 5 go through a `paths` alias. Its traps are bare imports that must
+stay external (`lodash`'s `debounce` next to a project `debounce`, `yaml`'s
+`parse` next to `@acme/core`'s). It measures one mechanism — imports of the
+repository's own packages and aliases — so it is smaller than the language
+sets (the consistency test aims for 20–80 edges there, 40–80 elsewhere).
+
+The labels follow the rules below, with one addition: an import of a
+workspace package binds what a build plus `node_modules` links would bind,
+the source file the package exports or, for a `dist/` entry, `src/index.ts`.
+The cross-check gives the TypeScript compiler exactly that mapping (and the
+fixture's own `paths`), plus an in-memory declaration file for `lodash` and
+`yaml`.
 
 ## Held-out real-repository set
 
@@ -63,7 +87,9 @@ a human one by one.** Every file says `"labelled_by": "agent"`. Its
 himself, the pre-screen accepted on the strength of his sample, or a
 second-check agent. The per-item record is `evals/review/provenance.jsonl`,
 and the counts are under [Review of the labels](#review-of-the-labels-164)
-below. A change of labels or `reviewed_by` re-records the baseline.
+below. A change of labels or `reviewed_by` re-records the baseline. The
+monorepo set (#169) came after that review: its `reviewed_by` is `null`, and
+nobody but its labelling agent and the TypeScript compiler has checked it.
 
 The labels were written from reading the code, never from myceliums output,
 and then cross-checked with the language's own tooling (below). Those checks
@@ -156,6 +182,7 @@ repository. Run them after changing a fixture or a label.
 |---|---|---|
 | Python | `ast` for symbols; `sys.setprofile` over a driver that runs every function | `python3 -I crates/myceliums-benchmarks/graph-gold/verify/python_trace.py` |
 | TypeScript | `tsc --strict`; the compiler API resolves every call and `new` | `npm install --prefix /tmp/tsc typescript@5 && NODE_PATH=/tmp/tsc/node_modules node crates/myceliums-benchmarks/graph-gold/verify/ts_calls.cjs` |
+| TypeScript monorepo | the same, with the fixture's `paths` and each workspace package mapped to its source entry | `NODE_PATH=/tmp/tsc/node_modules node crates/myceliums-benchmarks/graph-gold/verify/ts_calls.cjs typescript-monorepo` |
 | Go | `go vet`, `go build`; `go/types` resolves every call | `cd crates/myceliums-benchmarks/graph-gold/verify/go_calls && go run .` |
 | Rust | `rustc` compiles; every call in rustc's MIR | `python3 -I crates/myceliums-benchmarks/graph-gold/verify/rust_mir.py` |
 | Java | `javac -Xlint:all -Werror`; every invoke instruction in `javap -c -p` | `python3 -I crates/myceliums-benchmarks/graph-gold/verify/java_bytecode.py` |

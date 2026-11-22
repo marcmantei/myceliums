@@ -1,7 +1,16 @@
-// Cross-check the TypeScript gold set against the TypeScript compiler.
+// Cross-check a TypeScript gold set against the TypeScript compiler.
 //
 //   npm install --prefix /tmp/tsc typescript@5
 //   NODE_PATH=/tmp/tsc/node_modules node crates/myceliums-benchmarks/graph-gold/verify/ts_calls.cjs
+//   NODE_PATH=/tmp/tsc/node_modules node crates/myceliums-benchmarks/graph-gold/verify/ts_calls.cjs typescript-monorepo
+//
+// The argument names the gold file (default `typescript`). For the monorepo
+// fixture (#169) the compiler gets the fixture's own tsconfig.base.json
+// (`baseUrl`, `paths`), and each workspace package name is mapped to the
+// source file its package.json exports, or to src/index.ts when the
+// package.json names a build output (dist/) the fixture does not ship: what
+// a build plus node_modules links would give. The external packages the
+// fixture imports (lodash, yaml) get an in-memory declaration file.
 //
 // 1. Symbols: every top-level function, arrow-function constant, class,
 //    interface, type alias, method, constructor and interface method must be
@@ -17,10 +26,48 @@ const fs = require("fs");
 const path = require("path");
 
 const here = __dirname;
-const fixture = path.resolve(here, "../../../../tests/fixtures/graph-accuracy/typescript");
-const gold = JSON.parse(fs.readFileSync(path.join(here, "..", "typescript.json"), "utf8"));
-const files = fs.readdirSync(path.join(fixture, "src")).filter((f) => f.endsWith(".ts")).map((f) => path.join(fixture, "src", f));
-const program = ts.createProgram(files, { strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, lib: ["lib.es2022.d.ts", "lib.dom.d.ts"], noEmit: true });
+const goldName = process.argv[2] || "typescript";
+const gold = JSON.parse(fs.readFileSync(path.join(here, "..", `${goldName}.json`), "utf8"));
+const fixture = path.resolve(here, "../../../../tests/fixtures", gold.fixture);
+function sources(dir) {
+  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) return e.name === "node_modules" ? [] : sources(p);
+    return e.name.endsWith(".ts") && !e.name.endsWith(".d.ts") ? [p] : [];
+  });
+}
+const files = sources(fixture);
+let options = { strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, lib: ["lib.es2022.d.ts", "lib.dom.d.ts"], noEmit: true };
+const externals = path.join(fixture, "__externals__.d.ts");
+const externalText = 'declare module "lodash" { export function debounce(fn: () => void, wait: number): () => void; }\n' +
+  'declare module "yaml" { export function parse(text: string): unknown; }\n';
+if (fs.existsSync(path.join(fixture, "tsconfig.base.json"))) {
+  const base = ts.readConfigFile(path.join(fixture, "tsconfig.base.json"), ts.sys.readFile);
+  const parsed = ts.parseJsonConfigFileContent(base.config, ts.sys, fixture);
+  options = { ...parsed.options, lib: options.lib, noEmit: true };
+  const workspaces = JSON.parse(fs.readFileSync(path.join(fixture, "package.json"), "utf8")).workspaces;
+  for (const pattern of workspaces) {
+    const parent = path.join(fixture, pattern.replace(/\/\*$/, ""));
+    for (const dir of fs.readdirSync(parent)) {
+      const manifest = JSON.parse(fs.readFileSync(path.join(parent, dir, "package.json"), "utf8"));
+      const exportsMap = typeof manifest.exports === "string" ? { ".": manifest.exports } : manifest.exports || {};
+      const entries = Object.keys(exportsMap).length ? exportsMap : { ".": "./src/index.ts" };
+      for (const [sub, target] of Object.entries(entries)) {
+        const name = sub === "." ? manifest.name : `${manifest.name}/${sub.replace(/^\.\//, "")}`;
+        options.paths[name] = [path.relative(fixture, path.join(parent, dir, target))];
+      }
+    }
+  }
+  files.push(externals);
+}
+const host = ts.createCompilerHost(options);
+const readFile = host.readFile.bind(host);
+host.readFile = (f) => (path.resolve(f) === externals ? externalText : readFile(f));
+const fileExists = host.fileExists.bind(host);
+host.fileExists = (f) => path.resolve(f) === externals || fileExists(f);
+const getSourceFile = host.getSourceFile.bind(host);
+host.getSourceFile = (f, v) => (path.resolve(f) === externals ? ts.createSourceFile(f, externalText, v) : getSourceFile(f, v));
+const program = ts.createProgram(files.map((f) => path.resolve(f)), options, host);
 const checker = program.getTypeChecker();
 const failures = [];
 const diagnostics = ts.getPreEmitDiagnostics(program);
@@ -36,7 +83,7 @@ function record(sf, node, qual, nameNode) {
   found[id] = lineOf(sf, nameNode);
 }
 for (const sf of program.getSourceFiles()) {
-  if (!files.includes(path.resolve(sf.fileName))) continue;
+  if (!files.includes(path.resolve(sf.fileName)) || path.resolve(sf.fileName) === externals) continue;
   for (const stmt of sf.statements) {
     if (ts.isFunctionDeclaration(stmt) && stmt.name) record(sf, stmt, stmt.name.text, stmt.name);
     if (ts.isTypeAliasDeclaration(stmt)) record(sf, stmt, stmt.name.text, stmt.name);
@@ -89,7 +136,7 @@ function visit(sf, node) {
   }
   ts.forEachChild(node, (child) => visit(sf, child));
 }
-for (const sf of program.getSourceFiles()) if (files.includes(path.resolve(sf.fileName))) visit(sf, sf);
+for (const sf of program.getSourceFiles()) if (files.includes(path.resolve(sf.fileName)) && path.resolve(sf.fileName) !== externals) visit(sf, sf);
 
 const accepted = new Map();
 gold.calls.forEach((c, i) => [c.to, ...(c.also_accept || [])].forEach((t) => accepted.set(`${c.from} -> ${t}`, i)));

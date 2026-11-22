@@ -21,7 +21,7 @@ fn diff_or_git(diff: Option<String>, repo_id: &str) -> Result<String, ToolError>
 impl MyceliumsMcp {
     #[tool(
         name = "impact_of_change",
-        description = "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass.",
+        description = "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass. An `Incomplete:` block names what the walk did not follow (depth limit, unlinked call sites) and the next call.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -507,12 +507,48 @@ fn generate_suggested_questions(
     SuggestedQuestionsOutput { questions }
 }
 
-/// `body`, then `note` on a line of its own.
-fn with_note(body: String, note: Option<String>) -> String {
-    match note {
-        Some(note) => format!("{}\n\n{note}\n", body.trim_end()),
-        None => body,
+/// `body` with the `Incomplete:` block (#169) after its first line, so a
+/// cut answer never reads as complete; `body` as it is without one.
+fn with_gaps(body: String, block: &str) -> String {
+    if block.is_empty() {
+        return body;
     }
+    match body.split_once('\n') {
+        Some((first, rest)) => format!("{first}\n\n{block}{rest}"),
+        None => format!("{body}\n\n{block}"),
+    }
+}
+
+/// What a dependents walk from `roots` up to `depth` did not follow: the
+/// depth cut, and unlinked call sites named like the roots or like the
+/// dependents short of the depth limit (their callers are what it lists).
+fn impact_gaps<'a>(
+    roots: &[&'a myceliums_storage::CodeSymbol],
+    hits: &[navigation::Hit<'a>],
+    cut: navigation::DepthCut<'a>,
+    depth: u32,
+    stats: Option<&myceliums_core::CallResolutionStats>,
+    again: &str,
+) -> String {
+    let mut gaps = crate::incomplete::Gaps::default();
+    let mut next = Vec::new();
+    gaps.depth_cut(depth, cut);
+    if gaps.depth.is_some() {
+        next.push(if depth < 10 {
+            format!("{again}depth={})", depth + 1)
+        } else {
+            format!("impact_of_change on the symbols at depth {depth}")
+        });
+    }
+    let walked = roots
+        .iter()
+        .copied()
+        .chain(hits.iter().filter(|h| h.depth < depth).map(|h| h.symbol));
+    gaps.unlinked_into(stats, walked);
+    if let Some(read) = gaps.read_the_source() {
+        next.push(read);
+    }
+    gaps.block("dependents", &next.join("; then "))
 }
 
 impl MyceliumsMcp {
@@ -535,6 +571,12 @@ impl MyceliumsMcp {
 
         let symbols = graph.symbols().await?;
         let relationships = graph.relationships().await?;
+        let again = match (&params.symbol_name, &params.file_path) {
+            (Some(name), _) => format!("impact_of_change(symbol_name={name:?}, "),
+            (None, Some(path)) => format!("impact_of_change(file_path={path:?}, "),
+            (None, None) => "impact_of_change(diff=<the same diff>, ".to_string(),
+        };
+        let stats = crate::index_status::call_resolution(&graph.store()).await;
         let (subject, roots) = match (params.symbol_name, params.file_path) {
             (Some(name), _) => {
                 let s = navigation::resolve(&symbols, &name)?;
@@ -570,30 +612,29 @@ impl MyceliumsMcp {
                     "No changes detected (empty diff).".to_string()
                 } else {
                     let report = detect_impact(&diff_text, &symbols, &relationships, depth);
-                    let stats = crate::index_status::call_resolution(&graph.store()).await;
-                    let note = crate::index_status::unlinked_impact_note(
-                        stats.as_ref(),
-                        report
-                            .directly_changed
-                            .iter()
-                            .map(|s| (s.name.as_str(), s.file_path.as_str())),
-                    );
-                    with_note(format::format_impact_report(&report, page), note)
+                    // The changed symbols as stored, for the depth cut of
+                    // their dependents and their unlinked call sites.
+                    let roots: Vec<&myceliums_storage::CodeSymbol> = symbols
+                        .iter()
+                        .filter(|s| {
+                            report.directly_changed.iter().any(|c| {
+                                c.file_path == s.file_path && c.qualified_name == s.qualified_name
+                            })
+                        })
+                        .collect();
+                    let (hits, cut) =
+                        navigation::dependents_bounded(&symbols, &relationships, &roots, depth);
+                    let block = impact_gaps(&roots, &hits, cut, depth, stats.as_ref(), &again);
+                    with_gaps(format::format_impact_report(&report, page), &block)
                 };
                 return self.graph_text(&graph, body).await;
             }
         };
-        let hits = navigation::dependents(&symbols, &relationships, &roots, depth);
-        let stats = crate::index_status::call_resolution(&graph.store()).await;
-        let note = crate::index_status::unlinked_impact_note(
-            stats.as_ref(),
-            roots
-                .iter()
-                .map(|s| (s.name.as_str(), s.file_path.as_str())),
-        );
-        let body = with_note(
+        let (hits, cut) = navigation::dependents_bounded(&symbols, &relationships, &roots, depth);
+        let block = impact_gaps(&roots, &hits, cut, depth, stats.as_ref(), &again);
+        let body = with_gaps(
             format::format_dependents(&subject, &hits, depth, page),
-            note,
+            &block,
         );
         self.graph_text(&graph, body).await
     }

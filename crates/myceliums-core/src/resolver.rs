@@ -31,6 +31,7 @@
 //! Every edge records how its target was found ([`CallResolution`]).
 
 mod imports;
+mod js_project;
 mod types;
 
 use std::collections::{BTreeMap, HashMap};
@@ -45,6 +46,7 @@ use crate::parser::{
     CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, TypeBinding,
 };
 use imports::Bound;
+pub use js_project::JsProject;
 use types::Ty;
 
 /// How the resolver picked the target of a CALLS edge.
@@ -144,6 +146,65 @@ pub struct CallResolutionStats {
     /// edge shows.
     #[serde(default)]
     pub unlinked_by_name: BTreeMap<String, BTreeMap<String, usize>>,
+    /// The call sites each caller makes that got no edge but may reach
+    /// project code, per file and caller qualified name (#169): more than
+    /// [`MAX_AMBIGUOUS_TARGETS`] candidates, a name a project symbol has
+    /// that nothing in scope binds, a call through a variable, parameter or
+    /// callback. A walk over CALLS edges does not follow them; the tools
+    /// name them as places a flow may continue unseen. Library calls are
+    /// not recorded.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub unlinked_by_caller: BTreeMap<String, BTreeMap<String, Vec<UnlinkedCall>>>,
+}
+
+/// A call site that got no CALLS edge though it may reach project code
+/// (see [`CallResolutionStats::unlinked_by_caller`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UnlinkedCall {
+    /// The name called.
+    #[serde(rename = "n")]
+    pub name: String,
+    /// The line of the call site.
+    #[serde(rename = "l")]
+    pub line: u32,
+    /// Why it got no edge.
+    #[serde(rename = "r")]
+    pub reason: UnlinkedReason,
+}
+
+/// Why an [`UnlinkedCall`] got no edge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum UnlinkedReason {
+    /// More than [`MAX_AMBIGUOUS_TARGETS`] symbols qualify.
+    TooManyCandidates,
+    /// A project symbol has the name, but nothing in scope binds it.
+    NotInScope,
+    /// A call through a parameter, local variable, field or callback.
+    ThroughVariable,
+}
+
+impl UnlinkedReason {
+    /// Why, in a few words, for tool output.
+    pub fn describe(self) -> String {
+        match self {
+            UnlinkedReason::TooManyCandidates => {
+                format!("more than {MAX_AMBIGUOUS_TARGETS} candidates")
+            }
+            UnlinkedReason::NotInScope => "name not bound in scope".to_string(),
+            UnlinkedReason::ThroughVariable => "through a variable or callback".to_string(),
+        }
+    }
+
+    /// The reason a per-caller record keeps for `reason`, if any.
+    fn of(reason: Unlinked, has_namesake: bool) -> Option<Self> {
+        match reason {
+            Unlinked::TooManyCandidates => Some(UnlinkedReason::TooManyCandidates),
+            Unlinked::Unresolved if has_namesake => Some(UnlinkedReason::NotInScope),
+            Unlinked::ThroughVariable => Some(UnlinkedReason::ThroughVariable),
+            Unlinked::Unresolved | Unlinked::Library => None,
+        }
+    }
 }
 
 impl CallResolutionStats {
@@ -168,6 +229,15 @@ impl CallResolutionStats {
             .and_then(|names| names.get(name))
             .copied()
             .unwrap_or(0)
+    }
+
+    /// The call sites the symbol `qualified_name` in `file` makes that got
+    /// no edge but may reach project code, in line order.
+    pub fn unlinked_from(&self, file: &str, qualified_name: &str) -> &[UnlinkedCall] {
+        self.unlinked_by_caller
+            .get(file)
+            .and_then(|callers| callers.get(qualified_name))
+            .map_or(&[], Vec::as_slice)
     }
 
     /// One line for `analyze` output.
@@ -272,6 +342,8 @@ type DefId = usize;
 struct Def {
     uid: String,
     name: String,
+    /// The symbol's qualified name, as stored.
+    qualified: String,
     kind: SymbolKind,
     file: String,
     family: String,
@@ -383,6 +455,8 @@ pub struct CallResolver {
     by_file: HashMap<String, Vec<DefId>>,
     files: HashMap<String, FileContext>,
     index: imports::PathIndex,
+    /// Workspace packages and tsconfig path aliases (#169).
+    js: JsProject,
     prepared: bool,
     base_memo: types::BaseMemo,
     stats: CallResolutionStats,
@@ -416,6 +490,7 @@ impl CallResolver {
         self.defs.push(Def {
             uid: symbol.uid.clone(),
             name: symbol.name.clone(),
+            qualified: symbol.qualified_name.clone(),
             kind: symbol.kind.clone(),
             file: symbol.file_path.clone(),
             family,
@@ -462,6 +537,13 @@ impl CallResolver {
         context.bindings.extend(bindings.iter().cloned());
         context.declared.extend(declared.iter().cloned());
         self.prepared = false;
+    }
+
+    /// Pass 1: the repository's own JS/TS module names — workspace
+    /// packages and tsconfig/jsconfig `paths` (see [`JsProject`]). Without
+    /// it a bare specifier is always a library.
+    pub fn set_js_project(&mut self, project: JsProject) {
+        self.js = project;
     }
 
     /// Mark definitions nested in function bodies and index file paths.
@@ -571,6 +653,20 @@ impl CallResolver {
                         def.family == site.family && def.is_callable()
                     });
                     stats.count(reason, site.family, &call.callee_name, namesake);
+                    if let Some(reason) = UnlinkedReason::of(reason, namesake) {
+                        let def = &self.defs[caller];
+                        stats
+                            .unlinked_by_caller
+                            .entry(def.file.clone())
+                            .or_default()
+                            .entry(def.qualified.clone())
+                            .or_default()
+                            .push(UnlinkedCall {
+                                name: call.callee_name.clone(),
+                                line: call.line,
+                                reason,
+                            });
+                    }
                     continue;
                 }
             };
@@ -588,6 +684,12 @@ impl CallResolver {
                         edges.push((caller, target, resolution, call.line));
                     }
                 }
+            }
+        }
+        for callers in stats.unlinked_by_caller.values_mut() {
+            for calls in callers.values_mut() {
+                calls.sort_by(|a, b| (a.line, &a.name).cmp(&(b.line, &b.name)));
+                calls.dedup();
             }
         }
         self.stats = stats;
@@ -719,7 +821,14 @@ impl CallResolver {
         let Some(class) = self.enclosing_class(site) else {
             return Err(Unlinked::Unresolved);
         };
-        let Some(&base) = self.bases(class, 0).first() else {
+        // A constructor call never reaches an interface the class
+        // implements: `class E extends Lib implements Iface` with `Lib`
+        // outside the project calls a library constructor (#169).
+        let Some(base) = self
+            .bases(class, 0)
+            .into_iter()
+            .find(|&b| self.defs[b].kind != SymbolKind::Interface)
+        else {
             return Err(Unlinked::Library);
         };
         let base_name = self.defs[base].name.clone();
@@ -1896,6 +2005,41 @@ mod tests {
         );
     }
 
+    /// `super()` in a class that extends a library class and implements a
+    /// project interface calls the library constructor, not the interface
+    /// (#169: Vue's `VueElement extends BaseClass implements
+    /// ComponentCustomElementInterface`).
+    #[test]
+    fn super_never_reaches_an_implemented_interface() {
+        let mut resolver = resolver(&[
+            symbol("src/iface.ts", "Iface", SymbolKind::Interface, (1, 3)),
+            with_metadata(
+                class("src/elem.ts", "Elem", (1, 9)),
+                SymbolMetadata {
+                    superclasses: vec!["HTMLElement".to_string(), "Iface".to_string()],
+                    ..SymbolMetadata::default()
+                },
+            ),
+            method("src/elem.ts", "Elem.constructor", (2, 4)),
+        ]);
+        resolver.register_file(
+            "src/elem.ts",
+            &[import("Iface", "./iface", Some("Iface"))],
+            &[],
+            &[],
+            &[],
+        );
+        let calls = [call(
+            "src/elem.ts",
+            3,
+            "constructor",
+            "super",
+            CallForm::SuperConstructor,
+        )];
+        assert!(edges(&mut resolver, &calls).is_empty());
+        assert_eq!(resolver.stats().library, 1);
+    }
+
     /// A parameter or local named like a function shadows it: the call goes
     /// through a function value and gets no edge, unless the name holds a
     /// class (`cls()` in a classmethod).
@@ -2281,6 +2425,193 @@ mod tests {
         );
     }
 
+    /// A Vue-like monorepo (#169): `@vue/shared` and `vue` are packages of
+    /// the repository's pnpm workspace whose package.json names build
+    /// output (`dist/`) and a root `index.js` shim; `@vue/*` is also a
+    /// tsconfig `paths` alias. Both resolve to the package's `src/index.ts`
+    /// barrel; a package of another name stays a library.
+    #[test]
+    fn workspace_packages_and_path_aliases_resolve_like_relative_imports() {
+        let mut resolver = resolver(&[
+            function("packages/shared/src/general.ts", "isArray", (1, 2)),
+            function("packages/shared/src/general.ts", "hasOwn", (3, 4)),
+            function("packages/reactivity/src/reactive.ts", "reactive", (1, 9)),
+            function("packages/runtime/src/api.ts", "watch", (1, 9)),
+            function("packages/app/src/main.ts", "main", (1, 9)),
+            function("other/lodash.ts", "debounce", (1, 2)),
+        ]);
+        let shim = r#"{"name": "@vue/shared", "main": "index.js", "module": "dist/shared.esm-bundler.js", "types": "dist/shared.d.ts"}"#;
+        resolver.set_js_project(JsProject::from_files([
+            (
+                "pnpm-workspace.yaml".to_string(),
+                "packages:\n  - 'packages/*'\n".to_string(),
+            ),
+            ("packages/shared/package.json".to_string(), shim.to_string()),
+            (
+                "packages/reactivity/package.json".to_string(),
+                r#"{"name": "@vue/reactivity", "main": "index.js"}"#.to_string(),
+            ),
+            (
+                "packages/runtime/package.json".to_string(),
+                r#"{"name": "@vue/runtime", "exports": {".": "./src/api.ts", "./sub/*": "./src/*.ts"}}"#
+                    .to_string(),
+            ),
+        ]));
+        for (file, imports) in [
+            (
+                "packages/shared/src/index.ts",
+                vec![import("*", "./general", None)],
+            ),
+            // The root shim a bundler never sees.
+            ("packages/shared/index.js", vec![]),
+            (
+                "packages/reactivity/src/reactive.ts",
+                vec![import("isArray", "@vue/shared", Some("isArray"))],
+            ),
+            (
+                "packages/app/src/main.ts",
+                vec![
+                    import("shared", "@vue/shared", Some("*")),
+                    import("reactive", "@vue/reactivity/src/reactive", Some("reactive")),
+                    import("watch", "@vue/runtime", Some("watch")),
+                    import("debounce", "lodash", Some("debounce")),
+                ],
+            ),
+        ] {
+            resolver.register_file(file, &imports, &[], &[], &[]);
+        }
+        let calls = [
+            call(
+                "packages/reactivity/src/reactive.ts",
+                2,
+                "reactive",
+                "isArray",
+                CallForm::Bare,
+            ),
+            member(
+                "packages/app/src/main.ts",
+                2,
+                "main",
+                vec![ident("shared")],
+                "hasOwn",
+            ),
+            call(
+                "packages/app/src/main.ts",
+                3,
+                "main",
+                "reactive",
+                CallForm::Bare,
+            ),
+            call(
+                "packages/app/src/main.ts",
+                4,
+                "main",
+                "watch",
+                CallForm::Bare,
+            ),
+            call(
+                "packages/app/src/main.ts",
+                5,
+                "main",
+                "debounce",
+                CallForm::Bare,
+            ),
+        ];
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(
+                    "packages/app/src/main.ts::main",
+                    "packages/reactivity/src/reactive.ts::reactive",
+                    "import"
+                ),
+                edge(
+                    "packages/app/src/main.ts::main",
+                    "packages/runtime/src/api.ts::watch",
+                    "import"
+                ),
+                edge(
+                    "packages/app/src/main.ts::main",
+                    "packages/shared/src/general.ts::hasOwn",
+                    "import"
+                ),
+                edge(
+                    "packages/reactivity/src/reactive.ts::reactive",
+                    "packages/shared/src/general.ts::isArray",
+                    "import"
+                ),
+            ]
+        );
+        // lodash is no package of the repository: a library call.
+        assert_eq!(resolver.stats().library, 1);
+    }
+
+    /// tsconfig `paths` (through `extends`) and `baseUrl` name files of the
+    /// repository; they win over a workspace package of the same name, and
+    /// a pattern whose targets do not exist falls through.
+    #[test]
+    fn tsconfig_paths_and_base_url_resolve_bare_specifiers() {
+        let mut resolver = resolver(&[
+            function("shared/utils/strings.ts", "slugify", (1, 2)),
+            function("shared/config/index.ts", "readFlag", (1, 2)),
+            function("apps/web/src/lib/date.ts", "today", (1, 2)),
+            function("apps/web/src/main.ts", "start", (1, 9)),
+            function("vendor/missing.ts", "gone", (1, 2)),
+        ]);
+        resolver.set_js_project(JsProject::from_files([
+            (
+                "tsconfig.base.json".to_string(),
+                r#"{
+                  // shared options
+                  "compilerOptions": {
+                    "baseUrl": ".",
+                    "paths": {"~utils/*": ["shared/utils/*"], "@shared/config": ["shared/config"], "@gone/*": ["nowhere/*"],},
+                  },
+                }"#
+                .to_string(),
+            ),
+            (
+                "apps/web/tsconfig.json".to_string(),
+                r#"{"extends": "../../tsconfig.base.json"}"#.to_string(),
+            ),
+        ]));
+        resolver.register_file(
+            "apps/web/src/main.ts",
+            &[
+                import("slugify", "~utils/strings", Some("slugify")),
+                import("readFlag", "@shared/config", Some("readFlag")),
+                // baseUrl is the root: `apps/web/src/lib/date`.
+                import("today", "apps/web/src/lib/date", Some("today")),
+                import("gone", "@gone/missing", Some("gone")),
+            ],
+            &[],
+            &[],
+            &[],
+        );
+        let calls: Vec<CallReference> = ["slugify", "readFlag", "today", "gone"]
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                call(
+                    "apps/web/src/main.ts",
+                    i as u32 + 2,
+                    "start",
+                    name,
+                    CallForm::Bare,
+                )
+            })
+            .collect();
+        let start = "apps/web/src/main.ts::start";
+        assert_eq!(
+            edges(&mut resolver, &calls),
+            [
+                edge(start, "apps/web/src/lib/date.ts::today", "import"),
+                edge(start, "shared/config/index.ts::readFlag", "import"),
+                edge(start, "shared/utils/strings.ts::slugify", "import"),
+            ]
+        );
+    }
+
     /// A TypeScript barrel: `export { jwt } from './jwt'` and `export * from
     /// './util'` in `index.ts`, imported with `from '.'`.
     #[test]
@@ -2469,6 +2800,34 @@ mod tests {
             "no project symbol is named print"
         );
         assert!(stats.summary().starts_with("1 call sites linked; 5 not"));
+        // Per caller: the calls that may reach project code, in line order;
+        // not the library call (`json.loads`) or the built-in (`print`).
+        let reasons: Vec<(&str, u32, UnlinkedReason)> = stats
+            .unlinked_from("app.py", "main")
+            .iter()
+            .map(|c| (c.name.as_str(), c.line, c.reason))
+            .collect();
+        assert_eq!(
+            reasons,
+            [
+                ("get", 3, UnlinkedReason::TooManyCandidates),
+                ("callback", 5, UnlinkedReason::ThroughVariable),
+            ]
+        );
+        assert!(stats.unlinked_from("app.py", "helper").is_empty());
+        // The record round-trips through the index's JSON, and an older
+        // record without it still reads.
+        let json = serde_json::to_string(stats).unwrap();
+        assert!(
+            json.contains(r#""n":"get","l":3,"r":"too-many-candidates""#),
+            "{json}"
+        );
+        let back: CallResolutionStats = serde_json::from_str(&json).unwrap();
+        assert_eq!(&back, stats);
+        let old: CallResolutionStats =
+            serde_json::from_str(r#"{"linked":1,"too_many_candidates":0,"library":0,"through_variable":0,"unresolved":0,"no_caller":0}"#)
+                .unwrap();
+        assert!(old.unlinked_by_caller.is_empty());
     }
 
     // --- re-check of #144: bases the resolver cannot see -------------------

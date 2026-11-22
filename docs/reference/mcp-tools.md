@@ -212,9 +212,15 @@ Who calls this function or method? Structured result (`CallersOutput`): the
 callers with name, qualified name, kind, file, line range, `depth`, `via` (for
 depth > 1, the name of the symbol one step closer) and `resolved` (the CALLS
 edge resolution), ordered by depth, then file and line, plus `total_count`,
-`depth_limited`, `index_status` and a paging `notice`. The symbols, depths,
-`via` names and order are those `myc callers --json` prints (pinned by an
-end-to-end test).
+`depth_limited` (the depth limit left callers out), `index_status`, a paging
+`notice` and, when the list is not the whole answer, `incomplete` (#169):
+`reasons` (the depth limit of a transitive walk, the page, call sites named
+like a listed symbol that got no CALLS edge), `branches_cut` and `next`, the
+exact call that continues (`find_callers(symbol_name="x", depth=3)`). Direct
+callers are the whole answer to `depth` 1, so its depth limit is no reason.
+See [walks that stop early](../guides/call-resolution-limitations.md#walks-that-stop-early).
+The symbols, depths, `via` names and order are those `myc callers --json`
+prints (pinned by an end-to-end test).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -227,7 +233,10 @@ end-to-end test).
 
 What does this function or method call? Same parameters and shape as
 `find_callers` (`CalleesOutput`, list `callees`), following CALLS edges
-forwards.
+forwards. Its `incomplete` names the calls the walked symbols make that got
+no CALLS edge though they may reach project code (through a variable or
+callback, more than two candidates, a name not bound in scope), each with
+file and line.
 
 ### `impact_of_change`
 
@@ -244,6 +253,12 @@ What could break if I change this? Give at most one of `symbol_name`,
   HEAD` in the repository) or of the `diff` passed: changed symbols, symbols
   affected through calls and imports in both directions, files, and a risk
   score.
+
+When the walk stopped short, an `Incomplete (N branch(es) not followed)`
+block follows the first line: the depth limit (how many dependents one more
+step adds) and unlinked call sites named like the changed symbols or their
+dependents, with a `Next:` line (`impact_of_change(symbol_name="x",
+depth=3)`).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -262,9 +277,15 @@ step with kind, file and line; name-matched edges marked), then every symbol
 strictly between the two ends that lies on a chain of the shortest length —
 or up to `extra_calls` longer — with the chain length and its distance from
 the start. When `to_symbol` is not reachable within `max_depth` calls the
-result says so and suggests what to try (swap the ends, a larger
-`max_depth`, `find_callers`). The same symbol at both ends is
-`invalid_params`.
+result says so, with how many symbols were reached, and suggests what to try
+(swap the ends, a larger `max_depth`, `find_callers`). A cut flow is never
+presented as complete (#169): an `Incomplete (N branch(es) not followed)`
+block right under the first line names chains longer than the listed window
+(within `max_depth`), the page, the depth limit when no chain was found,
+calls made on the walk that got no CALLS edge (with file and line) and
+unlinked call sites named like `to_symbol`, then a `Next:` line with the
+exact call (`trace_flow(from_symbol="a", to_symbol="b", max_depth=12,
+extra_calls=3)`). The same symbol at both ends is `invalid_params`.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|

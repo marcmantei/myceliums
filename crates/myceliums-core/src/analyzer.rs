@@ -202,6 +202,31 @@ impl Analyzer {
         }
     }
 
+    /// When the analysis has JavaScript or TypeScript files: give the
+    /// resolver the repository's workspace packages and tsconfig/jsconfig
+    /// path aliases, so `import … from '@scope/pkg'` of a package in this
+    /// repository resolves like a relative import (#169).
+    fn register_js_project(
+        &self,
+        resolver: &mut CallResolver,
+        files: &[(PathBuf, SourceLanguage)],
+    ) {
+        let has_js = files.iter().any(|(path, _)| {
+            crate::resolver::language_family(&path.to_string_lossy()) == Some("js")
+        });
+        if !has_js {
+            return;
+        }
+        let project = crate::resolver::JsProject::load(&self.repo_path);
+        if !project.is_empty() {
+            let (packages, aliased) = project.counts();
+            info!(
+                "JS/TS project: {packages} workspace packages, path aliases in {aliased} directories"
+            );
+        }
+        resolver.set_js_project(project);
+    }
+
     /// Run a full analysis of the repository.
     ///
     /// Walks all source files, parses them, builds the call graph, and
@@ -640,6 +665,7 @@ impl Analyzer {
 
         let source_files = self.discover_files()?;
         self.check_cancelled()?;
+        self.register_js_project(&mut resolver, &source_files);
         let file_discovery_ms = file_discovery_timer.elapsed_ms();
         info!(
             "Discovered {} source files ({:.2}ms)",
@@ -1599,6 +1625,8 @@ impl Analyzer {
                 Some((p.clone(), lang))
             })
             .collect();
+
+        self.register_js_project(&mut resolver, &source_files);
 
         if source_files.is_empty() {
             return Ok(AnalysisResult {

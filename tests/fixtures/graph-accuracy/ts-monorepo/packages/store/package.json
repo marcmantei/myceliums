@@ -1,0 +1,11 @@
+{
+  "name": "@acme/store",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./memory": "./src/memory.ts"
+  },
+  "dependencies": {
+    "@acme/core": "*"
+  }
+}

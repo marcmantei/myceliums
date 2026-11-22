@@ -23,13 +23,51 @@ The parsers report each call with its line, the callee's name, how the call name
 3. **Constructor call `new X()`** (and Python's `X()`) → the class `X` in scope. **`super(...)`** → the base class's constructor.
 4. **Languages whose extractor does not record call forms or bindings** (C, C++, C#, Ruby, Kotlin, Swift, PHP, Lua, Zig, PowerShell, Elixir, Scala, Objective-C, Dart): by name, any callable kind, nearest scope first — the caller's file, its imports, its directory, the whole language family.
 
-**Imports** are resolved to project files per language: Python modules and packages (absolute from a source root — a module inside a package, a directory with an `__init__.py`, is never a top-level module, so `from io import BytesIO` stays the standard library's even next to Django's `django/contrib/gis/geos/io.py` — or relative; `import a.b` binds `a`), relative TypeScript paths (and `@/`, `~/` aliases), Go import paths to the package directory, Rust `use` paths to module files, Java classes and static imports. An import binds what the file declares under the name: a symbol, a module-level value, a submodule, or a re-export — followed up to three deep, also through `from m import *`, TypeScript `export { x } from './m'`, `export * from`, `export { x as y }` and barrels that import and re-export; a library name a project module re-exports stays a library name. A specifier that names no project file is a library: a call through it gets no edge. A name a project file exports without a declaration the resolver can see is *unknown*, not a library: method calls on it fall back to the method name.
+**Imports** are resolved to project files per language: Python modules and packages (absolute from a source root — a module inside a package, a directory with an `__init__.py`, is never a top-level module, so `from io import BytesIO` stays the standard library's even next to Django's `django/contrib/gis/geos/io.py` — or relative; `import a.b` binds `a`), relative TypeScript paths, the repository's own [workspace packages and tsconfig `paths`](#monorepos-workspace-packages-and-tsconfig-paths) (and `@/`, `~/` aliases), Go import paths to the package directory, Rust `use` paths to module files, Java classes and static imports. An import binds what the file declares under the name: a symbol, a module-level value, a submodule, or a re-export — followed up to three deep, also through `from m import *`, TypeScript `export { x } from './m'`, `export * from`, `export { x as y }` and barrels that import and re-export; a library name a project module re-exports stays a library name. A specifier that names no project file is a library: a call through it gets no edge. A name a project file exports without a declaration the resolver can see is *unknown*, not a library: method calls on it fall back to the method name.
 
 **Several candidates.** Where more than one symbol qualifies — a method name shared by two classes on an untyped receiver, two build-tag variants of a Go function — the call is linked to each candidate, labelled `ambiguous`, up to `MAX_AMBIGUOUS_TARGETS` (2). With three or more candidates the name says too little and the call gets no edge. Java overloads are first narrowed by argument count.
 
 Every CALLS edge records how its target was found in its metadata (`line:<n>;resolved:<label>`); the MCP tools that list callers and callees show it.
 
-**Calls that get no edge are counted.** Each analysis records how many call sites were linked and why the others were not — more than two candidates, a library target, a call through a variable, nothing in scope, outside any function. `myc analyze` and the MCP `analyze` tool print the counts (on Django 5.1.4: 60,298 call sites linked; 97,203 not: 9,041 with more than two candidates, 68,032 into libraries, 2,006 through variables, 17,877 with nothing in scope, 247 outside any function). Unlinked call sites whose name a project function, method or class of the same language has are also counted per name: `find_callers` reports them for the symbol (`unlinked_call_sites`: "N call site(s) named `m` got no CALLS edge ... not counted above"), and `impact_of_change` adds the same note for the changed symbols. Those are calls the symbol *may* receive that no edge shows. Incremental re-indexing (`analyze_files`) keeps the last full run's record.
+**Calls that get no edge are counted.** Each analysis records how many call sites were linked and why the others were not — more than two candidates, a library target, a call through a variable, nothing in scope, outside any function. `myc analyze` and the MCP `analyze` tool print the counts (on Django 5.1.4: 60,298 call sites linked; 97,203 not: 9,041 with more than two candidates, 68,032 into libraries, 2,006 through variables, 17,877 with nothing in scope, 247 outside any function). Unlinked call sites whose name a project function, method or class of the same language has are also counted per name, and each caller's own unlinked calls that may reach project code — more than two candidates, a project name nothing in scope binds, a call through a variable, parameter or callback — are recorded with their line (#169; library calls are not). The walks report both as places they could not follow ([below](#walks-that-stop-early)). Incremental re-indexing (`analyze_files`) keeps the last full run's record, so its lines can be stale for files changed since.
+
+### Walks that stop early
+
+`trace_flow`, `find_callers`/`find_callees` (and `myc callers`/`myc callees`) with a depth, and `impact_of_change` (and `myc impact`) never present a cut walk as complete (#169). When they stopped short they add an `Incomplete (N branch(es) not followed)` block — in `find_callers`/`find_callees` the `incomplete` object (`reasons`, `branches_cut`, `next`) — right under the first line, with one reason per cut and a `Next:` step that is the exact call to continue:
+
+| reason | when | next step |
+|---|---|---|
+| depth limit | a transitive walk (`depth` > 1, `impact_of_change`, `trace_flow` without a chain) stopped with edges leading further: how many symbols one more step adds, and through which | the same call with `depth`/`max_depth` raised |
+| longer chains | `trace_flow` found a chain, and more symbols lie on chains longer than the listed window (shortest + `extra_calls`) within `max_depth` | the same call with `extra_calls` raised; `find_callers` of the target when the gap is over 5 calls |
+| page | the list is paged | the same call with `offset` |
+| calls made here got no CALLS edge | a walked symbol makes calls the resolver could not link that may reach project code (callbacks, more than two candidates, unbound names): each with file and line | read those lines |
+| call sites named like a symbol here got no CALLS edge | callers the graph may be missing | grep for the name |
+
+Direct callers (`depth` 1) are the whole answer to "who calls X", so their depth limit is not a reason; their unlinked call sites are. Nothing is said when nothing was cut — which still does not make a graph answer complete: it is a heuristic, and for completeness-critical questions the agent guidance (server instructions, the routing block, the `code-explorer` subagent) says to read the source.
+
+### Monorepos: workspace packages and tsconfig paths
+
+A bare specifier is a library unless the repository declares it (#169). Before that, every import of a sibling package — `import { isArray } from '@vue/shared'` in vuejs/core — was a library import, and the calls through it had no edge. The analyzer now reads, besides the source files:
+
+- **workspaces**: `package.json` `workspaces` (an array or `{ "packages": [...] }`), `pnpm-workspace.yaml` `packages` (with `!` excludes), `lerna.json` `packages` (default `packages/*`), at any depth (a workspace root need not be the repository root). Each member's `package.json` `name` is a package of the repository. Its entry is looked for among the indexed files: a declared entry (`source`, `exports["."]` with a `source` condition first, `module`, `main`, `browser`, `types`) under a build directory (`dist/index.js`, `lib/…`, `esm/…`) stands for the same path under `src/`, since build output is not indexed; then `src/index.*`; then the declared entries as written (a root `index.js` that loads `dist/` comes after `src/index`); then the package's own `index.*`. A subpath (`@acme/store/memory`) goes through `exports` subpaths (with `*` patterns), then `src/<subpath>`, then `<subpath>`. Of two members with one name, the one sharing more leading directories with the importer wins. Nx and other tools that only use tsconfig `paths` are covered by the next point.
+- **tsconfig/jsconfig**: `compilerOptions.paths` and `baseUrl` of every `tsconfig*.json`/`jsconfig*.json` (comments and trailing commas allowed), following `extends` (a relative path, with or without `.json`, or a file of a workspace package such as `@repo/typescript-config/base.json`; never `node_modules`; an array of bases, later ones winning). `paths` targets are relative to `baseUrl`, else to the file that declares `paths`. The aliases apply to the files under the config's directory; the nearest directory with a `tsconfig.json`, `jsconfig.json` or other `tsconfig.*.json` that sets `paths` or `baseUrl` wins. An exact pattern beats a wildcard, a longer wildcard prefix a shorter one, and a pattern whose targets name no indexed file falls through.
+
+A bare specifier is tried against the importer's `paths`, then its `baseUrl`, then the workspace packages, then the `@/x`/`~/x` source-root convention; whatever names no indexed file stays a library. A call through such an import is labelled `import`, like any other import. `export *` and `export { … } from` chains are followed across packages as within one (up to three deep). Changing a `package.json` or tsconfig does not mark the index stale: re-run `analyze` after such a change.
+
+Measured (#169):
+
+| | before | after |
+|---|---:|---:|
+| graph-eval monorepo set (`ts-monorepo/`, 25 gold edges, 14 cross-package, 5 through `paths`): recall | 8 / 25 = 0.32 (0.17–0.52) | **25 / 25 = 1.00 (0.87–1.00)** |
+| … precision | 8 / 8 | **25 / 25** |
+| vuejs/core v3.5.46 (the #163 checkout and index excludes): call sites linked | 3,682 | 5,481 |
+| … into libraries | 5,984 | 3,723 |
+| … CALLS edges | 2,670 | 3,692 |
+| … CALLS edges between two `packages/*` | 138 | 948 |
+| … of those, the TypeScript checker resolves a call in the caller's lines to the target (`evals/agent/groundtruth/vue_edges.js`) | 11 | 808 |
+| … checker-resolved cross-package call sites inside a function that have an edge (of 1,811) | 9 | 1,162 |
+
+The other five gold sets and the held-out set are unchanged. Of the 810 Vue cross-package edges the change adds, 789 are `import` edges; 797 of the 810 match a checker-resolved call at the edge's line. Of the 13 that do not, 2 are right (`new EffectScope(…)` → the class, where the checker names the constructor) and 11 wrong: 9 are the name fallback for receivers of unknown type, which now reaches values typed by interfaces of another package (`exp.children.forEach(…)` → a test file's `Collection.forEach`), one is `this._app.unmount()` linked `ambiguous` to two wrong methods, and one follows a barrel that imports a name without re-exporting it. A sample of 10 added edges (seed 169) was checked against the source: all 10 right (e.g. `createRoot` imported from `@vue/compiler-dom`, which re-exports `@vue/compiler-core`). The other 127 cross-package edges the checker does not confirm (140 after, of 948) were there before, of 138 (`name-match` and `ambiguous` edges on untyped receivers).
 
 ## Language families
 
@@ -51,9 +89,9 @@ Every other extension is a family of its own (`rs`, `go`, `rb`, `swift`, `php`, 
 
 | label | meaning | gold set (all languages) |
 |---|---|---:|
-| `exact` | Determined by the call's syntax and the declarations in view: a method on a typed receiver (`self`/`this`/`super`, `Self`, a class, a variable, field or parameter whose type is declared or constructed in view, a declared return type), a class's static member, a constructor call, an unqualified call to the enclosing class's method (Java). | 161 / 161, precision 1.00 (0.98–1.00) |
-| `import` | Bound by an import: an imported name, or a member of an imported module or package. | 47 / 47, 1.00 (0.92–1.00) |
-| `name-match` | Found by name in the nearest scope where exactly one symbol qualifies: the caller's file, its package (Go) — or, for a call on a receiver of unknown type, the only method of that name in the language family; for languages without call forms, any scope up to the family. | 40 / 40, 1.00 (0.91–1.00) |
+| `exact` | Determined by the call's syntax and the declarations in view: a method on a typed receiver (`self`/`this`/`super`, `Self`, a class, a variable, field or parameter whose type is declared or constructed in view, a declared return type), a class's static member, a constructor call, an unqualified call to the enclosing class's method (Java). | 172 / 172, precision 1.00 (0.98–1.00) |
+| `import` | Bound by an import: an imported name, or a member of an imported module or package (also a workspace package or `paths` alias). | 56 / 56, 1.00 (0.94–1.00) |
+| `name-match` | Found by name in the nearest scope where exactly one symbol qualifies: the caller's file, its package (Go) — or, for a call on a receiver of unknown type, the only method of that name in the language family; for languages without call forms, any scope up to the family. | 45 / 45, 1.00 (0.92–1.00) |
 | `ambiguous` | Two symbols qualify; the call is linked to both. | none produced (see below) |
 
 Intervals are 95% Wilson intervals. On the gold set every `ambiguous` case was resolved by receiver typing; the evidence for the label and for the cap of 2 comes from the same fixtures resolved *without* receiver typing (the step-3 row below): there, two-candidate edges were right 33 of 64 times (0.52) and edges among three or more candidates 21 of 104 times (0.20). That is why three or more candidates get no edge. Treat an `ambiguous` edge as "one of these two".
@@ -69,9 +107,9 @@ Issue #94 added a gold set: small fixture projects in Python, TypeScript, Go, Ru
 - **The resolver rules were written while reading these fixtures** (#139). They implement general language rules — scoping, imports, declared types — not fixture-specific cases, but a gold set the rules were developed against measures the rules' coverage of its own constructs, not accuracy on unseen code. See [real repositories](#real-repositories) for an outside check.
 - The labels were written by an agent and **have not been reviewed by a human yet**.
 - The fixtures are a **stress test**: they deliberately reuse names (`parse`, `get`, `add`, `save`, `render`, `validate`, `map`) across modules, classes and languages, and declare most types.
-- The sets are small (43–59 edges per language, 249 in all). The intervals below say how little a perfect score on 45 edges proves.
+- The sets are small (43–59 edges per language, 25 in the monorepo set, 274 in all). The intervals below say how little a perfect score on 45 edges proves.
 
-Recorded baseline (`crates/myceliums-benchmarks/graph-gold/baseline.json`), each fixture analyzed as its own repository (`isolated`); with all five fixtures in one index (`polyglot`) every number is identical:
+Recorded baseline (`crates/myceliums-benchmarks/graph-gold/baseline.json`), each fixture analyzed as its own repository (`isolated`); with all six fixtures in one index (`polyglot`) every number is identical:
 
 | language | gold edges | extracted | correct | call precision | call recall |
 |---|---:|---:|---:|---:|---:|
@@ -80,9 +118,10 @@ Recorded baseline (`crates/myceliums-benchmarks/graph-gold/baseline.json`), each
 | Python | 43 | 42 | 42 | 1.00 (0.92–1.00) | 0.98 (0.88–1.00) |
 | Rust | 52 | 52 | 52 | 1.00 (0.93–1.00) | 1.00 (0.93–1.00) |
 | TypeScript | 50 | 50 | 50 | 1.00 (0.93–1.00) | 1.00 (0.93–1.00) |
-| **all** | **249** | **248** | **248** | **1.00 (0.98–1.00)** | **0.996 (0.98–1.00)** |
+| TypeScript monorepo (#169) | 25 | 25 | 25 | 1.00 (0.87–1.00) | 1.00 (0.87–1.00) |
+| **all** | **274** | **273** | **273** | **1.00 (0.99–1.00)** | **0.996 (0.98–1.00)** |
 
-Symbols: 337 of 337 gold symbols are found (Go and TypeScript interface methods are now extracted); the one extra symbol is a local arrow function in TypeScript (`index.ts::handler`), which the gold set leaves out of scope. The one missed edge is `cfg = config.Config.load(text); cfg.get(...)` in Python: `load` is a classmethod returning `cls(...)` with no return annotation, so `cfg`'s type is not declared anywhere.
+Symbols: 359 of 359 gold symbols are found (Go and TypeScript interface methods are now extracted); the one extra symbol is a local arrow function in TypeScript (`index.ts::handler`), which the gold set leaves out of scope. The one missed edge is `cfg = config.Config.load(text); cfg.get(...)` in Python: `load` is a classmethod returning `cls(...)` with no return annotation, so `cfg`'s type is not declared anywhere.
 
 How each step of #139 moved the numbers (all languages):
 
@@ -155,7 +194,7 @@ For every language: dynamic dispatch is linked to the statically bound declarati
 
 ### Missing edges
 
-A missing edge is now the more likely error, especially in untyped code: a method call on a value of unknown type whose name three or more classes share gets no edge; a call through a variable, parameter or callback never does; an interface or abstract method's implementations get no callers from calls through the interface. "No callers" does not mean "unused": `find_callers` says how many call sites of the name were left unlinked (`unlinked_call_sites`), and `impact_of_change` adds the same note.
+A missing edge is now the more likely error, especially in untyped code: a method call on a value of unknown type whose name three or more classes share gets no edge; a call through a variable, parameter or callback never does; an interface or abstract method's implementations get no callers from calls through the interface. "No callers" does not mean "unused": `find_callers`, `find_callees`, `trace_flow` and `impact_of_change` list the call sites they could not follow in their `Incomplete` block ([walks that stop early](#walks-that-stop-early)).
 
 ## Recommended practices
 

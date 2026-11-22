@@ -56,59 +56,6 @@ pub(crate) async fn call_resolution(store: &Store) -> Option<myceliums_core::Cal
     }
 }
 
-/// `N call sites named `m` got no CALLS edge ...` for a symbol, when the
-/// index recorded any: callers that may exist but no edge shows.
-pub(crate) fn unlinked_note(
-    stats: Option<&myceliums_core::CallResolutionStats>,
-    symbol: &myceliums_storage::CodeSymbol,
-) -> Option<String> {
-    let family = myceliums_core::language_family(&symbol.file_path)?;
-    let count = stats?.unlinked_named(family, &symbol.name);
-    (count > 0).then(|| {
-        format!(
-            "{count} call site(s) named `{}` got no CALLS edge (more than {} candidate \
-             symbols, or nothing in scope) and are not counted above",
-            symbol.name,
-            myceliums_core::MAX_AMBIGUOUS_TARGETS
-        )
-    })
-}
-
-/// For impact analysis: the changed symbols' names with call sites that got
-/// no CALLS edge, as one line, or `None`.
-pub(crate) fn unlinked_impact_note<'a>(
-    stats: Option<&myceliums_core::CallResolutionStats>,
-    symbols: impl IntoIterator<Item = (&'a str, &'a str)>,
-) -> Option<String> {
-    let stats = stats?;
-    let mut seen = std::collections::BTreeMap::new();
-    for (name, file_path) in symbols {
-        let Some(family) = myceliums_core::language_family(file_path) else {
-            continue;
-        };
-        let count = stats.unlinked_named(family, name);
-        if count > 0 {
-            seen.insert(name, count);
-        }
-    }
-    if seen.is_empty() {
-        return None;
-    }
-    let total: usize = seen.values().sum();
-    let names: Vec<String> = seen
-        .iter()
-        .take(10)
-        .map(|(name, count)| format!("`{name}` ({count})"))
-        .collect();
-    Some(format!(
-        "Not counted above: {total} call site(s) named like a changed symbol got no CALLS \
-         edge (more than {} candidate symbols, or nothing in scope): {}{}",
-        myceliums_core::MAX_AMBIGUOUS_TARGETS,
-        names.join(", "),
-        if seen.len() > 10 { ", ..." } else { "" }
-    ))
-}
-
 /// Load the embedding accounting for a store, for reporting in the `analyze`
 /// response's cached path.
 ///

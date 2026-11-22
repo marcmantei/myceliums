@@ -188,7 +188,7 @@ impl Targets {
 /// Subagent file name.
 pub const AGENT_FILE: &str = "code-explorer.md";
 /// Version of the subagent template; bump it when the text changes.
-pub const AGENT_VERSION: u32 = 2;
+pub const AGENT_VERSION: u32 = 3;
 /// Marker line in the subagent's frontmatter. A file without it is not ours.
 const AGENT_MARKER: &str = "# myceliums code-explorer";
 
@@ -213,7 +213,7 @@ You answer questions about the structure of this repository with the myceliums c
 1. Locate: `search_code` for a name or for a description of what the code does; `explain_symbol` shows a symbol's source, callers and callees.\n\
 2. Follow edges: `find_callers` / `find_callees` (`depth` for transitive chains), `impact_of_change` for what a change to a symbol, a file or the uncommitted diff would break, `trace_flow` for how A reaches B, `find_dead_code` for functions nothing calls.\n\
 3. Ambiguous names: the error lists `file:qualified_name` candidates; pick one by file or qualified name, and say which one you used.\n\
-4. Read only the lines needed to confirm a result. The graph reflects the last `myc analyze`; when it disagrees with the code, trust the code and say so.\n\
+4. Read only the lines needed to confirm a result. The graph reflects the last `myc analyze`; when it disagrees with the code, trust the code and say so. A result that says `Incomplete` (depth limit, calls without an edge) is partial: follow its `Next` step or read the source before calling an answer complete.\n\
 \n\
 Answer with the symbols as `name - path:line`, one per line, then at most two sentences. Report only what the graph and the code show.\n"
     )

@@ -27,6 +27,13 @@ const EMBEDDED: &[(&str, &str)] = &[
     ("go", include_str!("../../graph-gold/go.json")),
     ("rust", include_str!("../../graph-gold/rust.json")),
     ("java", include_str!("../../graph-gold/java.json")),
+    // A small TypeScript monorepo: workspace packages and tsconfig `paths`
+    // aliases (#169). Fewer edges than the language sets: it measures one
+    // mechanism, cross-package imports, not a language.
+    (
+        "typescript-monorepo",
+        include_str!("../../graph-gold/typescript-monorepo.json"),
+    ),
 ];
 
 /// Directory under `tests/fixtures/` that holds every gold fixture.
@@ -333,9 +340,15 @@ mod tests {
                 "{}",
                 language.fixture
             );
+            // The monorepo set covers cross-package imports only.
+            let aim = if language.language == "typescript-monorepo" {
+                20..=80
+            } else {
+                40..=80
+            };
             assert!(
-                (40..=80).contains(&language.calls.len()),
-                "{}: {} gold edges, the set aims for 40-80",
+                aim.contains(&language.calls.len()),
+                "{}: {} gold edges, the set aims for {aim:?}",
                 language.language,
                 language.calls.len()
             );

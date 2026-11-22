@@ -103,7 +103,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous).",
+    "description": "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous). `incomplete` lists calls the graph could not link (callbacks, ambiguous names) and the depth cut, with the call that continues.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -211,6 +211,34 @@
             "resolved"
           ],
           "type": "object"
+        },
+        "Incomplete": {
+          "description": "Why a graph walk is not the whole answer.",
+          "properties": {
+            "branches_cut": {
+              "description": "Places not followed: symbols one more step would add, plus unlinked call sites.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "next": {
+              "description": "The call that continues the walk.",
+              "type": "string"
+            },
+            "reasons": {
+              "description": "One per cut: depth limit, page, calls or call sites without a CALLS edge.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "reasons",
+            "branches_cut",
+            "next"
+          ],
+          "type": "object"
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -223,6 +251,17 @@
         },
         "depth_limited": {
           "type": "boolean"
+        },
+        "incomplete": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Incomplete"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set when this is not the whole answer: why, and the call that continues."
         },
         "index_status": {
           "description": "Index freshness: analyzed commit vs current HEAD.",
@@ -265,7 +304,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones.",
+    "description": "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones. `incomplete` says what the walk did not follow (depth limit, unlinked call sites) and the call that continues it.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -373,6 +412,34 @@
             "resolved"
           ],
           "type": "object"
+        },
+        "Incomplete": {
+          "description": "Why a graph walk is not the whole answer.",
+          "properties": {
+            "branches_cut": {
+              "description": "Places not followed: symbols one more step would add, plus unlinked call sites.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "next": {
+              "description": "The call that continues the walk.",
+              "type": "string"
+            },
+            "reasons": {
+              "description": "One per cut: depth limit, page, calls or call sites without a CALLS edge.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "reasons",
+            "branches_cut",
+            "next"
+          ],
+          "type": "object"
         }
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -385,6 +452,17 @@
         },
         "depth_limited": {
           "type": "boolean"
+        },
+        "incomplete": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Incomplete"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set when this is not the whole answer: why, and the call that continues."
         },
         "index_status": {
           "description": "Index freshness: analyzed commit vs current HEAD.",
@@ -404,13 +482,6 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
-        },
-        "unlinked_call_sites": {
-          "description": "Call sites with this symbol's name that got no CALLS edge (more\ncandidates than the resolver links, or nothing in scope): callers\nthat may exist but are not counted above.",
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "required": [
@@ -570,7 +641,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass.",
+    "description": "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass. An `Incomplete:` block names what the walk did not follow (depth limit, unlinked call sites) and the next call.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
@@ -861,7 +932,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line.",
+    "description": "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line. An `Incomplete:` block names what is not listed (longer chains, depth limit, calls without a CALLS edge) and the next call; read the source before calling a flow complete.",
     "inputSchema": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {

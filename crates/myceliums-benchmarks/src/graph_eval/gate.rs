@@ -188,13 +188,19 @@ fn estimates(current: &RunEdges, baseline: &RunEdges) -> Result<[(GatedMetric, D
 }
 
 /// False edges in the polyglot setup that connect two fixtures' languages.
+/// An edge between two fixtures of one language family (the TypeScript and
+/// the TypeScript monorepo fixture) is a false positive, not a crossing.
 pub fn cross_language_edges(report: &RunReport) -> usize {
+    let family = |id: &str| {
+        let file = id.split_once("::").map_or(id, |(file, _)| file);
+        myceliums_core::language_family(file).map(str::to_string)
+    };
     report.setups.get(POLYGLOT).map_or(0, |setup| {
         setup
             .detail
             .values()
             .flat_map(|d| &d.calls.false_positives)
-            .filter(|e| e.to.ends_with("[other fixture]"))
+            .filter(|e| e.to.ends_with("[other fixture]") && family(&e.from) != family(&e.to))
             .count()
     })
 }
@@ -427,6 +433,21 @@ mod tests {
         let outcome = compare(&crossing, &baseline, &gold).unwrap();
         assert!(outcome.failed());
         assert!(outcome.errors[0].contains("connect two languages"));
+    }
+
+    #[test]
+    fn an_edge_between_two_fixtures_of_one_family_is_no_crossing() {
+        let mut report = baseline();
+        let polyglot = report.setups.get_mut(POLYGLOT).unwrap();
+        let detail = polyglot.detail.values_mut().next().unwrap();
+        detail.calls.false_positives.push(WrongEdge {
+            from: "apps/web/src/main.ts::start".into(),
+            to: "typescript/src/storage.ts::Repository.all [other fixture]".into(),
+            label: "name-match".into(),
+            line: None,
+            note: None,
+        });
+        assert_eq!(cross_language_edges(&report), 0);
     }
 
     #[test]
