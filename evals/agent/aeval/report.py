@@ -34,6 +34,8 @@ COMPACT_FIELDS = [
     "hook_grep_calls", "hook_grep_hints", "hook_grep_silent_reasons", "session_hook", "format_hook_calls",
     # outcome eval at scale (#163): Bash in every condition
     "bash_calls", "myc_cli_calls", "myc_cli_subcommands",
+    # re-run after #169 (#171): Incomplete / Next hints met and followed
+    "incomplete_results", "next_followed", "next_kinds", "source_after_hint",
 ]
 
 METRICS = [
@@ -362,7 +364,10 @@ def regrade(label: str, note: str) -> int:
 
 def write_report(label: str, check: bool = False) -> bool:
     meta = config.load_json(config.RESULTS_DIR / label / "meta.json")
-    if meta.get("budgets"):  # outcome eval at scale (#163): one directory, several budgets
+    if meta.get("rerun_of"):  # one condition re-run against a committed #163-style run (#171)
+        from .report_rerun import render as render_rerun
+        text, summary = render_rerun(label)
+    elif meta.get("budgets"):  # outcome eval at scale (#163): one directory, several budgets
         from .report_scale import render as render_scale
         text, summary = render_scale(label)
     elif meta.get("conditions") and set(meta["conditions"]) != {"with", "without"}:

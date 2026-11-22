@@ -28,6 +28,9 @@ class Transcript:
     result: dict | None = None
     texts: list[str] = field(default_factory=list)
     tool_calls: list[dict] = field(default_factory=list)  # {"id", "name", "input", "parent"}
+    # {"id", "name", "text", "is_error", "after"}: what each tool call returned, in order; ``after`` is the
+    # number of tool calls made before the result arrived (#171: the Incomplete/Next hints)
+    tool_results: list[dict] = field(default_factory=list)
     hook_events: list[dict] = field(default_factory=list)  # `--include-hook-events` lifecycle events
     tool_errors: Counter = field(default_factory=Counter)
     rate_limits: list[dict] = field(default_factory=list)
@@ -127,13 +130,29 @@ def parse_transcript(path: str) -> Transcript:
                 content = (ev.get("message") or {}).get("content")
                 if isinstance(content, list):
                     for block in content:
-                        if block.get("type") == "tool_result" and block.get("is_error"):
+                        if block.get("type") != "tool_result":
+                            continue
+                        if block.get("is_error"):
                             t.tool_errors[by_id.get(block.get("tool_use_id"), "?")] += 1
+                        t.tool_results.append({"id": block.get("tool_use_id"),
+                                               "name": by_id.get(block.get("tool_use_id"), "?"),
+                                               "text": _result_text(block.get("content")),
+                                               "is_error": bool(block.get("is_error")),
+                                               "after": len(t.tool_calls)})
             elif typ == "rate_limit_event":
                 t.rate_limits.append(ev)
             elif typ == "result":
                 t.result = ev
     return t
+
+
+def _result_text(content) -> str:
+    """A tool result's text: a string, or the text parts of a content list."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "\n".join(str(b.get("text") or "") for b in content if isinstance(b, dict))
+    return ""
 
 
 def check_isolation(init: dict | None, required_tools: set[str], expect_mcp: bool,

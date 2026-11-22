@@ -44,7 +44,7 @@ DEFAULT_EXCLUDE = ["node_modules/**", ".git/**", "target/**", "dist/**", "build/
 
 
 def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | None = None,
-          record_only: bool = False) -> None:
+          record_only: bool = False, default_config: set[str] | None = None) -> None:
     """Build one myceliums index per repository with ``myc analyze``.
 
     ``myc analyze`` stores its data under ``$HOME/.myceliums``; ``HOME`` is set
@@ -54,6 +54,10 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
     With ``record_only`` an index that already exists (built by the same
     command) is only described in ``meta.json``; its ``analyze.log`` must be
     present next to it.
+
+    Repositories in ``default_config`` are indexed with myceliums' default
+    configuration, without their ``index_exclude_extra`` (#171: the Django
+    index with ``tests/``); ``meta.json`` records what was excluded.
     """
     cache = config.cache_dir()
     for name, r in repos.items():
@@ -63,6 +67,7 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
         work = config.work_root() / name
         log_path = cache / "index" / name / "analyze.log"
         took = None
+        extra = [] if name in (default_config or set()) else r.get("index_exclude_extra", [])
         if not record_only:
             if home.exists():
                 config.remove_tree(home, cache / "index")
@@ -70,9 +75,9 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
             if work.exists():
                 config.remove_tree(work, config.work_root())
             config.copy_tree(cache / "repos" / name, work)
-            if r.get("index_exclude_extra"):
+            if extra:
                 # Index-time only: the session checkouts are fresh copies without it.
-                patterns = DEFAULT_EXCLUDE + r["index_exclude_extra"]
+                patterns = DEFAULT_EXCLUDE + extra
                 (work / ".myceliums.toml").write_text(
                     "[analysis]\nexclude = [" + ", ".join(json.dumps(x) for x in patterns) + "]\n")
             env = {"HOME": str(home), "MYCELIUMS_DATA_DIR": str(home / ".myceliums"),
@@ -100,7 +105,8 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
             "embedded": _grab(log, r"Embeddings:\s+([\d,]+)"),
             "communities": _grab(log, r"Communities:\s+([\d,]+)"),
             "processes": _grab(log, r"Processes:\s+([\d,]+)"),
-            "index_exclude_extra": r.get("index_exclude_extra", []),
+            "index_exclude_extra": extra,
+            **({"index_config": "default"} if name in (default_config or set()) else {}),
             "myc_version": config.tool_version([myc, "--version"]),
             "myc_sha256": config.sha256_file(Path(myc)),
             "indexed_at": info.get("analyzed_at"),

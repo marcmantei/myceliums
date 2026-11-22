@@ -18,6 +18,7 @@ from pathlib import Path
 
 from . import config
 from .grading import grade, is_success
+from .hints import hint_stats
 from .report import COMPACT_FIELDS, _fmt, _fmt_diff, _fmt_ratio
 from .stats import exact_sign_test, mean, paired_bootstrap
 from .stream import parse_transcript
@@ -85,10 +86,13 @@ def export(label: str, runs: list[str], extra_meta: dict) -> Path:
             row.update(f1=round(g.f1, 4), precision=round(g.precision, 4), recall=round(g.recall, 4),
                        success=is_success(g.f1, thr), tp=g.tp, fp=g.fp, neutral=g.neutral, n_gold=g.n_gold,
                        n_answer=g.n_answer, missed=g.missed, false_positives=g.false_positives)
-            if row.get("first_turn_input_tokens") is None:
-                path = run_dir / "sessions" / run_id / f"attempt{row['attempt']}.jsonl"
-                if path.exists():
-                    row["first_turn_input_tokens"] = parse_transcript(str(path)).first_turn_input_tokens
+            path = run_dir / "sessions" / run_id / f"attempt{row['attempt']}.jsonl"
+            if path.exists():
+                t = parse_transcript(str(path))
+                if row.get("first_turn_input_tokens") is None:
+                    row["first_turn_input_tokens"] = t.first_turn_input_tokens
+                if config.VARIANTS[row["condition"]].mcp:
+                    row.update(hint_stats(t))
             compact = {k: row.get(k) for k in COMPACT_FIELDS}
             compact["run_id"] = f"t{budget}/{run_id}"
             compact["budget"] = budget

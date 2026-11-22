@@ -1,0 +1,151 @@
+{
+  "bash": true,
+  "budgets": [
+    10,
+    40
+  ],
+  "claude_version": "2.1.330",
+  "conditions": [
+    "C"
+  ],
+  "continuity_exclude": {
+    "django-tests-import-string": "The reused Django index of #153 does not cover tests/ (index_exclude_extra tests/**), so in C myceliums had no data for the three Django tests tasks; they are left out of the primary analysis.",
+    "django-tests-number-format": "The reused Django index of #153 does not cover tests/ (index_exclude_extra tests/**), so in C myceliums had no data for the three Django tests tasks; they are left out of the primary analysis.",
+    "django-tests-split-domain-port": "The reused Django index of #153 does not cover tests/ (index_exclude_extra tests/**), so in C myceliums had no data for the three Django tests tasks; they are left out of the primary analysis."
+  },
+  "date": "2026-11-22",
+  "effort": "medium",
+  "index": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "communities": 328,
+      "embedded": 12443,
+      "files": 828,
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_seconds": 1995.5,
+      "indexed_at": "2026-11-22T20:04:50.857822+00:00",
+      "myc_sha256": "4f59a4b2ada3c7bf701c3f1f28f292ecc0ebee0836926184b86b8af5ef732218",
+      "myc_version": "myc 0.3.2",
+      "processes": 2922,
+      "relationships": 31408,
+      "repo": "django",
+      "repo_id": "django-f980c747",
+      "symbols": 12443,
+      "work_path": "/private/tmp/aeval153/django"
+    },
+    "vue": {
+      "commit": "7de9e41b61b2d890fd4be408068da75cbeb05709",
+      "communities": 310,
+      "embedded": 15750,
+      "files": 501,
+      "index_exclude_extra": [
+        "packages-private/**",
+        "changelogs/**",
+        "CHANGELOG.md"
+      ],
+      "index_seconds": 3831.2,
+      "indexed_at": "2026-11-22T17:58:32.505970+00:00",
+      "myc_sha256": "4f59a4b2ada3c7bf701c3f1f28f292ecc0ebee0836926184b86b8af5ef732218",
+      "myc_version": "myc 0.3.2",
+      "processes": 635,
+      "relationships": 20566,
+      "repo": "vue",
+      "repo_id": "vue-2b84db6b",
+      "symbols": 15750,
+      "work_path": "/private/tmp/aeval153/vue"
+    }
+  },
+  "label": "2026-11-22-rerun-c",
+  "mcp_tools_offered": 9,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "d1edc390e0c4",
+  "myc_sha256": "4f59a4b2ada3c7bf701c3f1f28f292ecc0ebee0836926184b86b8af5ef732218",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Session accounting: 60 agent sessions (30 tasks x condition C x 10 and 40 turns x 1 repetition), every one graded on its first attempt: no retries (0 of the 5 allowed), no timeouts, no turn-limit hits; the longest took 269 s. Two probe sessions against the mock API (one per repository, condition C) used no model. The none and old C rows are the committed #163 sessions; none of them was re-run.",
+    "Binary: myc 0.3.2 built in release mode from d1edc390e0c4 (main with #169, PR #170), sha256 4f59a4b2ada3c7bf701c3f1f28f292ecc0ebee0836926184b86b8af5ef732218. #163 ran 951d041ff9e0 (sha256 4ef9e803...). Claude Code 2.1.330 and the resolved model claude-sonnet-5-5 are the same in both runs.",
+    "Indexes built fresh by that binary (myc analyze --strict-embeddings, jina-embeddings-v2-base-code) at the same working paths as #163 (/private/tmp/aeval153/<repo>). Django: the #153/#163 configuration, 12,443 of 12,443 symbols embedded in 1,996 s; index fingerprint (sha256 over the sorted sha256 of its 311 files) 6f63d9000feb4ce5... Vue: the #163 configuration, 15,750 of 15,750 embedded in 3,831 s (built next to the first Django build); 20,566 relationships against #163's 19,544 (#169 resolves the @vue/* workspace packages); fingerprint over 266 files bb68578d8433bbab.... myc callers toRawType now lists 3 direct callers (#163: 0).",
+    "Django with tests/: the planned index (myceliums' default configuration, agent_eval.py index --default-config django) parsed 41,842 symbols in 2,956 files with 328,884 relationships and embedded all 41,842 in 8,386 s; community detection then ran for more than 1.5 hours without finishing and the build was stopped (#172). The Django index was rebuilt without tests/, so the #163 confound remains: the primary analysis is the same 27 tasks as in #163, and the 30-task numbers include three Django tests tasks for which C had no index data.",
+    "Same setup as #163, checked per session against the #163 run directories: the prompt is byte-identical in all 60 sessions, and the claude command line is identical apart from temporary paths. What setup-claude writes differs only in the routing block, now v3 from #169, with the added line 'Graph answers are heuristic: when completeness matters, or a result says Incomplete or lists calls without an edge, read the source before answering.'",
+    "Time drift: the #163 sessions ran 10:34-11:12 UTC on 2026-11-22 (10 and 40 turns), this re-run 20:06-20:24 UTC the same day, not interleaved. A change behind the model alias or in the service between the two would also show up as a C (#171) difference. Two sessions (one per repository) ran at a time, as in #163.",
+    "Gold labels of tasks-scale were derived by an agent from the AST and the type checker and are not reviewed by a person (#164 left this set out). One repetition: every task-budget cell is one sample.",
+    "Incomplete hints were common: 45 of 60 C sessions received at least one result with an Incomplete block (63 results). The three task-budget pairs C (#171) lost against none: django-flow-runserver-import-string at 10 turns answered from two trace_flow calls although the result said 3 calls got no CALLS edge and named 'read the source at the lines listed above' (not followed; F1 0.48, the same answer as the old C); at 40 turns it read the source after the hint and still missed 8 functions of the exception-handling branch (F1 0.64); vue-amb-reactivity-warn at 40 turns followed the hints and added 22 names (F1 0.68, the old C 0.72); vue-tc-code-frame at 10 turns wrote that it had not checked two unlinked warn call sites and missed 9 functions (F1 0.76)."
+  ],
+  "primary_exclude": {
+    "django-tests-import-string": "The fresh Django index again leaves out tests/ (index_exclude_extra tests/**, as in #153/#163): with tests/ the analysis by the current main did not finish (#172), so in C myceliums had no data for the three Django tests tasks; they stay out of the primary analysis.",
+    "django-tests-number-format": "The fresh Django index again leaves out tests/ (index_exclude_extra tests/**, as in #153/#163): with tests/ the analysis by the current main did not finish (#172), so in C myceliums had no data for the three Django tests tasks; they stay out of the primary analysis.",
+    "django-tests-split-domain-port": "The fresh Django index again leaves out tests/ (index_exclude_extra tests/**, as in #153/#163): with tests/ the analysis by the current main did not finish (#172), so in C myceliums had no data for the three Django tests tasks; they stay out of the primary analysis."
+  },
+  "repos": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "display_name": "Django",
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_note": "Only the django/ package is indexed (12,443 symbols, 828 files): with tests/ and docs/ included, `myc analyze` produced 41,842 symbols and 328,884 relationships and its community detection had not finished after 9 minutes on the benchmark machine. The agent still sees the whole checkout; every #153 question is about the django/ package.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "django",
+      "ref": "5.1.4",
+      "url": "https://github.com/django/django.git"
+    },
+    "vue": {
+      "commit": "7de9e41b61b2d890fd4be408068da75cbeb05709",
+      "display_name": "Vue",
+      "index_exclude_extra": [
+        "packages-private/**",
+        "changelogs/**",
+        "CHANGELOG.md"
+      ],
+      "index_note": "packages-private/ (playgrounds and type-only tests) and the changelogs are not indexed; every #163 question is about packages/*/src or packages/*/__tests__, which are. The agent still sees the whole checkout.",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "vue",
+      "ref": "v3.5.46",
+      "url": "https://github.com/vuejs/core.git"
+    }
+  },
+  "reps": 1,
+  "rerun_of": "2026-11-22-scale",
+  "runs": {
+    "10": {
+      "attempts_total": 30,
+      "bash": true,
+      "label": "2026-11-22-rerun-c-t10",
+      "max_turns": 10,
+      "prompt_budget": true,
+      "retried_runs": [],
+      "runs_final": 30,
+      "sessions_launched_ledger": 30,
+      "timeout_s": 360
+    },
+    "40": {
+      "attempts_total": 30,
+      "bash": true,
+      "label": "2026-11-22-rerun-c-t40",
+      "max_turns": 40,
+      "prompt_budget": false,
+      "retried_runs": [],
+      "runs_final": 30,
+      "sessions_launched_ledger": 30,
+      "timeout_s": 480
+    }
+  },
+  "runs_final": 60,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-scale.json",
+  "tasks_sha256": "5c5164668ae63dee0743925d43b4ce0492d24e6fdb037414f23d8c7c9a7a6a1a",
+  "tool_search": null
+}
