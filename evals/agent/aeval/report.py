@@ -32,6 +32,8 @@ COMPACT_FIELDS = [
     # variant matrix (#125)
     "agent_calls", "subagent_tool_calls", "subagent_mcp_tool_calls", "first_mcp_call_index",
     "hook_grep_calls", "hook_grep_hints", "hook_grep_silent_reasons", "session_hook", "format_hook_calls",
+    # outcome eval at scale (#163): Bash in every condition
+    "bash_calls", "myc_cli_calls", "myc_cli_subcommands",
 ]
 
 METRICS = [

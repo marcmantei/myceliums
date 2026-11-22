@@ -82,6 +82,7 @@ def _run_config(args) -> RunConfig:
         myc=args.myc, models_dir=args.models_dir, conditions=conditions,
         tasks_file=os.environ.get("AEVAL_TASKS", ""), stop_after_s=getattr(args, "stop_after", None),
         prompt_budget=getattr(args, "prompt_budget", False),
+        bash=getattr(args, "bash", False),
     )
 
 
@@ -164,6 +165,7 @@ def cmd_export(args) -> int:
         "effort": cfg["effort"],
         "max_turns": cfg["max_turns"],
         **({"prompt_budget": True} if cfg.get("prompt_budget") else {}),
+        **({"bash": True} if cfg.get("bash") else {}),
         "timeout_s": cfg["timeout_s"],
         "reps": cfg["reps"],
         "success_threshold": cfg["success_threshold"],
@@ -334,6 +336,8 @@ def main(argv: list[str] | None = None) -> int:
                    "(running ones finish), to run a long matrix in bounded chunks")
     s.add_argument("--prompt-budget", action="store_true",
                    help="state the turn limit (--max-turns) in the prompt, identically in every condition (#153)")
+    s.add_argument("--bash", action="store_true",
+                   help="add the Bash tool in every condition (#163); the myc CLI is then reachable in C")
     s.set_defaults(fn=cmd_run)
 
     s = sub.add_parser("probe", help="check a variant's session setup against a mock API (no model call)")
@@ -347,6 +351,8 @@ def main(argv: list[str] | None = None) -> int:
         s.add_argument(flag, default=default, type=type(default))
     s.add_argument("--myc", default=_default_myc())
     s.add_argument("--models-dir", default=_default_models())
+    s.add_argument("--bash", action="store_true")
+    s.add_argument("--prompt-budget", action="store_true")
     s.set_defaults(reps=1, concurrency=1, max_retries=0, threshold=0.8, max_utilization=0.97,
                    max_sessions=None, tool_search=None, claude=None, fn=cmd_probe)
 

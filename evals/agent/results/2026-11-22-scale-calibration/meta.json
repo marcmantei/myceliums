@@ -1,0 +1,117 @@
+{
+  "attempts_total": 15,
+  "bash": true,
+  "claude_version": "2.1.330",
+  "conditions": [
+    "none"
+  ],
+  "date": "2026-11-22",
+  "effort": "medium",
+  "index": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "communities": 325,
+      "embedded": 12443,
+      "files": 828,
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_seconds": 1446.7,
+      "indexed_at": "2026-11-21T20:59:17.411273+00:00",
+      "myc_sha256": "4ef9e803790e41b4010695dc34c3dc75a391047296a56459de8319dfbbed9a33",
+      "myc_version": "myc 0.3.2",
+      "processes": 2922,
+      "relationships": 31408,
+      "repo": "django",
+      "repo_id": "django-f980c747",
+      "symbols": 12443,
+      "work_path": "/private/tmp/aeval153/django"
+    }
+  },
+  "label": "2026-11-22-scale-calibration",
+  "max_turns": 10,
+  "mcp_tools_offered": null,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "951d041ff9e0",
+  "myc_sha256": "4ef9e803790e41b4010695dc34c3dc75a391047296a56459de8319dfbbed9a33",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Calibration for #163 (15 sessions, the allowance): condition none only, --max-turns 10 with the budget stated in the prompt, Bash added to Read/Grep/Glob, the same prompt as the main run's 10-turn arm; one session for each of 15 of the 35 candidates in tasks/tasks-scale-candidates.json (the file this run used; the frozen set is tasks/tasks-scale.json).",
+    "Rule applied: a candidate is rejected as trivially solved when the agent reached F1 = 1.00 with at most two tool calls, and as impossible when it failed after reading the relevant code with a defensible but different reading of the question; none was impossible. Rejected as trivially solved: all five candidates that are not about calls (django-cfg-deploy-checks, django-cfg-empty-strings, django-cfg-safe-filters, vue-cfg-force-attrs, vue-cfg-unused-error-codes: one or two Bash calls, 5 to 11 s). The other ten are in the frozen set; 8 of them succeeded (target 30-80 %).",
+    "With Bash the agent wrote its own scripts (for example a Python ast call-graph script for django-tc-conditional-escape) and solved most call-graph candidates within the budget; it stayed inside the checkout (and /tmp for its scripts) in every session."
+  ],
+  "prompt_budget": true,
+  "repos": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "display_name": "Django",
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_note": "Only the django/ package is indexed (12,443 symbols, 828 files): with tests/ and docs/ included, `myc analyze` produced 41,842 symbols and 328,884 relationships and its community detection had not finished after 9 minutes on the benchmark machine. The agent still sees the whole checkout; every #153 question is about the django/ package.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "django",
+      "ref": "5.1.4",
+      "url": "https://github.com/django/django.git"
+    },
+    "fastapi": {
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "display_name": "FastAPI",
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_note": "docs/ (1,709 Markdown files in 13 languages) is excluded from the index: with it, `myc analyze` produced 23,941 symbols and its community detection had not finished after 13 minutes on the benchmark machine, before any embedding. The agent still sees docs/.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "fastapi",
+      "ref": "0.162.5",
+      "url": "https://github.com/fastapi/fastapi.git"
+    },
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "display_name": "fzf",
+      "language": "go",
+      "language_name": "Go",
+      "name": "fzf",
+      "ref": "v0.75.0",
+      "url": "https://github.com/junegunn/fzf.git"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "display_name": "hono",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "hono",
+      "ref": "v4.13.18",
+      "url": "https://github.com/honojs/hono.git"
+    },
+    "vue": {
+      "commit": "7de9e41b61b2d890fd4be408068da75cbeb05709",
+      "display_name": "Vue",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "vue",
+      "ref": "v3.5.46",
+      "url": "https://github.com/vuejs/core.git"
+    }
+  },
+  "reps": 1,
+  "retried_runs": [],
+  "runs_final": 15,
+  "sessions_launched_ledger": 15,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-scale-candidates.json",
+  "tasks_sha256": "f385541ae72ec031ef25bd925fe8b1f6bfea0d1182f73c3bdaa9ace6c8b39c4a",
+  "timeout_s": 420,
+  "tool_search": null
+}

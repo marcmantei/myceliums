@@ -11,7 +11,11 @@ body (never the headers) and answers with a fixed script:
    ``code-explorer`` subagent; the subagent's own first request (recognised
    by its system prompt) gets one ``find_callers`` call, the next a short
    text;
-3. everything else ends the turn with a short text.
+3. if the request offers ``Bash`` (#163), the next answer runs
+   ``myc callers <symbol>`` and a ``grep`` in the shell, so the probe shows
+   whether the CLI reaches the session's index and the grep hook fires on
+   Bash too;
+4. everything else ends the turn with a short text.
 
 What the recorded requests show is what ``probe`` reports: which memory files
 reached the context (project CLAUDE.md yes, ``~/.claude/CLAUDE.md`` no),
@@ -145,6 +149,10 @@ class MockAPI:
             return _message([{"type": "tool_use", "id": "toolu_probe_grep", "name": "Grep",
                               "input": {"pattern": self.grep_pattern, "output_mode": "files_with_matches"}}],
                             "tool_use", model)
+        if done == 1 and "Bash" in tools and "Agent" not in tools:
+            cmd = f"myc callers {self.callers_symbol} 2>&1 | head -5; grep -rl {self.grep_pattern} . | head -3"
+            return _message([{"type": "tool_use", "id": "toolu_probe_bash", "name": "Bash",
+                              "input": {"command": cmd, "description": "probe"}}], "tool_use", model)
         if done == 1 and "Agent" in tools:
             return _message([{"type": "tool_use", "id": "toolu_probe_agent", "name": "Agent", "input": {
                 "subagent_type": "code-explorer", "description": "probe",
