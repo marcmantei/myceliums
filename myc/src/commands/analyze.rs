@@ -8,7 +8,7 @@ use myceliums_core::cache::{self, CacheCheckConfig, CacheDecision};
 use myceliums_core::config::{self, ProjectConfig};
 use myceliums_core::{CommunityDetector, ProcessTracer};
 use myceliums_storage::{RepoInfo, RepoRegistry, Store};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Check if a path is a dangerous ancestor (/, /Users, /home, drive roots).
 fn is_dangerous_ancestor(path: &Path) -> bool {
@@ -540,8 +540,52 @@ pub(crate) async fn cmd_analyze_for_session(
     .await
 }
 
+/// What `--watch` does with one batch of file events.
+#[derive(Debug, PartialEq, Eq)]
+enum WatchPlan {
+    /// Re-analyze everything: a changed or removed path decides what is
+    /// indexed or what imports bind.
+    Full,
+    /// Re-index these changed files incrementally.
+    Changed(Vec<PathBuf>),
+    /// Drop these removed files' rows.
+    Removed(Vec<PathBuf>),
+}
+
+/// The plan for `event`. A change *or removal* of `.myceliums.toml`, a
+/// `package.json`, a tsconfig or another file that decides what JS/TS
+/// imports bind needs a full analysis (#169): incremental re-indexing reads
+/// source files only, and a removal only drops the file's own rows, so the
+/// edges through those imports would stay as they were.
+async fn plan_watch_event(
+    analyzer: &Analyzer,
+    event: myceliums_core::watch::WatchEvent,
+) -> WatchPlan {
+    use myceliums_core::watch::WatchEvent;
+    let (paths, removed) = match event {
+        WatchEvent::FilesChanged(paths) => (paths, false),
+        WatchEvent::FilesRemoved(paths) => (paths, true),
+    };
+    if analyzer.needs_full_analysis(&paths).await {
+        WatchPlan::Full
+    } else if removed {
+        WatchPlan::Removed(paths)
+    } else {
+        WatchPlan::Changed(paths)
+    }
+}
+
+/// The project's `.myceliums.toml`, when there is a readable one.
+fn watched_config(abs_path: &Path) -> Option<ProjectConfig> {
+    let config_path = abs_path.join(config::CONFIG_FILENAME);
+    config_path
+        .exists()
+        .then(|| ProjectConfig::load(&config_path).ok())
+        .flatten()
+}
+
 pub(crate) async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> {
-    use myceliums_core::watch::{start_watching, WatchEvent};
+    use myceliums_core::watch::start_watching;
 
     let abs_path = std::fs::canonicalize(path)
         .with_context(|| format!("Path does not exist: {}", path.display()))?;
@@ -549,13 +593,8 @@ pub(crate) async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> 
     RepoRegistry::validate_repo_id(&repo_id)?;
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
 
-    // Load project config if present
-    let config_path = abs_path.join(config::CONFIG_FILENAME);
-    let project_config = if config_path.exists() {
-        ProjectConfig::load(&config_path).ok()
-    } else {
-        None
-    };
+    // Reloaded after every full analysis: `.myceliums.toml` may have changed.
+    let mut project_config = watched_config(&abs_path);
 
     println!(
         "Watching {} for changes (Ctrl+C to stop)...",
@@ -565,40 +604,40 @@ pub(crate) async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> 
     let (mut rx, _debouncer) = start_watching(&abs_path)?;
 
     while let Some(event) = rx.recv().await {
-        match event {
-            WatchEvent::FilesChanged(paths) => {
-                let rel_paths: Vec<String> = paths
-                    .iter()
-                    .filter_map(|p| p.strip_prefix(&abs_path).ok())
-                    .map(|p| p.display().to_string())
-                    .collect();
+        let store = Store::open(&db_path, &repo_id).await?;
+        let a = if let Some(ref cfg) = project_config {
+            Analyzer::with_config(store, abs_path.clone(), cfg.clone())
+        } else {
+            Analyzer::new(store, abs_path.clone())
+        }
+        .set_skip_embeddings(skip_embeddings);
+        let relative = |paths: &[PathBuf]| -> String {
+            paths
+                .iter()
+                .filter_map(|p| p.strip_prefix(&abs_path).ok())
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
+        match plan_watch_event(&a, event).await {
+            WatchPlan::Full => {
+                drop(a);
+                println!(
+                    "  A file that decides what is indexed or what imports bind changed: full re-analysis"
+                );
+                let policy = EmbeddingPolicy::from_flags(skip_embeddings, false);
+                if let Err(e) = cmd_analyze(&abs_path, true, 0, policy).await {
+                    eprintln!("    Error during full re-analysis: {e}");
+                }
+                project_config = watched_config(&abs_path);
+            }
+            WatchPlan::Changed(paths) => {
                 println!(
                     "  Re-indexing {} changed file(s): {}",
                     paths.len(),
-                    rel_paths.join(", ")
+                    relative(&paths)
                 );
-
-                let store = Store::open(&db_path, &repo_id).await?;
-                let a = if let Some(ref cfg) = project_config {
-                    Analyzer::with_config(store, abs_path.clone(), cfg.clone())
-                } else {
-                    Analyzer::new(store, abs_path.clone())
-                }
-                .set_skip_embeddings(skip_embeddings);
-
-                // `analyze_files` reads source files only: a change to a
-                // file that decides what imports bind (package.json, a
-                // tsconfig, `.myceliums.toml`) needs a full analysis (#169).
-                if a.needs_full_analysis(&paths).await {
-                    drop(a);
-                    println!("    A resolution config changed: full re-analysis");
-                    let policy = EmbeddingPolicy::from_flags(skip_embeddings, false);
-                    if let Err(e) = cmd_analyze(&abs_path, true, 0, policy).await {
-                        eprintln!("    Error during full re-analysis: {e}");
-                    }
-                    continue;
-                }
-
                 match a.analyze_files(&paths).await {
                     Ok(result) => {
                         println!(
@@ -611,25 +650,12 @@ pub(crate) async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> 
                     }
                 }
             }
-            WatchEvent::FilesRemoved(paths) => {
-                let rel_paths: Vec<String> = paths
-                    .iter()
-                    .filter_map(|p| p.strip_prefix(&abs_path).ok())
-                    .map(|p| p.display().to_string())
-                    .collect();
+            WatchPlan::Removed(paths) => {
                 println!(
                     "  Removing {} deleted file(s): {}",
                     paths.len(),
-                    rel_paths.join(", ")
+                    relative(&paths)
                 );
-
-                let store = Store::open(&db_path, &repo_id).await?;
-                let a = if let Some(ref cfg) = project_config {
-                    Analyzer::with_config(store, abs_path.clone(), cfg.clone())
-                } else {
-                    Analyzer::new(store, abs_path.clone())
-                };
-
                 for p in &paths {
                     if let Err(e) = a.handle_file_deleted(p).await {
                         eprintln!("    Error removing file data: {}", e);
@@ -645,6 +671,39 @@ pub(crate) async fn cmd_watch(path: &Path, skip_embeddings: bool) -> Result<()> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// #169: in `--watch`, changing or deleting a file that decides what is
+    /// indexed or what imports bind re-analyzes everything; other changes
+    /// and deletions stay incremental.
+    #[tokio::test]
+    async fn watch_events_on_resolution_configs_need_a_full_analysis() {
+        use myceliums_core::watch::WatchEvent;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("project");
+        std::fs::create_dir_all(root.join("src")).unwrap();
+        let store = Store::open(&dir.path().join("db"), "watch-test")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::new(store, root.clone());
+        let at = |rel: &str| vec![root.join(rel)];
+        for (event, full) in [
+            (WatchEvent::FilesRemoved(at("package.json")), true),
+            (WatchEvent::FilesRemoved(at("apps/web/tsconfig.json")), true),
+            (WatchEvent::FilesRemoved(at(config::CONFIG_FILENAME)), true),
+            (WatchEvent::FilesChanged(at("tsconfig.base.json")), true),
+            (WatchEvent::FilesChanged(at(config::CONFIG_FILENAME)), true),
+            (WatchEvent::FilesRemoved(at("src/a.ts")), false),
+            (WatchEvent::FilesChanged(at("src/a.ts")), false),
+        ] {
+            let label = format!("{event:?}");
+            let plan = plan_watch_event(&analyzer, event).await;
+            assert_eq!(plan == WatchPlan::Full, full, "{label}: {plan:?}");
+        }
+        assert_eq!(
+            plan_watch_event(&analyzer, WatchEvent::FilesRemoved(at("src/a.ts"))).await,
+            WatchPlan::Removed(at("src/a.ts"))
+        );
+    }
     use crate::cli::{Cli, Commands};
     use clap::Parser;
     use myceliums_storage::Store;

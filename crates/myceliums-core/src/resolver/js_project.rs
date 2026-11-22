@@ -701,13 +701,12 @@ fn package(dir: &str, manifest: &Value) -> Package {
 
 /// The order conditions of an `exports` target are tried in. JSON objects
 /// are read without their key order, so it is fixed here: the source first,
-/// then what a bundler or Node would pick, types last; any other condition
-/// after these, by name.
+/// then what a bundler or Node would pick, types; any other condition after
+/// these, by name; `default` last, as Node requires it to be.
 const CONDITIONS: &[&str] = &[
     "source",
     "import",
     "module",
-    "default",
     "browser",
     "node",
     "require",
@@ -724,11 +723,12 @@ fn export_leaves(target: &Value, out: &mut Vec<String>) {
         Value::String(path) => out.push(path.clone()),
         Value::Array(items) => items.iter().for_each(|item| export_leaves(item, out)),
         Value::Object(conditions) => {
-            let rank = |name: &str| {
-                CONDITIONS
+            let rank = |name: &str| match name {
+                "default" => CONDITIONS.len() + 1,
+                _ => CONDITIONS
                     .iter()
                     .position(|c| *c == name)
-                    .unwrap_or(CONDITIONS.len())
+                    .unwrap_or(CONDITIONS.len()),
             };
             let mut ordered: Vec<(&String, &Value)> = conditions.iter().collect();
             ordered.sort_by(|a, b| (rank(a.0), a.0).cmp(&(rank(b.0), b.0)));
@@ -959,13 +959,22 @@ mod tests {
                     "./features/*": "./src/features/*.ts",
                     "./features/*.css": "./styles/*.css",
                     "./features/special": "./src/special.ts",
-                    ".": {"require": "./dist/a.cjs", "import": "./dist/a.mjs", "source": "./src/a.ts"}
+                    ".": {"default": "./index.js", "require": "./dist/a.cjs", "import": "./dist/a.mjs", "source": "./src/a.ts", "custom": "./c.js"}
                 }}"#,
             ),
         ]);
         let a = &p.packages["a"][0];
         // Conditions in a fixed order, whatever the file order.
-        assert_eq!(a.entries, ["./src/a.ts", "./dist/a.mjs", "./dist/a.cjs"]);
+        assert_eq!(
+            a.entries,
+            [
+                "./src/a.ts",
+                "./dist/a.mjs",
+                "./dist/a.cjs",
+                "./c.js",
+                "./index.js"
+            ]
+        );
         assert_eq!(a.subpath_targets("features/special"), ["./src/special.ts"]);
         assert_eq!(a.subpath_targets("features/x"), ["./src/features/x.ts"]);
         // Of two patterns with one prefix, the longer key.

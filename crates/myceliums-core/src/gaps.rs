@@ -48,6 +48,10 @@ pub struct Gaps<'a> {
     /// Walked symbols in files re-indexed incrementally since the last full
     /// analysis: their unlinked calls are unknown.
     pub unknown: BTreeSet<&'a str>,
+    /// Files re-indexed incrementally since the last full analysis, when the
+    /// walk counts unlinked call sites by name: the call sites in them are
+    /// unknown, wherever the walked symbols are.
+    pub unknown_call_site_files: usize,
 }
 
 impl<'a> Gaps<'a> {
@@ -81,16 +85,20 @@ impl<'a> Gaps<'a> {
     }
 
     /// Records the unlinked call sites named like `symbols` (once per
-    /// language family and name).
+    /// language family and name). As on the callees side, a record from
+    /// before the per-call record is unknown, and so are the call sites in
+    /// files re-indexed incrementally since the last full analysis (their
+    /// counts were dropped).
     pub fn unlinked_into(
         &mut self,
         stats: Option<&CallResolutionStats>,
         symbols: impl IntoIterator<Item = &'a CodeSymbol>,
     ) {
-        let Some(stats) = stats else {
+        let Some(stats) = stats.filter(|s| s.records_unlinked_calls()) else {
             self.record_missing = true;
             return;
         };
+        self.unknown_call_site_files = stats.stale_files.len();
         let mut seen: BTreeMap<(&str, &str), usize> = BTreeMap::new();
         for symbol in symbols {
             let Some(family) = crate::language_family(&symbol.file_path) else {
@@ -117,6 +125,7 @@ impl<'a> Gaps<'a> {
             && self.unlinked_in.is_empty()
             && !self.record_missing
             && self.unknown.is_empty()
+            && self.unknown_call_site_files == 0
     }
 
     /// Places the walk did not follow: symbols one more hop would add,
@@ -204,6 +213,13 @@ impl<'a> Gaps<'a> {
                 self.unknown.len()
             ));
         }
+        if self.unknown_call_site_files > 0 {
+            out.push(format!(
+                "unlinked call sites unknown in {} file(s) changed since the last full analysis \
+                 (a full analysis records them)",
+                self.unknown_call_site_files
+            ));
+        }
         out
     }
 
@@ -211,7 +227,7 @@ impl<'a> Gaps<'a> {
     /// ([`record_missing`](Self::record_missing) or
     /// [`unknown`](Self::unknown)).
     pub fn needs_full_analysis(&self) -> bool {
-        self.record_missing || !self.unknown.is_empty()
+        self.record_missing || !self.unknown.is_empty() || self.unknown_call_site_files > 0
     }
 
     /// The `Incomplete:` block of a text result, with `next` as the last
@@ -297,6 +313,19 @@ mod tests {
         assert_eq!(
             gaps.reasons("callees"),
             ["unlinked calls unknown for 1 symbol(s) in files changed since the last full analysis (a full analysis records them)"]
+        );
+
+        // The callers side alike: an old record is unknown, and call sites
+        // in changed files are.
+        let mut gaps = Gaps::default();
+        gaps.unlinked_into(Some(&old), [&a]);
+        assert!(gaps.record_missing && gaps.unlinked_in.is_empty());
+        let mut gaps = Gaps::default();
+        gaps.unlinked_into(Some(&stale), [&a]);
+        assert!(!gaps.record_missing && gaps.needs_full_analysis());
+        assert_eq!(
+            gaps.reasons("callers"),
+            ["unlinked call sites unknown in 1 file(s) changed since the last full analysis (a full analysis records them)"]
         );
     }
 

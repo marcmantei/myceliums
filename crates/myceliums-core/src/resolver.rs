@@ -141,10 +141,13 @@ pub struct CallResolutionStats {
     pub unresolved: usize,
     /// Call sites outside every function (module-level code).
     pub no_caller: usize,
-    /// Unlinked call sites (too many candidates, or nothing in scope) whose
-    /// name a project function, method or class of the same language family
-    /// has, per family and name: calls those symbols may receive that no
-    /// edge shows.
+    /// Unlinked call sites (too many candidates, or a project name nothing
+    /// in scope binds), per family and name: calls those symbols may
+    /// receive that no edge shows. Derived from
+    /// [`unlinked_by_caller`](Self::unlinked_by_caller) (its
+    /// [`UnlinkedReason::TooManyCandidates`] and
+    /// [`UnlinkedReason::NotInScope`] entries), so dropping a file's entries
+    /// after an incremental re-index drops its call sites here too (#169).
     #[serde(default)]
     pub unlinked_by_name: BTreeMap<String, BTreeMap<String, usize>>,
     /// The call sites each caller makes that got no edge but may reach
@@ -273,6 +276,11 @@ impl CallResolutionStats {
             self.unlinked_by_caller.remove(file);
             self.stale_files.remove(file);
         }
+        // The per-name counts follow the per-caller record; an older record
+        // has no per-caller entries to derive them from.
+        if self.records_unlinked_calls() {
+            self.unlinked_by_name = self.names_from_callers();
+        }
     }
 
     /// The call sites the symbol `qualified_name` in `file` makes that got
@@ -299,21 +307,37 @@ impl CallResolutionStats {
         )
     }
 
-    fn count(&mut self, reason: Unlinked, family: &str, name: &str, has_namesake: bool) {
+    fn count(&mut self, reason: Unlinked) {
         match reason {
             Unlinked::TooManyCandidates => self.too_many_candidates += 1,
             Unlinked::Library => self.library += 1,
             Unlinked::ThroughVariable => self.through_variable += 1,
             Unlinked::Unresolved => self.unresolved += 1,
         }
-        if has_namesake && matches!(reason, Unlinked::TooManyCandidates | Unlinked::Unresolved) {
-            *self
-                .unlinked_by_name
-                .entry(family.to_string())
-                .or_default()
-                .entry(name.to_string())
-                .or_default() += 1;
+    }
+
+    /// [`unlinked_by_name`](Self::unlinked_by_name) as the per-caller
+    /// record implies it.
+    fn names_from_callers(&self) -> BTreeMap<String, BTreeMap<String, usize>> {
+        let mut names: BTreeMap<String, BTreeMap<String, usize>> = BTreeMap::new();
+        for (file, callers) in &self.unlinked_by_caller {
+            let Some(family) = language_family(file) else {
+                continue;
+            };
+            for call in callers.values().flatten() {
+                if matches!(
+                    call.reason,
+                    UnlinkedReason::TooManyCandidates | UnlinkedReason::NotInScope
+                ) {
+                    *names
+                        .entry(family.to_string())
+                        .or_default()
+                        .entry(call.name.clone())
+                        .or_default() += 1;
+                }
+            }
         }
+        names
     }
 
     /// Persist the record inside the index.
@@ -696,7 +720,7 @@ impl CallResolver {
                         let def = &self.defs[id];
                         def.family == site.family && def.is_callable()
                     });
-                    stats.count(reason, site.family, &call.callee_name, namesake);
+                    stats.count(reason);
                     if let Some(reason) = UnlinkedReason::of(reason, namesake) {
                         let def = &self.defs[caller];
                         stats
@@ -736,6 +760,7 @@ impl CallResolver {
                 calls.dedup();
             }
         }
+        stats.unlinked_by_name = stats.names_from_callers();
         stats.version = myceliums_storage::schema::CALL_RECORD_VERSION;
         self.stats = stats;
         edges
@@ -2877,10 +2902,12 @@ mod tests {
         assert!(!old.records_unlinked_calls());
         assert!(stats.records_unlinked_calls());
 
-        // Incremental re-indexing forgets what it cannot know.
+        // Incremental re-indexing forgets what it cannot know: the file's
+        // per-caller entries and its call sites in the per-name counts.
         let mut recorded = stats.clone();
         recorded.forget_files(["app.py"], []);
         assert!(recorded.unlinked_from("app.py", "main").is_empty());
+        assert_eq!(recorded.unlinked_named("python", "get"), 0);
         assert!(recorded.is_stale("app.py"));
         recorded.forget_files([], ["app.py"]);
         assert!(!recorded.is_stale("app.py"));
