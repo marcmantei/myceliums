@@ -20,7 +20,7 @@
    "id": "client-observation-nonstandard-method-none",
    "commit": "d49f37cd91d6576cfd79fc6c7fb216f54012eb20",
    "issue": null,
-   "question": "HTTP client observations use the request method name as the value of the low-cardinality \"method\" key, falling back to \"none\" only when no request could be created. The default client request observation convention (DefaultClientRequestObservationConvention) reports any method name as-is, so a non-standard method such as HttpMethod.valueOf(\"CUSTOM\") becomes its own tag value, which can blow up metric cardinality. The default server request observation conventions already guard against this. Align HTTP client observations with them: report the method name only when it is one of the standard HttpMethod values, and \"none\" otherwise.",
+   "question": "HTTP client observations use the request method name as the value of the low-cardinality \"method\" key, falling back to \"none\" only when no request could be created. With RestTemplate and RestClient, the default observation convention reports any method name as-is, so a non-standard method such as HttpMethod.valueOf(\"CUSTOM\") becomes its own tag value, which can blow up metric cardinality. The default server request observation conventions already guard against arbitrary method names. Apply the same guard to the framework's HTTP client observations: report the method name only when it is one of the standard HttpMethod values, and \"none\" otherwise.",
    "primary_files": [
     "spring-web/src/main/java/org/springframework/http/client/observation/DefaultClientRequestObservationConvention.java"
    ],
@@ -29,7 +29,12 @@
    "review": {
     "verdict": "fix",
     "comment": "Solvable: the tests only assert method=none for HttpMethod.valueOf(\"CUSTOM\") on both client conventions, and no new public names are needed. 'HTTP client observations' plus 'default client request observation convention' is fine scope wording; the same-named WebFlux convention is left for the agent to find. The primary file (spring-web convention) is correct. The test_command covers both overlay classes. The only problem is the documentation sentence.",
-    "applied": "question replaced by the reviewer's rewrite"
+    "applied": "question replaced by the reviewer's rewrite",
+    "second": {
+     "verdict": "fix",
+     "comment": "Tests need no new API: MockClientHttpRequest(HttpMethod, String, Object...), ClientRequest.create(HttpMethod, URI), both test createContext helpers, and KeyValue \"method\"/\"none\" exist at the parent or are stated. 'HTTP client observations' is an allowed scope phrase and is enough to derive the reactive counterpart. Gold non-test files: both conventions plus observability.adoc (the parent adoc row says only 'if the request could not be created').",
+     "applied": "question replaced by this reviewer's text (its own text is not reviewed again)"
+    }
    },
    "reserve": true
   },
@@ -104,7 +109,7 @@
    "id": "spel-parser-configuration-builder",
    "commit": "37c8f41633d9274cf4bdba631ad0472380858994",
    "issue": "gh-37187",
-   "question": "SpelParserConfiguration has accumulated many overloaded constructors, ending in an 8-parameter one (compilerMode, compilerClassLoader, autoGrowNullReferences, autoGrowCollections, maximumAutoGrowSize, maximumExpressionLength, maximumOperations, maximumBigPowerBits). Call sites are unlabeled lists of booleans and ints, and overriding one setting means repeating every other default. Introduce a fluent builder like the one on SimpleEvaluationContext: `SpelParserConfiguration.builder()` returns a public static nested `SpelParserConfiguration.Builder` with `compilerMode(SpelCompilerMode)`, `compilerClassLoader(@Nullable ClassLoader)`, no-arg opt-ins `autoGrowNullReferences()` and `autoGrowCollections()`, `maximumAutoGrowSize(int)`, `maximumExpressionLength(int)`, `maximumOperations(int)`, `maximumBigPowerBits(int)` and `build()`. Each setter validates its argument as soon as it is called and throws an IllegalArgumentException for a null compiler mode, a negative maximumAutoGrowSize, or a maximumExpressionLength, maximumOperations or maximumBigPowerBits that is not positive. Also add `SpelParserConfiguration.withDefaults()` as shorthand for `builder().build()`. The builder's defaults match the no-arg constructor, including the SpringProperties-driven defaults for compiler mode, maximum operations and maximum big-power bits; the one exception is maximumAutoGrowSize, which defaults to 256 (like DataBinder's default auto-grow collection limit) instead of Integer.MAX_VALUE. The existing constructors stay unchanged (in particular they still accept a negative maximumAutoGrowSize) and are not deprecated.",
+   "question": "SpelParserConfiguration has accumulated many overloaded constructors, ending in an 8-parameter one (compilerMode, compilerClassLoader, autoGrowNullReferences, autoGrowCollections, maximumAutoGrowSize, maximumExpressionLength, maximumOperations, maximumBigPowerBits). Call sites are unlabeled lists of booleans and ints, and overriding one setting means repeating every other default. Introduce a fluent builder like the one on SimpleEvaluationContext: `SpelParserConfiguration.builder()` returns a public static nested `SpelParserConfiguration.Builder` with `compilerMode(SpelCompilerMode)`, `compilerClassLoader(@Nullable ClassLoader)`, no-arg opt-ins `autoGrowNullReferences()` and `autoGrowCollections()`, `maximumAutoGrowSize(int)`, `maximumExpressionLength(int)`, `maximumOperations(int)`, `maximumBigPowerBits(int)` and `build()`. Each setter validates its argument as soon as it is called and throws an IllegalArgumentException for a null compiler mode, a negative maximumAutoGrowSize, or a maximumExpressionLength, maximumOperations or maximumBigPowerBits that is not positive. Also add `SpelParserConfiguration.withDefaults()` as shorthand for `builder().build()`. The builder's defaults match the no-arg constructor, including the SpringProperties-driven defaults for compiler mode, maximum operations and maximum big-power bits; the one exception is maximumAutoGrowSize, which defaults to 256 (like DataBinder's default auto-grow collection limit) instead of Integer.MAX_VALUE. The framework itself should create its configurations through the new API instead of the constructors. The existing constructors stay unchanged (in particular they still accept a negative maximumAutoGrowSize) and are not deprecated.",
    "primary_files": [
     "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java"
    ],
@@ -113,7 +118,12 @@
    "review": {
     "verdict": "fix",
     "comment": "All new names are stated (builder(), Builder, 8 setters, build(), withDefaults(), default 256). Fix only the validation timing (see missing_for_tests) and drop 'build() should delegate to the existing canonical constructor' (implementation detail that invites the wrong validation placement). The legacy-constructor test canonicalConstructorDoesNotRejectNegativeMaximumAutoGrowSize requires the constructor to stay lenient; 'constructors stay unchanged' covers it, made explicit in the rewrite. Dependents (SpelExpressionParser, ExpressionState, StandardBeanExpressionResolver switched to the builder; evaluation.adoc) are behaviour-neutral refactors, so expect low dependent recall regardless of description quality.",
-    "applied": "question replaced by the reviewer's rewrite"
+    "applied": "question replaced by the reviewer's rewrite",
+    "second": {
+     "verdict": "fix",
+     "comment": "Reason for fix: the question never asks to move any usage to the new API, but the non-test, non-doc dependents (StandardBeanExpressionResolver, ExpressionState, SpelExpressionParser) are only call-site migrations. At the parent these are the only main-code constructor usages outside the class itself. A correct, complete answer to the current text changes only SpelParserConfiguration and passes all tests, so dependent recall would measure guessing. One scope sentence fixes this without naming a file. Solvability: every name and signature in the test diff is stated (builder(), withDefaults(), nested Builder, all eight setters including the no-arg ones and @Nullable class loader, build(), IllegalArgumentException cases at setter time, default 256); no messages asserted. LegacyConstructorTests and EvaluationTests (maxOperations SpringProperty read per instance) pass with parent constructors and a builder matching them. Facts verified: 8 constructors, the 8-arg parameter order, no negative maximumAutoGrowSize check, DataBinder.DEFAULT_AUTO_GROW_COLLECTION_LIMIT = 256, SimpleEvaluationContext has a nested public static final Builder. SimpleEvaluationContext and DataBinder are not gold files, so naming them is no leak.",
+     "applied": "question replaced by this reviewer's text (its own text is not reviewed again)"
+    }
    },
    "reserve": true
   },
@@ -132,7 +142,8 @@
    "review": {
     "verdict": "ok",
     "comment": "The tests need: the 8-arg constructor (positional), the SpelMessage.MAX_BIG_POWER_RESULT_EXCEEDED code, the insert order (base bit length, exponent, max) as ints, the error position at the operator (4 for '#bd ^ 4'), the inclusive limit, and the bit-length definition via unscaledValue() for BigDecimal (2.0 gives 5 bits). All are stated. The estimate formula looks like an implementation detail, but the boundary tests (15<=16, 20>16, 16==16) need it. The message text and number 1086 are not asserted, so omitting them is fine. The tests themselves add an evaluateAndCheckError overload, which comes in with the overlay."
-   }
+   },
+   "drop": "the parent cannot be built: io.micrometer:micrometer-bom:1.18.0-INTERNAL-SNAPSHOT is not in repo.spring.io/milestone or /snapshot (precheck of 23 November 2026)"
   },
   {
    "id": "form-converter-map-payloads",
@@ -181,7 +192,7 @@
     "verdict": "ok",
     "comment": "It states everything the tests need: CONTEXT_CACHE_PAUSE_PROPERTY_NAME = \"spring.test.context.cache.pause\", the nested enum ContextCache.PauseMode {ALWAYS, NEVER}, the static ContextCacheUtils.retrievePauseMode() defaulting to ALWAYS, case-insensitive parsing with whitespace stripped (the tests use \"\\talways\\u000B\", which trim()/strip() both handle), the exact IllegalArgumentException message, and new DefaultContextCache(int, PauseMode). The test helpers (ContextCacheTestUtils, TestContextTestUtils.buildTestContext, EventTracker, DisplayNameCustomizerFactory) exist at the parent. No leaks: the SpringProperties Javadoc @see and the two adoc pages are left as dependents. Three primaries is justified because the question names all three types and each gets new public API; 6 dependents remain. The description is detailed, but every detail is asserted by a test."
    },
-   "reserve": true
+   "replaces": "spel-big-power-result-limit (same strata: medium, two code modules, docs; no snapshot dependency)"
   },
   {
    "id": "retry-max-attempts-to-max-retries",
@@ -304,7 +315,11 @@
    "review": {
     "verdict": "fix",
     "comment": "The tests use no new API; the RestClientBuilderTests reflection on the 'defaultHeaders'/'defaultCookies' fields uses fields that exist at the parent. Behaviour is fully described. The only problem is the explicit hint at the test client builder; the rewrite keeps the generic scope statement, which the hidden WebClient and WebTestClient tests require.",
-    "applied": "question replaced by the reviewer's rewrite"
+    "applied": "question replaced by the reviewer's rewrite",
+    "second": {
+     "verdict": "ok",
+     "comment": "Scope phrase 'the framework's other HTTP client builders that support clone() or mutate()' is allowed and does not name WebClient/WebTestClient. The last sentence is needed: at the parent only WebTestClient's build() hands out live maps (RestClient and WebClient already copy in build()), and buildDoesNotShareDefaultHeaderAndCookieValues tests it. Tests need no new API: new DefaultRestClientBuilder(other), reflective fields defaultHeaders/defaultCookies, HttpHeaders.copyOf and LinkedMultiValueMap.deepCopy exist at the parent. The RestClientBuilderTests reflection assumes the private fields keep their names and the headers field stays an HttpHeaders, which any sensible fix keeps. Sharing via putAll / new LinkedMultiValueMap(map) confirmed in all three copy constructors."
+    }
    }
   },
   {
@@ -423,7 +438,11 @@
    "review": {
     "verdict": "fix",
     "comment": "The rest is solvable as stated: WebHttpHandlerBuilder.defaultHtmlEscape and clone, the HttpWebHandlerAdapter getter returning null, and RequestContext falling back to false and still honouring an override. ServerWebExchange.getDefaultHtmlEscape is abstract in the commit, so the decorator and DefaultServerRequestBuilder's delegating exchange are compile-forced dependents. The spring-test MockServerWebExchange builder option stays a dependent that the agent should find on its own. Update primary_files as described.",
-    "applied": "question replaced by the reviewer's rewrite; MockServerWebExchange (a test fixture, overlaid) replaced by DefaultServerWebExchange in primary_files"
+    "applied": "question replaced by the reviewer's rewrite; MockServerWebExchange (a test fixture, overlaid) replaced by DefaultServerWebExchange in primary_files",
+    "second": {
+     "verdict": "ok",
+     "comment": "Solvability: WebHttpHandlerBuilder.defaultHtmlEscape(Boolean) and clone retention, HttpWebHandlerAdapter.getDefaultHtmlEscape() with null default, the 7-arg protected DefaultServerWebExchange constructor (called by the testFixtures MockServerWebExchange via super(..., null, defaultHtmlEscape)) and the RequestContext false fallback/override are all stated. MockServerWebExchange.Builder.defaultHtmlEscape(boolean) used by RequestContextTests comes from the testFixtures file itself, so the harness MUST copy src/testFixtures with the test files; otherwise the task is not solvable. Facts verified (hard-coded null with TODO; 5-arg public and 6-arg protected constructors exist). Not stated but not needed by tests: hasDefaultHtmlEscape() on the builder, the 6-arg constructor becoming public. Named types are the five primaries only. Scoring caveats: (1) ServerWebExchangeDecorator and DefaultServerRequestBuilder's delegating exchange are derivable: compile-forced if the method is abstract, functionally required if it is a default method. (2) The two MockServerWebExchange files are not derivable from the stated requirements; consider leaving the testFixtures one out of the dependents (it is overwritten anyway) and treat the spring-test one as a soft dependent. Optional hardening: say the new ServerWebExchange method is abstract (like getApplicationContext())."
+    }
    },
    "reserve": true
   },
@@ -462,7 +481,7 @@
    "id": "bean-provider-parameterized-type-reference",
    "commit": "2e4ca413829f279f7ce3aa637582cb8b97b9b3ca",
    "issue": "gh-31444",
-   "question": "Retrieving a generically typed bean provider from a BeanFactory currently requires building a ResolvableType by hand, e.g. ResolvableType.forType(new ParameterizedTypeReference<List<String>>() {}). Add an overload <T> ObjectProvider<T> getBeanProvider(ParameterizedTypeReference<T> requiredType) to BeanFactory so that callers can write getBeanProvider(new ParameterizedTypeReference<>() {}) directly. It must behave exactly like getBeanProvider(ResolvableType.forType(requiredType)), including generic type matching and the uniqueness and availability semantics of the returned provider.",
+   "question": "Retrieving a generically typed bean provider from a BeanFactory currently requires building a ResolvableType by hand, e.g. ResolvableType.forType(new ParameterizedTypeReference<List<String>>() {}). Add an overload <T> ObjectProvider<T> getBeanProvider(ParameterizedTypeReference<T> requiredType) to BeanFactory so that callers can write getBeanProvider(new ParameterizedTypeReference<>() {}) directly. Declare it as an abstract method like the existing getBeanProvider overloads, not as a default method. It must be equivalent to the ResolvableType variant for the captured type, including generic type matching and the uniqueness and availability semantics of the returned provider.",
    "primary_files": [
     "spring-beans/src/main/java/org/springframework/beans/factory/BeanFactory.java"
    ],
@@ -471,7 +490,12 @@
    "review": {
     "verdict": "fix",
     "comment": "Apart from the dependent hint, the question is good: the signature is exact and the only test (BeanFactoryGenericsTests on DefaultListableBeanFactory) needs nothing else. If the new interface method is declared abstract (as in gold), compile errors bring the agent to the other implementations (StaticListableBeanFactory, SimpleJndiBeanFactory, AbstractApplicationContext, StubWebApplicationContext). An agent that adds a default method in BeanFactory produces an equally valid design with fewer dependents touched; keep this in mind when reading the dependent scores.",
-    "applied": "question replaced by the reviewer's rewrite"
+    "applied": "question replaced by the reviewer's rewrite",
+    "second": {
+     "verdict": "fix",
+     "comment": "Reason for fix: the question leaves open whether the method is abstract (as in the commit) or a default method (as the linked issue suggests). A one-line default method in BeanFactory satisfies the question and passes BeanFactoryGenericsTests while touching none of the five dependents (DefaultListableBeanFactory, StaticListableBeanFactory, AbstractApplicationContext, SimpleJndiBeanFactory, StubWebApplicationContext), so a correct answer would score zero recall. Requiring an abstract method makes the dependents compile-forced without naming them; a grep at the parent shows these five are the only classes that need it. Solvability: the test needs only the stated signature; ResolvableType.forType(ParameterizedTypeReference) exists at the parent. SimpleJndiBeanFactory throws UnsupportedOperationException for the ResolvableType variant too, so the equivalence holds there; its message is not asserted. BeanFactoryExtensions.kt is not gold.",
+     "applied": "question replaced by this reviewer's text (its own text is not reviewed again)"
+    }
    }
   },
   {
@@ -545,7 +569,7 @@
    "id": "expiration-seconds-int-overflow",
    "commit": "dcc24a2325a48684d6d8262af3bfb7467c6dbd02",
    "issue": "gh-37208",
-   "question": "FlashMap.startExpirationPeriod(int timeToLive) computes the expiration time by multiplying the number of seconds by 1000 in int arithmetic. Above roughly 2,147,483 seconds (about 24.9 days) this overflows to a negative offset, so the expiration time lands in the past and a flash map with a large timeout is treated as expired immediately. Fix the calculation so that any int number of seconds, up to Integer.MAX_VALUE, yields an expiration time in the future. The same overflow can occur wherever the framework turns an int number of seconds into an absolute expiration time this way; find and fix any other such place as well.",
+   "question": "FlashMap.startExpirationPeriod(int timeToLive) computes the expiration time by multiplying the number of seconds by 1000 in int arithmetic. Above roughly 2,147,483 seconds (about 24.9 days) this overflows and can yield a negative offset, so that the expiration time lands in the past and a flash map with a large timeout is treated as expired immediately. Fix the calculation so that any positive int number of seconds, up to Integer.MAX_VALUE, yields an expiration time in the future. The same overflow can occur wherever the framework turns an int number of seconds into an absolute expiration time this way; find and fix any other such place as well.",
    "primary_files": [
     "spring-webmvc/src/main/java/org/springframework/web/servlet/FlashMap.java"
    ],
@@ -554,7 +578,12 @@
    "review": {
     "verdict": "fix",
     "comment": "The tests need no new API. FlashMapTests checks getExpirationTime() > now and !isExpired() for Integer.MAX_VALUE; MockMvcWebClientBuilderTests checks that a cookie with max-age Integer.MAX_VALUE is stored. The rewrite keeps an issue-style scope statement, which the hidden spring-test test requires, without naming the HtmlUnit/cookie location. The linked PR notes that a scan of src/main finds no other live instance, so the generic phrasing leads to exactly one place. The task is very small (two one-character fixes).",
-    "applied": "question replaced by the reviewer's rewrite"
+    "applied": "question replaced by the reviewer's rewrite",
+    "second": {
+     "verdict": "fix",
+     "comment": "Only two small wording corrections; usable otherwise. 'wherever the framework turns an int number of seconds into an absolute expiration time' is a general scope phrase that does not name cookies, MockMvc or HtmlUnit. A grep at the parent confirms MockMvcWebConnection.createCookie is the only other live site (AbstractSockJsService.ONE_YEAR is long), so the request is well-defined. Tests need no new API (startExpirationPeriod, getExpirationTime, isExpired, the test's own controller mapping). Primary file correct. Only one hidden dependent (MockMvcWebConnection).",
+     "applied": "question replaced by this reviewer's text (its own text is not reviewed again)"
+    }
    },
    "reserve": true
   }

@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "groundtruth"))
 
 from aeval import bashcmd, config, editgrade, prep  # noqa: E402
 from aeval.prep import check_tasks  # noqa: E402
+from aeval.runner import build_prompt  # noqa: E402
 
 import commit_replay  # noqa: E402
 
@@ -213,17 +214,22 @@ class GradleCommands(unittest.TestCase):
                  ("D", "spring-core/src/test/java/org/z/GoneTests.java"),
                  ("M", "framework-docs/modules/ROOT/pages/a.adoc")]
         self.assertEqual(commit_replay.default_test_command(files),
-                         "./gradlew --no-daemon --console=plain :spring-context:test --tests org.y.CTest "
+                         "./gradlew --offline --no-scan --no-daemon --console=plain :spring-context:test --tests org.y.CTest "
                          ":spring-web:test --tests org.x.ATests --tests org.x.BTests")
 
     def test_arm_d_admits_gradle_test_runs_but_nothing_that_loads_code(self):
         rule = [{"prefix": "./gradlew", "args": commit_replay.GRADLE_ARGS}]
-        ok = ["./gradlew --no-daemon --console=plain :spring-web:test --tests org.x.ATests",
-              "./gradlew :spring-core:compileJava", "./gradlew -q :spring-web:test --tests 'org.x.A*'",
-              "./gradlew build --offline"]
-        bad = ["./gradlew -I /tmp/init.gradle :spring-web:test", "./gradlew -Dx=1 test", "./gradlew -Pa=b test",
-               "./gradlew --init-script x test", "./gradlew -p /elsewhere test", "./gradlew test; grep -r x .",
-               "./gradlew test --tests $(grep -l x .)", "gradle test"]
+        off = "./gradlew --offline --no-scan "
+        ok = [off + "--no-daemon --console=plain :spring-web:test --tests org.x.ATests",
+              "./gradlew :spring-core:compileJava --no-scan --offline", off + "-q :spring-web:test --tests 'org.x.A*'",
+              off + "build"]
+        bad = [off + "-I /tmp/init.gradle :spring-web:test", off + "-Dx=1 test", off + "-Pa=b test",
+               off + "--init-script x test", off + "-p /elsewhere test", off + "test; grep -r x .",
+               off + "test --tests $(grep -l x .)", "gradle --offline --no-scan test",
+               # network: a missing flag, a scan, a refresh, an upload of a stored scan, artifacts
+               "./gradlew test", "./gradlew --offline test", "./gradlew --no-scan test", off + "--scan test",
+               off + "--refresh-dependencies test", off + "buildScanPublishPrevious", off + ":spring-core:publish",
+               off + "publishAllPublicationsToCentral", "./gradlew --offline --no-scanX test"]
         for c in ok:
             self.assertTrue(bashcmd.allowed(c, rule)[0], c)
         for c in bad:
@@ -299,6 +305,13 @@ class TaskFile(unittest.TestCase):
                 r = repos[t["repo"]]
                 self.assertEqual(r["env_from_caller"], ["JAVA_HOME"])
                 self.assertTrue(set(t["test_overlay"]) <= set(editgrade.gold_paths(t)))
+                # Network-free: every command, its environment, arm D and the prompt of every arm.
+                self.assertTrue(t["test_command"].startswith("./gradlew --offline --no-scan "), t["id"])
+                self.assertTrue(bashcmd.allowed(t["test_command"], t["allowed_commands"])[0], t["id"])
+                self.assertFalse(bashcmd.allowed(t["test_command"].replace("--offline ", ""), t["allowed_commands"])[0])
+                self.assertIn("-Dhttps.proxyHost=127.0.0.1", r["session_env"]["GRADLE_OPTS"])
+                self.assertEqual(r["session_env"]["DEVELOCITY_CACHE_SERVER"], "http://127.0.0.1:9")
+                self.assertIn("--offline --no-scan", build_prompt(t, r))
                 q = t["question"].lower()
                 for word in ("framework-docs", ".adoc", ".java", "src/main", "src/test"):
                     self.assertNotIn(word, q, (t["id"], word))

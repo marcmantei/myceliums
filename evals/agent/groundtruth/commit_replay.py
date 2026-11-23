@@ -54,13 +54,28 @@ URL = "https://github.com/spring-projects/spring-framework.git"
 EXCLUDE = re.compile(r"^(Upgrade|Bump|Polish|Update copyright|Replace file headers|Revert|Release|Next development|"
                      r"Merge|Update to|Prepare|Format|Apply|Consistent|Fix typo|Remove unused)", re.I)
 MODULE = re.compile(r"^(spring-[a-z-]+|framework-[a-z]+|integration-tests)/")
-# Gradle flags that cannot load code or configuration (no -I/-D/-P/--init-script/-c/-p).
-GRADLE_ARGS = (r"(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|"
+# Gradle without the network (#183): dependencies from the warm cache, no
+# remote build cache (Gradle disables it offline), no build scan.
+OFFLINE = "--offline --no-scan"
+# What arm D may pass to ./gradlew: both offline flags are required; nothing
+# that loads code or configuration (-I/-D/-P/-p/--init-script) or reaches the
+# network (--scan, --refresh-dependencies, any publish task:
+# buildScanPublishPrevious would upload a stored build scan).
+GRADLE_ARGS = (r"(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)"
+               r"(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|"
                r"--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+")
+BUILD_NOTE = ("The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with "
+              "fully qualified task paths such as `:spring-core:test --tests ...`.")
+# A port nobody listens on: a build started without the flags cannot leave
+# the machine either (not verified yet with a real build).
+NOWHERE = "127.0.0.1"
 SESSION_ENV = {
     # One build per session and no Kotlin daemon left behind: daemons would
     # outlive the session and pile up across Gradle versions.
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process",
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process "
+                   f"-Dhttp.proxyHost={NOWHERE} -Dhttp.proxyPort=9 -Dhttps.proxyHost={NOWHERE} -Dhttps.proxyPort=9 "
+                   "-Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": f"http://{NOWHERE}:9",  # the Spring build's remote cache (default ge.spring.io)
 }
 
 
@@ -151,7 +166,7 @@ def default_test_command(files: list[tuple[str, str]]) -> str:
             by_module[mod].append(m.group(1).replace("/", "."))
     parts = [f":{mod}:test" + "".join(f" --tests {c}" for c in sorted(classes))
              for mod, classes in sorted(by_module.items())]
-    return "./gradlew --no-daemon --console=plain " + " ".join(parts)
+    return f"./gradlew {OFFLINE} --no-daemon --console=plain " + " ".join(parts)
 
 
 def cmd_build(args) -> int:
@@ -178,9 +193,11 @@ def cmd_build(args) -> int:
             "url": URL, "ref": f"parent of {sha[:12]}", "commit": parent, "gold_commit": sha,
             "gradle": gradle, "java_toolchain": java, "work_name": "spring-framework",
             "parent_date": git(hist, "show", "-s", "--format=%cI", parent).strip(),
-            "session_env": SESSION_ENV, "env_from_caller": ["JAVA_HOME"],
+            "build_note": BUILD_NOTE, "session_env": SESSION_ENV, "env_from_caller": ["JAVA_HOME"],
         })
         cmd = s.get("test_command") or default_test_command(files)
+        if OFFLINE not in cmd:  # the spec's own commands name modules and tests only
+            cmd = cmd.replace("./gradlew ", f"./gradlew {OFFLINE} ", 1)
         overlay = [p for _, p in files if file_kind(p) == "tests"]
         sp = spread(files)
         task = {
@@ -198,6 +215,9 @@ def cmd_build(args) -> int:
                        "size": "S" if sp["files"] <= 5 else "M" if sp["files"] <= 12 else "L"},
         }
         prev = old.get(s["id"], {}).get("precheck")
+        # A failed download says nothing about the task: prechecked again.
+        if prev and prev.get("parent_failure") == "infrastructure":
+            prev = None
         if prev and prev.get("command") == cmd and prev.get("commit") == parent:
             task["precheck"] = prev
         tasks.append(task)

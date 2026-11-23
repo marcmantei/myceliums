@@ -153,6 +153,8 @@ def build_prompt(task: dict, repo: dict, budget_turns: int | None = None) -> str
     if is_edit_task(task):
         budget = ("\n" + BUDGET_RULES.format(max_turns=budget_turns, tool_turns=budget_turns - 1) + "\n"
                   if budget_turns else "")
+        if repo.get("build_note"):  # the same text in every arm (#183)
+            budget = "\n" + repo["build_note"] + "\n" + budget
         return EDIT_PROMPT_TEMPLATE.format(repo=repo["display_name"], language=repo["language_name"],
                                            question=task["question"], budget=budget)
     rules = FORMAT_RULES[task["answer_kind"]]

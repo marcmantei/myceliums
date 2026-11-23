@@ -14,8 +14,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-11-13T14:45:13+01:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -34,8 +36,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-11-06T14:58:30+01:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -54,8 +58,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-10-06T09:28:43+01:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -74,8 +80,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-08-20T18:17:01+02:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -94,28 +102,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-03-26T15:08:58+01:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
-   },
-   "env_from_caller": [
-    "JAVA_HOME"
-   ]
-  },
-  {
-   "name": "spring-test-context-cache-pause-mode",
-   "display_name": "Spring Framework",
-   "language": "java",
-   "language_name": "Java",
-   "url": "https://github.com/spring-projects/spring-framework.git",
-   "ref": "parent of 9711db787e0d",
-   "commit": "d3a385d2225f622fe164953e1ac76e0e4bc5967c",
-   "gold_commit": "9711db787e0db5e7d569119491e723c720b684a2",
-   "gradle": "9.2.1",
-   "java_toolchain": "25",
-   "work_name": "spring-framework",
-   "parent_date": "2026-01-09T19:52:22+01:00",
-   "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -134,8 +124,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2025-10-09T17:45:17+02:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -154,8 +146,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-03-16T11:16:48+01:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -174,8 +168,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-03-10T20:09:20+01:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -194,8 +190,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2025-10-10T18:45:32+02:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -214,8 +212,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2025-12-22T15:34:41+01:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -234,8 +234,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-10-13T10:18:09+02:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -254,8 +256,10 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-08-31T12:57:32+02:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -268,7 +272,7 @@
    "repo": "spring-client-observation-nonstandard-method-none",
    "type": "edit",
    "answer_kind": "diff",
-   "question": "HTTP client observations use the request method name as the value of the low-cardinality \"method\" key, falling back to \"none\" only when no request could be created. The default client request observation convention (DefaultClientRequestObservationConvention) reports any method name as-is, so a non-standard method such as HttpMethod.valueOf(\"CUSTOM\") becomes its own tag value, which can blow up metric cardinality. The default server request observation conventions already guard against this. Align HTTP client observations with them: report the method name only when it is one of the standard HttpMethod values, and \"none\" otherwise.",
+   "question": "HTTP client observations use the request method name as the value of the low-cardinality \"method\" key, falling back to \"none\" only when no request could be created. With RestTemplate and RestClient, the default observation convention reports any method name as-is, so a non-standard method such as HttpMethod.valueOf(\"CUSTOM\") becomes its own tag value, which can blow up metric cardinality. The default server request observation conventions already guard against arbitrary method names. Apply the same guard to the framework's HTTP client observations: report the method name only when it is one of the standard HttpMethod values, and \"none\" otherwise.",
    "rationale": "The commit makes the default client observation conventions emit method=none for non-standard HTTP methods. The primary file is the spring-web convention used by RestTemplate/RestClient. The dependent is the same-named WebClient convention in spring-webflux (org.springframework.web.reactive.function.client), plus a one-line clarification in observability.adoc.",
    "source": {
     "commit": "d49f37cd91d6576cfd79fc6c7fb216f54012eb20",
@@ -300,7 +304,7 @@
    "primary_files": [
     "spring-web/src/main/java/org/springframework/http/client/observation/DefaultClientRequestObservationConvention.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.http.client.observation.DefaultClientRequestObservationConventionTests :spring-webflux:test --tests org.springframework.web.reactive.function.client.DefaultClientRequestObservationConventionTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-web:test --tests org.springframework.http.client.observation.DefaultClientRequestObservationConventionTests :spring-webflux:test --tests org.springframework.web.reactive.function.client.DefaultClientRequestObservationConventionTests",
    "test_overlay": [
     "spring-web/src/test/java/org/springframework/http/client/observation/DefaultClientRequestObservationConventionTests.java",
     "spring-webflux/src/test/java/org/springframework/web/reactive/function/client/DefaultClientRequestObservationConventionTests.java"
@@ -308,7 +312,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -359,14 +363,14 @@
    "primary_files": [
     "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.standard.SpelParserTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.standard.SpelParserTests",
    "test_overlay": [
     "spring-expression/src/test/java/org/springframework/expression/spel/standard/SpelParserTests.java"
    ],
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -456,7 +460,7 @@
    "primary_files": [
     "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessor.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.DispatcherHandlerErrorTests --tests org.springframework.web.reactive.result.method.annotation.RequestMappingExceptionHandlingIntegrationTests --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerIntegrationTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.DispatcherHandlerErrorTests --tests org.springframework.web.reactive.result.method.annotation.RequestMappingExceptionHandlingIntegrationTests --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerIntegrationTests",
    "test_overlay": [
     "spring-webflux/src/test/java/org/springframework/web/reactive/DispatcherHandlerErrorTests.java",
     "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/RequestMappingExceptionHandlingIntegrationTests.java",
@@ -469,7 +473,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -495,7 +499,7 @@
    "repo": "spring-spel-parser-configuration-builder",
    "type": "edit",
    "answer_kind": "diff",
-   "question": "SpelParserConfiguration has accumulated many overloaded constructors, ending in an 8-parameter one (compilerMode, compilerClassLoader, autoGrowNullReferences, autoGrowCollections, maximumAutoGrowSize, maximumExpressionLength, maximumOperations, maximumBigPowerBits). Call sites are unlabeled lists of booleans and ints, and overriding one setting means repeating every other default. Introduce a fluent builder like the one on SimpleEvaluationContext: `SpelParserConfiguration.builder()` returns a public static nested `SpelParserConfiguration.Builder` with `compilerMode(SpelCompilerMode)`, `compilerClassLoader(@Nullable ClassLoader)`, no-arg opt-ins `autoGrowNullReferences()` and `autoGrowCollections()`, `maximumAutoGrowSize(int)`, `maximumExpressionLength(int)`, `maximumOperations(int)`, `maximumBigPowerBits(int)` and `build()`. Each setter validates its argument as soon as it is called and throws an IllegalArgumentException for a null compiler mode, a negative maximumAutoGrowSize, or a maximumExpressionLength, maximumOperations or maximumBigPowerBits that is not positive. Also add `SpelParserConfiguration.withDefaults()` as shorthand for `builder().build()`. The builder's defaults match the no-arg constructor, including the SpringProperties-driven defaults for compiler mode, maximum operations and maximum big-power bits; the one exception is maximumAutoGrowSize, which defaults to 256 (like DataBinder's default auto-grow collection limit) instead of Integer.MAX_VALUE. The existing constructors stay unchanged (in particular they still accept a negative maximumAutoGrowSize) and are not deprecated.",
+   "question": "SpelParserConfiguration has accumulated many overloaded constructors, ending in an 8-parameter one (compilerMode, compilerClassLoader, autoGrowNullReferences, autoGrowCollections, maximumAutoGrowSize, maximumExpressionLength, maximumOperations, maximumBigPowerBits). Call sites are unlabeled lists of booleans and ints, and overriding one setting means repeating every other default. Introduce a fluent builder like the one on SimpleEvaluationContext: `SpelParserConfiguration.builder()` returns a public static nested `SpelParserConfiguration.Builder` with `compilerMode(SpelCompilerMode)`, `compilerClassLoader(@Nullable ClassLoader)`, no-arg opt-ins `autoGrowNullReferences()` and `autoGrowCollections()`, `maximumAutoGrowSize(int)`, `maximumExpressionLength(int)`, `maximumOperations(int)`, `maximumBigPowerBits(int)` and `build()`. Each setter validates its argument as soon as it is called and throws an IllegalArgumentException for a null compiler mode, a negative maximumAutoGrowSize, or a maximumExpressionLength, maximumOperations or maximumBigPowerBits that is not positive. Also add `SpelParserConfiguration.withDefaults()` as shorthand for `builder().build()`. The builder's defaults match the no-arg constructor, including the SpringProperties-driven defaults for compiler mode, maximum operations and maximum big-power bits; the one exception is maximumAutoGrowSize, which defaults to 256 (like DataBinder's default auto-grow collection limit) instead of Integer.MAX_VALUE. The framework itself should create its configurations through the new API instead of the constructors. The existing constructors stay unchanged (in particular they still accept a negative maximumAutoGrowSize) and are not deprecated.",
    "rationale": "The commit adds SpelParserConfiguration.builder()/Builder/withDefaults() and moves internal call sites to it. SpelParserConfiguration is the primary file. Dependents are the internal call sites switched to the builder: SpelExpressionParser's no-arg constructor, ExpressionState's convenience constructors, and StandardBeanExpressionResolver in spring-context. These switches don't change behaviour and no test checks them. The SpEL reference docs (evaluation.adoc) are also a dependent.",
    "source": {
     "commit": "37c8f41633d9274cf4bdba631ad0472380858994",
@@ -552,7 +556,7 @@
    "primary_files": [
     "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.EvaluationTests --tests org.springframework.expression.spel.IndexingTests --tests org.springframework.expression.spel.SpelCompilationCoverageTests --tests org.springframework.expression.spel.SpelParserConfigurationTests --tests org.springframework.expression.spel.SpelReproTests --tests org.springframework.expression.spel.standard.SpelCompilerTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.EvaluationTests --tests org.springframework.expression.spel.IndexingTests --tests org.springframework.expression.spel.SpelCompilationCoverageTests --tests org.springframework.expression.spel.SpelParserConfigurationTests --tests org.springframework.expression.spel.SpelReproTests --tests org.springframework.expression.spel.standard.SpelCompilerTests",
    "test_overlay": [
     "spring-expression/src/test/java/org/springframework/expression/spel/EvaluationTests.java",
     "spring-expression/src/test/java/org/springframework/expression/spel/IndexingTests.java",
@@ -564,7 +568,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -627,14 +631,14 @@
    "primary_files": [
     "spring-web/src/main/java/org/springframework/http/converter/FormHttpMessageConverter.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.http.converter.FormHttpMessageConverterTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-web:test --tests org.springframework.http.converter.FormHttpMessageConverterTests",
    "test_overlay": [
     "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java"
    ],
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -650,92 +654,6 @@
      "framework-docs",
      "spring-test",
      "spring-web"
-    ],
-    "docs": true,
-    "size": "M"
-   }
-  },
-  {
-   "id": "test-context-cache-pause-mode",
-   "repo": "spring-test-context-cache-pause-mode",
-   "type": "edit",
-   "answer_kind": "diff",
-   "question": "Since Spring Framework 7.0 the TestContext framework pauses inactive application contexts in the context cache and restarts them when they are needed again. When pausing or restarting Lifecycle components is slow, this slows down the whole test suite, so it must be possible to disable pausing completely through a JVM system property or Spring property named \"spring.test.context.cache.pause\", exposed as ContextCache.CONTEXT_CACHE_PAUSE_PROPERTY_NAME. Introduce a nested enum ContextCache.PauseMode with the constants ALWAYS (the default and the current behaviour) and NEVER (inactive contexts are never paused). Add a static method ContextCacheUtils.retrievePauseMode() that reads the property and returns ALWAYS when it is not set. It parses the value case-insensitively, ignoring leading and trailing whitespace. For an unknown value it throws an IllegalArgumentException with the message \"Unsupported value '<value>' for property 'spring.test.context.cache.pause'\". DefaultContextCache gets a new constructor DefaultContextCache(int maxSize, PauseMode pauseMode), and its existing constructors use the retrieved pause mode. With NEVER, a context is not paused when its last test class stops using it.",
-   "rationale": "The commit adds the spring.test.context.cache.pause property with PauseMode ALWAYS/NEVER, the parsing logic in ContextCacheUtils, and a pause-mode-aware DefaultContextCache. The three spring-test types are primary because the tests call all of them directly. The remaining dependents are the SpringProperties Javadoc cross-reference in spring-core, the appendix and the context-caching AsciiDoc pages.",
-   "source": {
-    "commit": "9711db787e0db5e7d569119491e723c720b684a2",
-    "subject": "Introduce Spring property to disable context pausing for tests",
-    "date": "2026-01-11",
-    "issue": "gh-36117"
-   },
-   "gold_files": [
-    {
-     "path": "framework-docs/modules/ROOT/pages/appendix.adoc",
-     "status": "M"
-    },
-    {
-     "path": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc",
-     "status": "M"
-    },
-    {
-     "path": "spring-core/src/main/java/org/springframework/core/SpringProperties.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/context/cache/ContextCache.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/context/cache/ContextCacheUtils.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/context/cache/DefaultContextCache.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/test/java/org/springframework/test/context/cache/ContextCachePauseModeTests.java",
-     "status": "A"
-    },
-    {
-     "path": "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheUtilsTests.java",
-     "status": "M"
-    }
-   ],
-   "primary_files": [
-    "spring-test/src/main/java/org/springframework/test/context/cache/ContextCache.java",
-    "spring-test/src/main/java/org/springframework/test/context/cache/ContextCacheUtils.java",
-    "spring-test/src/main/java/org/springframework/test/context/cache/DefaultContextCache.java"
-   ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-test:test --tests org.springframework.test.context.cache.ContextCachePauseModeTests --tests org.springframework.test.context.cache.ContextCacheTests --tests org.springframework.test.context.cache.ContextCacheUtilsTests",
-   "test_overlay": [
-    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCachePauseModeTests.java",
-    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheTests.java",
-    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheUtilsTests.java"
-   ],
-   "allowed_commands": [
-    {
-     "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
-    }
-   ],
-   "test_timeout_s": 1800,
-   "strata": {
-    "files": 9,
-    "files_by_kind": {
-     "code": 4,
-     "tests": 3,
-     "docs": 2
-    },
-    "code_modules": 2,
-    "modules": [
-     "framework-docs",
-     "spring-core",
-     "spring-test"
     ],
     "docs": true,
     "size": "M"
@@ -796,7 +714,7 @@
     "spring-core/src/main/java/org/springframework/core/retry/RetryPolicy.java",
     "spring-context/src/main/java/org/springframework/resilience/annotation/Retryable.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-context:test --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --tests org.springframework.core.retry.RetryTemplateTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-context:test --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --tests org.springframework.core.retry.RetryTemplateTests",
    "test_overlay": [
     "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
     "spring-context/src/test/java/org/springframework/resilience/RejectMalformedInputException3Predicate.java",
@@ -806,7 +724,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -888,14 +806,14 @@
     "spring-core/src/main/java/org/springframework/core/io/DefaultResourceLoader.java",
     "spring-core/src/main/java/org/springframework/core/io/support/EncodedResource.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-core:test --tests org.springframework.core.io.support.PathMatchingResourcePatternResolverTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-core:test --tests org.springframework.core.io.support.PathMatchingResourcePatternResolverTests",
    "test_overlay": [
     "spring-core/src/test/java/org/springframework/core/io/support/PathMatchingResourcePatternResolverTests.java"
    ],
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -981,7 +899,7 @@
     "spring-webflux/src/main/java/org/springframework/web/reactive/result/view/RequestContext.java",
     "spring-web/src/main/java/org/springframework/web/server/adapter/DefaultServerWebExchange.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.web.server.adapter.WebHttpHandlerBuilderTests :spring-webflux:test --tests org.springframework.web.reactive.result.view.RequestContextTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-web:test --tests org.springframework.web.server.adapter.WebHttpHandlerBuilderTests :spring-webflux:test --tests org.springframework.web.reactive.result.view.RequestContextTests",
    "test_overlay": [
     "spring-web/src/test/java/org/springframework/web/server/adapter/WebHttpHandlerBuilderTests.java",
     "spring-web/src/testFixtures/java/org/springframework/web/testfixture/server/MockServerWebExchange.java",
@@ -990,7 +908,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -1050,7 +968,7 @@
     "spring-core/src/main/java/org/springframework/core/task/SyncTaskExecutor.java",
     "spring-core/src/main/java/org/springframework/core/task/TaskCallback.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-core:test --tests org.springframework.core.task.SyncTaskExecutorTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-core:test --tests org.springframework.core.task.SyncTaskExecutorTests",
    "test_overlay": [
     "spring-context/src/test/java/org/springframework/resilience/ConcurrencyLimitTests.java",
     "spring-core/src/test/java/org/springframework/core/task/SyncTaskExecutorTests.java"
@@ -1058,7 +976,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -1138,7 +1056,7 @@
     "spring-context/src/main/java/org/springframework/resilience/retry/AbstractRetryInterceptor.java",
     "spring-core/src/main/java/org/springframework/core/retry/RetryTemplate.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-context:test --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --tests org.springframework.core.retry.RetryTemplateTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-context:test --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --tests org.springframework.core.retry.RetryTemplateTests",
    "test_overlay": [
     "spring-context/src/test/java/org/springframework/resilience/MethodRetryEventListener.java",
     "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
@@ -1148,7 +1066,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -1201,7 +1119,7 @@
    "primary_files": [
     "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerMapping.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.result.method.annotation.RequestMappingHandlerMappingTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMappingTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.result.method.annotation.RequestMappingHandlerMappingTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMappingTests",
    "test_overlay": [
     "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/RequestMappingHandlerMappingTests.java",
     "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerMappingTests.java"
@@ -1209,7 +1127,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,
@@ -1234,7 +1152,7 @@
    "repo": "spring-expiration-seconds-int-overflow",
    "type": "edit",
    "answer_kind": "diff",
-   "question": "FlashMap.startExpirationPeriod(int timeToLive) computes the expiration time by multiplying the number of seconds by 1000 in int arithmetic. Above roughly 2,147,483 seconds (about 24.9 days) this overflows to a negative offset, so the expiration time lands in the past and a flash map with a large timeout is treated as expired immediately. Fix the calculation so that any int number of seconds, up to Integer.MAX_VALUE, yields an expiration time in the future. The same overflow can occur wherever the framework turns an int number of seconds into an absolute expiration time this way; find and fix any other such place as well.",
+   "question": "FlashMap.startExpirationPeriod(int timeToLive) computes the expiration time by multiplying the number of seconds by 1000 in int arithmetic. Above roughly 2,147,483 seconds (about 24.9 days) this overflows and can yield a negative offset, so that the expiration time lands in the past and a flash map with a large timeout is treated as expired immediately. Fix the calculation so that any positive int number of seconds, up to Integer.MAX_VALUE, yields an expiration time in the future. The same overflow can occur wherever the framework turns an int number of seconds into an absolute expiration time this way; find and fix any other such place as well.",
    "rationale": "Widens seconds*1000 to long in FlashMap.startExpirationPeriod and in MockMvcWebConnection.createCookie. Primary is FlashMap. Dependents: MockMvcWebConnection in spring-test, FlashMapTests and MockMvcWebClientBuilderTests.",
    "source": {
     "commit": "dcc24a2325a48684d6d8262af3bfb7467c6dbd02",
@@ -1263,7 +1181,7 @@
    "primary_files": [
     "spring-webmvc/src/main/java/org/springframework/web/servlet/FlashMap.java"
    ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-test:test --tests org.springframework.test.web.servlet.htmlunit.MockMvcWebClientBuilderTests :spring-webmvc:test --tests org.springframework.web.servlet.FlashMapTests",
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-test:test --tests org.springframework.test.web.servlet.htmlunit.MockMvcWebClientBuilderTests :spring-webmvc:test --tests org.springframework.web.servlet.FlashMapTests",
    "test_overlay": [
     "spring-test/src/test/java/org/springframework/test/web/servlet/htmlunit/MockMvcWebClientBuilderTests.java",
     "spring-webmvc/src/test/java/org/springframework/web/servlet/FlashMapTests.java"
@@ -1271,7 +1189,7 @@
    "allowed_commands": [
     {
      "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
    "test_timeout_s": 1800,

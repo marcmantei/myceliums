@@ -1590,7 +1590,7 @@ tests, at least two build modules touched (`framework-docs` counts), and a
 parent that builds with the Java 25 toolchain: **151 candidates**. 34 were
 picked for a public API or behaviour change a description can state
 (no pure refactoring or deprecation), and stratified by files, code modules
-and docs; 20 are the task set, 13 are reserves
+and docs; 20 are the task set, 12 are reserves
 (`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
 fails.
 
@@ -1599,7 +1599,7 @@ fails.
 | `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 2 | yes | 1 |
 | `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 | yes | 2 |
 | `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 | yes | 3 |
-| `spel-big-power-result-limit` | 8a92c19e4d | 8 (4/2/2) | 2 | yes | 2 |
+| `test-context-cache-pause-mode` | 9711db787e | 9 (4/3/2) | 2 | yes | 3 |
 | `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 | yes | 1 |
 | `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | yes | 2 |
 | `fn-request-bind-pathvars-headers` | a9a404266c | 7 (3/2/2) | 2 | yes | 1 |
@@ -1627,9 +1627,15 @@ files, test classes, dependent classes, modules, docs or tests). A second
 agent reviewed all 34 for leakage and solvability against the test diff (it
 split them over four sub-agents and itself re-checked nine): 27 ok, 7 to fix.
 Six were replaced by the reviewer's rewrite (two of them among the 20); the
-rewrites were not reviewed again. The seventh, a reserve, had to name a
+rewrites went to a third check. A third agent re-reviewed those six: two ok, four
+changed again (a class name that also names its counterpart, a wrong fact about the server
+conventions, two wrong facts about the overflow, a call-site scope that was
+not stated, and for `bean-provider-parameterized-type-reference`, one of the 20,
+that the method is abstract as in the commit; without it a one-line default
+method would have passed). With it the implementations are compile errors, so this task says
+little about forgotten dependents. These four texts were not reviewed again. The seventh, a reserve, had to name a
 dependent (a Kotlin extension its module's tests compile against) and was
-dropped, which leaves 13 reserves. No human has reviewed the descriptions.
+dropped (later one more went into the set: 12 reserves). No human has reviewed the descriptions.
 Scope words an issue would use ("for both Spring MVC and WebFlux") are allowed
 and noted in the spec.
 
@@ -1637,10 +1643,10 @@ and noted in the spec.
 task file's own `repos` (the parent; `gold_commit` the replayed commit),
 `gold_files` (the commit's name-status, renames as delete + add),
 `test_overlay` (the commit's test files, fixtures included), the default test
-command (`./gradlew --no-daemon --console=plain :module:test --tests ...` over
-the changed test classes; three tasks narrow it, see the spec), arm D's
+command (`./gradlew --offline --no-scan --no-daemon --console=plain :module:test --tests ...` over
+the changed test classes; two tasks narrow it, see the spec), arm D's
 `allowed_commands` (`./gradlew` with task paths, `--tests` filters and a few
-flags; `-I`, `-D`, `-P`, `-p`, `--init-script` are refused) and the strata.
+flags, `--offline --no-scan` required; `-I`, `-D`, `-P`, `-p`, `--init-script` are refused) and the strata.
 
 **Harness additions.**
 
@@ -1677,7 +1683,7 @@ flags; `-I`, `-D`, `-P`, `-p`, `--init-script` are refused) and the strata.
 export JAVA_HOME=$HOME/.cache/myc-java/jdk/jdk-25.0.5.1+2/Contents/Home   # Spring's build needs a JDK 25 toolchain
 T=evals/agent/tasks/tasks-commit-replay.json
 python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 MB each) + gold files
-python3 evals/agent/agent_eval.py --tasks $T precheck-edit   # fails on parent + overlay, passes on the commit
+python3 evals/agent/agent_eval.py --tasks $T precheck-edit --gold-runs 2   # needs a warm Gradle cache: the commands are offline
 python3 evals/agent/agent_eval.py --tasks $T check-tasks
 python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models --base $BASE_HOME
 python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-replay --conditions A,C,D \
@@ -1748,24 +1754,88 @@ of the final context and 8-30k output.
 | Wall time, one session at a time (shared path) | 18 h | 36 h | 75 h |
 
 Plus, once: the derived indexes (not measured) and the prechecks (40 Gradle
-runs, not measured). The call counts and context sizes above are assumptions;
+runs). The call counts and context sizes above are assumptions;
 a pilot of one repetition (60 sessions) would replace them. Disk: 20 parents
 about 2 GB, graph-only indexes 0.67 GB each, embedded ones larger (not
 measured; about 1.1 GB if vectors add 0.4 GB, so 22 GB for 20, close to all the
 free space: build, run and delete task by task), `~/.gradle`
-1.8 GB after two of 11 Gradle versions, still growing.
+8-9 GB (forecast, below).
 
-**Prechecks: 1 of 20 done.** `precheck-edit --gold-runs 2` runs the tests on
-the parent with the commit's tests (must fail, and for a compile or test
-failure, not a failed download), then twice on the whole commit with Gradle's
-`--rerun`, because the build cache could otherwise answer without running
-them. `spel-simple-context-restricted-conversion`: parent fails to compile the
-tests (212 s), commit passes 2 of 2 (42 s, 33 s). All times were taken beside the
-#182 index build (10 cores busy, Gradle at 4 workers and low priority) and have to
-be re-timed. Java had no network on this machine until 23 November, 19:00.
-`~/.gradle` was 1.8 GB after two Gradle versions of 11. The other 19 test
-commands are unproven, so `check-tasks` reports them as not prechecked and CI
-covers the task file with unit tests only (`tests/test_commit_replay.py`).
+**Prechecks: none is valid for the current commands; 13 of 20 passed online on
+23 November** ([records](groundtruth/commit_replay_prechecks_online.json)). The
+test commands have since become offline commands (next paragraph), so all 20
+run again, offline and without competing load. `precheck-edit --gold-runs 2`
+runs the tests on the parent with the commit's tests (must fail, and for a
+compile or test failure, not a failed download), then twice on the whole commit
+with Gradle's `--rerun`, because the build cache could otherwise answer without
+running them. Online: nine parents fail to compile the commit's tests (each on API
+the commit adds or changes), four fail the tests; every commit passed both
+runs. One at a time, low priority, 4 Gradle workers, beside the #182 index build:
+
+| Task | Parent + commit's tests | Commit | Time on the commit |
+|---|---|---:|---:|
+| `spel-simple-context-restricted-conversion` | compile, 212 s | 2 of 2 | 42, 33 s |
+| `observation-record-handled-exception` | compile, 106 s | 2 of 2 | 88, 47 s |
+| `beans-max-nested-path-depth` | compile, 160 s | 2 of 2 | 94, 38 s |
+| `jsonl-media-type-support` | compile, 410 s | 2 of 2 | 111, 32 s |
+| `test-context-cache-pause-mode` | not run | | |
+| `retry-max-attempts-to-max-retries` | compile, 304 s | 2 of 2 | 135, 40 s |
+| `fn-request-bind-pathvars-headers` | tests, 550 s | 2 of 2 | 138, 41 s |
+| `jdbcclient-batch-entry-dsl` | compile, 275 s | 2 of 2 | 100, 69 s |
+| `type-mismatch-required-type-arg` | tests, 216 s | 2 of 2 | 92, 49 s |
+| `servlet-response-ignore-body-flush` | not run | | |
+| `content-negotiation-no-fallback-mapping` | tests, 306 s | 2 of 2 | 86, 63 s |
+| `client-builders-deep-copy-default-headers-cookies` | not run | | |
+| `http-range-honor-if-range` | not run | | |
+| `error-response-interceptor-with-request` | compile, 221 s | 2 of 2 | 112, 39 s |
+| `mime-type-parameter-names-case-insensitive` | tests, 135 s | 2 of 2 | 93, 45 s |
+| `deferred-bean-registrar-contains-bean` | not run | | |
+| `cache-manager-reset-caches` | compile, 203 s | 2 of 2 | 153, 59 s |
+| `api-version-deprecation-handler-handler-arg` | compile, 453 s | 2 of 2 | 197, 41 s |
+| `bean-provider-parameterized-type-reference` | not run | | |
+| `message-source-default-charset` | not run | | |
+
+* **Dropped:** `spel-big-power-result-limit`: its parent needs
+  `micrometer-bom:1.18.0-INTERNAL-SNAPSHOT`, which neither Spring repository
+  has. Replaced by the reserve `test-context-cache-pause-mode` (same strata); 12
+  reserves are left.
+* **Not run (7).** Gradle distributions 9.1.0, 9.3.1, 9.4.1 and 9.8.2 are missing, and of
+  each build's 21 BOMs and root plugins these: `test-context-cache-pause-mode`
+  (9.2.1, on disk) 9; `servlet-response-ignore-body-flush` (9.3.1) 6;
+  `message-source-default-charset` (9.3.1) 5; `client-builders-...` and
+  `http-range-...` (9.8.2) 1 each; `deferred-bean-registrar-contains-bean` (9.4.1) 1;
+  `bean-provider-...` (9.1.0) 8. Further artifacts may be missing. One online warm-up per
+  Gradle version is needed before they can run offline.
+* **Reproducibility risk:** six of the 20 parents depend on unpinned `-SNAPSHOT` BOMs
+  (micrometer 1.18.0, reactor 2026.0.0; `beans-max-nested-path-depth` reactor
+  only). Offline, Gradle takes the cached snapshot; a lost cache may not be recoverable.
+* `~/.gradle` grew from 0 to 6.1 GB with seven complete distributions; forecast
+  for the ten versions of the kept tasks: 8-9 GB.
+
+**Network-free builds.** Test commands start with `./gradlew --offline --no-scan`;
+arm D's pattern requires both flags and refuses `--scan`,
+`--refresh-dependencies` and every publish task (the first version would have let
+`buildScanPublishPrevious` through, which uploads a stored scan); every arm's prompt
+says the build has no network; and the sessions' `GRADLE_OPTS` send
+HTTP(S) to a closed loopback port, with the Spring build's remote cache
+(`DEVELOCITY_CACHE_SERVER`) there too, for a build started without the flags. Tested
+on the command strings only: **no Gradle has run offline yet**.
+
+`io.spring.develocity.conventions` (0.0.22 and 0.0.25, read from its source; the scan and
+cache conventions are identical in both, the plugin class differs, and both check `--no-scan`):
+
+* **Build scans** are published to `https://ge.spring.io` only if authenticated
+  (`publishIfAuthenticated`); with `--no-scan` the scan conventions are not applied. No access
+  key is set on this machine (no `DEVELOCITY_*`/`GRADLE_ENTERPRISE_*` variable, no key file
+  in `~/.gradle`), and no log mentions a published scan. `~/.gradle/build-scan-data`
+  holds three scan payloads written locally (1.9 MB): they contain the user name and local
+  paths. The evidence says they were not sent; it is absence of evidence of an
+  upload, not a packet capture.
+* **Remote build cache:** on by default whenever Gradle's build cache is
+  (`org.gradle.caching=true` in Spring), read-only, at `https://ge.spring.io`
+  (pushing needs a key and a CI). The first build into an empty `~/.gradle` took 13
+  tasks from a cache, which points to it having been read. Gradle turns the
+  remote cache off with `--offline` (its documentation; not yet observed here).
 
 **Mock validation** (no model call; run on the per-task paths, before the shared path). It shows the pipeline, not a passing grade: the scripted edit is a comment, so the tests would fail even with a working Gradle. `probe --profile realistic --bash` on
 `mime-type-parameter-names-case-insensitive` against the graph-only index, with
