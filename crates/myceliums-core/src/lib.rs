@@ -102,6 +102,7 @@ pub mod cycles;
 pub mod demotion;
 /// File dependencies and module coupling metrics.
 pub mod dependencies;
+pub mod dispatch;
 pub mod drift;
 pub mod dsl;
 pub mod email;

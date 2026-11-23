@@ -169,18 +169,10 @@ impl<'a> CallLabels<'a> {
         }
     }
 
-    /// `name`, followed by the label when the edge is a guess.
-    pub(crate) fn mark(label: &str, name: &str) -> String {
-        if Self::is_heuristic(label) {
-            format!("{name} (resolved: {label})")
-        } else {
-            name.to_string()
-        }
-    }
-
-    /// Whether the label marks a name-based guess rather than a certain edge.
+    /// Whether the label marks a guess rather than a certain edge: matched
+    /// by name, or reached through dynamic dispatch (#190).
     pub(crate) fn is_heuristic(label: &str) -> bool {
-        matches!(label, "name-match" | "ambiguous")
+        matches!(label, "name-match" | "ambiguous") || label.starts_with("dispatch")
     }
 }
 

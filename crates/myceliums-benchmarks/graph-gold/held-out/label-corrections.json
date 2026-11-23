@@ -1,0 +1,62 @@
+{
+  "description": "Corrections to the Java CALLS sets (#177), kept apart from the sets: graph-eval scores every set with its labels as committed and, where a correction applies, again with the correction, and reports both. Each correction adds gold targets the labelling missed under the sets' own rule (\"where the call dispatches, every override of it in the repository\"). They were found while reviewing the wrong dispatch targets of #190 (PR #192), so they correct only omissions some tool hit; an omission no edge reaches stays unseen. Source lines are at the pinned commit f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4.",
+  "labelled_by": "agent",
+  "reviewed_by": null,
+  "corrections": [
+    {
+      "set": "held-out/java-spring-heldout.json",
+      "file": "spring-web/src/main/java/org/springframework/http/converter/multipart/PartGenerator.java",
+      "caller": "addPart",
+      "callee": "add",
+      "call_line": 147,
+      "add_targets": [
+        {
+          "file": "spring-web/src/jmh/java/org/springframework/http/support/HeadersAdaptersBaseline.java",
+          "name": "add",
+          "line": 66
+        },
+        {
+          "file": "spring-web/src/jmh/java/org/springframework/http/support/HeadersAdaptersBaseline.java",
+          "name": "add",
+          "line": 268
+        },
+        {
+          "file": "spring-web/src/jmh/java/org/springframework/http/support/HeadersAdaptersBaseline.java",
+          "name": "add",
+          "line": 561
+        }
+      ],
+      "why": "The pair lists MultiValueMap.add and every implementation in the production sources. HeadersAdaptersBaseline.HttpComponents (line 44), .Jetty (243) and .Netty4 (541) implement MultiValueMap<String, String> in the JMH benchmark sources and declare add(String, String) at lines 66, 268 and 561: overrides in the repository, which the rule includes."
+    },
+    {
+      "set": "held-out/java-spring-heldout.json",
+      "file": "spring-core/src/main/java/org/springframework/core/io/support/PathMatchingResourcePatternResolver.java",
+      "caller": "findPathMatchingResources",
+      "callee": "doFindPathMatchingFileResources",
+      "call_line": 782,
+      "add_targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/context/support/ServletContextResourcePatternResolver.java",
+          "name": "doFindPathMatchingFileResources",
+          "line": 80
+        }
+      ],
+      "why": "An implicit-this call of a protected method, labelled with the class's own declaration only. ServletContextResourcePatternResolver extends PathMatchingResourcePatternResolver and overrides doFindPathMatchingFileResources at line 80, so the call dispatches. Pairs 39 (initializeMultipart) and 52 (getBodyInternal) of the same set label implicit-this calls with their overrides; this pair was inconsistent with them."
+    },
+    {
+      "set": "held-out/java-spring-dev.json",
+      "file": "spring-context/src/main/java/org/springframework/cache/interceptor/CacheAspectSupport.java",
+      "caller": "executeSynchronized",
+      "callee": "invokeOperation",
+      "call_line": 1161,
+      "add_targets": [
+        {
+          "file": "spring-context/src/test/java/org/springframework/cache/config/CustomInterceptorTests.java",
+          "name": "invokeOperation",
+          "line": 138
+        }
+      ],
+      "why": "The call is on the outer CacheAspectSupport instance and dispatches. CustomInterceptorTests.TestCacheInterceptor (line 135) extends CacheInterceptor, a CacheAspectSupport, and overrides invokeOperation at line 138, in the test sources: an override in the repository, which the rule includes."
+    }
+  ]
+}

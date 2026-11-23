@@ -355,6 +355,16 @@ pub struct SymbolContextOutput {
     pub callees: Vec<String>,
     /// All callees, including those not listed.
     pub callees_total: usize,
+    /// The methods this one overrides or implements (#190), as
+    /// `file:qualified_name` handles.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub overrides: Vec<String>,
+    /// Concrete implementations of this method, at most one page.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub implementations: Vec<String>,
+    /// All implementations, including those not listed.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub implementations_total: usize,
     pub metadata: Option<String>,
     /// Set when `content` was cut to the source budget: how to get the rest.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -562,8 +572,12 @@ pub struct CallerItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
     /// How the CALLS edge reaching this symbol was resolved:
-    /// exact | import | name-match | ambiguous.
+    /// exact | import | name-match | ambiguous | dispatch.
     pub resolved: String,
+    /// For `resolved: dispatch`: through which overridden method, and how
+    /// likely (`via Base.m, confidence 0.8`; #190).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dispatch: Option<String>,
     /// The declaration line; only with `detail: full` (#181).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -600,8 +614,12 @@ pub struct CalleeItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
     /// How the CALLS edge reaching this symbol was resolved:
-    /// exact | import | name-match | ambiguous.
+    /// exact | import | name-match | ambiguous | dispatch.
     pub resolved: String,
+    /// For `resolved: dispatch`: through which overridden method, and how
+    /// likely (`via Base.m, confidence 0.8`; #190).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dispatch: Option<String>,
     /// The declaration line; only with `detail: full` (#181).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,

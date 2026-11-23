@@ -165,6 +165,7 @@ fn edge_type_display(kind: &str) -> String {
         "HAS_ATTACHMENT" => "Has Attachment",
         "PART_OF_CONVERSATION" => "Part Of Conversation",
         "MENTIONS" => "Mentions",
+        "OVERRIDES" => "Overrides",
         _ => "Related",
     }
     .to_string()

@@ -299,6 +299,41 @@ pub fn markdown(report: &RunReport) -> String {
             .collect();
         let _ = writeln!(out, "| recall share | {} |", shares.join(" | "));
 
+        let _ = writeln!(
+            out,
+            "\nDispatch (#190): implementations of a called method that dispatch adds, derived from \
+             OVERRIDES edges, not CALLS; correct when the gold accepts the implementation as the \
+             call's target:\n"
+        );
+        let _ = writeln!(
+            out,
+            "| language | dispatch targets | correct | precision (95% CI) |"
+        );
+        let _ = writeln!(out, "|---|---:|---:|---:|");
+        let (mut all, mut all_correct) = (0, 0);
+        for (lang, detail) in &result.detail {
+            let d = &detail.dispatch;
+            all += d.targets;
+            all_correct += d.correct;
+            let _ = writeln!(
+                out,
+                "| {lang} | {} | {} | {} |",
+                d.targets,
+                d.correct,
+                rate_with_interval(d.correct, d.targets)
+            );
+        }
+        let _ = writeln!(
+            out,
+            "| **all** | {all} | {all_correct} | {} |",
+            rate_with_interval(all_correct, all)
+        );
+        for (lang, detail) in &result.detail {
+            for wrong in &detail.dispatch.wrong {
+                let _ = writeln!(out, "- wrong dispatch target ({lang}): `{wrong}`");
+            }
+        }
+
         let _ = writeln!(out, "\nGold edges found, by tag:\n");
         let _ = writeln!(out, "| tag | found / gold |");
         let _ = writeln!(out, "|---|---:|");

@@ -964,7 +964,9 @@ impl CallList {
                 }
                 line.push(']');
             }
-            if crate::repo::CallLabels::is_heuristic(&item.resolved) {
+            if let Some(dispatch) = &item.dispatch {
+                line.push_str(&format!(" (dispatch {dispatch})"));
+            } else if crate::repo::CallLabels::is_heuristic(&item.resolved) {
                 line.push_str(&format!(" (resolved: {})", item.resolved));
             }
             (item.file_path.as_str(), line)
@@ -1016,6 +1018,7 @@ impl CallList {
                     depth: c.depth,
                     via: c.via,
                     resolved: c.resolved,
+                    dispatch: c.dispatch,
                     signature: c.signature,
                 })
                 .collect(),
@@ -1044,7 +1047,7 @@ impl MyceliumsMcp {
         let start = navigation::resolve(&symbols, name)?;
         let stats = crate::index_status::call_resolution(&graph.store()).await;
         let max_depth = depth.clamp(1, 10);
-        let (hits, cut) =
+        let (hits, cut, dispatch_cut) =
             navigation::walk_calls_bounded(&symbols, &relationships, start, direction, max_depth);
         let total_count = hits.len() as u32;
         let depth_limited = cut.is_cut();
@@ -1084,6 +1087,21 @@ impl MyceliumsMcp {
                 });
             }
         }
+        // Calls through an overridden method with more implementations than
+        // a list shows (#190).
+        for c in &dispatch_cut {
+            gaps.other.push(format!(
+                "dispatch: {} of {} implementations of {} listed",
+                c.listed, c.total, c.base.qualified_name
+            ));
+            gaps.other_branches += c.total - c.listed;
+        }
+        if let Some(c) = dispatch_cut.first() {
+            next.push(format!(
+                "explain_symbol(repo_id={repo_id:?}, symbol_name={:?}) lists its implementations",
+                crate::repo::located_name(c.base)
+            ));
+        }
         // Symbols whose own edges the list shows: the start and every hit
         // short of the depth limit.
         let walked = std::iter::once(start).chain(
@@ -1117,6 +1135,7 @@ impl MyceliumsMcp {
                 // The short name, as `myc callers --json` reports it.
                 via: h.via.map(|v| v.name.clone()),
                 resolved: h.resolved.unwrap_or("exact").to_string(),
+                dispatch: h.dispatch_provenance(),
                 signature: Some(h.symbol.signature.clone()),
             })
             .collect();
@@ -1148,6 +1167,7 @@ impl MyceliumsMcp {
         };
         let callers = edges(navigation::Direction::Callers);
         let callees = edges(navigation::Direction::Callees);
+        let (overrides, implementations) = navigation::overrides(&symbols, &relationships, symbol);
         let (content, source_notice) = source_budget(symbol, max_lines);
 
         let output = SymbolContextOutput {
@@ -1163,6 +1183,9 @@ impl MyceliumsMcp {
             callers: callers.into_iter().take(CONTEXT_EDGES).collect(),
             callees_total: callees.len(),
             callees: callees.into_iter().take(CONTEXT_EDGES).collect(),
+            overrides,
+            implementations_total: implementations.len(),
+            implementations: implementations.into_iter().take(CONTEXT_EDGES).collect(),
             metadata: symbol.metadata.clone(),
             source_notice,
         };
@@ -1195,6 +1218,57 @@ fn source_budget(
 #[cfg(test)]
 mod tests {
     use super::source_budget;
+
+    /// #190: a dispatch hit keeps `resolved` a status label (`dispatch`)
+    /// and carries its provenance in `dispatch`; the compact line shows it.
+    #[test]
+    fn dispatch_hits_keep_resolved_a_status_label() {
+        let item = |name: &str, resolved: &str, dispatch: Option<&str>| super::CallerItem {
+            name: name.into(),
+            qualified_name: format!("Alerts.{name}"),
+            kind: "Method".into(),
+            file_path: "src/Alerts.java".into(),
+            start_line: 3,
+            end_line: 9,
+            depth: 1,
+            via: None,
+            resolved: resolved.into(),
+            dispatch: dispatch.map(str::to_string),
+            signature: None,
+        };
+        let list = super::CallList {
+            index_status: "Index: r".into(),
+            symbol_name: "send".into(),
+            items: vec![
+                item("notify", "dispatch", Some("via Port.send, confidence 0.8")),
+                item("retry", "name-match", None),
+                item("flush", "exact", None),
+            ],
+            total_count: 3,
+            max_depth: 1,
+            depth_limited: false,
+            notice: None,
+            page_cut: false,
+            incomplete: None,
+        };
+        let text = list.compact("callers");
+        assert!(
+            text.contains("Alerts.notify Method :3-9 (dispatch via Port.send, confidence 0.8)"),
+            "{text}"
+        );
+        assert!(
+            text.contains("Alerts.retry Method :3-9 (resolved: name-match)"),
+            "{text}"
+        );
+        assert!(!text.contains("flush Method :3-9 ("), "{text}");
+        let json = serde_json::to_value(list.into_callers()).unwrap();
+        assert_eq!(json["callers"][0]["resolved"], "dispatch");
+        assert_eq!(
+            json["callers"][0]["dispatch"],
+            "via Port.send, confidence 0.8"
+        );
+        assert!(json["callers"][1].get("dispatch").is_none());
+    }
 
     #[test]
     fn long_sources_are_cut_with_a_way_to_get_the_rest() {

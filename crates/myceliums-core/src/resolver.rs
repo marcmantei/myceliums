@@ -32,6 +32,7 @@
 
 mod imports;
 mod js_project;
+mod overrides;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -444,6 +445,8 @@ struct Def {
     /// The parameters, where they select among overloads (Java); `None`
     /// elsewhere or when the signature is unreadable.
     params: Option<Params>,
+    /// What decides whether a method overrides or is overridden (#190).
+    traits: overrides::MethodTraits,
 }
 
 impl Def {
@@ -537,6 +540,11 @@ pub struct CallResolver {
     prepared: bool,
     base_memo: types::BaseMemo,
     stats: CallResolutionStats,
+    /// (method, overridden method, ambiguous) triples, once computed for this
+    /// preparation (#190).
+    override_pairs: Option<Vec<(DefId, DefId, bool)>>,
+    /// Method → the methods it overrides, from `override_pairs`.
+    overridden: HashMap<DefId, Vec<DefId>>,
 }
 
 impl CallResolver {
@@ -561,9 +569,9 @@ impl CallResolver {
             .as_deref()
             .and_then(|json| serde_json::from_str(json).ok())
             .unwrap_or_default();
-        let params = (family == "jvm")
-            .then(|| param_count(&symbol.signature, &symbol.name))
-            .flatten();
+        let arity = param_count(&symbol.signature, &symbol.name);
+        let params = arity.filter(|_| family == "jvm");
+        let traits = overrides::MethodTraits::of(symbol, &metadata.decorators, arity);
         self.defs.push(Def {
             uid: symbol.uid.clone(),
             name: symbol.name.clone(),
@@ -583,6 +591,7 @@ impl CallResolver {
                 .map(|text| BaseRef { text, at: None })
                 .collect(),
             params,
+            traits,
         });
         self.by_name
             .entry(symbol.name.clone())
@@ -684,6 +693,8 @@ impl CallResolver {
         let paths = self.by_file.keys().chain(self.files.keys());
         self.index = imports::PathIndex::new(paths);
         self.base_memo = types::BaseMemo::default();
+        self.override_pairs = None;
+        self.overridden.clear();
         self.prepared = true;
     }
 
@@ -714,6 +725,7 @@ impl CallResolver {
     /// `line:<n>;resolved:<label>`.
     pub fn resolve_calls(&mut self, calls: &[CallReference], repo_id: &str) -> Vec<Relationship> {
         self.prepare();
+        self.override_pairs();
         let mut stats = CallResolutionStats::default();
         let mut edges: Vec<(DefId, DefId, CallResolution, u32)> = Vec::new();
         let mut seen: HashMap<(DefId, DefId), usize> = HashMap::new();
@@ -864,7 +876,14 @@ impl CallResolver {
             CallForm::SuperConstructor => self.super_constructor(site),
             CallForm::Unknown => self.resolve_by_name(site, call),
         }?;
-        let targets = self.by_arity(targets, call.arg_count);
+        let mut targets = self.by_arity(targets, call.arg_count);
+        // Matched by name (no call forms): a method and its overrides are
+        // one call of that method, which dispatch follows (#190).
+        if call.form == CallForm::Unknown && targets.len() > 1 {
+            if let Some(root) = self.overridden_root(&targets) {
+                targets = vec![(root, CallResolution::NameMatch)];
+            }
+        }
         match targets.len() {
             0 => Err(Unlinked::Unresolved),
             // The name says too little: no edge.

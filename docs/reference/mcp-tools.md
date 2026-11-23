@@ -181,6 +181,26 @@ their compact lines, `explain_symbol`, `trace_flow`, `impact_of_change`,
 label existed get it derived at query time (`ambiguous` if the name is shared,
 else `name-match`); re-run `analyze` to record the exact labels.
 
+**Dispatch (#190).** A call through an interface, abstract or overridden
+method keeps its CALLS edge to that declaration. The analysis also records
+OVERRIDES edges (implementation → every method it overrides), and the walks
+follow them: the callers of an implementation include the callers of the
+methods it overrides, and the callees of a call include the implementations
+of the method it binds (at most 8 per call; the rest are named in
+`incomplete`, with `explain_symbol` on the method as the next step). Such a
+hit is marked `(dispatch via I.m, confidence c)` instead of a resolution label;
+with `detail: "full"` its `resolved` is `dispatch` and a `dispatch` field
+holds `via I.m, confidence c`. Overriding follows each language's modifiers
+(`final`, `virtual`/`override`/`new`, `open`) and parameter types; an
+override several same-arity overloads fit gets an edge to each, marked
+`ambiguous-overload`, at most 0.2. The confidence falls with the
+number of implementations (0.9 for one, 0.2 beyond 16) and is lower when the
+overridden method has a body of its own. Overrides of `toString`, `equals`,
+`hashCode` and the like are not followed, `ambiguous` edges and `super.m()`
+calls do not dispatch. `impact_of_change`, `trace_flow` and `find_dead_code`
+follow dispatch too; `explain_symbol` lists what a method overrides and its
+implementations. See [dispatch](../guides/call-resolution-limitations.md#dispatch-190).
+
 **Untrusted content.** Indexed text — source code, documents, email, code
 comments, Cypher rows, and search result tables (whose names and signatures
 can be email subjects or Markdown headings) — is framed as data:
@@ -370,9 +390,9 @@ symbol at both ends is `invalid_params`.
 ### `find_dead_code`
 
 Which functions and methods are never called? Lists the functions and methods
-with no incoming CALLS edge. A candidate list, not proof: entry points,
-callbacks, trait/interface implementations and calls the resolver missed look
-unused too. Structured result (`DeadCodeOutput`).
+with no incoming CALLS edge that implement no called method (dispatch, #190).
+A candidate list, not proof: entry points, callbacks, implementations of
+library interfaces and calls the resolver missed look unused too. Structured result (`DeadCodeOutput`).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|

@@ -9,11 +9,16 @@ use myceliums_core::Analyzer;
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, Store};
 use std::path::Path;
 
-/// Symbols and CALLS edges of one analyzed tree.
-#[derive(Debug, Clone)]
+/// Symbols, CALLS and OVERRIDES edges of one analyzed tree.
+#[derive(Debug, Clone, Default)]
 pub struct Extraction {
     pub symbols: Vec<CodeSymbol>,
     pub calls: Vec<Relationship>,
+    /// Which methods override which (#190): dispatch is derived from these
+    /// and the CALLS edges. Not part of the CALLS scores.
+    pub overrides: Vec<Relationship>,
+    /// Wall time of the analysis, in seconds.
+    pub analysis_secs: f64,
 }
 
 /// Analyze `root` into a temporary store and return what was extracted.
@@ -26,18 +31,30 @@ pub async fn extract(root: &Path) -> Result<Extraction> {
         .await
         .context("opening the scratch store")?;
     let analyzer = Analyzer::new(store, root.to_path_buf()).set_skip_embeddings(true);
+    let started = std::time::Instant::now();
     analyzer
         .analyze()
         .await
         .with_context(|| format!("analyzing {}", root.display()))?;
+    let analysis_secs = started.elapsed().as_secs_f64();
     let store = analyzer.store();
     let symbols = store.get_symbols().await.context("reading symbols")?;
-    let calls = store
+    let (calls, overrides) = store
         .get_relationships()
         .await
         .context("reading relationships")?
         .into_iter()
-        .filter(|r| r.kind == RelationshipKind::Calls)
-        .collect();
-    Ok(Extraction { symbols, calls })
+        .filter(|r| {
+            matches!(
+                r.kind,
+                RelationshipKind::Calls | RelationshipKind::Overrides
+            )
+        })
+        .partition(|r| r.kind == RelationshipKind::Calls);
+    Ok(Extraction {
+        symbols,
+        calls,
+        overrides,
+        analysis_secs,
+    })
 }

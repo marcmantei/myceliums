@@ -35,11 +35,19 @@ impl MyceliumsMcp {
         use myceliums_storage::RelationshipKind;
 
         // Pre-build set of UIDs that are call targets — O(R) instead of O(S*R)
-        let called_uids: std::collections::HashSet<&str> = relationships
+        let mut called_uids: std::collections::HashSet<&str> = relationships
             .iter()
             .filter(|r| r.kind == RelationshipKind::Calls)
             .map(|r| r.target_uid.as_str())
             .collect();
+        // An implementation of a called interface or base method is called
+        // through dispatch (#190).
+        let dispatch = myceliums_core::dispatch::DispatchIndex::new(&relationships);
+        let dispatched: Vec<&str> = called_uids
+            .iter()
+            .flat_map(|uid| dispatch.implementations(uid).iter().map(|o| o.other))
+            .collect();
+        called_uids.extend(dispatched);
 
         let dead_code: Vec<DeadCodeItem> = symbols
             .iter()

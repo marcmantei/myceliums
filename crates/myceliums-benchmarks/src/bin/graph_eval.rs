@@ -44,6 +44,8 @@ struct Options {
     check_baseline: bool,
     report_path: PathBuf,
     summary_path: Option<PathBuf>,
+    /// Score only the real-repository sets whose name contains this.
+    held_out_filter: Option<String>,
 }
 
 impl Options {
@@ -54,6 +56,7 @@ impl Options {
             check_baseline: false,
             report_path: crate_dir.join(DEFAULT_REPORT),
             summary_path: None,
+            held_out_filter: None,
         };
         let mut args = args.skip(1);
         while let Some(arg) = args.next() {
@@ -69,13 +72,18 @@ impl Options {
                         args.next().context("--summary requires a path")?,
                     ))
                 }
+                "--held-out" => {
+                    options.held_out_filter =
+                        Some(args.next().context("--held-out requires a set name")?)
+                }
                 "--help" | "-h" => {
                     println!(
                         "graph-eval [options]\n\n  \
                          --check-baseline    fail on a regression against {BASELINE}\n  \
                          --update-baseline   rewrite {BASELINE}\n  \
                          --out <path>        write the JSON report here (default {DEFAULT_REPORT})\n  \
-                         --summary <path>    append the Markdown report (e.g. $GITHUB_STEP_SUMMARY)"
+                         --summary <path>    append the Markdown report (e.g. $GITHUB_STEP_SUMMARY)\n  \
+                         --held-out <name>   score only the real-repository sets whose file name contains <name>"
                     );
                     std::process::exit(0);
                 }
@@ -124,7 +132,12 @@ async fn main() -> Result<()> {
     // section says so.
     match held_out::repos_dir() {
         Some(dir) => {
-            for held_out_set in HeldOutSet::all()? {
+            for held_out_set in HeldOutSet::all()?.into_iter().filter(|set| {
+                options
+                    .held_out_filter
+                    .as_deref()
+                    .is_none_or(|name| set.name.contains(name))
+            }) {
                 let held_out_report = held_out::run(&held_out_set, &dir).await?;
                 text.push_str(&held_out::markdown(&held_out_set, &held_out_report));
             }

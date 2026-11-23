@@ -17,6 +17,7 @@
 
 use crate::errors::ToolError;
 use crate::repo::{located_name, CallLabels};
+use myceliums_core::dispatch::{Dispatch, DispatchCut};
 use myceliums_core::navigation::{self as core_nav, Reached, Resolution};
 pub(crate) use myceliums_core::navigation::{ChainStep, DepthCut, NoChain};
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind};
@@ -122,16 +123,35 @@ pub(crate) struct Hit<'a> {
     /// The edge that reached `symbol`.
     pub(crate) edge: &'a Relationship,
     /// For a CALLS edge: how its target was resolved (`exact`, `import`,
-    /// `name-match`, `ambiguous`); `None` for other edge kinds.
+    /// `name-match`, `ambiguous`, or `dispatch` for a hit reached through
+    /// dynamic dispatch); `None` for other edge kinds.
     pub(crate) resolved: Option<&'static str>,
+    /// Set for a hit reached through dynamic dispatch (#190).
+    pub(crate) dispatch: Option<Dispatch<'a>>,
 }
 
 impl Hit<'_> {
     /// `name`, marked with the edge resolution when the edge is a guess.
     pub(crate) fn marked_name(&self) -> String {
-        match self.resolved {
-            Some(label) => CallLabels::mark(label, &self.symbol.name),
-            None => self.symbol.name.clone(),
+        format!("{}{}", self.symbol.name, self.mark())
+    }
+
+    /// Where a dispatch hit came from (`via Base.m, confidence 0.8`), for
+    /// the `dispatch` field next to the `resolved` status label.
+    pub(crate) fn dispatch_provenance(&self) -> Option<String> {
+        self.dispatch.as_ref().map(Dispatch::provenance)
+    }
+
+    /// ` (dispatch via Base.m, confidence 0.8)` for a hit reached through
+    /// dispatch, ` (resolved: name-match)` for a name-based guess, else
+    /// nothing.
+    pub(crate) fn mark(&self) -> String {
+        match (&self.dispatch, self.resolved) {
+            (Some(dispatch), _) => format!(" ({})", dispatch.describe()),
+            (None, Some(label)) if CallLabels::is_heuristic(label) => {
+                format!(" (resolved: {label})")
+            }
+            _ => String::new(),
         }
     }
 }
@@ -146,11 +166,18 @@ fn labelled<'a>(symbols: &'a [CodeSymbol], reached: Vec<Reached<'a>>) -> Vec<Hit
             depth: r.depth,
             via: r.via,
             edge: r.edge,
-            resolved: (r.edge.kind == RelationshipKind::Calls)
-                .then(|| labels.label(r.edge, &edge_target(symbols, &r).name)),
+            resolved: match r.dispatch {
+                Some(_) => Some(DISPATCH),
+                None => (r.edge.kind == RelationshipKind::Calls)
+                    .then(|| labels.label(r.edge, &edge_target(symbols, &r).name)),
+            },
+            dispatch: r.dispatch,
         })
         .collect()
 }
+
+/// The label of a hit reached through dynamic dispatch.
+pub(crate) const DISPATCH: &str = "dispatch";
 
 /// The symbol at the target end of the edge that reached `r`.
 fn edge_target<'a>(symbols: &'a [CodeSymbol], r: &Reached<'a>) -> &'a CodeSymbol {
@@ -181,16 +208,17 @@ pub(crate) fn walk_calls<'a>(
     )
 }
 
-/// [`walk_calls`], with what the depth limit cut (#169).
+/// [`walk_calls`], with what the depth limit cut (#169) and the calls whose
+/// implementations it lists only in part (#190).
 pub(crate) fn walk_calls_bounded<'a>(
     symbols: &'a [CodeSymbol],
     relationships: &'a [Relationship],
     start: &'a CodeSymbol,
     direction: Direction,
     max_depth: u32,
-) -> (Vec<Hit<'a>>, DepthCut<'a>) {
+) -> (Vec<Hit<'a>>, DepthCut<'a>, Vec<DispatchCut<'a>>) {
     let walk = core_nav::walk_calls_bounded(symbols, relationships, start, direction, max_depth);
-    (labelled(symbols, walk.hits), walk.cut)
+    (labelled(symbols, walk.hits), walk.cut, walk.dispatch_cut)
 }
 
 /// Symbols that call or import any of `roots`, transitively up to
@@ -217,6 +245,36 @@ pub(crate) fn dependents_bounded<'a>(
     (labelled(symbols, walk.hits), walk.cut)
 }
 
+/// What `symbol` overrides and what implements it (#190), as
+/// `file:qualified_name` handles ordered by file and line: the methods it
+/// overrides or implements, and the concrete implementations of it.
+pub(crate) fn overrides(
+    symbols: &[CodeSymbol],
+    relationships: &[Relationship],
+    symbol: &CodeSymbol,
+) -> (Vec<String>, Vec<String>) {
+    let index = myceliums_core::dispatch::DispatchIndex::new(relationships);
+    let handles = |uids: Vec<&str>| -> Vec<String> {
+        let mut found: Vec<&CodeSymbol> = symbols
+            .iter()
+            .filter(|s| uids.contains(&s.uid.as_str()))
+            .collect();
+        found.sort_by(|a, b| (&a.file_path, a.start_line).cmp(&(&b.file_path, b.start_line)));
+        found.into_iter().map(located_name).collect()
+    };
+    let up = index
+        .overridden(&symbol.uid)
+        .iter()
+        .map(|o| o.other)
+        .collect();
+    let down = index
+        .implementations(&symbol.uid)
+        .iter()
+        .map(|o| o.other)
+        .collect();
+    (handles(up), handles(down))
+}
+
 /// The definitions in the indexed file `path` (core's matching: exact path,
 /// else a unique path suffix).
 pub(crate) fn symbols_in_file<'a>(symbols: &'a [CodeSymbol], path: &str) -> Vec<&'a CodeSymbol> {
@@ -228,8 +286,9 @@ pub(crate) fn symbols_in_file<'a>(symbols: &'a [CodeSymbol], path: &str) -> Vec<
 #[derive(Debug)]
 pub(crate) struct CallChains<'a> {
     /// One shortest chain, `from` first; every later symbol comes with the
-    /// resolution of the CALLS edge that reached it.
-    pub(crate) shortest: Vec<(&'a CodeSymbol, Option<&'static str>)>,
+    /// resolution of the CALLS edge that reached it (`dispatch via …` for a
+    /// call that reaches it through dynamic dispatch).
+    pub(crate) shortest: Vec<(&'a CodeSymbol, Option<String>)>,
     /// Every symbol strictly between the ends on a chain within the widened
     /// length (see [`core_nav::call_chains`]).
     pub(crate) on_chains: Vec<ChainStep<'a>>,
@@ -261,7 +320,14 @@ pub(crate) fn call_chains<'a>(
         shortest: chains
             .shortest
             .into_iter()
-            .map(|(symbol, edge)| (symbol, edge.map(|e| labels.label(e, &symbol.name))))
+            .zip(chains.dispatched)
+            .map(|((symbol, edge), dispatch)| {
+                let label = match dispatch {
+                    Some(dispatch) => Some(dispatch.describe()),
+                    None => edge.map(|e| labels.label(e, &symbol.name).to_string()),
+                };
+                (symbol, label)
+            })
             .collect(),
         on_chains: chains.on_chains,
         longer: chains.longer,
@@ -384,8 +450,117 @@ mod tests {
         let chains = call_chains(&s, &r, &s[0], find, 5, 0).unwrap();
         assert_eq!(chains.len(), 2);
         assert_eq!(chains.shortest[0].1, None);
-        assert_eq!(chains.shortest[1].1, Some("ambiguous"));
-        assert_eq!(chains.shortest[2].1, Some("name-match"));
+        assert_eq!(chains.shortest[1].1.as_deref(), Some("ambiguous"));
+        assert_eq!(chains.shortest[2].1.as_deref(), Some("name-match"));
+    }
+
+    /// An interface method `Port.send` with `impls` implementations, and a
+    /// caller through the interface.
+    fn dispatch_graph(impls: usize) -> (Vec<CodeSymbol>, Vec<Relationship>) {
+        use myceliums_core::dispatch::{DispatchConfidence, OverriddenKind};
+        let mut symbols = vec![
+            sym(
+                "caller",
+                "notify",
+                "Alerts.notify",
+                SymbolKind::Method,
+                "src/a.java",
+            ),
+            sym(
+                "port",
+                "send",
+                "Port.send",
+                SymbolKind::Method,
+                "src/port.java",
+            ),
+        ];
+        let mut call = edge(RelationshipKind::Calls, "caller", "port");
+        call.metadata = "line:3;resolved:exact".into();
+        let mut rels = vec![call];
+        for i in 0..impls {
+            let uid = format!("impl{i}");
+            symbols.push(sym(
+                &uid,
+                "send",
+                &format!("Port{i}.send"),
+                SymbolKind::Method,
+                &format!("src/port{i}.java"),
+            ));
+            let mut overrides = edge(RelationshipKind::Overrides, &uid, "port");
+            overrides.metadata = DispatchConfidence {
+                overridden: OverriddenKind::Abstract,
+                implementations: impls,
+                abstract_override: false,
+                universal: false,
+                ambiguous: false,
+            }
+            .to_metadata();
+            rels.push(overrides);
+        }
+        (symbols, rels)
+    }
+
+    #[test]
+    fn dispatch_hits_say_through_which_method() {
+        let (s, r) = dispatch_graph(2);
+        let impl0 = s.iter().find(|x| x.uid == "impl0").unwrap();
+        let callers = walk_calls(&s, &r, impl0, Direction::Callers, 1);
+        let names: Vec<String> = callers.iter().map(Hit::marked_name).collect();
+        assert_eq!(names, ["notify (dispatch via Port.send, confidence 0.8)"]);
+        assert_eq!(callers[0].resolved, Some(DISPATCH));
+        assert_eq!(
+            callers[0].dispatch_provenance().as_deref(),
+            Some("via Port.send, confidence 0.8")
+        );
+        // impact_of_change on the implementation reaches the caller too.
+        let deps = dependents(&s, &r, &[impl0], 1);
+        assert_eq!(deps.len(), 1);
+        assert!(deps[0].dispatch.is_some());
+
+        let callees = walk_calls(&s, &r, &s[0], Direction::Callees, 1);
+        let names: Vec<String> = callees.iter().map(Hit::marked_name).collect();
+        assert_eq!(
+            names,
+            [
+                "send",
+                "send (dispatch via Port.send, confidence 0.8)",
+                "send (dispatch via Port.send, confidence 0.8)"
+            ]
+        );
+        // trace_flow through the interface to an implementation.
+        let chains = call_chains(&s, &r, &s[0], impl0, 3, 0).unwrap();
+        assert_eq!(
+            chains.shortest[1].1.as_deref(),
+            Some("dispatch via Port.send, confidence 0.8")
+        );
+        let (up, down) = overrides(&s, &r, impl0);
+        assert_eq!(
+            (up.as_slice(), down.len()),
+            (["src/port.java:Port.send".to_string()].as_slice(), 0)
+        );
+        let (_, down) = overrides(&s, &r, &s[1]);
+        assert_eq!(
+            down,
+            ["src/port0.java:Port0.send", "src/port1.java:Port1.send"]
+        );
+    }
+
+    #[test]
+    fn a_callee_list_caps_the_implementations_of_a_wide_call() {
+        let (s, r) = dispatch_graph(20);
+        let (hits, _, cut) = walk_calls_bounded(&s, &r, &s[0], Direction::Callees, 1);
+        let dispatched = hits.iter().filter(|h| h.dispatch.is_some()).count();
+        assert_eq!(
+            dispatched,
+            myceliums_core::dispatch::MAX_LISTED_IMPLEMENTATIONS
+        );
+        assert_eq!(cut.len(), 1);
+        assert_eq!((cut[0].base.uid.as_str(), cut[0].total), ("port", 20));
+        // A wide interface: low confidence.
+        assert!(hits
+            .iter()
+            .filter_map(|h| h.dispatch)
+            .all(|d| d.confidence <= 0.2));
     }
 
     #[test]

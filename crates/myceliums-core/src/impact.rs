@@ -59,7 +59,8 @@ pub struct AffectedSymbol {
     pub file_path: String,
     /// Graph distance from the nearest directly-changed symbol.
     pub distance: u32,
-    /// Direction of the relationship (`"caller"` or `"callee"`).
+    /// Direction of the relationship: `"caller"`, `"callee"`, or
+    /// `"dispatch caller"` for a caller of a method the symbol overrides.
     pub relationship: String,
 }
 
@@ -78,10 +79,11 @@ pub struct AffectedSymbol {
 ///   untyped code, changes to methods with **common names** (`get`, `load`,
 ///   `render`) may list false positives. Calls never cross language families.
 ///
-/// - Dispatch is linked to the statically bound declaration: a call through
-///   an interface, trait or abstract method reaches that declaration, not
-///   its implementations, so an implementation lists no callers through the
-///   interface — check the interface method's dependents too.
+/// - A call through an interface, trait or abstract method is linked to
+///   that declaration; an implementation's callers include the callers of
+///   the methods it overrides, labelled `dispatch caller` (#190, see
+///   [`crate::dispatch`]). Overrides of `toString`, `equals` and the like
+///   are not followed.
 ///
 /// - Calls the resolver could not link (more than two candidate symbols,
 ///   nothing in scope) are counted per name at analysis time
@@ -254,6 +256,19 @@ pub fn detect_impact(
         }
     }
 
+    // Callers through dynamic dispatch (#190): an implementation's callers
+    // include the callers of every method it overrides.
+    let dispatch = crate::dispatch::DispatchIndex::new(relationships);
+    let mut dispatch_callers_of: HashMap<&str, Vec<&str>> = HashMap::new();
+    for rel in relationships.iter().filter(|r| dispatch.dispatches(r)) {
+        for ov in dispatch.implementations(&rel.target_uid) {
+            dispatch_callers_of
+                .entry(ov.other)
+                .or_default()
+                .push(rel.source_uid.as_str());
+        }
+    }
+
     // Step 1: Find directly changed symbols
     let mut directly_changed: Vec<ChangedSymbol> = Vec::new();
     let mut directly_changed_uids: HashSet<String> = HashSet::new();
@@ -314,6 +329,11 @@ pub fn detect_impact(
                 }
             }
         }
+        for caller_uid in dispatch_callers_of.get(uid.as_str()).into_iter().flatten() {
+            if !visited.contains(*caller_uid) {
+                queue.push_back((caller_uid.to_string(), 1, "dispatch caller"));
+            }
+        }
         // Callees of this symbol (downstream impact)
         if let Some(callees) = callees_of.get(uid.as_str()) {
             for callee_uid in callees {
@@ -348,6 +368,11 @@ pub fn detect_impact(
                         if !visited.contains(*caller_uid) {
                             queue.push_back((caller_uid.to_string(), dist + 1, "caller"));
                         }
+                    }
+                }
+                for caller_uid in dispatch_callers_of.get(uid.as_str()).into_iter().flatten() {
+                    if !visited.contains(*caller_uid) {
+                        queue.push_back((caller_uid.to_string(), dist + 1, "dispatch caller"));
                     }
                 }
                 if let Some(callees) = callees_of.get(uid.as_str()) {
@@ -516,6 +541,42 @@ index abc..def 100644
         // bar is a caller of foo (distance 1), baz is a caller of bar (distance 2)
         assert!(!report.indirectly_affected.is_empty());
         assert!(report.indirectly_affected.iter().any(|a| a.name == "bar"));
+    }
+
+    /// #190: a change to an implementation reaches the callers of the
+    /// interface method it implements, labelled as dispatch.
+    #[test]
+    fn a_changed_implementation_reaches_callers_through_its_interface() {
+        let symbols = vec![
+            make_symbol("iface", "send", "src/port.java", 1, 3),
+            make_symbol("impl", "send", "src/smtp.java", 5, 15),
+            make_symbol("caller", "notify", "src/alerts.java", 1, 9),
+        ];
+        let overrides = Relationship {
+            uid: "impl->iface".into(),
+            source_uid: "impl".into(),
+            target_uid: "iface".into(),
+            kind: RelationshipKind::Overrides,
+            repo_id: "test".into(),
+            metadata: crate::dispatch::DispatchConfidence {
+                overridden: crate::dispatch::OverriddenKind::Abstract,
+                implementations: 1,
+                abstract_override: false,
+                universal: false,
+                ambiguous: false,
+            }
+            .to_metadata(),
+        };
+        let relationships = vec![make_call_rel("caller", "iface"), overrides];
+        let diff = "diff --git a/src/smtp.java b/src/smtp.java\n--- a/src/smtp.java\n+++ b/src/smtp.java\n@@ -10,1 +10,2 @@\n+changed\n";
+        let report = detect_impact(diff, &symbols, &relationships, 1);
+        assert_eq!(report.directly_changed[0].name, "send");
+        let caller = report
+            .indirectly_affected
+            .iter()
+            .find(|a| a.name == "notify")
+            .expect("the caller through the interface is affected");
+        assert_eq!(caller.relationship, "dispatch caller");
     }
 
     #[test]
