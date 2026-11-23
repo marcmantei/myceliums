@@ -138,7 +138,9 @@ TASK_TYPES = {"callers", "callees", "impact", "where", "dead_code", "flow",
               # multi-hop types of the hard set (#125)
               "transitive_callers", "blast_radius", "ambiguous", "tests",
               # questions that are not about calls (#163)
-              "config"}
+              "config",
+              # changes graded by the files they touch and a test command (#178)
+              "edit"}
 
 
 def check_tasks(tasks: list[dict], repos: dict[str, dict], check_evidence: bool = True) -> list[str]:
@@ -156,6 +158,9 @@ def check_tasks(tasks: list[dict], repos: dict[str, dict], check_evidence: bool 
         if tid in ids:
             problems.append(f"{tid}: duplicate id")
         ids.add(tid)
+        if t.get("answer_kind") == "diff":
+            problems.extend(_check_edit_task(t, repos, root if check_evidence else None))
+            continue
         for key in ("id", "repo", "type", "answer_kind", "question", "gold", "rationale"):
             if not t.get(key):
                 problems.append(f"{tid}: missing {key}")
@@ -187,4 +192,37 @@ def check_tasks(tasks: list[dict], repos: dict[str, dict], check_evidence: bool 
                                         f"{ev['contains']!r}")
                 elif not any(ev["contains"] in ln for ln in lines):
                     problems.append(f"{tid}/{g['name']}: {ev['file']} does not contain {ev['contains']!r}")
+    return problems
+
+
+def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list[str]:
+    """Schema of an edit task (#178, aeval/editgrade.py); with ``root``, the
+    gold files must match the pinned checkout (modified and deleted files
+    exist, added files do not)."""
+    tid = t.get("id", "?")
+    problems = []
+    for key in ("id", "repo", "type", "question", "gold_files", "rationale"):
+        if not t.get(key):
+            problems.append(f"{tid}: missing {key}")
+    if t.get("type") != "edit":
+        problems.append(f"{tid}: answer_kind diff needs type edit")
+    if t.get("repo") not in repos:
+        return problems + [f"{tid}: unknown repo {t.get('repo')}"]
+    paths = []
+    for g in t.get("gold_files") or []:
+        path, status = (g, "M") if isinstance(g, str) else (g.get("path"), g.get("status", "M"))
+        if not path or status not in ("M", "A", "D"):
+            problems.append(f"{tid}: bad gold file {g!r}")
+            continue
+        paths.append(path)
+        if root is not None and (root / t["repo"] / path).exists() != (status != "A"):
+            problems.append(f"{tid}: gold file {path} (status {status}) does not match the pinned checkout")
+    if len(paths) != len(set(paths)):
+        problems.append(f"{tid}: duplicate gold files")
+    for d in t.get("dependents") or []:
+        dp = d if isinstance(d, str) else d.get("path")
+        if dp not in paths:
+            problems.append(f"{tid}: dependent {dp} is not a gold file")
+    if "test_command" in t and not isinstance(t["test_command"], str):
+        problems.append(f"{tid}: test_command must be a string")
     return problems

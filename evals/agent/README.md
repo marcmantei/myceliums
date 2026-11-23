@@ -90,6 +90,17 @@ the Django index again has no `tests/` (#172). At 10 turns C solved 89 %
 (none 96 %, old C 89 %; −7 pp [−19, +0], p = 0.5). The arms ran about nine
 hours apart.
 
+**Token attribution, 23 November 2026** (#178, no new sessions):
+[method and numbers](#token-attribution-and-cost-178). Read afterwards from
+the #163 and #171 transcripts, reconciled to zero residual: with myceliums the
+agent read about half the grep output (−8.7k tokens per session in #163) and
+about as much myceliums output and hook text instead (+8.8k); C's sessions
+were larger because its bigger system prompt is re-read on every call
+(+21.9k), but that is cached input, so cost per solved task was 0.93×
+[0.78×, 1.10×] of none's. The harness now also has a myceliums-only arm (D),
+edit tasks graded by test command and changed files, and a realistic profile
+(100-turn cap, 3 repetitions).
+
 ## What is measured
 
 **Tasks** ([`tasks/tasks.json`](tasks/tasks.json)): 30 questions over three
@@ -244,8 +255,8 @@ small model. Environment variables: `AEVAL_CACHE` (default
 Running the agents needs Claude credentials, so no workflow does it. The
 [`agent-eval` workflow](../../.github/workflows/agent-eval.yml) runs only the
 secret-free parts on pull requests: the harness's unit tests, the task-file
-schema check, and a check that every committed `REPORT.md` / `TOOLSEL.md` is
-exactly what the generator produces from the committed results.
+schema check, and a check that every committed `REPORT.md` / `TOOLSEL.md` /
+`TOKENS.md` is exactly what the generator produces from the committed results.
 
 ## Variant matrix (#125)
 
@@ -861,6 +872,152 @@ python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json exp
     --runs my-rerun-t10,my-rerun-t40 --rerun-of 2026-11-22-scale --primary-exclude-reason "..."
 python3 evals/agent/agent_eval.py report my-rerun
 ```
+
+## Token attribution and cost (#178)
+
+Where do a session's tokens go: into grep output, myceliums output, file
+reads, or the model's own text? Every session row (since #178) and every
+`TOKENS.md` answers it per category, prices the cache classes separately and
+divides by the solved tasks. No model call is needed: it is read from the
+stream-json transcripts ([`aeval/tokens.py`](aeval/tokens.py)).
+
+**Input tokens per category.** Each model call re-sends the whole
+conversation, so a session's input tokens are the sum over its calls of each
+call's context (`input_tokens + cache_creation_input_tokens +
+cache_read_input_tokens`, from the `usage` on the call's assistant events;
+events of one call share a message id and count once). The first call's
+context is the **base** (system prompt, tool definitions, task prompt,
+SessionStart hook text). The growth from one call to the next is what arrived
+in between: the model's previous reply and the tool results (and hook text)
+it led to. That growth, measured, is split over those parts in proportion to
+their size estimated as characters / 4 (for the reply: text, tool-call
+inputs, and the CLI's `thinking_tokens` estimate, since thinking is replayed
+and its text is not in the transcript). Each part then stays in the context
+for every later call, so a result's billed input is its size times the calls
+after it. A call's usage is laid over the context in order: the first
+`cache_read` tokens are cache reads, the next `cache_creation` tokens cache
+writes (5-minute or 1-hour, as the call reports), the rest uncached. A growth
+with nothing to explain it goes to *other*; a context that shrinks scales the
+earlier parts down. Without per-call usage the context is estimated from
+characters / 4 alone (`attribution_method: chars/4`).
+
+On the 180 #163 sessions the measured growth fits all parts at the same rate
+(least squares over 850 calls: 0.43 tokens per character of tool results,
+0.46 of reply text, 0.44 of hook text, 1.07 tokens per estimated thinking
+token, 36 tokens of fixed overhead per call), so the proportional split does
+not favour one kind of part. The absolute chars/4 estimate undercounts by
+about 1.7× on this code; it only fixes the split, the measurement fixes the
+total.
+
+**Categories.** `base`; `myceliums` (MCP results and `myc` CLI runs in Bash);
+`hook` (text the hooks add after the first call: in these runs the
+`setup-claude` hooks); `search` (`Grep`, `Glob`, and Bash commands running
+`grep`, `rg`, `find`, `ag`, `ack`, `fd`, `locate` or `git grep`); `read`
+(`Read`; Bash `cat`, `sed`, `head`, `tail`, `nl`, ...); `edit` (`Edit`,
+`Write`, `sed -i`); `other`; `assistant` (the model's earlier replies,
+re-read); `unattributed` (the residual, below); `output` (generated tokens,
+thinking included, from the result event: the per-event `output_tokens` are
+streaming snapshots and undercount). A Bash command that runs several kinds
+of program gets the highest of myceliums > search > edit > read
+([`aeval/bashcmd.py`](aeval/bashcmd.py)).
+
+**Reconciliation.** The categories add up, by construction, to the summed
+per-call usage. The residual is the session total in the result event's
+`modelUsage` minus that sum, per model and field: model calls the transcript
+does not show. It is reported per session (`attribution_residual`) and kept
+as `unattributed`. Over the 240 sessions of #163 and #171 the residual is
+**0** in every field and session; the categories add up to each session's
+total input to within 0.2 tokens (rounding of `tokens.jsonl`); the cost
+priced from the table below equals the CLI's `total_cost_usd` to within
+5 × 10⁻⁷ USD per session.
+
+**Cost.** Uncached input, cache writes (5 minutes: 1.25× input; 1 hour: 2×),
+cache reads and output are priced with the published per-token prices of the
+model each call reports (`PRICES` in [`aeval/tokens.py`](aeval/tokens.py), as
+of 2026-11-03; `claude-sonnet-5-5`: input $2, 1-hour write $4, cache read
+$0.10, output $10 per million tokens). `tokens --prices FILE` merges a JSON
+table over it. A category's cost is its share of each class's cost. Claude
+Code writes the cache with the 1-hour TTL, so in these runs almost all input
+is a 1-hour cache write or a cache read (no 5-minute writes; at most 46
+uncached input tokens in a session).
+
+**Per solved task.** Tokens and cost summed over a condition's sessions,
+divided by its solved sessions (a ratio of sums, so unsolved tasks still add
+their spend), with a 95 % paired bootstrap over tasks for each condition and
+for the ratio ([`aeval/stats.py`](aeval/stats.py) `per_success_bootstrap`).
+
+**#163 and #171, attributed afterwards** ([scale](results/2026-11-22-scale/TOKENS.md),
+[re-run](results/2026-11-22-rerun-c/TOKENS.md); 27 tasks of the primary
+analysis; thousands of billed tokens per session, all budgets together):
+
+| Run | Arm | Base | myceliums | Hook | Search | Reads | Replies | Output | Total | USD/session | USD per solved, C ÷ none |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| #163 | none | 44.5 | 0 | 0 | 16.9 | 3.5 | 7.6 | 3.1 | 75.7 | 0.076 | |
+| #163 | C | 66.4 | 7.5 | 1.3 | 8.2 | 2.1 | 5.8 | 2.5 | 93.7 | 0.072 | 0.93× [0.78×, 1.10×] |
+| #171 (10 + 40 turns) | none | 52.7 | 0 | 0 | 23.5 | 5.1 | 10.7 | 3.9 | 96.2 | 0.096 | |
+| #171 (10 + 40 turns) | C (re-run) | 75.1 | 13.0 | 2.0 | 12.4 | 1.9 | 8.8 | 3.2 | 116.5 | 0.093 | 0.99× [0.83×, 1.16×] |
+
+With myceliums the agent read about half as many search tokens (−8.7k per
+session in #163), and the myceliums results plus hook text took about as many
+(+8.8k): the swap was roughly even. What made C's sessions larger is the base:
+C's first call carries ~5.4k more tokens (the nine tool schemas, the CLAUDE.md
+routing block, the SessionStart line), and every call re-reads them (+21.9k
+per session). Because that part is a cheap cache read, C was not more
+expensive per session or per solved task (#163: 0.93× [0.78×, 1.10×] cost per
+solved task, while tokens per solved task were 1.22× [1.01×, 1.45×]). At 40
+turns C used 1.40× [1.17×, 1.73×] the tokens per solved task of none (#171
+re-run: 1.48× [1.08×, 1.96×]), at a cost ratio of 1.07× and 1.13× (both
+intervals include 1).
+
+```bash
+# a committed run whose transcripts are elsewhere; writes tokens.jsonl, TOKENS.md, tokens_summary.json
+python3 evals/agent/agent_eval.py tokens 2026-11-22-scale --runs-root ../myceliums-eval-163-outcome-scale/evals/agent/runs
+python3 evals/agent/agent_eval.py tokens 2026-11-22-scale --check   # CI: TOKENS.md matches tokens.jsonl
+```
+
+### Arm D: myceliums only
+
+`--conditions D`: the myceliums MCP server (as in A, no `setup-claude` files)
+and `Read`, with search taken away. `Grep` and `Glob` are not offered and are
+in `--disallowedTools`; with `--bash`, permission rules `Bash(grep:*)`,
+`Bash(rg:*)`, ... deny commands that start with a search program, and a
+PreToolUse hook on `Bash` (`python3 -I aeval/bashcmd.py hook`, passed with
+`--settings`) blocks any command that runs one anywhere in a pipeline, with a
+reason the model sees. Listing a directory (`ls`) and reading a file (`cat`,
+`sed -n`) stay allowed; so does the `myc` CLI. The hook and the attribution use
+the same classifier, so what D blocks is exactly what the attribution counts
+as search. The edit tools are offered on edit tasks, as in every arm. The
+isolation check of every D transcript requires the built-in tools to be
+exactly `Read` (+ `Bash`, + edit tools) with an optional `ToolSearch`.
+Checked against the mock API (`probe --conditions D,A --bash`, myc at
+`951d041ff9e0`): D was offered `Bash` and `Read` only, the scripted
+`grep -rl parseAccept .` came back blocked by the hook, the scripted
+`myc callers parseAccept` ran; A was offered `Grep` and `Glob` as before.
+
+### Edit tasks
+
+A task with `"type": "edit"`, `"answer_kind": "diff"` asks for a change; the
+agent gets `Edit` and `Write` and a prompt without an answer format
+([`aeval/editgrade.py`](aeval/editgrade.py)). The gold is the files a
+reference commit changed (`gold_files`, each `M`, `A` or `D`; for the commit
+replays of #183, the commit on its parent). After the session, before the
+working copy is replaced, the runner records `git status` and the diff and
+grades: (a) the task's `test_command` must exit 0; (b) file-level recall and
+precision against the gold files, overall and separately for code, tests and
+docs (by path: test directories and test file names, then docs and `.md` /
+`.rst` / `.txt`, else code); (c) forgotten dependents: the gold files listed
+in `dependents` (default: all) that the agent did not touch. A session
+succeeds when the test command passes, or without one when the file-level F1
+over code files reaches the threshold. `check-tasks` validates the schema and,
+with the checkouts, that modified and deleted gold files exist and added ones
+do not.
+
+### Realistic budget profile
+
+`run --profile realistic` sets `--max-turns 100` as a safety cap only (never
+stated in the prompt; `--prompt-budget` is refused with it) and 3
+repetitions. The profile name is stored in the run's config, so a resumed run
+cannot change it.
 
 ## Tool-selection eval
 

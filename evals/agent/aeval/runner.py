@@ -26,6 +26,7 @@ import re
 import shlex
 import signal
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -33,8 +34,12 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import config
-from .grading import extract_answer, grade, is_success
+from .editgrade import changed_files, grade_edit, run_test
+from .grading import Grade, extract_answer, grade, is_success
 from .stream import MCP_PREFIX, check_isolation, parse_transcript
+from .tokens import attribute
+
+NOSEARCH_HOOK = Path(__file__).resolve().parent / "bashcmd.py"
 
 TRANSIENT_API_STATUS = {408, 409, 429, 500, 502, 503, 504, 529}
 TRANSIENT_TEXT = re.compile(
@@ -95,7 +100,25 @@ BUDGET_RULES = (
 )
 
 
+# Edit tasks (#178): the answer is the change itself; see aeval/editgrade.py.
+EDIT_PROMPT_TEMPLATE = """\
+You are working in a checkout of the {repo} repository ({language}); it is your current working directory. Make the change described below in this codebase. Investigate the code with the tools you have before you edit; change every file the change needs and nothing else. Do not commit.
+
+Change: {question}
+{budget}
+When you are done, reply with a short summary of what you changed."""
+
+
+def is_edit_task(task: dict) -> bool:
+    return task.get("answer_kind") == "diff"
+
+
 def build_prompt(task: dict, repo: dict, budget_turns: int | None = None) -> str:
+    if is_edit_task(task):
+        budget = ("\n" + BUDGET_RULES.format(max_turns=budget_turns, tool_turns=budget_turns - 1) + "\n"
+                  if budget_turns else "")
+        return EDIT_PROMPT_TEMPLATE.format(repo=repo["display_name"], language=repo["language_name"],
+                                           question=task["question"], budget=budget)
     rules = FORMAT_RULES[task["answer_kind"]]
     if budget_turns:
         rules += "\n\n" + BUDGET_RULES.format(max_turns=budget_turns, tool_turns=budget_turns - 1)
@@ -131,6 +154,7 @@ class RunConfig:
     stop_after_s: int | None = None  # start no session after this many seconds
     prompt_budget: bool = False  # state --max-turns in the prompt (#153's budgeted sessions)
     bash: bool = False  # add the Bash tool in every condition (#163)
+    profile: str = ""  # #178: the named profile (config.PROFILES) the run's limits came from
 
     def comparable(self) -> dict:
         """Fields that must not change when a run is resumed."""
@@ -150,6 +174,8 @@ class RunConfig:
             d.pop("prompt_budget")
         if not d["bash"]:
             d.pop("bash")
+        if not d["profile"]:
+            d.pop("profile")
         return d
 
 
@@ -374,13 +400,29 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         mcp_path.write_text(json.dumps({"mcpServers": {config.MCP_SERVER_NAME: server}}, indent=2))
         return mcp_path, bin_dir
 
-    def _builtin_tools(self) -> tuple[str, ...]:
-        return config.BUILTIN_TOOLS + (("Bash",) if self.cfg.bash else ())
-
-    def _command(self, item: WorkItem, mcp_path: Path) -> list[str]:
+    def _builtin_tools(self, item: WorkItem) -> tuple[str, ...]:
+        """Built-in tools of a session: read and search (no search in D),
+        Bash with ``--bash``, the edit tools on edit tasks (#178)."""
         variant = config.VARIANTS[item.condition]
-        tools = list(self._builtin_tools())
-        allowed = list(self._builtin_tools())
+        tools = tuple(t for t in config.BUILTIN_TOOLS if not (variant.no_search and t in config.SEARCH_TOOLS))
+        tools += ("Bash",) if self.cfg.bash else ()
+        tools += config.EDIT_TOOLS if is_edit_task(item.task) else ()
+        return tools
+
+    def _nosearch_settings(self, tmp: Path) -> Path:
+        """Settings for D (#178): a PreToolUse hook on Bash that blocks every
+        command running a search program (aeval/bashcmd.py), passed with
+        ``--settings`` so it applies whatever the setting sources are."""
+        hook = f"{shlex.quote(sys.executable)} -I {shlex.quote(str(NOSEARCH_HOOK))} hook"
+        settings = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": hook}]}]}}
+        path = tmp / "nosearch-settings.json"
+        path.write_text(json.dumps(settings, indent=1))
+        return path
+
+    def _command(self, item: WorkItem, mcp_path: Path, settings_path: Path | None = None) -> list[str]:
+        variant = config.VARIANTS[item.condition]
+        tools = list(self._builtin_tools(item))
+        allowed = list(self._builtin_tools(item))
         if variant.mcp:
             allowed.append(f"mcp__{config.MCP_SERVER_NAME}")
         if variant.agent:
@@ -394,8 +436,13 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "--tools", ",".join(tools),
             "--allowedTools", ",".join(allowed),
         ]
-        if variant.agent:
-            cmd += ["--disallowedTools", ",".join(f"Agent({a})" for a in config.BUILTIN_AGENTS)]
+        disallowed = [f"Agent({a})" for a in config.BUILTIN_AGENTS] if variant.agent else []
+        if variant.no_search:
+            disallowed += list(config.SEARCH_TOOLS) + (list(config.BASH_SEARCH_RULES) if self.cfg.bash else [])
+        if disallowed:
+            cmd += ["--disallowedTools", ",".join(disallowed)]
+        if settings_path is not None:
+            cmd += ["--settings", str(settings_path)]
         cmd += [
             "--permission-mode", "dontAsk",
             "--strict-mcp-config", "--mcp-config", str(mcp_path),
@@ -447,7 +494,10 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             if self.cfg.tool_search is not None:
                 extra["ENABLE_TOOL_SEARCH"] = self.cfg.tool_search
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
-            cmd = self._command(item, mcp_path)
+            settings = self._nosearch_settings(tmp) if variant.no_search else None
+            if settings is not None:
+                (out_dir / "settings.json").write_text(settings.read_text())
+            cmd = self._command(item, mcp_path, settings)
             (out_dir / "command.json").write_text(json.dumps(cmd, indent=1))
             started = time.time()
             timed_out = False
@@ -462,31 +512,46 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                     timed_out = True
                     _kill_group(proc)
             wall = time.time() - started
+            edit = self._grade_edit(item, workdir, out_dir) if is_edit_task(task) else None
         finally:
             config.remove_tree(tmp, self.cache / "tmp")
             # The working copy stays until the next session of this repo
-            # replaces it; nothing writes to it (the agent has no write tools).
+            # replaces it; only edit tasks (#178) write to it, and they are
+            # graded above, before that.
 
-        return self._summarise(item, attempt, transcript, wall, timed_out, proc.returncode)
+        return self._summarise(item, attempt, transcript, wall, timed_out, proc.returncode, edit)
+
+    def _grade_edit(self, item: WorkItem, workdir: Path, out_dir: Path) -> dict:
+        """Grade an edit task's working copy: changed files, test command."""
+        changed = changed_files(workdir)
+        diff = subprocess.run(["git", "-C", str(workdir), "diff", "HEAD"], capture_output=True, text=True)
+        (out_dir / "changes.diff").write_text(diff.stdout)
+        tests = None
+        if item.task.get("test_command"):
+            tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)))
+        return grade_edit(item.task, changed, tests, self.cfg.success_threshold)
 
     def _summarise(self, item: WorkItem, attempt: int, transcript: Path, wall: float,
-                   timed_out: bool, returncode: int | None) -> dict:
+                   timed_out: bool, returncode: int | None, edit: dict | None = None) -> dict:
         t = parse_transcript(str(transcript))
         res = t.result or {}
         variant = config.VARIANTS[item.condition]
-        required = (set(config.REQUIRED_TOOLS) | ({"Agent"} if variant.agent else set())
-                    | ({"Bash"} if self.cfg.bash else set()))
+        optional = set(config.BUILTIN_TOOLS) - set(config.REQUIRED_TOOLS)
+        required = ((set(self._builtin_tools(item)) - optional) | ({"Agent"} if variant.agent else set()))
         init = dict(t.init) if t.init else None
         if init:  # the init event names the Agent tool by its old name, Task
             init["tools"] = ["Agent" if x == "Task" else x for x in init.get("tools") or []]
-        problems = check_isolation(init, required, variant.mcp,
-                                   set(config.BUILTIN_TOOLS) - set(config.REQUIRED_TOOLS))
+        problems = check_isolation(init, required, variant.mcp, optional)
         if variant.agent and t.init and config.EXPLORER_AGENT not in (t.init.get("agents") or []):
             problems.append(f"{config.EXPLORER_AGENT} subagent not loaded: {t.init.get('agents')}")
         hooks = hook_stats(transcript.parent / "hooks")
         text = t.final_text
-        answer = extract_answer(text) or extract_answer("\n".join(t.texts[-3:]))
-        g = grade(item.task, answer, self.cfg.success_threshold)
+        if edit is not None:  # #178: graded from the working copy, not from an answer list
+            answer = None
+            g = None
+        else:
+            answer = extract_answer(text) or extract_answer("\n".join(t.texts[-3:]))
+            g = grade(item.task, answer, self.cfg.success_threshold)
 
         if problems and t.init:
             status = "isolation_error"
@@ -505,12 +570,19 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             else:
                 status = "error"
         else:
-            status = "ok" if answer is not None else "no_answer"
+            status = "ok" if answer is not None or edit is not None else "no_answer"
 
         counts = t.tool_counts
         mcp_calls = {k[len(MCP_PREFIX):]: v for k, v in counts.items() if k.startswith(MCP_PREFIX)}
         cli = myc_cli_calls(t.tool_calls)
         usage = t.usage()
+        if g is None:
+            missed = edit["dependents_forgotten"]
+            g = Grade(edit["file_precision"], edit["file_recall"], edit["file_f1"],
+                      len(edit["files_changed"]) - len(edit["files_extra"]), len(edit["files_extra"]), 0,
+                      len(item.task.get("gold_files") or []), len(edit["files_changed"]), True,
+                      missed=missed, false_positives=edit["files_extra"])
+        success = edit["success"] if edit is not None else is_success(g.f1, self.cfg.success_threshold)
         row = {
             "run_id": item.run_id,
             "task_id": item.task["id"],
@@ -526,7 +598,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "f1": round(g.f1, 4),
             "precision": round(g.precision, 4),
             "recall": round(g.recall, 4),
-            "success": is_success(g.f1, self.cfg.success_threshold),
+            "success": success,
             "tp": g.tp, "fp": g.fp, "neutral": g.neutral, "n_gold": g.n_gold,
             "n_answer": g.n_answer,
             "missed": g.missed,
@@ -565,6 +637,10 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "max_utilization": t.max_utilization,
             "finished_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         }
+        # #178: where the tokens went, and the cost by cache class.
+        row.update(attribute(str(transcript)).as_row())
+        if edit is not None:
+            row["edit"] = edit
         return row
 
     # ---- loop ------------------------------------------------------------

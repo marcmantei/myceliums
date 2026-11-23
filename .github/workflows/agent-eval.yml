@@ -54,6 +54,9 @@ jobs:
             if [ -f "$dir/results.jsonl" ]; then
               python3 evals/agent/agent_eval.py report "$label" --check
             fi
+            if [ -f "$dir/tokens.jsonl" ]; then
+              python3 evals/agent/agent_eval.py tokens "$label" --check
+            fi
             if [ -f "$dir/toolsel_results.jsonl" ]; then
               python3 evals/agent/agent_eval.py toolsel-report "$label" --check
             fi

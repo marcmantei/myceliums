@@ -36,6 +36,9 @@ COMPACT_FIELDS = [
     "bash_calls", "myc_cli_calls", "myc_cli_subcommands",
     # re-run after #169 (#171): Incomplete / Next hints met and followed
     "incomplete_results", "next_followed", "next_kinds", "source_after_hint",
+    # token attribution and cost by cache class (#178); edit-task grading
+    "attribution_method", "tokens_by_category", "tokens_by_class", "result_tokens_by_category", "thinking_tokens",
+    "attribution_residual", "cost_by_category", "cost_by_class", "priced_cost_usd", "edit",
 ]
 
 METRICS = [

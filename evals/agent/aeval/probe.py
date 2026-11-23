@@ -97,6 +97,7 @@ def summarise(run_dir: Path, condition: str) -> dict:
         "tool_calls": [(c["name"], c.get("parent")) for c in t.tool_calls] if t else None,
         "hook_events": len(t.hook_events) if t else None,
         "bash_result": _tool_result_text(main, "toolu_probe_bash")[:400] or None,
+        "search_result": _tool_result_text(main, "toolu_probe_search")[:400] or None,
     }
     problems = []
     if findings["user_claude_md_loaded"]:
@@ -110,6 +111,12 @@ def summarise(run_dir: Path, condition: str) -> dict:
             problems.append(f"subagent got no myceliums tools: {findings['subagent_tools']}")
     elif agent_tool is not None:
         problems.append("Agent tool offered outside variant E")
+    if variant.no_search:  # #178: arm D
+        offered = sorted(set(names) & set(config.SEARCH_TOOLS))
+        if offered:
+            problems.append(f"search tools offered in a no-search arm: {offered}")
+        if findings["search_result"] is not None and "Searching is not available" not in findings["search_result"]:
+            problems.append(f"grep in Bash was not blocked: {findings['search_result'][:120]!r}")
     if variant.mcp and not findings["myc_tools_with_schema"]:
         problems.append("no myceliums tool schema in the first request")
     findings["problems"] = problems
