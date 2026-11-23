@@ -418,7 +418,12 @@ src/main/resources/beans.xml
   call chain reaches it.
 
 Past 8 places, a `Next (by name):` line gives the `grep -rnF` that lists them
-all. `detail: "full"` answers are unchanged. What links and what does not:
+all. `detail: "full"` answers are unchanged. The section is as current as the
+index: after an incremental re-index (`myc analyze --watch`) of the named
+symbol's file, the places that name it are kept as long as a symbol of that
+qualified name is still there. Logger categories named after a class
+(`LogFactory.getLog("a.b.C")`) are listed like any other place. What links
+and what does not:
 [references by name](../guides/call-resolution-limitations.md#references-by-name-179).
 
 ### `find_dead_code`

@@ -308,6 +308,41 @@ impl Analyzer {
         }
     }
 
+    /// The name-reference edges into the symbols of `changed` files
+    /// (repository-relative) from other files (#179), before an incremental
+    /// run deletes them. Best effort: empty when the index cannot be read.
+    async fn name_refs_into<'a>(
+        &self,
+        changed: impl Iterator<Item = &'a String>,
+    ) -> Vec<(String, crate::name_refs::NameRefMetadata)> {
+        let changed: std::collections::HashSet<&str> = changed.map(String::as_str).collect();
+        let refs = match self
+            .store
+            .get_relationships_of_kind(&RelationshipKind::References)
+            .await
+        {
+            Ok(refs) if !refs.is_empty() => refs,
+            Ok(_) => return Vec::new(),
+            Err(e) => {
+                warn!("Name references into the changed files are lost: {e}");
+                return Vec::new();
+            }
+        };
+        let symbols = match self.store.get_symbols().await {
+            Ok(symbols) => symbols,
+            Err(e) => {
+                warn!("Name references into the changed files are lost: {e}");
+                return Vec::new();
+            }
+        };
+        let targets: std::collections::HashSet<&str> = symbols
+            .iter()
+            .filter(|s| changed.contains(s.file_path.as_str()))
+            .map(|s| s.uid.as_str())
+            .collect();
+        crate::name_refs::kept_into(&refs, &targets, &changed)
+    }
+
     /// Run a full analysis of the repository.
     ///
     /// Walks all source files, parses them, builds the call graph, and
@@ -1809,6 +1844,16 @@ impl Analyzer {
             })
             .collect();
         self.forget_unlinked_calls(&changed_rel, &[]).await;
+        // Name references from elsewhere into the changed files (#179): the
+        // deletion below drops them with the files' symbols; they are linked
+        // again to the re-indexed symbols by name.
+        let kept_names = self
+            .name_refs_into(
+                changed_rel
+                    .iter()
+                    .chain(changed_resources.iter().map(|(_, rel, _)| rel)),
+            )
+            .await;
         for (_, rel, _) in &changed_resources {
             self.store.delete_file_data(rel).await.with_context(|| {
                 format!(
@@ -2247,7 +2292,7 @@ impl Analyzer {
                 .iter()
                 .filter_map(|(path, rel, kind)| crate::name_refs::read_resource(path, rel, *kind)),
         );
-        let name_refs = if name_candidates.is_empty() {
+        let mut name_refs = if name_candidates.is_empty() {
             crate::name_refs::Linked::default()
         } else {
             match self.store.get_symbols().await {
@@ -2268,6 +2313,13 @@ impl Analyzer {
                 }
             }
         };
+
+        name_refs.relationships.extend(crate::name_refs::relink(
+            &kept_names,
+            &all_symbols,
+            &mut name_layout,
+            self.store.repo_id(),
+        ));
 
         // Store
         self.store.store_symbols(&all_symbols).await?;

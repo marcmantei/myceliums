@@ -364,8 +364,10 @@ fn c_like_literals(source: &str) -> Vec<(u32, &str)> {
                     i += 1;
                 }
                 let end = i.min(bytes.len());
-                if let Some(text) = source.get(start..end) {
-                    out.push((start_line, text.trim()));
+                if !concatenated(bytes, start - 3, end + 3, false) {
+                    if let Some(text) = source.get(start..end) {
+                        out.push((start_line, text.trim()));
+                    }
                 }
                 i += 3;
             }
@@ -381,7 +383,7 @@ fn c_like_literals(source: &str) -> Vec<(u32, &str)> {
                     i += 1;
                 }
                 let end = i.min(bytes.len());
-                if quote == b'"' && !escaped {
+                if quote == b'"' && !escaped && !concatenated(bytes, start - 1, end + 1, false) {
                     if let Some(text) = source.get(start..end) {
                         out.push((line, text));
                     }
@@ -394,6 +396,58 @@ fn c_like_literals(source: &str) -> Vec<(u32, &str)> {
         }
     }
     out
+}
+
+/// Whether the literal from `open` (its opening quote or prefix) to
+/// `after` (past its closing quote) is part of a concatenation: a `+` next
+/// to it, or (`adjacent`: Python) another literal right after or before it.
+/// `Class.forName("a.b.C" + "$Inner")` names no `a.b.C`.
+fn concatenated(bytes: &[u8], open: usize, after: usize, adjacent: bool) -> bool {
+    let before = bytes[..open.min(bytes.len())]
+        .iter()
+        .rev()
+        .find(|b| !b.is_ascii_whitespace() && **b != b'\\');
+    let next = bytes
+        .get(after..)
+        .unwrap_or_default()
+        .iter()
+        .find(|b| !b.is_ascii_whitespace() && **b != b'\\');
+    if before == Some(&b'+') || next == Some(&b'+') {
+        return true;
+    }
+    // Adjacent literals join on one line (or across a `\` continuation);
+    // a literal on the next line is a statement of its own.
+    if !adjacent {
+        return false;
+    }
+    // Spaces, and newlines a `\` continues, are skipped.
+    let skip = |text: &[u8]| -> Option<u8> {
+        let mut continued = false;
+        for &b in text {
+            match b {
+                b' ' | b'\t' | b'\r' => {}
+                b'\\' => continued = true,
+                b'\n' if continued => continued = false,
+                other => return Some(other),
+            }
+        }
+        None
+    };
+    let mut reversed: Vec<u8> = bytes[..open.min(bytes.len())]
+        .iter()
+        .rev()
+        .take(256)
+        .copied()
+        .collect();
+    // Backwards, a continued newline reads `\n` then `\`.
+    for i in 0..reversed.len().saturating_sub(1) {
+        if reversed[i] == b'\n' && reversed[i + 1] == b'\\' {
+            reversed.swap(i, i + 1);
+        }
+    }
+    let before = skip(&reversed);
+    let next = skip(bytes.get(after..).unwrap_or_default());
+    matches!(before, Some(b'"' | b'\'')) || matches!(next, Some(b'"' | b'\''))
 }
 
 /// String literals of Python source, with prefixes (`r`, `u`; `f` and `b`
@@ -454,7 +508,8 @@ fn python_literals(source: &str) -> Vec<(u32, &str)> {
                 }
                 let end = i.min(bytes.len());
                 let closed = end < bytes.len() && bytes[end] == quote;
-                if !skipped && closed {
+                let after = end + if triple { 3 } else { 1 };
+                if !skipped && closed && !concatenated(bytes, p, after, true) {
                     if let Some(text) = source.get(start..end) {
                         out.push((start_line, if triple { text.trim() } else { text }));
                     }
@@ -826,6 +881,109 @@ fn qualified_key(
     }
 }
 
+/// The symbols of `targets` whose qualified name is one of `keys`, by key.
+fn key_table<'a>(
+    keys: &HashSet<String>,
+    targets: &'a [CodeSymbol],
+    layout: &mut Layout,
+) -> HashMap<String, Vec<(&'a CodeSymbol, Family)>> {
+    let wanted: HashSet<&str> = keys.iter().map(|k| last_name(k)).collect();
+    // Every symbol of the files that hold a wanted name, for what encloses
+    // each.
+    let target_files: HashSet<&str> = targets
+        .iter()
+        .filter(|s| wanted.contains(s.name.as_str()))
+        .map(|s| s.file_path.as_str())
+        .collect();
+    let mut by_file: HashMap<&str, Vec<&CodeSymbol>> = HashMap::new();
+    for s in targets {
+        if target_files.contains(s.file_path.as_str()) {
+            by_file.entry(s.file_path.as_str()).or_default().push(s);
+        }
+    }
+    let mut table: HashMap<String, Vec<(&CodeSymbol, Family)>> = HashMap::new();
+    for (file, symbols) in &by_file {
+        let Some(family) = Family::of_path(file) else {
+            continue;
+        };
+        for s in symbols {
+            if !wanted.contains(s.name.as_str()) {
+                continue;
+            }
+            if let Some(key) = qualified_key(s, family, symbols, layout) {
+                if keys.contains(&key) {
+                    table.entry(key).or_default().push((s, family));
+                }
+            }
+        }
+    }
+    table
+}
+
+/// The name-reference edges into the symbols `targets` (uids) whose source
+/// is outside the `changed` files, each as its source and metadata: what an
+/// incremental run re-links to the re-indexed symbols ([`relink`]) after it
+/// deleted them with their edges.
+pub fn kept_into(
+    relationships: &[Relationship],
+    targets: &HashSet<&str>,
+    changed: &HashSet<&str>,
+) -> Vec<(String, NameRefMetadata)> {
+    relationships
+        .iter()
+        .filter(|r| targets.contains(r.target_uid.as_str()))
+        .filter_map(|r| Some((r.source_uid.clone(), NameRefMetadata::of(r)?)))
+        .filter(|(_, meta)| !changed.contains(meta.file.as_str()))
+        .collect()
+}
+
+/// The edges of `kept` ([`kept_into`]) to the symbols of `targets` (the
+/// re-indexed files') that carry the same qualified name, by the rules of
+/// [`link`]. A target renamed, moved to another package or deleted gets no
+/// edge.
+pub fn relink(
+    kept: &[(String, NameRefMetadata)],
+    targets: &[CodeSymbol],
+    layout: &mut Layout,
+    repo_id: &str,
+) -> Vec<Relationship> {
+    let keys: HashSet<String> = kept.iter().map(|(_, m)| key_of(&m.name)).collect();
+    if keys.is_empty() {
+        return Vec::new();
+    }
+    let table = key_table(&keys, targets, layout);
+    let mut seen: HashSet<(&str, &str)> = HashSet::new();
+    let mut out = Vec::new();
+    for (source_uid, meta) in kept {
+        let Some(found) = table.get(&key_of(&meta.name)) else {
+            continue;
+        };
+        let own = Family::of_path(&meta.file);
+        let found: Vec<&CodeSymbol> = found
+            .iter()
+            .filter(|(_, family)| meta.origin != "string" || own == Some(*family))
+            .map(|(s, _)| *s)
+            .collect();
+        if found.len() > MAX_TARGETS {
+            continue;
+        }
+        for target in found {
+            if target.uid == *source_uid || !seen.insert((source_uid, &target.uid)) {
+                continue;
+            }
+            out.push(Relationship {
+                uid: Uuid::new_v4().to_string(),
+                source_uid: source_uid.clone(),
+                target_uid: target.uid.clone(),
+                kind: RelationshipKind::References,
+                repo_id: repo_id.to_string(),
+                metadata: serde_json::to_string(meta).unwrap_or_default(),
+            });
+        }
+    }
+    out
+}
+
 /// What [`link`] found.
 #[derive(Debug, Default)]
 pub struct Linked {
@@ -859,37 +1017,7 @@ pub fn link(
     if keys.is_empty() {
         return linked;
     }
-    let wanted: HashSet<&str> = keys.iter().map(|k| last_name(k)).collect();
-
-    // Every symbol of the files that hold a wanted name, for what encloses
-    // each.
-    let target_files: HashSet<&str> = targets
-        .iter()
-        .filter(|s| wanted.contains(s.name.as_str()))
-        .map(|s| s.file_path.as_str())
-        .collect();
-    let mut by_file: HashMap<&str, Vec<&CodeSymbol>> = HashMap::new();
-    for s in targets {
-        if target_files.contains(s.file_path.as_str()) {
-            by_file.entry(s.file_path.as_str()).or_default().push(s);
-        }
-    }
-    let mut table: HashMap<String, Vec<(&CodeSymbol, Family)>> = HashMap::new();
-    for (file, symbols) in &by_file {
-        let Some(family) = Family::of_path(file) else {
-            continue;
-        };
-        for s in symbols {
-            if !wanted.contains(s.name.as_str()) {
-                continue;
-            }
-            if let Some(key) = qualified_key(s, family, symbols, layout) {
-                if keys.contains(&key) {
-                    table.entry(key).or_default().push((s, family));
-                }
-            }
-        }
-    }
+    let table = key_table(&keys, targets, layout);
     if table.is_empty() {
         return linked;
     }
@@ -1609,6 +1737,90 @@ class X {
         assert_eq!(layout.python_module("__init__.py"), None);
     }
 
+    /// A literal joined to another by `+` (or, in Python, by adjacency) is
+    /// only part of a name: `Class.forName("a.b.C" + "$X")` names no `a.b.C`.
+    #[test]
+    fn concatenated_literals_are_not_names() {
+        let java = "class X {\n  void m() {\n\
+            Class.forName(\"a.b.Plugin\" + \"$Inner\");\n\
+            Class.forName(prefix + \"a.b.Joined\");\n\
+            Class.forName(\"a.b.Wrapped\" +\n    suffix);\n\
+            Class.forName(\"a.b.Alone\");\n\
+            s += \"a.b.Appended\";\n  }\n}\n";
+        assert_eq!(
+            names(&code_candidates(java, SourceLanguage::Java)),
+            vec![(7, "a.b.Alone"), (8, "a.b.Appended")]
+        );
+        let python = "A = \"pkg.mod.A\" \"B\"\nB = \"pkg.mod.\" + name\nC = \"pkg.mod.C\" \\\n    \"D\"\nD = \"pkg.mod.Alone\"\n\"pkg.mod.Next\"\n";
+        assert_eq!(
+            names(&code_candidates(python, SourceLanguage::Python)),
+            vec![(5, "pkg.mod.Alone"), (6, "pkg.mod.Next")]
+        );
+    }
+
+    /// A YAML (or properties) value names a class whatever its key: the key
+    /// is not read, so `description: a.b.Plugin` links like `class:
+    /// a.b.Plugin` (documented).
+    #[test]
+    fn yaml_values_link_under_any_key() {
+        let symbols = project();
+        let yaml = config(
+            "src/main/resources/application.yml",
+            "acme:\n  description: a.b.Plugin\n  plugin-class: a.b.Plugin\n",
+        );
+        let linked = link(&[yaml], &symbols, &symbols, &[], &mut layout(), "r");
+        let meta = NameRefMetadata::of(&linked.relationships[0]).unwrap();
+        assert_eq!(linked.relationships.len(), 1);
+        assert_eq!((meta.line, meta.count), (2, 2));
+    }
+
+    /// Kept edges are linked again to re-indexed symbols of the same
+    /// qualified name; a renamed target gets none.
+    #[test]
+    fn kept_names_relink_to_the_reindexed_symbols() {
+        let symbols = project();
+        let props = config("x.properties", "k=a.b.Plugin\nj=a.b.Plugin$Inner\n");
+        let mut nodes = vec![];
+        let linked = link(&[props], &symbols, &symbols, &nodes, &mut layout(), "r");
+        nodes.extend(linked.config_files.iter().cloned());
+        let targets: HashSet<&str> = symbols
+            .iter()
+            .filter(|s| s.file_path == "src/a/b/Plugin.java")
+            .map(|s| s.uid.as_str())
+            .collect();
+        let changed: HashSet<&str> = ["src/a/b/Plugin.java"].into_iter().collect();
+        let kept = kept_into(&linked.relationships, &targets, &changed);
+        assert_eq!(kept.len(), 2);
+        // Re-indexed: new uids, the same names.
+        let mut reindexed: Vec<CodeSymbol> = symbols
+            .iter()
+            .filter(|s| s.file_path == "src/a/b/Plugin.java")
+            .cloned()
+            .map(|mut s| {
+                s.uid = format!("new:{}", s.uid);
+                s
+            })
+            .collect();
+        let again = relink(&kept, &reindexed, &mut layout(), "r");
+        let mut targets: Vec<&str> = again.iter().map(|r| r.target_uid.as_str()).collect();
+        targets.sort();
+        assert_eq!(
+            targets,
+            [
+                "new:src/a/b/Plugin.java:Inner:5",
+                "new:src/a/b/Plugin.java:Plugin:3"
+            ]
+        );
+        assert!(again.iter().all(|r| r.source_uid == nodes[0].uid));
+        // Renamed: `a.b.Plugin` is gone, and so is `a.b.Plugin$Inner`.
+        for s in &mut reindexed {
+            if s.name == "Plugin" {
+                s.name = "Extension".to_string();
+            }
+        }
+        assert!(relink(&kept, &reindexed, &mut layout(), "r").is_empty());
+    }
+
     #[test]
     fn package_declarations_are_read_from_the_header() {
         assert_eq!(
@@ -1909,6 +2121,84 @@ public class AcmeAutoConfiguration {
             .any(|f| f.path == "pyproject.toml"));
     }
 
+    /// #179 review: an incremental change to the file a name points into
+    /// keeps the edges from strings and config files elsewhere; renaming or
+    /// deleting the named class drops them.
+    #[tokio::test]
+    async fn incremental_changes_to_the_named_class_keep_or_drop_its_edges() {
+        let dir = TempDir::new().unwrap();
+        let root = dir.path().join("acme");
+        let client = "src/org/acme/client/AcmeClient.java";
+        write(
+            &root,
+            &[
+                (
+                    client,
+                    "package org.acme.client;\n\npublic class AcmeClient {\n    public static class Builder {}\n}\n",
+                ),
+                (
+                    "src/org/acme/Loader.java",
+                    "package org.acme;\n\npublic class Loader {\n    void load() throws Exception {\n        Class.forName(\"org.acme.client.AcmeClient$Builder\");\n    }\n}\n",
+                ),
+                (
+                    "res/beans.xml",
+                    "<beans>\n  <bean class=\"org.acme.client.AcmeClient\"/>\n</beans>\n",
+                ),
+            ],
+        );
+        let store = Store::open(&dir.path().join("db"), "acme").await.unwrap();
+        let analyzer = Analyzer::new(store, root.clone()).set_skip_embeddings(true);
+        analyzer.analyze().await.unwrap();
+        let both = vec![
+            e("res/beans.xml", "AcmeClient", 2),
+            e(
+                "src/org/acme/Loader.java:Loader.load",
+                "AcmeClient.Builder",
+                5,
+            ),
+        ];
+        assert_eq!(name_edges(analyzer.store()).await, both);
+
+        // Edited (lines move, uids change): the edges stay.
+        write(
+            &root,
+            &[(
+                client,
+                "package org.acme.client;\n\n/** A client. */\npublic class AcmeClient {\n    public void send() {}\n\n    public static class Builder {}\n}\n",
+            )],
+        );
+        analyzer.analyze_files(&[root.join(client)]).await.unwrap();
+        assert_eq!(name_edges(analyzer.store()).await, both);
+
+        // Renamed: no class carries the names any more.
+        write(
+            &root,
+            &[(
+                client,
+                "package org.acme.client;\n\npublic class HttpClient {\n    public static class Builder {}\n}\n",
+            )],
+        );
+        analyzer.analyze_files(&[root.join(client)]).await.unwrap();
+        assert!(name_edges(analyzer.store()).await.is_empty());
+
+        // Back, then the class deleted with its file.
+        write(
+            &root,
+            &[(
+                client,
+                "package org.acme.client;\n\npublic class AcmeClient {\n    public static class Builder {}\n}\n",
+            )],
+        );
+        analyzer.analyze().await.unwrap();
+        assert_eq!(name_edges(analyzer.store()).await, both);
+        std::fs::remove_file(root.join(client)).unwrap();
+        analyzer
+            .handle_file_deleted(&root.join(client))
+            .await
+            .unwrap();
+        assert!(name_edges(analyzer.store()).await.is_empty());
+    }
+
     /// An incremental run links a changed Java file's strings to classes of
     /// unchanged files, reading their package from disk.
     #[tokio::test]
@@ -1947,5 +2237,48 @@ public class AcmeAutoConfiguration {
             name_edges(analyzer.store()).await,
             vec![e("src/org/acme/Loader.java:Loader.load", "AcmeClient", 5)]
         );
+    }
+}
+
+/// The population of the precision samples (#179): every name-reference
+/// edge of an index, one JSON object per line. Run by
+/// `crates/myceliums-benchmarks/graph-gold/held-out/sample_name_refs.py`
+/// (see there); ignored otherwise.
+#[cfg(test)]
+mod sampling_dump {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore = "needs an index: run by graph-gold/held-out/sample_name_refs.py"]
+    async fn dump_name_refs_for_sampling() {
+        let var = |name: &str| std::env::var(name).unwrap_or_else(|_| panic!("set {name}"));
+        let store = myceliums_storage::Store::open_existing(
+            Path::new(&var("NAME_REFS_INDEX")),
+            &var("NAME_REFS_REPO"),
+        )
+        .await
+        .unwrap();
+        let symbols = store.get_symbols().await.unwrap();
+        let by_uid: HashMap<&str, &CodeSymbol> =
+            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
+        let mut lines = Vec::new();
+        for r in store.get_relationships().await.unwrap() {
+            let Some(m) = NameRefMetadata::of(&r) else {
+                continue;
+            };
+            let target = by_uid[r.target_uid.as_str()];
+            lines.push(
+                serde_json::json!({
+                    "file": m.file, "line": m.line, "name": m.name, "text": m.text,
+                    "origin": m.origin, "count": m.count,
+                    "source": by_uid.get(r.source_uid.as_str()).map(|s| s.qualified_name.clone()),
+                    "target": target.qualified_name, "target_kind": target.kind.to_string(),
+                    "target_file": target.file_path, "target_line": target.start_line,
+                })
+                .to_string(),
+            );
+        }
+        lines.sort();
+        std::fs::write(var("NAME_REFS_OUT"), lines.join("\n") + "\n").unwrap();
     }
 }
