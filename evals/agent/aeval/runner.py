@@ -289,6 +289,7 @@ class Runner:
         self.sessions_started = 0
         self.cache = config.cache_dir()
         self.work_root = config.work_root()
+        self.claude_version = ""  # set by run(): one version for a whole run
 
     # ---- bookkeeping -----------------------------------------------------
     def _check_config(self) -> None:
@@ -303,6 +304,23 @@ class Runner:
                 raise SystemExit(f"run '{self.cfg.label}' was started with a different config: {diff}")
         else:
             path.write_text(json.dumps(current, indent=2) + "\n")
+
+    def _pin_claude(self) -> None:
+        """One Claude Code for a whole run (#183; it updated itself during the
+        #182 run): the binary behind the ``claude`` link, its version kept in the
+        run's directory. A resume with another version is refused, and every
+        session's init event is checked."""
+        self.cfg.claude = os.path.realpath(self.cfg.claude)
+        m = re.search(r"\d+\.\d+\.\d+", config.tool_version([self.cfg.claude, "--version"]))
+        if not m:
+            raise SystemExit(f"cannot read the version of {self.cfg.claude}")
+        path = self.run_dir / "claude_version.txt"
+        pinned = path.read_text().strip() if path.exists() else m.group(0)
+        if pinned != m.group(0):
+            raise SystemExit(f"run '{self.cfg.label}' is pinned to Claude Code {pinned}, {self.cfg.claude} is "
+                             f"{m.group(0)}; pass --claude PATH of the pinned version")
+        path.write_text(pinned + "\n")
+        self.claude_version = pinned
 
     def completed(self) -> set[str]:
         done = set()
@@ -438,6 +456,11 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         (out_dir / "setup-claude.txt").write_text(res.stdout + res.stderr)
         if res.returncode != 0:
             raise StopRun(f"{item.run_id}: myc setup-claude failed: {res.stderr.strip()[:300]}")
+        # Claude Code reads a project's AGENTS.md only when there is no CLAUDE.md, and setup-claude writes one: without
+        # the import, C alone would miss the project's own instructions (found in the #182 review).
+        agents, claude_md = workdir / "AGENTS.md", workdir / "CLAUDE.md"
+        if agents.exists() and claude_md.exists() and "@AGENTS.md" not in claude_md.read_text():
+            claude_md.write_text("@AGENTS.md\n\n" + claude_md.read_text())
         # Keep what the agent will load, for the record.
         snap = out_dir / "setup-files"
         for rel in (*ROUTING_FILES, ".mcp.json", ".claude/settings.json", f".claude/agents/{config.EXPLORER_AGENT}.md"):
@@ -701,6 +724,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         if init:  # the init event names the Agent tool by its old name, Task
             init["tools"] = ["Agent" if x == "Task" else x for x in init.get("tools") or []]
         problems = check_isolation(init, required, variant.mcp, optional)
+        if init and self.claude_version and init.get("claude_code_version") not in (None, self.claude_version):
+            problems.append(f"Claude Code {init.get('claude_code_version')} ran, the run is pinned to {self.claude_version}")
         if variant.agent and t.init and config.EXPLORER_AGENT not in (t.init.get("agents") or []):
             problems.append(f"{config.EXPLORER_AGENT} subagent not loaded: {t.init.get('agents')}")
         hooks = hook_stats(transcript.parent / "hooks")
@@ -801,7 +826,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "finished_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         }
         # #178: where the tokens went, the cost by cache class, and whether the agent searched.
-        row.update(attribute(str(transcript)).as_row())
+        att = attribute(str(transcript))
+        row.update(att.as_row())
+        row["api_calls"] = att.calls  # model calls; the CLI's num_turns is tool calls + 1
         prompt_path = transcript.parent / "prompt.txt"
         row["search_audit"] = search_audit(str(transcript), prompt_path.read_text() if prompt_path.exists() else "")
         if edit is not None:
@@ -876,6 +903,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         order = self.run_dir / "plan.txt"
         if not order.exists():  # the planned order, for the record (#182)
             order.write_text("".join(f"{it.run_id}\n" for it in self.plan()))
+        if any(self.repos[it.repo].get("isolated") for it in items):
+            self._pin_claude()
         # Before the first session: every wrapper distribution of the run is on disk (#183).
         missing = {p for it in items if (self.cache / "repos" / it.repo).is_dir()
                    and (p := wrapper_problem(self.cache / "repos" / it.repo, self.repos[it.repo].get("session_env")))}

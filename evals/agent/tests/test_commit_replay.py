@@ -200,6 +200,9 @@ class GradleCommands(unittest.TestCase):
         self.assertEqual(kind("Execution failed for task ':spring-core:compileJava'.\n> Could not resolve all files"),
                          "infrastructure")  # a download error is not evidence about the change
         self.assertEqual(kind("Downloading from https://x/gradle.zip failed: timeout"), "infrastructure")
+        self.assertEqual(kind("> Could not resolve all files for configuration\n > No cached version of a:b:1 available for offline mode."), "infrastructure")
+        # Gradle also prints that line as a notice of a build that goes on.
+        self.assertEqual(kind("No cached version of a:b:1 available for offline mode.\n3 tests completed, 1 failed"), "tests")
         self.assertEqual(kind("No tests found for given includes: [x]"), "no_tests")
         self.assertEqual(kind("boom"), "other")
         self.assertEqual(editgrade.rerun_command("./gradlew -q :a-b:test --tests x.YTests :c:test"),
@@ -355,11 +358,15 @@ class Isolation(unittest.TestCase):
         def run(event):
             return subprocess.run([sys.executable, "-I", str(script), "isolated-hook", "--root", str(self.root),
                                    "--search", "no", "--allow-json", "[]"], input=event, capture_output=True, text=True)
-        self.assertEqual(run(json.dumps({"tool_name": "Read", "tool_input": {"file_path": "a.java"}, "cwd": str(self.root)})).returncode, 0)
-        out = run(json.dumps({"tool_name": "Read", "tool_input": {"file_path": str(self.secret / "f")}, "cwd": str(self.root)}))
-        self.assertEqual(out.returncode, 2)
-        self.assertIn(bashcmd.ISOLATED_MARKER, out.stderr)
-        self.assertEqual(run("not json").returncode, 2)
+        ok = run(json.dumps({"tool_name": "Read", "tool_input": {"file_path": "a.java"}, "cwd": str(self.root)}))
+        self.assertEqual((ok.returncode, ok.stdout), (0, ""))
+        for event in (json.dumps({"tool_name": "Read", "tool_input": {"file_path": str(self.secret / "f")},
+                                  "cwd": str(self.root)}), "not json"):
+            out = json.loads(run(event).stdout)["hookSpecificOutput"]
+            self.assertEqual(out["permissionDecision"], "deny")
+            self.assertIn(bashcmd.ISOLATED_MARKER, out["permissionDecisionReason"])
+            for hidden in (str(config.EVAL_DIR), str(config.cache_dir()), "--allow-json", "isolated-hook"):
+                self.assertNotIn(hidden, out["permissionDecisionReason"])
 
     @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec is macOS")
     def test_the_kernel_refuses_protected_places(self):
@@ -382,6 +389,52 @@ class Isolation(unittest.TestCase):
         # ... and for the test command that grades a session.
         t = editgrade.run_test(f"cat {self.secret}/f", self.root, prefix=isolation.sandboxed([], prof))
         self.assertFalse(t["passed"])
+
+    def test_c_imports_the_projects_agents_md(self):
+        from aeval.runner import Runner, RunConfig, WorkItem
+        r = Runner(RunConfig(label="x", conditions=("C",), claude="claude"), [], {})
+        for agents in (True, False):
+            w, out, b = (self.root.parent / f"{n}{agents}" for n in ("w", "o", "b"))
+            for d in (w, out, b):
+                d.mkdir()
+            if agents:
+                (w / "AGENTS.md").write_text("Spring's own rules\n")
+            (b / "myc").write_text(f"#!/bin/sh\nmkdir -p {w}/.claude; echo routing > {w}/CLAUDE.md; echo '{{}}' > {w}/.claude/settings.json\n")
+            (b / "myc").chmod(0o755)
+            for _ in range(2):  # idempotent
+                r._setup_claude(WorkItem({"id": "t", "repo": "r"}, "C", 1), w, b, {}, out)
+            self.assertEqual((w / "CLAUDE.md").read_text(), "@AGENTS.md\n\nrouting\n" if agents else "routing\n")
+
+    def test_one_claude_version_per_run(self):
+        from aeval.runner import Runner, RunConfig, WorkItem
+        base = self.root.parent
+        with mock.patch.object(config, "RUNS_DIR", base / "runs"):
+            (base / "runs/x").mkdir(parents=True)
+            for v in ("2.1.330", "2.1.331"):
+                (base / v).write_text(f"#!/bin/sh\necho '{v} (Claude Code)'\n")
+                (base / v).chmod(0o755)
+            link = base / "claude"
+            link.symlink_to(base / "2.1.330")
+            task = {"id": "t", "repo": "r", "type": "callers", "answer_kind": "symbols", "gold": []}
+            r = Runner(RunConfig(label="x", conditions=("A",), claude=str(link)), [task], {"r": {"name": "r", "commit": "c"}})
+            r._pin_claude()
+            self.assertEqual((r.claude_version, r.cfg.claude), ("2.1.330", str(base / "2.1.330")))
+            link.unlink()
+            link.symlink_to(base / "2.1.331")  # the updater moves the link: this run keeps its binary
+            self.assertEqual(config.tool_version([r.cfg.claude, "--version"]), "2.1.330 (Claude Code)")
+            r2 = Runner(RunConfig(label="x", conditions=("A",), claude=str(link)), [], {})
+            with self.assertRaises(SystemExit):  # a resume with another version
+                r2._pin_claude()
+            init = {"type": "system", "subtype": "init", "tools": ["Read", "Grep", "Glob", "mcp__myceliums__x"],
+                    "mcp_servers": [{"name": "myceliums", "status": "connected"}], "slash_commands": [], "skills": [],
+                    "claude_code_version": "2.1.331"}
+            t = base / "t.jsonl"
+            t.write_text(json.dumps(init) + "\n")
+            row = r._summarise(WorkItem(task, "A", 1), 1, t, 1.0, False, 0)
+            self.assertEqual(row["status"], "isolation_error")
+            self.assertIn("pinned to 2.1.330", row["isolation_problems"][-1])
+            self.assertIn("api_calls", row)
+        self.assertEqual(config.ISOLATION_ENV["DISABLE_AUTOUPDATER"], "1")
 
     def test_audit_counts_per_arm(self):
         from aeval import isolation

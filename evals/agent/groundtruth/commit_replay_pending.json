@@ -1,0 +1,95 @@
+{
+ "note": "Offline prechecks of 23 November 2026 that stopped at artifacts missing from the Gradle cache; only the first failing resolution of each build, so more may be missing. Repositories the builds declare: Maven Central, https://repo.spring.io/milestone and /snapshot (snapshots), the Gradle plugin portal (plugins).",
+ "pending": {
+  "observation-record-handled-exception": {
+   "gradle": "9.9.0",
+   "missing": [
+    "io.micrometer:micrometer-jakarta9:1.18.0-SNAPSHOT",
+    "jakarta.jms:jakarta.jms-api:3.1.0"
+   ]
+  },
+  "spel-big-power-result-limit": {
+   "gradle": "9.7.0",
+   "missing": [
+    "io.micrometer:context-propagation:",
+    "io.micrometer:micrometer-bom:1.18.0-INTERNAL-SNAPSHOT",
+    "io.projectreactor:reactor-bom:2026.0.0-INTERNAL-SNAPSHOT"
+   ]
+  },
+  "jsonl-media-type-support": {
+   "gradle": "9.4.0",
+   "missing": [
+    "org.jetbrains.kotlin:kotlin-stdlib:2.2.0"
+   ]
+  },
+  "servlet-response-ignore-body-flush": {
+   "gradle": "9.3.1",
+   "missing": [
+    "io.micrometer:micrometer-bom:1.16.3",
+    "io.projectreactor:reactor-bom:2025.0.3",
+    "org.eclipse.jetty.ee11:jetty-ee11-bom:12.1.6",
+    "org.eclipse.jetty:jetty-bom:12.1.6",
+    "org.junit:junit-bom:6.0.2",
+    "org.mockito:mockito-bom:5.21.0"
+   ]
+  },
+  "client-builders-deep-copy-default-headers-cookies": {
+   "gradle": "9.8.2",
+   "missing": [
+    "io.netty:netty-bom:4.2.19.Final"
+   ]
+  },
+  "http-range-honor-if-range": {
+   "gradle": "9.8.2",
+   "missing": [
+    "io.netty:netty-bom:4.2.19.Final"
+   ]
+  },
+  "error-response-interceptor-with-request": {
+   "gradle": "9.8.0",
+   "missing": [
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:2.21.6",
+    "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.21.6",
+    "com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.21.6",
+    "com.fasterxml.jackson.module:jackson-module-kotlin:2.21.6",
+    "com.fasterxml.jackson.module:jackson-module-parameter-names:2.21.6",
+    "tools.jackson.module:jackson-module-kotlin:3.1.6"
+   ]
+  },
+  "deferred-bean-registrar-contains-bean": {
+   "gradle": "9.4.1",
+   "missing": [
+    "io.netty:netty-bom:4.2.12.Final"
+   ]
+  },
+  "bean-provider-parameterized-type-reference": {
+   "gradle": "9.1.0",
+   "missing": [
+    "org.jetbrains.kotlin:kotlin-gradle-plugin:2.2.20"
+   ]
+  },
+  "message-source-default-charset": {
+   "gradle": "9.3.1",
+   "missing": [
+    "io.micrometer:micrometer-bom:1.16.3",
+    "io.projectreactor:reactor-bom:2025.0.3",
+    "org.eclipse.jetty.ee11:jetty-ee11-bom:12.1.6",
+    "org.eclipse.jetty:jetty-bom:12.1.6",
+    "org.mockito:mockito-bom:5.21.0"
+   ]
+  },
+  "retryable-method-retry-event": {
+   "gradle": "9.2.1",
+   "missing": [
+    "io.micrometer:micrometer-bom:1.16.1",
+    "io.netty:netty-bom:4.2.9.Final",
+    "io.projectreactor:reactor-bom:2025.0.1",
+    "org.apache.groovy:groovy-bom:5.0.3",
+    "org.eclipse.jetty.ee11:jetty-ee11-bom:12.1.5",
+    "org.eclipse.jetty:jetty-bom:12.1.5",
+    "org.mockito:mockito-bom:5.21.0",
+    "tools.jackson:jackson-bom:3.0.3"
+   ]
+  }
+ }
+}

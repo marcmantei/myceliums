@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 
 from . import config
+from .bashcmd import ISOLATED_MARKER
 from .stream import parse_transcript
 
 USER_MEMORY = str(Path(os.path.expanduser("~")) / ".claude" / "CLAUDE.md")
@@ -52,6 +53,13 @@ def _tool_result_text(requests: list[dict], tool_use_id: str) -> str:
                 if isinstance(b, dict) and b.get("type") == "tool_result" and b.get("tool_use_id") == tool_use_id:
                     return "\n".join(_texts(b.get("content")))
     return ""
+
+
+def findings_work(run_dir: Path) -> str:
+    """The work directory's name of the probe's one task."""
+    rows = [json.loads(x) for x in (run_dir / "results.jsonl").read_text().splitlines() if x.strip()]
+    repos = config.load_repos()
+    return config.work_name(repos[rows[-1]["repo"]]) if rows else ""
 
 
 def summarise(run_dir: Path, condition: str) -> dict:
@@ -104,6 +112,15 @@ def summarise(run_dir: Path, condition: str) -> dict:
         "test_result": _tool_result_text(main, "toolu_probe_test")[:300] or None,
     }
     problems = []
+    # Every arm must see the project's own instructions (AGENTS.md), C through setup-claude's CLAUDE.md too.
+    work = config.work_root() / findings_work(run_dir)
+    agents = work / "AGENTS.md"
+    findings["agents_md_loaded"] = None
+    if agents.exists() and not variant.legacy:
+        mark = max((ln.strip() for ln in agents.read_text().splitlines()), key=len)
+        findings["agents_md_loaded"] = mark in blob
+        if not findings["agents_md_loaded"]:
+            problems.append("the project's AGENTS.md is not in the first request")
     if findings["user_claude_md_loaded"]:
         problems.append("~/.claude/CLAUDE.md reached the session")
     if variant.setup_claude != findings["project_claude_md_loaded"]:
@@ -119,7 +136,7 @@ def summarise(run_dir: Path, condition: str) -> dict:
         offered = sorted(set(names) & set(config.SEARCH_TOOLS))
         if offered:
             problems.append(f"search tools offered in a no-search arm: {offered}")
-        if findings["search_result"] is not None and not any(m in findings["search_result"] for m in ("This session has no search", "Searching is not available")):
+        if findings["search_result"] is not None and not any(m in findings["search_result"] for m in ("This session has no search", "Searching is not available", ISOLATED_MARKER)):
             problems.append(f"grep in Bash was not blocked: {findings['search_result'][:120]!r}")
     if variant.mcp and not findings["myc_tools_with_schema"]:
         problems.append("no myceliums tool schema in the first request")

@@ -559,7 +559,7 @@ ISOLATED_MESSAGE = ("Not allowed in this session: {why}. Work only on files of t
 ISOLATED_MARKER = "Not allowed in this session:"
 
 
-def isolated_hook(argv: list[str], stdin=sys.stdin, stderr=sys.stderr) -> int:
+def isolated_hook(argv: list[str], stdin=sys.stdin, stdout=sys.stdout) -> int:
     """PreToolUse hook of an isolated session, for every tool, in every arm."""
     opts = dict(zip(argv[::2], argv[1::2]))
     try:
@@ -571,13 +571,20 @@ def isolated_hook(argv: list[str], stdin=sys.stdin, stderr=sys.stderr) -> int:
         why = isolated_tool(str(event.get("tool_name") or ""), event.get("tool_input") or {}, root,
                             event.get("cwd") or root, extra, search, readable)
     except Exception as exc:  # noqa: BLE001 - a hook that cannot decide refuses
-        stderr.write(f"{ISOLATED_MARKER} the check failed ({type(exc).__name__})\n")
-        return 2
+        return _deny(stdout, f"{ISOLATED_MARKER} the check failed ({type(exc).__name__})")
     if why is None:
         return 0
     progs = sorted(D_ALLOWED) + ["head/tail as pipes"] + (sorted(SEARCH_SHELL) if search else [])
-    stderr.write(ISOLATED_MESSAGE.format(why=why[1], root=root, progs=", ".join(progs)) + "\n")
-    return 2
+    return _deny(stdout, ISOLATED_MESSAGE.format(why=why[1], root=root, progs=", ".join(progs)))
+
+
+def _deny(stdout, reason: str) -> int:
+    """Refuse with the hook's JSON answer: unlike exit 2, Claude Code then
+    shows the model the reason alone, not the hook's command line (its paths
+    and the Gradle pattern)."""
+    json.dump({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
+                                      "permissionDecisionReason": reason}}, stdout)
+    return 0
 
 
 def allowed(command: str, extra=(), cwd: str | None = None) -> tuple[bool, list[str]]:

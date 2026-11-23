@@ -1775,62 +1775,53 @@ a pilot of one repetition (60 sessions) would replace them. Disk: 20 parents
 about 2 GB, graph-only indexes 0.67 GB each, embedded ones larger (not
 measured; about 1.1 GB if vectors add 0.4 GB, so 22 GB for 20, close to all the
 free space: build, run and delete task by task), `~/.gradle`
-8-9 GB (forecast, below).
+8.4 GB so far.
 
-**Prechecks: none is valid for the current commands; 13 of 20 passed online on
-23 November** (12 of them still in the set; [records](groundtruth/commit_replay_prechecks_online.json)). The
-test commands have since become offline commands (next paragraph), so all 20
-run again, offline and without competing load. `precheck-edit --gold-runs 2`
-runs the tests on the parent with the commit's tests (must fail, and for a
-compile or test failure, not a failed download), then twice on the whole commit
-with Gradle's `--rerun`, because the build cache could otherwise answer without
-running them. Online: nine parents fail to compile the commit's tests (each on API
-the commit adds or changes), four fail the tests; every commit passed both
-runs. One at a time, low priority, 4 Gradle workers, beside the #182 index build:
+**Prechecks: 9 of 20 valid, offline; 11 pending on artifacts missing from the Gradle cache**
+(23 November, after the #182 run, one at a time). `precheck-edit --gold-runs 2` runs the tests on the parent with the
+commit's tests (must fail, and for a compile or test failure, not a resolution failure), then twice on the whole commit
+with Gradle's `--rerun`. All 9 pass both runs, none is flaky in two. Four of them were first
+misread as resolution failures (a regex that matched a harmless notice) and re-run. Earlier, 13 tasks of an older set passed online
+([records](groundtruth/commit_replay_prechecks_online.json), other commands).
 
 | Task | Parent + commit's tests | Commit | Time on the commit |
 |---|---|---:|---:|
-| `spel-simple-context-restricted-conversion` | compile, 212 s | 2 of 2 | 42, 33 s |
-| `observation-record-handled-exception` | compile, 106 s | 2 of 2 | 88, 47 s |
-| `beans-max-nested-path-depth` | compile, 160 s | 2 of 2 | 94, 38 s |
-| `spel-big-power-result-limit` | not run | | |
-| `jsonl-media-type-support` | compile, 410 s | 2 of 2 | 111, 32 s |
-| `retry-max-attempts-to-max-retries` | compile, 304 s | 2 of 2 | 135, 40 s |
-| `fn-request-bind-pathvars-headers` | tests, 550 s | 2 of 2 | 138, 41 s |
-| `jdbcclient-batch-entry-dsl` | compile, 275 s | 2 of 2 | 100, 69 s |
-| `type-mismatch-required-type-arg` | tests, 216 s | 2 of 2 | 92, 49 s |
-| `servlet-response-ignore-body-flush` | not run | | |
-| `content-negotiation-no-fallback-mapping` | tests, 306 s | 2 of 2 | 86, 63 s |
-| `client-builders-deep-copy-default-headers-cookies` | not run | | |
-| `http-range-honor-if-range` | not run | | |
-| `error-response-interceptor-with-request` | compile, 221 s | 2 of 2 | 112, 39 s |
-| `mime-type-parameter-names-case-insensitive` | tests, 135 s | 2 of 2 | 93, 45 s |
-| `deferred-bean-registrar-contains-bean` | not run | | |
-| `api-version-deprecation-handler-handler-arg` | compile, 453 s | 2 of 2 | 197, 41 s |
-| `bean-provider-parameterized-type-reference` | not run | | |
-| `message-source-default-charset` | not run | | |
-| `retryable-method-retry-event` | not run | | |
+| `spel-simple-context-restricted-conversion` | compile, 48 s | 2 of 2 | 18, 9 s |
+| `observation-record-handled-exception` | pending: 2 artifacts not cached | | |
+| `beans-max-nested-path-depth` | compile, 51 s | 2 of 2 | 28, 10 s |
+| `spel-big-power-result-limit` | pending: 3 artifacts not cached | | |
+| `jsonl-media-type-support` | pending: 1 artifacts not cached | | |
+| `retry-max-attempts-to-max-retries` | compile, 47 s | 2 of 2 | 43, 13 s |
+| `fn-request-bind-pathvars-headers` | tests, 89 s | 2 of 2 | 33, 16 s |
+| `jdbcclient-batch-entry-dsl` | compile, 59 s | 2 of 2 | 16, 10 s |
+| `type-mismatch-required-type-arg` | tests, 80 s | 2 of 2 | 17, 10 s |
+| `servlet-response-ignore-body-flush` | pending: 6 artifacts not cached | | |
+| `content-negotiation-no-fallback-mapping` | tests, 68 s | 2 of 2 | 14, 10 s |
+| `client-builders-deep-copy-default-headers-cookies` | pending: 1 artifacts not cached | | |
+| `http-range-honor-if-range` | pending: 1 artifacts not cached | | |
+| `error-response-interceptor-with-request` | pending: 6 artifacts not cached | | |
+| `mime-type-parameter-names-case-insensitive` | tests, 62 s | 2 of 2 | 35, 10 s |
+| `deferred-bean-registrar-contains-bean` | pending: 1 artifacts not cached | | |
+| `api-version-deprecation-handler-handler-arg` | compile, 91 s | 2 of 2 | 51, 10 s |
+| `bean-provider-parameterized-type-reference` | pending: 1 artifacts not cached | | |
+| `message-source-default-charset` | pending: 5 artifacts not cached | | |
+| `retryable-method-retry-event` | pending: 8 artifacts not cached | | |
 
-* **Without an online pass: 8 of 20** (the six below, `spel-big-power-result-limit` and the new `retryable-method-retry-event`). `spel-big-power-result-limit`
-  failed because its parent needs `micrometer-bom:1.18.0-INTERNAL-SNAPSHOT`, which Gradle did not
-  find in either Spring repository (missing, no connection error), so it will probably
-  fail offline too; `test-context-cache-pause-mode` (a reserve, same strata) is its stand-in.
-  `servlet-response-ignore-body-flush` and `bean-provider-parameterized-type-reference`
-  never got past the wrapper's download.
-* **Not in the cache, not fetched.** Distributions: 9.1.0, 9.3.1 and 9.8.2 were put
-  there as zips by hand, with their published SHA-256 compared (same origin; Spring pins no
-  checksum; unpacking by the wrapper not tried yet); **9.4.1** is missing
-  (`deferred-bean-registrar-contains-bean`, and the reserve `form-converter-map-payloads`)
-  and 9.8.1 (a reserve). Of each build's 21 BOMs and root plugins: `servlet-response-...` 6,
-  `message-source-default-charset` 5, `bean-provider-...` 8, `deferred-bean-...` 1,
-  `client-builders-...` and `http-range-...` 1 each, the stand-in 9 (names:
-  micrometer, reactor, netty, jetty, junit, mockito, groovy and jackson BOMs, `kotlin-gradle-plugin`
-  2.2.20, `io.spring.nullability`; of the new `retryable-method-retry-event`, 9.2.1, not listed yet). Further artifacts may be missing.
+Median 62 s on the parent (max 91 s, cold) and 28 s for the first run on the commit. Pending tasks and their coordinates:
+[`groundtruth/commit_replay_pending.json`](groundtruth/commit_replay_pending.json) (the first failing resolution of each build; more may be
+missing). Nothing was fetched: each needs one online warm-up. `spel-big-power-result-limit` needs INTERNAL-SNAPSHOT BOMs, found missing online as
+well; its stand-in is the reserve `test-context-cache-pause-mode`. Three tasks that passed online (`jsonl-...`, `observation-...`,
+`error-response-...`) are pending because their command now compiles modules whose dependencies were never fetched.
+
+**Connections, sampled with `lsof` every 0.7 s or so** over the 24 offline runs and the probe's three sessions (2,616 samples in all, all
+processes of the JDK): no remote connection; loopback TCP, a UDP socket per Gradle process (file-lock messages), and wildcard TCP listeners
+only while `fn-request-bind-pathvars-headers` ran its HTTP server tests. A sample can miss a short connection. The wrapper unpacked
+9.8.2 from its zip without a connection.
+
 * **Reproducibility risk:** six of the 20 parents depend on unpinned `-SNAPSHOT` BOMs
   (micrometer 1.18.0, reactor 2026.0.0, not counting `spel-big-power-result-limit`; `beans-max-nested-path-depth` reactor
   only). Offline, Gradle takes the cached snapshot; a lost cache may not be recoverable.
-* `~/.gradle` grew from 0 to 6.1 GB with seven complete distributions; forecast
-  for the eleven versions of the kept tasks: 8-9 GB.
+* `~/.gradle` is 8.4 GB with all eleven distributions unpacked; the pending dependencies come on top (not measured).
 
 **The wrapper must never connect.** `gradlew --offline` does not cover the wrapper's
 own download of its distribution, and the firewall on this machine attributes
@@ -1847,7 +1838,7 @@ grading test (an agent may have edited the wrapper properties).
 --no-build-cache`, and the hook (below) holds every arm to the same rule; every arm's prompt says so. No build
 cache means no task output of another arm's session or of a precheck of the gold commit, and no remote cache. The
 sessions' `GRADLE_OPTS` send HTTP(S) to a closed loopback port, with the Spring build's remote cache
-(`DEVELOCITY_CACHE_SERVER`) there too. Tested on command strings only: **no Gradle has run offline yet**.
+(`DEVELOCITY_CACHE_SERVER`) there too.
 
 **Isolation** (repositories marked `isolated`, the same in every arm; [`aeval/isolation.py`](aeval/isolation.py)).
 Before the PR review a session could read the gold files, later parents and the history clone, and A and C could use
@@ -1870,8 +1861,13 @@ the network.
 * **Limits.** The kernel layer cannot deny the network (the session needs the model's API), so code the agent
   writes and runs through Gradle could open a connection; names and times of protected files stay visible; the Spring
   commits are public and may be in the model's training data; this guards a cooperative agent.
-  Checked with unit tests, among them the real sandbox with plain programs; **a session under it (probe) and Gradle
-  under it have not run yet**.
+  Checked with unit tests (among them the real sandbox with plain programs) and the mock-API probe below.
+* **Same instructions, one CLI.** Claude Code reads AGENTS.md only where there is no CLAUDE.md, and `setup-claude`
+  writes one, so C alone missed Spring's AGENTS.md (found in the #182 review): the harness makes C's CLAUDE.md import it. Six of
+  the 20 parents have an AGENTS.md (`spel-simple-...`, `observation-...`, `content-negotiation-...`, `client-builders-...`,
+  `http-range-...`, `error-response-...`). A run uses one Claude Code binary (the file behind the link), refuses a resume or a
+  session with another version, and keeps auto-update off. Rows carry `api_calls` (model calls; the CLI's `num_turns` is tool calls + 1). The hook
+  answers with JSON, so a refusal shows its reason without the hook's command line.
 
 `io.spring.develocity.conventions` (0.0.22 and 0.0.25, read from its source; the scan and
 cache conventions are identical in both, the plugin class differs, and both check `--no-scan`):
@@ -1889,26 +1885,28 @@ cache conventions are identical in both, the plugin class differs, and both chec
   tasks from a cache, which points to it having been read. Gradle turns the
   remote cache off with `--offline` (its documentation; not yet observed here).
 
-**Mock validation** (no model call; run on the per-task paths, before the shared path). It shows the pipeline, not a passing grade: the scripted edit is a comment, so the tests would fail even with a working Gradle. `probe --profile realistic --bash` on
-`mime-type-parameter-names-case-insensitive` against the graph-only index, with
-the scripted session searching, calling `myc callers parseMimeType`, reading
-and editing `MimeType.java` and running the task's test command:
+**Mock validation** (no model call, 23 November, Claude Code 2.1.331, graph-only index, shared path, under the sandbox):
+`probe --profile realistic --bash` on `spel-simple-context-restricted-conversion`; the scripted session searches, runs
+`myc callers`, reads and edits the primary file and runs the task's test command piped to `tail`.
 
 | Arm | Isolation | Tools offered | Search | Graded |
 |---|---|---|---|---|
-| A | ok | Bash, Edit, Glob, Grep, Read, Write + 9 myceliums tools | Grep ran | 1 file changed (code recall 1/2, `MediaType.java` forgotten as an other-module dependent, both tests forgotten), overlay of 2 test files applied, test command ran (exit 1: no network for Gradle) |
-| C | ok, routing block loaded | as A | Grep ran | as A; setup-claude's `CLAUDE.md`/`.mcp.json` not counted |
-| D | ok | Bash, Edit, Read, Write + 9 myceliums tools | `grep` refused by the hook | as A; the hook let `./gradlew ... --tests ...` run, `myc callers` answered from the index |
+| A | no problem; AGENTS.md in the first request | Bash, Edit, Glob, Grep, Read, Write + 9 myceliums tools | Grep ran | one file changed; Gradle ran offline in the session (43-45 s with compilation) and in the grading (9 s); the tests fail, as they must (the scripted edit is a comment) |
+| C | no problem; AGENTS.md and the routing block | as A | Grep ran | as A; setup-claude's files not counted |
+| D | no problem; AGENTS.md | without Grep and Glob | `grep` refused; the refusal names neither the checkout nor the hook | as A |
+
+With the sessions' own profile, `cat` of the gold files, the task file, another parent and the preparation's notes is refused by the
+kernel and the working copy stays readable; the audit counted one refusal in D and nothing else. The mock answers every request with one
+message id, so `api_calls` is 1 there. The real-session path past the mock has not run.
 
 ```bash
-export JAVA_HOME=...; T=evals/agent/tasks/tasks-commit-replay.json
-python3 evals/agent/agent_eval.py --tasks $T index --repo spring-mime-type-parameter-names-case-insensitive --skip-embeddings --myc $MYC
-python3 evals/agent/agent_eval.py --tasks $T probe --label v183 --task mime-type-parameter-names-case-insensitive \
-    --conditions A,C,D --bash --profile realistic --myc $MYC --grep parseMimeType --callers parseMimeType \
-    --edit-file spring-core/src/main/java/org/springframework/util/MimeType.java \
-    --edit-old "public class MimeType implements Comparable<MimeType>, Serializable {" \
-    --edit-new "public class MimeType implements Comparable<MimeType>, Serializable { // probe" \
-    --edit-command "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-core:test --tests org.springframework.util.MimeTypeTests :spring-web:test --tests org.springframework.http.MediaTypeTests"
+python3 evals/agent/agent_eval.py --tasks $T index --repo spring-spel-simple-context-restricted-conversion --skip-embeddings --myc $MYC
+python3 evals/agent/agent_eval.py --tasks $T probe --label v183 --task spel-simple-context-restricted-conversion \
+    --conditions A,C,D --bash --profile realistic --timeout 400 --myc $MYC --grep SimpleEvaluationContext --callers withMethodResolvers \
+    --edit-file spring-expression/src/main/java/org/springframework/expression/spel/support/SimpleEvaluationContext.java \
+    --edit-old "public final class SimpleEvaluationContext implements EvaluationContext {" \
+    --edit-new "public final class SimpleEvaluationContext implements EvaluationContext { // probe" \
+    --edit-command "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests 2>&1 | tail -15"
 ```
 
 ## Replaying myceliums calls (#181)
