@@ -48,7 +48,8 @@ TRANSIENT_TEXT = re.compile(
     r"timed out|fetch failed|Request was aborted|API Error: 5\d\d|API Error: 429",
     re.IGNORECASE,
 )
-USAGE_LIMIT_TEXT = re.compile(r"usage limit|limit reached|out of extra usage", re.IGNORECASE)
+USAGE_LIMIT_TEXT = re.compile(
+    r"usage limit|limit reached|out of (extra )?usage|you'?ve (hit|reached) your\b.*\blimit", re.IGNORECASE)
 
 PROMPT_TEMPLATE = """\
 You are working in a checkout of the {repo} repository ({language}); it is your current working directory. Answer the question below about this codebase. Investigate the code with the tools you have; do not guess.
@@ -622,10 +623,12 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
         if problems and t.init:
             status = "isolation_error"
+        elif t.rate_limit_rejected or USAGE_LIMIT_TEXT.search(text or "") and res.get("is_error"):
+            # Before the timeout: the CLI may sleep until the limit resets, and a session
+            # the limit cut off must never be graded as its arm's failure (#182).
+            status = "usage_limit"
         elif timed_out:
             status = "timeout"
-        elif t.rate_limit_rejected or USAGE_LIMIT_TEXT.search(text or "") and res.get("is_error"):
-            status = "usage_limit"
         elif not res:
             status = "crash"
         elif res.get("subtype") == "error_max_turns":

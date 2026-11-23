@@ -16,7 +16,7 @@ import agent_eval  # noqa: E402
 from aeval import config, mockapi  # noqa: E402
 from aeval.grading import grade  # noqa: E402
 from aeval.prep import check_tasks  # noqa: E402
-from aeval.runner import RunConfig, Runner, StopRun, build_prompt  # noqa: E402
+from aeval.runner import RunConfig, Runner, StopRun, WorkItem, build_prompt  # noqa: E402
 
 JAVA_TASKS = config.EVAL_DIR / "tasks" / "tasks-java.json"
 ARMS = ("none", "C", "D")
@@ -83,6 +83,38 @@ class InterleavedSchedule(unittest.TestCase):
         with self.assertRaises(SystemExit):
             runner.run(conditions=["C"])
         self.assertFalse(runner.run_dir.exists())  # refused before anything was written
+
+
+class UsageLimit(unittest.TestCase):
+    """A session the account's limit cut off is never final: it would count as its arm's failure."""
+
+    def _status(self, *events, timed_out=False):
+        r = _runner(1)
+        task = dict(r.tasks[0], answer_kind="symbols", gold=[{"name": "A.b"}])
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "t.jsonl"
+            p.write_text("".join(json.dumps(e) + "\n" for e in events))
+            row = r._summarise(WorkItem(task, "none", 1), 1, p, 1.0, timed_out, 0)
+        return row["status"], row["final"]
+
+    @staticmethod
+    def _result(text, is_error=True):
+        return {"type": "result", "subtype": "success", "is_error": is_error, "result": text, "num_turns": 1}
+
+    def test_the_clis_messages(self):
+        for text in ("You've hit your session limit \u00b7 resets 7pm", "You've hit your weekly limit",
+                     "You've reached your Fable 5 limit", "You're out of usage credits", "Usage limit reached"):
+            self.assertEqual(self._status(self._result(text)), ("usage_limit", False), text)
+
+    def test_a_limit_that_ends_in_the_timeout(self):
+        ev = {"type": "rate_limit_event", "rate_limit_info": {"status": "rejected"}}
+        self.assertEqual(self._status(ev, timed_out=True), ("usage_limit", False))
+
+    def test_ordinary_endings_stay_final(self):
+        self.assertEqual(self._status(timed_out=True), ("timeout", True))
+        warn = {"type": "rate_limit_event", "rate_limit_info": {"status": "allowed_warning", "utilization": 0.9}}
+        self.assertEqual(self._status(warn, self._result("the limit reached here is fine", False)),
+                         ("no_answer", True))
 
 
 class UnembeddedIndex(unittest.TestCase):
