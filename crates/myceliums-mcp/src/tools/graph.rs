@@ -933,7 +933,8 @@ impl CallList {
     }
 
     /// The default answer of `find_callers`/`find_callees` (#181): a count,
-    /// then one line per hit under its file (`qualified_name kind :line`,
+    /// then one line per hit under its file (`qualified_name kind
+    /// :start-end`,
     /// the depth and the symbol one step closer when it is not a direct
     /// hit, a mark on name-based edges), then what the walk did not follow.
     /// A file line plus a qualified name is a handle every symbol argument
@@ -950,7 +951,12 @@ impl CallList {
         );
         out.push_str(if self.items.is_empty() { ".\n" } else { ":\n" });
         out.push_str(&format::group_by_file(self.items.iter().map(|item| {
-            let mut line = format!("{} {} :{}", item.qualified_name, item.kind, item.start_line);
+            let mut line = format!(
+                "{} {} {}",
+                item.qualified_name,
+                item.kind,
+                format::line_range(item.start_line, item.end_line)
+            );
             if item.depth > 1 {
                 line.push_str(&format!(" [depth {}", item.depth));
                 if let Some(via) = &item.via {

@@ -15,7 +15,8 @@
 //! ```
 
 use myceliums_mcp::{MyceliumsMcp, Toolsets};
-use serde_json::Value;
+use rmcp::ServerHandler;
+use serde_json::{json, Value};
 use std::path::PathBuf;
 
 fn golden_path(profile: &str) -> PathBuf {
@@ -89,4 +90,45 @@ fn check(toolsets: &Toolsets, profile: &str) {
             path.display()
         );
     }
+}
+
+/// What the default profile adds to every model call (#181): the core tool
+/// definitions as Claude Code sends them (name with its `mcp__myceliums__`
+/// prefix, description, input schema; compact JSON), measured at 6,697
+/// characters, and the server instructions, measured at 1,778. Each budget
+/// is that size plus 10 %: a change that grows them past it must cut
+/// something else or raise the budget on purpose.
+const CORE_DEFINITIONS_BUDGET: usize = 7_366;
+const INSTRUCTIONS_BUDGET: usize = 1_955;
+
+#[test]
+fn core_definitions_and_instructions_stay_within_budget() {
+    let tools = MyceliumsMcp::tool_list_for_test(&Toolsets::default());
+    let definitions: Vec<Value> = tools
+        .iter()
+        .map(|t| {
+            json!({
+                "name": format!("mcp__myceliums__{}", t.name),
+                "description": t.description,
+                "input_schema": &*t.input_schema,
+            })
+        })
+        .collect();
+    let chars = serde_json::to_string(&definitions)
+        .expect("render")
+        .chars()
+        .count();
+    assert!(
+        chars <= CORE_DEFINITIONS_BUDGET,
+        "core tool definitions are {chars} characters, budget {CORE_DEFINITIONS_BUDGET}"
+    );
+    let instructions = MyceliumsMcp::new()
+        .get_info()
+        .instructions
+        .expect("server instructions");
+    let chars = instructions.chars().count();
+    assert!(
+        chars <= INSTRUCTIONS_BUDGET,
+        "server instructions are {chars} characters, budget {INSTRUCTIONS_BUDGET}"
+    );
 }

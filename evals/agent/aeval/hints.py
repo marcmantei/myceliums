@@ -1,9 +1,11 @@
 """Did the agent meet and follow myceliums' Incomplete / Next hints? (#171)
 
 Since #169 a graph walk that stops early says so: the text result carries an
-``Incomplete (N branch(es) not followed):`` block that ends in ``Next: …``,
-and ``find_callers`` / ``find_callees`` return a structured ``incomplete``
-object with a ``next`` field. ``Next`` names one or more steps joined by
+``Incomplete (N branch(es) not followed):`` block that ends in ``Next: …``.
+``find_callers`` / ``find_callees`` answered with JSON holding an
+``incomplete`` object with a ``next`` field until #181 (the #163/#171
+transcripts); since #181 their compact text carries the same block, and the
+JSON form is what ``detail: "full"`` returns. Both forms are read. ``Next`` names one or more steps joined by
 ``; then `` or ``; or ``: a tool call (``find_callers(repo_id=…,
 symbol_name=…, depth=3)``, ``trace_flow(…, max_depth=7)``, ``analyze(…,
 force=true)``), "<tool> on the symbols at depth N", "read the source at the

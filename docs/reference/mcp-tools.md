@@ -84,27 +84,35 @@ the MCP specification recommends.
 the rest of the session and is re-sent with every later model call, so the
 navigation tools answer compactly: `find_callers`, `find_callees`,
 `impact_of_change` (symbol and file mode) and `trace_flow` list one line per
-hit, `qualified_name kind :line`, under a heading line with its file, each
-file once. A file heading plus a qualified name is a handle
+hit, `qualified_name kind :start-end` (the lines to read; `:start` for a
+one-line symbol), under a heading line with its file, each file once. A file heading plus a qualified name is a handle
 (`src/db.ts:Database.findById`) that every symbol parameter accepts, so
 `explain_symbol` shows any hit in full (source, signature, callers,
 callees). `find_callers`/`find_callees` take `detail: "full"` for the
 previous JSON with every field and each hit's signature. Replayed over the
-265 myceliums calls of the #163/#171 agent sessions, the answers shrank from
-1,104,910 to 486,928 characters (`find_callers` −58 %, `find_callees` −59 %,
-`impact_of_change` −34 %, `trace_flow` −20 %) with the same hits, totals and
-`Next` steps.
+265 myceliums calls of the #163/#171 agent sessions with `agent_eval.py
+replay` ([`evals/agent/aeval/replay.py`](../../evals/agent/aeval/replay.py);
+[report](../../evals/agent/results/2026-11-23-compact-output/REPLAY.md)),
+the answers shrank from 1,104,910 to 505,145 characters (`find_callers`
+−56 %, `find_callees` −58 %, `impact_of_change` −31 %, `trace_flow` −18 %).
+For every call of the four tools both builds give the same hits (file,
+qualified name, start line, depth or chain position, `via`, edge marks),
+totals, `Incomplete` reasons and `Next` step, and the same text for error
+results; the replay checks this per call.
 
 **Tool definitions (#181).** The names, descriptions and input schemas of the
 exposed tools go to the model with every call. The descriptions say what a
 tool answers and when to use it; how to read results (the `Index:` line,
-paging, `Incomplete`/`Next`, edge marks) is said once, in the server
-instructions. Input schemas carry no `$schema`, `title`, `format`, a
+paging, `Incomplete`/`Next`, edge marks) is said once per request, in the
+server instructions (which Claude Code re-sends with every request, like the
+tool definitions). Input schemas carry no `$schema`, `title`, `format`, a
 `minimum` of 0, or the `null` an optional field would add to `type` and
 `enum`; optional is what `required` leaves out. For the default (`core`)
 profile this cut the tool definitions an agent receives from 11,847 to 6,697
-characters (2,807 to 1,592 tokens in the `o200k_base` tokenizer; the server
-instructions grew from 1,548 to 1,778 characters).
+characters (2,807 to 1,592 tokens in `o200k_base`, an OpenAI tokenizer
+used for the ratio, not Claude's; the server instructions grew from 1,548 to
+1,778 characters). `tests/tools_list_snapshot.rs` fails when either grows
+more than 10 % past these sizes.
 
 **Symbols.** Every symbol parameter accepts a short name, a qualified name, or
 `file_path:qualified_name`. When a name matches several symbols — two files
@@ -248,13 +256,13 @@ Index: django, commit 2d4add1 = HEAD, up to date.
 
 21 callers of get_default_renderer up to depth 3:
 django/forms/forms.py
-  BaseForm.__init__ Method :71
+  BaseForm.__init__ Method :71-125
 django/forms/widgets.py
-  Widget._render Method :281
-  Widget.render Method :276 [depth 2 via _render]
+  Widget._render Method :281-284
+  Widget.render Method :276-279 [depth 2 via _render]
 django/template/autoreload.py
-  reset_loaders Function :33
-  template_changed Function :55 [depth 2 via reset_loaders] (resolved: name-match)
+  reset_loaders Function :33-45
+  template_changed Function :55-61 [depth 2 via reset_loaders] (resolved: name-match)
 ```
 
 A caller past depth 1 carries `[depth N via X]` (X: the symbol one step
@@ -303,7 +311,7 @@ What could break if I change this? Give at most one of `symbol_name`,
   symbol the file defines), transitively up to `depth`, in sections *Direct
   dependents* (these must change too if a signature changes) and *Indirect
   dependents* (with `[depth N via X]`), each one line per dependent,
-  `qualified_name kind :line`, under its file (#181; the file headings
+  `qualified_name kind :start-end`, under its file (#181; the file headings
   replace the former *Files with dependents* section, the first line counts
   the files). IMPORTS edges are marked `[imports]`, name-matched CALLS edges
   `(resolved: …)`.

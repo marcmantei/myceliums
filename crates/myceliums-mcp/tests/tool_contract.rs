@@ -808,7 +808,7 @@ async fn core_tools_answer_the_common_structural_questions() {
     let hits = grouped_items(&direct);
     assert_eq!(hits.len(), 1, "{direct}");
     assert!(
-        hits[0].ends_with("|src/services/user.ts|UserService.getUser Method :16"),
+        hits[0].ends_with("|src/services/user.ts|UserService.getUser Method :16-18"),
         "{direct}"
     );
     let deep = ok_text(

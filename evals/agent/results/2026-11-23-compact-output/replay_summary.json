@@ -1,0 +1,185 @@
+{
+ "comparison": {
+  "find_callees": {
+   "compared": 14,
+   "differ": [],
+   "errors": 4
+  },
+  "find_callers": {
+   "compared": 220,
+   "differ": [],
+   "errors": 9
+  },
+  "impact_of_change": {
+   "compared": 8,
+   "differ": [],
+   "errors": 1
+  },
+  "trace_flow": {
+   "compared": 23,
+   "differ": [],
+   "errors": 7
+  }
+ },
+ "meta": {
+  "after": "feat-181-compact-output",
+  "before": "origin/main fbbf24f",
+  "calls": 265,
+  "indexes": "Django 2d4add1 and Vue 7de9e41, built with `myc analyze --skip-embeddings` and the index exclusions of results/2026-11-22-scale/meta.json",
+  "runs": [
+   "2026-11-22-rerun-c-t10",
+   "2026-11-22-rerun-c-t40",
+   "2026-11-22-scale-t10",
+   "2026-11-22-scale-t4",
+   "2026-11-22-scale-t40"
+  ],
+  "title": "#163/#171 sessions, before and after #181"
+ },
+ "summary": {
+  "answers": {
+   "find_callees": {
+    "after": {
+     "calls": 14,
+     "chars": 33043,
+     "chars_4": 8255,
+     "o200k": 8817
+    },
+    "before": {
+     "calls": 14,
+     "chars": 78335,
+     "chars_4": 19578,
+     "o200k": 19029
+    }
+   },
+   "find_callers": {
+    "after": {
+     "calls": 220,
+     "chars": 418522,
+     "chars_4": 104549,
+     "o200k": 112741
+    },
+    "before": {
+     "calls": 220,
+     "chars": 956541,
+     "chars_4": 239051,
+     "o200k": 236957
+    }
+   },
+   "impact_of_change": {
+    "after": {
+     "calls": 8,
+     "chars": 20205,
+     "chars_4": 5048,
+     "o200k": 5468
+    },
+    "before": {
+     "calls": 8,
+     "chars": 29185,
+     "chars_4": 7294,
+     "o200k": 7729
+    }
+   },
+   "trace_flow": {
+    "after": {
+     "calls": 23,
+     "chars": 33375,
+     "chars_4": 8337,
+     "o200k": 9452
+    },
+    "before": {
+     "calls": 23,
+     "chars": 40849,
+     "chars_4": 10205,
+     "o200k": 11095
+    }
+   }
+  },
+  "answers_total": {
+   "after": {
+    "chars": 505145,
+    "chars_4": 126189,
+    "o200k": 136478
+   },
+   "before": {
+    "chars": 1104910,
+    "chars_4": 276128,
+    "o200k": 274810
+   }
+  },
+  "definitions": {
+   "after": {
+    "chars": 6697,
+    "chars_4": 1674,
+    "o200k": 1592
+   },
+   "before": {
+    "chars": 11847,
+    "chars_4": 2961,
+    "o200k": 2807
+   }
+  },
+  "instructions": {
+   "after": {
+    "chars": 1778,
+    "chars_4": 444,
+    "o200k": 425
+   },
+   "before": {
+    "chars": 1548,
+    "chars_4": 387,
+    "o200k": 374
+   }
+  },
+  "per_tool_definition": {
+   "analyze": {
+    "after": 806,
+    "before": 1333
+   },
+   "explain_symbol": {
+    "after": 532,
+    "before": 862
+   },
+   "find_callees": {
+    "after": 727,
+    "before": 1241
+   },
+   "find_callers": {
+    "after": 717,
+    "before": 1250
+   },
+   "find_dead_code": {
+    "after": 650,
+    "before": 1187
+   },
+   "impact_of_change": {
+    "after": 907,
+    "before": 1677
+   },
+   "list_repos": {
+    "after": 366,
+    "before": 657
+   },
+   "search_code": {
+    "after": 1062,
+    "before": 2025
+   },
+   "trace_flow": {
+    "after": 938,
+    "before": 1623
+   }
+  },
+  "tokenizer": "o200k_base (tiktoken; not Claude's tokenizer)",
+  "tools_list": {
+   "after": {
+    "chars": 9920,
+    "chars_4": 2480,
+    "o200k": 2396
+   },
+   "before": {
+    "chars": 19264,
+    "chars_4": 4816,
+    "o200k": 4627
+   }
+  }
+ }
+}

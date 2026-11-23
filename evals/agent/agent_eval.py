@@ -15,6 +15,7 @@ Subcommands (see evals/agent/README.md for the full procedure):
   toolsel-list  print / save the live tools/list of a myc binary
   toolsel-run   run the tool-selection eval
   toolsel-report render the tool-selection report
+  replay        replay a run's myceliums calls against two myc builds: sizes and equivalence (#181)
 
 Python standard library only; nothing here is part of `cargo test`.
 """
@@ -290,6 +291,49 @@ def cmd_tokens(args) -> int:
     return 0
 
 
+def cmd_replay(args) -> int:
+    """Replay a run's myceliums MCP calls against two builds (#181): REPLAY.md."""
+    from aeval import replay
+    out_dir = config.RESULTS_DIR / args.label
+    summary_path = out_dir / "replay_summary.json"
+    if args.check:
+        data = json.loads(summary_path.read_text())
+        ok = (out_dir / "REPLAY.md").read_text() == replay.render(data["summary"], data["comparison"],
+                                                                  data["meta"])
+        print("REPLAY.md is current" if ok else "REPLAY.md does not match replay_summary.json")
+        return 0 if ok else 1
+    work = {}
+    for item in args.work:
+        name, _, path = item.partition("=")
+        work[name] = Path(path).resolve()
+    data_dir = Path(args.data).resolve()
+    calls = replay.extract_calls([Path(r) for r in args.runs_root], args.run_glob)
+    calls = [c for c in calls if c["repo"] in work]
+    if args.index:
+        replay.index(args.before, work, data_dir)
+    before = replay.replay(args.before, calls, work, data_dir)
+    after = replay.replay(args.after, calls, work, data_dir)
+    if args.answers_dir:
+        answers = Path(args.answers_dir)
+        answers.mkdir(parents=True, exist_ok=True)
+        (answers / "before.json").write_text(json.dumps(before))
+        (answers / "after.json").write_text(json.dumps(after))
+    summary = replay.summarize(before, after)
+    comparison = replay.compare(before, after)
+    runs = sorted({c["run"] for c in calls})
+    meta = {"title": args.title or args.label, "runs": runs, "calls": len(calls),
+            "before": args.before_name or args.before, "after": args.after_name or args.after,
+            "indexes": args.indexes or ", ".join(sorted(work))}
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps({"meta": meta, "summary": summary, "comparison": comparison},
+                                       indent=1, sort_keys=True) + "\n")
+    (out_dir / "REPLAY.md").write_text(replay.render(summary, comparison, meta))
+    print(f"wrote {out_dir / 'REPLAY.md'}")
+    differ = sum(len(c["differ"]) for c in comparison.values())
+    print(f"{len(calls)} calls replayed; {differ} differ in substance")
+    return 1 if differ else 0
+
+
 def cmd_precheck_edit(args) -> int:
     """Run every edit task's test command on the pinned (parent) commit and
     record the result in the task file (#178): it must fail there."""
@@ -507,6 +551,25 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--render-only", action="store_true", help="re-render TOKENS.md from the committed tokens.jsonl")
     s.add_argument("--check", action="store_true", help="verify TOKENS.md matches tokens.jsonl")
     s.set_defaults(fn=cmd_tokens)
+
+    s = sub.add_parser("replay", help="replay a run's myceliums calls against two myc builds (#181)")
+    s.add_argument("label", help="results/<label>/ receives REPLAY.md and replay_summary.json")
+    s.add_argument("--runs-root", action="append", default=[],
+                   help="directory with <run>/sessions/<session>/attempt*.jsonl (repeatable)")
+    s.add_argument("--run-glob", default="*", help="which runs under each root (default: all)")
+    s.add_argument("--before", help="myc binary of the old format")
+    s.add_argument("--after", help="myc binary of the new format")
+    s.add_argument("--before-name", help="how REPLAY.md names the old build (default: its path)")
+    s.add_argument("--after-name", help="how REPLAY.md names the new build (default: its path)")
+    s.add_argument("--work", action="append", default=[],
+                   help="REPO=PATH: the working copy the sessions of REPO ran in (repeatable)")
+    s.add_argument("--data", help="myceliums data directory holding (or receiving) the indexes")
+    s.add_argument("--index", action="store_true", help="first index every --work copy (skip_embeddings)")
+    s.add_argument("--indexes", help="how REPLAY.md describes the indexes")
+    s.add_argument("--title")
+    s.add_argument("--answers-dir", help="also keep every answer of both builds here (large; not committed)")
+    s.add_argument("--check", action="store_true", help="verify REPLAY.md matches replay_summary.json")
+    s.set_defaults(fn=cmd_replay)
 
     toolsets_help = ("myc mcp toolset profile to offer (default all; `core` is myc's own default "
                      "and is scored on the intents it can answer)")

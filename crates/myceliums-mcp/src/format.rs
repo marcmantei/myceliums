@@ -586,10 +586,24 @@ fn heuristic_mark(resolved: Option<&str>) -> String {
     }
 }
 
-/// `qualified_name kind :line`: a hit on a line under its file's heading
-/// (see [`group_by_file`]).
+/// `qualified_name kind :start-end`: a hit on a line under its file's
+/// heading (see [`group_by_file`]).
 fn hit_line(s: &myceliums_storage::CodeSymbol) -> String {
-    format!("{} {} :{}", s.qualified_name, s.kind, s.start_line)
+    format!(
+        "{} {} {}",
+        s.qualified_name,
+        s.kind,
+        line_range(s.start_line, s.end_line)
+    )
+}
+
+/// `:start-end`, or `:start` for a one-line symbol: the lines to read.
+pub(crate) fn line_range(start: u32, end: u32) -> String {
+    if end > start {
+        format!(":{start}-{end}")
+    } else {
+        format!(":{start}")
+    }
 }
 
 /// Lists hits compactly (#181): each file once, as a heading line, and its
