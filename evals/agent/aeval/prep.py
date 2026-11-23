@@ -36,6 +36,45 @@ def fetch(repos: dict[str, dict]) -> None:
         if status:
             raise SystemExit(f"{dst} has local changes; delete it and fetch again")
         print(f"{name:<8} {r['commit'][:12]} ({r.get('ref', '')}) -> {dst}")
+        if r.get("gold_commit"):
+            fetch_gold(r)
+
+
+def fetch_gold(r: dict) -> Path:
+    """Keep the files of a repository's ``gold_commit`` (#183: the replayed
+    commit, whose parent is the pin) in ``config.gold_dir``, never in the
+    checkout: the working copies hold the parent only, so the agent cannot
+    find the commit in the history. ``gold.json`` records the commit's
+    name-status against the pin (renames as delete + add); ``files/`` holds
+    every added or modified file."""
+    out = config.gold_dir(r["name"])
+    meta = out / "gold.json"
+    if meta.exists() and config.load_json(meta).get("gold_commit") == r["gold_commit"]:
+        return out
+    tmp = out.with_name(out.name + ".git")
+    for d in (out, tmp):
+        if d.exists():
+            config.remove_tree(d, config.cache_dir() / "gold")
+    _git("init", "-q", "--bare", str(tmp))
+    _git("-C", str(tmp), "fetch", "-q", "--depth", "2", r["url"], r["gold_commit"])
+    parent = _git("-C", str(tmp), "rev-parse", f"{r['gold_commit']}^")
+    if parent != r["commit"]:
+        raise SystemExit(f"{r['name']}: parent of {r['gold_commit'][:12]} is {parent[:12]}, not the pin {r['commit'][:12]}")
+    files = {}
+    for line in _git("-C", str(tmp), "diff", "--name-status", "--no-renames", r["commit"], r["gold_commit"]).splitlines():
+        status, path = line.split("\t", 1)
+        files[path] = status[0]
+        if status[0] != "D":
+            blob = subprocess.run(["git", "-C", str(tmp), "show", f"{r['gold_commit']}:{path}"], capture_output=True)
+            if blob.returncode != 0:
+                raise SystemExit(f"{r['name']}: cannot read {path} at {r['gold_commit'][:12]}")
+            (out / "files" / path).parent.mkdir(parents=True, exist_ok=True)
+            (out / "files" / path).write_bytes(blob.stdout)
+    config.remove_tree(tmp, config.cache_dir() / "gold")
+    meta.write_text(json.dumps({"gold_commit": r["gold_commit"], "parent": r["commit"], "files": files},
+                               indent=1, sort_keys=True) + "\n")
+    print(f"{r['name']:<8} gold {r['gold_commit'][:12]}: {len(files)} files -> {out}")
+    return out
 
 
 # myceliums' default `[analysis] exclude`; a project config replaces it, so it is repeated.
@@ -237,16 +276,43 @@ def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list
         problems.append(f"{tid}: primary_files cover every gold file; leave out the dependents")
     if "dependents" in t:
         problems.append(f"{tid}: `dependents` is replaced by `primary_files` (every other gold file is a dependent)")
+    repo = repos[t["repo"]]
+    overlay = t.get("test_overlay")
+    if overlay is not None:
+        from .editgrade import file_kind
+        if not repo.get("gold_commit"):
+            problems.append(f"{tid}: test_overlay needs a gold_commit on repo {t['repo']}")
+        for p in overlay if isinstance(overlay, list) else [overlay]:
+            if p not in paths:
+                problems.append(f"{tid}: overlay file {p} is not a gold file")
+            elif file_kind(p) != "tests":
+                problems.append(f"{tid}: overlay file {p} is not a test file")
+    if root is not None and repo.get("gold_commit"):
+        meta = config.gold_dir(t["repo"]) / "gold.json"
+        if not meta.exists() or config.load_json(meta).get("gold_commit") != repo["gold_commit"]:
+            problems.append(f"{tid}: gold files of {repo['gold_commit'][:12]} not fetched; run `agent_eval.py fetch`")
+        else:
+            got = config.load_json(meta)["files"]
+            want = {(g if isinstance(g, str) else g["path"]): ("M" if isinstance(g, str) else g.get("status", "M"))
+                    for g in t.get("gold_files") or []}
+            if got != want:
+                problems.append(f"{tid}: gold_files differ from the commit's own changes: "
+                                f"{sorted(set(got.items()) ^ set(want.items()))[:6]}")
     if "test_command" in t:
         if not isinstance(t["test_command"], str) or not t["test_command"].strip():
             problems.append(f"{tid}: test_command must be a non-empty string")
         pre = t.get("precheck") or {}
-        if pre.get("command") != t.get("test_command") or pre.get("commit") != repos[t["repo"]]["commit"]:
+        if pre.get("command") != t.get("test_command") or pre.get("commit") != repo["commit"]:
             problems.append(f"{tid}: no precheck of this test command on the pinned commit; run "
                             f"`agent_eval.py precheck-edit`")
         elif not pre.get("fails_on_parent"):
             problems.append(f"{tid}: the test command does not fail on the pinned (parent) commit, so passing it "
                             f"proves nothing")
+        elif repo.get("gold_commit") and (pre.get("gold_commit") != repo["gold_commit"] or not pre.get("passes_on_gold")):
+            problems.append(f"{tid}: the test command was not shown to pass on the gold commit "
+                            f"{repo['gold_commit'][:12]}; run `agent_eval.py precheck-edit`")
+        elif (pre.get("test_overlay") or None) != (t.get("test_overlay") or None):
+            problems.append(f"{tid}: the precheck ran with another test_overlay; run `agent_eval.py precheck-edit`")
     for a in t.get("allowed_commands") or []:
         if isinstance(a, str) and a.split():
             continue

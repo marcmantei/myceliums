@@ -18,7 +18,11 @@ body (never the headers) and answers with a fixed script:
 4. if the request offers ``Bash`` but not ``Grep`` (arm ``D``, #178), the
    first answer runs a ``grep`` in the shell, which D's hook must block, and
    the second ``myc callers <symbol>`` alone, which must still run;
-5. everything else ends the turn with a short text and an answer block:
+5. on an edit task (#183, ``edit`` given and the ``Edit`` tool offered), the
+   session then reads a file, edits it, and, with ``Bash``, runs a command
+   (the task's test command), so the probe shows the edit being graded and
+   arm D's allowlist admitting the task's own command;
+6. everything else ends the turn with a short text and an answer block:
    empty, or (``answers``, used by ``run --mock-api``, #182) the answer
    listed for the question the session's prompt contains, so the grading
    and token pipeline sees a real answer.
@@ -99,10 +103,19 @@ def _first_user_text(body: dict) -> str:
     return ""
 
 
+def _tool_ids(body: dict) -> set[str]:
+    ids = set()
+    for m in body.get("messages") or []:
+        if m.get("role") == "assistant" and isinstance(m.get("content"), list):
+            ids.update(b.get("id") for b in m["content"] if isinstance(b, dict) and b.get("type") == "tool_use")
+    return ids
+
+
 class MockAPI:
     def __init__(self, log_dir: Path, grep_pattern: str, callers_symbol: str,
-                 answers: dict[str, list[str]] | None = None):
+                 answers: dict[str, list[str]] | None = None, edit: dict | None = None):
         self.answers = answers or {}
+        self.edit = edit or {}  # {"file", "old", "new", "command"}: the edit-task steps (#183)
         self.log_dir = log_dir
         self.grep_pattern = grep_pattern
         self.callers_symbol = callers_symbol
@@ -189,6 +202,19 @@ class MockAPI:
             return _message([{"type": "tool_use", "id": "toolu_probe_agent", "name": "Agent", "input": {
                 "subagent_type": "code-explorer", "description": "probe",
                 "prompt": f"Who calls {self.callers_symbol}?"}}], "tool_use", model)
+        if self.edit.get("file") and "Edit" in tools and SUBAGENT_MARKER not in _system_text(body):
+            seen = _tool_ids(body)
+            step = None
+            if "toolu_probe_read" not in seen:
+                step = ("toolu_probe_read", "Read", {"file_path": self.edit["file"]})
+            elif "toolu_probe_edit" not in seen:
+                step = ("toolu_probe_edit", "Edit", {"file_path": self.edit["file"], "old_string": self.edit["old"],
+                                                     "new_string": self.edit["new"]})
+            elif self.edit.get("command") and "Bash" in tools and "toolu_probe_test" not in seen:
+                step = ("toolu_probe_test", "Bash", {"command": self.edit["command"], "description": "probe test"})
+            if step:
+                return _message([{"type": "tool_use", "id": step[0], "name": step[1], "input": step[2]}],
+                                "tool_use", model)
         return _message([{"type": "text", "text": "probe done\n```json\n"
                           + json.dumps({"answer": self.answer_for(body)}) + "\n```"}], "end_turn", model)
 

@@ -1,0 +1,561 @@
+{
+ "description": "Commit-replay edit tasks on spring-framework (issue #183). Hand-written part: which commits, the change description the agent gets (drafted by an agent from the commit message and linked issue, reviewed by a second agent for leakage and solvability), the primary files and, where the default does not fit, the test command. Everything else is derived from the commit by commit_replay.py build.",
+ "tasks": [
+  {
+   "id": "spel-simple-context-restricted-conversion",
+   "commit": "d41495720cbabe30844e65c12765eacf806d2653",
+   "issue": null,
+   "question": "SimpleEvaluationContext is meant for evaluating less trusted expressions, but by default it converts values with the shared DefaultConversionService, which can convert a value by reflectively invoking constructors and methods of the target type (a String constructor, static valueOf/of/from, find<Entity>, or to<TargetType>() on the source). By default, SimpleEvaluationContext should instead use a restricted conversion service: a DefaultConversionService without its Object-to-Object converters (ObjectToObjectConverter and IdToEntityConverter). Common conversions such as numbers, booleans, enums, UUID, collections and arrays must keep working, and a conversion that is no longer supported should fail with a ConverterNotFoundException as root cause. A TypeConverter or ConversionService registered via withTypeConverter(...) or withConversionService(...) on the builder is still used as-is. Add `public <S, T> Builder withConverter(Class<S> sourceType, Class<T> targetType, Converter<? super S, ? extends T> converter)` to SimpleEvaluationContext.Builder: it may be called several times and adds converters on top of the default (restricted) conversion service, and build() throws an IllegalStateException if withConverter() was combined with withConversionService() or withTypeConverter(), in either order. Also add `public static final String REFLECTIVE_CONVERSION_PROPERTY_NAME = \"spring.expression.reflectiveConversion\"` to SimpleEvaluationContext: when this flag is set (JVM system property or SpringProperties), the default is a standard DefaultConversionService again, and withConverter() then adds to a standard DefaultConversionService. The flag is checked whenever a context is built, so it can be toggled at runtime.",
+   "primary_files": [
+    "spring-expression/src/main/java/org/springframework/expression/spel/support/SimpleEvaluationContext.java"
+   ],
+   "rationale": "The commit gives SimpleEvaluationContext a restricted default ConversionService (DefaultConversionService minus Object->Object converters), adds Builder.withConverter() and a SpringProperties flag that restores the old behaviour. SimpleEvaluationContext is the primary file. Dependents: a maintenance comment in DefaultConversionService (spring-core) next to the reflective converters, the SpEL reference docs (evaluation.adoc security section and type conversion note) and the Spring properties table in appendix.adoc.",
+   "notes": "No linked issue. Tests check SpelMessage codes (TYPE_CONVERSION_ERROR, EXCEPTION_DURING_PROPERTY_WRITE, METHOD_NOT_FOUND) and a ConverterNotFoundException root cause, which follow naturally from removing the converters. reflectiveConversionProperty toggles a SpringProperties flag at runtime, so an implementation that caches the flag statically fails; the description says so. The only spring-core change is a comment, so the dependent check for it scores comment-only edits.",
+   "review": {
+    "verdict": "ok",
+    "comment": "All test-needed API is stated: Builder.withConverter(Class<S>,Class<T>,Converter<? super S,? extends T>), REFLECTIVE_CONVERSION_PROPERTY_NAME='spring.expression.reflectiveConversion', IllegalStateException on combination in either order, ConverterNotFoundException root cause, flag read at build time (test toggles SpringProperties). Naming ObjectToObjectConverter/IdToEntityConverter and 'DefaultConversionService without its Object-to-Object converters' nearly gives away the solution (removeConvertible(Object,Object)) and points at DefaultConversionService, which is a gold dependent (maintenance comment only). The commit message says the same, so it is acceptable issue wording; mild over-specification. Dependents (DefaultConversionService comment, evaluation.adoc, appendix.adoc) are not mentioned."
+   }
+  },
+  {
+   "id": "client-observation-nonstandard-method-none",
+   "commit": "d49f37cd91d6576cfd79fc6c7fb216f54012eb20",
+   "issue": null,
+   "question": "HTTP client observations use the request method name as the value of the low-cardinality \"method\" key, falling back to \"none\" only when no request could be created. The default client request observation convention (DefaultClientRequestObservationConvention) reports any method name as-is, so a non-standard method such as HttpMethod.valueOf(\"CUSTOM\") becomes its own tag value, which can blow up metric cardinality. The default server request observation conventions already guard against this. Align HTTP client observations with them: report the method name only when it is one of the standard HttpMethod values, and \"none\" otherwise.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/client/observation/DefaultClientRequestObservationConvention.java"
+   ],
+   "rationale": "The commit makes the default client observation conventions emit method=none for non-standard HTTP methods. The primary file is the spring-web convention used by RestTemplate/RestClient. The dependent is the same-named WebClient convention in spring-webflux (org.springframework.web.reactive.function.client), plus a one-line clarification in observability.adoc.",
+   "notes": "Scope: the description says 'HTTP client observations' and gives the class name, which exists in both spring-web and spring-webflux (different packages); the commit message names RestTemplate, RestClient and WebClient. The webflux test fails unless the agent also finds the WebClient convention, which is the dependent this task checks. No linked issue.",
+   "review": {
+    "verdict": "fix",
+    "comment": "Solvable: the tests only assert method=none for HttpMethod.valueOf(\"CUSTOM\") on both client conventions, and no new public names are needed. 'HTTP client observations' plus 'default client request observation convention' is fine scope wording; the same-named WebFlux convention is left for the agent to find. The primary file (spring-web convention) is correct. The test_command covers both overlay classes. The only problem is the documentation sentence.",
+    "applied": "question replaced by the reviewer's rewrite"
+   },
+   "reserve": true
+  },
+  {
+   "id": "observation-record-handled-exception",
+   "commit": "297c74d29c0704e0879ce121ba3789b677abb9ff",
+   "issue": "gh-37658",
+   "question": "Code that handles an exception can record it on the server request observation by calling setError on the ServerRequestObservationContext, for example via ServerHttpObservationFilter.findObservationContext(request) or ServerRequestObservationContext.findCurrent(attributes). That error reaches the metrics, but Observation.error(Throwable) is never called, so ObservationHandlers such as the tracing handler are not notified and the server span is not marked as failed. Code outside the filter cannot call Observation.error reliably itself. Add `public static void recordHandledException(HttpServletRequest request, Throwable error)` to ServerHttpObservationFilter and `public static void recordHandledException(Map<String, Object> attributes, Throwable error)` to ServerRequestObservationContext (for the reactive exchange attributes). The recorded exception must be reported once via Observation.error when the exchange completes, before the observation is stopped, also when the request completes asynchronously. Both methods are no-ops when there is no observation for the request or exchange; in that case they must not add any request attribute or map entry. Spring MVC's and WebFlux's own exception handling, which currently records server errors (5xx) on the observation context, should use the new methods.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/filter/ServerHttpObservationFilter.java",
+    "spring-web/src/main/java/org/springframework/http/server/reactive/observation/ServerRequestObservationContext.java"
+   ],
+   "rationale": "The commit adds recordHandledException to the Servlet observation filter and to the reactive observation context; the filter (and, through an existing exchange attribute, HttpWebHandlerAdapter) reports the exception via Observation.error when the exchange completes. Primary files are the two spring-web types the tests call. Dependents: the Spring MVC call sites (ResponseStatusExceptionResolver, ExceptionHandlerExceptionResolver, ResponseEntityExceptionHandler, DefaultHandlerExceptionResolver), the WebFlux ResponseEntityExceptionHandler, the two framework-docs UserController snippets and observability.adoc.",
+   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests",
+   "notes": "spring-webmvc tests left out: they need a build change from the commit (testImplementation io.micrometer:micrometer-observation-test in spring-webmvc.gradle) that a description cannot fairly ask for, and they rely on the new ObservedExchange test helper, which is not a test class. They also pass on the parent, because the resolvers already call context.setError and the helper reads context.getError(). The webflux ResponseEntityExceptionHandlerTests probably pass on the parent too and are kept only as a regression guard. Scope stated as 'Spring MVC's and WebFlux's own exception handling'; no classes named.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Both static signatures, the no-op rule with no attribute or entry added (asserted by both 'without observation' tests), reporting via Observation.error before stop, and async completion are all stated. The reactive side can reuse the parent's HttpWebHandlerAdapter handling of the 'ExceptionHandlingWebHandler.handledException' attribute (the agent can find this) or change the adapter, so either way works. test_command leaves out the spring-webmvc overlay tests (ObservedExchange etc.). That is correct: they need the build-file change that adds micrometer-observation-test to spring-webmvc.gradle, which no description can fairly ask for. As a result the MVC dependents (resolvers, ResponseEntityExceptionHandler) are scored only through file comparison, not by tests. The webflux ResponseEntityExceptionHandlerTests may already pass at the parent, because context.setError satisfies hasError. The spring-web tests fail at the parent (the method is missing). Not over-specified."
+   }
+  },
+  {
+   "id": "spel-default-nesting-depth-200",
+   "commit": "b83db743084358782504649ec9a43c489214d8d6",
+   "issue": "gh-37651",
+   "question": "SpelParserConfiguration.DEFAULT_MAX_EXPRESSION_NESTING_DEPTH (currently 1000) is meant to make the SpEL parser throw a descriptive SpelParseException before a deeply nested expression exhausts the call stack. Before the parser has been JIT-compiled, though, a thread with the common 1 MB or 2 MB stack throws a StackOverflowError after roughly 450 to 950 levels of nesting, before the limit is reached. Real-world SpEL expressions rarely nest more than a few levels deep. Lower the default maximum nesting depth to 200, so that an expression nested exactly to the default depth parses successfully on a thread with a 1 MB stack, and one level more fails with the usual nesting-depth SpelParseException. Applications that need more can still configure a higher limit via SpelParserConfiguration.builder().maximumNestingDepth(...).",
+   "primary_files": [
+    "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java"
+   ],
+   "rationale": "The commit lowers DEFAULT_MAX_EXPRESSION_NESTING_DEPTH from 1000 to 200 and documents why. SpelParserConfiguration holds the constant. The only dependent is the SpEL reference doc (evaluation.adoc), which states the old default of 1,000.",
+   "notes": "The task is small: a constant change plus a docs dependent. The new test runs the parser on a thread with a 1 MB stack, so whether it fails on the parent depends on the JVM and JIT state; at depth 1000 it should overflow reliably. The test asserts the existing message 'SpEL expression nesting depth exceeds the threshold of N'.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Faithful to the issue; DEFAULT_MAX_EXPRESSION_NESTING_DEPTH and builder().maximumNestingDepth(...) exist at the parent; the new value 200 is stated. Trivial one-constant change; the only dependent is evaluation.adoc ('cannot exceed 1,000 by default'), which is not mentioned."
+   },
+   "reserve": true
+  },
+  {
+   "id": "problemdetail-no-instance-from-path",
+   "commit": "ac6528854d3f8947fc9a24d2174d861accac9484",
+   "issue": "gh-35969",
+   "question": "When a controller or @ExceptionHandler method returns a ProblemDetail, either directly as the response body or as the body of a ResponseEntity/HttpEntity, the framework sets its instance property to the current request path if the application has not set it. For example, Spring MVC's RequestResponseBodyMethodProcessor does this. RFC 9457 defines instance as a URI reference that identifies the specific occurrence of the problem, not the request URL, so this default is wrong and not useful to clients. The framework should no longer populate instance itself: it stays null unless the application sets it, and a value set by the application is still rendered as-is.",
+   "primary_files": [
+    "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessor.java"
+   ],
+   "rationale": "The commit removes the code that defaults ProblemDetail.instance to the request path. The description points at RequestResponseBodyMethodProcessor (Spring MVC, @ResponseBody case). Dependents: HttpEntityMethodProcessor (MVC, ResponseEntity case), WebFlux ResponseBodyResultHandler and ResponseEntityResultHandler, and the RFC 9457 sections in both the MVC and WebFlux reference docs (ann-rest-exceptions.adoc).",
+   "notes": "Scope is not stated: the issue was filed against Spring MVC, and WebFlux has to be found by the agent (four webflux test classes check it). Tests assert exact JSON/XML bodies without 'instance'. Integration tests (RequestMappingExceptionHandlingIntegrationTests, ResourceHttpRequestHandlerIntegrationTests) start servers and are somewhat slower.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Clean. It names only the primary RequestResponseBodyMethodProcessor, plus the generic phrase 'the framework'. The phrase 'directly as the response body or as the body of a ResponseEntity/HttpEntity' is behavioural scope as a user would put it; it hints at the HttpEntity path but names no class. WebFlux handlers and both adoc pages are left for the agent to find. The tests only drop instance expectations or assert null; no new API. Primary file is correct. The test_command covers all 7 overlay classes. ResourceHttpRequestHandlerIntegrationTests and RequestMappingExceptionHandlingIntegrationTests are integration tests, but they are deterministic."
+   },
+   "reserve": true
+  },
+  {
+   "id": "beans-max-nested-path-depth",
+   "commit": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
+   "issue": "gh-37252",
+   "question": "AbstractNestablePropertyAccessor resolves a nested property path such as \"a.b.c.d\" recursively, one level per path segment, with no limit on the depth. A long enough path, for example against a self-referential type, exhausts the stack with a StackOverflowError that gives no useful diagnostics. Constructor binding via DataBinder.construct() has the same problem, since it builds nested constructor arguments recursively through a nested path, including elements of indexed and mapped parameters. Add a maximum nesting depth: `int DEFAULT_MAX_NESTED_PATH_DEPTH = 100` plus `void setMaxNestedPathDepth(int)` and `int getMaxNestedPathDepth()` on ConfigurablePropertyAccessor, and `setMaxNestedPathDepth(int)`/`getMaxNestedPathDepth()` on DataBinder, which applies the limit to the property accessor it uses (bean property or direct field access) and to constructor binding. The nesting depth is the number of intermediate properties traversed (\"address.country.name\" has depth 2); a path at exactly the limit is allowed, a deeper one throws an InvalidPropertyException whose message ends with \"Nesting depth of property path exceeds the maximum of <limit>\". The limit applies whether or not autoGrowNestedPaths is enabled. A value of 0 disables nested paths but still allows simple, indexed and mapped access. Negative values are rejected with an IllegalArgumentException with the message \"'maxNestedPathDepth' must not be negative\". Like setAutoGrowCollectionLimit, DataBinder.setMaxNestedPathDepth must throw an IllegalStateException containing \"DataBinder is already initialized - call setMaxNestedPathDepth before other configuration methods\" once the binding result has been initialized. Resolution of a nested path must keep recursing through the protected getPropertyAccessorForPropertyPath(String) method, so that subclass overrides are still invoked at every level.",
+   "primary_files": [
+    "spring-beans/src/main/java/org/springframework/beans/AbstractNestablePropertyAccessor.java",
+    "spring-beans/src/main/java/org/springframework/beans/ConfigurablePropertyAccessor.java",
+    "spring-context/src/main/java/org/springframework/validation/DataBinder.java"
+   ],
+   "rationale": "The commit tracks nesting depth per nested property accessor and in DataBinder's recursive constructor binding, and throws InvalidPropertyException past a configurable limit (default 100). Primary files are the three types the description names (the accessor where the recursion lives, the interface with the new API, DataBinder). Dependents: AbstractPropertyAccessor (holds and validates the setting), BeanPropertyBindingResult and DirectFieldBindingResult (new constructor argument passed through to their accessors; the direct field access test needs it), and the data-binding reference doc (data-binding.adoc).",
+   "test_command": "./gradlew --no-daemon --console=plain :spring-beans:test --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+   "notes": "AbstractPropertyAccessorTests is abstract: its new @Nested MaxNestedPathDepthTests run through the concrete subclasses BeanWrapperTests and DirectFieldAccessorTests, so the command runs those two instead of the abstract class. Tests assert exact messages (ending/containing). The test for the getPropertyAccessorForPropertyPath override passes on the parent; it is a regression guard, hence the last sentence of the description. The stack-overflow tests use paths 100,000 segments deep.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Every new name the tests use is stated: DEFAULT_MAX_NESTED_PATH_DEPTH=100, set/getMaxNestedPathDepth on ConfigurablePropertyAccessor (tests call them on AbstractPropertyAccessor; adding them there is a dependent) and on DataBinder, the message suffix, the negative-value IAE message, and the DataBinder 'already initialized' ISE text. The depth semantics (limit inclusive, 0 still allows simple/indexed/mapped access) are also stated. The last sentence (keep recursing through the protected getPropertyAccessorForPropertyPath) borders on over-specification. It is justified: BeanWrapperTests counts 3 invocations of an override, and a depth-threading private recursion would fail that test. The parent already recurses this way, so the sentence only forbids a regression. The test_command adds DirectFieldAccessorTests, which is not in the overlay; that is correct because it inherits from the changed abstract AbstractPropertyAccessorTests. The deep-path tests (100_000 segments) are deterministic once the depth check runs before the recursion."
+   }
+  },
+  {
+   "id": "spel-parser-configuration-builder",
+   "commit": "37c8f41633d9274cf4bdba631ad0472380858994",
+   "issue": "gh-37187",
+   "question": "SpelParserConfiguration has accumulated many overloaded constructors, ending in an 8-parameter one (compilerMode, compilerClassLoader, autoGrowNullReferences, autoGrowCollections, maximumAutoGrowSize, maximumExpressionLength, maximumOperations, maximumBigPowerBits). Call sites are unlabeled lists of booleans and ints, and overriding one setting means repeating every other default. Introduce a fluent builder like the one on SimpleEvaluationContext: `SpelParserConfiguration.builder()` returns a public static nested `SpelParserConfiguration.Builder` with `compilerMode(SpelCompilerMode)`, `compilerClassLoader(@Nullable ClassLoader)`, no-arg opt-ins `autoGrowNullReferences()` and `autoGrowCollections()`, `maximumAutoGrowSize(int)`, `maximumExpressionLength(int)`, `maximumOperations(int)`, `maximumBigPowerBits(int)` and `build()`. Each setter validates its argument as soon as it is called and throws an IllegalArgumentException for a null compiler mode, a negative maximumAutoGrowSize, or a maximumExpressionLength, maximumOperations or maximumBigPowerBits that is not positive. Also add `SpelParserConfiguration.withDefaults()` as shorthand for `builder().build()`. The builder's defaults match the no-arg constructor, including the SpringProperties-driven defaults for compiler mode, maximum operations and maximum big-power bits; the one exception is maximumAutoGrowSize, which defaults to 256 (like DataBinder's default auto-grow collection limit) instead of Integer.MAX_VALUE. The existing constructors stay unchanged (in particular they still accept a negative maximumAutoGrowSize) and are not deprecated.",
+   "primary_files": [
+    "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java"
+   ],
+   "rationale": "The commit adds SpelParserConfiguration.builder()/Builder/withDefaults() and moves internal call sites to it. SpelParserConfiguration is the primary file. Dependents are the internal call sites switched to the builder: SpelExpressionParser's no-arg constructor, ExpressionState's convenience constructors, and StandardBeanExpressionResolver in spring-context. These switches don't change behaviour and no test checks them. The SpEL reference docs (evaluation.adoc) are also a dependent.",
+   "notes": "On the 7.0.x line: the parent has no maximumNestingDepth, so the linked issue's mention of a 9-parameter constructor does not apply and the description says 8 parameters. Most changed test classes only switch from constructors to the builder, so they just need the API to compile. SpelParserConfigurationTests also checks that the canonical constructor still accepts a negative maximumAutoGrowSize, so the agent must not add validation there; 'constructors stay unchanged' covers this. Dependent call sites are refactorings that no test checks.",
+   "review": {
+    "verdict": "fix",
+    "comment": "All new names are stated (builder(), Builder, 8 setters, build(), withDefaults(), default 256). Fix only the validation timing (see missing_for_tests) and drop 'build() should delegate to the existing canonical constructor' (implementation detail that invites the wrong validation placement). The legacy-constructor test canonicalConstructorDoesNotRejectNegativeMaximumAutoGrowSize requires the constructor to stay lenient; 'constructors stay unchanged' covers it, made explicit in the rewrite. Dependents (SpelExpressionParser, ExpressionState, StandardBeanExpressionResolver switched to the builder; evaluation.adoc) are behaviour-neutral refactors, so expect low dependent recall regardless of description quality.",
+    "applied": "question replaced by the reviewer's rewrite"
+   },
+   "reserve": true
+  },
+  {
+   "id": "spel-big-power-result-limit",
+   "commit": "8a92c19e4dc7de87a6dfc7ce85920c6a2446320d",
+   "issue": "gh-37034",
+   "question": "A SpEL power operation on a BigDecimal or BigInteger base (for example `#bd ^ 1000000`) can be extremely expensive in time and memory, and nothing limits it. Add a configurable limit on the estimated result size of such power operations. The estimate in bits is the bit length of the base multiplied by the exponent, where the bit length is BigInteger.bitLength() for a BigInteger and the bit length of unscaledValue() for a BigDecimal. A result exactly at the limit is allowed. If the estimate exceeds the limit, throw a SpelEvaluationException at the position of the power operator with the new message code `SpelMessage.MAX_BIG_POWER_RESULT_EXCEEDED`, whose inserts are, in order, the base bit length, the exponent and the configured maximum. In SpelParserConfiguration, add `DEFAULT_MAX_BIG_POWER_BITS = 1_000_000`, a new canonical constructor `SpelParserConfiguration(SpelCompilerMode, ClassLoader, boolean, boolean, int, int, int, int maximumBigPowerBits)` that rejects non-positive values, and `getMaximumBigPowerBits()`. The default can also be set globally via a JVM system property or Spring property named `spring.expression.maxBigPowerBits`, exposed as the constant `SPRING_EXPRESSION_MAX_BIG_POWER_BITS_PROPERTY_NAME`. Integer.MAX_VALUE removes the limit.",
+   "primary_files": [
+    "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java",
+    "spring-expression/src/main/java/org/springframework/expression/spel/SpelMessage.java"
+   ],
+   "rationale": "The commit limits BigDecimal/BigInteger power results in SpEL via a new SpelParserConfiguration setting (default 1,000,000 bits, overridable through SpringProperties) and a new SpelMessage. Primary files are the configuration class and SpelMessage, both named. Dependents: OperatorPower (the AST node that must do the check), the @see list in SpringProperties (spring-core), the parser-configuration section of evaluation.adoc and the Spring properties table in appendix.adoc.",
+   "test_command": "./gradlew --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.EvaluationTests",
+   "notes": "The commit message has a typo 'Closes ch-37034', read here as gh-37034. AbstractExpressionTests (an abstract test-support class that gains an evaluateAndCheckError overload) is left out of the test command; it is copied with the test files. Tests check the message code and its inserts (position 4, base bit length, exponent, max), not the message text. The BigDecimal bit-length detail (unscaledValue) is stated because the inserts assert 5 for BigDecimal 2.0.",
+   "review": {
+    "verdict": "ok",
+    "comment": "The tests need: the 8-arg constructor (positional), the SpelMessage.MAX_BIG_POWER_RESULT_EXCEEDED code, the insert order (base bit length, exponent, max) as ints, the error position at the operator (4 for '#bd ^ 4'), the inclusive limit, and the bit-length definition via unscaledValue() for BigDecimal (2.0 gives 5 bits). All are stated. The estimate formula looks like an implementation detail, but the boundary tests (15<=16, 20>16, 16==16) need it. The message text and number 1086 are not asserted, so omitting them is fine. The tests themselves add an evaluateAndCheckError overload, which comes in with the overlay."
+   }
+  },
+  {
+   "id": "form-converter-map-payloads",
+   "commit": "ab8de8ec4b004e80979af6e4391e28a8a5da4f8e",
+   "issue": "gh-36408",
+   "question": "FormHttpMessageConverter only reads and writes URL-encoded forms as a MultiValueMap, so a plain Map<String, String> (for example one created with Map.of(...)) cannot be used as a form body. FormHttpMessageConverter should support any Map for reading and writing application/x-www-form-urlencoded content. To allow this, the converter is declared as a SmartHttpMessageConverter<Object> instead of being typed to MultiValueMap<String, String>: read(...) returns Object, and write(...) accepts an Object that must be a Map. When the target type is not a MultiValueMap, reading returns a single-value Map that keeps only the first value for each key. canRead and canWrite accept Map, MultiValueMap and their implementations, with or without generics. Both methods only match a media type that one of the supported media types includes, so canWrite no longer accepts a wildcard such as */*. Writing a plain Map serializes each entry as name=value in the map's iteration order.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/converter/FormHttpMessageConverter.java"
+   ],
+   "rationale": "The commit widens FormHttpMessageConverter from MultiValueMap<String,String> to Object so Map payloads can be read and written, and makes canWrite use includes() like canRead. The primary file is the converter. Dependents are the call sites that now need a cast on read(...): FormContentFilter (spring-web), ContentRequestMatchers and AbstractMockHttpServletRequestBuilder (spring-test), plus the message-converters AsciiDoc page.",
+   "notes": "The generic type change is stated because the test calls write(HashMap, MediaType, HttpOutputMessage), which only compiles with SmartHttpMessageConverter<Object>. The canWrite(*/*) == false change is stated because the test asserts it. writeFormFromMap asserts HashMap iteration order (\"name+2=value+2&name+1=value+1\"), which is deterministic for these keys. The spring-test call sites fail to compile without casts; the spring-web test run alone does not catch that, but a full build does.",
+   "review": {
+    "verdict": "ok",
+    "comment": "The type change to SmartHttpMessageConverter<Object> (read returns Object, write takes Object) is needed: the test calls write(HashMap) and casts read results. It also explains the casts needed in spring-test/FormContentFilter, but it names no dependents. Also stated: canRead/canWrite for Map, MultiValueMap and their subtypes with or without generics; includes() matching, so */* is rejected; a single-value Map for non-MultiValueMap targets; serialization in iteration order (writeFormFromMap relies on the deterministic HashMap order 'name+2=...&name+1=...', which is not flaky). One minor gap: cannotReadToMapsWhenMediaTypeMissing expects canRead(type, null) == false. This follows from 'only match a media type that one of the supported media types includes', because includes(null) is false, and the parent already behaves this way, so it is acceptable."
+   },
+   "reserve": true
+  },
+  {
+   "id": "jsonl-media-type-support",
+   "commit": "22e4d84993105c1975d6afe16d34467772c7c676",
+   "issue": "gh-36485",
+   "question": "Spring's web frameworks use application/x-ndjson for streaming newline-delimited JSON, but application/jsonl (JSON Lines) is gaining popularity and may supersede it. Add JSON Lines as a well-known media type on MediaType, with the constants APPLICATION_JSONL and APPLICATION_JSONL_VALUE (\"application/jsonl\"). It must be supported everywhere application/x-ndjson is supported today. The JSON codecs list it among their default supported MIME types, directly after application/x-ndjson, and treat it as a streaming media type. Spring MVC streams a reactive multi-value return value as newline-delimited JSON with the content type application/jsonl when the client accepts application/jsonl, just as it does for application/x-ndjson.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/MediaType.java"
+   ],
+   "rationale": "The commit adds MediaType.APPLICATION_JSONL(_VALUE) and registers it next to NDJSON in every JSON codec (Jackson 3 and 2, Gson, Kotlin serialization, Protobuf JSON) and in Spring MVC's ReactiveTypeHandler. MediaType is the primary file. Dependents are the codec classes in spring-web, ReactiveTypeHandler and spring-mvc.xsd in spring-webmvc, and three AsciiDoc pages.",
+   "notes": "Scope is stated (\"everywhere application/x-ndjson is supported\", Spring MVC streaming) without naming classes. The position after x-ndjson is stated because HttpMessageWriterViewTests uses containsExactly on the supported media types. The tests span two modules: spring-webflux (HttpMessageWriterViewTests) and spring-webmvc (ReactiveTypeHandlerTests).",
+   "review": {
+    "verdict": "ok",
+    "comment": "MediaType.APPLICATION_JSONL / APPLICATION_JSONL_VALUE stated; ordering 'directly after application/x-ndjson' is stated (HttpMessageWriterViewTests uses containsExactly). MVC content-type behaviour stated (ReactiveTypeHandlerTests). Not mentioned: spring-mvc.xsd, three adoc pages, the individual codecs - good for the dependent metric."
+   }
+  },
+  {
+   "id": "test-context-cache-pause-mode",
+   "commit": "9711db787e0db5e7d569119491e723c720b684a2",
+   "issue": "gh-36117",
+   "question": "Since Spring Framework 7.0 the TestContext framework pauses inactive application contexts in the context cache and restarts them when they are needed again. When pausing or restarting Lifecycle components is slow, this slows down the whole test suite, so it must be possible to disable pausing completely through a JVM system property or Spring property named \"spring.test.context.cache.pause\", exposed as ContextCache.CONTEXT_CACHE_PAUSE_PROPERTY_NAME. Introduce a nested enum ContextCache.PauseMode with the constants ALWAYS (the default and the current behaviour) and NEVER (inactive contexts are never paused). Add a static method ContextCacheUtils.retrievePauseMode() that reads the property and returns ALWAYS when it is not set. It parses the value case-insensitively, ignoring leading and trailing whitespace. For an unknown value it throws an IllegalArgumentException with the message \"Unsupported value '<value>' for property 'spring.test.context.cache.pause'\". DefaultContextCache gets a new constructor DefaultContextCache(int maxSize, PauseMode pauseMode), and its existing constructors use the retrieved pause mode. With NEVER, a context is not paused when its last test class stops using it.",
+   "primary_files": [
+    "spring-test/src/main/java/org/springframework/test/context/cache/ContextCache.java",
+    "spring-test/src/main/java/org/springframework/test/context/cache/ContextCacheUtils.java",
+    "spring-test/src/main/java/org/springframework/test/context/cache/DefaultContextCache.java"
+   ],
+   "rationale": "The commit adds the spring.test.context.cache.pause property with PauseMode ALWAYS/NEVER, the parsing logic in ContextCacheUtils, and a pause-mode-aware DefaultContextCache. The three spring-test types are primary because the tests call all of them directly. The remaining dependents are the SpringProperties Javadoc cross-reference in spring-core, the appendix and the context-caching AsciiDoc pages.",
+   "notes": "The tests assert the exact error message (with value 'bogus'). The whitespace test includes \\u000B, which both strip() and trim() remove. ContextCacheTests only adds a usage-count assertion that likely passes on the parent; it is kept in the default command. Few non-primary code dependents (only the SpringProperties Javadoc), so the dependent signal comes mostly from the docs.",
+   "review": {
+    "verdict": "ok",
+    "comment": "It states everything the tests need: CONTEXT_CACHE_PAUSE_PROPERTY_NAME = \"spring.test.context.cache.pause\", the nested enum ContextCache.PauseMode {ALWAYS, NEVER}, the static ContextCacheUtils.retrievePauseMode() defaulting to ALWAYS, case-insensitive parsing with whitespace stripped (the tests use \"\\talways\\u000B\", which trim()/strip() both handle), the exact IllegalArgumentException message, and new DefaultContextCache(int, PauseMode). The test helpers (ContextCacheTestUtils, TestContextTestUtils.buildTestContext, EventTracker, DisplayNameCustomizerFactory) exist at the parent. No leaks: the SpringProperties Javadoc @see and the two adoc pages are left as dependents. Three primaries is justified because the question names all three types and each gets new public API; 6 dependents remain. The description is detailed, but every detail is asserted by a test."
+   },
+   "reserve": true
+  },
+  {
+   "id": "retry-max-attempts-to-max-retries",
+   "commit": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
+   "issue": "gh-35772",
+   "question": "Configuring retries via maxAttempts is confusing: developers cannot tell whether 'max attempts' means the total number of attempts (the initial one plus retries) or only the retry attempts. Rename the concept to maxRetries in the retry API and keep the semantics unchanged (total attempts = 1 initial attempt + maxRetries). In @Retryable, the attributes maxAttempts and maxAttemptsString become maxRetries (default 3) and maxRetriesString. RetryPolicy.withMaxAttempts(long) becomes RetryPolicy.withMaxRetries(long), RetryPolicy.Builder.maxAttempts(long) becomes maxRetries(long), and the constant RetryPolicy.Builder.DEFAULT_MAX_ATTEMPTS becomes DEFAULT_MAX_RETRIES. The validation messages use the new name. A negative value is rejected with an IllegalArgumentException whose message starts with \"Invalid maxRetries (-1)\". Building with a custom BackOff together with any of the other options fails with \"The following configuration options are not supported with a custom BackOff strategy: maxRetries, delay, jitter, multiplier, or maxDelay.\" The BackOff implementations (FixedBackOff, ExponentialBackOff) keep their own maxAttempts naming.",
+   "primary_files": [
+    "spring-core/src/main/java/org/springframework/core/retry/RetryPolicy.java",
+    "spring-context/src/main/java/org/springframework/resilience/annotation/Retryable.java"
+   ],
+   "rationale": "The commit renames maxAttempts to maxRetries in RetryPolicy (factory method, builder method, constant, messages) and in @Retryable (attributes), and updates the docs to explain total attempts = 1 + maxRetries. RetryPolicy and Retryable are primary because the tests use their renamed members. Dependents are RetryAnnotationBeanPostProcessor, AbstractRetryInterceptor and the MethodRetrySpec record component in spring-context, the RetryTemplate Javadoc in spring-core, and resilience.adoc.",
+   "notes": "The commit deletes MaxAttemptsRetryPolicyTests and adds MaxRetriesRetryPolicyTests. The harness must apply the deletion, otherwise the old test (which calls builder().maxAttempts) breaks spring-core test compilation, unless the agent removes or renames it itself. The BackOff boundary is stated because RetryPolicyTests, ExponentialBackOffTests and FixedBackOffTests still assert 'maxAttempts=' in toString output. The tests assert exact message texts. The MethodRetrySpec rename is not test-enforced.",
+   "review": {
+    "verdict": "ok",
+    "comment": "This is a public-API rename with unchanged semantics. The tests fail on the parent only through compile errors (Retryable.maxRetries/maxRetriesString, RetryPolicy.withMaxRetries, Builder.maxRetries) and through the changed message texts ('Invalid maxRetries (-1)', the custom-BackOff message). All of these are given verbatim. The dependents (RetryAnnotationBeanPostProcessor, AbstractRetryInterceptor, the MethodRetrySpec record component, the RetryTemplate Javadoc, resilience.adoc) are not named. Most of them surface through compile errors, except the MethodRetrySpec component rename and the docs, so the dependent signal is weaker than in behavioural tasks; still usable. MaxAttemptsRetryPolicyTests is a deleted gold file in the overlay. apply_gold removes deleted overlay files, so the stale test does not break spring-core test compilation. DEFAULT_MAX_RETRIES is not used by the tests but is a legitimate part of the requested API."
+   }
+  },
+  {
+   "id": "fn-request-bind-pathvars-headers",
+   "commit": "a9a404266c25a82b0f3a4286053f69ce0c8fb008",
+   "issue": "gh-35800",
+   "question": "In functional endpoints, ServerRequest.bind(Class) only binds request parameters onto the target object. A handler for a route such as \"/request/{var}\" therefore cannot bind the URI variable var, or a request header, the way data binding for annotated controllers can. Data binding through ServerRequest.bind should also bind URI path variables and request headers, consistent with the extended data binders that annotated controllers use. This applies to both WebFlux and Spring MVC functional endpoints.",
+   "primary_files": [
+    "spring-webflux/src/main/java/org/springframework/web/reactive/function/server/DefaultServerRequest.java"
+   ],
+   "rationale": "The commit makes the functional DefaultServerRequest.bind use ExtendedWebExchangeDataBinder (WebFlux) and ExtendedServletRequestDataBinder (MVC) instead of the plain binders. The WebFlux DefaultServerRequest is primary because the issue is reported against WebFlux. Dependents are the MVC DefaultServerRequest, the new single-argument constructor in ExtendedWebExchangeDataBinder, and the webflux-functional and webmvc-functional AsciiDoc pages.",
+   "notes": "Scope stated (\"both WebFlux and Spring MVC\"). ServerRequest itself is not a gold file; the description names the API (ServerRequest.bind), not the package-private implementation class. The tests only exercise header binding, not path variables. BindingFunctionIntegrationTests starts real HTTP servers (parameterized over several engines), so it is slower and potentially port-sensitive.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Solvable: the tests now send 'bar' as a header instead of a query parameter and expect it bound. No new public API is needed; the new ExtendedWebExchangeDataBinder(Object) constructor is optional because the (Object, String) constructor exists. 'Both WebFlux and Spring MVC functional endpoints' is a scope phrase from the commit. The test_command covers both overlay classes."
+   }
+  },
+  {
+   "id": "retry-match-exception-causes",
+   "commit": "97ae5fde7ca43ae5a799c3853ff352d64b39c595",
+   "issue": "gh-35583",
+   "question": "@Retryable and a RetryPolicy built through RetryPolicy.Builder match the configured includes and excludes exception types only against the top-level exception thrown by a failed invocation. Users often care about an underlying cause instead, for example retrying when an IOException is wrapped in a RuntimeException. The includes and excludes exception types of both RetryPolicy.Builder and @Retryable should match the thrown exception as well as its nested causes. A custom predicate is still applied after includes and excludes and still receives the top-level exception.",
+   "primary_files": [
+    "spring-core/src/main/java/org/springframework/core/retry/RetryPolicy.java",
+    "spring-context/src/main/java/org/springframework/resilience/annotation/Retryable.java"
+   ],
+   "rationale": "The commit switches the exception filtering in DefaultRetryPolicy (spring-core) and MethodRetrySpec (spring-context) to ExceptionTypeFilter.match(throwable, true), which already exists at the parent. It also documents the behaviour on RetryPolicy.Builder, @Retryable and in resilience.adoc. RetryPolicy and Retryable are primary as the named API types. Dependents are DefaultRetryPolicy, MethodRetrySpec and the AsciiDoc page.",
+   "notes": "The primary files change only in Javadoc. The behaviour lives in the package-private DefaultRetryPolicy and in MethodRetrySpec, which the agent must find. The commit adds a test helper, RejectMalformedInputException3Predicate (not a *Tests class), which is copied with the tests but not listed in the command. Tests span spring-core (RetryTemplateTests) and spring-context (RetryInterceptorTests, ReactiveRetryInterceptorTests). The retry tests use small delays (10ms); timing is not asserted.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Needs no new public API: ExceptionTypeFilter.match(Throwable, boolean) already exists at the parent. The question states that includes/excludes match nested causes for both the builder and @Retryable, and that the predicate is applied after them and gets the top-level exception (needed by RejectMalformedInputException3Predicate's getClass() check). Tests use 10ms delays and count invocations only, so they are not timing-sensitive. No leakage."
+   },
+   "reserve": true
+  },
+  {
+   "id": "jdbcclient-batch-entry-dsl",
+   "commit": "833ab4d48fdaf64f7b234f6dac76d4cced14390c",
+   "issue": "gh-37341",
+   "question": "JdbcClient's batch API (BatchSpec, obtained from StatementSpec.batch()) binds parameters to a 'current' entry and separates entries with add(). A missing add() still compiles but silently merges two entries, and the style does not suit batches built from an existing collection. Replace this style with self-contained entries. BatchSpec provides entry(Consumer<BatchEntry>), entry(List<?>) for one entry of positional parameters, and entry(Map<String, ?>) for one entry of named parameters. It also provides entries(Object...) and entries(List<?>), which define one named-parameter entry per parameter object (a bean or record, a Map, or a SqlParameterSource). These calls can be combined freely within one batch, and update(...) executes the accumulated entries. A new nested interface JdbcClient.BatchEntry offers param(Object), param(int, Object), param(int, Object, int), param(String, Object), param(String, Object, int), paramSource(Object) and paramSource(SqlParameterSource), each returning BatchEntry. Remove add(), param(...), params(...) and paramSource(...) from BatchSpec. Each entry is validated when it is added and is rejected with an IllegalStateException: \"Configure at least one parameter for each batch entry\" for an empty entry; \"Configure either named or indexed parameters, not both\" when an entry mixes indexed parameters with named parameters or a parameter source; \"Configure either individual named parameters or a SqlParameterSource, not both\" when an entry mixes named parameters with a parameter source; and \"Configure either named or indexed parameters for all batch entries, not both\" when an entry's style differs from earlier entries.",
+   "primary_files": [
+    "spring-jdbc/src/main/java/org/springframework/jdbc/core/simple/JdbcClient.java"
+   ],
+   "rationale": "The commit replaces BatchSpec's add()-based chaining with entry(...)/entries(...) and a new JdbcClient.BatchEntry type, and validates eagerly per entry. JdbcClient (the interface) is primary. Dependents are the DefaultJdbcClient implementation (DefaultBatchSpec and a new DefaultBatchEntry) and the data-access/jdbc/core.adoc examples.",
+   "notes": "The description is long because the hidden tests use the whole new API surface and assert four exact messages. Three of them already exist at the parent; \"Configure at least one parameter for each batch entry\" is new. The tests expect the exception from the entry(...)/entries(...) call itself (no update() inside isThrownBy), so the description states that validation happens when the entry is added. There is only one module and no cross-module dependents.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Complete and matches the issue's own proposal. Every signature the tests use is stated: entry(Consumer<BatchEntry>), entry(List<?>), entry(Map<String,?>), entries(Object...), entries(List<?>), and BatchEntry.param x5 / paramSource x2. All four IllegalStateException messages are given verbatim; only 'Configure at least one parameter for each batch entry' is new, the other three exist at the parent. entries(List.of()).update() returning an empty array already works at the parent. No leaks: the DefaultJdbcClient implementation and core.adoc are left as dependents. It is long, but the length is justified by message assertions, and the API list comes straight from the issue. The test_command covers the 3 overlay classes; JdbcClientIntegrationTests uses embedded HSQL and is deterministic."
+   }
+  },
+  {
+   "id": "type-mismatch-required-type-arg",
+   "commit": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
+   "issue": "gh-35837",
+   "question": "When ResponseEntityExceptionHandler handles a TypeMismatchException, the arguments passed to the MessageSource for a custom problem detail message are only the property name ({0}) and the rejected value ({1}). A custom message therefore cannot mention the expected type. Add the simple name of the required type as a third message argument ({2}), and use an empty string when the required type is unknown. The default detail message stays unchanged.",
+   "primary_files": [
+    "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandler.java"
+   ],
+   "rationale": "The commit adds requiredType.getSimpleName() as message argument {2} for TypeMismatchException in the MVC ResponseEntityExceptionHandler. The handler is the primary file. The only dependent is the mvc-ann-rest-exceptions.adoc table that lists the message arguments.",
+   "notes": "The test asserts the exact resolved detail \"Failed to set name to value: James for type String\". This is a very small change, and the only dependent is the AsciiDoc page. No WebFlux counterpart was changed.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Clean and sufficient. The test expects {2} to resolve to 'String' (simple name). The question states the simple name, the empty-string fallback, and an unchanged default detail. It names only the primary; the adoc message-args table is left as a dependent. The test_command is correct."
+   }
+  },
+  {
+   "id": "servlet-response-ignore-body-flush",
+   "commit": "e0b54e244e7ac9f48f720bcbdcc869e2400fe35c",
+   "issue": "gh-36385",
+   "question": "Flush calls on the OutputStream returned by ServletServerHttpResponse.getBody() go straight to the Servlet response output stream. HttpMessageConverters and codec libraries can flush many times while writing, which forces the Servlet container to flush to the network and degrades performance; the container is better placed to decide when to flush. By default, flush() on the body stream of a ServletServerHttpResponse should be a no-op, while ServletServerHttpResponse.flush() keeps flushing the response, and client-side usage is unaffected. Cases that do need flushing, such as streaming, must keep working by flushing the response itself. Add a Spring property that restores the previous behaviour, exposed as the constant ServletServerHttpResponse.BODY_FLUSH_ENABLED with the value \"spring.http.response.flush.enabled\". When this property is true, body stream flushes go through to the Servlet output stream. The property is read when a ServletServerHttpResponse is created.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/server/ServletServerHttpResponse.java"
+   ],
+   "rationale": "The commit wraps the body stream in StreamUtils.nonFlushing unless the spring.http.response.flush.enabled Spring property is set. ServletServerHttpResponse is primary. Dependents are the Spring MVC call sites that relied on flushing via the body stream, which now call response.flush(): HttpHeadersReturnValueHandler and StreamingResponseBodyReturnValueHandler (spring-webmvc). The appendix.adoc Spring property table is also a dependent.",
+   "notes": "The description says the property is read per instance because appliesFlushCallsOnOutputStream sets it after class loading; a static field would fail. The sentence about streaming paraphrases the issue and does not name the MVC handlers. The webmvc dependents have no changed tests, so only the file-overlap metric captures them.",
+   "review": {
+    "verdict": "ok",
+    "comment": "It states the constant BODY_FLUSH_ENABLED = \"spring.http.response.flush.enabled\", the default no-op body flush, and that true restores pass-through. Both tests are mock-based. 'The property is read when a ServletServerHttpResponse is created' is a small over-specification (reading it lazily would also pass) but harmless. No docs or modules are named. The primary is correct; HttpHeadersReturnValueHandler, StreamingResponseBodyReturnValueHandler and appendix.adoc remain dependents."
+   }
+  },
+  {
+   "id": "content-negotiation-no-fallback-mapping",
+   "commit": "7fbdbd6eb7665be6a66562d26b26ffcfb600ee32",
+   "issue": null,
+   "question": "Content negotiation strategies that map a key (file extension or query parameter value) to a media type fall back to MediaTypeFactory when the key is not configured. Today such fallback results are added to the strategy's registered mappings, so the set of mapped keys, file extensions and supported media types grows at runtime, and the supported media types reported in a not-acceptable error (for example NotAcceptableStatusException) contain values that were never configured. Fallback lookups must still resolve the requested media type, but must not be added to the registered mappings: AbstractMappingContentNegotiationStrategy#getMediaTypes(), getAllFileExtensions() and resolveFileExtensions(..) must only reflect the configured values, and the supported media types reported on rejection must be exactly the configured ones. Apply this consistently to the parameter-based strategy in both Spring MVC and WebFlux. As in Spring MVC, a key that contains a dot (e.g. \"not.json\") must not be resolved through the MediaTypeFactory fallback; it only matches if it is registered explicitly (e.g. a configured key \"custom.json\"), otherwise the request is rejected as not acceptable.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/accept/AbstractMappingContentNegotiationStrategy.java"
+   ],
+   "rationale": "The commit stops AbstractMappingContentNegotiationStrategy from calling addMapping() for handleNoMatch() results and makes the WebFlux ParameterContentTypeResolver keep an immutable map of configured types, no longer putIfAbsent()-ing fallback results, and skip MediaTypeFactory for dotted keys. Primary file is the MVC base class named in the description; the dependent is the WebFlux ParameterContentTypeResolver plus both test classes.",
+   "notes": "Scope 'both Spring MVC and WebFlux' is stated (commit message says 'content negotiation strategies (including the parameter based one)'); the WebFlux resolver is not named, but the mention of NotAcceptableStatusException points to WebFlux. The dot-key rule is stated because the WebFlux test noMatchForInvalidKey needs it; MVC already had that rule at the parent. resolveRegisteredKeyWithDot likely passes on the parent already. No linked issue.",
+   "review": {
+    "verdict": "ok",
+    "comment": "All test needs are covered. Fallback results are not added to the mappings (getMediaTypes/getAllFileExtensions/resolveFileExtensions, which already exist at the parent). Supported types on rejection are exactly the configured ones. Dotted keys are rejected unless registered: 'not.json' would resolve via MediaTypeFactory at the parent, so this rule had to be stated. The dot rule is fair: MVC already has the indexOf('.') check at the parent. No over-specification beyond the tested behaviour."
+   }
+  },
+  {
+   "id": "client-builders-deep-copy-default-headers-cookies",
+   "commit": "4cf6335372556d4f6ccc3a0166318c5f19037e8f",
+   "issue": null,
+   "question": "The RestClient.Builder copy constructor (used by clone() and by RestClient#mutate()) copies the default headers and default cookies maps but shares their value lists with the original builder. As a result, adding a value under an existing header or cookie name on a cloned or mutated builder also changes the builder it was copied from, and every builder later obtained from mutate() on the same client. Copied builders must hold independent copies of the default header and cookie values, so that changes on one never show up in another. The framework's other HTTP client builders that support clone() or mutate() have the same problem and must be fixed in the same way. In addition, a client that has already been built must not see default header or cookie changes made to its builder afterwards.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/client/DefaultRestClientBuilder.java"
+   ],
+   "rationale": "The commit deep-copies defaultHeaders (HttpHeaders.copyOf) and defaultCookies (LinkedMultiValueMap#deepCopy) in the copy constructors of DefaultRestClientBuilder, DefaultWebClientBuilder and DefaultWebTestClientBuilder, and DefaultWebTestClientBuilder#build() now passes copies to the built client. Primary is the RestClient builder named via RestClient.Builder; dependents are the WebFlux WebClient builder and the spring-test WebTestClient builder, plus three test classes across spring-web, spring-webflux and spring-test.",
+   "notes": "Scope stated generically ('the other HTTP client builders that support clone()/mutate(), including the test client') following the commit message; WebClient and WebTestClient builders are not named. The 'already built client' sentence is needed for MockServerTests.buildDoesNotShareDefaultHeaderAndCookieValues (WebTestClient only; RestClient/WebClient build() already copied). RestClientBuilderTests reads private fields 'defaultHeaders'/'defaultCookies' via reflection; these names exist at the parent. No linked issue.",
+   "review": {
+    "verdict": "fix",
+    "comment": "The tests use no new API; the RestClientBuilderTests reflection on the 'defaultHeaders'/'defaultCookies' fields uses fields that exist at the parent. Behaviour is fully described. The only problem is the explicit hint at the test client builder; the rewrite keeps the generic scope statement, which the hidden WebClient and WebTestClient tests require.",
+    "applied": "question replaced by the reviewer's rewrite"
+   }
+  },
+  {
+   "id": "http-range-honor-if-range",
+   "commit": "8ab533263994e92f9660c9917a07cd3d8f8e769b",
+   "issue": null,
+   "question": "Resource responses ignore the If-Range request header: a Range request is always answered with 206 Partial Content, even when the If-Range validator no longer matches the current representation (RFC 9110, section 13.1.5). In that case the client must instead receive the full resource with 200 OK and no Content-Range header. Add a static method HttpRange.parseRanges(HttpHeaders requestHeaders, HttpHeaders responseHeaders) that returns the parsed ranges of the Range request header when there is no If-Range header or when If-Range matches the response, and an empty list (meaning \"ignore Range\") when it does not match; in that case an invalid Range value is ignored too, without an exception. A quoted If-Range value is an entity tag and matches only by strong comparison with the response ETag, so weak tags (W/\"...\") never match; any other value is a date that must equal the response Last-Modified header value. More than one If-Range value counts as no match. Apply the behaviour consistently to resource responses in both Spring MVC and WebFlux, including when the ETag is set by the handler on the response.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/HttpRange.java"
+   ],
+   "rationale": "The commit adds HttpRange.parseRanges(HttpHeaders, HttpHeaders) and uses it wherever resource range requests are served: ResourceHttpMessageWriter (WebFlux, also used by ResourceWebHandler), ResourceHttpRequestHandler, AbstractMessageConverterMethodProcessor and DefaultEntityResponseBuilder (Spring MVC), falling back to a full response when the list is empty. Primary is HttpRange; dependents are those four call sites in spring-web and spring-webmvc, plus six test classes in three modules.",
+   "notes": "Scope 'both Spring MVC and WebFlux' is stated in the commit message ('Apply the behavior consistently to MVC and WebFlux resource responses'). MVC has three separate range-handling paths (static resource handler, ResponseEntity<Resource> return values, functional EntityResponse); the description does not list them. The matching-If-Range tests probably pass on the parent already. Weak-ETag and multi-value rules are stated because HttpRangeTests asserts them. No linked issue.",
+   "review": {
+    "verdict": "ok",
+    "comment": "It states the new public API HttpRange.parseRanges(HttpHeaders requestHeaders, HttpHeaders responseHeaders), the empty-list semantics, the strong-only ETag comparison (tested with W/\"current\" vs W/\"current\" giving empty), date equality with Last-Modified, and that an invalid Range is ignored when If-Range does not match. Test-side APIs (setEtagGenerator, ResourceHandlerFunction(Resource, BiConsumer)) exist at the parent. 'More than one If-Range value counts as no match' is not tested and is slight over-specification, but harmless. 'In both Spring MVC and WebFlux' is a scope phrase from the commit message. The primary is correct; 4 code dependents remain. The test_command covers all 6 overlay classes."
+   }
+  },
+  {
+   "id": "error-response-interceptor-with-request",
+   "commit": "d70220eb5de0e10211e1a843b292cc54bed0c365",
+   "issue": "gh-37410",
+   "question": "ErrorResponse.Interceptor is the central API to enrich an RFC 9457 ProblemDetail before it is rendered, but implementations only receive the ProblemDetail and the ErrorResponse. Implementations that depend on the request, for example on request headers or query parameters, are therefore not possible. Add a default method handleError(ProblemDetail detail, @Nullable ErrorResponse errorResponse, HttpRequest request) to ErrorResponse.Interceptor that delegates to the existing two-argument method by default. The interface must remain usable as a lambda for the existing two-argument method. All framework calls of the interceptor must use the new request-aware variant and pass the current request, in both Spring MVC and WebFlux.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/ErrorResponse.java"
+   ],
+   "rationale": "The commit adds the default 3-argument handleError(..., HttpRequest) to ErrorResponse.Interceptor (plus @FunctionalInterface) and switches every framework call site to it: AbstractMessageWriterResultHandler, ResponseBodyResultHandler and ResponseEntityResultHandler in WebFlux, and AbstractMessageConverterMethodProcessor, HttpEntityMethodProcessor and RequestResponseBodyMethodProcessor in Spring MVC. Primary is ErrorResponse; dependents are the six call sites and four test classes.",
+   "notes": "Scope 'Spring MVC and WebFlux' is stated in the linked issue ('We should ensure that all Framework calls use this new variant') and the commit message. In MVC an HttpRequest must be built from the servlet request (e.g. ServletServerHttpRequest); in WebFlux the ServerHttpRequest is already an HttpRequest. Tests use constructors that already take interceptor lists at the parent.",
+   "review": {
+    "verdict": "ok",
+    "comment": "It states the exact new default method handleError(ProblemDetail, @Nullable ErrorResponse, HttpRequest), delegation to the two-argument method, and that the lambda form must keep working (tests use two-arg lambdas). All constructors the tests use (4-argument with interceptors) exist at the parent. 'All framework calls ... in both Spring MVC and WebFlux' is taken from the issue text ('ensure that all Framework calls use this new variant') and names no classes. The primary is correct; 7 code dependents remain. The test_command covers the 4 overlay classes."
+   }
+  },
+  {
+   "id": "mime-type-parameter-names-case-insensitive",
+   "commit": "2028eb3694babca20cbcb95a966b50b3e6fe71ca",
+   "issue": null,
+   "question": "MIME type parameter names are case-insensitive, and MimeType already stores its parameters in a case-insensitive map, but several code paths still compare parameter names case-sensitively. As a result MimeType.hashCode() is inconsistent with equals(): text/plain;Spring=framework and text/plain;spring=framework are equal but hash differently, so one is not found in a hash-based collection holding the other. compareTo() and the charset handling have the same blind spot: a parameter named \"Charset\" must be treated like \"charset\" (charset values compared case-insensitively), so text/plain;Charset=UTF-8 and text/plain;charset=utf-8 are equal, have the same hash code and compare as 0. Handle parameter names case-insensitively everywhere this matters, including the quality-factor parameter of media types: parsing audio/basic;Q=1.1 must be rejected as invalid just like q=1.1, and removing the quality value must also remove a Q= parameter.",
+   "primary_files": [
+    "spring-core/src/main/java/org/springframework/util/MimeType.java"
+   ],
+   "rationale": "The commit switches PARAM_CHARSET comparisons to equalsIgnoreCase in MimeType.parametersAreEqual/compareTo and lower-cases the key in parametersHashCode; in spring-web MediaType.checkParameters and removeQualityValue now treat the q parameter case-insensitively. Primary is MimeType; the dependent is MediaType in spring-web, plus MimeTypeTests and MediaTypeTests.",
+   "notes": "The quality-factor behaviour has to be stated because MediaTypeTests asserts it; MediaType is not named, but 'quality-factor parameter of media types' and 'removing the quality value' point to it fairly directly. The removeQualityValue() test with lower-case q passes on the parent. No linked issue.",
+   "review": {
+    "verdict": "ok",
+    "comment": "All tested behaviours are stated: equals/hashCode/compareTo for differently-cased names, the 'Charset' name with case-insensitive value comparison, Q=1.1 → invalid (InvalidMediaTypeException is existing behaviour for q=1.1), and removeQualityValue with Q=. The examples mirror the test inputs closely, which is acceptable for an issue. No new public API."
+   }
+  },
+  {
+   "id": "bean-factory-get-bean-by-type-reference",
+   "commit": "0eba6f0da3fbd879326226c9310791ceb329bb82",
+   "issue": "gh-34687",
+   "question": "BeanFactory#getBean(String, Class) only provides type safety against a raw class, so retrieving a generic bean by name (e.g. a Template<String>) needs an unchecked cast and cannot detect a bean that is a Template<Number>. Add a type-safe method <T> T getBean(String name, ParameterizedTypeReference<T> typeReference) to BeanFactory that returns the named bean if it matches the full generic type and otherwise throws BeanNotOfRequiredTypeException. BeanNotOfRequiredTypeException must support generic required types: add a constructor taking a java.lang.reflect.Type as the required type and a getGenericRequiredType() method returning that Type, while getRequiredType() keeps returning the raw Class (e.g. Template for Template<String>) and getBeanName()/getActualType() keep their meaning. The exception message should use the type name of the generic type. The reified Kotlin getBean<T>(name) extension should keep generic type arguments too, instead of being subject to type erasure.",
+   "primary_files": [
+    "spring-beans/src/main/java/org/springframework/beans/factory/BeanFactory.java",
+    "spring-beans/src/main/java/org/springframework/beans/factory/BeanNotOfRequiredTypeException.java"
+   ],
+   "rationale": "The commit adds an abstract getBean(String, ParameterizedTypeReference) to BeanFactory and generic-Type support to BeanNotOfRequiredTypeException, implements the method in AbstractBeanFactory, StaticListableBeanFactory and SimpleJndiBeanFactory, delegates in AbstractApplicationContext and StubWebApplicationContext (spring-test), and switches the reified Kotlin getBean<T>(name) extension to the new method. Primaries are the two types named; dependents are the five implementations/delegates in three modules and the Kotlin extension, plus two test classes.",
+   "notes": "The Kotlin extension behaviour is stated (one sentence) because BeanFactoryExtensionsTests verifies that getBean<Foo>(name) calls getBean(name, ParameterizedTypeReference); without it the test would require a change no reasonable issue implies. Implementations of the new abstract interface method are left for the agent to find; compile errors in other modules (spring-context, spring-test) will point to most of them. Tests include Kotlin (src/test/kotlin).",
+   "review": {
+    "verdict": "fix",
+    "comment": "Java API needed by DefaultListableBeanFactoryTests is fully stated. The Kotlin test (BeanFactoryExtensionsTests) verifies that getBean<T>(name) delegates to getBean(name, ParameterizedTypeReference), so the current text names the Kotlin extension to make that test passable. Choose one: (a) preferred: use the rewrite and remove BeanFactoryExtensionsTests from test_command (the overlay file still compiles against the new BeanFactory method), so the Kotlin extension stays a dependent the agent must find; or (b) keep the sentence and record the Kotlin extension as a stated (non-hidden) dependent. Implementations (AbstractBeanFactory, StaticListableBeanFactory, AbstractApplicationContext, SimpleJndiBeanFactory, StubWebApplicationContext) are forced by compilation since the commit adds an abstract interface method; an agent adding a default method would skip them legitimately.",
+    "applied": "kept the drafted question: the Kotlin extension test is compiled with the module's other Kotlin tests, so the extension has to be stated (a stated dependent)"
+   },
+   "reserve": true
+  },
+  {
+   "id": "deferred-bean-registrar-contains-bean",
+   "commit": "7502b923922d02109b5a3c861033715f973dc3cd",
+   "issue": "gh-21497",
+   "question": "BeanRegistrar implementations cannot register beans conditionally on what is already registered, and since they run while configuration classes and other registrations are still being processed, any such check would depend on registration order. Add three methods to BeanRegistry: boolean containsBean(String name), boolean containsBean(Class<?> beanType) and <T> boolean containsBean(ParameterizedTypeReference<T> beanType), which tell whether a bean of that name, type or generic type is already registered. Also add a marker interface org.springframework.context.DeferredBeanRegistrar extends BeanRegistrar for registrars that run at the end of the bean registration phase, after regular bean definition reading and configuration class processing, so that their containsBean checks see all user-registered beans independent of order. Regular BeanRegistrars keep their current timing and therefore only see beans registered before them. Deferred registrars must be supported wherever bean registrars can be registered, whether imported from configuration classes via @Import or registered programmatically with an application context; multiple deferred registrars run in order (Ordered/@Order).",
+   "primary_files": [
+    "spring-beans/src/main/java/org/springframework/beans/factory/BeanRegistry.java",
+    "spring-context/src/main/java/org/springframework/context/DeferredBeanRegistrar.java"
+   ],
+   "rationale": "The commit adds containsBean(String/Class/ParameterizedTypeReference) to BeanRegistry (implemented in BeanRegistryAdapter) and the DeferredBeanRegistrar marker interface. ConfigurationClassBeanDefinitionReader skips deferred registrars, ConfigurationClassPostProcessor invokes them after configuration class parsing, GenericApplicationContext#register(BeanRegistrar...) collects them into an internal PriorityOrdered registry post-processor ordered after ConfigurationClassPostProcessor, and the @Import Javadoc mentions them. Primaries are the two named types; dependents are BeanRegistryAdapter, the two configuration-class processing classes, GenericApplicationContext and Import, plus tests and test fixtures.",
+   "notes": "The tests depend on five new test-fixture classes under spring-context/src/testFixtures (MyDeferredBeanRegistrar, MyRegularBeanRegistrar, *Configuration, TestBeanConfiguration). The replay harness must copy src/testFixtures files along with src/test, otherwise the tests do not compile. The fully qualified name of DeferredBeanRegistrar is stated because the fixtures import it. Scope wording ('imported via @Import or registered programmatically with an application context') follows the issue's GenericApplicationContext/configuration-class context; the concrete classes are not named. The regular-registrar tests check order-dependence and probably need only containsBean.",
+   "review": {
+    "verdict": "ok",
+    "comment": "The three containsBean signatures and the FQN org.springframework.context.DeferredBeanRegistrar (imported by the overlay fixtures) are stated. So are the deferred timing (after config class processing / bean definition reading, needed by deferredBeanRegistrarWithConditionMet for both AnnotationConfigApplicationContext and GenericApplicationContext) and the unchanged timing of regular registrars. Type matching for ParameterizedTypeReference<Comparable<Object>> against TestBean follows from 'generic type is already registered'. BeanRegistryAdapter is the only BeanRegistry implementation at the parent, and the agent finds it through compile errors. '@Order/Ordered' ordering is untested and slightly over-specified but harmless. The overlay includes the testFixtures sources, which is correct."
+   }
+  },
+  {
+   "id": "resource-loader-classpath-all-get-resource",
+   "commit": "1345760087bf6e68a64923e13d4c0ebcc82b7f34",
+   "issue": "gh-36415",
+   "question": "ResourceLoader#getResource does not support the \"classpath*:\" prefix: getResource(\"classpath*:META-INF/MANIFEST.MF\") does not give access to all same-named resources on the classpath, which today requires ResourcePatternResolver#getResources. Declare the CLASSPATH_ALL_URL_PREFIX constant (\"classpath*:\") on ResourceLoader itself, and make DefaultResourceLoader#getResource return a multi-content resource handle for such a fully specified (non-pattern) location. That resource exists and is readable if at least one match exists, is not a file, reports the combined content length of all matches, and its getInputStream() returns the merged content of all matching resources in classpath order. Merged content is fine for simple concatenation but not for formats that must be parsed one document at a time, so add a general-purpose method Resource#consumeContent(callback) that invokes a callback once per content: once with the regular input stream by default, but once per matching resource for a multi-content resource. The callback receives an InputStream and may throw IOException. EncodedResource needs a matching consumeContent(callback) variant whose callback receives a Reader that applies the configured encoding/charset, while its getReader() and getContentAsString() expose the merged content.",
+   "primary_files": [
+    "spring-core/src/main/java/org/springframework/core/io/Resource.java",
+    "spring-core/src/main/java/org/springframework/core/io/ResourceLoader.java",
+    "spring-core/src/main/java/org/springframework/core/io/DefaultResourceLoader.java",
+    "spring-core/src/main/java/org/springframework/core/io/support/EncodedResource.java"
+   ],
+   "rationale": "The commit moves CLASSPATH_ALL_URL_PREFIX from ResourcePatternResolver to ResourceLoader, adds a ClassPathAllResource to DefaultResourceLoader, a default Resource#consumeContent(IOConsumer<InputStream>), EncodedResource#consumeContent(IOConsumer<Reader>) and the new functional interface org.springframework.util.function.IOConsumer, and switches YamlProcessor, PropertiesBeanDefinitionReader and XmlBeanDefinitionReader to consumeContent so they parse each matching file separately. Primaries are the four named types; dependents are IOConsumer, ResourcePatternResolver (constant removal) and the three spring-beans readers.",
+   "notes": "The IOConsumer type name is deliberately not given: the test passes only lambdas that throw IOException, so any IOException-capable functional interface compiles. The spring-beans readers (YAML, properties, XML bean definitions) are the dependents; the description only motivates per-document parsing without naming them, and no test covers them. Test relies on several META-INF/MANIFEST.MF files being on the test classpath (true for the Gradle test runtime).",
+   "review": {
+    "verdict": "ok",
+    "comment": "Test needs Resource#consumeContent(callback throwing IOException, InputStream arg), EncodedResource#consumeContent(Reader callback), getResource('classpath*:...') via PathMatchingResourcePatternResolver delegating to DefaultResourceLoader, exists/isReadable true, isFile false, contentLength = sum, merged getInputStream, EncodedResource.getContentAsString merged (exists at parent). All stated. The callback interface name (IOConsumer) is not needed: the test only uses lambdas. Four primary files are all named core types; six dependents remain (IOConsumer, ResourcePatternResolver, YamlProcessor, PropertiesBeanDefinitionReader, XmlBeanDefinitionReader). The test reads all MANIFEST.MF files on the test classpath; deterministic."
+   },
+   "reserve": true
+  },
+  {
+   "id": "webflux-default-html-escape",
+   "commit": "d4893fb32fc2d9b1c66ce90e49dbd09ca7c54240",
+   "issue": "gh-36378",
+   "question": "WebFlux's RequestContext has no application-wide defaultHtmlEscape setting: the value is hard-coded to null with a TODO, unlike the Servlet stack where it can be configured centrally. Add a programmatic way to configure it. WebHttpHandlerBuilder gets a defaultHtmlEscape(Boolean) method, and the setting is kept when the builder is cloned. HttpWebHandlerAdapter gets setDefaultHtmlEscape(Boolean) and getDefaultHtmlEscape(), the latter returning null when nothing was configured. The adapter makes the setting available on every exchange it creates, via a new `@Nullable Boolean getDefaultHtmlEscape()` method on ServerWebExchange. DefaultServerWebExchange receives the value through a new protected constructor taking (ServerHttpRequest, ServerHttpResponse, WebSessionManager, ServerCodecConfigurer, LocaleContextResolver, @Nullable ApplicationContext, @Nullable Boolean defaultHtmlEscape); the existing constructors keep working and pass null. RequestContext initializes its default HTML escape flag from the exchange and falls back to false when nothing is configured; calling setDefaultHtmlEscape on a RequestContext still overrides the exchange-level value.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/server/adapter/WebHttpHandlerBuilder.java",
+    "spring-web/src/main/java/org/springframework/web/server/adapter/HttpWebHandlerAdapter.java",
+    "spring-web/src/main/java/org/springframework/web/server/ServerWebExchange.java",
+    "spring-webflux/src/main/java/org/springframework/web/reactive/result/view/RequestContext.java",
+    "spring-web/src/main/java/org/springframework/web/server/adapter/DefaultServerWebExchange.java"
+   ],
+   "rationale": "Adds an application-wide defaultHtmlEscape setting for WebFlux, flowing from WebHttpHandlerBuilder through HttpWebHandlerAdapter into the exchange and finally RequestContext. Primary files are the builder, adapter, exchange contract, RequestContext and the test-fixture mock exchange the tests build on. Dependents: DefaultServerWebExchange (new constructor/field), ServerWebExchangeDecorator and the delegating exchange in DefaultServerRequestBuilder (new interface method), the spring-test MockServerWebExchange builder, and the two test classes.",
+   "notes": "Tests rely on the spring-web testFixtures MockServerWebExchange.Builder.defaultHtmlEscape(boolean); testFixtures are not under src/test, so the agent must add it (hence named in the question and listed as primary). RequestContext must return false (not null) when unconfigured. The spring-test MockServerWebExchange counterpart is a dependent and deliberately not distinguished. Tests span spring-web and spring-webflux.",
+   "review": {
+    "verdict": "fix",
+    "comment": "The rest is solvable as stated: WebHttpHandlerBuilder.defaultHtmlEscape and clone, the HttpWebHandlerAdapter getter returning null, and RequestContext falling back to false and still honouring an override. ServerWebExchange.getDefaultHtmlEscape is abstract in the commit, so the decorator and DefaultServerRequestBuilder's delegating exchange are compile-forced dependents. The spring-test MockServerWebExchange builder option stays a dependent that the agent should find on its own. Update primary_files as described.",
+    "applied": "question replaced by the reviewer's rewrite; MockServerWebExchange (a test fixture, overlaid) replaced by DefaultServerWebExchange in primary_files"
+   },
+   "reserve": true
+  },
+  {
+   "id": "cache-manager-reset-caches",
+   "commit": "96aadc2b12bce37237e053b7f7e1c28b98be328b",
+   "issue": "gh-35845",
+   "question": "Some cache managers already offer a provider-specific resetCaches() method to throw away all cache content, but there is no general way to do this through the CacheManager abstraction. Add a void resetCaches() method to the CacheManager interface. Its default behaviour clears every registered cache (via Cache#clear) while keeping the caches registered, so getCacheNames() and getCache(name) keep returning the same caches afterwards but without entries. Concrete cache managers may override it with a more efficient implementation at the provider level, or with a more radical one that drops caches and re-creates them on demand. Managers that delegate to other cache managers should apply the reset to all of their delegates.",
+   "primary_files": [
+    "spring-context/src/main/java/org/springframework/cache/CacheManager.java"
+   ],
+   "rationale": "Generalizes resetCaches() into the CacheManager interface with a default that clears all caches. Primary is CacheManager. Dependents: overrides in AbstractCacheManager, CompositeCacheManager, NoOpCacheManager (spring-context) and JCacheCacheManager (spring-context-support), plus JCacheEhCacheApiTests.",
+   "notes": "The single test (JCacheEhCacheApiTests.resetCaches) passes with just the interface default method, so the dependent overrides are measured only by the file comparison. The delegation sentence paraphrases the issue's mention of CompositeCacheManager without naming it.",
+   "review": {
+    "verdict": "ok",
+    "comment": "resetCaches() on CacheManager with clear-but-keep semantics is stated; the hidden JCache test passes with only the interface default method (JCacheCacheManager override is not required), so the test is weak but valid (fails at parent by compilation). Optional tightening: drop the delegating-managers sentence so CompositeCacheManager is found unaided."
+   }
+  },
+  {
+   "id": "api-version-deprecation-handler-handler-arg",
+   "commit": "b128f59714b071e9b4d8a1ae9cdc63f3ff62251f",
+   "issue": "gh-35750",
+   "question": "ApiVersionDeprecationHandler implementations decide on deprecation purely based on the request version, but a custom implementation may need to know which handler was chosen for the request. Pass the selected handler to deprecation handling, for both Spring MVC and WebFlux. In the Servlet variant of ApiVersionDeprecationHandler the method becomes handleVersion(Comparable<?> version, Object handler, HttpServletRequest request, HttpServletResponse response); in the reactive variant it becomes handleVersion(Comparable<?> version, Object handler, ServerWebExchange exchange). The handler must be supplied by the infrastructure that invokes deprecation handling once the handler for the request has been determined.",
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/accept/ApiVersionDeprecationHandler.java",
+    "spring-webflux/src/main/java/org/springframework/web/reactive/accept/ApiVersionDeprecationHandler.java"
+   ],
+   "rationale": "Adds an Object handler parameter to ApiVersionDeprecationHandler.handleVersion in both stacks. Primary are the two handler interfaces. Dependents: ApiVersionStrategy.handleDeprecations and DefaultApiVersionStrategy in both modules, StandardApiVersionDeprecationHandler in both modules, AbstractHandlerMapping in spring-webmvc and spring-webflux (call sites), and the two StandardApiVersionDeprecationHandlerTests.",
+   "notes": "Scope 'both Spring MVC and WebFlux' stated; both signatures given because each module's test calls its own variant. Tests only fail on the parent through compilation (signature change); header behaviour is unchanged.",
+   "review": {
+    "verdict": "ok",
+    "comment": "Both new signatures are stated exactly; the tests only call StandardApiVersionDeprecationHandler.handleVersion with the new signatures. Tests cannot check that the handler is actually passed through by the handler mappings, so they mostly verify compilation; the dependents (ApiVersionStrategy.handleDeprecations in both modules, DefaultApiVersionStrategy, StandardApiVersionDeprecationHandler, both AbstractHandlerMapping) are well hidden."
+   }
+  },
+  {
+   "id": "bean-provider-parameterized-type-reference",
+   "commit": "2e4ca413829f279f7ce3aa637582cb8b97b9b3ca",
+   "issue": "gh-31444",
+   "question": "Retrieving a generically typed bean provider from a BeanFactory currently requires building a ResolvableType by hand, e.g. ResolvableType.forType(new ParameterizedTypeReference<List<String>>() {}). Add an overload <T> ObjectProvider<T> getBeanProvider(ParameterizedTypeReference<T> requiredType) to BeanFactory so that callers can write getBeanProvider(new ParameterizedTypeReference<>() {}) directly. It must behave exactly like getBeanProvider(ResolvableType.forType(requiredType)), including generic type matching and the uniqueness and availability semantics of the returned provider.",
+   "primary_files": [
+    "spring-beans/src/main/java/org/springframework/beans/factory/BeanFactory.java"
+   ],
+   "rationale": "Adds getBeanProvider(ParameterizedTypeReference) to BeanFactory as an abstract method. Primary is BeanFactory. Dependents: every implementation - DefaultListableBeanFactory, StaticListableBeanFactory (spring-beans), AbstractApplicationContext and SimpleJndiBeanFactory (spring-context), StubWebApplicationContext (spring-test) - plus BeanFactoryGenericsTests.",
+   "notes": "The commit adds an abstract interface method; an agent may instead add a default method, which compiles without touching the implementations, so dependents are then a judgment of whether it still overrides/delegates. The UnsupportedOperationException sentence hints at SimpleJndiBeanFactory's behaviour without naming it.",
+   "review": {
+    "verdict": "fix",
+    "comment": "Apart from the dependent hint, the question is good: the signature is exact and the only test (BeanFactoryGenericsTests on DefaultListableBeanFactory) needs nothing else. If the new interface method is declared abstract (as in gold), compile errors bring the agent to the other implementations (StaticListableBeanFactory, SimpleJndiBeanFactory, AbstractApplicationContext, StubWebApplicationContext). An agent that adds a default method in BeanFactory produces an equally valid design with fewer dependents touched; keep this in mind when reading the dependent scores.",
+    "applied": "question replaced by the reviewer's rewrite"
+   }
+  },
+  {
+   "id": "sync-task-executor-concurrency-throttle",
+   "commit": "8b36736344a333c1bddaccbc46a0367d28bed9f9",
+   "issue": "gh-35460",
+   "question": "There is no programmatic, template-style alternative to @ConcurrencyLimit for bounding concurrent synchronous invocations. Extend SyncTaskExecutor so it can throttle concurrency: it should inherit the existing concurrency throttle support so that setConcurrencyLimit(int) limits how many callers execute tasks at the same time, with further callers blocking until a slot is free. Add a new functional interface TaskCallback<V, E extends Exception> in the same package as SyncTaskExecutor, extending Callable<V> and redeclaring V call() throws E. SyncTaskExecutor gets a new method <V, E extends Exception> V execute(TaskCallback<V, E> task) throws E that runs the callback synchronously, returns its result and propagates its exception unchanged; both the Runnable and the callback variant apply the concurrency limit when one is set.",
+   "primary_files": [
+    "spring-core/src/main/java/org/springframework/core/task/SyncTaskExecutor.java",
+    "spring-core/src/main/java/org/springframework/core/task/TaskCallback.java"
+   ],
+   "rationale": "SyncTaskExecutor now extends ConcurrencyThrottleSupport and gains execute(TaskCallback); TaskCallback is new. Primary are those two types. Dependents: the @ConcurrencyLimit annotation Javadoc in spring-context (cross-reference to the new programmatic option), the reworked ConcurrencyLimitTests, and the new SyncTaskExecutorTests.",
+   "test_command": "./gradlew --no-daemon --console=plain :spring-core:test --tests org.springframework.core.task.SyncTaskExecutorTests",
+   "notes": "ConcurrencyLimitTests (spring-context) only gets a test-internal refactoring that passes on the parent, so it is dropped from test_command. SyncTaskExecutorTests uses 10 threads with 10ms sleeps and asserts no more than 2 concurrent executions; mildly timing-dependent but should be stable. ConcurrencyThrottleSupport is existing API and intentionally not named.",
+   "review": {
+    "verdict": "ok",
+    "comment": "TaskCallback<V, E extends Exception> extends Callable<V> with 'V call() throws E', and '<V, E extends Exception> V execute(TaskCallback<V, E>) throws E', are both stated. Overload resolution between execute(Runnable) and execute(TaskCallback) for value-returning method refs works with exactly this shape. setConcurrencyLimit comes from inheriting ConcurrencyThrottleSupport ('the existing concurrency throttle support'), which is not named; that is fine. test_command leaves out ConcurrencyLimitTests (overlay only refactors a test bean, passes at the parent); that is reasonable."
+   },
+   "reserve": true
+  },
+  {
+   "id": "message-source-default-charset",
+   "commit": "02af3e7a17db9f63ced52425d06558eb50deb495",
+   "issue": "gh-36413",
+   "question": "AbstractResourceBasedMessageSource only offers setDefaultEncoding(String), accepting a charset name, although elsewhere the framework now supports passing a Charset directly. Add public void setDefaultCharset(@Nullable Charset) and protected @Nullable Charset getDefaultCharset() to AbstractResourceBasedMessageSource, with the same semantics as the existing encoding property (null means the platform default). The resource-bundle based message sources should use the configured Charset directly when reading properties files instead of a charset name. setDefaultEncoding(String) remains as a convenience but resolves the name immediately, so an invalid charset name now fails at configuration time with an UnsupportedCharsetException rather than surfacing later as a NoSuchMessageException.",
+   "primary_files": [
+    "spring-context/src/main/java/org/springframework/context/support/AbstractResourceBasedMessageSource.java"
+   ],
+   "rationale": "Stores the default encoding as a Charset, adds setDefaultCharset/getDefaultCharset and resolves names eagerly. Primary is AbstractResourceBasedMessageSource. Dependents: ReloadableResourceBundleMessageSource and ResourceBundleMessageSource switching to getDefaultCharset(), the DefaultPropertiesPersister Javadoc in spring-core mentioning the property, and ResourceBundleMessageSourceTests.",
+   "notes": "The phrase 'resource-bundle based message sources' states scope without naming the two subclasses. Test asserts UnsupportedCharsetException type for setDefaultEncoding(\"BOGUS\"), no message text.",
+   "review": {
+    "verdict": "ok",
+    "comment": "The tests need public setDefaultCharset(Charset) (stated) and UnsupportedCharsetException from setDefaultEncoding(\"BOGUS\") at configuration time (stated). The removed NoSuchMessageException test for 'argh' matches the described behaviour change. Not over-specified. DefaultPropertiesPersister (Javadoc) and the subclasses are left for the agent."
+   }
+  },
+  {
+   "id": "retryable-method-retry-event",
+   "commit": "92a43c007ad33b594b5a16a57ed625ceb2fbdac7",
+   "issue": "gh-35382",
+   "question": "@Retryable method execution offers no way to observe the failures encountered during retries. Introduce an application event org.springframework.resilience.retry.MethodRetryEvent (an ApplicationEvent whose source is the MethodInvocation) with getMethod(), getFailure() returning the Throwable encountered, and isRetryAborted(). The retry interceptor publishes such an event through the application's event publisher whenever @Retryable processing is enabled in an application context: one event with isRetryAborted() == false for every failed attempt (exception thrown by the method or emitted by its returned reactive publisher), and one final event with isRetryAborted() == true when retrying gives up, whose failure is the RetryException for imperative methods or the Reactor retry-exhausted (or timeout) exception for reactive methods. Successful invocations publish no event. Separately, the RetryException thrown by RetryTemplate when interrupted during back-off should carry the message \"Interrupted during back-off for retryable operation '<name>'; aborting execution\".",
+   "primary_files": [
+    "spring-context/src/main/java/org/springframework/resilience/retry/MethodRetryEvent.java",
+    "spring-context/src/main/java/org/springframework/resilience/retry/AbstractRetryInterceptor.java",
+    "spring-core/src/main/java/org/springframework/core/retry/RetryTemplate.java"
+   ],
+   "rationale": "Adds MethodRetryEvent and publishes it from AbstractRetryInterceptor (imperative via a RetryListener on the RetryTemplate, reactive via doOnError around retryWhen). Primary are the new event, the interceptor and RetryTemplate (named for the interruption message). Dependents: RetryAnnotationBeanPostProcessor must become ApplicationEventPublisherAware and pass the publisher to its interceptor, the @Retryable Javadoc, the RetryPolicy Javadoc note, the new MethodRetryEventListener test helper, and RetryInterceptorTests, ReactiveRetryInterceptorTests, RetryTemplateTests.",
+   "notes": "RetryTemplateTests asserts the exact interruption message via regex, hence stated verbatim. The commit's Integer.MAX_VALUE retry cap in RetryTemplate is untested and not mentioned. Tests rely on the event reaching listeners when the post-processor is registered via @EnableResilientMethods or as a plain bean in a GenericApplicationContext; the question says 'in an application context' without naming the post-processor. MethodRetryEventListener is a non-test helper under src/test (copied with the tests). Retry tests use 10ms delays; timing is not asserted.",
+   "review": {
+    "verdict": "ok",
+    "comment": "The FQN and accessors of MethodRetryEvent (ApplicationEvent with source MethodInvocation, getMethod/getFailure/isRetryAborted) are stated. So are the event cardinality (one per failed attempt including the initial one, plus one final aborted event with RetryException or the Reactor retry-exhausted exception, none on success) and the exact interrupt message the regex in RetryTemplateTests asserts. Delivery 'through the application's event publisher whenever @Retryable processing is enabled in an application context' covers both @EnableResilientMethods and a RetryAnnotationBeanPostProcessor bean in GenericApplicationContext, which is how the rewritten test helper creates it. It implies the post-processor must pass the publisher on (a dependent, not named). The RetryListener.onRetryableExecution/RetryState API that the agent can use already exists at the parent. The interrupt-message change is an unrelated part bundled in from the same commit, but it is asserted, so it must stay."
+   },
+   "reserve": true
+  },
+  {
+   "id": "httpexchange-version-mapping",
+   "commit": "091097db7982ef04660aa63358d87fc6675b3238",
+   "issue": null,
+   "question": "Controllers annotated with @HttpExchange (or its shortcuts such as @GetExchange) can declare an API version through the annotation's version attribute, but the request mapping created from the annotation ignores it. As a result, version-based routing is silently skipped for such controllers: the mapping has no version condition and requests for a specific version are not routed to the matching method. RequestMappingHandlerMapping must carry the version from @HttpExchange into the RequestMappingInfo it builds, the same way it does for @RequestMapping, for both Spring MVC and WebFlux. Methods without a version keep having no version condition.",
+   "primary_files": [
+    "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerMapping.java"
+   ],
+   "rationale": "Adds .version(httpExchange.version()) when building RequestMappingInfo from @HttpExchange. Primary is the Spring MVC RequestMappingHandlerMapping. Dependents: the WebFlux RequestMappingHandlerMapping counterpart and both RequestMappingHandlerMappingTests.",
+   "notes": "Scope 'for both Spring MVC and WebFlux' is stated (the commit message names both). RequestMappingHandlerMapping is a class name shared by both modules; only the MVC one is listed as primary. No new public API; tests fail on the parent behaviourally.",
+   "review": {
+    "verdict": "ok",
+    "comment": "No new API: version() exists on @HttpExchange/@GetExchange at the parent, and the test helpers (7-arg DefaultApiVersionStrategy, getVersionCondition().getVersion()) exist too. The tests need the version condition to be set and to be null when no version is given, and both are stated. The task is very small, a one-line change per module."
+   },
+   "reserve": true
+  },
+  {
+   "id": "expiration-seconds-int-overflow",
+   "commit": "dcc24a2325a48684d6d8262af3bfb7467c6dbd02",
+   "issue": "gh-37208",
+   "question": "FlashMap.startExpirationPeriod(int timeToLive) computes the expiration time by multiplying the number of seconds by 1000 in int arithmetic. Above roughly 2,147,483 seconds (about 24.9 days) this overflows to a negative offset, so the expiration time lands in the past and a flash map with a large timeout is treated as expired immediately. Fix the calculation so that any int number of seconds, up to Integer.MAX_VALUE, yields an expiration time in the future. The same overflow can occur wherever the framework turns an int number of seconds into an absolute expiration time this way; find and fix any other such place as well.",
+   "primary_files": [
+    "spring-webmvc/src/main/java/org/springframework/web/servlet/FlashMap.java"
+   ],
+   "rationale": "Widens seconds*1000 to long in FlashMap.startExpirationPeriod and in MockMvcWebConnection.createCookie. Primary is FlashMap. Dependents: MockMvcWebConnection in spring-test, FlashMapTests and MockMvcWebClientBuilderTests.",
+   "notes": "Scope stated as in the PR title ('MockMvc and FlashMap'), described as the HtmlUnit cookie max-age conversion without naming MockMvcWebConnection. Tests span spring-webmvc and spring-test; both fail on the parent.",
+   "review": {
+    "verdict": "fix",
+    "comment": "The tests need no new API. FlashMapTests checks getExpirationTime() > now and !isExpired() for Integer.MAX_VALUE; MockMvcWebClientBuilderTests checks that a cookie with max-age Integer.MAX_VALUE is stored. The rewrite keeps an issue-style scope statement, which the hidden spring-test test requires, without naming the HtmlUnit/cookie location. The linked PR notes that a scan of src/main finds no other live instance, so the generic phrasing leads to exactly one place. The task is very small (two one-character fixes).",
+    "applied": "question replaced by the reviewer's rewrite"
+   },
+   "reserve": true
+  }
+ ]
+}

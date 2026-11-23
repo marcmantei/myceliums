@@ -35,7 +35,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import config
-from .editgrade import changed_files, gold_paths, grade_edit, run_test
+from .editgrade import apply_gold, changed_files, gold_paths, grade_edit, run_test, snapshot
 from .grading import Grade, extract_answer, grade, is_success
 from .stream import MCP_PREFIX, check_isolation, parse_transcript
 from .searchaudit import audit as search_audit
@@ -577,7 +577,12 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 extra["ENABLE_TOOL_SEARCH"] = self.cfg.tool_search
             if variant.no_search:
                 extra.update(nosearch_git_env(tmp))
+            # #183: what the repository's build needs (JAVA_HOME, Gradle options).
+            extra.update(config.repo_env(repo))
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
+            # Files the harness changed before the agent starts (setup-claude's
+            # CLAUDE.md, .mcp.json) are not the agent's edits.
+            baseline = snapshot(workdir) if is_edit_task(task) else None
             settings = self._nosearch_settings(tmp, task, hook_dir) if variant.no_search else None
             if settings is not None:
                 (out_dir / "settings.json").write_text(settings.read_text())
@@ -596,7 +601,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                     timed_out = True
                     _kill_group(proc)
             wall = time.time() - started
-            edit = self._grade_edit(item, workdir, out_dir) if is_edit_task(task) else None
+            edit = self._grade_edit(item, workdir, out_dir, baseline) if is_edit_task(task) else None
         finally:
             config.remove_tree(tmp, self.cache / "tmp")
             if hook_dir is not None:
@@ -607,15 +612,29 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
         return self._summarise(item, attempt, transcript, wall, timed_out, proc.returncode, edit)
 
-    def _grade_edit(self, item: WorkItem, workdir: Path, out_dir: Path) -> dict:
-        """Grade an edit task's working copy: changed files, test command."""
-        changed = changed_files(workdir)
+    def _grade_edit(self, item: WorkItem, workdir: Path, out_dir: Path, baseline: dict | None = None) -> dict:
+        """Grade an edit task's working copy: changed files, then the test
+        command, after the commit's own tests (``test_overlay``, #183) are
+        written over the agent's working copy."""
+        changed = changed_files(workdir, baseline)
         diff = subprocess.run(["git", "-C", str(workdir), "diff", "HEAD"], capture_output=True, text=True)
         (out_dir / "changes.diff").write_text(diff.stdout)
+        untracked = [f for f in changed if (workdir / f).is_file()
+                     and subprocess.run(["git", "-C", str(workdir), "ls-files", "--error-unmatch", f],
+                                        capture_output=True).returncode != 0]
+        if untracked:
+            (out_dir / "untracked.txt").write_text("\n".join(untracked) + "\n")
         tests = None
+        overlay = item.task.get("test_overlay") or []
         if item.task.get("test_command"):
-            tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)))
-        return grade_edit(item.task, changed, tests, self.cfg.success_threshold)
+            if overlay:
+                apply_gold(workdir, config.gold_dir(item.repo), item.task, overlay)
+            tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)),
+                             config.repo_env(self.repos[item.repo]))
+        g = grade_edit(item.task, changed, tests, self.cfg.success_threshold)
+        if overlay:
+            g["test_overlay"] = list(overlay)
+        return g
 
     def _summarise(self, item: WorkItem, attempt: int, transcript: Path, wall: float,
                    timed_out: bool, returncode: int | None, edit: dict | None = None) -> dict:

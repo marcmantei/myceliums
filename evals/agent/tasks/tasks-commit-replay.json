@@ -1,0 +1,2025 @@
+{
+ "description": "Commit-replay edit tasks on spring-framework (issue #183). Hand-written part: which commits, the change description the agent gets (drafted by an agent from the commit message and linked issue, reviewed by a second agent for leakage and solvability), the primary files and, where the default does not fit, the test command. Everything else is derived from the commit by commit_replay.py build.",
+ "repos": [
+  {
+   "name": "spring-spel-simple-context-restricted-conversion",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of d41495720cba",
+   "commit": "5e1e150f2bb3475a5a8e1147507b86716e61e3a5",
+   "gold_commit": "d41495720cbabe30844e65c12765eacf806d2653",
+   "gradle": "9.9.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-observation-record-handled-exception",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 297c74d29c07",
+   "commit": "49678a69abe284fbce7c83de90e4be01925c7474",
+   "gold_commit": "297c74d29c0704e0879ce121ba3789b677abb9ff",
+   "gradle": "9.9.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-beans-max-nested-path-depth",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 8ab525f6f09f",
+   "commit": "33988a4621349b8522e94b2eadde4f28a2844065",
+   "gold_commit": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
+   "gradle": "9.7.1",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-spel-big-power-result-limit",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 8a92c19e4dc7",
+   "commit": "ee1874ac52a0da4fda8ca9c315d9119f2b7f986e",
+   "gold_commit": "8a92c19e4dc7de87a6dfc7ce85920c6a2446320d",
+   "gradle": "9.7.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-jsonl-media-type-support",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 22e4d8499310",
+   "commit": "e2b9b19970bb88913cfb6530857f964d2b01187a",
+   "gold_commit": "22e4d84993105c1975d6afe16d34467772c7c676",
+   "gradle": "9.4.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-retry-max-attempts-to-max-retries",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 24590092efa3",
+   "commit": "771517dc36735842a129ea3a51738f0b6fcce7bd",
+   "gold_commit": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
+   "gradle": "9.2.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-fn-request-bind-pathvars-headers",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of a9a404266c25",
+   "commit": "b29f4ed37edf0da0f41dc19c4ac56ba0d445fca6",
+   "gold_commit": "a9a404266c25a82b0f3a4286053f69ce0c8fb008",
+   "gradle": "9.2.1",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-jdbcclient-batch-entry-dsl",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 833ab4d48fda",
+   "commit": "223a5562bebba968a4b948cc6cd97a372d3fc6bb",
+   "gold_commit": "833ab4d48fdaf64f7b234f6dac76d4cced14390c",
+   "gradle": "9.8.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-type-mismatch-required-type-arg",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 4847ee80b045",
+   "commit": "f4ee120a423c069ddfc94076cc49e02ec9d797d5",
+   "gold_commit": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
+   "gradle": "9.2.1",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-servlet-response-ignore-body-flush",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of e0b54e244e7a",
+   "commit": "f2b64ad09c50f69c2ffb0c13715254300a7ed915",
+   "gold_commit": "e0b54e244e7ac9f48f720bcbdcc869e2400fe35c",
+   "gradle": "9.3.1",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-content-negotiation-no-fallback-mapping",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 7fbdbd6eb766",
+   "commit": "b6fdd4317e8086b02ecb8a5c7d62e5397d0ddda0",
+   "gold_commit": "7fbdbd6eb7665be6a66562d26b26ffcfb600ee32",
+   "gradle": "9.9.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-client-builders-deep-copy-default-headers-cookies",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 4cf633537255",
+   "commit": "0c575d443dbdff69349a2369f40491c002dc2c96",
+   "gold_commit": "4cf6335372556d4f6ccc3a0166318c5f19037e8f",
+   "gradle": "9.8.2",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-http-range-honor-if-range",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 8ab533263994",
+   "commit": "749aa1f6a9bd70b637f01b0e2dceb1103cd1c5f1",
+   "gold_commit": "8ab533263994e92f9660c9917a07cd3d8f8e769b",
+   "gradle": "9.8.2",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-error-response-interceptor-with-request",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of d70220eb5de0",
+   "commit": "7ae82b88d608ddb83cc891a140598714c9c34f9d",
+   "gold_commit": "d70220eb5de0e10211e1a843b292cc54bed0c365",
+   "gradle": "9.8.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-mime-type-parameter-names-case-insensitive",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 2028eb3694ba",
+   "commit": "ee19b96ee9a6ba9264194268e28ebaf9705ff59d",
+   "gold_commit": "2028eb3694babca20cbcb95a966b50b3e6fe71ca",
+   "gradle": "9.7.1",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-deferred-bean-registrar-contains-bean",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 7502b923922d",
+   "commit": "99e7543a7faefb0b22a5cfb3e308e2b7e9075e61",
+   "gold_commit": "7502b923922d02109b5a3c861033715f973dc3cd",
+   "gradle": "9.4.1",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-cache-manager-reset-caches",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 96aadc2b12bc",
+   "commit": "2c6ccaea052cb59ef20c267a073b015a03aa6f2b",
+   "gold_commit": "96aadc2b12bce37237e053b7f7e1c28b98be328b",
+   "gradle": "9.2.1",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-api-version-deprecation-handler-handler-arg",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of b128f59714b0",
+   "commit": "cd67010518675a67c15d8e3cd5245e43e3f16835",
+   "gold_commit": "b128f59714b071e9b4d8a1ae9cdc63f3ff62251f",
+   "gradle": "9.2.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-bean-provider-parameterized-type-reference",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 2e4ca413829f",
+   "commit": "6503f354047d9252b85b41e35cb09935e126ca4e",
+   "gold_commit": "2e4ca413829f279f7ce3aa637582cb8b97b9b3ca",
+   "gradle": "9.1.0",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
+   "name": "spring-message-source-default-charset",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 02af3e7a17db",
+   "commit": "3c6f1b35ba72c87309e32f591c6afef4294c99c5",
+   "gold_commit": "02af3e7a17db9f63ced52425d06558eb50deb495",
+   "gradle": "9.3.1",
+   "java_toolchain": "25",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  }
+ ],
+ "tasks": [
+  {
+   "id": "spel-simple-context-restricted-conversion",
+   "repo": "spring-spel-simple-context-restricted-conversion",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "SimpleEvaluationContext is meant for evaluating less trusted expressions, but by default it converts values with the shared DefaultConversionService, which can convert a value by reflectively invoking constructors and methods of the target type (a String constructor, static valueOf/of/from, find<Entity>, or to<TargetType>() on the source). By default, SimpleEvaluationContext should instead use a restricted conversion service: a DefaultConversionService without its Object-to-Object converters (ObjectToObjectConverter and IdToEntityConverter). Common conversions such as numbers, booleans, enums, UUID, collections and arrays must keep working, and a conversion that is no longer supported should fail with a ConverterNotFoundException as root cause. A TypeConverter or ConversionService registered via withTypeConverter(...) or withConversionService(...) on the builder is still used as-is. Add `public <S, T> Builder withConverter(Class<S> sourceType, Class<T> targetType, Converter<? super S, ? extends T> converter)` to SimpleEvaluationContext.Builder: it may be called several times and adds converters on top of the default (restricted) conversion service, and build() throws an IllegalStateException if withConverter() was combined with withConversionService() or withTypeConverter(), in either order. Also add `public static final String REFLECTIVE_CONVERSION_PROPERTY_NAME = \"spring.expression.reflectiveConversion\"` to SimpleEvaluationContext: when this flag is set (JVM system property or SpringProperties), the default is a standard DefaultConversionService again, and withConverter() then adds to a standard DefaultConversionService. The flag is checked whenever a context is built, so it can be toggled at runtime.",
+   "rationale": "The commit gives SimpleEvaluationContext a restricted default ConversionService (DefaultConversionService minus Object->Object converters), adds Builder.withConverter() and a SpringProperties flag that restores the old behaviour. SimpleEvaluationContext is the primary file. Dependents: a maintenance comment in DefaultConversionService (spring-core) next to the reflective converters, the SpEL reference docs (evaluation.adoc security section and type conversion note) and the Spring properties table in appendix.adoc.",
+   "source": {
+    "commit": "d41495720cbabe30844e65c12765eacf806d2653",
+    "subject": "Restrict type conversion in SimpleEvaluationContext",
+    "date": "2026-11-13"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/appendix.adoc",
+     "status": "M"
+    },
+    {
+     "path": "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/main/java/org/springframework/core/convert/support/DefaultConversionService.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/main/java/org/springframework/expression/spel/support/SimpleEvaluationContext.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/test/java/org/springframework/expression/spel/support/SimpleEvaluationContextTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-expression/src/main/java/org/springframework/expression/spel/support/SimpleEvaluationContext.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests",
+   "test_overlay": [
+    "spring-expression/src/test/java/org/springframework/expression/spel/support/SimpleEvaluationContextTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 5,
+    "files_by_kind": {
+     "code": 2,
+     "tests": 1,
+     "docs": 2
+    },
+    "code_modules": 2,
+    "modules": [
+     "framework-docs",
+     "spring-core",
+     "spring-expression"
+    ],
+    "docs": true,
+    "size": "S"
+   }
+  },
+  {
+   "id": "observation-record-handled-exception",
+   "repo": "spring-observation-record-handled-exception",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "Code that handles an exception can record it on the server request observation by calling setError on the ServerRequestObservationContext, for example via ServerHttpObservationFilter.findObservationContext(request) or ServerRequestObservationContext.findCurrent(attributes). That error reaches the metrics, but Observation.error(Throwable) is never called, so ObservationHandlers such as the tracing handler are not notified and the server span is not marked as failed. Code outside the filter cannot call Observation.error reliably itself. Add `public static void recordHandledException(HttpServletRequest request, Throwable error)` to ServerHttpObservationFilter and `public static void recordHandledException(Map<String, Object> attributes, Throwable error)` to ServerRequestObservationContext (for the reactive exchange attributes). The recorded exception must be reported once via Observation.error when the exchange completes, before the observation is stopped, also when the request completes asynchronously. Both methods are no-ops when there is no observation for the request or exchange; in that case they must not add any request attribute or map entry. Spring MVC's and WebFlux's own exception handling, which currently records server errors (5xx) on the observation context, should use the new methods.",
+   "rationale": "The commit adds recordHandledException to the Servlet observation filter and to the reactive observation context; the filter (and, through an existing exchange attribute, HttpWebHandlerAdapter) reports the exception via Observation.error when the exchange completes. Primary files are the two spring-web types the tests call. Dependents: the Spring MVC call sites (ResponseStatusExceptionResolver, ExceptionHandlerExceptionResolver, ResponseEntityExceptionHandler, DefaultHandlerExceptionResolver), the WebFlux ResponseEntityExceptionHandler, the two framework-docs UserController snippets and observability.adoc.",
+   "source": {
+    "commit": "297c74d29c0704e0879ce121ba3789b677abb9ff",
+    "subject": "Report handled exceptions to the observation",
+    "date": "2026-11-10",
+    "issue": "gh-37658"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/integration/observability.adoc",
+     "status": "M"
+    },
+    {
+     "path": "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java",
+     "status": "M"
+    },
+    {
+     "path": "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/server/reactive/observation/ServerRequestObservationContext.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/filter/ServerHttpObservationFilter.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/web/filter/ServerHttpObservationFilterTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/web/server/adapter/HttpWebHandlerAdapterObservabilityTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityExceptionHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityExceptionHandlerTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/spring-webmvc.gradle",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/annotation/ResponseStatusExceptionResolver.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolver.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolver.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/ObservedExchange.java",
+     "status": "A"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/annotation/ResponseStatusExceptionResolverTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverErrorViewTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverProblemDetailTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolverTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/filter/ServerHttpObservationFilter.java",
+    "spring-web/src/main/java/org/springframework/http/server/reactive/observation/ServerRequestObservationContext.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/web/filter/ServerHttpObservationFilterTests.java",
+    "spring-web/src/test/java/org/springframework/web/server/adapter/HttpWebHandlerAdapterObservabilityTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityExceptionHandlerTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/ObservedExchange.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/annotation/ResponseStatusExceptionResolverTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverErrorViewTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverProblemDetailTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolverTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 20,
+    "files_by_kind": {
+     "code": 10,
+     "tests": 9,
+     "docs": 1
+    },
+    "code_modules": 4,
+    "modules": [
+     "framework-docs",
+     "spring-web",
+     "spring-webflux",
+     "spring-webmvc"
+    ],
+    "docs": true,
+    "size": "L"
+   }
+  },
+  {
+   "id": "beans-max-nested-path-depth",
+   "repo": "spring-beans-max-nested-path-depth",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "AbstractNestablePropertyAccessor resolves a nested property path such as \"a.b.c.d\" recursively, one level per path segment, with no limit on the depth. A long enough path, for example against a self-referential type, exhausts the stack with a StackOverflowError that gives no useful diagnostics. Constructor binding via DataBinder.construct() has the same problem, since it builds nested constructor arguments recursively through a nested path, including elements of indexed and mapped parameters. Add a maximum nesting depth: `int DEFAULT_MAX_NESTED_PATH_DEPTH = 100` plus `void setMaxNestedPathDepth(int)` and `int getMaxNestedPathDepth()` on ConfigurablePropertyAccessor, and `setMaxNestedPathDepth(int)`/`getMaxNestedPathDepth()` on DataBinder, which applies the limit to the property accessor it uses (bean property or direct field access) and to constructor binding. The nesting depth is the number of intermediate properties traversed (\"address.country.name\" has depth 2); a path at exactly the limit is allowed, a deeper one throws an InvalidPropertyException whose message ends with \"Nesting depth of property path exceeds the maximum of <limit>\". The limit applies whether or not autoGrowNestedPaths is enabled. A value of 0 disables nested paths but still allows simple, indexed and mapped access. Negative values are rejected with an IllegalArgumentException with the message \"'maxNestedPathDepth' must not be negative\". Like setAutoGrowCollectionLimit, DataBinder.setMaxNestedPathDepth must throw an IllegalStateException containing \"DataBinder is already initialized - call setMaxNestedPathDepth before other configuration methods\" once the binding result has been initialized. Resolution of a nested path must keep recursing through the protected getPropertyAccessorForPropertyPath(String) method, so that subclass overrides are still invoked at every level.",
+   "rationale": "The commit tracks nesting depth per nested property accessor and in DataBinder's recursive constructor binding, and throws InvalidPropertyException past a configurable limit (default 100). Primary files are the three types the description names (the accessor where the recursion lives, the interface with the new API, DataBinder). Dependents: AbstractPropertyAccessor (holds and validates the setting), BeanPropertyBindingResult and DirectFieldBindingResult (new constructor argument passed through to their accessors; the direct field access test needs it), and the data-binding reference doc (data-binding.adoc).",
+   "source": {
+    "commit": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
+    "subject": "Add a configurable limit for maximum nested property path depth",
+    "date": "2026-09-16",
+    "issue": "gh-37252"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/main/java/org/springframework/beans/AbstractNestablePropertyAccessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/main/java/org/springframework/beans/AbstractPropertyAccessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/main/java/org/springframework/beans/ConfigurablePropertyAccessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/test/java/org/springframework/beans/AbstractPropertyAccessorTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/test/java/org/springframework/beans/BeanWrapperTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/validation/BeanPropertyBindingResult.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/validation/DataBinder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/validation/DirectFieldBindingResult.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/test/java/org/springframework/validation/DataBinderConstructTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/test/java/org/springframework/validation/DataBinderFieldAccessTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/test/java/org/springframework/validation/DataBinderTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-beans/src/main/java/org/springframework/beans/AbstractNestablePropertyAccessor.java",
+    "spring-beans/src/main/java/org/springframework/beans/ConfigurablePropertyAccessor.java",
+    "spring-context/src/main/java/org/springframework/validation/DataBinder.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-beans:test --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+   "test_overlay": [
+    "spring-beans/src/test/java/org/springframework/beans/AbstractPropertyAccessorTests.java",
+    "spring-beans/src/test/java/org/springframework/beans/BeanWrapperTests.java",
+    "spring-context/src/test/java/org/springframework/validation/DataBinderConstructTests.java",
+    "spring-context/src/test/java/org/springframework/validation/DataBinderFieldAccessTests.java",
+    "spring-context/src/test/java/org/springframework/validation/DataBinderTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 12,
+    "files_by_kind": {
+     "code": 6,
+     "tests": 5,
+     "docs": 1
+    },
+    "code_modules": 2,
+    "modules": [
+     "framework-docs",
+     "spring-beans",
+     "spring-context"
+    ],
+    "docs": true,
+    "size": "M"
+   }
+  },
+  {
+   "id": "spel-big-power-result-limit",
+   "repo": "spring-spel-big-power-result-limit",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "A SpEL power operation on a BigDecimal or BigInteger base (for example `#bd ^ 1000000`) can be extremely expensive in time and memory, and nothing limits it. Add a configurable limit on the estimated result size of such power operations. The estimate in bits is the bit length of the base multiplied by the exponent, where the bit length is BigInteger.bitLength() for a BigInteger and the bit length of unscaledValue() for a BigDecimal. A result exactly at the limit is allowed. If the estimate exceeds the limit, throw a SpelEvaluationException at the position of the power operator with the new message code `SpelMessage.MAX_BIG_POWER_RESULT_EXCEEDED`, whose inserts are, in order, the base bit length, the exponent and the configured maximum. In SpelParserConfiguration, add `DEFAULT_MAX_BIG_POWER_BITS = 1_000_000`, a new canonical constructor `SpelParserConfiguration(SpelCompilerMode, ClassLoader, boolean, boolean, int, int, int, int maximumBigPowerBits)` that rejects non-positive values, and `getMaximumBigPowerBits()`. The default can also be set globally via a JVM system property or Spring property named `spring.expression.maxBigPowerBits`, exposed as the constant `SPRING_EXPRESSION_MAX_BIG_POWER_BITS_PROPERTY_NAME`. Integer.MAX_VALUE removes the limit.",
+   "rationale": "The commit limits BigDecimal/BigInteger power results in SpEL via a new SpelParserConfiguration setting (default 1,000,000 bits, overridable through SpringProperties) and a new SpelMessage. Primary files are the configuration class and SpelMessage, both named. Dependents: OperatorPower (the AST node that must do the check), the @see list in SpringProperties (spring-core), the parser-configuration section of evaluation.adoc and the Spring properties table in appendix.adoc.",
+   "source": {
+    "commit": "8a92c19e4dc7de87a6dfc7ce85920c6a2446320d",
+    "subject": "Limit result size of BigDecimal/BigInteger power operations in SpEL",
+    "date": "2026-08-14",
+    "issue": "gh-37034"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/appendix.adoc",
+     "status": "M"
+    },
+    {
+     "path": "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/main/java/org/springframework/core/SpringProperties.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/main/java/org/springframework/expression/spel/SpelMessage.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/main/java/org/springframework/expression/spel/ast/OperatorPower.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/test/java/org/springframework/expression/spel/AbstractExpressionTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/test/java/org/springframework/expression/spel/EvaluationTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java",
+    "spring-expression/src/main/java/org/springframework/expression/spel/SpelMessage.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.EvaluationTests",
+   "test_overlay": [
+    "spring-expression/src/test/java/org/springframework/expression/spel/AbstractExpressionTests.java",
+    "spring-expression/src/test/java/org/springframework/expression/spel/EvaluationTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 8,
+    "files_by_kind": {
+     "code": 4,
+     "tests": 2,
+     "docs": 2
+    },
+    "code_modules": 2,
+    "modules": [
+     "framework-docs",
+     "spring-core",
+     "spring-expression"
+    ],
+    "docs": true,
+    "size": "M"
+   }
+  },
+  {
+   "id": "jsonl-media-type-support",
+   "repo": "spring-jsonl-media-type-support",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "Spring's web frameworks use application/x-ndjson for streaming newline-delimited JSON, but application/jsonl (JSON Lines) is gaining popularity and may supersede it. Add JSON Lines as a well-known media type on MediaType, with the constants APPLICATION_JSONL and APPLICATION_JSONL_VALUE (\"application/jsonl\"). It must be supported everywhere application/x-ndjson is supported today. The JSON codecs list it among their default supported MIME types, directly after application/x-ndjson, and treat it as a streaming media type. Spring MVC streams a reactive multi-value return value as newline-delimited JSON with the content type application/jsonl when the client accepts application/jsonl, just as it does for application/x-ndjson.",
+   "rationale": "The commit adds MediaType.APPLICATION_JSONL(_VALUE) and registers it next to NDJSON in every JSON codec (Jackson 3 and 2, Gson, Kotlin serialization, Protobuf JSON) and in Spring MVC's ReactiveTypeHandler. MediaType is the primary file. Dependents are the codec classes in spring-web, ReactiveTypeHandler and spring-mvc.xsd in spring-webmvc, and three AsciiDoc pages.",
+   "source": {
+    "commit": "22e4d84993105c1975d6afe16d34467772c7c676",
+    "subject": "Add support for \"application/jsonl\" JSON lines",
+    "date": "2026-03-17",
+    "issue": "gh-36485"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/testing/webtestclient.adoc",
+     "status": "M"
+    },
+    {
+     "path": "framework-docs/modules/ROOT/pages/web/webflux/reactive-spring.adoc",
+     "status": "M"
+    },
+    {
+     "path": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-async.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/MediaType.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/json/GsonEncoder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/json/Jackson2CodecSupport.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/json/Jackson2JsonEncoder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/json/JacksonJsonDecoder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/json/JacksonJsonEncoder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/json/KotlinSerializationJsonDecoder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/json/KotlinSerializationJsonEncoder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/protobuf/ProtobufJsonEncoder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ReactiveTypeHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/resources/org/springframework/web/servlet/config/spring-mvc.xsd",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ReactiveTypeHandlerTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/MediaType.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.result.view.HttpMessageWriterViewTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandlerTests",
+   "test_overlay": [
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ReactiveTypeHandlerTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 16,
+    "files_by_kind": {
+     "code": 11,
+     "tests": 2,
+     "docs": 3
+    },
+    "code_modules": 2,
+    "modules": [
+     "framework-docs",
+     "spring-web",
+     "spring-webflux",
+     "spring-webmvc"
+    ],
+    "docs": true,
+    "size": "L"
+   }
+  },
+  {
+   "id": "retry-max-attempts-to-max-retries",
+   "repo": "spring-retry-max-attempts-to-max-retries",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "Configuring retries via maxAttempts is confusing: developers cannot tell whether 'max attempts' means the total number of attempts (the initial one plus retries) or only the retry attempts. Rename the concept to maxRetries in the retry API and keep the semantics unchanged (total attempts = 1 initial attempt + maxRetries). In @Retryable, the attributes maxAttempts and maxAttemptsString become maxRetries (default 3) and maxRetriesString. RetryPolicy.withMaxAttempts(long) becomes RetryPolicy.withMaxRetries(long), RetryPolicy.Builder.maxAttempts(long) becomes maxRetries(long), and the constant RetryPolicy.Builder.DEFAULT_MAX_ATTEMPTS becomes DEFAULT_MAX_RETRIES. The validation messages use the new name. A negative value is rejected with an IllegalArgumentException whose message starts with \"Invalid maxRetries (-1)\". Building with a custom BackOff together with any of the other options fails with \"The following configuration options are not supported with a custom BackOff strategy: maxRetries, delay, jitter, multiplier, or maxDelay.\" The BackOff implementations (FixedBackOff, ExponentialBackOff) keep their own maxAttempts naming.",
+   "rationale": "The commit renames maxAttempts to maxRetries in RetryPolicy (factory method, builder method, constant, messages) and in @Retryable (attributes), and updates the docs to explain total attempts = 1 + maxRetries. RetryPolicy and Retryable are primary because the tests use their renamed members. Dependents are RetryAnnotationBeanPostProcessor, AbstractRetryInterceptor and the MethodRetrySpec record component in spring-context, the RetryTemplate Javadoc in spring-core, and resilience.adoc.",
+   "source": {
+    "commit": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
+    "subject": "Rename maxAttempts to maxRetries in @⁠Retryable and RetryPolicy",
+    "date": "2025-11-10",
+    "issue": "gh-35772"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/resilience/annotation/RetryAnnotationBeanPostProcessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/resilience/annotation/Retryable.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/resilience/retry/AbstractRetryInterceptor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/resilience/retry/MethodRetrySpec.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/main/java/org/springframework/core/retry/RetryPolicy.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/main/java/org/springframework/core/retry/RetryTemplate.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+     "status": "D"
+    },
+    {
+     "path": "spring-core/src/test/java/org/springframework/core/retry/MaxRetriesRetryPolicyTests.java",
+     "status": "A"
+    },
+    {
+     "path": "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-core/src/main/java/org/springframework/core/retry/RetryPolicy.java",
+    "spring-context/src/main/java/org/springframework/resilience/annotation/Retryable.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-context:test --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --tests org.springframework.core.retry.MaxRetriesRetryPolicyTests --tests org.springframework.core.retry.RetryPolicyTests --tests org.springframework.core.retry.RetryTemplateTests",
+   "test_overlay": [
+    "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+    "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+    "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+    "spring-core/src/test/java/org/springframework/core/retry/MaxRetriesRetryPolicyTests.java",
+    "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+    "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 13,
+    "files_by_kind": {
+     "code": 6,
+     "tests": 6,
+     "docs": 1
+    },
+    "code_modules": 2,
+    "modules": [
+     "framework-docs",
+     "spring-context",
+     "spring-core"
+    ],
+    "docs": true,
+    "size": "L"
+   }
+  },
+  {
+   "id": "fn-request-bind-pathvars-headers",
+   "repo": "spring-fn-request-bind-pathvars-headers",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "In functional endpoints, ServerRequest.bind(Class) only binds request parameters onto the target object. A handler for a route such as \"/request/{var}\" therefore cannot bind the URI variable var, or a request header, the way data binding for annotated controllers can. Data binding through ServerRequest.bind should also bind URI path variables and request headers, consistent with the extended data binders that annotated controllers use. This applies to both WebFlux and Spring MVC functional endpoints.",
+   "rationale": "The commit makes the functional DefaultServerRequest.bind use ExtendedWebExchangeDataBinder (WebFlux) and ExtendedServletRequestDataBinder (MVC) instead of the plain binders. The WebFlux DefaultServerRequest is primary because the issue is reported against WebFlux. Dependents are the MVC DefaultServerRequest, the new single-argument constructor in ExtendedWebExchangeDataBinder, and the webflux-functional and webmvc-functional AsciiDoc pages.",
+   "source": {
+    "commit": "a9a404266c25a82b0f3a4286053f69ce0c8fb008",
+    "subject": "Data binding from pathvars and headers in fn handlers",
+    "date": "2025-11-26",
+    "issue": "gh-35800"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/web/webflux-functional.adoc",
+     "status": "M"
+    },
+    {
+     "path": "framework-docs/modules/ROOT/pages/web/webmvc-functional.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/function/server/DefaultServerRequest.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ExtendedWebExchangeDataBinder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/function/server/BindingFunctionIntegrationTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/function/DefaultServerRequest.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/function/DefaultServerRequestTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-webflux/src/main/java/org/springframework/web/reactive/function/server/DefaultServerRequest.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.function.server.BindingFunctionIntegrationTests :spring-webmvc:test --tests org.springframework.web.servlet.function.DefaultServerRequestTests",
+   "test_overlay": [
+    "spring-webflux/src/test/java/org/springframework/web/reactive/function/server/BindingFunctionIntegrationTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/function/DefaultServerRequestTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 7,
+    "files_by_kind": {
+     "code": 3,
+     "tests": 2,
+     "docs": 2
+    },
+    "code_modules": 2,
+    "modules": [
+     "framework-docs",
+     "spring-webflux",
+     "spring-webmvc"
+    ],
+    "docs": true,
+    "size": "M"
+   }
+  },
+  {
+   "id": "jdbcclient-batch-entry-dsl",
+   "repo": "spring-jdbcclient-batch-entry-dsl",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "JdbcClient's batch API (BatchSpec, obtained from StatementSpec.batch()) binds parameters to a 'current' entry and separates entries with add(). A missing add() still compiles but silently merges two entries, and the style does not suit batches built from an existing collection. Replace this style with self-contained entries. BatchSpec provides entry(Consumer<BatchEntry>), entry(List<?>) for one entry of positional parameters, and entry(Map<String, ?>) for one entry of named parameters. It also provides entries(Object...) and entries(List<?>), which define one named-parameter entry per parameter object (a bean or record, a Map, or a SqlParameterSource). These calls can be combined freely within one batch, and update(...) executes the accumulated entries. A new nested interface JdbcClient.BatchEntry offers param(Object), param(int, Object), param(int, Object, int), param(String, Object), param(String, Object, int), paramSource(Object) and paramSource(SqlParameterSource), each returning BatchEntry. Remove add(), param(...), params(...) and paramSource(...) from BatchSpec. Each entry is validated when it is added and is rejected with an IllegalStateException: \"Configure at least one parameter for each batch entry\" for an empty entry; \"Configure either named or indexed parameters, not both\" when an entry mixes indexed parameters with named parameters or a parameter source; \"Configure either individual named parameters or a SqlParameterSource, not both\" when an entry mixes named parameters with a parameter source; and \"Configure either named or indexed parameters for all batch entries, not both\" when an entry's style differs from earlier entries.",
+   "rationale": "The commit replaces BatchSpec's add()-based chaining with entry(...)/entries(...) and a new JdbcClient.BatchEntry type, and validates eagerly per entry. JdbcClient (the interface) is primary. Dependents are the DefaultJdbcClient implementation (DefaultBatchSpec and a new DefaultBatchEntry) and the data-access/jdbc/core.adoc examples.",
+   "source": {
+    "commit": "833ab4d48fdaf64f7b234f6dac76d4cced14390c",
+    "subject": "Introduce entry-based DSL for JdbcClient batch updates",
+    "date": "2026-09-28",
+    "issue": "gh-37341"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-jdbc/src/main/java/org/springframework/jdbc/core/simple/DefaultJdbcClient.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-jdbc/src/main/java/org/springframework/jdbc/core/simple/JdbcClient.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-jdbc/src/main/java/org/springframework/jdbc/core/simple/JdbcClient.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-jdbc:test --tests org.springframework.jdbc.core.simple.JdbcClientIndexedParameterTests --tests org.springframework.jdbc.core.simple.JdbcClientIntegrationTests --tests org.springframework.jdbc.core.simple.JdbcClientNamedParameterTests",
+   "test_overlay": [
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 6,
+    "files_by_kind": {
+     "code": 2,
+     "tests": 3,
+     "docs": 1
+    },
+    "code_modules": 1,
+    "modules": [
+     "framework-docs",
+     "spring-jdbc"
+    ],
+    "docs": true,
+    "size": "M"
+   }
+  },
+  {
+   "id": "type-mismatch-required-type-arg",
+   "repo": "spring-type-mismatch-required-type-arg",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "When ResponseEntityExceptionHandler handles a TypeMismatchException, the arguments passed to the MessageSource for a custom problem detail message are only the property name ({0}) and the rejected value ({1}). A custom message therefore cannot mention the expected type. Add the simple name of the required type as a third message argument ({2}), and use an empty string when the required type is unknown. The default detail message stays unchanged.",
+   "rationale": "The commit adds requiredType.getSimpleName() as message argument {2} for TypeMismatchException in the MVC ResponseEntityExceptionHandler. The handler is the primary file. The only dependent is the mvc-ann-rest-exceptions.adoc table that lists the message arguments.",
+   "source": {
+    "commit": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
+    "subject": "Add required type to TypeMismatchException message args",
+    "date": "2025-11-26",
+    "issue": "gh-35837"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandler.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests",
+   "test_overlay": [
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 3,
+    "files_by_kind": {
+     "code": 1,
+     "tests": 1,
+     "docs": 1
+    },
+    "code_modules": 1,
+    "modules": [
+     "framework-docs",
+     "spring-webmvc"
+    ],
+    "docs": true,
+    "size": "S"
+   }
+  },
+  {
+   "id": "servlet-response-ignore-body-flush",
+   "repo": "spring-servlet-response-ignore-body-flush",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "Flush calls on the OutputStream returned by ServletServerHttpResponse.getBody() go straight to the Servlet response output stream. HttpMessageConverters and codec libraries can flush many times while writing, which forces the Servlet container to flush to the network and degrades performance; the container is better placed to decide when to flush. By default, flush() on the body stream of a ServletServerHttpResponse should be a no-op, while ServletServerHttpResponse.flush() keeps flushing the response, and client-side usage is unaffected. Cases that do need flushing, such as streaming, must keep working by flushing the response itself. Add a Spring property that restores the previous behaviour, exposed as the constant ServletServerHttpResponse.BODY_FLUSH_ENABLED with the value \"spring.http.response.flush.enabled\". When this property is true, body stream flushes go through to the Servlet output stream. The property is read when a ServletServerHttpResponse is created.",
+   "rationale": "The commit wraps the body stream in StreamUtils.nonFlushing unless the spring.http.response.flush.enabled Spring property is set. ServletServerHttpResponse is primary. Dependents are the Spring MVC call sites that relied on flushing via the body stream, which now call response.flush(): HttpHeadersReturnValueHandler and StreamingResponseBodyReturnValueHandler (spring-webmvc). The appendix.adoc Spring property table is also a dependent.",
+   "source": {
+    "commit": "e0b54e244e7ac9f48f720bcbdcc869e2400fe35c",
+    "subject": "Ignore flushes on ServletServerHttpResponse output stream",
+    "date": "2026-02-24",
+    "issue": "gh-36385"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/appendix.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/server/ServletServerHttpResponse.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/http/server/ServletServerHttpResponseTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/HttpHeadersReturnValueHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/StreamingResponseBodyReturnValueHandler.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/server/ServletServerHttpResponse.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.http.server.ServletServerHttpResponseTests",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/http/server/ServletServerHttpResponseTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 5,
+    "files_by_kind": {
+     "code": 3,
+     "tests": 1,
+     "docs": 1
+    },
+    "code_modules": 2,
+    "modules": [
+     "framework-docs",
+     "spring-web",
+     "spring-webmvc"
+    ],
+    "docs": true,
+    "size": "S"
+   }
+  },
+  {
+   "id": "content-negotiation-no-fallback-mapping",
+   "repo": "spring-content-negotiation-no-fallback-mapping",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "Content negotiation strategies that map a key (file extension or query parameter value) to a media type fall back to MediaTypeFactory when the key is not configured. Today such fallback results are added to the strategy's registered mappings, so the set of mapped keys, file extensions and supported media types grows at runtime, and the supported media types reported in a not-acceptable error (for example NotAcceptableStatusException) contain values that were never configured. Fallback lookups must still resolve the requested media type, but must not be added to the registered mappings: AbstractMappingContentNegotiationStrategy#getMediaTypes(), getAllFileExtensions() and resolveFileExtensions(..) must only reflect the configured values, and the supported media types reported on rejection must be exactly the configured ones. Apply this consistently to the parameter-based strategy in both Spring MVC and WebFlux. As in Spring MVC, a key that contains a dot (e.g. \"not.json\") must not be resolved through the MediaTypeFactory fallback; it only matches if it is registered explicitly (e.g. a configured key \"custom.json\"), otherwise the request is rejected as not acceptable.",
+   "rationale": "The commit stops AbstractMappingContentNegotiationStrategy from calling addMapping() for handleNoMatch() results and makes the WebFlux ParameterContentTypeResolver keep an immutable map of configured types, no longer putIfAbsent()-ing fallback results, and skip MediaTypeFactory for dotted keys. Primary file is the MVC base class named in the description; the dependent is the WebFlux ParameterContentTypeResolver plus both test classes.",
+   "source": {
+    "commit": "7fbdbd6eb7665be6a66562d26b26ffcfb600ee32",
+    "subject": "Return only configured types for content negociation",
+    "date": "2026-11-13"
+   },
+   "gold_files": [
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/accept/AbstractMappingContentNegotiationStrategy.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/web/accept/MappingContentNegotiationStrategyTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/accept/ParameterContentTypeResolver.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/accept/ParameterContentTypeResolverTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/accept/AbstractMappingContentNegotiationStrategy.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.web.accept.MappingContentNegotiationStrategyTests :spring-webflux:test --tests org.springframework.web.reactive.accept.ParameterContentTypeResolverTests",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/web/accept/MappingContentNegotiationStrategyTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/accept/ParameterContentTypeResolverTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 4,
+    "files_by_kind": {
+     "code": 2,
+     "tests": 2,
+     "docs": 0
+    },
+    "code_modules": 2,
+    "modules": [
+     "spring-web",
+     "spring-webflux"
+    ],
+    "docs": false,
+    "size": "S"
+   }
+  },
+  {
+   "id": "client-builders-deep-copy-default-headers-cookies",
+   "repo": "spring-client-builders-deep-copy-default-headers-cookies",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "The RestClient.Builder copy constructor (used by clone() and by RestClient#mutate()) copies the default headers and default cookies maps but shares their value lists with the original builder. As a result, adding a value under an existing header or cookie name on a cloned or mutated builder also changes the builder it was copied from, and every builder later obtained from mutate() on the same client. Copied builders must hold independent copies of the default header and cookie values, so that changes on one never show up in another. The framework's other HTTP client builders that support clone() or mutate() have the same problem and must be fixed in the same way. In addition, a client that has already been built must not see default header or cookie changes made to its builder afterwards.",
+   "rationale": "The commit deep-copies defaultHeaders (HttpHeaders.copyOf) and defaultCookies (LinkedMultiValueMap#deepCopy) in the copy constructors of DefaultRestClientBuilder, DefaultWebClientBuilder and DefaultWebTestClientBuilder, and DefaultWebTestClientBuilder#build() now passes copies to the built client. Primary is the RestClient builder named via RestClient.Builder; dependents are the WebFlux WebClient builder and the spring-test WebTestClient builder, plus three test classes across spring-web, spring-webflux and spring-test.",
+   "source": {
+    "commit": "4cf6335372556d4f6ccc3a0166318c5f19037e8f",
+    "subject": "Deep copy default headers, cookies in client builders",
+    "date": "2026-10-22"
+   },
+   "gold_files": [
+    {
+     "path": "spring-test/src/main/java/org/springframework/test/web/reactive/server/DefaultWebTestClientBuilder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-test/src/test/java/org/springframework/test/web/reactive/server/MockServerTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/client/DefaultRestClientBuilder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/web/client/RestClientBuilderTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/DefaultWebClientBuilder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/function/client/DefaultWebClientTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/client/DefaultRestClientBuilder.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-test:test --tests org.springframework.test.web.reactive.server.MockServerTests :spring-web:test --tests org.springframework.web.client.RestClientBuilderTests :spring-webflux:test --tests org.springframework.web.reactive.function.client.DefaultWebClientTests",
+   "test_overlay": [
+    "spring-test/src/test/java/org/springframework/test/web/reactive/server/MockServerTests.java",
+    "spring-web/src/test/java/org/springframework/web/client/RestClientBuilderTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/function/client/DefaultWebClientTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 6,
+    "files_by_kind": {
+     "code": 3,
+     "tests": 3,
+     "docs": 0
+    },
+    "code_modules": 3,
+    "modules": [
+     "spring-test",
+     "spring-web",
+     "spring-webflux"
+    ],
+    "docs": false,
+    "size": "M"
+   }
+  },
+  {
+   "id": "http-range-honor-if-range",
+   "repo": "spring-http-range-honor-if-range",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "Resource responses ignore the If-Range request header: a Range request is always answered with 206 Partial Content, even when the If-Range validator no longer matches the current representation (RFC 9110, section 13.1.5). In that case the client must instead receive the full resource with 200 OK and no Content-Range header. Add a static method HttpRange.parseRanges(HttpHeaders requestHeaders, HttpHeaders responseHeaders) that returns the parsed ranges of the Range request header when there is no If-Range header or when If-Range matches the response, and an empty list (meaning \"ignore Range\") when it does not match; in that case an invalid Range value is ignored too, without an exception. A quoted If-Range value is an entity tag and matches only by strong comparison with the response ETag, so weak tags (W/\"...\") never match; any other value is a date that must equal the response Last-Modified header value. More than one If-Range value counts as no match. Apply the behaviour consistently to resource responses in both Spring MVC and WebFlux, including when the ETag is set by the handler on the response.",
+   "rationale": "The commit adds HttpRange.parseRanges(HttpHeaders, HttpHeaders) and uses it wherever resource range requests are served: ResourceHttpMessageWriter (WebFlux, also used by ResourceWebHandler), ResourceHttpRequestHandler, AbstractMessageConverterMethodProcessor and DefaultEntityResponseBuilder (Spring MVC), falling back to a full response when the list is empty. Primary is HttpRange; dependents are those four call sites in spring-web and spring-webmvc, plus six test classes in three modules.",
+   "source": {
+    "commit": "8ab533263994e92f9660c9917a07cd3d8f8e769b",
+    "subject": "Honor If-Range for resource range requests",
+    "date": "2026-10-22"
+   },
+   "gold_files": [
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/HttpRange.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/codec/ResourceHttpMessageWriter.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/http/HttpRangeTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/http/codec/ResourceHttpMessageWriterTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/resource/ResourceWebHandlerTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/function/DefaultEntityResponseBuilder.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/AbstractMessageConverterMethodProcessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/resource/ResourceHttpRequestHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/function/ResourceHandlerFunctionTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorMockTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/resource/ResourceHttpRequestHandlerTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/http/HttpRange.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/http/HttpRangeTests.java",
+    "spring-web/src/test/java/org/springframework/http/codec/ResourceHttpMessageWriterTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/resource/ResourceWebHandlerTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/function/ResourceHandlerFunctionTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorMockTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/resource/ResourceHttpRequestHandlerTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 11,
+    "files_by_kind": {
+     "code": 5,
+     "tests": 6,
+     "docs": 0
+    },
+    "code_modules": 2,
+    "modules": [
+     "spring-web",
+     "spring-webflux",
+     "spring-webmvc"
+    ],
+    "docs": false,
+    "size": "M"
+   }
+  },
+  {
+   "id": "error-response-interceptor-with-request",
+   "repo": "spring-error-response-interceptor-with-request",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "ErrorResponse.Interceptor is the central API to enrich an RFC 9457 ProblemDetail before it is rendered, but implementations only receive the ProblemDetail and the ErrorResponse. Implementations that depend on the request, for example on request headers or query parameters, are therefore not possible. Add a default method handleError(ProblemDetail detail, @Nullable ErrorResponse errorResponse, HttpRequest request) to ErrorResponse.Interceptor that delegates to the existing two-argument method by default. The interface must remain usable as a lambda for the existing two-argument method. All framework calls of the interceptor must use the new request-aware variant and pass the current request, in both Spring MVC and WebFlux.",
+   "rationale": "The commit adds the default 3-argument handleError(..., HttpRequest) to ErrorResponse.Interceptor (plus @FunctionalInterface) and switches every framework call site to it: AbstractMessageWriterResultHandler, ResponseBodyResultHandler and ResponseEntityResultHandler in WebFlux, and AbstractMessageConverterMethodProcessor, HttpEntityMethodProcessor and RequestResponseBodyMethodProcessor in Spring MVC. Primary is ErrorResponse; dependents are the six call sites and four test classes.",
+   "source": {
+    "commit": "d70220eb5de0e10211e1a843b292cc54bed0c365",
+    "subject": "Give ErrorResponse.Interceptor access to the request",
+    "date": "2026-10-06",
+    "issue": "gh-37410"
+   },
+   "gold_files": [
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/ErrorResponse.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/AbstractMessageWriterResultHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandlerTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandlerTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/AbstractMessageConverterMethodProcessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessorTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/ErrorResponse.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+   "test_overlay": [
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandlerTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandlerTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessorTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 11,
+    "files_by_kind": {
+     "code": 7,
+     "tests": 4,
+     "docs": 0
+    },
+    "code_modules": 3,
+    "modules": [
+     "spring-web",
+     "spring-webflux",
+     "spring-webmvc"
+    ],
+    "docs": false,
+    "size": "M"
+   }
+  },
+  {
+   "id": "mime-type-parameter-names-case-insensitive",
+   "repo": "spring-mime-type-parameter-names-case-insensitive",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "MIME type parameter names are case-insensitive, and MimeType already stores its parameters in a case-insensitive map, but several code paths still compare parameter names case-sensitively. As a result MimeType.hashCode() is inconsistent with equals(): text/plain;Spring=framework and text/plain;spring=framework are equal but hash differently, so one is not found in a hash-based collection holding the other. compareTo() and the charset handling have the same blind spot: a parameter named \"Charset\" must be treated like \"charset\" (charset values compared case-insensitively), so text/plain;Charset=UTF-8 and text/plain;charset=utf-8 are equal, have the same hash code and compare as 0. Handle parameter names case-insensitively everywhere this matters, including the quality-factor parameter of media types: parsing audio/basic;Q=1.1 must be rejected as invalid just like q=1.1, and removing the quality value must also remove a Q= parameter.",
+   "rationale": "The commit switches PARAM_CHARSET comparisons to equalsIgnoreCase in MimeType.parametersAreEqual/compareTo and lower-cases the key in parametersHashCode; in spring-web MediaType.checkParameters and removeQualityValue now treat the q parameter case-insensitively. Primary is MimeType; the dependent is MediaType in spring-web, plus MimeTypeTests and MediaTypeTests.",
+   "source": {
+    "commit": "2028eb3694babca20cbcb95a966b50b3e6fe71ca",
+    "subject": "Handle MIME type parameter names case-insensitively",
+    "date": "2026-08-31"
+   },
+   "gold_files": [
+    {
+     "path": "spring-core/src/main/java/org/springframework/util/MimeType.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/test/java/org/springframework/util/MimeTypeTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/http/MediaType.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/http/MediaTypeTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-core/src/main/java/org/springframework/util/MimeType.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-core:test --tests org.springframework.util.MimeTypeTests :spring-web:test --tests org.springframework.http.MediaTypeTests",
+   "test_overlay": [
+    "spring-core/src/test/java/org/springframework/util/MimeTypeTests.java",
+    "spring-web/src/test/java/org/springframework/http/MediaTypeTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 4,
+    "files_by_kind": {
+     "code": 2,
+     "tests": 2,
+     "docs": 0
+    },
+    "code_modules": 2,
+    "modules": [
+     "spring-core",
+     "spring-web"
+    ],
+    "docs": false,
+    "size": "S"
+   }
+  },
+  {
+   "id": "deferred-bean-registrar-contains-bean",
+   "repo": "spring-deferred-bean-registrar-contains-bean",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "BeanRegistrar implementations cannot register beans conditionally on what is already registered, and since they run while configuration classes and other registrations are still being processed, any such check would depend on registration order. Add three methods to BeanRegistry: boolean containsBean(String name), boolean containsBean(Class<?> beanType) and <T> boolean containsBean(ParameterizedTypeReference<T> beanType), which tell whether a bean of that name, type or generic type is already registered. Also add a marker interface org.springframework.context.DeferredBeanRegistrar extends BeanRegistrar for registrars that run at the end of the bean registration phase, after regular bean definition reading and configuration class processing, so that their containsBean checks see all user-registered beans independent of order. Regular BeanRegistrars keep their current timing and therefore only see beans registered before them. Deferred registrars must be supported wherever bean registrars can be registered, whether imported from configuration classes via @Import or registered programmatically with an application context; multiple deferred registrars run in order (Ordered/@Order).",
+   "rationale": "The commit adds containsBean(String/Class/ParameterizedTypeReference) to BeanRegistry (implemented in BeanRegistryAdapter) and the DeferredBeanRegistrar marker interface. ConfigurationClassBeanDefinitionReader skips deferred registrars, ConfigurationClassPostProcessor invokes them after configuration class parsing, GenericApplicationContext#register(BeanRegistrar...) collects them into an internal PriorityOrdered registry post-processor ordered after ConfigurationClassPostProcessor, and the @Import Javadoc mentions them. Primaries are the two named types; dependents are BeanRegistryAdapter, the two configuration-class processing classes, GenericApplicationContext and Import, plus tests and test fixtures.",
+   "source": {
+    "commit": "7502b923922d02109b5a3c861033715f973dc3cd",
+    "subject": "Introduce DeferredBeanRegistrar and BeanRegistry#containsBean methods",
+    "date": "2026-03-28",
+    "issue": "gh-21497"
+   },
+   "gold_files": [
+    {
+     "path": "spring-beans/src/main/java/org/springframework/beans/factory/BeanRegistry.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/main/java/org/springframework/beans/factory/support/BeanRegistryAdapter.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/DeferredBeanRegistrar.java",
+     "status": "A"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassBeanDefinitionReader.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassPostProcessor.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/annotation/Import.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/support/GenericApplicationContext.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/test/java/org/springframework/context/annotation/beanregistrar/BeanRegistrarConfigurationTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/test/java/org/springframework/context/support/GenericApplicationContextTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/testFixtures/java/org/springframework/context/testfixture/beans/factory/MyDeferredBeanRegistrar.java",
+     "status": "A"
+    },
+    {
+     "path": "spring-context/src/testFixtures/java/org/springframework/context/testfixture/beans/factory/MyRegularBeanRegistrar.java",
+     "status": "A"
+    },
+    {
+     "path": "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/MyDeferredBeanRegistrarConfiguration.java",
+     "status": "A"
+    },
+    {
+     "path": "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/MyRegularBeanRegistrarConfiguration.java",
+     "status": "A"
+    },
+    {
+     "path": "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/TestBeanConfiguration.java",
+     "status": "A"
+    }
+   ],
+   "primary_files": [
+    "spring-beans/src/main/java/org/springframework/beans/factory/BeanRegistry.java",
+    "spring-context/src/main/java/org/springframework/context/DeferredBeanRegistrar.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-context:test --tests org.springframework.context.annotation.beanregistrar.BeanRegistrarConfigurationTests --tests org.springframework.context.support.GenericApplicationContextTests",
+   "test_overlay": [
+    "spring-context/src/test/java/org/springframework/context/annotation/beanregistrar/BeanRegistrarConfigurationTests.java",
+    "spring-context/src/test/java/org/springframework/context/support/GenericApplicationContextTests.java",
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/beans/factory/MyDeferredBeanRegistrar.java",
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/beans/factory/MyRegularBeanRegistrar.java",
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/MyDeferredBeanRegistrarConfiguration.java",
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/MyRegularBeanRegistrarConfiguration.java",
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/TestBeanConfiguration.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 14,
+    "files_by_kind": {
+     "code": 7,
+     "tests": 7,
+     "docs": 0
+    },
+    "code_modules": 2,
+    "modules": [
+     "spring-beans",
+     "spring-context"
+    ],
+    "docs": false,
+    "size": "L"
+   }
+  },
+  {
+   "id": "cache-manager-reset-caches",
+   "repo": "spring-cache-manager-reset-caches",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "Some cache managers already offer a provider-specific resetCaches() method to throw away all cache content, but there is no general way to do this through the CacheManager abstraction. Add a void resetCaches() method to the CacheManager interface. Its default behaviour clears every registered cache (via Cache#clear) while keeping the caches registered, so getCacheNames() and getCache(name) keep returning the same caches afterwards but without entries. Concrete cache managers may override it with a more efficient implementation at the provider level, or with a more radical one that drops caches and re-creates them on demand. Managers that delegate to other cache managers should apply the reset to all of their delegates.",
+   "rationale": "Generalizes resetCaches() into the CacheManager interface with a default that clears all caches. Primary is CacheManager. Dependents: overrides in AbstractCacheManager, CompositeCacheManager, NoOpCacheManager (spring-context) and JCacheCacheManager (spring-context-support), plus JCacheEhCacheApiTests.",
+   "source": {
+    "commit": "96aadc2b12bce37237e053b7f7e1c28b98be328b",
+    "subject": "Add resetCaches() method to general CacheManager interface",
+    "date": "2025-12-04",
+    "issue": "gh-35845"
+   },
+   "gold_files": [
+    {
+     "path": "spring-context-support/src/main/java/org/springframework/cache/jcache/JCacheCacheManager.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context-support/src/test/java/org/springframework/cache/jcache/JCacheEhCacheApiTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/cache/CacheManager.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/cache/support/AbstractCacheManager.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/cache/support/CompositeCacheManager.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/cache/support/NoOpCacheManager.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-context/src/main/java/org/springframework/cache/CacheManager.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-context-support:test --tests org.springframework.cache.jcache.JCacheEhCacheApiTests",
+   "test_overlay": [
+    "spring-context-support/src/test/java/org/springframework/cache/jcache/JCacheEhCacheApiTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 6,
+    "files_by_kind": {
+     "code": 5,
+     "tests": 1,
+     "docs": 0
+    },
+    "code_modules": 2,
+    "modules": [
+     "spring-context",
+     "spring-context-support"
+    ],
+    "docs": false,
+    "size": "M"
+   }
+  },
+  {
+   "id": "api-version-deprecation-handler-handler-arg",
+   "repo": "spring-api-version-deprecation-handler-handler-arg",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "ApiVersionDeprecationHandler implementations decide on deprecation purely based on the request version, but a custom implementation may need to know which handler was chosen for the request. Pass the selected handler to deprecation handling, for both Spring MVC and WebFlux. In the Servlet variant of ApiVersionDeprecationHandler the method becomes handleVersion(Comparable<?> version, Object handler, HttpServletRequest request, HttpServletResponse response); in the reactive variant it becomes handleVersion(Comparable<?> version, Object handler, ServerWebExchange exchange). The handler must be supplied by the infrastructure that invokes deprecation handling once the handler for the request has been determined.",
+   "rationale": "Adds an Object handler parameter to ApiVersionDeprecationHandler.handleVersion in both stacks. Primary are the two handler interfaces. Dependents: ApiVersionStrategy.handleDeprecations and DefaultApiVersionStrategy in both modules, StandardApiVersionDeprecationHandler in both modules, AbstractHandlerMapping in spring-webmvc and spring-webflux (call sites), and the two StandardApiVersionDeprecationHandlerTests.",
+   "source": {
+    "commit": "b128f59714b071e9b4d8a1ae9cdc63f3ff62251f",
+    "subject": "Expose handler to ApiVersionDeprecationHandler implementations",
+    "date": "2025-11-05",
+    "issue": "gh-35750"
+   },
+   "gold_files": [
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/accept/ApiVersionDeprecationHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/accept/ApiVersionStrategy.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/accept/DefaultApiVersionStrategy.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/main/java/org/springframework/web/accept/StandardApiVersionDeprecationHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/accept/ApiVersionDeprecationHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/accept/ApiVersionStrategy.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/accept/DefaultApiVersionStrategy.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandler.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/main/java/org/springframework/web/reactive/handler/AbstractHandlerMapping.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-webmvc/src/main/java/org/springframework/web/servlet/handler/AbstractHandlerMapping.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-web/src/main/java/org/springframework/web/accept/ApiVersionDeprecationHandler.java",
+    "spring-webflux/src/main/java/org/springframework/web/reactive/accept/ApiVersionDeprecationHandler.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.web.accept.StandardApiVersionDeprecationHandlerTests :spring-webflux:test --tests org.springframework.web.reactive.accept.StandardApiVersionDeprecationHandlerTests",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 12,
+    "files_by_kind": {
+     "code": 10,
+     "tests": 2,
+     "docs": 0
+    },
+    "code_modules": 3,
+    "modules": [
+     "spring-web",
+     "spring-webflux",
+     "spring-webmvc"
+    ],
+    "docs": false,
+    "size": "M"
+   }
+  },
+  {
+   "id": "bean-provider-parameterized-type-reference",
+   "repo": "spring-bean-provider-parameterized-type-reference",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "Retrieving a generically typed bean provider from a BeanFactory currently requires building a ResolvableType by hand, e.g. ResolvableType.forType(new ParameterizedTypeReference<List<String>>() {}). Add an overload <T> ObjectProvider<T> getBeanProvider(ParameterizedTypeReference<T> requiredType) to BeanFactory so that callers can write getBeanProvider(new ParameterizedTypeReference<>() {}) directly. It must behave exactly like getBeanProvider(ResolvableType.forType(requiredType)), including generic type matching and the uniqueness and availability semantics of the returned provider.",
+   "rationale": "Adds getBeanProvider(ParameterizedTypeReference) to BeanFactory as an abstract method. Primary is BeanFactory. Dependents: every implementation - DefaultListableBeanFactory, StaticListableBeanFactory (spring-beans), AbstractApplicationContext and SimpleJndiBeanFactory (spring-context), StubWebApplicationContext (spring-test) - plus BeanFactoryGenericsTests.",
+   "source": {
+    "commit": "2e4ca413829f279f7ce3aa637582cb8b97b9b3ca",
+    "subject": "Add getBeanProvider(ParameterizedTypeReference) overload",
+    "date": "2025-10-15",
+    "issue": "gh-31444"
+   },
+   "gold_files": [
+    {
+     "path": "spring-beans/src/main/java/org/springframework/beans/factory/BeanFactory.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/main/java/org/springframework/beans/factory/support/DefaultListableBeanFactory.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/main/java/org/springframework/beans/factory/support/StaticListableBeanFactory.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-beans/src/test/java/org/springframework/beans/factory/support/BeanFactoryGenericsTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/jndi/support/SimpleJndiBeanFactory.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-test/src/main/java/org/springframework/test/web/servlet/setup/StubWebApplicationContext.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-beans/src/main/java/org/springframework/beans/factory/BeanFactory.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-beans:test --tests org.springframework.beans.factory.support.BeanFactoryGenericsTests",
+   "test_overlay": [
+    "spring-beans/src/test/java/org/springframework/beans/factory/support/BeanFactoryGenericsTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 7,
+    "files_by_kind": {
+     "code": 6,
+     "tests": 1,
+     "docs": 0
+    },
+    "code_modules": 3,
+    "modules": [
+     "spring-beans",
+     "spring-context",
+     "spring-test"
+    ],
+    "docs": false,
+    "size": "M"
+   }
+  },
+  {
+   "id": "message-source-default-charset",
+   "repo": "spring-message-source-default-charset",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "AbstractResourceBasedMessageSource only offers setDefaultEncoding(String), accepting a charset name, although elsewhere the framework now supports passing a Charset directly. Add public void setDefaultCharset(@Nullable Charset) and protected @Nullable Charset getDefaultCharset() to AbstractResourceBasedMessageSource, with the same semantics as the existing encoding property (null means the platform default). The resource-bundle based message sources should use the configured Charset directly when reading properties files instead of a charset name. setDefaultEncoding(String) remains as a convenience but resolves the name immediately, so an invalid charset name now fails at configuration time with an UnsupportedCharsetException rather than surfacing later as a NoSuchMessageException.",
+   "rationale": "Stores the default encoding as a Charset, adds setDefaultCharset/getDefaultCharset and resolves names eagerly. Primary is AbstractResourceBasedMessageSource. Dependents: ReloadableResourceBundleMessageSource and ResourceBundleMessageSource switching to getDefaultCharset(), the DefaultPropertiesPersister Javadoc in spring-core mentioning the property, and ResourceBundleMessageSourceTests.",
+   "source": {
+    "commit": "02af3e7a17db9f63ced52425d06558eb50deb495",
+    "subject": "Introduce setDefaultCharset() in AbstractResourceBasedMessageSource",
+    "date": "2026-03-03",
+    "issue": "gh-36413"
+   },
+   "gold_files": [
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/support/AbstractResourceBasedMessageSource.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/support/ReloadableResourceBundleMessageSource.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/main/java/org/springframework/context/support/ResourceBundleMessageSource.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/main/java/org/springframework/util/DefaultPropertiesPersister.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-context/src/main/java/org/springframework/context/support/AbstractResourceBasedMessageSource.java"
+   ],
+   "test_command": "./gradlew --no-daemon --console=plain :spring-context:test --tests org.springframework.context.support.ResourceBundleMessageSourceTests",
+   "test_overlay": [
+    "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 900,
+   "strata": {
+    "files": 5,
+    "files_by_kind": {
+     "code": 4,
+     "tests": 1,
+     "docs": 0
+    },
+    "code_modules": 2,
+    "modules": [
+     "spring-context",
+     "spring-core"
+    ],
+    "docs": false,
+    "size": "S"
+   }
+  }
+ ]
+}

@@ -48,14 +48,16 @@ def _default_models() -> str:
 
 def cmd_fetch(args) -> int:
     repos = config.load_repos()
-    if args.repo:
-        repos = {k: v for k, v in repos.items() if k in set(args.repo)}
+    # A task file with its own pins (#183) fetches those by default.
+    only = set(args.repo or config.task_file_repos())
+    if only:
+        repos = {k: v for k, v in repos.items() if k in only}
     prep.fetch(repos)
     return 0
 
 
 def cmd_index(args) -> int:
-    only = set(args.repo) if args.repo else None
+    only = set(args.repo or config.task_file_repos()) or None
     prep.index(config.load_repos(), args.myc, args.models_dir, only, record_only=args.record_only,
                default_config=set(args.default_config or []), skip_embeddings=args.skip_embeddings)
     return 0
@@ -182,13 +184,27 @@ def cmd_probe(args) -> int:
             sys.exit(f"{run_dir} exists; pick another --label")
         log_dir = run_dir / "mock"
         log_dir.mkdir(parents=True)
-        api = mockapi.MockAPI(log_dir, args.grep, args.callers).start()
+        edit = None
+        if args.edit_file:
+            edit = {"file": str(config.work_root() / task["repo"] / args.edit_file), "old": args.edit_old,
+                    "new": args.edit_new, "command": args.edit_command}
+        api = mockapi.MockAPI(log_dir, args.grep, args.callers, edit=edit).start()
         cfg.extra_env = mockapi.session_env(api.url)
         try:
             Runner(cfg, [task], repos).run(only_tasks={task["id"]}, reps=[1], conditions=[cond])
         finally:
             api.stop()
         findings = probe.summarise(run_dir, cond)
+        rows = [json.loads(x) for x in (run_dir / "results.jsonl").read_text().splitlines() if x.strip()] \
+            if (run_dir / "results.jsonl").exists() else []
+        if rows and rows[-1].get("edit"):  # #183: what the grading made of the scripted edit
+            e = rows[-1]["edit"]
+            findings["edit"] = {k: e.get(k) for k in ("files_changed", "file_recall", "file_precision",
+                                                      "files_by_kind", "dependents", "tests_passed", "success",
+                                                      "test_overlay")}
+            findings["edit"]["test"] = {k: (e.get("test") or {}).get(k) for k in ("command", "returncode", "seconds")}
+            findings["status"] = rows[-1]["status"]
+            findings["tool_errors"] = rows[-1].get("tool_errors")
         print(json.dumps(findings, indent=1))
         ok &= not findings.get("problems")
     return 0 if ok else 1
@@ -415,12 +431,21 @@ def cmd_precheck_edit(args) -> int:
         if args.task and t["id"] not in args.task:
             continue
         checkout = config.cache_dir() / "repos" / t["repo"]
-        rec = editgrade.precheck(t, checkout, scratch, repos[t["repo"]]["commit"],
-                                 int(t.get("test_timeout_s", 900)))
+        repo = repos[t["repo"]]
+        gold = config.gold_dir(t["repo"]) if repo.get("gold_commit") else None
+        rec = editgrade.precheck(t, checkout, scratch, repo["commit"], int(t.get("test_timeout_s", 900)),
+                                 gold=gold, env=config.repo_env(repo), gold_commit=repo.get("gold_commit"))
         t["precheck"] = rec
-        bad += not rec["fails_on_parent"]
-        print(f"{t['id']}: test command {'fails' if rec['fails_on_parent'] else 'does NOT fail'} on the parent "
-              f"(exit {rec['returncode']}{', timed out' if rec['timed_out'] else ''})")
+        ok = rec["fails_on_parent"] and rec.get("passes_on_gold", True)
+        bad += not ok
+        line = (f"{t['id']}: test command {'fails' if rec['fails_on_parent'] else 'does NOT fail'} on the parent "
+                f"(exit {rec['returncode']}{', timed out' if rec['timed_out'] else ''}, {rec['seconds_parent']:.0f} s)")
+        if gold is not None:
+            line += (f"; {'passes' if rec['passes_on_gold'] else 'does NOT pass'} on the gold commit "
+                     f"(exit {rec['gold_returncode']}, {rec['seconds_gold']:.0f} s)")
+        print(line, flush=True)
+        # Written after every task, so a long precheck run keeps what it has.
+        path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
     return 1 if bad else 0
 
@@ -597,6 +622,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--models-dir", default=_default_models())
     s.add_argument("--bash", action="store_true")
     s.add_argument("--prompt-budget", action="store_true")
+    s.add_argument("--edit-file", help="edit tasks (#183): file (relative to the checkout) the script reads and edits")
+    s.add_argument("--edit-old", help="text the scripted Edit replaces")
+    s.add_argument("--edit-new", help="replacement text")
+    s.add_argument("--edit-command", help="command the scripted session then runs in Bash (the task's test command)")
+    s.add_argument("--profile", choices=sorted(config.PROFILES))
     s.set_defaults(reps=1, concurrency=1, max_retries=0, threshold=0.8, max_utilization=0.97,
                    max_sessions=None, tool_search=None, claude=None, fn=cmd_probe)
 

@@ -16,7 +16,13 @@ task carries
   ``agent_eval.py precheck-edit``), so passing it means the change was made;
 * ``allowed_commands`` (optional): the build/test commands arm D's Bash
   allowlist admits, exactly (strings) or as ``{"prefix", "args": REGEX}``
-  (default: the test command).
+  (default: the test command);
+* ``test_overlay`` (optional, #183): gold test files written from the
+  reference commit into the working copy before the test command runs (the
+  commit's own tests, which the agent never sees); they come from the
+  repository's ``gold_commit``, which ``fetch`` keeps outside every working
+  copy (:func:`apply_gold`). With a ``gold_commit`` the precheck also applies
+  the whole commit and requires the test command to pass there.
 
 Grading, after the session, from ``git status`` of the working copy:
 
@@ -28,7 +34,8 @@ Grading, after the session, from ``git status`` of the working copy:
   directory than every primary file: another module) and ``local`` (code next
   to a primary file). Without ``primary_files`` every gold file would be a
   dependent and the metric would equal 1 − recall, so it is not reported
-  (``None``).
+  (``None``). ``other_module`` (#183) counts the code dependents in another
+  Gradle/Maven module than every primary file (the path before ``/src/``).
 
 A session succeeds when the test command passes; without one, when the
 file-level F1 over code files (all files if the gold has no code file)
@@ -37,8 +44,11 @@ reaches the run's success threshold.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import re
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -83,9 +93,31 @@ def gold_paths(task: dict) -> list[str]:
     return [g if isinstance(g, str) else g["path"] for g in task.get("gold_files") or []]
 
 
-def changed_files(workdir: Path) -> list[str]:
+def changed_files(workdir: Path, baseline: dict[str, str] | None = None) -> list[str]:
     """Files that differ from ``HEAD`` in the working copy: modified, added,
-    deleted, renamed (both paths) and untracked (``git status``)."""
+    deleted, renamed (both paths) and untracked (``git status``).
+
+    ``baseline`` (from :func:`snapshot` before the session) leaves out the
+    files the harness changed and the agent did not touch afterwards: what
+    ``myc setup-claude`` writes in arm C (``CLAUDE.md``, ``.mcp.json``)."""
+    files = _status_files(workdir)
+    if baseline:
+        files = [f for f in files if f not in baseline or _digest(workdir / f) != baseline[f]]
+    return files
+
+
+def snapshot(workdir: Path) -> dict[str, str]:
+    """The files that already differ from ``HEAD`` and their content digests."""
+    return {f: _digest(workdir / f) for f in _status_files(workdir)}
+
+
+def _digest(path: Path) -> str:
+    if path.is_file():
+        return hashlib.sha256(path.read_bytes()).hexdigest()
+    return "dir" if path.is_dir() else "missing"
+
+
+def _status_files(workdir: Path) -> list[str]:
     out = subprocess.run(["git", "-C", str(workdir), "status", "--porcelain=v1", "-z", "-uall"],
                          capture_output=True, text=True, timeout=120)
     if out.returncode != 0:
@@ -155,43 +187,101 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
         return None
     primary = set(primary)
     primary_dirs = {p.rsplit("/", 1)[0] if "/" in p else "" for p in primary}
-    out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in ("docs", "tests", "remote", "local")}}
+    primary_modules = {module_of(p) for p in primary}
+    out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in ("docs", "tests", "remote", "local")},
+           "other_module": {"n": 0, "forgotten": []}}
     for f in sorted(set(gold_paths(task)) - primary):
         kind = file_kind(f)
         if kind == "code":
             kind = "local" if (f.rsplit("/", 1)[0] if "/" in f else "") in primary_dirs else "remote"
         out["n"] += 1
         out["by_kind"][kind]["n"] += 1
+        far = kind in ("remote", "local") and module_of(f) is not None and module_of(f) not in primary_modules
+        out["other_module"]["n"] += far
         if f not in changed:
             out["forgotten"].append(f)
             out["by_kind"][kind]["forgotten"].append(f)
+            if far:
+                out["other_module"]["forgotten"].append(f)
     return out
 
 
-def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: int = 900) -> dict:
+def module_of(path: str) -> str | None:
+    """The build module of a source path: what comes before ``/src/``
+    (``spring-web`` for ``spring-web/src/main/java/...``); None outside one."""
+    i = path.find("/src/")
+    return path[:i] if i > 0 else None
+
+
+def apply_gold(work: Path, gold: Path, task: dict, paths: list[str] | None = None) -> list[str]:
+    """Write gold files from ``gold`` (``config.gold_dir``) into ``work``:
+    ``paths`` (default: every gold file); a deleted gold file is removed.
+    Returns the paths written or removed."""
+    status = {g if isinstance(g, str) else g["path"]: "M" if isinstance(g, str) else g.get("status", "M")
+              for g in task.get("gold_files") or []}
+    done = []
+    for rel in paths if paths is not None else list(status):
+        dst = work / rel
+        if status.get(rel) == "D":
+            if dst.exists():
+                dst.unlink()
+        else:
+            src = gold / "files" / rel
+            if not src.is_file():
+                raise RuntimeError(f"gold file {rel} missing in {gold}; run `agent_eval.py fetch`")
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, dst)
+        done.append(rel)
+    return done
+
+
+def gold_name_status(gold: Path) -> dict[str, str]:
+    """The reference commit's changed files and their status, as ``fetch``
+    recorded them (``gold.json``)."""
+    return json.loads((gold / "gold.json").read_text())["files"]
+
+
+def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: int = 900,
+             gold: Path | None = None, env: dict | None = None, gold_commit: str | None = None) -> dict:
     """Run the task's test command on a fresh copy of the pinned checkout
-    (the gold commit's parent) before any agent runs. The test must fail
-    there, or passing it after a session would prove nothing. Returns the
-    record ``check-tasks`` expects in the task's ``precheck``."""
+    (the gold commit's parent) before any agent runs, with the task's
+    ``test_overlay`` applied (the commit's own tests). The test must fail
+    there, or passing it after a session would prove nothing. With ``gold``
+    (#183) the whole reference commit is then applied to the same copy and
+    the test must pass. Returns the record ``check-tasks`` expects in the
+    task's ``precheck``."""
     from .config import copy_tree, remove_tree
     work = scratch / f"precheck-{task['id']}"
     copy_tree(checkout, work)
+    after = None
     try:
-        res = run_test(task["test_command"], work, timeout_s)
+        if task.get("test_overlay"):
+            apply_gold(work, gold, task, task["test_overlay"])
+        res = run_test(task["test_command"], work, timeout_s, env)
+        if gold is not None:
+            apply_gold(work, gold, task)
+            after = run_test(task["test_command"], work, timeout_s, env)
     finally:
         remove_tree(work, scratch)
-    return {"fails_on_parent": not res["passed"] and not res["timed_out"], "returncode": res["returncode"], "timed_out": res["timed_out"],
-            "commit": commit, "command": task["test_command"],
-            "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    rec = {"fails_on_parent": not res["passed"] and not res["timed_out"], "returncode": res["returncode"], "timed_out": res["timed_out"],
+           "commit": commit, "command": task["test_command"], "seconds_parent": res["seconds"],
+           "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    if task.get("test_overlay"):
+        rec["test_overlay"] = list(task["test_overlay"])
+    if after is not None:
+        rec.update({"passes_on_gold": after["passed"], "gold_commit": gold_commit, "gold_returncode": after["returncode"],
+                    "gold_timed_out": after["timed_out"], "seconds_gold": after["seconds"]})
+    return rec
 
 
 def run_test(command: str, workdir: Path, timeout_s: int = 900, env: dict | None = None) -> dict:
-    """Run a task's test command in the working copy (``/bin/sh -c``)."""
+    """Run a task's test command in the working copy (``/bin/sh -c``);
+    ``env`` is added to a minimal environment (``PATH``, ``HOME``)."""
     started = time.time()
+    base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/tmp")}
     try:
         res = subprocess.run(["/bin/sh", "-c", command], cwd=workdir, capture_output=True, text=True,
-                             timeout=timeout_s, env=env or {"PATH": os.environ.get("PATH", "/usr/bin:/bin"),
-                                                            "HOME": os.environ.get("HOME", "/tmp")})
+                             timeout=timeout_s, env={**base, **(env or {})})
         rc, out, timed_out = res.returncode, (res.stdout or "") + (res.stderr or ""), False
     except subprocess.TimeoutExpired as exc:
         rc, out, timed_out = None, str(exc.stdout or "") + str(exc.stderr or ""), True

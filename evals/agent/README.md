@@ -1575,6 +1575,163 @@ repetitions and (since #182) the interleaved schedule, see
 [#182](#java-tasks-on-spring-framework-182). The profile
 name is stored in the run's config, so a resumed run cannot change it.
 
+## Commit replay on Java (#183)
+
+Do agents change everything a real change needs, in other modules, tests and
+docs, and does myceliums save tokens per solved task? 20 edit tasks replay
+recent spring-framework commits. **Prepared, not run**: the sessions need
+Marc's budget approval, and the prechecks need Gradle (below).
+
+**Mining** ([`groundtruth/commit_replay.py`](groundtruth/commit_replay.py)
+`mine`, over a blobless clone with history): non-merge commits on `main` since
+2025-10-01 with at most 25 files (at most two renamed), no dependency bump,
+polish, copyright, revert or release subject, changes to main code and to
+tests, at least two build modules touched (`framework-docs` counts), and a
+parent that builds with the Java 25 toolchain: **151 candidates**. 34 were
+picked by hand for a public API or behaviour change a description can state
+(no pure refactoring or deprecation), and stratified by files, code modules
+and docs; 20 are the task set, 14 are reserves
+(`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
+fails.
+
+| Task | Commit | Files (code/tests/docs) | Code modules | Docs | Primary files |
+|---|---|---:|---:|---|---:|
+| `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 2 | yes | 1 |
+| `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 | yes | 2 |
+| `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 | yes | 3 |
+| `spel-big-power-result-limit` | 8a92c19e4d | 8 (4/2/2) | 2 | yes | 2 |
+| `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 | yes | 1 |
+| `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | yes | 2 |
+| `fn-request-bind-pathvars-headers` | a9a404266c | 7 (3/2/2) | 2 | yes | 1 |
+| `jdbcclient-batch-entry-dsl` | 833ab4d48f | 6 (2/3/1) | 1 | yes | 1 |
+| `type-mismatch-required-type-arg` | 4847ee80b0 | 3 (1/1/1) | 1 | yes | 1 |
+| `servlet-response-ignore-body-flush` | e0b54e244e | 5 (3/1/1) | 2 | yes | 1 |
+| `content-negotiation-no-fallback-mapping` | 7fbdbd6eb7 | 4 (2/2/0) | 2 | no | 1 |
+| `client-builders-deep-copy-default-headers-cookies` | 4cf6335372 | 6 (3/3/0) | 3 | no | 1 |
+| `http-range-honor-if-range` | 8ab5332639 | 11 (5/6/0) | 2 | no | 1 |
+| `error-response-interceptor-with-request` | d70220eb5d | 11 (7/4/0) | 3 | no | 1 |
+| `mime-type-parameter-names-case-insensitive` | 2028eb3694 | 4 (2/2/0) | 2 | no | 1 |
+| `deferred-bean-registrar-contains-bean` | 7502b92392 | 14 (7/7/0) | 2 | no | 2 |
+| `cache-manager-reset-caches` | 96aadc2b12 | 6 (5/1/0) | 2 | no | 1 |
+| `api-version-deprecation-handler-handler-arg` | b128f59714 | 12 (10/2/0) | 3 | no | 2 |
+| `bean-provider-parameterized-type-reference` | 2e4ca41382 | 7 (6/1/0) | 3 | no | 1 |
+| `message-source-default-charset` | 02af3e7a17 | 5 (4/1/0) | 2 | no | 1 |
+Spread: 6 small (≤ 5 files), 10 medium (6-12), 4 large (13-20); code in one
+module 2, two modules 12, three or more 6; 10 with docs.
+
+**Descriptions** were drafted by agents from the commit message, the linked
+issue and the diff ([`groundtruth/commit_replay_spec.json`](groundtruth/commit_replay_spec.json),
+rules: an issue-style change request that names every new public name the
+commit's tests need, may name the type of the core change, and never names
+files, test classes, dependent classes, modules, docs or tests). A second
+agent reviewed all 34 for leakage and solvability against the test diff:
+27 ok, 7 rewritten (a docs mention, a test-client hint, a named dependent, a
+builder whose setters must validate on their own, a missing constructor the
+fixture calls), none dropped; one kept its sentence on a Kotlin extension
+because the module's Kotlin tests compile together (a stated dependent). The
+verdicts are in the spec (`review`). Scope words an issue would use ("for
+both Spring MVC and WebFlux") are allowed and noted there.
+
+**What the build derives** (`commit_replay.py build`): one pin per task in the
+task file's own `repos` (the parent; `gold_commit` the replayed commit),
+`gold_files` (the commit's name-status, renames as delete + add),
+`test_overlay` (the commit's test files, fixtures included), the default test
+command (`./gradlew --no-daemon --console=plain :module:test --tests ...` over
+the changed test classes; three tasks narrow it, see the spec), arm D's
+`allowed_commands` (`./gradlew` with task paths, `--tests` filters and a few
+flags; `-I`, `-D`, `-P`, `-p`, `--init-script` are refused) and the strata.
+
+**Harness additions.**
+
+* `load_repos` merges the pins a task file declares (`repos`); `fetch` and
+  `index` default to them. `fetch` shallow-fetches each parent and keeps the
+  gold commit's files in `$AEVAL_CACHE/gold/<repo>/`, outside every working
+  copy, so the agent cannot find the commit in the history (`check-tasks`
+  verifies `gold_files` against the commit).
+* Grading writes the commit's own tests (`test_overlay`) over the agent's
+  working copy after its changed files are recorded, then runs the test
+  command. An agent's edit of one of those test files is therefore replaced
+  (its file still counts for recall); new public names the tests use are
+  stated in the description.
+* `precheck-edit` applies the overlay to the parent (the test must fail),
+  then the whole commit (it must pass), and records both exit codes and run
+  times; `check-tasks` refuses a task without both.
+* The repository's `session_env` (`GRADLE_OPTS`: no Gradle daemon, Kotlin
+  compiler in process, so no daemon outlives a session) and the caller's
+  `JAVA_HOME` (`env_from_caller`; `$JAVA_HOME/bin` first on `PATH`) reach
+  the session, the test command and the precheck.
+* Files the harness wrote before the session (setup-claude's `CLAUDE.md` and
+  `.mcp.json` in C) no longer count as the agent's changes (a snapshot before
+  the session); before, every C session got them as extra files.
+* Forgotten dependents also report `other_module`: code dependents in another
+  Gradle module than every primary file (`remote` counts another directory,
+  which in Java is any other package).
+* `probe --edit-file/--edit-old/--edit-new/--edit-command`: the mock session
+  reads and edits a file and runs the test command in Bash, so the probe
+  shows the grading and D's allowlist on an edit task.
+
+**Run configuration.**
+
+```bash
+export JAVA_HOME=$HOME/.cache/myc-java/jdk/jdk-25.0.5.1+2/Contents/Home   # Spring's build needs a JDK 25 toolchain
+T=evals/agent/tasks/tasks-commit-replay.json
+python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 MB each) + gold files
+python3 evals/agent/agent_eval.py --tasks $T precheck-edit   # fails on parent + overlay, passes on the commit
+python3 evals/agent/agent_eval.py --tasks $T check-tasks
+python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models
+python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-replay --conditions A,C,D \
+    --profile realistic --bash --timeout 2400 --concurrency 3 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
+```
+
+Arms A (MCP server), C (what `myc setup-claude --no-agent` installs) and D
+(myceliums only, Bash allowlisted to file operations, git and `./gradlew`
+test runs); every arm has `Bash`, `Edit` and `Write`. Realistic profile:
+100-turn cap not stated in the prompt, 3 repetitions; the run order is
+repetition-major with tasks shuffled and the three arms adjacent per task in
+shuffled order (interleaved). Each session gets a fresh copy of its task's
+parent at `/tmp/aeval/spring-<task>` and, in A/C/D, a fresh copy of that
+parent's index. Index: `myc analyze --strict-embeddings` of the whole
+checkout (tests and `framework-docs/` included; AsciiDoc is indexed since
+#180), built from `main` at `276d916` (#180 merged). INDEX
+
+**Budget estimate** (not measured; from #163/#171 scaled to edit tasks).
+#163/#171 question sessions with Bash at 40 turns: 8 turns, 100-136k input
+tokens, 3.5-4k output, $0.10, 29-36 s per session (`claude-sonnet-5-5`,
+medium effort: input $2, 1-hour cache write $4, cache read $0.10, output $10
+per million). An edit session on Spring reads more and larger files, edits,
+and runs Gradle: assumed 20-80 calls (central 40) with the context growing
+from ~25k to 60-150k (central 100k) tokens. Input ≈ calls × mean context:
+0.8M-7M (central 2.5M) tokens, almost all cache reads; plus one cache write
+of the final context and 8-30k output.
+
+| | Low | Central | High |
+|---|---:|---:|---:|
+| Input tokens per session | 0.8M | 2.5M | 7M |
+| Cost per session | $0.40 | $0.80 | $1.60 |
+| Sessions (20 tasks × 3 arms × 3 reps) | 180 | 180 | 180 |
+| Tokens, whole run | 145M | 450M | 1.26B |
+| Cost, whole run | $72 | $144 | $288 |
+| Wall time per session (model + agent's Gradle runs + grading) | 6 min | 12 min | 25 min |
+| Wall time, concurrency 3 | 6 h | 12 h | 25 h |
+
+Plus, once: 20 indexes (INDEXTIME) and the prechecks (40 Gradle runs). A pilot
+of one repetition (60 sessions, ~$50) would replace these assumptions with
+measurements before the full run. Disk: 20 checkouts 2 GB, 20 indexes
+(INDEXSIZE each), `~/.gradle` 3-5 GB (11 Gradle versions among the parents,
+9.1.0-9.9.0, each with its own distribution and caches, plus the shared
+dependency and build caches).
+
+**Blocked: Java has no network on the benchmark machine.** Little Snitch
+lets `curl`, `git` and Python out but not `java` (both the Homebrew JDK 23 and
+the Temurin JDK 25: connections time out, loopback works), so the Gradle
+wrapper cannot download its distribution and no precheck has run. Allowing
+`java` (rule for the JDK under `~/.cache/myc-java/jdk/`) is needed for the
+prechecks and for the sessions, whose agents run Gradle too. Until then the
+task file fails `check-tasks` (no precheck), and CI checks its schema with
+the unit tests only (`tests/test_commit_replay.py`).
+
+**Mock validation.** PROBE
+
 ## Replaying myceliums calls (#181)
 
 `agent_eval.py replay` measures a change to myceliums' answer format or tool
