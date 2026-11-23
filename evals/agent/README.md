@@ -1643,7 +1643,10 @@ about forgotten dependents, and only because the test command compiles every cha
 (before the PR review it did not). The PR review checked these four texts. It also found two that named a gold class
 (`DefaultConversionService`, `@Import`; removed, see the spec) and a weak test:
 `cache-manager-reset-caches` passed with an interface default method alone while its description made the
-gold overrides optional; it was replaced by `retryable-method-retry-event` (same strata). The seventh, a reserve, had to name a
+gold overrides optional; it was replaced by `retryable-method-retry-event` (same strata). A fourth agent checked the two reworded texts and the new one: no leak, nothing missing for the tests,
+but wrong facts in all three (for `deferred-bean-registrar-contains-bean` one that would have led to a file the commit does not
+change); all three now have its text, which nobody has reviewed again, and `weak_test` in the task file lists the gold
+dependents their test commands do not enforce. The seventh, a reserve, had to name a
 dependent (a Kotlin extension its module's tests compile against) and was
 dropped (12 reserves are left). No human has reviewed the descriptions.
 Scope words an issue would use ("for both Spring MVC and WebFlux") are allowed
