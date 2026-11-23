@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -84,7 +85,7 @@ DEFAULT_EXCLUDE = ["node_modules/**", ".git/**", "target/**", "dist/**", "build/
 
 def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | None = None,
           record_only: bool = False, default_config: set[str] | None = None,
-          skip_embeddings: bool = False, base: Path | None = None) -> None:
+          skip_embeddings: bool = False, base: Path | None = None, record_difference: bool = False) -> None:
     """Build one myceliums index per repository with ``myc analyze``.
 
     ``myc analyze`` stores its data under ``$HOME/.myceliums``; ``HOME`` is set
@@ -142,7 +143,7 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
                    "FASTEMBED_CACHE_DIR": models_dir, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
             started = time.time()
             flag = "--skip-embeddings" if skip_embeddings else "--strict-embeddings"
-            res = subprocess.run([myc, "analyze", str(work), flag] + (["--force"] if base is not None else []),
+            res = subprocess.run([*TIME, myc, "analyze", str(work), flag] + (["--force"] if base is not None else []),
                                  env=env, capture_output=True, text=True)
             took = round(time.time() - started, 1)
             log_path.write_text(res.stdout + res.stderr)
@@ -150,7 +151,7 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
                 raise SystemExit(f"myc analyze failed for {name}; see {log_path}")
         log = log_path.read_text()
         if base is not None:
-            derived = verify_derived(log, name, work, myc, env, cache)
+            derived = verify_derived(log, name, work, myc, env, cache, record_difference)
             derived["base"] = str(base)
             base = home
         registry = config.load_json(home / ".myceliums" / "repos.json")
@@ -175,6 +176,7 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
             "myc_version": config.tool_version([myc, "--version"]),
             "myc_sha256": config.sha256_file(Path(myc)),
             "indexed_at": info.get("analyzed_at"),
+            **measured(log, home),
             "index_seconds": took if took is not None else _grab_ms(log),
         }
         (cache / "index" / name / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
@@ -199,7 +201,23 @@ def graph_counts(log: str) -> dict:
     return {k: _grab(log, p) for k, p in GRAPH_COUNTS.items()}
 
 
-def verify_derived(log: str, name: str, work: Path, myc: str, env: dict, cache: Path) -> dict:
+# Peak memory of `myc analyze` (macOS; its report goes to stderr, so into analyze.log).
+TIME = ["/usr/bin/time", "-l"] if Path("/usr/bin/time").exists() and sys.platform == "darwin" else []
+
+
+def measured(log: str, home: Path) -> dict:
+    """What the log and the disk say about one build: seconds per phase, peak
+    memory, size (all files of the index's home)."""
+    out: dict = {"disk_bytes": sum(f.stat().st_size for f in home.rglob("*") if f.is_file() and not f.is_symlink())}
+    if m := re.search(r"Phases:\s+(.+)", log):
+        out["phases_s"] = {k: float(v) for k, v in re.findall(r"(\w+) ([\d.]+) s", m.group(1))}
+    if m := re.search(r"(\d+)\s+maximum resident set size", log):
+        out["peak_rss_bytes"] = int(m.group(1))
+    return out
+
+
+def verify_derived(log: str, name: str, work: Path, myc: str, env: dict, cache: Path,
+                   record_difference: bool = False) -> dict:
     """What a derived index reused, and its graph counts against a fresh
     graph-only build of the same working copy (stops on no reuse)."""
     reused = _grab(log, r"([\d,]+) kept from the previous index")
@@ -218,9 +236,11 @@ def verify_derived(log: str, name: str, work: Path, myc: str, env: dict, cache: 
     finally:
         config.remove_tree(tmp, cache / "tmp")
     got = graph_counts(log)
-    if got != fresh:
+    if got != fresh and not record_difference:
         raise SystemExit(f"{name}: the derived graph differs from a fresh one: {got} against {fresh}")
-    return {"vectors_reused": reused, "counts": got, "fresh_graph_counts": fresh, "graph_equal": got == fresh}
+    embedded = _grab(log, r"Embeddings:\s+([\d,]+)") or 0
+    return {"vectors_reused": reused, "vectors_embedded_new": embedded - reused, "graph_only_phases_s":
+            measured(res.stdout + res.stderr, tmp).get("phases_s"), "counts": got, "fresh_graph_counts": fresh, "graph_equal": got == fresh}
 
 
 def _grab(text: str, pattern: str) -> int | None:

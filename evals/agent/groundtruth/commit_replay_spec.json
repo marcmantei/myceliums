@@ -155,7 +155,7 @@
     "verdict": "ok",
     "comment": "The tests need: the 8-arg constructor (positional), the SpelMessage.MAX_BIG_POWER_RESULT_EXCEEDED code, the insert order (base bit length, exponent, max) as ints, the error position at the operator (4 for '#bd ^ 4'), the inclusive limit, and the bit-length definition via unscaledValue() for BigDecimal (2.0 gives 5 bits). All are stated. The estimate formula looks like an implementation detail, but the boundary tests (15<=16, 20>16, 16==16) need it. The message text and number 1086 are not asserted, so omitting them is fine. The tests themselves add an evaluateAndCheckError overload, which comes in with the overlay."
    },
-   "open": "parent needs io.micrometer:micrometer-bom:1.18.0-INTERNAL-SNAPSHOT, not found in repo.spring.io/milestone and /snapshot on 23 November 2026 (found missing, no connection error); to be re-run"
+   "drop": "parent needs io.micrometer:micrometer-bom:1.18.0-INTERNAL-SNAPSHOT, not found in repo.spring.io/milestone and /snapshot on 23 November 2026 (found missing, no connection error); also missing offline; replaced by test-context-cache-pause-mode"
   },
   {
    "id": "form-converter-map-payloads",
@@ -204,8 +204,7 @@
     "verdict": "ok",
     "comment": "It states everything the tests need: CONTEXT_CACHE_PAUSE_PROPERTY_NAME = \"spring.test.context.cache.pause\", the nested enum ContextCache.PauseMode {ALWAYS, NEVER}, the static ContextCacheUtils.retrievePauseMode() defaulting to ALWAYS, case-insensitive parsing with whitespace stripped (the tests use \"\\talways\\u000B\", which trim()/strip() both handle), the exact IllegalArgumentException message, and new DefaultContextCache(int, PauseMode). The test helpers (ContextCacheTestUtils, TestContextTestUtils.buildTestContext, EventTracker, DisplayNameCustomizerFactory) exist at the parent. No leaks: the SpringProperties Javadoc @see and the two adoc pages are left as dependents. Three primaries is justified because the question names all three types and each gets new public API; 6 dependents remain. The description is detailed, but every detail is asserted by a test."
    },
-   "reserve": true,
-   "replaces_if_needed": "spel-big-power-result-limit (same strata)"
+   "replaces": "spel-big-power-result-limit (parent not buildable; same size and docs stratum, one module with code changes as well)"
   },
   {
    "id": "retry-max-attempts-to-max-retries",
