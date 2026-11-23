@@ -289,7 +289,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
         L.extend(_arm_lines(analysis, base, arm))
     else:  # #182: several arms (A/C/D), each against the base
         for a in arms:
-            L.extend(_arm_lines(by_arm[a], base, a, f": `{a}` against `{base}`"))
+            lines = _arm_lines(by_arm[a], base, a, f": `{a}` against `{base}`")
+            L.extend(lines[:2] + config.pair_notes(res_dir, a, base) + lines[2:])
     L.extend(_audit_lines(audit))
     L.append("*Tokens* are billed input tokens (every call re-reads the context, so a result counts once per later "
              "call) and output tokens; *result size* is a result's own size when it entered the context (its share "

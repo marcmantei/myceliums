@@ -171,7 +171,8 @@ def by_category(rows, tasks, conditions) -> dict:
     return out
 
 
-def _pairwise_lines(pw: dict, cats: dict, conditions: list[str], thr: float, n_resamples: int) -> list[str]:
+def _pairwise_lines(pw: dict, cats: dict, conditions: list[str], thr: float, n_resamples: int,
+                    notes: list[str] = ()) -> list[str]:
     L = ["## Pairwise comparisons", ""]
     L.append(f"Every pair of conditions, none of them a baseline. A task counts as solved in a condition when at "
              f"least half of its repetitions reach F1 ≥ {thr}; McNemar's exact test runs over the tasks solved in "
@@ -192,6 +193,7 @@ def _pairwise_lines(pw: dict, cats: dict, conditions: list[str], thr: float, n_r
                  f"{_fmt_ratio(tk['ratio'])} [{_fmt_ratio(tk['ratio_lo'])}, {_fmt_ratio(tk['ratio_hi'])}] | "
                  f"{_fmt_ratio(us['ratio'])} [{_fmt_ratio(us['ratio_lo'])}, {_fmt_ratio(us['ratio_hi'])}] |")
     L.append("")
+    L.extend(notes)
     L.append(f"**Multiplicity.** {len(pw['pairs'])} pairs × 4 primary measures (success, F1, tokens and cost per "
              f"solved task) = {4 * len(pw['pairs'])} comparisons, plus the per-category table below. Only the "
              f"success tests are corrected (Holm over the {len(pw['pairs'])} pairs); every interval is a "
@@ -242,7 +244,11 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     L.append("## Setup")
     L.append("")
     L.append(f"- **Date:** {meta.get('date')}")
-    L.append(f"- **Agent:** Claude Code {meta.get('claude_version')}, `--model {meta.get('model_alias')}` "
+    mixed = meta.get("claude_versions") or {}
+    cli = (" and ".join(f"{v} ({', '.join(f'{c} {n}' for c, n in sorted(m['sessions'].items()))}; repetitions "
+                         f"{', '.join(map(str, m['reps']))})" for v, m in mixed.items())
+           + " (**updated during the run**)" if mixed else meta.get("claude_version"))
+    L.append(f"- **Agent:** Claude Code {cli}, `--model {meta.get('model_alias')}` "
              f"(resolved: `{meta.get('model')}`), `--effort {meta.get('effort')}`, "
              f"`--max-turns {meta.get('max_turns')}`, timeout {meta.get('timeout_s')} s per session"
              + ("; the prompt states the turn limit (the same text in every condition)"
@@ -296,7 +302,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     if is_pairwise:
         pw = pairwise(rows, tasks, conditions, n_resamples)
         cats = by_category(rows, tasks, conditions)
-        L.extend(_pairwise_lines(pw, cats, conditions, thr, n_resamples))
+        L.extend(_pairwise_lines(pw, cats, conditions, thr, n_resamples, config.pair_notes(res_dir)))
     if others:
         L.append(f"## Paired differences vs {baseline}")
         L.append("")

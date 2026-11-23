@@ -1,0 +1,201 @@
+{
+  "analysis": {
+    "by_type": {
+      "blast_radius": {
+        "none": {
+          "cost_usd": 0.13903105000000002,
+          "f1": 0.83335,
+          "first_turn_input_tokens": 9008.0,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 10.5,
+          "output_tokens": 5682.0,
+          "precision": 0.75,
+          "recall": 1.0,
+          "success": 0.5,
+          "tool_calls": 9.5,
+          "total_input_tokens": 158809.0,
+          "wall_s": 64.025
+        }
+      },
+      "by_name": {
+        "none": {
+          "cost_usd": 0.03440636666666667,
+          "f1": 1.0,
+          "first_turn_input_tokens": 8685.166666666666,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 3.0,
+          "output_tokens": 946.6666666666666,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 2.0,
+          "total_input_tokens": 29030.333333333332,
+          "wall_s": 13.158333333333333
+        }
+      },
+      "concept": {
+        "none": {
+          "cost_usd": 0.029585216666666667,
+          "f1": 1.0,
+          "first_turn_input_tokens": 8740.666666666666,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 2.8333333333333335,
+          "output_tokens": 625.0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 1.8333333333333333,
+          "total_input_tokens": 27454.5,
+          "wall_s": 11.464999999999998
+        }
+      },
+      "dispatch": {
+        "none": {
+          "cost_usd": 0.039647466666666666,
+          "f1": 1.0,
+          "first_turn_input_tokens": 8876.5,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 3.5,
+          "output_tokens": 1149.3333333333333,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 2.5,
+          "total_input_tokens": 29916.166666666668,
+          "wall_s": 13.071666666666665
+        }
+      },
+      "docs": {
+        "none": {
+          "cost_usd": 0.03396595,
+          "f1": 1.0,
+          "first_turn_input_tokens": 8792.333333333334,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 2.3333333333333335,
+          "output_tokens": 1225.8333333333333,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 1.3333333333333333,
+          "total_input_tokens": 22813.0,
+          "wall_s": 12.924999999999999
+        }
+      },
+      "transitive_callers": {
+        "none": {
+          "cost_usd": 0.09176525,
+          "f1": 1.0,
+          "first_turn_input_tokens": 9108.25,
+          "myc_calls": 0.0,
+          "myc_used": 0.0,
+          "num_turns": 7.5,
+          "output_tokens": 3213.25,
+          "precision": 1.0,
+          "recall": 1.0,
+          "success": 1.0,
+          "tool_calls": 6.5,
+          "total_input_tokens": 93380.75,
+          "wall_s": 28.435000000000002
+        }
+      }
+    },
+    "means": {
+      "none": {
+        "cost_usd": {
+          "hi": 0.06326608816666666,
+          "lo": 0.03773190266666667,
+          "mean": 0.049025103333333334,
+          "n_tasks": 30
+        },
+        "f1": {
+          "hi": 1.0,
+          "lo": 0.96667,
+          "mean": 0.9888899999999999,
+          "n_tasks": 30
+        },
+        "first_turn_input_tokens": {
+          "hi": 8886.934166666666,
+          "lo": 8784.899166666666,
+          "mean": 8833.9,
+          "n_tasks": 30
+        },
+        "myc_calls": {
+          "hi": 0.0,
+          "lo": 0.0,
+          "mean": 0.0,
+          "n_tasks": 30
+        },
+        "myc_used": {
+          "hi": 0.0,
+          "lo": 0.0,
+          "mean": 0.0,
+          "n_tasks": 30
+        },
+        "num_turns": {
+          "hi": 5.0,
+          "lo": 3.2,
+          "mean": 4.033333333333333,
+          "n_tasks": 30
+        },
+        "output_tokens": {
+          "hi": 2205.9441666666667,
+          "lo": 1121.5316666666668,
+          "mean": 1596.6,
+          "n_tasks": 30
+        },
+        "precision": {
+          "hi": 1.0,
+          "lo": 0.95,
+          "mean": 0.9833333333333333,
+          "n_tasks": 30
+        },
+        "recall": {
+          "hi": 1.0,
+          "lo": 1.0,
+          "mean": 1.0,
+          "n_tasks": 30
+        },
+        "success": {
+          "hi": 1.0,
+          "lo": 0.9,
+          "mean": 0.9666666666666667,
+          "n_tasks": 30
+        },
+        "tool_calls": {
+          "hi": 4.0,
+          "lo": 2.2,
+          "mean": 3.033333333333333,
+          "n_tasks": 30
+        },
+        "total_input_tokens": {
+          "hi": 61263.6375,
+          "lo": 31808.53166666667,
+          "mean": 44880.833333333336,
+          "n_tasks": 30
+        },
+        "wall_s": {
+          "hi": 24.488391666666665,
+          "lo": 13.705666666666668,
+          "mean": 18.183666666666667,
+          "n_tasks": 30
+        }
+      }
+    },
+    "vs_baseline": {}
+  },
+  "baseline": "none",
+  "conditions": [
+    "none"
+  ],
+  "label": "182-spring-calibration",
+  "n_rows": 30,
+  "statuses": {
+    "none/ok": 30
+  },
+  "threshold": 0.8
+}

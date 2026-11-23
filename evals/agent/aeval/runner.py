@@ -24,6 +24,7 @@ import os
 import random
 import re
 import shlex
+import shutil
 import signal
 import subprocess
 import sys
@@ -48,7 +49,8 @@ TRANSIENT_TEXT = re.compile(
     r"timed out|fetch failed|Request was aborted|API Error: 5\d\d|API Error: 429",
     re.IGNORECASE,
 )
-USAGE_LIMIT_TEXT = re.compile(r"usage limit|limit reached|out of extra usage", re.IGNORECASE)
+USAGE_LIMIT_TEXT = re.compile(
+    r"usage limit|limit reached|out of (extra )?usage|you'?ve (hit|reached) your\b.*\blimit", re.IGNORECASE)
 
 PROMPT_TEMPLATE = """\
 You are working in a checkout of the {repo} repository ({language}); it is your current working directory. Answer the question below about this codebase. Investigate the code with the tools you have; do not guess.
@@ -468,14 +470,22 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         tools += config.EDIT_TOOLS if is_edit_task(item.task) else ()
         return tools
 
-    def _nosearch_settings(self, tmp: Path, task: dict | None = None) -> Path:
+    def _nosearch_settings(self, tmp: Path, task: dict | None = None, hook_dir: Path | None = None) -> Path:
         """Settings for D (#178): a PreToolUse hook on Bash that lets a command
         through only if every program it runs is on the allowlist
         (aeval/bashcmd.py: ``myc``, plain file operations, git without search,
         and the task's own build/test commands), passed with ``--settings`` so
-        it applies whatever the setting sources are."""
+        it applies whatever the setting sources are. Claude Code shows the
+        model the hook's command line with every refusal, so the session runs
+        a copy in ``hook_dir``, outside the eval checkout and the cache: the
+        original's path would point at the gold sets (#182)."""
+        script = NOSEARCH_HOOK
+        if hook_dir is not None:
+            script = hook_dir / NOSEARCH_HOOK.name
+            shutil.copyfile(NOSEARCH_HOOK, script)
+            script.chmod(0o444)
         allow = allowed_commands(task or {})
-        hook = (f"{shlex.quote(sys.executable)} -I {shlex.quote(str(NOSEARCH_HOOK))} hook"
+        hook = (f"{shlex.quote(sys.executable)} -I {shlex.quote(str(script))} hook"
                 + (f" --allow-json {shlex.quote(json.dumps(allow))}" if allow else ""))
         # Bash: the allowlist; the edit tools: no writes into .git (planted git config could run anything).
         settings = {"hooks": {"PreToolUse": [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
@@ -543,6 +553,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
         tmp = Path(tempfile.mkdtemp(prefix="aeval-run-", dir=self.cache / "tmp"))
         variant = config.VARIANTS[item.condition]
+        hook_dir = Path(tempfile.mkdtemp(prefix="hook-")) if variant.no_search else None
         try:
             workdir = self._prepare_workspace(item.repo)
             mcp_path, bin_dir = self._prepare_mcp(item, tmp, workdir, out_dir)
@@ -561,7 +572,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             if variant.no_search:
                 extra.update(nosearch_git_env(tmp))
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
-            settings = self._nosearch_settings(tmp, task) if variant.no_search else None
+            settings = self._nosearch_settings(tmp, task, hook_dir) if variant.no_search else None
             if settings is not None:
                 (out_dir / "settings.json").write_text(settings.read_text())
             cmd = self._command(item, mcp_path, settings)
@@ -582,6 +593,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             edit = self._grade_edit(item, workdir, out_dir) if is_edit_task(task) else None
         finally:
             config.remove_tree(tmp, self.cache / "tmp")
+            if hook_dir is not None:
+                shutil.rmtree(hook_dir, ignore_errors=True)
             # The working copy stays until the next session of this repo
             # replaces it; only edit tasks (#178) write to it, and they are
             # graded above, before that.
@@ -622,10 +635,12 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
         if problems and t.init:
             status = "isolation_error"
+        elif t.rate_limit_rejected or USAGE_LIMIT_TEXT.search(text or "") and res.get("is_error"):
+            # Before the timeout: the CLI may sleep until the limit resets, and a session
+            # the limit cut off must never be graded as its arm's failure (#182).
+            status = "usage_limit"
         elif timed_out:
             status = "timeout"
-        elif t.rate_limit_rejected or USAGE_LIMIT_TEXT.search(text or "") and res.get("is_error"):
-            status = "usage_limit"
         elif not res:
             status = "crash"
         elif res.get("subtype") == "error_max_turns":
@@ -634,6 +649,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             api = res.get("api_error_status")
             if (isinstance(api, int) and api in TRANSIENT_API_STATUS) or TRANSIENT_TEXT.search(text or ""):
                 status = "api_error"
+            elif returncode is not None and (returncode < 0 or returncode in (130, 137, 143)):
+                status = "crash"  # killed from outside (SIGINT/SIGKILL/SIGTERM): infrastructure, retried (#182)
             else:
                 status = "error"
         else:

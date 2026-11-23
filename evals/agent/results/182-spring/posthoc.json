@@ -1,0 +1,25 @@
+{
+ "agents_tokens_intercept": 1796.6620421768675,
+ "agents_tokens_at_mean_prompt": 1803.7415794766976,
+ "n163": 30,
+ "slope182": 0.32895800021888955,
+ "slope163": 0.324457340778438,
+ "d_refused_only_calls_input_share": 0.11486238357875922,
+ "d_with_rereads_input_share": 0.13406893229466738,
+ "pair_notes": [
+  {
+   "pair": [
+    "C",
+    "none"
+   ],
+   "text": "confounded (#200). Spring's `AGENTS.md` (1,804 tokens) was in `none`'s context and not in C's. With it added to each of C's model calls, behaviour held fixed (post hoc point estimates): tokens per solved task 1.16\u00d7 (measured 1.02\u00d7), cost 0.90\u00d7 to 1.08\u00d7 (measured 0.89\u00d7). Ratios here are C \u00f7 none; tables that list `none` vs `C` show the inverse. Per category: [`POSTHOC.md`](POSTHOC.md)."
+  },
+  {
+   "pair": [
+    "D",
+    "C"
+   ],
+   "text": "the same confound (#200), the other way round: tokens per solved task 2.32\u00d7 (measured 2.63\u00d7), cost 2.15\u00d7 to 2.57\u00d7 (measured 2.62\u00d7)."
+  }
+ ]
+}

@@ -1,0 +1,188 @@
+{
+  "analysis": {
+    "all": {
+      "none": {
+        "cli_cost": 0.049025103333333334,
+        "cost": {
+          "assistant": 0.0032525666666666665,
+          "base": 0.016351133333333333,
+          "edit": 0.0,
+          "hook": 0.0,
+          "myceliums": 0.0,
+          "other": 0.0,
+          "output": 0.015966,
+          "read": 0.001251,
+          "search": 0.012204433333333332,
+          "unattributed": 0.0
+        },
+        "cost_class": {
+          "cache_read": 0.0037551333333333335,
+          "cache_write_1h": 0.0292888,
+          "cache_write_5m": 0.0,
+          "output": 0.015966,
+          "uncached": 1.52e-05
+        },
+        "priced_cost": 0.04902516666666667,
+        "result_tokens": {
+          "assistant": 774.7966666666667,
+          "base": 0.0,
+          "edit": 0.0,
+          "hook": 0.0,
+          "myceliums": 0.0,
+          "other": 0.0,
+          "output": 0.0,
+          "read": 296.35999999999996,
+          "search": 2928.55,
+          "unattributed": 0.0
+        },
+        "sessions": 30,
+        "solved": 29,
+        "tokens": {
+          "assistant": 2308.7833333333333,
+          "base": 33817.4,
+          "edit": 0.0,
+          "hook": 0.0,
+          "myceliums": 0.0,
+          "other": 0.0,
+          "output": 1596.6,
+          "read": 957.65,
+          "search": 7797.003333333333,
+          "unattributed": 0.0
+        },
+        "tokens_fitted": {
+          "assistant": 1805.4066666666665,
+          "base": 33817.4,
+          "edit": 0.0,
+          "hook": 0.0,
+          "myceliums": 0.0,
+          "other": 0.0,
+          "output": 1596.6,
+          "read": 860.9866666666668,
+          "search": 8397.039999999999,
+          "unattributed": 0.0
+        }
+      },
+      "per_solved_cost": {
+        "a": 0.05071568965517242,
+        "a_hi": NaN,
+        "a_lo": NaN,
+        "b": NaN,
+        "b_hi": NaN,
+        "b_lo": NaN,
+        "diff": NaN,
+        "diff_hi": NaN,
+        "diff_lo": NaN,
+        "n_tasks": 30,
+        "ratio": NaN,
+        "ratio_hi": NaN,
+        "ratio_lo": NaN,
+        "skipped": 10000,
+        "solved_a": 29.0,
+        "solved_b": 0.0
+      },
+      "per_solved_tokens": {
+        "a": 48080.106896551726,
+        "a_hi": NaN,
+        "a_lo": NaN,
+        "b": NaN,
+        "b_hi": NaN,
+        "b_lo": NaN,
+        "diff": NaN,
+        "diff_hi": NaN,
+        "diff_lo": NaN,
+        "n_tasks": 30,
+        "ratio": NaN,
+        "ratio_hi": NaN,
+        "ratio_lo": NaN,
+        "skipped": 10000,
+        "solved_a": 29.0,
+        "solved_b": 0.0
+      }
+    }
+  },
+  "arm": "none",
+  "base": "none",
+  "crosscheck": {
+    "available": true,
+    "fit": {
+      "constant": 292.2,
+      "features": {
+        "reply": {
+          "coef": 1.7354,
+          "n_calls": 84,
+          "tokens_per_char": 0.4338
+        },
+        "search": {
+          "coef": 1.5989,
+          "n_calls": 78,
+          "tokens_per_char": 0.3997
+        },
+        "thinking": {
+          "coef": 0.3637,
+          "n_calls": 29
+        }
+      },
+      "left_out": [
+        "read"
+      ],
+      "n_calls": 84,
+      "r2": 0.894
+    },
+    "rates": {
+      "reply": 1.7354,
+      "search": 1.5989,
+      "thinking": 0.3637
+    }
+  },
+  "excluded": [],
+  "label": "182-spring-calibration",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "prices": {
+    "claude-sonnet-5-5": {
+      "cache_read": 0.1,
+      "cache_write_1h": 4.0,
+      "cache_write_5m": 2.5,
+      "input": 2.0,
+      "output": 10.0
+    }
+  },
+  "prices_as_of": "2026-11-03",
+  "prices_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "reconciliation": {
+    "input_tokens_attributed": 1346425.1,
+    "input_tokens_session_totals": 1346425,
+    "max_abs_cost_diff_usd": 5.000000000074389e-07,
+    "max_abs_session_gap_tokens": 0.1,
+    "methods": [
+      "usage-delta"
+    ],
+    "residual": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 0
+    },
+    "sessions": 30,
+    "sessions_with_residual": 0
+  },
+  "search_audit": {
+    "none": {
+      "bash_blocked": 0,
+      "bash_calls": 40,
+      "blind_reads": 0,
+      "files_read": 7,
+      "flagged": 29,
+      "grep_glob_calls": 44,
+      "interpreted_calls": 0,
+      "interpreted_ran": 0,
+      "max_reads_per_turn": 7,
+      "reads": 7,
+      "search_attempts": 39,
+      "search_blocked": 0,
+      "search_leaks": 39,
+      "sessions": 30
+    }
+  },
+  "tasks": 30
+}

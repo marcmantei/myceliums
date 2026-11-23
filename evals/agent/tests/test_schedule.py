@@ -16,7 +16,7 @@ import agent_eval  # noqa: E402
 from aeval import config, mockapi  # noqa: E402
 from aeval.grading import grade  # noqa: E402
 from aeval.prep import check_tasks  # noqa: E402
-from aeval.runner import RunConfig, Runner, StopRun, build_prompt  # noqa: E402
+from aeval.runner import RunConfig, Runner, StopRun, WorkItem, build_prompt  # noqa: E402
 
 JAVA_TASKS = config.EVAL_DIR / "tasks" / "tasks-java.json"
 ARMS = ("none", "C", "D")
@@ -83,6 +83,71 @@ class InterleavedSchedule(unittest.TestCase):
         with self.assertRaises(SystemExit):
             runner.run(conditions=["C"])
         self.assertFalse(runner.run_dir.exists())  # refused before anything was written
+
+
+class MixedVersionsAndHookPath(unittest.TestCase):
+    """#182 review: a CLI update during a run is disclosed; D's refusals do not show where the gold lies."""
+
+    def test_mixed_claude_versions(self):
+        row = lambda i, c, v, rep, final=True: {"run_id": i, "condition": c, "claude_version": v,  # noqa: E731
+                                                "rep": rep, "final": final}
+        rows = [row("a", "none", "1", 1), row("b", "D", "1", 1), row("c", "D", "2", 3), row("d", "C", "3", 1, False)]
+        self.assertEqual(agent_eval.mixed_claude_versions(rows),
+                         {"1": {"sessions": {"none": 1, "D": 1}, "reps": [1]}, "2": {"sessions": {"D": 1}, "reps": [3]}})
+        self.assertEqual(agent_eval.mixed_claude_versions(rows[:2]), {})
+
+    def test_the_hook_runs_from_a_neutral_copy(self):
+        import subprocess
+        r = _runner(1)
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory(prefix="hook-") as hd:
+            s = json.loads(r._nosearch_settings(Path(tmp), None, Path(hd)).read_text())
+            cmd = s["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+            self.assertNotIn(str(config.EVAL_DIR), cmd)
+            self.assertNotIn(str(config.cache_dir()), cmd)
+            for command, rc in (("grep -rn x .", 2), ("git status", 0)):
+                ev = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+                p = subprocess.run(cmd, shell=True, input=ev, capture_output=True, text=True)
+                self.assertEqual(p.returncode, rc, p.stderr)
+                self.assertNotIn(str(config.EVAL_DIR), p.stderr)
+
+
+class UsageLimit(unittest.TestCase):
+    """A session the account's limit cut off is never final: it would count as its arm's failure."""
+
+    def _status(self, *events, timed_out=False, returncode=0):
+        r = _runner(1)
+        task = dict(r.tasks[0], answer_kind="symbols", gold=[{"name": "A.b"}])
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "t.jsonl"
+            p.write_text("".join(json.dumps(e) + "\n" for e in events))
+            row = r._summarise(WorkItem(task, "none", 1), 1, p, 1.0, timed_out, returncode)
+        return row["status"], row["final"]
+
+    @staticmethod
+    def _result(text, is_error=True):
+        return {"type": "result", "subtype": "success", "is_error": is_error, "result": text, "num_turns": 1}
+
+    def test_the_clis_messages(self):
+        for text in ("You've hit your session limit \u00b7 resets 7pm", "You've hit your weekly limit",
+                     "You've reached your Fable 5 limit", "You're out of usage credits", "Usage limit reached"):
+            self.assertEqual(self._status(self._result(text)), ("usage_limit", False), text)
+
+    def test_a_limit_that_ends_in_the_timeout(self):
+        ev = {"type": "rate_limit_event", "rate_limit_info": {"status": "rejected"}}
+        self.assertEqual(self._status(ev, timed_out=True), ("usage_limit", False))
+
+    def test_a_session_killed_from_outside_is_retried(self):
+        res = {"type": "result", "subtype": "error_during_execution", "is_error": True, "result": ""}
+        for code in (-9, -15, 137, 143):
+            self.assertEqual(self._status(res, returncode=code), ("crash", False), code)
+            self.assertEqual(self._status(returncode=code), ("crash", False), code)
+        self.assertEqual(self._status(res, returncode=1), ("error", True))
+
+    def test_ordinary_endings_stay_final(self):
+        self.assertEqual(self._status(timed_out=True), ("timeout", True))
+        warn = {"type": "rate_limit_event", "rate_limit_info": {"status": "allowed_warning", "utilization": 0.9}}
+        self.assertEqual(self._status(warn, self._result("the limit reached here is fine", False)),
+                         ("no_answer", True))
 
 
 class UnembeddedIndex(unittest.TestCase):

@@ -131,6 +131,18 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
+def pair_notes(res_dir: Path, *arms: str) -> list[str]:
+    """Report lines about a pair of conditions that its numbers alone do not show (a confound found after the
+    run, with the adjusted value), from ``posthoc.json`` of a results directory; without ``arms``, every pair's."""
+    path = res_dir / "posthoc.json"
+    notes = load_json(path).get("pair_notes", []) if path.exists() else []
+    out: list[str] = []
+    for n in notes:
+        if not arms or set(n["pair"]) == set(arms):
+            out += [f"> **{n['pair'][0]} ÷ {n['pair'][1]}:** {n['text']}", ""]
+    return out
+
+
 def tool_version(cmd: list[str]) -> str:
     try:
         out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
