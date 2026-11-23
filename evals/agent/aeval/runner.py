@@ -244,8 +244,12 @@ class StopRun(Exception):
 class Scheduler:
     items: list[WorkItem]
     busy: set = field(default_factory=set)
+    work_names: dict = field(default_factory=dict)  # repo -> shared work path (#183); sessions there never overlap
     stop_reason: str | None = None
     cond: threading.Condition = field(default_factory=threading.Condition)
+
+    def key(self, it: WorkItem) -> str:
+        return self.work_names.get(it.repo, it.repo)
 
     def next(self) -> WorkItem | None:
         with self.cond:
@@ -253,14 +257,14 @@ class Scheduler:
                 if self.stop_reason or not self.items:
                     return None
                 for i, it in enumerate(self.items):
-                    if it.repo not in self.busy:
-                        self.busy.add(it.repo)
+                    if self.key(it) not in self.busy:
+                        self.busy.add(self.key(it))
                         return self.items.pop(i)
                 self.cond.wait()
 
     def done(self, it: WorkItem) -> None:
         with self.cond:
-            self.busy.discard(it.repo)
+            self.busy.discard(self.key(it))
             self.cond.notify_all()
 
     def stop(self, reason: str) -> None:
@@ -348,7 +352,7 @@ class Runner:
 
     # ---- one session -----------------------------------------------------
     def _prepare_workspace(self, repo: str) -> Path:
-        dst = self.work_root / repo
+        dst = self.work_root / config.work_name(self.repos[repo])
         if dst.exists():
             config.remove_tree(dst, self.work_root)
         config.copy_tree(self.cache / "repos" / repo, dst)
@@ -821,7 +825,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             order.write_text("".join(f"{it.run_id}\n" for it in self.plan()))
         print(f"{len(done)} runs already final, {len(items)} to go "
               f"(concurrency {self.cfg.concurrency})", flush=True)
-        sched = Scheduler(items)
+        sched = Scheduler(items, work_names={n: config.work_name(r) for n, r in self.repos.items()})
         threads = [threading.Thread(target=self._worker, args=(sched,), daemon=True)
                    for _ in range(max(1, self.cfg.concurrency))]
         for th in threads:

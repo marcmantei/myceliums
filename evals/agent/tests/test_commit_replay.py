@@ -209,6 +209,62 @@ class GradleCommands(unittest.TestCase):
             self.assertFalse(bashcmd.allowed(c, rule)[0], c)
 
 
+class SharedPathAndDerivedIndex(unittest.TestCase):
+    def test_sessions_of_one_work_path_never_overlap(self):
+        from aeval.runner import Scheduler, WorkItem
+        items = [WorkItem({"id": i, "repo": i}, "A", 1) for i in ("a", "b", "c")]
+        sched = Scheduler(list(items), work_names={"a": "s", "b": "s", "c": "c"})
+        self.assertEqual([sched.next().repo, sched.next().repo], ["a", "c"])  # b waits for a
+        sched.done(items[0])
+        self.assertEqual(sched.next().repo, "b")
+        self.assertEqual(config.work_name({"name": "x"}), "x")
+
+    def test_indexes_are_derived_newest_first_and_checked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            env = {"AEVAL_CACHE": str(root / "cache"), "AEVAL_WORK_ROOT": str(root / "work"), "AEVAL_TASKS": ""}
+            # A stand-in for myc: counts come from REUSED/RELS next to it.
+            fake = root / "myc"
+            fake.write_text("#!/bin/sh\n[ \"$1\" = --version ] && { echo fake; exit; }\n"
+                            "d=$(dirname \"$0\"); K=; R=10\n"
+                            "case \"$*\" in *--force*) K=\", $(cat $d/REUSED) kept from the previous index\"; R=$(cat $d/RELS);; esac\n"
+                            "echo \"  Symbols: 5\n  Files: 2\n  Relationships: $R\n  Embeddings: 5 (5/5 symbols$K)\n  Mentions: 1\"\n"
+                            "mkdir -p \"$MYCELIUMS_DATA_DIR\"; printf '{\"repos\":{\"i\":{\"id\":\"i\",\"path\":\"%s\",\"symbol_count\":5,"
+                            "\"file_count\":2,\"analyzed_commit\":\"%s\",\"analyzed_at\":\"x\"}}}' \"$2\" \"$(cat $2/HEAD)\" "
+                            "> \"$MYCELIUMS_DATA_DIR/repos.json\"\n")
+            fake.chmod(0o755)
+            (root / "REUSED").write_text("4")
+            (root / "RELS").write_text("10")
+            repos = {}
+            for n, d in (("old", "2025"), ("new", "2026")):
+                co = root / "cache/repos" / n
+                co.mkdir(parents=True)
+                (co / "HEAD").write_text(n)
+                repos[n] = {"name": n, "commit": n, "work_name": "shared", "parent_date": d}
+            base = root / "base"
+            (base / ".myceliums").mkdir(parents=True)
+            (root / "work").mkdir()
+            reg = {"repos": {"i": {"path": str(root / "work/shared")}}}
+            (base / ".myceliums/repos.json").write_text(json.dumps(reg))
+            with mock.patch.dict(os.environ, env):
+                prep.index(repos, str(fake), "m", base=base)
+                metas = {n: config.load_json(root / f"cache/index/{n}/meta.json") for n in repos}
+                self.assertEqual(metas["new"]["derived"]["base"], str(base))
+                self.assertEqual(metas["old"]["derived"]["base"], str(root / "cache/index/new/home"))
+                self.assertEqual(metas["old"]["derived"]["vectors_reused"], 4)
+                self.assertTrue(metas["old"]["derived"]["graph_equal"])
+                (root / "RELS").write_text("9")  # a graph that differs from a fresh build is recorded
+                prep.index(repos, str(fake), "m", only={"new"}, base=base)
+                self.assertFalse(config.load_json(root / "cache/index/new/meta.json")["derived"]["graph_equal"])
+                (root / "REUSED").write_text("0")
+                with self.assertRaises(SystemExit):  # nothing reused: not a derived index
+                    prep.index(repos, str(fake), "m", only={"new"}, base=base)
+                reg["repos"]["i"]["path"] = "/elsewhere/shared"
+                (base / ".myceliums/repos.json").write_text(json.dumps(reg))
+                with self.assertRaises(SystemExit):  # another path: myc would silently re-embed everything
+                    prep.index(repos, str(fake), "m", only={"new"}, base=base)
+
+
 class TaskFile(unittest.TestCase):
     def test_commit_replay_task_file_schema(self):
         path = Path(__file__).resolve().parents[1] / "tasks" / "tasks-commit-replay.json"

@@ -124,6 +124,14 @@ def load_repos() -> dict[str, dict]:
     return repos
 
 
+def work_name(repo: dict) -> str:
+    """The directory under ``work_root()`` a repository's sessions and index
+    use: its ``work_name`` (#183: every replayed parent shares one, because an
+    index is keyed by its path and only an index of the same path can hand its
+    vectors on), else its name."""
+    return repo.get("work_name") or repo["name"]
+
+
 def task_file_repos() -> list[str]:
     """Names of the repositories the current task file pins itself (#183)."""
     path = tasks_file()

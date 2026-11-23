@@ -12,6 +12,8 @@
    "gold_commit": "d49f37cd91d6576cfd79fc6c7fb216f54012eb20",
    "gradle": "9.9.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-11-13T14:45:13+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -30,6 +32,8 @@
    "gold_commit": "b83db743084358782504649ec9a43c489214d8d6",
    "gradle": "9.8.2",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-11-06T14:58:30+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -48,6 +52,8 @@
    "gold_commit": "ac6528854d3f8947fc9a24d2174d861accac9484",
    "gradle": "9.8.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-10-06T09:28:43+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -66,6 +72,8 @@
    "gold_commit": "37c8f41633d9274cf4bdba631ad0472380858994",
    "gradle": "9.7.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-08-20T18:17:01+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -84,6 +92,8 @@
    "gold_commit": "ab8de8ec4b004e80979af6e4391e28a8a5da4f8e",
    "gradle": "9.4.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-03-26T15:08:58+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -102,6 +112,8 @@
    "gold_commit": "9711db787e0db5e7d569119491e723c720b684a2",
    "gradle": "9.2.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-01-09T19:52:22+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -120,24 +132,8 @@
    "gold_commit": "97ae5fde7ca43ae5a799c3853ff352d64b39c595",
    "gradle": "9.1.0",
    "java_toolchain": "25",
-   "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
-   },
-   "env_from_caller": [
-    "JAVA_HOME"
-   ]
-  },
-  {
-   "name": "spring-bean-factory-get-bean-by-type-reference",
-   "display_name": "Spring Framework",
-   "language": "java",
-   "language_name": "Java",
-   "url": "https://github.com/spring-projects/spring-framework.git",
-   "ref": "parent of 0eba6f0da3fb",
-   "commit": "a5579614d9ff079560c321a6cc80ed7de2c72002",
-   "gold_commit": "0eba6f0da3fbd879326226c9310791ceb329bb82",
-   "gradle": "9.4.1",
-   "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-10-09T17:45:17+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -156,6 +152,8 @@
    "gold_commit": "1345760087bf6e68a64923e13d4c0ebcc82b7f34",
    "gradle": "9.4.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-03-16T11:16:48+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -174,6 +172,8 @@
    "gold_commit": "d4893fb32fc2d9b1c66ce90e49dbd09ca7c54240",
    "gradle": "9.4.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-03-10T20:09:20+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -192,6 +192,8 @@
    "gold_commit": "8b36736344a333c1bddaccbc46a0367d28bed9f9",
    "gradle": "9.1.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-10-10T18:45:32+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -210,6 +212,8 @@
    "gold_commit": "92a43c007ad33b594b5a16a57ed625ceb2fbdac7",
    "gradle": "9.2.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-12-22T15:34:41+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -228,6 +232,8 @@
    "gold_commit": "091097db7982ef04660aa63358d87fc6675b3238",
    "gradle": "9.8.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-10-13T10:18:09+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -246,6 +252,8 @@
    "gold_commit": "dcc24a2325a48684d6d8262af3bfb7467c6dbd02",
    "gradle": "9.7.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-08-31T12:57:32+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -816,94 +824,6 @@
      "spring-core"
     ],
     "docs": true,
-    "size": "M"
-   }
-  },
-  {
-   "id": "bean-factory-get-bean-by-type-reference",
-   "repo": "spring-bean-factory-get-bean-by-type-reference",
-   "type": "edit",
-   "answer_kind": "diff",
-   "question": "BeanFactory#getBean(String, Class) only provides type safety against a raw class, so retrieving a generic bean by name (e.g. a Template<String>) needs an unchecked cast and cannot detect a bean that is a Template<Number>. Add a type-safe method <T> T getBean(String name, ParameterizedTypeReference<T> typeReference) to BeanFactory that returns the named bean if it matches the full generic type and otherwise throws BeanNotOfRequiredTypeException. BeanNotOfRequiredTypeException must support generic required types: add a constructor taking a java.lang.reflect.Type as the required type and a getGenericRequiredType() method returning that Type, while getRequiredType() keeps returning the raw Class (e.g. Template for Template<String>) and getBeanName()/getActualType() keep their meaning. The exception message should use the type name of the generic type. The reified Kotlin getBean<T>(name) extension should keep generic type arguments too, instead of being subject to type erasure.",
-   "rationale": "The commit adds an abstract getBean(String, ParameterizedTypeReference) to BeanFactory and generic-Type support to BeanNotOfRequiredTypeException, implements the method in AbstractBeanFactory, StaticListableBeanFactory and SimpleJndiBeanFactory, delegates in AbstractApplicationContext and StubWebApplicationContext (spring-test), and switches the reified Kotlin getBean<T>(name) extension to the new method. Primaries are the two types named; dependents are the five implementations/delegates in three modules and the Kotlin extension, plus two test classes.",
-   "source": {
-    "commit": "0eba6f0da3fbd879326226c9310791ceb329bb82",
-    "subject": "Add typesafe method to get generic bean by name with type reference",
-    "date": "2026-03-24",
-    "issue": "gh-34687"
-   },
-   "gold_files": [
-    {
-     "path": "spring-beans/src/main/java/org/springframework/beans/factory/BeanFactory.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-beans/src/main/java/org/springframework/beans/factory/BeanNotOfRequiredTypeException.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractBeanFactory.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-beans/src/main/java/org/springframework/beans/factory/support/StaticListableBeanFactory.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-beans/src/main/kotlin/org/springframework/beans/factory/BeanFactoryExtensions.kt",
-     "status": "M"
-    },
-    {
-     "path": "spring-beans/src/test/java/org/springframework/beans/factory/DefaultListableBeanFactoryTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-beans/src/test/kotlin/org/springframework/beans/factory/BeanFactoryExtensionsTests.kt",
-     "status": "M"
-    },
-    {
-     "path": "spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-context/src/main/java/org/springframework/jndi/support/SimpleJndiBeanFactory.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/web/servlet/setup/StubWebApplicationContext.java",
-     "status": "M"
-    }
-   ],
-   "primary_files": [
-    "spring-beans/src/main/java/org/springframework/beans/factory/BeanFactory.java",
-    "spring-beans/src/main/java/org/springframework/beans/factory/BeanNotOfRequiredTypeException.java"
-   ],
-   "test_command": "./gradlew --no-daemon --console=plain :spring-beans:test --tests org.springframework.beans.factory.BeanFactoryExtensionsTests --tests org.springframework.beans.factory.DefaultListableBeanFactoryTests",
-   "test_overlay": [
-    "spring-beans/src/test/java/org/springframework/beans/factory/DefaultListableBeanFactoryTests.java",
-    "spring-beans/src/test/kotlin/org/springframework/beans/factory/BeanFactoryExtensionsTests.kt"
-   ],
-   "allowed_commands": [
-    {
-     "prefix": "./gradlew",
-     "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
-    }
-   ],
-   "test_timeout_s": 900,
-   "strata": {
-    "files": 10,
-    "files_by_kind": {
-     "code": 8,
-     "tests": 2,
-     "docs": 0
-    },
-    "code_modules": 3,
-    "modules": [
-     "spring-beans",
-     "spring-context",
-     "spring-test"
-    ],
-    "docs": false,
     "size": "M"
    }
   },

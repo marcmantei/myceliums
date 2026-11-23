@@ -368,7 +368,8 @@
     "comment": "Java API needed by DefaultListableBeanFactoryTests is fully stated. The Kotlin test (BeanFactoryExtensionsTests) verifies that getBean<T>(name) delegates to getBean(name, ParameterizedTypeReference), so the current text names the Kotlin extension to make that test passable. Choose one: (a) preferred: use the rewrite and remove BeanFactoryExtensionsTests from test_command (the overlay file still compiles against the new BeanFactory method), so the Kotlin extension stays a dependent the agent must find; or (b) keep the sentence and record the Kotlin extension as a stated (non-hidden) dependent. Implementations (AbstractBeanFactory, StaticListableBeanFactory, AbstractApplicationContext, SimpleJndiBeanFactory, StubWebApplicationContext) are forced by compilation since the commit adds an abstract interface method; an agent adding a default method would skip them legitimately.",
     "applied": "kept the drafted question: the Kotlin extension test is compiled with the module's other Kotlin tests, so the extension has to be stated (a stated dependent)"
    },
-   "reserve": true
+   "reserve": true,
+   "drop": "leakage: the description has to name a dependent (the Kotlin extension), because the module's Kotlin tests do not compile without it; was a reserve, never one of the 20"
   },
   {
    "id": "deferred-bean-registrar-contains-bean",

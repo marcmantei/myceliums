@@ -84,7 +84,7 @@ DEFAULT_EXCLUDE = ["node_modules/**", ".git/**", "target/**", "dist/**", "build/
 
 def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | None = None,
           record_only: bool = False, default_config: set[str] | None = None,
-          skip_embeddings: bool = False) -> None:
+          skip_embeddings: bool = False, base: Path | None = None) -> None:
     """Build one myceliums index per repository with ``myc analyze``.
 
     ``myc analyze`` stores its data under ``$HOME/.myceliums``; ``HOME`` is set
@@ -104,18 +104,32 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
     refuses such an index unless the run uses the mock API.
     """
     cache = config.cache_dir()
-    for name, r in repos.items():
+    order = list(repos.items())
+    if base is not None:
+        if skip_embeddings or record_only:
+            raise SystemExit("--base needs an embedded build")
+        # Newest parent first: each index is derived from its neighbour's.
+        order.sort(key=lambda kv: kv[1].get("parent_date", ""), reverse=True)
+    for name, r in order:
         if only and name not in only:
             continue
+        derived = None
         home = cache / "index" / name / "home"
-        work = config.work_root() / name
+        work = config.work_root() / config.work_name(r)
         log_path = cache / "index" / name / "analyze.log"
         took = None
         extra = [] if name in (default_config or set()) else r.get("index_exclude_extra", [])
         if not record_only:
+            if base is not None:
+                check_base(base, config.work_root() / config.work_name(r))
+                if home.resolve() == base.resolve():
+                    raise SystemExit(f"{name}: --base is this repository's own index")
             if home.exists():
                 config.remove_tree(home, cache / "index")
-            home.mkdir(parents=True)
+            if base is not None:
+                config.copy_tree(base, home)
+            else:
+                home.mkdir(parents=True)
             if work.exists():
                 config.remove_tree(work, config.work_root())
             config.copy_tree(cache / "repos" / name, work)
@@ -128,13 +142,17 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
                    "FASTEMBED_CACHE_DIR": models_dir, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
             started = time.time()
             flag = "--skip-embeddings" if skip_embeddings else "--strict-embeddings"
-            res = subprocess.run([myc, "analyze", str(work), flag],
+            res = subprocess.run([myc, "analyze", str(work), flag] + (["--force"] if base is not None else []),
                                  env=env, capture_output=True, text=True)
             took = round(time.time() - started, 1)
             log_path.write_text(res.stdout + res.stderr)
             if res.returncode != 0:
                 raise SystemExit(f"myc analyze failed for {name}; see {log_path}")
         log = log_path.read_text()
+        if base is not None:
+            derived = verify_derived(log, name, work, myc, env, cache)
+            derived["base"] = str(base)
+            base = home
         registry = config.load_json(home / ".myceliums" / "repos.json")
         (info,) = registry["repos"].values()
         if info.get("analyzed_commit") != r["commit"]:
@@ -153,6 +171,7 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
             "index_exclude_extra": extra,
             **({"index_config": "default"} if name in (default_config or set()) else {}),
             **({"embeddings": "skipped"} if skip_embeddings else {}),
+            **({"derived": derived} if derived else {}),
             "myc_version": config.tool_version([myc, "--version"]),
             "myc_sha256": config.sha256_file(Path(myc)),
             "indexed_at": info.get("analyzed_at"),
@@ -160,6 +179,46 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
         }
         (cache / "index" / name / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
         print(json.dumps(meta))
+
+
+def check_base(base: Path, work: Path) -> None:
+    """An index hands its vectors on only to an index of the same path (the
+    store filters by repository id, which hashes the path); at another path
+    ``myc`` would re-embed everything without saying so."""
+    (info,) = config.load_json(base / ".myceliums" / "repos.json")["repos"].values()
+    if Path(info["path"]) != Path(str(work.parent.resolve() / work.name)):
+        raise SystemExit(f"base index is of {info['path']}, not {work}; its vectors would not be reused "
+                         f"(set AEVAL_WORK_ROOT to the base's work root)")
+
+
+GRAPH_COUNTS = {"symbols": r"Symbols:\s+([\d,]+)", "files": r"Files:\s+([\d,]+)",
+                "relationships": r"Relationships:\s+([\d,]+)", "mentions": r"Mentions:\s+([\d,]+)"}
+
+
+def graph_counts(log: str) -> dict:
+    return {k: _grab(log, p) for k, p in GRAPH_COUNTS.items()}
+
+
+def verify_derived(log: str, name: str, work: Path, myc: str, env: dict, cache: Path) -> dict:
+    """What a derived index reused, and its graph counts against a fresh
+    graph-only build of the same working copy (stops on no reuse)."""
+    reused = _grab(log, r"([\d,]+) kept from the previous index")
+    if not reused:
+        raise SystemExit(f"{name}: no vector of the base index was reused")
+    tmp = cache / "tmp" / f"graph-{name}"
+    if tmp.exists():
+        config.remove_tree(tmp, cache / "tmp")
+    tmp.mkdir(parents=True)
+    try:
+        res = subprocess.run([myc, "analyze", str(work), "--skip-embeddings"], capture_output=True, text=True,
+                             env={**env, "HOME": str(tmp), "MYCELIUMS_DATA_DIR": str(tmp / ".myceliums")})
+        if res.returncode != 0:
+            raise SystemExit(f"{name}: fresh graph-only build failed: {res.stderr[-300:]}")
+        fresh = graph_counts(res.stdout + res.stderr)
+    finally:
+        config.remove_tree(tmp, cache / "tmp")
+    got = graph_counts(log)
+    return {"vectors_reused": reused, "counts": got, "fresh_graph_counts": fresh, "graph_equal": got == fresh}
 
 
 def _grab(text: str, pattern: str) -> int | None:

@@ -12,6 +12,8 @@
    "gold_commit": "d41495720cbabe30844e65c12765eacf806d2653",
    "gradle": "9.9.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-11-13T14:45:14+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -30,6 +32,8 @@
    "gold_commit": "297c74d29c0704e0879ce121ba3789b677abb9ff",
    "gradle": "9.9.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-11-10T12:30:54+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -48,6 +52,8 @@
    "gold_commit": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
    "gradle": "9.7.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-09-15T16:26:37+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -66,6 +72,8 @@
    "gold_commit": "8a92c19e4dc7de87a6dfc7ce85920c6a2446320d",
    "gradle": "9.7.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-08-14T09:19:58+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -84,6 +92,8 @@
    "gold_commit": "22e4d84993105c1975d6afe16d34467772c7c676",
    "gradle": "9.4.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-03-17T11:59:45+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -102,6 +112,8 @@
    "gold_commit": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
    "gradle": "9.2.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-11-10T09:57:06+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -120,6 +132,8 @@
    "gold_commit": "a9a404266c25a82b0f3a4286053f69ce0c8fb008",
    "gradle": "9.2.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-11-26T12:30:48Z",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -138,6 +152,8 @@
    "gold_commit": "833ab4d48fdaf64f7b234f6dac76d4cced14390c",
    "gradle": "9.8.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-09-28T12:07:25+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -156,6 +172,8 @@
    "gold_commit": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
    "gradle": "9.2.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-11-26T13:22:26+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -174,6 +192,8 @@
    "gold_commit": "e0b54e244e7ac9f48f720bcbdcc869e2400fe35c",
    "gradle": "9.3.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-02-24T17:17:31+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -192,6 +212,8 @@
    "gold_commit": "7fbdbd6eb7665be6a66562d26b26ffcfb600ee32",
    "gradle": "9.9.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-11-13T14:45:13+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -210,6 +232,8 @@
    "gold_commit": "4cf6335372556d4f6ccc3a0166318c5f19037e8f",
    "gradle": "9.8.2",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-10-22T11:40:36+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -228,6 +252,8 @@
    "gold_commit": "8ab533263994e92f9660c9917a07cd3d8f8e769b",
    "gradle": "9.8.2",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-10-21T18:38:57+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -246,6 +272,8 @@
    "gold_commit": "d70220eb5de0e10211e1a843b292cc54bed0c365",
    "gradle": "9.8.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-10-06T18:15:52+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -264,6 +292,8 @@
    "gold_commit": "2028eb3694babca20cbcb95a966b50b3e6fe71ca",
    "gradle": "9.7.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-08-31T17:17:01+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -282,6 +312,8 @@
    "gold_commit": "7502b923922d02109b5a3c861033715f973dc3cd",
    "gradle": "9.4.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-03-28T11:13:56+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -300,6 +332,8 @@
    "gold_commit": "96aadc2b12bce37237e053b7f7e1c28b98be328b",
    "gradle": "9.2.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-12-03T17:15:53+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -318,6 +352,8 @@
    "gold_commit": "b128f59714b071e9b4d8a1ae9cdc63f3ff62251f",
    "gradle": "9.2.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-11-05T12:23:59Z",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -336,6 +372,8 @@
    "gold_commit": "2e4ca413829f279f7ce3aa637582cb8b97b9b3ca",
    "gradle": "9.1.0",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2025-10-15T15:55:48+02:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
@@ -354,6 +392,8 @@
    "gold_commit": "02af3e7a17db9f63ced52425d06558eb50deb495",
    "gradle": "9.3.1",
    "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-03-03T12:14:33+01:00",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },

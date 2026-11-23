@@ -1588,9 +1588,9 @@ Marc's budget approval, and the prechecks need Gradle (below).
 polish, copyright, revert or release subject, changes to main code and to
 tests, at least two build modules touched (`framework-docs` counts), and a
 parent that builds with the Java 25 toolchain: **151 candidates**. 34 were
-picked by hand for a public API or behaviour change a description can state
+picked for a public API or behaviour change a description can state
 (no pure refactoring or deprecation), and stratified by files, code modules
-and docs; 20 are the task set, 14 are reserves
+and docs; 20 are the task set, 13 are reserves
 (`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
 fails.
 
@@ -1617,20 +1617,21 @@ fails.
 | `bean-provider-parameterized-type-reference` | 2e4ca41382 | 7 (6/1/0) | 3 | no | 1 |
 | `message-source-default-charset` | 02af3e7a17 | 5 (4/1/0) | 2 | no | 1 |
 Spread: 6 small (≤ 5 files), 10 medium (6-12), 4 large (13-20); code in one
-module 2, two modules 12, three or more 6; 10 with docs.
+module 2, two modules 13, three or more 5; 10 with docs.
 
 **Descriptions** were drafted by agents from the commit message, the linked
 issue and the diff ([`groundtruth/commit_replay_spec.json`](groundtruth/commit_replay_spec.json),
 rules: an issue-style change request that names every new public name the
 commit's tests need, may name the type of the core change, and never names
 files, test classes, dependent classes, modules, docs or tests). A second
-agent reviewed all 34 for leakage and solvability against the test diff:
-27 ok, 7 rewritten (a docs mention, a test-client hint, a named dependent, a
-builder whose setters must validate on their own, a missing constructor the
-fixture calls), none dropped; one kept its sentence on a Kotlin extension
-because the module's Kotlin tests compile together (a stated dependent). The
-verdicts are in the spec (`review`). Scope words an issue would use ("for
-both Spring MVC and WebFlux") are allowed and noted there.
+agent reviewed all 34 for leakage and solvability against the test diff (it
+split them over four sub-agents and itself re-checked nine): 27 ok, 7 to fix.
+Six were replaced by the reviewer's rewrite (two of them among the 20); the
+rewrites were not reviewed again. The seventh, a reserve, had to name a
+dependent (a Kotlin extension its module's tests compile against) and was
+dropped, which leaves 13 reserves. No human has reviewed the descriptions.
+Scope words an issue would use ("for both Spring MVC and WebFlux") are allowed
+and noted in the spec.
 
 **What the build derives** (`commit_replay.py build`): one pin per task in the
 task file's own `repos` (the parent; `gold_commit` the replayed commit),
@@ -1678,9 +1679,9 @@ T=evals/agent/tasks/tasks-commit-replay.json
 python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 MB each) + gold files
 python3 evals/agent/agent_eval.py --tasks $T precheck-edit   # fails on parent + overlay, passes on the commit
 python3 evals/agent/agent_eval.py --tasks $T check-tasks
-python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models
+python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models --base $BASE_HOME
 python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-replay --conditions A,C,D \
-    --profile realistic --bash --timeout 2400 --concurrency 3 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
+    --profile realistic --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
 ```
 
 Arms A (MCP server), C (what `myc setup-claude --no-agent` installs) and D
@@ -1689,26 +1690,42 @@ test runs); every arm has `Bash`, `Edit` and `Write`. Realistic profile:
 100-turn cap not stated in the prompt, 3 repetitions and the interleaved schedule of #182
 (repetition-major, tasks shuffled, the three arms adjacent per task with
 their order counterbalanced). Each session gets a fresh copy of its task's
-parent at `/tmp/aeval/spring-<task>` and, in A/C/D, a fresh copy of that
-parent's index. Index: `myc analyze --strict-embeddings` of the whole
-checkout (tests and `framework-docs/` included; AsciiDoc is indexed since
-#180), built from `main` at `276d916` (#180 merged).
+parent at one shared path (`work_name`: `spring-framework` under `AEVAL_WORK_ROOT`) and a
+fresh copy of that parent's index. The path is shared because of the index
+(below); its price is that **sessions run one at a time**.
 
-**Index cost, measured on one parent** (`mime-type-parameter-names-case-insensitive`,
-8-core benchmark Mac): the graph alone (`index --skip-embeddings`) took
-73 s for 10,109 files, 143,541 symbols, 485,247 relationships and 39,899 doc
-mentions, 668 MB on disk. With embeddings (`--strict-embeddings`, the
-configuration of every earlier run) the build was still embedding after
-2 hours and was stopped there; at Vue's rate in #163 (15,750 symbols in
-1,163 s) a Spring parent takes about 3 hours, so 20 parents about 60 hours,
-and the vectors add about 0.4 GB per index (143k × 768 floats), about 1.1 GB
-each, 22 GB for 20, more than the machine has free. Embeddings cannot be
-shared between parents. Two ways to run it, for Marc to decide: graph-only
-indexes for every arm (search_code falls back to BM25; 25 minutes and 13 GB
-for 20), or embedded indexes built and deleted task by task (60 hours of
-indexing). Graph-only for real sessions needs `run` to accept an index
-built with `--skip-embeddings`, which it refuses since #182 (mock runs only).
-The budget below assumes graph-only.
+**Index plan: derive, do not rebuild.** `myc` has no command that updates an
+index from a git diff: file-level re-indexing (`analyze_files`) is reachable
+only through `analyze --watch` (and email sync), and the post-commit hook
+runs `analyze --skip-embeddings`. What it does have is a full graph rebuild
+that takes over the vector of every symbol whose embedding text is unchanged
+(`analyze --force`, #151), so only changed symbols are embedded. That reads the
+previous index by repository id, which hashes the path: at another path
+nothing would be reused, silently (read in the code, not run). Hence one shared work path, and `index --base HOME`:
+
+* it refuses a base of another path, and an index that reused no vector;
+* newest parent first, each index is derived from its neighbour's, so each
+  step embeds one interval of history only;
+* each is compared with a fresh graph-only build of the same working copy
+  (symbols, files, relationships, mentions; `meta.json` `derived`).
+
+The base is the #182 run's embedded index of v7.1.0 (same models; its path is
+`/private/tmp/aeval182/spring-framework`, so `AEVAL_WORK_ROOT=/private/tmp/aeval182`),
+used only after that run has finished with the path. v7.1.0 is the better
+base than the oldest parent: 8 of the 20 parents differ from it by at most
+606 files (7 to 606), against 3,039 to 3,296 from the oldest.
+**Not measured yet** (embedding waits for the #182 build): vectors reused,
+time and disk per task, graph equality. This was checked against a stand-in
+`myc` in the unit tests only.
+
+Measured on one parent (`mime-type-parameter-names-case-insensitive`, M1 Max,
+10 cores, machine under other load): the graph alone took 73 s for 10,109
+files, 143,541 symbols, 485,247 relationships and 39,899 doc mentions, 668 MB.
+A full embedded build was stopped by a 2-hour tool limit while still
+embedding; about 3 hours at Vue's #163 rate is an extrapolation across
+different code and load, so no more than an order of magnitude. If derived indexes
+fail, the fallback is graph-only with semantic search off in every arm, which needs
+the #182 guard on `--skip-embeddings` indexes relaxed.
 
 **Budget estimate** (not measured; from #163/#171 scaled to edit tasks).
 #163/#171 question sessions with Bash at 40 turns: 8 turns, 100-136k input
@@ -1728,26 +1745,27 @@ of the final context and 8-30k output.
 | Tokens, whole run | 145M | 450M | 1.26B |
 | Cost, whole run | $72 | $144 | $288 |
 | Wall time per session (model + agent's Gradle runs + grading) | 6 min | 12 min | 25 min |
-| Wall time, concurrency 3 | 6 h | 12 h | 25 h |
+| Wall time, one session at a time (shared path) | 18 h | 36 h | 75 h |
 
-Plus, once: 20 graph-only indexes (25 min; about 60 h with embeddings) and
-the prechecks (40 Gradle runs). A pilot
-of one repetition (60 sessions, ~$50) would replace these assumptions with
-measurements before the full run. Disk: 20 checkouts 2 GB, 20 graph-only indexes
-13 GB (0.67 GB each), `~/.gradle` 3-5 GB (11 Gradle versions among the parents,
-9.1.0-9.9.0, each with its own distribution and caches, plus the shared
-dependency and build caches).
+Plus, once: the derived indexes (not measured) and the prechecks (40 Gradle
+runs, not measured). The call counts and context sizes above are assumptions;
+a pilot of one repetition (60 sessions) would replace them. Disk: 20 parents
+about 2 GB, graph-only indexes 0.67 GB each, embedded ones larger (not
+measured; about 1.1 GB if vectors add 0.4 GB, so 22 GB for 20, close to all the
+free space: build, run and delete task by task), `~/.gradle` not measured
+(nothing downloaded yet; the parents use 11 Gradle versions).
 
-**Blocked: Java has no network on the benchmark machine.** Little Snitch
-lets `curl`, `git` and Python out but not `java` (both the Homebrew JDK 23 and
-the Temurin JDK 25: connections time out, loopback works), so the Gradle
-wrapper cannot download its distribution and no precheck has run. Allowing
-`java` (rule for the JDK under `~/.cache/myc-java/jdk/`) is needed for the
-prechecks and for the sessions, whose agents run Gradle too. Until then the
-task file fails `check-tasks` (no precheck), and CI checks its schema with
-the unit tests only (`tests/test_commit_replay.py`).
+**Blocked: Java cannot connect on the benchmark machine.** Connections from
+`java` (Homebrew JDK 23 and Temurin JDK 25) to the internet time out while
+`curl`, `git` and Python connect and loopback works. Little Snitch runs on the
+machine and is the likely cause, but its log showed nothing about `java` and
+its rules were not readable, so this is not confirmed. Until `java` can connect,
+Gradle cannot download its distribution, no precheck has run, and the test
+commands themselves are unproven (none has been seen to pass). `check-tasks` then
+reports every task as not prechecked; CI covers the task file with unit tests
+only (`tests/test_commit_replay.py`).
 
-**Mock validation** (no model call): `probe --profile realistic --bash` on
+**Mock validation** (no model call; run on the per-task paths, before the shared path). It shows the pipeline, not a passing grade: the scripted edit is a comment, so the tests would fail even with a working Gradle. `probe --profile realistic --bash` on
 `mime-type-parameter-names-case-insensitive` against the graph-only index, with
 the scripted session searching, calling `myc callers parseMimeType`, reading
 and editing `MimeType.java` and running the task's test command:

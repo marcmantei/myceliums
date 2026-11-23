@@ -59,7 +59,8 @@ def cmd_fetch(args) -> int:
 def cmd_index(args) -> int:
     only = set(args.repo or config.task_file_repos()) or None
     prep.index(config.load_repos(), args.myc, args.models_dir, only, record_only=args.record_only,
-               default_config=set(args.default_config or []), skip_embeddings=args.skip_embeddings)
+               default_config=set(args.default_config or []), skip_embeddings=args.skip_embeddings,
+               base=Path(args.base).resolve() if args.base else None)
     return 0
 
 
@@ -186,7 +187,7 @@ def cmd_probe(args) -> int:
         log_dir.mkdir(parents=True)
         edit = None
         if args.edit_file:
-            edit = {"file": str(config.work_root() / task["repo"] / args.edit_file), "old": args.edit_old,
+            edit = {"file": str(config.work_root() / config.work_name(repos[task["repo"]]) / args.edit_file), "old": args.edit_old,
                     "new": args.edit_new, "command": args.edit_command}
         api = mockapi.MockAPI(log_dir, args.grep, args.callers, edit=edit).start()
         cfg.extra_env = mockapi.session_env(api.url)
@@ -540,6 +541,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--repo", action="append")
     s.add_argument("--record-only", action="store_true",
                    help="describe an existing index (needs its analyze.log) instead of rebuilding it")
+    s.add_argument("--base", metavar="HOME", help="#183: an embedded index's home directory, built at the same work path: "
+                   "each selected repository's index is derived from it (newest first, each from the one before), "
+                   "embedding only changed symbols, and checked against a fresh graph-only build")
     s.add_argument("--skip-embeddings", action="store_true",
                    help="#182: no vectors (minutes instead of hours), for `run --mock-api` checks only; "
                         "a real run refuses such an index")

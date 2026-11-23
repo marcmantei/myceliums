@@ -176,7 +176,8 @@ def cmd_build(args) -> int:
         repos.append({
             "name": name, "display_name": "Spring Framework", "language": "java", "language_name": "Java",
             "url": URL, "ref": f"parent of {sha[:12]}", "commit": parent, "gold_commit": sha,
-            "gradle": gradle, "java_toolchain": java,
+            "gradle": gradle, "java_toolchain": java, "work_name": "spring-framework",
+            "parent_date": git(hist, "show", "-s", "--format=%cI", parent).strip(),
             "session_env": SESSION_ENV, "env_from_caller": ["JAVA_HOME"],
         })
         cmd = s.get("test_command") or default_test_command(files)
