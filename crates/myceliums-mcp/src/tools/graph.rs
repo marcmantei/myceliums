@@ -186,7 +186,10 @@ impl MyceliumsMcp {
                 .map(|(s, _)| *s)
                 .chain(c.on_chains.iter().map(|step| step.symbol))
                 .collect(),
-            Err(_) => vec![from],
+            // No chain: what the walk reached may load `to` by name.
+            Err(none) => std::iter::once(from)
+                .chain(none.reached.iter().map(|(s, _)| *s))
+                .collect(),
         };
         let body = body + &crate::name_refs::flow_sections(&symbols, &relationships, &on_flow, to);
         self.graph_text(&graph, body).await
