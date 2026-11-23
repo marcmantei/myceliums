@@ -165,12 +165,27 @@ targets the symbol its label names, if any).
 
 - **`held-out/doc-mentions-spring-heldout.json`, held out** (`--heldout`,
   seed 4180): 30 code spans, 10 `xref:` macros, 10 API links, disjoint from
-  the dev set, scored once after the matching rules were frozen.
+  the dev set. Its recorded score (precision 24/24, recall 24/26) is from
+  the matcher frozen at commit `550dae6` of #193 (`2a3a70d` after the rebase
+  onto #192; the matcher is the same). It was first scored on an uncommitted
+  tree with the same result; the changes in between came from the review of
+  #193 (KDoc links, `@Nullable`-style shared annotation names, files that
+  are no namespace), not from this set's misses. The set's `scoring` field
+  says the same.
 - **`held-out/doc-mentions-spring-dev.json`, dev** (seed 180): 15 + 5 + 5.
   Two rules came from reading its misses and a sample of all Spring links:
   a constructor carries its type's name (`DeferredResult` is the class, not
   also its constructors), and `@Name` only names an annotation type
   (`@Resource` is Jakarta's annotation, not Spring's `Resource`).
+
+**What recall covers.** Only the three drawn forms: backtick code spans,
+`xref:` macros and `{spring-framework-api}` links. Not sampled, and not
+matched: 384 `<<anchor>>` cross-references (doc-to-doc anchors; a code span
+in their label is matched as a code span), plain-text names outside code
+spans (about 900 CamelCase names and about 180 qualified names by the
+review's count of #193), and the 12 `{spring-framework-api-kdoc}` links
+(matched since the review, not sampled). A doc that names a symbol only in
+prose is therefore missed whatever these numbers say.
 
 `graph-eval` scores both whenever the checkout is present, reusing the
 analysis of the Java sets: per item, the predictions are the doc MENTIONS

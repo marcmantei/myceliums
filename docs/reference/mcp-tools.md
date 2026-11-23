@@ -245,6 +245,15 @@ and line range.
 | `rerank` | bool | no | `false` | Rerank the top 50 hybrid results with a cross-encoder |
 | `explain` | bool | no | `false` | Show the scoring breakdown of each result |
 | `tests` | enum | no | `demote` | Test code: `demote` ranks it below product code, `include` ranks it like product code, `prefer` ranks it first. See [Test code](#test-code) |
+| `docs` | enum | no | `demote` | Doc sections and documents (Markdown, MDX, AsciiDoc, plain text): `demote` ranks them below code by the test-code weight, `include` ranks them like code (#180) |
+
+Docs rank below code by default (#180) because a doc page that repeats a
+query's words would push code out of a code search. On spring-framework
+v7.1.0, indexing its 470 AsciiDoc pages put doc pages into the keyword top 10
+of 4 of 15 code-intent queries (8 hits). With `docs: "demote"` that dropped
+to 2 queries (3 hits). The demotion places a doc at position `p` as if it
+were at `p / 0.2`, like test code (#146). `docs: "include"` restores the
+plain ranking. The CLI (`myc search`) and the library rank docs like code.
 
 `auto` decides from the embedding metadata recorded at index time and never
 loads a model for an index built with `skip_embeddings`. An explicit

@@ -25,7 +25,10 @@ const RERANK_WINDOW: usize = 50;
 fn unclassified_notice(graph: &Graph<'_>, tests: &TestPolicy) -> Option<&'static str> {
     let stale = graph.info().classification_version
         < myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION;
-    (stale && !tests.is_neutral()).then_some(
+    // About test code only: docs are kinds, not a classification.
+    let reorders_tests =
+        tests.ranking != myceliums_core::TestRanking::Include && !tests.is_neutral();
+    (stale && reorders_tests).then_some(
         "Note: this index was built before test code was classified, so tests rank like \
          product code. Re-run analyze to rank them below it.",
     )

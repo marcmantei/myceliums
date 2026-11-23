@@ -54,7 +54,7 @@ public class Service {
 
 const GUIDE: &str = "= Guide\n\n== Opening\n\nCall `Store#open` once.\n\n== Caching\n\nA `Store` reads a `Cache`.\n\n== Eviction\n\nThen `evict()` it.\n";
 
-const README: &str = "# Readme\n\n## Usage\n\nUse `Store.open()`.\n\n## Notes\n\n`Store#open(Cache)` again.\n\n## More\n\n`org.acme.Store#open`.\n";
+const README: &str = "# Readme\n\n## Usage\n\nUse `Store.open()`.\n\n## Notes\n\n`Store#open(Cache)` again.\n\n## More\n\n`org.acme.Store#open`.\n\n## Evict\n\nA section titled like the methods.\n";
 
 fn git(dir: &Path, args: &[&str]) {
     let status = Command::new("git")
@@ -265,6 +265,40 @@ async fn impact_and_callers_name_the_docs_that_mention_a_symbol() {
             "\n\nNot linked: 1 doc mention(s) of `evict` that several symbols could be, e.g. docs/guide.adoc:13\n"
         ),
         "{evict}"
+    );
+
+    // ── search_code ranks doc sections below code unless asked ──────────
+    let rows = |text: &str| -> Vec<String> {
+        text.lines()
+            .filter(|l| {
+                l.split_whitespace()
+                    .next()
+                    .is_some_and(|n| n.parse::<u32>().is_ok())
+            })
+            .map(|l| l.split_whitespace().take(3).collect::<Vec<_>>().join(" "))
+            .collect()
+    };
+    let demoted = call(
+        &client,
+        "search_code",
+        json!({"repo_id": repo, "query": "evict", "mode": "keyword"}),
+    )
+    .await;
+    let included = call(
+        &client,
+        "search_code",
+        json!({"repo_id": repo, "query": "evict", "mode": "keyword", "docs": "include"}),
+    )
+    .await;
+    let position = |rows: &[String]| rows.iter().position(|r| r.ends_with(" Section"));
+    let (d, i) = (rows(&demoted), rows(&included));
+    // The section scores highest: first with docs included, below both
+    // methods by default.
+    assert_eq!(position(&i), Some(0), "{i:?}");
+    assert_eq!(position(&d), Some(2), "{d:?}");
+    assert!(
+        d[0].ends_with(" Method") && d[1].ends_with(" Method"),
+        "{d:?}"
     );
 
     // ── trace_flow is unchanged ─────────────────────────────────────────

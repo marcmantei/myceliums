@@ -1296,6 +1296,7 @@ mod tests {
             notice: None,
             page_cut: false,
             incomplete: None,
+            docs: String::new(),
         };
         let text = list.compact("callers");
         assert!(
