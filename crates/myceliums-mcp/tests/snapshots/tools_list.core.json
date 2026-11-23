@@ -299,7 +299,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
+    "description": "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file, then the docs naming it. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
     "inputSchema": {
       "properties": {
         "depth": {

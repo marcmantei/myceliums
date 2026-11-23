@@ -6,7 +6,7 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "query_knowledge",
-        description = "Query cross-domain knowledge: find emails and documents that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels.",
+        description = "Query cross-domain knowledge: find emails, documents and doc comments that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -28,11 +28,18 @@ impl MyceliumsMcp {
         let page = Page::new(params.limit, params.offset, Budget::new(20, 100));
         let include_sources = params.include_sources.unwrap_or(true);
 
-        // Step 1: Find matching code symbols using BM25 search
-        let matching_symbols = search_symbols(&symbols, &params.query)
-            .into_iter()
-            .filter_map(|result| symbols.iter().find(|s| s.name == result.symbol.name))
-            .collect::<Vec<_>>();
+        // Step 1: the code symbol the query names exactly (a
+        // `file:Qualified.name` handle, a qualified or unique name) with, for
+        // a type, its members (#180); else the BM25 search's symbols.
+        let matching_symbols = match navigation::resolve(&symbols, &params.query) {
+            Ok(symbol) if myceliums_core::navigation::is_code_definition(&symbol.kind) => {
+                myceliums_core::doc_mentions::mention_targets(&symbols, &[symbol])
+            }
+            _ => search_symbols(&symbols, &params.query)
+                .into_iter()
+                .filter_map(|result| symbols.iter().find(|s| s.name == result.symbol.name))
+                .collect::<Vec<_>>(),
+        };
 
         if matching_symbols.is_empty() {
             let output = KnowledgeQueryOutput {
@@ -60,8 +67,11 @@ impl MyceliumsMcp {
 
                     // Step 3: Find source symbol
                     if let Some(source_symbol) = symbols.iter().find(|s| s.uid == rel.source_uid) {
-                        // Filter to content symbols only
-                        if !is_content_symbol(&source_symbol.kind) {
+                        // Content symbols, and code symbols whose doc
+                        // comment names the symbol (#180).
+                        if !is_content_symbol(&source_symbol.kind)
+                            && !rel.metadata.contains(myceliums_core::doc_mentions::METHOD)
+                        {
                             continue;
                         }
 
@@ -113,6 +123,13 @@ impl MyceliumsMcp {
             a.match_line.cmp(&b.match_line)
         });
 
+        // One line can hold two mentions of a symbol (an API link and the
+        // code span in its label): list it once.
+        results.dedup_by(|a, b| {
+            a.source_uid == b.source_uid
+                && a.mentioned_uid == b.mentioned_uid
+                && a.match_line == b.match_line
+        });
         let total_mentions = results.len();
         let page = page.take(results);
 

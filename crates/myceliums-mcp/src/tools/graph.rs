@@ -941,6 +941,9 @@ pub(crate) struct CallList {
     page_cut: bool,
     /// What the walk did not follow, and the call that continues it.
     incomplete: Option<crate::output::Incomplete>,
+    /// The docs naming the symbol (callers only, #180): appended to the
+    /// compact answer.
+    docs: String,
 }
 
 /// `detail: full`: the whole output as JSON text (#181).
@@ -1011,6 +1014,7 @@ impl CallList {
             }
             out.push_str(&format!("Next: {}\n", incomplete.next));
         }
+        out.push_str(&self.docs);
         out
     }
 
@@ -1164,7 +1168,24 @@ impl MyceliumsMcp {
                 signature: Some(h.symbol.signature.clone()),
             })
             .collect();
+        // A caller list answers "what must change with it": name the docs
+        // too (#180). A callee list does not.
+        let docs = match direction {
+            navigation::Direction::Callers => {
+                crate::docs::section(
+                    &graph.store(),
+                    &symbols,
+                    &relationships,
+                    &[start],
+                    crate::docs::Subject::Symbol(start),
+                    repo_id,
+                )
+                .await
+            }
+            navigation::Direction::Callees => String::new(),
+        };
         Ok(CallList {
+            docs,
             index_status: self.index_status(&graph).await?,
             symbol_name: start.name.clone(),
             items,

@@ -25,6 +25,7 @@
 #![warn(missing_docs)]
 
 mod analysis;
+mod docs;
 mod embedding_jobs;
 mod errors;
 mod format;
