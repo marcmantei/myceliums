@@ -117,12 +117,17 @@ def is_edit_task(task: dict) -> bool:
 def nosearch_git_env(tmp: Path) -> dict[str, str]:
     """Git settings for arm D, set by the harness in the session's environment
     (the agent cannot change it: the allowlist refuses assignments and
-    ``export``): no hooks (an empty ``core.hooksPath``), no fsmonitor command,
-    no implicit bare repositories, no system config."""
+    ``export``): no system or global config, no hooks (an empty
+    ``core.hooksPath``), no fsmonitor command, ``cat`` as every pager, ``true``
+    as editor, no implicit bare repositories. ``diff.external`` is not pinned:
+    an empty value makes ``git diff`` fail ("cannot run"), and the working
+    copy's own config, the only one git still reads, cannot be written in D."""
     hooks = tmp / "no-git-hooks"
     hooks.mkdir(exist_ok=True)
-    pairs = [("core.hooksPath", str(hooks)), ("core.fsmonitor", "false"), ("safe.bareRepository", "explicit")]
-    env = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_COUNT": str(len(pairs))}
+    pairs = [("core.hooksPath", str(hooks)), ("core.fsmonitor", "false"), ("safe.bareRepository", "explicit"),
+             ("core.pager", "cat"), ("pager.diff", "cat"), ("pager.log", "cat"), ("pager.show", "cat"),
+             ("pager.status", "cat"), ("core.editor", "true"), ("sequence.editor", "true")]
+    env = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_COUNT": str(len(pairs))}
     for i, (k, v) in enumerate(pairs):
         env[f"GIT_CONFIG_KEY_{i}"] = k
         env[f"GIT_CONFIG_VALUE_{i}"] = v

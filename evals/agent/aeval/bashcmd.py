@@ -40,17 +40,23 @@ repository (``-c``, ``--config-env``, ``--exec-path``, ``--git-dir``, ...);
 and exactly the task's own build and test commands (:func:`task_rules`).
 Everything else is denied, as is any command substitution (``$(...)``,
 backticks, ``<(...)``), any environment assignment or wrapper in front of a
-command, any argument that names a path inside ``.git``, and any command
-that does not parse (unbalanced quotes, a heredoc never closed). The same
-hook refuses ``Edit``/``Write`` into ``.git``, and the harness pins
-``core.hooksPath``, ``core.fsmonitor`` and ``safe.bareRepository`` through
-the session's environment, so an allowed git command cannot be made to run a
-program.
+command, any argument that names a path inside ``.git``, ``git --output``,
+and any command that does not parse (unbalanced quotes, a heredoc never
+closed). File operands (of ``cd``, ``mkdir``, ``touch``, ``mv``, ``cp``,
+``rm``, ``chmod``) and redirection targets must not contain glob or
+expansion characters (``* ? [ { ~ $``), must not name ``.git`` or a git
+config, and must stay inside the working copy (the hook's ``cwd``). The same
+hook refuses ``Edit``/``Write`` outside the working copy, into ``.git`` and
+to ``~/.gitconfig`` / ``~/.config/git``, and the harness pins git's
+configuration through the session's environment (aeval/runner.py
+``nosearch_git_env``). This guards a cooperative agent told not to search;
+it is not a sandbox (see the README's threat model).
 """
 
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import sys
@@ -97,7 +103,15 @@ def _tokens(line: str) -> list[str]:
 def simple_commands(command: str) -> list[list[str]]:
     """The word lists of every simple command in ``command``; heredoc bodies
     are skipped (raises :class:`Unparsed`)."""
+    return parse(command)[0]
+
+
+def parse(command: str) -> tuple[list[list[str]], list[tuple[int, str]]]:
+    """``(simple commands, redirection targets)``; a target is ``(index of its
+    simple command, word)``: the file of ``> f``, ``>> f``, ``< f``, ``&> f``,
+    ``>& f`` (not an fd duplication like ``2>&1``, not a heredoc word)."""
     out: list[list[str]] = []
+    targets: list[tuple[int, str]] = []
     heredoc: list[tuple[str, bool]] = []  # (delimiter, leading tabs stripped: `<<-`) still to be met
     for line in (command or "").splitlines():
         if heredoc:
@@ -129,6 +143,10 @@ def simple_commands(command: str) -> list[list[str]]:
                     elif word.startswith("-") and t == "<<":  # `<<-EOF` splits as `<<`, `-EOF`
                         word, tabs = word[1:], True
                     heredoc.append((word, tabs))
+                elif t != "<<<" and i + 1 < len(toks):
+                    word = toks[i + 1]
+                    if not (t.endswith("&") and (word.isdigit() or word == "-")):
+                        targets.append((len(out), word))
                 i += 1
             else:
                 cur.append(t)
@@ -137,7 +155,7 @@ def simple_commands(command: str) -> list[list[str]]:
             out.append(cur)
     if heredoc:
         raise Unparsed(f"heredoc {heredoc[0][0]!r} is never closed")
-    return out
+    return out, targets
 
 
 KEYWORDS = frozenset({"do", "then", "else", "elif", "if", "while", "until", "!", "{", "time"})
@@ -288,18 +306,61 @@ def _task_allows(words: list[str], rules: list) -> bool:
     return False
 
 
-def allowed(command: str, extra=()) -> tuple[bool, list[str]]:
+PATH_PROGRAMS = frozenset({"cd", "mkdir", "touch", "mv", "cp", "rm", "chmod"})
+EXPANSION_CHARS = set("*?[{~$")  # globs, brace, tilde and variable expansion: the shell may turn them into .git
+DEVICES = frozenset({"/dev/null", "/dev/stdout", "/dev/stderr"})
+
+
+def _inside(path: str, cwd: str, root: str) -> bool:
+    full = os.path.realpath(os.path.join(cwd, path))
+    root = os.path.realpath(root)
+    return full == root or full.startswith(root.rstrip("/") + "/")
+
+
+def path_problem(word: str, cwd: str | None, root: str | None) -> str | None:
+    """Why ``word`` may not be used as a file operand or a write target in D:
+    an expansion character, a ``.git`` path, a home git config, or (with the
+    session's working copy ``root``) a path outside it; None when fine."""
+    if word in DEVICES:
+        return None
+    if set(word) & EXPANSION_CHARS:
+        return f"`{word}` (globs and expansions are not allowed in file operands)"
+    if touches_dot_git(word) or touches_home_git_config(word):
+        return "a path inside .git or a git config"
+    if root and not _inside(word, cwd or root, root):
+        return f"`{word}` (outside the working copy)"
+    return None
+
+
+def touches_home_git_config(path: str) -> bool:
+    home = os.path.expanduser("~")
+    full = os.path.realpath(os.path.expanduser(path)) if path else ""
+    return (os.path.basename(path or "") == ".gitconfig"
+            or full == os.path.join(home, ".gitconfig")
+            or full.startswith(os.path.join(home, ".config", "git") + os.sep)
+            or "/.config/git/" in (path or "") + "/")
+
+
+def allowed(command: str, extra=(), cwd: str | None = None) -> tuple[bool, list[str]]:
     """Arm D's allowlist: ``(ok, denied programs)``. ``extra`` are the task's
-    own build/test commands (:func:`task_rules`)."""
+    own build/test commands (:func:`task_rules`); ``cwd`` is the session's
+    working copy (the hook passes it): file operands and write targets must
+    stay inside it."""
     if "$(" in command or "`" in command or "<(" in command or ">(" in command:
         return False, ["command substitution"]
     try:
-        cmds = simple_commands(command)
+        cmds, targets = parse(command)
     except Unparsed:
         return False, ["unparsable command"]
     rules = task_rules(extra)
     denied = []
-    for words in cmds:
+    here = cwd
+    for k, words in enumerate(cmds):
+        # Redirection targets, of every command (a task command included): `git show :x > .git/config`.
+        bad = [why for idx, t in targets if idx == k for why in [path_problem(t, here, cwd)] if why]
+        if bad:
+            denied.extend("redirection to " + b for b in bad)
+            continue
         if _task_allows(words, rules):
             continue
         head = words[0] if words else ""
@@ -315,9 +376,20 @@ def allowed(command: str, extra=()) -> tuple[bool, list[str]]:
         prog, args = program(words)
         if not prog:
             continue
+        if prog in PATH_PROGRAMS:
+            operands = [a for a in args if not a.startswith("-")] or (["~"] if prog == "cd" else [])
+            bad = [why for a in operands for why in [path_problem(a, here, cwd)] if why]
+            if bad:
+                denied.extend(bad)
+                continue
+            if prog == "cd" and here:
+                here = os.path.realpath(os.path.join(here, operands[0]))
         if prog in D_ALLOWED_PROGRAMS:
             continue
         if prog.startswith("git "):
+            if any(a.startswith("--output") for a in args):
+                denied.append(prog + " --output")
+                continue
             pre = words[1:len(words) - len(args) - 1]  # global options before the subcommand
             if any(o == u or o.startswith(u + "=") or (u == "-c" and o.startswith("-c"))
                    for o in pre for u in GIT_UNSAFE_OPTS):
@@ -350,16 +422,19 @@ def hook(argv: list[str], stdin=sys.stdin, stderr=sys.stderr) -> int:
         stderr.write("unreadable hook input\n")
         return 2
     tool, inp = event.get("tool_name"), event.get("tool_input") or {}
+    cwd = event.get("cwd") or None
     if tool in EDIT_TOOLS:
-        # Writing into a .git directory could plant config that makes an allowed git command run anything.
+        # Writes stay in the working copy and out of .git and git config: planted config could make an
+        # allowed git command run anything.
         path = str(inp.get("file_path") or inp.get("notebook_path") or "")
-        if touches_dot_git(path):
-            stderr.write(f"Editing files inside .git is not allowed in this session: {path}\n")
+        if touches_dot_git(path) or touches_home_git_config(path) or (cwd and not _inside(path, cwd, cwd)):
+            stderr.write(f"Writing there is not allowed in this session (only files of the working copy, "
+                         f"not inside .git): {path}\n")
             return 2
         return 0
     if tool != "Bash":
         return 0
-    ok, denied = allowed(str(inp.get("command") or ""), extra)
+    ok, denied = allowed(str(inp.get("command") or ""), extra, cwd)
     if ok:
         return 0
     shown = [e if isinstance(e, str) else f"{e['prefix']} <{e['args']}>" for e in extra]

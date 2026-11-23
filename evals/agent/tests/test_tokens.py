@@ -3,6 +3,7 @@ task, arm D ("myceliums only"), edit-task grading and the realistic profile."""
 
 import io
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -158,6 +159,37 @@ class DBypasses(unittest.TestCase):
         for cmd in ("git -C sub status", "git --no-pager diff --stat", "git add .gitignore", "cp a.py b.py"):
             self.assertTrue(bashcmd.allowed(cmd)[0], cmd)
 
+    def test_redirection_targets_and_file_operands_are_checked(self):
+        wc = "/w/repo"
+        deny = [
+            "git show :payload.txt > .git/config", "git show :p >> .git/hooks/pre-commit", "myc callers x &> .git/x",
+            "git show :p >& .git/config", "npx vitest run src/utils/accept.test.ts > .git/config",
+            "cp x .gi?/config", "cp x .g*/config", "cd .g*", "cp x .gi[t]/config", "cp x .{git,x}/config",
+            "cp x ~/.gitconfig", "cp x $HOME/.gitconfig", "touch ~/.config/git/config", "cd", "cd ~",
+            "cp a.py /tmp/b.py", "git show :p > /tmp/x", "cd /tmp && touch x", "mv a.py ../a.py",
+            "cd sub && cp x ../../y", "git diff --output=x.patch", "touch .gitconfig",
+        ]
+        for cmd in deny:
+            self.assertFalse(bashcmd.allowed(cmd, ["npx vitest run src/utils/accept.test.ts"], wc)[0], cmd)
+        ok = ["myc callers x 2>&1", "myc callers x 2>/dev/null", "git show :p > out.txt", "cd sub && touch ../x.py",
+              "cp a.py /w/repo/b.py", "git diff > changes.patch", "mkdir -p src/new && touch src/new/a.py",
+              "npx vitest run src/utils/accept.test.ts 2>&1"]
+        for cmd in ok:
+            self.assertTrue(bashcmd.allowed(cmd, ["npx vitest run src/utils/accept.test.ts"], wc)[0], cmd)
+        _, targets = bashcmd.parse("a > x 2>&1 >> y < z <<<w &>v")
+        self.assertEqual([t for _, t in targets], ["x", "y", "z", "v"])
+
+    def test_writes_stay_in_the_working_copy(self):
+        home = os.path.expanduser("~")
+        for path, rc in (("/w/repo/src/a.py", 0), ("src/a.py", 0), ("/w/repo/../x.py", 2), ("/tmp/x.py", 2),
+                         (home + "/.gitconfig", 2), (home + "/.config/git/config", 2), ("/w/repo/.git/config", 2)):
+            ev = json.dumps({"tool_name": "Write", "cwd": "/w/repo", "tool_input": {"file_path": path}})
+            self.assertEqual(bashcmd.hook([], io.StringIO(ev), io.StringIO()), rc, path)
+        ev = json.dumps({"tool_name": "Bash", "cwd": "/w/repo", "tool_input": {"command": "git show :p > .git/config"}})
+        err = io.StringIO()
+        self.assertEqual(bashcmd.hook([], io.StringIO(ev), err), 2)
+        self.assertIn("redirection", err.getvalue())
+
     def test_no_edits_inside_dot_git(self):
         for tool, inp, rc in (("Write", {"file_path": "/w/.git/config"}, 2),
                               ("Edit", {"file_path": "/w/.git/hooks/pre-commit"}, 2),
@@ -199,6 +231,11 @@ class DBypasses(unittest.TestCase):
             (w / "a.py").write_text("x = 1\n")
             base = {"PATH": "/usr/bin:/bin", "HOME": tmp, "GIT_CONFIG_GLOBAL": "/dev/null"}
             env = {**base, **nosearch_git_env(Path(tmp))}
+            self.assertEqual(env["GIT_CONFIG_GLOBAL"], "/dev/null")
+            self.assertEqual(env["GIT_CONFIG_NOSYSTEM"], "1")
+            _git("config", "core.pager", f"touch {marker}.pager; cat", cwd=w)
+            got = subprocess.run(["git", "config", "core.pager"], cwd=w, env=env, capture_output=True, text=True)
+            self.assertEqual(got.stdout.strip(), "cat")  # the session's pin wins over the repository's config
             for args in (["add", "a.py"], ["-c", "user.email=e@x", "-c", "user.name=n", "commit", "-qm", "x"],
                          ["status"]):
                 subprocess.run(["git", *args], cwd=w, env=env, check=True, capture_output=True)

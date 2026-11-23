@@ -1036,14 +1036,23 @@ Everything else is refused with a message that lists what is allowed:
 (`bash -c`), `eval`, any command substitution, any environment assignment or
 wrapper in front of a command (`GIT_EXTERNAL_DIFF=... git diff`,
 `env GIT_DIR=...`, `nice ...`), any argument naming a path inside `.git`
-(`mv dotgit .git`), and any command that does not parse (unbalanced quotes,
-or a heredoc never closed; heredoc terminators follow bash, including `<<-`
-with tab-indented terminators). The same hook refuses `Edit`/`Write` into a
-`.git` directory, so no git configuration can be planted, and the harness
-sets `core.hooksPath` to an empty directory, `core.fsmonitor=false`,
-`safe.bareRepository=explicit` and `GIT_CONFIG_NOSYSTEM` through the
-session's environment (`GIT_CONFIG_COUNT`), which the agent cannot change, so
-`git commit` runs no hook. Permission rules (`Bash(grep:*)`, ...) deny the
+(`mv dotgit .git`), `git --output`, and any command that does not parse
+(unbalanced quotes, or a heredoc never closed; heredoc terminators follow
+bash, including `<<-` with tab-indented terminators). File operands of `cd`,
+`mkdir`, `touch`, `mv`, `cp`, `rm`, `chmod` and every redirection target
+(`git show :x > .git/config`, also after a task command) must not contain a
+glob or expansion character (`* ? [ { ~ $`: `cp x .gi?/config`), must not
+name `.git` or a git config, and must stay inside the working copy (the
+hook's `cwd`, followed through `cd`). The same hook refuses `Edit`/`Write`
+outside the working copy, into `.git`, and to `~/.gitconfig` or
+`~/.config/git/`. The harness sets git's configuration through the session's
+environment (`GIT_CONFIG_COUNT`), which the agent cannot change:
+`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `core.hooksPath` an
+empty directory (so `git commit` runs no hook), `core.fsmonitor=false`,
+`core.pager` and `pager.diff/log/show/status` `cat`, `core.editor` and
+`sequence.editor` `true`, `safe.bareRepository=explicit`. `diff.external` is
+not pinned: an empty value makes `git diff` fail ("cannot run"); the only git
+config still read is the working copy's own, which D cannot write. Permission rules (`Bash(grep:*)`, ...) deny the
 common search programs as a second layer. Reading a file goes through `Read`.
 The edit tools are offered on edit tasks, as in every arm. The isolation
 check of every D transcript requires the built-in tools to be exactly `Read`
@@ -1058,6 +1067,17 @@ search (`grep` pipelines, `awk`/`sed -n` filters, `$(grep ...)` in loops,
 `Bash` and `Read` only, the scripted `grep -rl parseAccept .` was refused by
 the hook, the scripted `myc callers parseAccept` ran, and the audit counted
 one blocked search and no flag; A was offered `Grep` and `Glob` as before.
+
+**Threat model.** Arm D isolates a *cooperative* agent that has been told,
+by its tool set, not to search: it takes away the search tools and the shell
+commands an agent reaches for, and the transcript audit backs that up. It is
+not a sandbox against an adversarial agent: a determined one could still find
+a way through an allowed program, the reviews of #185 closed the holes found
+so far, not every possible one. Sessions run in a throwaway copy of the
+pinned checkout, and any search-like behaviour that gets through (a search
+command that ran, an interpreter, Grep/Glob, many blind reads) is caught by
+the search audit and reported per session, so a D result is read together
+with its audit counts.
 
 ### Edit tasks
 
