@@ -149,6 +149,14 @@ async fn call(client: &Client, tool: &str, args: Value) -> (String, Option<Value
     (text, result.structured_content)
 }
 
+/// A list tool's `detail: full` answer, parsed (#181).
+async fn full(client: &Client, tool: &str, mut args: Value) -> Value {
+    args["detail"] = json!("full");
+    let (text, structured) = call(client, tool, args).await;
+    assert!(structured.is_none(), "{tool} answers in text");
+    serde_json::from_str(&text).unwrap_or_else(|e| panic!("{tool}: {e}: {text}"))
+}
+
 /// The text after the `Index:` line and the blank line under it.
 fn body(text: &str) -> &str {
     assert!(text.starts_with("Index: "), "{text}");
@@ -232,7 +240,7 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     let (wider, _) = call(&client, "trace_flow", args).await;
     assert!(!wider.contains("longer chains"), "{wider}");
     for step in ["step1", "step2", "step3"] {
-        assert!(wider.contains(&format!("* {step} (Function)")), "{wider}");
+        assert!(wider.contains(&format!("  {step} Function :")), "{wider}");
     }
     // The callback is still a place the flow may go on unseen.
     assert!(wider.contains("`entry` -> `cb` ("), "{wider}");
@@ -273,13 +281,34 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     assert!(found.contains(": 3 calls."), "{found}");
 
     // ── find_callees: depth limit and unlinked calls ─────────────────────
-    let (_, callees) = call(
+    // The compact default says the same in its `Incomplete` block.
+    let (compact, _) = call(
         &client,
         "find_callees",
         json!({"repo_id": repo, "symbol_name": "entry", "depth": 2}),
     )
     .await;
-    let callees = callees.expect("structured");
+    assert!(
+        body(&compact).contains("callees of entry up to depth 2:\n"),
+        "{compact}"
+    );
+    assert!(
+        compact
+            .contains("Incomplete (2 branch(es) not followed):\n  - depth limit 2: 1 more callees"),
+        "{compact}"
+    );
+    assert!(
+        next_line(&compact).starts_with(&format!(
+            r#"find_callees(repo_id="{repo}", symbol_name="entry", depth=3)"#
+        )),
+        "{compact}"
+    );
+    let callees = full(
+        &client,
+        "find_callees",
+        json!({"repo_id": repo, "symbol_name": "entry", "depth": 2}),
+    )
+    .await;
     assert_eq!(callees["depth_limited"], true, "{callees}");
     let incomplete = &callees["incomplete"];
     let reasons = incomplete["reasons"].as_array().unwrap();
@@ -296,13 +325,12 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
         )),
         "{next}"
     );
-    let (_, deeper) = call(
+    let deeper = full(
         &client,
         "find_callees",
         json!({"repo_id": repo, "symbol_name": "entry", "depth": 3}),
     )
     .await;
-    let deeper = deeper.unwrap();
     assert_eq!(deeper["depth_limited"], false);
     assert!(!deeper["incomplete"]["reasons"]
         .as_array()
@@ -311,13 +339,12 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
         .any(|r| r.as_str().unwrap().starts_with("depth limit")));
 
     // A page cut is a reason too, and its call fetches the rest.
-    let (_, first) = call(
+    let first = full(
         &client,
         "find_callees",
         json!({"repo_id": repo, "symbol_name": "entry", "depth": 3, "limit": 2}),
     )
     .await;
-    let first = first.unwrap();
     let next = first["incomplete"]["next"].as_str().unwrap();
     assert!(
         next.starts_with(&format!(
@@ -325,16 +352,25 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
         )),
         "{next}"
     );
+    // Compact: the page cut is said once, in the Incomplete block.
+    let (page, _) = call(
+        &client,
+        "find_callees",
+        json!({"repo_id": repo, "symbol_name": "entry", "depth": 3, "limit": 2}),
+    )
+    .await;
+    assert!(page.contains("  - page: 1-2 of "), "{page}");
+    assert!(!page.contains("call again with offset="), "{page}");
+    assert!(next_line(&page).contains("offset=2)"), "{page}");
 
     // Direct callees: the depth limit is the question, not a cut; the
     // ambiguous method call (three `run` methods) is one.
-    let (_, poll) = call(
+    let poll = full(
         &client,
         "find_callees",
         json!({"repo_id": repo, "symbol_name": "poll"}),
     )
     .await;
-    let poll = poll.unwrap();
     assert_eq!(poll["total_count"], 0, "{poll}");
     let reasons = poll["incomplete"]["reasons"].as_array().unwrap();
     assert_eq!(reasons.len(), 1, "{poll}");
@@ -347,25 +383,23 @@ async fn walks_that_stop_early_say_why_and_how_to_continue() {
     );
 
     // ── find_callers: nothing cut says nothing; unlinked sites say so ────
-    let (_, callers) = call(
+    let callers = full(
         &client,
         "find_callers",
         json!({"repo_id": repo, "symbol_name": "finish"}),
     )
     .await;
-    let callers = callers.unwrap();
     assert_eq!(
         callers["total_count"], 4,
         "entry, step3, origin, o7: {callers}"
     );
     assert!(callers.get("incomplete").is_none(), "{callers}");
-    let (_, run) = call(
+    let run = full(
         &client,
         "find_callers",
         json!({"repo_id": repo, "symbol_name": "Job.run"}),
     )
     .await;
-    let run = run.unwrap();
     let incomplete = &run["incomplete"];
     assert!(
         incomplete["reasons"][0]

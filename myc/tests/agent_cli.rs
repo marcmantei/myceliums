@@ -412,14 +412,18 @@ async fn mcp_tools_answer_like_the_cli() {
         .map(|(_, tool, symbol, depth)| {
             (
                 *tool,
-                serde_json::json!({"symbol_name": symbol, "depth": depth, "limit": 200}),
+                serde_json::json!({"symbol_name": symbol, "depth": depth, "limit": 200, "detail": "full"}),
             )
         })
         .collect();
     let results = mcp_calls(data, &fixture(), &calls);
     for ((command, tool, symbol, depth), result) in cases.iter().zip(&results) {
         assert_ne!(result["isError"], true, "{tool} {symbol}: {result}");
-        let mcp = &result["structuredContent"];
+        // `detail: full` answers with every field as JSON text (#181).
+        let mcp: serde_json::Value =
+            serde_json::from_str(result["content"][0]["text"].as_str().unwrap())
+                .unwrap_or_else(|e| panic!("{tool} {symbol}: {e}: {result}"));
+        let mcp = &mcp;
         let key = if *command == "callers" {
             "callers"
         } else {

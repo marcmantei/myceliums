@@ -17,7 +17,7 @@ const SOURCE_LINES: Budget = Budget::new(120, 5000);
 impl MyceliumsMcp {
     #[tool(
         name = "explain_symbol",
-        description = "Show a function, method or class with everything needed to understand it before changing it: its source, signature, file and line range, and who calls it and what it calls (with how each call edge was resolved).",
+        description = "Show a function, method or class before changing it: source, signature, location, direct callers and callees. Also the follow-up for one hit of another tool.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -55,7 +55,7 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "find_callers",
-        description = "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones. `incomplete` says what the walk did not follow (depth limit, unlinked call sites) and the call that continues it.",
+        description = "Who calls this function or method? Callers grouped by file, with line; depth > 1 adds the callers' callers.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -66,8 +66,9 @@ impl MyceliumsMcp {
     pub(crate) async fn find_callers(
         &self,
         Parameters(params): Parameters<FindCallsParams>,
-    ) -> Result<Json<CallersOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let detail = params.detail.unwrap_or_default();
         let list = self
             .call_list(
                 &repo_id,
@@ -78,12 +79,15 @@ impl MyceliumsMcp {
                 params.offset,
             )
             .await?;
-        Ok(Json(list.into_callers()))
+        match detail {
+            Detail::Compact => text(list.compact("callers")),
+            Detail::Full => full_json(&list.into_callers()),
+        }
     }
 
     #[tool(
         name = "find_callees",
-        description = "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous). `incomplete` lists calls the graph could not link (callbacks, ambiguous names) and the depth cut, with the call that continues.",
+        description = "What does this function or method call? Callees grouped by file, with line; depth > 1 follows the calls further down.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -94,8 +98,9 @@ impl MyceliumsMcp {
     pub(crate) async fn find_callees(
         &self,
         Parameters(params): Parameters<FindCallsParams>,
-    ) -> Result<Json<CalleesOutput>, ToolError> {
+    ) -> TextResult {
         let repo_id = self.resolve_repo_id(params.repo_id.as_deref())?;
+        let detail = params.detail.unwrap_or_default();
         let list = self
             .call_list(
                 &repo_id,
@@ -106,12 +111,15 @@ impl MyceliumsMcp {
                 params.offset,
             )
             .await?;
-        Ok(Json(list.into_callees()))
+        match detail {
+            Detail::Compact => text(list.compact("callees")),
+            Detail::Full => full_json(&list.into_callees()),
+        }
     }
 
     #[tool(
         name = "trace_flow",
-        description = "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line. An `Incomplete:` block names what is not listed (longer chains, depth limit, calls without a CALLS edge) and the next call; read the source before calling a flow complete.",
+        description = "How does control get from one function to another? The shortest call chain from from_symbol to to_symbol, plus every function on a chain of that length (extra_calls widens it), with file and line.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -400,7 +408,7 @@ impl MyceliumsMcp {
                 params.offset,
             )
             .await?;
-        Ok(Json(list.into_callers()))
+        Ok(Json(list.without_signatures().into_callers()))
     }
 
     #[tool(
@@ -427,7 +435,7 @@ impl MyceliumsMcp {
                 params.offset,
             )
             .await?;
-        Ok(Json(list.into_callees()))
+        Ok(Json(list.without_signatures().into_callees()))
     }
 
     #[tool(
@@ -900,13 +908,79 @@ pub(crate) struct CallList {
     symbol_name: String,
     items: Vec<CallerItem>,
     total_count: u32,
+    /// The depth that was asked for (after clamping).
+    max_depth: u32,
     depth_limited: bool,
     notice: Option<String>,
+    /// Whether the page cut the list (`incomplete` then names the next page).
+    page_cut: bool,
     /// What the walk did not follow, and the call that continues it.
     incomplete: Option<crate::output::Incomplete>,
 }
 
+/// `detail: full`: the whole output as JSON text (#181).
+fn full_json<T: Serialize>(output: &T) -> TextResult {
+    serde_json::to_string(output).map_err(|e| ToolError::internal("cannot serialize the result", e))
+}
+
 impl CallList {
+    /// Drops the signatures, which only `detail: full` shows.
+    fn without_signatures(mut self) -> Self {
+        for item in &mut self.items {
+            item.signature = None;
+        }
+        self
+    }
+
+    /// The default answer of `find_callers`/`find_callees` (#181): a count,
+    /// then one line per hit under its file (`qualified_name kind :line`,
+    /// the depth and the symbol one step closer when it is not a direct
+    /// hit, a mark on name-based edges), then what the walk did not follow.
+    /// A file line plus a qualified name is a handle every symbol argument
+    /// accepts, so any hit can be asked about in full.
+    fn compact(&self, noun: &str) -> String {
+        let depth = if self.max_depth > 1 {
+            format!(" up to depth {}", self.max_depth)
+        } else {
+            String::new()
+        };
+        let mut out = format!(
+            "{}\n\n{} {noun} of {}{depth}",
+            self.index_status, self.total_count, self.symbol_name
+        );
+        out.push_str(if self.items.is_empty() { ".\n" } else { ":\n" });
+        out.push_str(&format::group_by_file(self.items.iter().map(|item| {
+            let mut line = format!("{} {} :{}", item.qualified_name, item.kind, item.start_line);
+            if item.depth > 1 {
+                line.push_str(&format!(" [depth {}", item.depth));
+                if let Some(via) = &item.via {
+                    line.push_str(&format!(" via {via}"));
+                }
+                line.push(']');
+            }
+            if crate::repo::CallLabels::is_heuristic(&item.resolved) {
+                line.push_str(&format!(" (resolved: {})", item.resolved));
+            }
+            (item.file_path.as_str(), line)
+        })));
+        if !self.page_cut {
+            if let Some(notice) = &self.notice {
+                out.push_str(&format!("{notice}\n"));
+            }
+        }
+        if let Some(incomplete) = &self.incomplete {
+            out.push_str(&format!(
+                "Incomplete ({} branch(es) not followed):\n",
+                incomplete.branches_cut
+            ));
+            for reason in &incomplete.reasons {
+                out.push_str(&format!("  - {reason}\n"));
+            }
+            out.push_str(&format!("Next: {}\n", incomplete.next));
+        }
+        out
+    }
+
     fn into_callers(self) -> CallersOutput {
         CallersOutput {
             index_status: self.index_status,
@@ -936,6 +1010,7 @@ impl CallList {
                     depth: c.depth,
                     via: c.via,
                     resolved: c.resolved,
+                    signature: c.signature,
                 })
                 .collect(),
             total_count: self.total_count,
@@ -1036,6 +1111,7 @@ impl MyceliumsMcp {
                 // The short name, as `myc callers --json` reports it.
                 via: h.via.map(|v| v.name.clone()),
                 resolved: h.resolved.unwrap_or("exact").to_string(),
+                signature: Some(h.symbol.signature.clone()),
             })
             .collect();
         Ok(CallList {
@@ -1043,8 +1119,10 @@ impl MyceliumsMcp {
             symbol_name: start.name.clone(),
             items,
             total_count,
+            max_depth,
             depth_limited,
             notice: page.notice,
+            page_cut: total_count as usize > shown_to,
             incomplete,
         })
     }

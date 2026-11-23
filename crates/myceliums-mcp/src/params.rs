@@ -215,97 +215,105 @@ impl From<TestsParam> for myceliums_core::TestRanking {
 }
 
 // ── Core tool parameters ─────────────────────────────────────────────────
+//
+// The core tools' schemas go to the model with every call, so their field
+// docs are kept to what a caller needs to fill the field (#181): defaults
+// and bounds, no prose the tool description already says. `repo_id` (see
+// `list_repos`) and `offset` (named by every page notice) go undocumented,
+// and handlers clamp `offset` themselves.
+
+/// How much a list tool says per hit (#181).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(inline)]
+pub enum Detail {
+    // One line per hit, grouped by file. (Plain comments: doc comments on
+    // variants would turn the schema's `enum` into `oneOf`.)
+    #[default]
+    Compact,
+    // Every field as JSON, signatures included.
+    Full,
+}
 
 #[derive(Deserialize, schemars::JsonSchema, Default, Clone)]
 pub struct SearchCodeParams {
-    /// What to find: a name (parseConfig, Item.AsString) or what the code does (builds the Set-Cookie header)
+    /// A name (parseConfig, Item.AsString) or what the code does
     pub query: String,
-    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
-    /// auto (default): hybrid when the index has embeddings, else keyword. keyword: names and signatures, no model. semantic: meaning only. hybrid: both, fused
+    /// auto (default): hybrid with embeddings, else keyword
     pub mode: Option<SearchMode>,
-    /// Max results per page (default 20, max 100)
+    /// Page size (default 20)
     #[schemars(range(min = 1, max = 100))]
     pub limit: Option<usize>,
-    /// Results to skip, for the next page (default 0)
-    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
-    /// Rerank the top 50 hybrid results with a cross-encoder: slower, more precise (default: false)
+    /// Cross-encoder rerank of the hybrid top 50: slower, more precise
     pub rerank: Option<bool>,
-    /// Show the scoring breakdown of each result (default: false)
+    /// Show each result's score breakdown
     pub explain: Option<bool>,
-    /// Test code (test files and directories such as *_test.go, *.test.ts, tests/, and #[cfg(test)] modules): demote (default) ranks it below product code, include ranks it like product code, prefer ranks it first. Use include or prefer to find tests
+    /// Test code: demote (default), include, or prefer (to find tests)
     pub tests: Option<TestsParam>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct ExplainSymbolParams {
-    /// Symbol: name, qualified name, or file_path:qualified_name
+    /// Name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
-    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
-    /// Most source lines shown; longer bodies are cut with a note (default 120, max 5000)
+    /// Source lines shown (default 120)
     #[schemars(range(min = 1, max = 5000))]
     pub max_source_lines: Option<usize>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct FindCallsParams {
-    /// Symbol: name, qualified name, or file_path:qualified_name
+    /// Name, qualified name, or file_path:qualified_name
     pub symbol_name: String,
-    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
-    /// Hops to follow: 1 = direct only (default 1, max 10)
+    /// Hops; 1 = direct only (default)
     #[schemars(range(min = 1, max = 10))]
     pub depth: Option<u32>,
-    /// Max symbols per page (default 20, max 200)
+    /// Page size (default 20)
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
-    /// Symbols to skip, for the next page (default 0)
-    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
+    /// compact (default): a line per hit; full: JSON with signatures
+    pub detail: Option<Detail>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default, Clone)]
 pub struct ImpactOfChangeParams {
-    /// The symbol you plan to change (name, qualified name, or file_path:qualified_name). Give at most one of symbol_name, file_path, diff
+    /// Symbol to change (name, qualified name, or file_path:qualified_name). At most one of symbol_name, file_path, diff
     pub symbol_name: Option<String>,
-    /// The file you plan to change (repository-relative): all symbols it defines
+    /// Repository-relative file to change
     pub file_path: Option<String>,
-    /// A unified diff of the change (default when neither symbol_name nor file_path is given: `git diff HEAD` in the repository)
+    /// Unified diff (default without symbol_name/file_path: git diff HEAD)
     pub diff: Option<String>,
-    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
-    /// Hops to follow from the changed code (default 2, max 10)
+    /// Hops (default 2)
     #[schemars(range(min = 1, max = 10))]
     pub depth: Option<u32>,
-    /// Max report lines per page (default 50, max 500)
+    /// Page size in lines (default 50)
     #[schemars(range(min = 1, max = 500))]
     pub limit: Option<usize>,
-    /// Report lines to skip, for the next page (default 0)
-    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct TraceFlowParams {
-    /// Where the flow starts: name, qualified name, or file_path:qualified_name
+    /// Start: name, qualified name, or file_path:qualified_name
     pub from_symbol: String,
-    /// Where the flow ends: name, qualified name, or file_path:qualified_name
+    /// End: name, qualified name, or file_path:qualified_name
     pub to_symbol: String,
-    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
-    /// Longest chain searched, in calls (default 12, max 30)
+    /// Longest chain in calls (default 12)
     #[schemars(range(min = 1, max = 30))]
     pub max_depth: Option<u32>,
-    /// Also list symbols on chains up to this many calls longer than the shortest (default 0, max 5)
+    /// Also list chains up to this many calls longer than the shortest (default 0)
     #[schemars(range(max = 5))]
     pub extra_calls: Option<u32>,
-    /// Max symbols per page (default 20, max 200)
+    /// Page size (default 20)
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
-    /// Symbols to skip, for the next page (default 0)
-    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -313,15 +321,15 @@ pub struct TraceFlowParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct AnalyzeParams {
-    /// Path to the project directory to analyze
+    /// Project directory
     pub path: String,
-    /// Force full re-analysis even if cache is fresh (default: false)
+    /// Re-index even if the index is fresh
     pub force: Option<bool>,
-    /// Maximum cache age in minutes before re-analysis (default: 60)
+    /// Reuse an index younger than this (default 60)
     pub max_age_minutes: Option<u64>,
-    /// Skip embedding generation for faster analysis (default: false)
+    /// Faster, but no search by meaning
     pub skip_embeddings: Option<bool>,
-    /// Skip community detection (default: false); only community tools need it
+    /// Only the community tools need them
     pub skip_communities: Option<bool>,
 }
 
@@ -336,11 +344,9 @@ pub struct DeleteParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct ListReposParams {
-    /// Max repos per page (default 20, max 200)
+    /// Page size (default 20)
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
-    /// Repos to skip, for the next page (default 0)
-    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 
@@ -497,17 +503,14 @@ pub struct GetSymbolDefinitionParams {
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]
 pub struct FindDeadCodeParams {
-    /// Repository ID (default: the indexed repository containing the working directory)
     pub repo_id: Option<String>,
-    /// Only functions in this file, or under this directory (repository-relative, e.g. src/utils/)
+    /// Only under this repository-relative file or directory
     pub path: Option<String>,
-    /// Comma-separated substrings; symbols whose name contains one are skipped (e.g. known entry points)
+    /// Comma-separated name substrings to skip (known entry points)
     pub exclude_patterns: Option<String>,
-    /// Max symbols per page (default 20, max 200)
+    /// Page size (default 20)
     #[schemars(range(min = 1, max = 200))]
     pub limit: Option<usize>,
-    /// Symbols to skip, for the next page (default 0)
-    #[schemars(range(max = 100000))]
     pub offset: Option<usize>,
 }
 

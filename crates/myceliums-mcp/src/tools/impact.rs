@@ -21,7 +21,7 @@ fn diff_or_git(diff: Option<String>, repo_id: &str) -> Result<String, ToolError>
 impl MyceliumsMcp {
     #[tool(
         name = "impact_of_change",
-        description = "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass. An `Incomplete:` block names what the walk did not follow (depth limit, unlinked call sites) and the next call.",
+        description = "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,

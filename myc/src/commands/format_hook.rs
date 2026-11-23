@@ -76,7 +76,8 @@ fn format_hook_message(
                 && !l.starts_with(">>>END ")
         })
         .unwrap_or("");
-    // Structured tools (find_callers, ...) send JSON.
+    // JSON results: the deprecated get_callers/get_callees, and
+    // find_callers/find_callees with `detail: full` (#181).
     let json: serde_json::Value =
         serde_json::from_str(result_text).unwrap_or(serde_json::Value::Null);
 
@@ -88,12 +89,16 @@ fn format_hook_message(
                 "callees"
             };
             let name = tool_input["symbol_name"].as_str().unwrap_or("?");
-            let cut = if json["incomplete"].is_object() {
+            let cut = if json["incomplete"].is_object() || result_text.contains("\nIncomplete (") {
                 " (incomplete)"
             } else {
                 ""
             };
-            match json["total_count"].as_u64() {
+            // The compact answer starts with the count: `4 callers of parse:`.
+            let count = json["total_count"]
+                .as_u64()
+                .or_else(|| first_line.split_once(' ').and_then(|(n, _)| n.parse().ok()));
+            match count {
                 Some(n) => format!("[myceliums] {n} {what} of {}{cut}", truncate(name, 40)),
                 None => format!("[myceliums] {what} of {}{cut}", truncate(name, 40)),
             }
@@ -212,6 +217,12 @@ mod tests {
         assert_eq!(
             format_hook_message("find_callers", &input, &hook_response_text(&callers)),
             "[myceliums] 4 callers of parse"
+        );
+        // The compact default (#181) is text that starts with the count.
+        let compact = serde_json::json!([{"type": "text", "text": "Index: commit 1a2b3c4 = HEAD, up to date.\n\n4 callers of parse up to depth 2:\nsrc/a.ts\n  run Function :3\nIncomplete (1 branch(es) not followed):\n  - depth limit 2\nNext: find_callers(symbol_name=\"parse\", depth=3)\n"}]);
+        assert_eq!(
+            format_hook_message("find_callers", &input, &hook_response_text(&compact)),
+            "[myceliums] 4 callers of parse (incomplete)"
         );
     }
 }

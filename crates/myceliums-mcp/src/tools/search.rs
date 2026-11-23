@@ -113,7 +113,7 @@ async fn vector_embedder(store: &Store) -> Result<Arc<Embedder>, ToolError> {
 impl MyceliumsMcp {
     #[tool(
         name = "search_code",
-        description = "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings. Test code ranks below product code unless tests=include or tests=prefer.",
+        description = "Find where something is implemented: functions, classes and types by name or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code: one line per hit with kind, file and lines.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,

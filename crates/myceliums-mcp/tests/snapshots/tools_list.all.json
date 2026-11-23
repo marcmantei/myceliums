@@ -9,49 +9,33 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Index a project into the knowledge graph: parses 20+ languages (TypeScript/JavaScript, Python, Go, Rust, Java, Kotlin, C/C++, C#, Ruby, PHP, Swift, …) plus Markdown, PDF and email, extracts symbols and call edges, detects communities and traces execution flows, then answers; symbols are embedded for search by meaning in the background afterwards (progress in the Index line of every result and in server_stats). Reuses a fresh index unless force=true. Writes only to the myceliums data directory, never to the project.",
+    "description": "Index a project (20+ languages, Markdown, PDF, email) into the graph. Run it when there is no index or the Index line says stale. Reuses a fresh index unless force=true; embeddings for search by meaning follow in the background. Writes only to the myceliums data directory.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "force": {
-          "description": "Force full re-analysis even if cache is fresh (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Re-index even if the index is fresh",
+          "type": "boolean"
         },
         "max_age_minutes": {
-          "description": "Maximum cache age in minutes before re-analysis (default: 60)",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "description": "Reuse an index younger than this (default 60)",
+          "type": "integer"
         },
         "path": {
-          "description": "Path to the project directory to analyze",
+          "description": "Project directory",
           "type": "string"
         },
         "skip_communities": {
-          "description": "Skip community detection (default: false); only community tools need it",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Only the community tools need them",
+          "type": "boolean"
         },
         "skip_embeddings": {
-          "description": "Skip embedding generation for faster analysis (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Faster, but no search by meaning",
+          "type": "boolean"
         }
       },
       "required": [
         "path"
       ],
-      "title": "AnalyzeParams",
       "type": "object"
     },
     "name": "analyze"
@@ -65,43 +49,26 @@
     },
     "description": "Run architecture quality checks: circular dependencies, god nodes, high fan-out, unstable dependencies. Returns findings with severity levels and affected entities.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "god_node_threshold": {
           "description": "God node degree threshold (default: 20)",
-          "format": "uint32",
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "limit": {
           "description": "Max findings per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Findings to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "rules": {
           "description": "Rules to check (default: all)",
@@ -115,13 +82,9 @@
             ],
             "type": "string"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": "array"
         }
       },
-      "title": "ArchitectureLintParams",
       "type": "object"
     },
     "name": "architecture_lint"
@@ -135,17 +98,12 @@
     },
     "description": "Generate a service-level architecture diagram from the knowledge graph. Communities become service nodes, cross-community edges become connections. Returns the services, their connections, and a Mermaid diagram.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "ArchitectureViewParams",
       "type": "object"
     },
     "name": "architecture_view"
@@ -159,34 +117,21 @@
     },
     "description": "DEPRECATED: use `search_code` instead (this alias is removed in the next release). Search for functions, classes, and symbols in the knowledge graph by name and signature (keyword ranking).",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "explain": {
           "description": "Show scoring breakdown and graph paths for each result (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "limit": {
           "description": "Max results per page (default 20, semantic_search 10; max 100)",
-          "format": "uint",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Results to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "query": {
           "description": "Search query string",
@@ -194,16 +139,12 @@
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "SearchParams",
       "type": "object"
     },
     "name": "context_search"
@@ -217,27 +158,17 @@
     },
     "description": "Execute a read-only Cypher query against the knowledge graph. Supports MATCH, RETURN, WHERE, ORDER BY, LIMIT, SKIP, CONTAINS, IS NULL; write clauses are rejected. Rows are paged (limit/offset).",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max rows per page (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Rows to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "query": {
           "description": "Cypher query string",
@@ -252,7 +183,6 @@
         "query",
         "repo_id"
       ],
-      "title": "CypherQueryParams",
       "type": "object"
     },
     "name": "cypher_query"
@@ -266,7 +196,6 @@
     },
     "description": "Permanently delete a repository's index (not the project files). Irreversible: requires confirm=true; only do it when the user asked for it.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "confirm": {
           "default": false,
@@ -281,7 +210,6 @@
       "required": [
         "repo_id"
       ],
-      "title": "DeleteParams",
       "type": "object"
     },
     "name": "delete"
@@ -295,51 +223,31 @@
     },
     "description": "What changed in the code structure since the previous analysis? Compares two recorded states of the graph (default: the analysis before the current one vs the current graph; any two snapshot ids with from_snapshot/to_snapshot) and returns a drift score (100 = unchanged) and the added/removed symbols and relationships.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "from_snapshot": {
           "description": "Baseline snapshot ID (default: the analysis before the current one; each analyze records a snapshot)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "limit": {
           "description": "Max changes per page, across all change lists (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Changes to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "to_snapshot": {
           "description": "Snapshot ID to compare against the baseline (default: the current graph)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "DetectDriftParams",
       "type": "object"
     },
     "name": "detect_architecture_drift"
@@ -353,60 +261,36 @@
     },
     "description": "Detect circular dependencies in the codebase using Tarjan's strongly connected components algorithm. Returns groups of symbols that form dependency cycles. Use to find architectural issues like mutual imports or call cycles.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "include_calls": {
           "description": "Include CALLS edges in cycle detection (default: true)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "include_imports": {
           "description": "Include IMPORTS edges in cycle detection (default: true)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "limit": {
           "description": "Max cycles per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "min_cycle_size": {
           "description": "Minimum number of symbols in a cycle to report (default: 2)",
-          "format": "uint",
           "minimum": 2,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Cycles to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "DetectCyclesParams",
       "type": "object"
     },
     "name": "detect_circular_dependencies"
@@ -420,54 +304,33 @@
     },
     "description": "DEPRECATED: use `impact_of_change` instead (this alias is removed in the next release). Analyze the impact of code changes before committing. Traces changed symbols through the call graph to find indirectly affected code. Use this proactively when modifying functions to catch unintended side effects.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
           "description": "Graph traversal depth (default: 2)",
-          "format": "uint32",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "diff": {
           "description": "Diff string (optional -- if omitted, runs git diff HEAD in repo path)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "limit": {
           "description": "Max report lines (changed, affected, files) per page (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Report lines to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "DetectImpactParams",
       "type": "object"
     },
     "name": "detect_impact"
@@ -481,7 +344,6 @@
     },
     "description": "Compare how two repositories implement the same intent/feature. Isolates the relevant symbols in each repo, aligns them via embedding similarity, and reports structural differences. Returns: matched symbol pairs, unmatched symbols, and structural comparison metrics.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "intent": {
           "description": "Natural language description of the intent to compare\n(e.g., \"tree-sitter parsing\", \"authentication flow\")",
@@ -489,23 +351,15 @@
         },
         "max_symbols": {
           "description": "Maximum symbols per slice (default: 50)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "similarity_threshold": {
           "description": "Similarity threshold for symbol alignment (default: 0.65)",
-          "format": "double",
           "maximum": 1.0,
           "minimum": 0.0,
-          "type": [
-            "number",
-            "null"
-          ]
+          "type": "number"
         },
         "source_repo_id": {
           "description": "Source repository ID (the approach to compare FROM)",
@@ -521,7 +375,6 @@
         "source_repo_id",
         "target_repo_id"
       ],
-      "title": "DifferentiateIntentParams",
       "type": "object"
     },
     "name": "differentiate_intent"
@@ -536,36 +389,26 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Show a function, method or class with everything needed to understand it before changing it: its source, signature, file and line range, and who calls it and what it calls (with how each call edge was resolved).",
+    "description": "Show a function, method or class before changing it: source, signature, location, direct callers and callees. Also the follow-up for one hit of another tool.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "max_source_lines": {
-          "description": "Most source lines shown; longer bodies are cut with a note (default 120, max 5000)",
-          "format": "uint",
+          "description": "Source lines shown (default 120)",
           "maximum": 5000,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
-          "description": "Symbol: name, qualified name, or file_path:qualified_name",
+          "description": "Name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
       "required": [
         "symbol_name"
       ],
-      "title": "ExplainSymbolParams",
       "type": "object"
     },
     "name": "explain_symbol"
@@ -579,30 +422,21 @@
     },
     "description": "Export the knowledge graph as a Mermaid diagram. Supports flowchart (call graph), class (class hierarchy), and graph (community-grouped) views. Returns a Mermaid-syntax string that can be rendered by any Mermaid-compatible tool.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "diagram_type": {
           "description": "Diagram type (default: flowchart)",
           "enum": [
             "flowchart",
             "class",
-            "graph",
-            null
+            "graph"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "ExportMermaidParams",
       "type": "object"
     },
     "name": "export_mermaid"
@@ -617,196 +451,46 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous). `incomplete` lists calls the graph could not link (callbacks, ambiguous names) and the depth cut, with the call that continues.",
+    "description": "What does this function or method call? Callees grouped by file, with line; depth > 1 follows the calls further down.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
-          "description": "Hops to follow: 1 = direct only (default 1, max 10)",
-          "format": "uint32",
+          "description": "Hops; 1 = direct only (default)",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
+        },
+        "detail": {
+          "description": "compact (default): a line per hit; full: JSON with signatures",
+          "enum": [
+            "compact",
+            "full"
+          ],
+          "type": "string"
         },
         "limit": {
-          "description": "Max symbols per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
-          "description": "Symbol: name, qualified name, or file_path:qualified_name",
+          "description": "Name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
       "required": [
         "symbol_name"
       ],
-      "title": "FindCallsParams",
       "type": "object"
     },
-    "name": "find_callees",
-    "outputSchema": {
-      "$defs": {
-        "CalleeItem": {
-          "properties": {
-            "depth": {
-              "description": "Calls between this symbol and the one asked about (1 = direct).",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "end_line": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "file_path": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            },
-            "qualified_name": {
-              "type": "string"
-            },
-            "resolved": {
-              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
-              "type": "string"
-            },
-            "start_line": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "via": {
-              "description": "For depth > 1: the name of the symbol one step closer to the one\nasked about.",
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "name",
-            "qualified_name",
-            "kind",
-            "file_path",
-            "start_line",
-            "end_line",
-            "depth",
-            "resolved"
-          ],
-          "type": "object"
-        },
-        "Incomplete": {
-          "description": "Why a graph walk is not the whole answer.",
-          "properties": {
-            "branches_cut": {
-              "description": "Places not followed: symbols one more step would add, plus unlinked call sites.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "next": {
-              "description": "The call that continues the walk.",
-              "type": "string"
-            },
-            "reasons": {
-              "description": "One per cut: depth limit, page, calls or call sites without a CALLS edge.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "reasons",
-            "branches_cut",
-            "next"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "callees": {
-          "items": {
-            "$ref": "#/$defs/CalleeItem"
-          },
-          "type": "array"
-        },
-        "depth_limited": {
-          "type": "boolean"
-        },
-        "incomplete": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Incomplete"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Set when this is not the whole answer: why, and the call that continues."
-        },
-        "index_status": {
-          "description": "Index freshness: analyzed commit vs current HEAD.",
-          "type": "string"
-        },
-        "notice": {
-          "description": "Set when results were cut: how to fetch the next page.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "symbol_name": {
-          "type": "string"
-        },
-        "total_count": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "index_status",
-        "symbol_name",
-        "callees",
-        "total_count",
-        "depth_limited"
-      ],
-      "title": "CalleesOutput",
-      "type": "object"
-    }
+    "name": "find_callees"
   },
   {
     "_meta": {
@@ -818,196 +502,46 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones. `incomplete` says what the walk did not follow (depth limit, unlinked call sites) and the call that continues it.",
+    "description": "Who calls this function or method? Callers grouped by file, with line; depth > 1 adds the callers' callers.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
-          "description": "Hops to follow: 1 = direct only (default 1, max 10)",
-          "format": "uint32",
+          "description": "Hops; 1 = direct only (default)",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
+        },
+        "detail": {
+          "description": "compact (default): a line per hit; full: JSON with signatures",
+          "enum": [
+            "compact",
+            "full"
+          ],
+          "type": "string"
         },
         "limit": {
-          "description": "Max symbols per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
-          "description": "Symbol: name, qualified name, or file_path:qualified_name",
+          "description": "Name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
       "required": [
         "symbol_name"
       ],
-      "title": "FindCallsParams",
       "type": "object"
     },
-    "name": "find_callers",
-    "outputSchema": {
-      "$defs": {
-        "CallerItem": {
-          "properties": {
-            "depth": {
-              "description": "Calls between this symbol and the one asked about (1 = direct).",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "end_line": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "file_path": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            },
-            "qualified_name": {
-              "type": "string"
-            },
-            "resolved": {
-              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
-              "type": "string"
-            },
-            "start_line": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "via": {
-              "description": "For depth > 1: the name of the symbol one step closer to the one\nasked about.",
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "name",
-            "qualified_name",
-            "kind",
-            "file_path",
-            "start_line",
-            "end_line",
-            "depth",
-            "resolved"
-          ],
-          "type": "object"
-        },
-        "Incomplete": {
-          "description": "Why a graph walk is not the whole answer.",
-          "properties": {
-            "branches_cut": {
-              "description": "Places not followed: symbols one more step would add, plus unlinked call sites.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "next": {
-              "description": "The call that continues the walk.",
-              "type": "string"
-            },
-            "reasons": {
-              "description": "One per cut: depth limit, page, calls or call sites without a CALLS edge.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "reasons",
-            "branches_cut",
-            "next"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "callers": {
-          "items": {
-            "$ref": "#/$defs/CallerItem"
-          },
-          "type": "array"
-        },
-        "depth_limited": {
-          "type": "boolean"
-        },
-        "incomplete": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Incomplete"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Set when this is not the whole answer: why, and the call that continues."
-        },
-        "index_status": {
-          "description": "Index freshness: analyzed commit vs current HEAD.",
-          "type": "string"
-        },
-        "notice": {
-          "description": "Set when results were cut: how to fetch the next page.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "symbol_name": {
-          "type": "string"
-        },
-        "total_count": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "index_status",
-        "symbol_name",
-        "callers",
-        "total_count",
-        "depth_limited"
-      ],
-      "title": "CallersOutput",
-      "type": "object"
-    }
+    "name": "find_callers"
   },
   {
     "_meta": {
@@ -1019,53 +553,30 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Which functions and methods are never called? Lists those with no incoming CALLS edge, optionally only under a file or directory (path). A candidate list, not proof: entry points, callbacks and calls the resolver missed look unused too; skip known ones with exclude_patterns.",
+    "description": "Which functions and methods are never called? Candidates with no incoming CALLS edge, optionally under path. Entry points and callbacks look unused too: skip them with exclude_patterns.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "exclude_patterns": {
-          "description": "Comma-separated substrings; symbols whose name contains one are skipped (e.g. known entry points)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Comma-separated name substrings to skip (known entry points)",
+          "type": "string"
         },
         "limit": {
-          "description": "Max symbols per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "path": {
-          "description": "Only functions in this file, or under this directory (repository-relative, e.g. src/utils/)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Only under this repository-relative file or directory",
+          "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "FindDeadCodeParams",
       "type": "object"
     },
     "name": "find_dead_code",
@@ -1154,7 +665,6 @@
     },
     "description": "Find the shortest path between two symbols in the knowledge graph using BFS across all relationship types (CALLS, CONTAINED_BY, IMPORTS, etc.). Answers 'how are these two things connected?' directly. Returns the ordered list of symbols and edge types along the path.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "from_symbol": {
           "description": "Start symbol: name, qualified name, or file_path:qualified_name",
@@ -1162,20 +672,13 @@
         },
         "max_depth": {
           "description": "Maximum BFS depth (default: 10)",
-          "format": "uint32",
           "maximum": 30,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "to_symbol": {
           "description": "End symbol: name, qualified name, or file_path:qualified_name",
@@ -1186,7 +689,6 @@
         "from_symbol",
         "to_symbol"
       ],
-      "title": "FindPathParams",
       "type": "object"
     },
     "name": "find_path"
@@ -1200,37 +702,23 @@
     },
     "description": "DEPRECATED: use `find_callees` instead (this alias is removed in the next release). Find all functions called by a given symbol, with optional depth limit. Use to understand dependencies and call chains. Each callee carries how its CALLS edge was resolved.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max callees per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "max_depth": {
           "description": "Maximum transitive depth (default: 3)",
-          "format": "uint32",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Callees to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID",
@@ -1245,7 +733,6 @@
         "repo_id",
         "symbol_name"
       ],
-      "title": "GetCalleesParams",
       "type": "object"
     },
     "name": "get_callees",
@@ -1279,6 +766,13 @@
             "resolved": {
               "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
               "type": "string"
+            },
+            "signature": {
+              "description": "The declaration line; only with `detail: full` (#181).",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "start_line": {
               "format": "uint32",
@@ -1396,37 +890,23 @@
     },
     "description": "DEPRECATED: use `find_callers` instead (this alias is removed in the next release). Find all functions that call a given symbol, with optional depth limit. Use to understand impact of changes or find usage patterns. Each caller carries how its CALLS edge was resolved.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max callers per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "max_depth": {
           "description": "Maximum transitive depth (default: 3)",
-          "format": "uint32",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Callers to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID",
@@ -1441,7 +921,6 @@
         "repo_id",
         "symbol_name"
       ],
-      "title": "GetCallersParams",
       "type": "object"
     },
     "name": "get_callers",
@@ -1475,6 +954,13 @@
             "resolved": {
               "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
               "type": "string"
+            },
+            "signature": {
+              "description": "The declaration line; only with `detail: full` (#181).",
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "start_line": {
               "format": "uint32",
@@ -1592,7 +1078,6 @@
     },
     "description": "Compute centrality metrics (degree, betweenness, closeness, eigenvector) for all symbols in the call graph. Returns the top-N symbols ranked by the chosen metric. Betweenness identifies bridge/bottleneck symbols, closeness measures how central a symbol is, eigenvector highlights symbols connected to other important symbols.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "metric": {
           "description": "Centrality metric to sort by (default: betweenness)",
@@ -1600,43 +1085,26 @@
             "degree",
             "betweenness",
             "closeness",
-            "eigenvector",
-            null
+            "eigenvector"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "offset": {
           "description": "Nodes to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "top_n": {
           "description": "Max nodes per page (default 15, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         }
       },
-      "title": "GetCentralityParams",
       "type": "object"
     },
     "name": "get_centrality_report"
@@ -1650,27 +1118,17 @@
     },
     "description": "List all detected communities with summary stats and top symbols. Use to understand code organization and find related modules.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max communities per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Communities to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID",
@@ -1680,7 +1138,6 @@
       "required": [
         "repo_id"
       ],
-      "title": "GetCommunitiesParams",
       "type": "object"
     },
     "name": "get_communities",
@@ -1766,7 +1223,6 @@
     },
     "description": "Get a community's summary, its top member symbols, and its internal/external edge counts. Use to understand community structure before refactoring.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "community_id": {
           "description": "Community UID or label to get details for",
@@ -1781,7 +1237,6 @@
         "repo_id",
         "community_id"
       ],
-      "title": "GetCommunityDetailParams",
       "type": "object"
     },
     "name": "get_community_detail",
@@ -1898,37 +1353,23 @@
     },
     "description": "Compute quality metrics for the Leiden community partitioning: overall modularity score (higher = better separation), per-community cohesion (internal edge density), and inter-community coupling (edge counts between community pairs). Use to assess code architecture quality.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max rows per table (cohesion, coupling) (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Rows to skip in each table, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetCommunityMetricsParams",
       "type": "object"
     },
     "name": "get_community_metrics"
@@ -1942,37 +1383,23 @@
     },
     "description": "Detect API contracts (OpenAPI, Protobuf) in the repository and match endpoints to handler symbols. Returns linked and unlinked endpoints.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max unlinked endpoints listed (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Unlinked endpoints to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetContractsParams",
       "type": "object"
     },
     "name": "get_contracts"
@@ -1986,7 +1413,6 @@
     },
     "description": "Get a full email thread by conversation symbol UID. Returns all emails in the thread with their relationships.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "conversation_uid": {
           "description": "Conversation symbol UID",
@@ -1994,36 +1420,23 @@
         },
         "limit": {
           "description": "Max emails per page (default 20, max 100)",
-          "format": "uint",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Emails to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "conversation_uid"
       ],
-      "title": "GetConversationParams",
       "type": "object"
     },
     "name": "get_conversation"
@@ -2037,34 +1450,21 @@
     },
     "description": "List Architecture Decision Records (ADRs) for a repository. Optionally filter by status.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max decisions per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Decisions to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "status": {
           "description": "Only decisions with this status (optional)",
@@ -2072,16 +1472,11 @@
             "proposed",
             "accepted",
             "deprecated",
-            "superseded",
-            null
+            "superseded"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetDecisionsParams",
       "type": "object"
     },
     "name": "get_decisions"
@@ -2095,7 +1490,6 @@
     },
     "description": "Compute file-level dependencies: direct imports, transitive closure (all files reachable via import chains), and reverse dependents (files that import this file). Use before refactoring to understand the full impact of moving or deleting a file.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "file_path": {
           "description": "File path to analyze dependencies for",
@@ -2103,45 +1497,28 @@
         },
         "limit": {
           "description": "Max files per list (direct, transitive, dependents) (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "max_depth": {
           "description": "Maximum transitive depth (default: unlimited)",
-          "format": "uint32",
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Files to skip in each list, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "file_path"
       ],
-      "title": "GetDependenciesParams",
       "type": "object"
     },
     "name": "get_dependencies"
@@ -2155,7 +1532,6 @@
     },
     "description": "List all symbols defined in a specific file with kinds and signatures. Use for file-level navigation and understanding file contents.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "file_path": {
           "description": "File path to list symbols for",
@@ -2163,23 +1539,14 @@
         },
         "limit": {
           "description": "Max symbols per page (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID",
@@ -2190,7 +1557,6 @@
         "repo_id",
         "file_path"
       ],
-      "title": "GetFileSymbolsParams",
       "type": "object"
     },
     "name": "get_file_symbols",
@@ -2279,27 +1645,17 @@
     },
     "description": "Get git ownership and history metadata for a symbol. Returns last author, modification date, commit count, and age in days.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max symbols per page (default 10, max 100)",
-          "format": "uint",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID",
@@ -2314,7 +1670,6 @@
         "symbol_name",
         "repo_id"
       ],
-      "title": "GetGitContextParams",
       "type": "object"
     },
     "name": "get_git_context"
@@ -2328,46 +1683,28 @@
     },
     "description": "Identify the highest-degree symbols (god nodes) in the call graph. Returns the top-N most connected symbols ranked by total incoming + outgoing CALLS edges. High-coupling nodes (degree > threshold) are flagged as architectural bottlenecks.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "coupling_threshold": {
           "description": "Coupling threshold: nodes with degree > this are flagged as high-coupling (default: 20)",
-          "format": "uint32",
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Nodes to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "top_n": {
           "description": "Max nodes per page (default 10, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         }
       },
-      "title": "GetGodNodesParams",
       "type": "object"
     },
     "name": "get_god_nodes"
@@ -2381,37 +1718,23 @@
     },
     "description": "DEPRECATED: use `detect_architecture_drift` instead (this alias is removed in the next release). Compare the current knowledge graph against the last stored snapshot to detect architectural drift. Shows new/removed symbols and relationships since the last analysis that saved a snapshot.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max changes per page, across all change lists (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Changes to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetGraphDiffParams",
       "type": "object"
     },
     "name": "get_graph_diff"
@@ -2425,7 +1748,6 @@
     },
     "description": "Detect structural weaknesses in the codebase: untested code (functions with no test callers), isolated modules (communities with few external connections), documentation gaps (files with many symbols but no rationale/doc nodes), and single points of failure (symbols that are the only bridge between communities). Use to prioritize testing, documentation, and refactoring efforts.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "category": {
           "description": "Only this gap category (default: all)",
@@ -2433,43 +1755,26 @@
             "untested",
             "isolated",
             "undocumented",
-            "single_point_of_failure",
-            null
+            "single_point_of_failure"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "limit": {
           "description": "Max gaps per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Gaps to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetKnowledgeGapsParams",
       "type": "object"
     },
     "name": "get_knowledge_gaps"
@@ -2483,44 +1788,27 @@
     },
     "description": "Compute module-level coupling metrics (afferent Ca, efferent Ce, instability I) for all files or directories. Instability ranges from 0 (maximally stable, many dependents) to 1 (maximally unstable, depends on many others). Use to find fragile modules.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "group_by_directory": {
           "description": "Group by directory instead of individual files (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "limit": {
           "description": "Max modules per page (default 30, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Modules to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetModuleCouplingParams",
       "type": "object"
     },
     "name": "get_module_coupling"
@@ -2534,27 +1822,17 @@
     },
     "description": "Resolve file ownership from CODEOWNERS rules. Parses .github/CODEOWNERS or CODEOWNERS and matches symbols to their owners.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max files per list (owned, unowned) (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Files to skip in each list, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID",
@@ -2564,7 +1842,6 @@
       "required": [
         "repo_id"
       ],
-      "title": "GetOwnershipParams",
       "type": "object"
     },
     "name": "get_ownership"
@@ -2578,27 +1855,17 @@
     },
     "description": "Get all emails involving a specific person (sent by or received by). Returns the person's email activity summary.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max emails per page (default 50, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Emails to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "person": {
           "description": "Person email address or name to search for",
@@ -2606,16 +1873,12 @@
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "person"
       ],
-      "title": "GetPersonContextParams",
       "type": "object"
     },
     "name": "get_person_context"
@@ -2629,50 +1892,29 @@
     },
     "description": "Get execution flows showing how functions chain together (e.g. request handler → validation → database → response). Use to understand architecture and data flow before refactoring.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "entry": {
           "description": "Filter by entry point name (case-insensitive substring match)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "filter": {
           "description": "Filter by keyword in process description/flow (case-insensitive substring match)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "limit": {
           "description": "Max processes per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "min_steps": {
           "description": "Show only processes with N or more steps",
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Processes to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID",
@@ -2682,7 +1924,6 @@
       "required": [
         "repo_id"
       ],
-      "title": "GetProcessesParams",
       "type": "object"
     },
     "name": "get_processes"
@@ -2696,51 +1937,31 @@
     },
     "description": "Get design rationale comments (NOTE:, HACK:, WHY:, TODO:, FIXME:, IMPORTANT:) linked to a symbol or file. Use to understand *why* code was written a certain way — surfaces inline reasoning from comments.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "file_path": {
           "description": "File path to get all rationale comments for (optional — provide this OR symbol_name)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "limit": {
           "description": "Max comments per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Comments to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
           "description": "Symbol (name, qualified name, or file_path:qualified_name) to get rationale for — provide this OR file_path",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetRationaleParams",
       "type": "object"
     },
     "name": "get_rationale"
@@ -2754,51 +1975,32 @@
     },
     "description": "Get a compact structural summary of code changes for efficient review. Analyzes a diff to identify changed symbols, their callers and callees, and affected communities — returning signatures instead of full source to minimize token usage.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
           "description": "Graph traversal depth for blast radius (default: 1)",
-          "format": "uint32",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "diff": {
           "description": "Diff string (optional — if omitted, runs git diff HEAD in repo path)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "include_source": {
           "description": "Include full source code of changed symbols (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "limit": {
           "description": "Max callers and max callees listed (default 50, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "ReviewContextParams",
       "type": "object"
     },
     "name": "get_review_context"
@@ -2812,7 +2014,6 @@
     },
     "description": "Get property definitions and schema information for entity types or edge types in the ontology. Returns detailed information about what properties are expected for each specified entity type.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "entity_types": {
           "description": "Entity type name(s) to get schema for (comma-separated, e.g., \"Function,Class,Method\")",
@@ -2820,16 +2021,12 @@
         },
         "include_edges": {
           "description": "Whether to include edge type schemas in addition to entity schemas (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         }
       },
       "required": [
         "entity_types"
       ],
-      "title": "GetSchemaParams",
       "type": "object"
     },
     "name": "get_schema"
@@ -2843,37 +2040,23 @@
     },
     "description": "List all community-to-service name mappings for a repository.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max mappings per page (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Mappings to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetServiceMapParams",
       "type": "object"
     },
     "name": "get_service_map"
@@ -2887,7 +2070,6 @@
     },
     "description": "Get codebase statistics: symbol counts by kind, files, relationships, languages, and communities. Use to understand overall codebase structure.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "repo_id": {
           "description": "Repository ID",
@@ -2897,7 +2079,6 @@
       "required": [
         "repo_id"
       ],
-      "title": "GetStatsParams",
       "type": "object"
     },
     "name": "get_stats",
@@ -2982,44 +2163,27 @@
     },
     "description": "Auto-generate contextual code review questions based on code graph structure and git diff. Returns ranked questions about potential issues like missing test coverage, high caller counts, or API contract violations.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "diff": {
           "description": "Diff string (optional — if omitted, runs git diff HEAD in repo path)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "limit": {
           "description": "Max questions per page (default 5, max 50)",
-          "format": "uint",
           "maximum": 50,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Questions to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetSuggestedQuestionsParams",
       "type": "object"
     },
     "name": "get_suggested_questions"
@@ -3033,47 +2197,29 @@
     },
     "description": "Detect surprising cross-community CALLS edges: connections between symbols in different Leiden communities that rarely interact. Ranked by surprise score (0–1); higher means more isolated/unexpected coupling. Use to find hidden architectural dependencies.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max connections per page (default 50, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "min_surprise_score": {
           "description": "Minimum surprise score in [0.0, 1.0] to include in results (default: 0.1)",
-          "format": "double",
           "maximum": 1.0,
           "minimum": 0.0,
-          "type": [
-            "number",
-            "null"
-          ]
+          "type": "number"
         },
         "offset": {
           "description": "Connections to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "GetSurprisingConnectionsParams",
       "type": "object"
     },
     "name": "get_surprising_connections"
@@ -3087,7 +2233,6 @@
     },
     "description": "DEPRECATED: use `explain_symbol` instead (this alias is removed in the next release). Get the complete definition and source code of a symbol. Use to understand what a function/class does before using or modifying it.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "repo_id": {
           "description": "Repository ID",
@@ -3102,7 +2247,6 @@
         "repo_id",
         "symbol_name"
       ],
-      "title": "GetSymbolDefinitionParams",
       "type": "object"
     },
     "name": "get_symbol_definition",
@@ -3171,34 +2315,21 @@
     },
     "description": "DEPRECATED: use `search_code` instead (this alias is removed in the next release). Search using hybrid BM25 + vector semantic search with Reciprocal Rank Fusion for better search quality",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "explain": {
           "description": "Show scoring breakdown and graph paths for each result (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "limit": {
           "description": "Max results per page (default 20, max 100)",
-          "format": "uint",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Results to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "query": {
           "description": "Search query string",
@@ -3206,23 +2337,16 @@
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "rerank": {
           "description": "Rerank the top 50 hybrid results with a cross-encoder (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         }
       },
       "required": [
         "query"
       ],
-      "title": "HybridSearchParams",
       "type": "object"
     },
     "name": "hybrid_search"
@@ -3237,70 +2361,40 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass. An `Incomplete:` block names what the walk did not follow (depth limit, unlinked call sites) and the next call.",
+    "description": "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
-          "description": "Hops to follow from the changed code (default 2, max 10)",
-          "format": "uint32",
+          "description": "Hops (default 2)",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "diff": {
-          "description": "A unified diff of the change (default when neither symbol_name nor file_path is given: `git diff HEAD` in the repository)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Unified diff (default without symbol_name/file_path: git diff HEAD)",
+          "type": "string"
         },
         "file_path": {
-          "description": "The file you plan to change (repository-relative): all symbols it defines",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Repository-relative file to change",
+          "type": "string"
         },
         "limit": {
-          "description": "Max report lines per page (default 50, max 500)",
-          "format": "uint",
+          "description": "Page size in lines (default 50)",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Report lines to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
-          "description": "The symbol you plan to change (name, qualified name, or file_path:qualified_name). Give at most one of symbol_name, file_path, diff",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Symbol to change (name, qualified name, or file_path:qualified_name). At most one of symbol_name, file_path, diff",
+          "type": "string"
         }
       },
-      "title": "ImpactOfChangeParams",
       "type": "object"
     },
     "name": "impact_of_change"
@@ -3314,17 +2408,12 @@
     },
     "description": "Isolate the symbols implementing a specific intent/feature in a repository. Uses hybrid search to find seed symbols, then expands via call graph traversal with community-aware pruning. Returns the IntentSlice: seed symbols, expanded symbols, internal relationships, and structural metadata.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
           "description": "Call graph expansion depth (default: 2)",
-          "format": "uint32",
           "maximum": 5,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "intent": {
           "description": "Natural language description of the intent/feature to isolate\n(e.g., \"tree-sitter parsing\", \"authentication flow\", \"API routing\")",
@@ -3332,13 +2421,9 @@
         },
         "max_symbols": {
           "description": "Maximum symbols to include in the slice (default: 50)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID to isolate from",
@@ -3349,7 +2434,6 @@
         "intent",
         "repo_id"
       ],
-      "title": "IsolateIntentParams",
       "type": "object"
     },
     "name": "isolate_intent"
@@ -3363,7 +2447,6 @@
     },
     "description": "Link an Architecture Decision Record to a code symbol. Creates a traceability connection between the decision and the code it affects.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "decision_id": {
           "description": "ADR id, or a unique prefix of it as listed by get_decisions",
@@ -3383,7 +2466,6 @@
         "decision_id",
         "symbol_name"
       ],
-      "title": "LinkDecisionParams",
       "type": "object"
     },
     "name": "link_decision"
@@ -3398,32 +2480,19 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "List the analyzed repositories (id, name, path, when and from which commit they were indexed, size). Tools default to the repository of the working directory; pass another one's id as repo_id.",
+    "description": "List the indexed repositories: id, path, indexed commit. Tools default to the repository of the working directory; pass another id as repo_id.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
-          "description": "Max repos per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Repos to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         }
       },
-      "title": "ListReposParams",
       "type": "object"
     },
     "name": "list_repos",
@@ -3515,7 +2584,6 @@
     },
     "description": "Assign a human-readable service name to a community. Use with architecture_view to create meaningful service labels.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "community_label": {
           "description": "Community label to map",
@@ -3535,7 +2603,6 @@
         "community_label",
         "service_name"
       ],
-      "title": "MapServiceParams",
       "type": "object"
     },
     "name": "map_service"
@@ -3549,19 +2616,14 @@
     },
     "description": "Generate an actionable adaptation plan for migrating one repository's approach to another. Compares intent implementations, then produces ordered steps with dependency tracking, effort estimates, and risk analysis.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "direction": {
           "description": "Which side to adapt (default: source_to_target, i.e. adapt the target to match the source)",
           "enum": [
             "source_to_target",
-            "target_to_source",
-            null
+            "target_to_source"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "intent": {
           "description": "Natural language description of the intent",
@@ -3569,13 +2631,9 @@
         },
         "max_symbols": {
           "description": "Maximum symbols per slice (default: 50)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "source_repo_id": {
           "description": "Repository whose approach to adapt FROM",
@@ -3591,7 +2649,6 @@
         "source_repo_id",
         "target_repo_id"
       ],
-      "title": "PlanAdaptationParams",
       "type": "object"
     },
     "name": "plan_adaptation"
@@ -3605,37 +2662,23 @@
     },
     "description": "Identify refactoring hotspots by combining graph centrality, git churn, and module instability into a composite score. High-scoring symbols are architecturally critical AND frequently changed — prime candidates for refactoring.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "offset": {
           "description": "Hotspots to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "top_n": {
           "description": "Max hotspots per page (default 20, max 200)",
-          "format": "uint",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         }
       },
-      "title": "QualityHotspotsParams",
       "type": "object"
     },
     "name": "quality_hotspots"
@@ -3649,34 +2692,21 @@
     },
     "description": "Query cross-domain knowledge: find emails and documents that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "include_sources": {
           "description": "Include source citations with line numbers and context (default: true)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "limit": {
           "description": "Max mentions per page (default 20, max 100)",
-          "format": "uint",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Mentions to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "query": {
           "description": "Natural language query or symbol name to search for across all knowledge",
@@ -3684,16 +2714,12 @@
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "QueryKnowledgeParams",
       "type": "object"
     },
     "name": "query_knowledge"
@@ -3707,14 +2733,10 @@
     },
     "description": "Create an Architecture Decision Record (ADR). Records architectural decisions with context, rationale, and consequences. Link to code symbols with link_decision.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "consequences": {
           "description": "Expected consequences (optional)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "context": {
           "description": "Context and motivation",
@@ -3734,13 +2756,9 @@
             "proposed",
             "accepted",
             "deprecated",
-            "superseded",
-            null
+            "superseded"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "title": {
           "description": "ADR title",
@@ -3753,7 +2771,6 @@
         "context",
         "decision"
       ],
-      "title": "RecordDecisionParams",
       "type": "object"
     },
     "name": "record_decision"
@@ -3767,17 +2784,12 @@
     },
     "description": "Preview renaming a symbol across the codebase. Returns a rename plan with all edits needed (does not modify files).",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
           "description": "Max edits per page (default 100, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "new_name": {
           "description": "New name for the symbol",
@@ -3785,13 +2797,8 @@
         },
         "offset": {
           "description": "Edits to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID",
@@ -3807,7 +2814,6 @@
         "new_name",
         "repo_id"
       ],
-      "title": "RenameParams",
       "type": "object"
     },
     "name": "rename_symbol"
@@ -3822,87 +2828,56 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings. Test code ranks below product code unless tests=include or tests=prefer.",
+    "description": "Find where something is implemented: functions, classes and types by name or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code: one line per hit with kind, file and lines.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "explain": {
-          "description": "Show the scoring breakdown of each result (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Show each result's score breakdown",
+          "type": "boolean"
         },
         "limit": {
-          "description": "Max results per page (default 20, max 100)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "mode": {
-          "description": "auto (default): hybrid when the index has embeddings, else keyword. keyword: names and signatures, no model. semantic: meaning only. hybrid: both, fused",
+          "description": "auto (default): hybrid with embeddings, else keyword",
           "enum": [
             "auto",
             "keyword",
             "semantic",
-            "hybrid",
-            null
+            "hybrid"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "offset": {
-          "description": "Results to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "query": {
-          "description": "What to find: a name (parseConfig, Item.AsString) or what the code does (builds the Set-Cookie header)",
+          "description": "A name (parseConfig, Item.AsString) or what the code does",
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "rerank": {
-          "description": "Rerank the top 50 hybrid results with a cross-encoder: slower, more precise (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Cross-encoder rerank of the hybrid top 50: slower, more precise",
+          "type": "boolean"
         },
         "tests": {
-          "description": "Test code (test files and directories such as *_test.go, *.test.ts, tests/, and #[cfg(test)] modules): demote (default) ranks it below product code, include ranks it like product code, prefer ranks it first. Use include or prefer to find tests",
+          "description": "Test code: demote (default), include, or prefer (to find tests)",
           "enum": [
             "demote",
             "include",
-            "prefer",
-            null
+            "prefer"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "SearchCodeParams",
       "type": "object"
     },
     "name": "search_code"
@@ -3916,34 +2891,21 @@
     },
     "description": "DEPRECATED: use `search_code` instead (this alias is removed in the next release). Same as context_search (keyword ranking over names and signatures); it never was a separate BM25 document search.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "explain": {
           "description": "Show scoring breakdown and graph paths for each result (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "limit": {
           "description": "Max results per page (default 20, semantic_search 10; max 100)",
-          "format": "uint",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Results to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "query": {
           "description": "Search query string",
@@ -3951,16 +2913,12 @@
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "SearchParams",
       "type": "object"
     },
     "name": "search_documents"
@@ -3974,41 +2932,25 @@
     },
     "description": "Search indexed emails by keyword, with optional person and date filters. Returns matching Email symbols with subject, sender, date, and body snippet.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "date": {
           "description": "Filter by date (ISO 8601 prefix, e.g. \"2026-04\") (optional)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "limit": {
           "description": "Max emails per page (default 20, max 100)",
-          "format": "uint",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Emails to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "person": {
           "description": "Filter by person email address (optional)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "query": {
           "description": "Search keyword to match in email subject or body",
@@ -4016,16 +2958,12 @@
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "SearchEmailsParams",
       "type": "object"
     },
     "name": "search_emails"
@@ -4039,34 +2977,21 @@
     },
     "description": "DEPRECATED: use `search_code` instead (this alias is removed in the next release). Search for symbols using semantic similarity (vector embeddings). Returns symbols most similar in meaning to the query.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "explain": {
           "description": "Show scoring breakdown and graph paths for each result (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": "boolean"
         },
         "limit": {
           "description": "Max results per page (default 20, semantic_search 10; max 100)",
-          "format": "uint",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Results to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "query": {
           "description": "Search query string",
@@ -4074,16 +2999,12 @@
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "SearchParams",
       "type": "object"
     },
     "name": "semantic_search"
@@ -4111,51 +3032,31 @@
     },
     "description": "DEPRECATED: use `detect_architecture_drift` instead (this alias is removed in the next release). Compare two graph snapshots to see architectural changes over time. Shows added/removed symbols and relationships. Defaults to comparing the two most recent snapshots.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "from_snapshot": {
           "description": "Snapshot ID to compare FROM (default: second-to-latest)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "limit": {
           "description": "Max changes per page, across added and removed (default 50, max 500)",
-          "format": "uint",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
           "description": "Changes to skip, for the next page (default 0)",
-          "format": "uint",
           "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
           "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "to_snapshot": {
           "description": "Snapshot ID to compare TO (default: latest)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "SnapshotDiffParams",
       "type": "object"
     },
     "name": "snapshot_diff"
@@ -4169,7 +3070,6 @@
     },
     "description": "DEPRECATED: use `explain_symbol` instead (this alias is removed in the next release). Get a symbol's full context: source code, callers, and callees. Use this to understand how a function is used before modifying it — reveals dependencies that file reading alone cannot.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "repo_id": {
           "description": "Repository ID",
@@ -4184,7 +3084,6 @@
         "symbol_name",
         "repo_id"
       ],
-      "title": "SymbolContextParams",
       "type": "object"
     },
     "name": "symbol_context"
@@ -4199,63 +3098,38 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line. An `Incomplete:` block names what is not listed (longer chains, depth limit, calls without a CALLS edge) and the next call; read the source before calling a flow complete.",
+    "description": "How does control get from one function to another? The shortest call chain from from_symbol to to_symbol, plus every function on a chain of that length (extra_calls widens it), with file and line.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "extra_calls": {
-          "description": "Also list symbols on chains up to this many calls longer than the shortest (default 0, max 5)",
-          "format": "uint32",
+          "description": "Also list chains up to this many calls longer than the shortest (default 0)",
           "maximum": 5,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "from_symbol": {
-          "description": "Where the flow starts: name, qualified name, or file_path:qualified_name",
+          "description": "Start: name, qualified name, or file_path:qualified_name",
           "type": "string"
         },
         "limit": {
-          "description": "Max symbols per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "max_depth": {
-          "description": "Longest chain searched, in calls (default 12, max 30)",
-          "format": "uint32",
+          "description": "Longest chain in calls (default 12)",
           "maximum": 30,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "to_symbol": {
-          "description": "Where the flow ends: name, qualified name, or file_path:qualified_name",
+          "description": "End: name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
@@ -4263,7 +3137,6 @@
         "from_symbol",
         "to_symbol"
       ],
-      "title": "TraceFlowParams",
       "type": "object"
     },
     "name": "trace_flow"
