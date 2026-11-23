@@ -638,7 +638,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
         tmp = Path(tempfile.mkdtemp(prefix="aeval-run-", dir=self.cache / "tmp"))
         variant = config.VARIANTS[item.condition]
-        hook_dir = Path(tempfile.mkdtemp(prefix="hook-")) if variant.no_search else None
+        hook_dir = Path(tempfile.mkdtemp(prefix="hook-")) if variant.no_search and not repo.get("isolated") else None
         try:
             workdir = self._prepare_workspace(item.repo)
             if problem := wrapper_problem(workdir, config.repo_env(repo)):
