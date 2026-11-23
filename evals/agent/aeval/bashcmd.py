@@ -87,17 +87,49 @@ class Unparsed(ValueError):
 
 
 def _tokens(line: str) -> list[str]:
-    lex = shlex.shlex(line, posix=True, punctuation_chars=True)
+    lex = shlex.shlex(strip_comment(line), posix=True, punctuation_chars=True)
     lex.whitespace_split = True
-    lex.commenters = ""  # `#` inside a word (`${f#*:}`) is not a comment
+    lex.commenters = ""  # `#` inside a word (`${f#*:}`) or quoted (`'#method'`) is not a comment
     try:
-        toks = list(lex)
+        return list(lex)
     except ValueError as exc:
         raise Unparsed(str(exc)) from exc
-    for i, t in enumerate(toks):
-        if t.startswith("#"):  # a comment starts at a word boundary
-            return toks[:i]
-    return toks
+
+
+def quoted_states(text: str) -> list[str] | None:
+    """Per character: ``u`` unquoted, ``s`` in single quotes, ``d`` in double
+    quotes, ``e`` escaped by a backslash, ``q`` a quote itself, ``b`` such a
+    backslash; None when a quote stays open."""
+    out, state, i = [], "u", 0
+    while i < len(text):
+        c = text[i]
+        if state == "s":
+            out.append("q" if c == "'" else "s")
+            state = "u" if c == "'" else "s"
+        elif c == "\\" and i + 1 < len(text) and (state == "u" or text[i + 1] in '$`"\\\n'):
+            out += ["b", "e"]
+            i += 1
+        elif state == "d":
+            out.append("q" if c == '"' else "d")
+            state = "u" if c == '"' else "d"
+        elif c in "'\"":
+            out.append("q")
+            state = "s" if c == "'" else "d"
+        else:
+            out.append("u")
+        i += 1
+    return out if state == "u" else None
+
+
+def strip_comment(line: str) -> str:
+    """``line`` without its shell comment: an unquoted ``#`` at a word start."""
+    states = quoted_states(line)
+    if states is None:
+        return line
+    for i, c in enumerate(line):
+        if c == "#" and states[i] == "u" and (i == 0 or (states[i - 1] == "u" and line[i - 1] in " \t;&|()")):
+            return line[:i]
+    return line
 
 
 def simple_commands(command: str) -> list[list[str]]:
@@ -348,7 +380,7 @@ def touches_home_git_config(path: str) -> bool:
 # search additionally get SEARCH_SHELL below, the shell's search and file
 # reading programs. Nothing else differs.
 SEARCH_SHELL = frozenset({"grep", "egrep", "fgrep", "rg", "find", "ls", "cat", "head", "tail", "wc", "nl", "sed",
-                          "sort", "uniq", "cut", "git grep", "git ls-files", "git blame"})
+                          "awk", "sort", "uniq", "cut", "git grep", "git ls-files", "git blame"})
 ISOLATED_TOOLS = frozenset({"Bash", "Read", "Edit", "Write", "Grep", "Glob", "ToolSearch", "TodoWrite"})
 # `myc` subcommands that read the index; the others serve, write configuration or reach out (`email`).
 MYC_READS = frozenset({"analyze", "callers", "callees", "communities", "context", "diff", "impact", "knowledge", "list",
@@ -366,7 +398,33 @@ _UNSAFE_OPT = {"find": re.compile(r"^-(exec|execdir|ok|okdir|delete|fprint|fprin
                "uniq": re.compile(r"^[^-]"), "wc": re.compile(r"^--files0-from"),
                "git grep": re.compile(r"^-O|^--open-files-in-pager|^--no-index|^-f|^--file"),
                "git ls-files": re.compile(r"^-X|^--exclude-from"), "git blame": re.compile(r"^--(contents|ignore-revs-file)")}
-_SED_PRINT = re.compile(r"^\d+(,\d+)?p(;\d+(,\d+)?p)*$")
+_SED_ADDR = r"(?:\d+|\$|/(?:[^/\\\n]|\\[^\n])*/)"
+_SED_PRINT = re.compile(rf"^{_SED_ADDR}(,{_SED_ADDR})?p(;\s*{_SED_ADDR}(,{_SED_ADDR})?p)*$")
+_AWK_UNSAFE = re.compile(r"system|getline|\||print[^}]*>|close\s*\(|ENVIRON|@")
+
+
+def unaccounted(command: str) -> str | None:
+    """What in ``command`` the parser above does not model, so that the whole
+    command is refused: any expansion, continuation lines, odd characters, a
+    quote that stays open on its line."""
+    if any(ord(c) < 32 and c not in "\n\t" or ord(c) in (0x85, 0xA0, 0x2028, 0x2029) for c in command):
+        return "control characters"
+    for line in command.split("\n"):
+        st = quoted_states(line)
+        if st is None:
+            return "a quote that is open at the end of a line"
+        for i, c in enumerate(line):
+            if c in "$`" and st[i] in "ud":
+                return "an expansion (`$`, backticks)"
+            if c in "{}" and st[i] == "u":
+                return "a brace expansion"
+            if c == "!" and st[i] in "ud" and line[i + 1:i + 2].strip():
+                return "a history expansion"
+            if c == "\\" and st[i] == "u":
+                return "a backslash at the end of a line"
+            if c in "<>" and st[i] == "u" and line[i + 1:i + 2] == "(":
+                return "process substitution"
+    return None
 
 
 def outside(word: str, here: str, root: str) -> bool:
@@ -375,6 +433,12 @@ def outside(word: str, here: str, root: str) -> bool:
     ``:`` (``--file=/x``, ``HEAD:/x``)."""
     if word in DEVICES:
         return False
+    if re.match(r"^-[A-Za-z0-9]+[/~]", word):  # a path attached to a short option: `-e/etc/x`
+        return True
+    if re.search(r"(^|[/=:,{])\.\.(/|$|[,}])", word):  # no `..` at all: a `cd` before it may not have happened
+        return True
+    if re.search(r"[{,]\s*[/~]", word):  # alternatives of a glob: `{/etc/x,a}`
+        return True
     for part in {word, *re.split(r"[=:,]", word)}:
         if re.search(r"\$[A-Za-z_{]", part) or part.startswith("~"):
             return True
@@ -388,6 +452,9 @@ def outside(word: str, here: str, root: str) -> bool:
 
 def _pattern_operands(prog: str, args: list[str]) -> set[int]:
     """Indexes of the arguments that are search patterns, not paths."""
+    if prog in ("awk", "sed"):  # the program text
+        return next(({i} for i, a in enumerate(args) if not a.startswith("-") and (i == 0 or args[i - 1] not in ("-F", "-v"))),
+                    set())
     if prog not in ("grep", "egrep", "fgrep", "rg", "git grep"):
         return set()
     out, i = set(), 0
@@ -414,8 +481,8 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
     here, root = here or root or "/", root or here or "/"
     if not _inside(here, root, root):
         return False, ["a shell outside the working copy"]
-    if "$(" in command or "`" in command or "<(" in command or ">(" in command:
-        return False, ["command substitution"]
+    if why := unaccounted(command):
+        return False, [why]
     try:
         cmds, targets = parse(command)
     except Unparsed:
@@ -480,9 +547,12 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
             rx = _UNSAFE_OPT.get("grep" if prog in ("egrep", "fgrep") else prog)
             if rx and any(i not in patterns and rx.search(a) for i, a in enumerate(args)):
                 denied.append(f"`{prog}` with that option")
-            elif prog == "sed" and not (len(args) >= 2 and args[0] == "-n" and _SED_PRINT.match(args[1])
+            elif prog == "sed" and not (len(args) >= 2 and args[0] in ("-n", "-nE", "-En") and _SED_PRINT.match(args[1])
                                         and not any(a.startswith("-") for a in args[2:])):
-                denied.append("`sed` other than `sed -n 'A,Bp'`")
+                denied.append("`sed` other than printing (`sed -n 'A,Bp'`, `sed -n '/re/p'`)")
+            elif prog == "awk" and (any(_AWK_UNSAFE.search(a) for a in args) or any(
+                    re.match(r"^-(f|-file|E|l|-load|i|-include)", a) for a in args)):
+                denied.append("`awk` with system, getline, a pipe, a redirection or a program file")
             elif prog == "tail" and any(re.match(r"^-[a-zA-Z]*[fF]|^--follow|^--retry", a) for a in args):
                 denied.append("`tail -f`")
             else:
@@ -495,7 +565,10 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
         if not ok:
             denied.extend(why)
         elif prog == "cd":
-            here = os.path.realpath(os.path.join(here, ([a for a in args if not a.startswith("-")] or ["."])[0]))
+            target = os.path.realpath(os.path.join(here, ([a for a in args if not a.startswith("-")] or ["."])[0]))
+            if not os.path.isdir(target):
+                denied.append("`cd` to a directory that does not exist")
+            here = target
     return not denied, denied
 
 
@@ -535,7 +608,7 @@ def isolated_tool(tool: str, inp: dict, root: str, here: str | None = None, extr
         return "outside", f"reading {path}"
     if tool in ("Grep", "Glob"):
         vals = [str(inp.get(k) or "") for k in (("path", "glob") if tool == "Grep" else ("path", "pattern"))]
-        bad = [v for v in vals if v and (outside(v, here, root) or touches_dot_git(v))]
+        bad = [v for v in vals if v and (outside(v, here, root) or touches_dot_git(v) or "$" in v)]
         return ("outside", f"{tool} in {bad[0]}") if bad else None
     if tool.startswith("mcp__"):
         def strings(v):

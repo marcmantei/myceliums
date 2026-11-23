@@ -256,6 +256,8 @@ def cmd_build(args) -> int:
             "test_command": cmd, "test_overlay": overlay,
             **({"build_overlay": build_overlay} if build_overlay else {}),
             "allowed_commands": [{"prefix": "./gradlew", "args": GRADLE_ARGS}],
+            **({"equivalents": s["equivalents"]} if s.get("equivalents") else {}),
+            **({"untested": s["untested"]} if s.get("untested") else {}),
             **({"weak_test": s["weak_test"]} if s.get("weak_test") else {}),
             "test_timeout_s": s.get("test_timeout_s", 1800),
             "strata": {"files": sp["files"], "files_by_kind": sp["kinds"], "code_modules": len(sp["code_modules"]), "comment_only": len(comments),

@@ -32,6 +32,7 @@ from .searchaudit import BLIND_READ_LIMIT
 from .searchaudit import audit as search_audit
 from .searchaudit import summarise as audit_summary
 from . import isolation
+from .editgrade import report_lines as edit_lines
 from .stats import per_success_bootstrap
 from .tokens import (CATEGORIES, CLASSES, PRICES_AS_OF, PRICES_SOURCE, attribute, fit_rates, load_prices, price_of,
                      rates_of)
@@ -101,8 +102,9 @@ def collect(label: str, runs_root: Path | None = None, prices_file: str | None =
             keep.update({k: row.get(k) for k in TOKEN_FIELDS + ("search_audit",)})
         else:
             raise SystemExit(f"no transcript for {row['run_id']}: {path}")
-        if row.get("isolation_audit"):  # #183
-            keep["isolation_audit"] = row["isolation_audit"]
+        for k in ("isolation_audit", "edit", "weak_test"):  # #183
+            if row.get(k) is not None and (row.get("isolation_audit") or k == "isolation_audit"):
+                keep[k] = row[k]
         out.append(keep)
         atts.append(path)
     cross = {"available": have}
@@ -296,6 +298,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
             lines = _arm_lines(by_arm[a], base, a, f": `{a}` against `{base}`")
             L.extend(lines[:2] + config.pair_notes(res_dir, a, base) + lines[2:])
     L.extend(_audit_lines(audit))
+    L.extend(edit_lines([r for r in own if r["task_id"] in ids]))
     L.extend(isolation.report_lines(isolated))
     L.append("*Tokens* are billed input tokens (every call re-reads the context, so a result counts once per later "
              "call) and output tokens; *result size* is a result's own size when it entered the context (its share "

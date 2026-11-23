@@ -322,6 +322,23 @@ class Runner:
         path.write_text(pinned + "\n")
         self.claude_version = pinned
 
+    def _check_login(self, item: WorkItem) -> None:
+        """Is the CLI logged in *inside* the sandbox profile with a fresh
+        configuration directory? `auth status` only, no model call: a profile
+        that hides the login would fail every session."""
+        tmp = Path(tempfile.mkdtemp(prefix="aeval-run-", dir=self.cache / "tmp"))
+        work = tmp / "work"
+        work.mkdir()
+        try:
+            prof = self._sandbox_profile(item, tmp, work, tmp)
+            env = config.session_env(isolation.session_environment(tmp), legacy=False)
+            res = subprocess.run(isolation.sandboxed([self.cfg.claude, "auth", "status"], prof), cwd=work, env=env,
+                                 capture_output=True, text=True, timeout=120)
+            if not re.search(r'"loggedIn":\s*true', res.stdout):
+                raise SystemExit(f"Claude Code is not logged in inside the sandbox: {(res.stderr or res.stdout).strip()[:200]}")
+        finally:
+            config.remove_tree(tmp, self.cache / "tmp")
+
     def completed(self) -> set[str]:
         done = set()
         if self.results_path.exists():
@@ -523,7 +540,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             {"matcher": "*", "hooks": [{"type": "command", "command": hook}]}]}}, indent=1))
         return path
 
-    def _sandbox_profile(self, tmp: Path, workdir: Path, out_dir: Path) -> Path:
+    def _sandbox_profile(self, item: WorkItem, tmp: Path, workdir: Path, out_dir: Path) -> Path:
         """The kernel layer (aeval/isolation.py): only this session's own files
         of the protected places are readable."""
         if not isolation.available():
@@ -531,8 +548,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         path = tmp / "session.sb"
         hooks = out_dir / "hooks"
         hooks.mkdir(parents=True, exist_ok=True)
-        path.write_text(isolation.profile([tmp, workdir, hooks, Path(self.cfg.myc), Path(self.cfg.models_dir),
-                                           isolation.project_dir(workdir)]))
+        myc = [Path(self.cfg.myc), Path(self.cfg.models_dir)] if config.VARIANTS[item.condition].mcp else []
+        path.write_text(isolation.session_profile(tmp, workdir, hooks, self.cfg.claude,
+                                                  config.repo_env(self.repos[item.repo]), myc))
         return path
 
     def _nosearch_settings(self, tmp: Path, task: dict | None = None, hook_dir: Path | None = None) -> Path:
@@ -643,6 +661,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 extra.update(nosearch_git_env(tmp))
             # #183: what the repository's build needs (JAVA_HOME, Gradle options).
             extra.update(config.repo_env(repo))
+            if isolated:
+                extra.update(isolation.session_environment(tmp))
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
             # Files the harness changed before the agent starts (setup-claude's
             # CLAUDE.md, .mcp.json) are not the agent's edits.
@@ -652,7 +672,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             if settings is not None:
                 (out_dir / "settings.json").write_text(settings.read_text())
             cmd = self._command(item, mcp_path, settings)
-            sandbox = self._sandbox_profile(tmp, workdir, out_dir) if isolated else None
+            sandbox = self._sandbox_profile(item, tmp, workdir, out_dir) if isolated else None
             if sandbox is not None:
                 (out_dir / "session.sb").write_text(sandbox.read_text())
                 cmd = isolation.sandboxed(cmd, sandbox)
@@ -686,8 +706,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         """Grade an edit task's working copy: changed files, then the test
         command, after the commit's own tests (``test_overlay``, #183) are
         written over the agent's working copy."""
-        changed = changed_files(workdir, baseline)
-        diff = subprocess.run(["git", "-C", str(workdir), "diff", "HEAD"], capture_output=True, text=True)
+        base = self.repos[item.repo]["commit"]  # the parent, not HEAD: the agent may have committed
+        changed = changed_files(workdir, baseline, base)
+        diff = subprocess.run(["git", "-C", str(workdir), "diff", base], capture_output=True, text=True)
         (out_dir / "changes.diff").write_text(diff.stdout)
         untracked = [f for f in changed if (workdir / f).is_file()
                      and subprocess.run(["git", "-C", str(workdir), "ls-files", "--error-unmatch", f],
@@ -833,6 +854,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         row["search_audit"] = search_audit(str(transcript), prompt_path.read_text() if prompt_path.exists() else "")
         if edit is not None:
             row["edit"] = edit
+            if item.task.get("weak_test"):
+                row["weak_test"] = True
         if self.repos[item.repo].get("isolated"):
             row["isolation_audit"] = isolation.audit(
                 str(transcript), str(self.work_root / config.work_name(self.repos[item.repo])))
@@ -905,6 +928,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             order.write_text("".join(f"{it.run_id}\n" for it in self.plan()))
         if any(self.repos[it.repo].get("isolated") for it in items):
             self._pin_claude()
+            if not self.cfg.extra_env:  # a real run, not the mock API
+                self._check_login(next(it for it in items if self.repos[it.repo].get("isolated")))
         # Before the first session: every wrapper distribution of the run is on disk (#183).
         missing = {p for it in items if (self.cache / "repos" / it.repo).is_dir()
                    and (p := wrapper_problem(self.cache / "repos" / it.repo, self.repos[it.repo].get("session_env")))}

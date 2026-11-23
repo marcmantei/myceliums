@@ -1590,38 +1590,45 @@ tests, at least two build modules touched (`framework-docs` counts), and a
 parent that builds with the Java 25 toolchain: **151 candidates**. 34 were
 picked for a public API or behaviour change a description can state
 (no pure refactoring or deprecation), and stratified by files, code modules
-and docs; 20 are the task set, 12 are reserves
+and docs; 20 are the task set, 11 are reserves
 (`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
 fails.
 
-| Task | Commit | Files (code/tests/docs) | Modules whose code changes | Comment-only files | Docs | Primary files |
-|---|---|---:|---:|---:|---|---:|
-| `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 1 | 1 | yes | 1 |
-| `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 |  | yes | 2 |
-| `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 |  | yes | 3 |
-| `spel-big-power-result-limit` | 8a92c19e4d | 8 (4/2/2) | 1 | 1 | yes | 2 |
-| `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 |  | yes | 1 |
-| `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | 1 | yes | 2 |
-| `fn-request-bind-pathvars-headers` | a9a404266c | 7 (3/2/2) | 2 |  | yes | 1 |
-| `jdbcclient-batch-entry-dsl` | 833ab4d48f | 6 (2/3/1) | 1 |  | yes | 1 |
-| `type-mismatch-required-type-arg` | 4847ee80b0 | 3 (1/1/1) | 1 |  | yes | 1 |
-| `servlet-response-ignore-body-flush` | e0b54e244e | 5 (3/1/1) | 2 |  | yes | 1 |
-| `content-negotiation-no-fallback-mapping` | 7fbdbd6eb7 | 4 (2/2/0) | 2 |  | no | 1 |
-| `client-builders-deep-copy-default-headers-cookies` | 4cf6335372 | 6 (3/3/0) | 3 |  | no | 1 |
-| `http-range-honor-if-range` | 8ab5332639 | 11 (5/6/0) | 2 |  | no | 1 |
-| `error-response-interceptor-with-request` | d70220eb5d | 11 (7/4/0) | 3 |  | no | 1 |
-| `mime-type-parameter-names-case-insensitive` | 2028eb3694 | 4 (2/2/0) | 2 |  | no | 1 |
-| `deferred-bean-registrar-contains-bean` | 7502b92392 | 14 (7/7/0) | 2 | 1 | no | 2 |
-| `api-version-deprecation-handler-handler-arg` | b128f59714 | 12 (10/2/0) | 3 |  | no | 2 |
-| `bean-provider-parameterized-type-reference` | 2e4ca41382 | 7 (6/1/0) | 3 |  | no | 1 |
-| `message-source-default-charset` | 02af3e7a17 | 5 (4/1/0) | 1 | 1 | no | 1 |
-| `retryable-method-retry-event` | 92a43c007a | 10 (6/4/0) | 2 | 2 | no | 3 |
+| Task | Commit | Files (code/tests/docs) | Modules whose code changes | Comment-only files | Docs | Weakly tested | Primary files |
+|---|---|---:|---:|---:|---|---|---:|
+| `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 1 | 1 | yes |  | 1 |
+| `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 |  | yes | yes | 2 |
+| `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 |  | yes |  | 3 |
+| `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 |  | yes | yes | 1 |
+| `test-context-cache-pause-mode` | 9711db787e | 9 (4/3/2) | 1 | 1 | yes |  | 3 |
+| `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | 1 | yes | yes | 2 |
+| `fn-request-bind-pathvars-headers` | a9a404266c | 7 (3/2/2) | 2 |  | yes | yes | 1 |
+| `jdbcclient-batch-entry-dsl` | 833ab4d48f | 6 (2/3/1) | 1 |  | yes |  | 1 |
+| `type-mismatch-required-type-arg` | 4847ee80b0 | 3 (1/1/1) | 1 |  | yes |  | 1 |
+| `servlet-response-ignore-body-flush` | e0b54e244e | 5 (3/1/1) | 2 |  | yes | yes | 1 |
+| `content-negotiation-no-fallback-mapping` | 7fbdbd6eb7 | 4 (2/2/0) | 2 |  | no |  | 1 |
+| `client-builders-deep-copy-default-headers-cookies` | 4cf6335372 | 6 (3/3/0) | 3 |  | no |  | 1 |
+| `http-range-honor-if-range` | 8ab5332639 | 11 (5/6/0) | 2 |  | no |  | 1 |
+| `error-response-interceptor-with-request` | d70220eb5d | 11 (7/4/0) | 3 |  | no |  | 1 |
+| `mime-type-parameter-names-case-insensitive` | 2028eb3694 | 4 (2/2/0) | 2 |  | no |  | 1 |
+| `deferred-bean-registrar-contains-bean` | 7502b92392 | 14 (7/7/0) | 2 | 1 | no | yes | 2 |
+| `api-version-deprecation-handler-handler-arg` | b128f59714 | 12 (10/2/0) | 3 |  | no |  | 2 |
+| `bean-provider-parameterized-type-reference` | 2e4ca41382 | 7 (6/1/0) | 3 |  | no | yes | 1 |
+| `message-source-default-charset` | 02af3e7a17 | 5 (4/1/0) | 1 | 1 | no | yes | 1 |
+| `retryable-method-retry-event` | 92a43c007a | 10 (6/4/0) | 2 | 2 | no |  | 3 |
 Spread: 6 small (≤ 5 files), 10 medium (6-12), 4 large (13-20); main code changes
 in one module 5, two 10, three or more 5; 10 with docs. The split is computed from
 the diffs: a file in which only comments, Javadoc or imports change does not count for a
 module (six tasks have such gold files; the mining filter and the first versions of this
 table counted them). Grading reports these files and Gradle scripts as their own
 kinds of dependent (`comments`, `build`) and the code recall also without them (`code_changed`).
+
+**What the test commands enforce** (an agent's reading of the diffs and tests, nothing was run): in 8 tasks at least one gold dependent
+can stay as at the parent and the command still passes (`weak_test` in the task file says which; `bean-provider-...` is one of them because only the
+demanded abstract method enforces its five); `untested` notes other unchecked behaviour. The report gives success and file recall with
+and without those 8. `spel-simple-...`, `test-context-...` and `type-mismatch-...` have no code dependent to find at all, so they measure docs and
+tests only. Where a part of the change has several valid places (`equivalents`: the reader or the post-processor in `deferred-bean-registrar-...`, three pairs in
+`beans-max-nested-path-depth`), changing one counts for the group.
 
 **Descriptions** were drafted by agents from the commit message, the linked
 issue and the diff ([`groundtruth/commit_replay_spec.json`](groundtruth/commit_replay_spec.json),
@@ -1645,10 +1652,10 @@ about forgotten dependents, and only because the test command compiles every cha
 `cache-manager-reset-caches` passed with an interface default method alone while its description made the
 gold overrides optional; it was replaced by `retryable-method-retry-event` (same strata). A fourth agent checked the two reworded texts and the new one: no leak, nothing missing for the tests,
 but wrong facts in all three (for `deferred-bean-registrar-contains-bean` one that would have led to a file the commit does not
-change); all three now have its text, which nobody has reviewed again, and `weak_test` in the task file lists the gold
+change); all three now have its text, which the second PR review checked, and `weak_test` in the task file lists the gold
 dependents their test commands do not enforce. The seventh, a reserve, had to name a
 dependent (a Kotlin extension its module's tests compile against) and was
-dropped (12 reserves are left). No human has reviewed the descriptions.
+dropped (11 reserves are left). No human has reviewed the descriptions.
 Scope words an issue would use ("for both Spring MVC and WebFlux") are allowed
 and noted in the spec.
 
@@ -1702,12 +1709,13 @@ python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 
 python3 evals/agent/agent_eval.py --tasks $T precheck-edit --gold-runs 2   # needs a warm Gradle cache: the commands are offline
 python3 evals/agent/agent_eval.py --tasks $T check-tasks
 python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models --base $BASE_HOME
-python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-replay --conditions A,C,D \
+python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-replay --conditions none,C,D \
     --profile realistic --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
 ```
 
-Arms A (MCP server), C (what `myc setup-claude --no-agent` installs) and D
-(myceliums only, Bash allowlisted to file operations, git and `./gradlew`
+Arms: `none` (no myceliums: the issue's arm A, the baseline), C (what `myc setup-claude --no-agent` installs) and D
+(myceliums only; search taken away). The first versions of this plan said `A,C,D`: in the harness `A` is the MCP server alone, so that
+run would have had no baseline. Every arm's Bash is the hook's allowlist (below; file operations, git, `./gradlew`
 test runs); every arm has `Bash`, `Edit` and `Write`. Realistic profile:
 100-turn cap not stated in the prompt, 3 repetitions and the interleaved schedule of #182
 (repetition-major, tasks shuffled, the three arms adjacent per task with
@@ -1789,8 +1797,8 @@ misread as resolution failures (a regex that matched a harmless notice) and re-r
 | `spel-simple-context-restricted-conversion` | compile, 48 s | 2 of 2 | 18, 9 s |
 | `observation-record-handled-exception` | pending: 2 artifacts not cached | | |
 | `beans-max-nested-path-depth` | compile, 51 s | 2 of 2 | 28, 10 s |
-| `spel-big-power-result-limit` | pending: 3 artifacts not cached | | |
 | `jsonl-media-type-support` | pending: 1 artifacts not cached | | |
+| `test-context-cache-pause-mode` | pending: not run | | |
 | `retry-max-attempts-to-max-retries` | compile, 47 s | 2 of 2 | 43, 13 s |
 | `fn-request-bind-pathvars-headers` | tests, 89 s | 2 of 2 | 33, 16 s |
 | `jdbcclient-batch-entry-dsl` | compile, 59 s | 2 of 2 | 16, 10 s |
@@ -1809,7 +1817,9 @@ misread as resolution failures (a regex that matched a harmless notice) and re-r
 
 Median 62 s on the parent (max 91 s, cold) and 28 s for the first run on the commit. Pending tasks and their coordinates:
 [`groundtruth/commit_replay_pending.json`](groundtruth/commit_replay_pending.json) (the first failing resolution of each build; more may be
-missing). Nothing was fetched: each needs one online warm-up. `spel-big-power-result-limit` needs INTERNAL-SNAPSHOT BOMs, found missing online as
+missing). Nothing was fetched: they need one online warm-up, prepared but not run
+([`groundtruth/warm_gradle.py`](groundtruth/warm_gradle.py): one command, one working and wrapper path, no scan, no build cache;
+without `--go` it lists the builds, the hosts and the estimate). `spel-big-power-result-limit` needs INTERNAL-SNAPSHOT BOMs, found missing online as
 well; its stand-in is the reserve `test-context-cache-pause-mode`. Three tasks that passed online (`jsonl-...`, `observation-...`,
 `error-response-...`) are pending because their command now compiles modules whose dependencies were never fetched.
 
@@ -1840,28 +1850,35 @@ cache means no task output of another arm's session or of a precheck of the gold
 sessions' `GRADLE_OPTS` send HTTP(S) to a closed loopback port, with the Spring build's remote cache
 (`DEVELOCITY_CACHE_SERVER`) there too.
 
-**Isolation** (repositories marked `isolated`, the same in every arm; [`aeval/isolation.py`](aeval/isolation.py)).
-Before the PR review a session could read the gold files, later parents and the history clone, and A and C could use
-the network.
+**Isolation** (repositories marked `isolated`, the same in every arm; [`aeval/isolation.py`](aeval/isolation.py)). Two independent
+reviews found holes in the earlier versions (gold files, history and the network reachable; then a quoted `#` that ended the parser, brace
+expansion, and an incomplete list of closed places). This is the last round; the threat model below states what remains.
 
-* One PreToolUse hook on every tool (`bashcmd.py isolated-hook`): Read, Edit, Write, Grep, Glob and myceliums calls
-  stay in the working copy (and the session's own saved tool results); Bash is an allowlist with no path outside, no
-  substitution, no interpreter, no wrapper, no network program (`curl`, `git fetch`, ...); WebFetch, WebSearch and
-  unknown tools are refused; Gradle's wrapper files cannot be changed; a check that fails refuses.
-* All arms share arm D's allowlist, the Gradle rule and `| tail`, `| head`. A and C have **only** search in
-  addition: `Grep`, `Glob` and the shell's search and file reading programs (`grep`, `rg`, `find`, `ls`, `cat`,
-  `sed -n 'A,Bp'`, ...; `SEARCH_SHELL`); a unit test compares the generated settings and tool lists. This makes A and C
-  less free than a user's Claude Code (no `python`, no `awk`, no pipes into other programs).
-* macOS: the session, and the test command that grades it, run under `sandbox-exec`. The kernel refuses the data of
-  the harness cache (gold, parents, indexes), this repository and its sibling checkouts, the history clone, Claude's
-  other session files and the orchestrator's notes to every child process, also to a test the agent wrote;
-  `AEVAL_PROTECT` adds places (set it to the scratch directories of the preparation). Without `sandbox-exec` a run refuses to start.
-* Every row carries `isolation_audit`, from the transcript with tests of its own: attempts, refusals and what ran, per
-  kind (outside, network, Gradle without the flags), protected places in results or edits; `TOKENS.md` counts them per arm.
-* **Limits.** The kernel layer cannot deny the network (the session needs the model's API), so code the agent
-  writes and runs through Gradle could open a connection; names and times of protected files stay visible; the Spring
-  commits are public and may be in the model's training data; this guards a cooperative agent.
-  Checked with unit tests (among them the real sandbox with plain programs) and the mock-API probe below.
+* **Kernel allowlist** (macOS `sandbox-exec`, around the session and the test command that grades it; without it a run refuses to start). Under the home
+  directory and `/private/tmp` a session reads and writes only its working copy, its own temporary directory (index copy, hook, a fresh
+  `CLAUDE_CONFIG_DIR`, temporary files) and Gradle's home, without `build-cache-1`, stored scans and other builds' daemon logs; it reads
+  the CLI's binary, the JDK, the login keychain's files and, in C and D only, the `myc` binary and the embedding models. The profiles of the arms
+  differ in those two myc paths alone (unit test). Shell-parsing gaps no longer reach the gold.
+* **Hook** (PreToolUse on every tool, one script): tool calls stay in the working copy; Bash is an allowlist without interpreters, wrappers or network
+  programs, and a command the parser cannot fully account for (any expansion, an open quote, a continuation line) is refused, as is `..`;
+  WebFetch, WebSearch, unknown tools and changes to the Gradle wrapper are refused; a check that fails refuses.
+* **Same conditions.** All arms share D's allowlist, the Gradle rule and `| tail`, `| head`. `none` and C have only search in addition: `Grep`, `Glob` and the
+  shell's read-only search and text programs (`grep`, `rg`, `find`, `ls`, `cat`, `awk` without `system`/`getline`/pipes/redirections, `sed -n` printing, `sort`, ...).
+  I allowed `awk` and `sed -n` there because the kernel covers reads and they are how an agent slices grep output; interpreters stay out
+  because they could open connections, which nothing but the hook prevents.
+* **Direction of the bias.** Without scripting, bulk edits (a rename across files) cost one `Edit` per place in every arm, so absolute tokens and wall time are
+  above what a user would see. It should hurt `none` most: its usual `grep | xargs sed` and `python` scripts are gone, while D never had them; a result in favour of
+  myceliums is therefore partly a result against a restricted baseline, above all for `retry-max-attempts-to-max-retries`.
+* **Audit** per session, with raw-text tests that share no code with the hook (program names, addresses, absolute and parent paths, Gradle flags): what was refused, what
+  ran although the scan suspects it (*disagreements*, kept in `to_review` and to be read, because the scan also meets search patterns), kernel refusals, protected places in
+  results or edits. `TOKENS.md` counts them per arm, with the hook's refusals.
+* **Threat model.** A cooperative agent told to work in its checkout, audited per session. Not covered: the network is refused by the hook only (the session needs the model's
+  API), so code the agent writes and runs through Gradle could open a connection (the build's proxy points at a closed port); that code could also ask the keychain, whose
+  files the login needs, or inherit `CLAUDE_CODE_OAUTH_TOKEN` where the caller passes one instead; `/private/var/folders` (the user's temporary directory, which
+  Java uses), system directories and the names of all files stay visible; Spring's commits may be in the model's training data.
+* Checked: unit tests with the real sandbox and plain programs; 18 places by name with the session's profile (build cache, stored scans, Claude's history and other
+  projects, the other cache, gold, parents, history clone, checkouts, shell history, `.ssh`, all closed); login inside the profile (`auth status`, no model call; the first version of the
+  allowlist hid it, which would have failed every session); and the probe below. **Not yet: Gradle inside this profile** (Java is off); the run with Gradle was inside the previous one.
 * **Same instructions, one CLI.** Claude Code reads AGENTS.md only where there is no CLAUDE.md, and `setup-claude`
   writes one, so C alone missed Spring's AGENTS.md (found in the #182 review): the harness makes C's CLAUDE.md import it. Six of
   the 20 parents have an AGENTS.md (`spel-simple-...`, `observation-...`, `content-negotiation-...`, `client-builders-...`,
@@ -1885,24 +1902,23 @@ cache conventions are identical in both, the plugin class differs, and both chec
   tasks from a cache, which points to it having been read. Gradle turns the
   remote cache off with `--offline` (its documentation; not yet observed here).
 
-**Mock validation** (no model call, 23 November, Claude Code 2.1.331, graph-only index, shared path, under the sandbox):
-`probe --profile realistic --bash` on `spel-simple-context-restricted-conversion`; the scripted session searches, runs
-`myc callers`, reads and edits the primary file and runs the task's test command piped to `tail`.
+**Mock validation** (no model call, Claude Code 2.1.331, graph-only index, shared path), on `spel-simple-context-restricted-conversion`; the scripted session
+searches, runs `myc callers`, reads and edits the primary file and runs one command.
 
-| Arm | Isolation | Tools offered | Search | Graded |
-|---|---|---|---|---|
-| A | no problem; AGENTS.md in the first request | Bash, Edit, Glob, Grep, Read, Write + 9 myceliums tools | Grep ran | one file changed; Gradle ran offline in the session (43-45 s with compilation) and in the grading (9 s); the tests fail, as they must (the scripted edit is a comment) |
-| C | no problem; AGENTS.md and the routing block | as A | Grep ran | as A; setup-claude's files not counted |
-| D | no problem; AGENTS.md | without Grep and Glob | `grep` refused; the refusal names neither the checkout nor the hook | as A |
+| Arm | Isolation | Tools offered | Search | `myc callers` | Edit graded |
+|---|---|---|---|---|---|
+| none | no problem; AGENTS.md in the first request | Bash, Edit, Glob, Grep, Read, Write | Grep ran | `command not found`, as it must | yes |
+| C | no problem; AGENTS.md and the routing block | the same + 9 myceliums tools | Grep ran | answered from the index | yes; setup-claude's files not counted |
+| D | no problem; AGENTS.md | without Grep and Glob | refused; the refusal names neither the checkout nor the hook | answered from the index | yes |
 
-With the sessions' own profile, `cat` of the gold files, the task file, another parent and the preparation's notes is refused by the
-kernel and the working copy stays readable; the audit counted one refusal in D and nothing else. The mock answers every request with one
-message id, so `api_calls` is 1 there. The real-session path past the mock has not run.
+This is the probe of 24 November inside the allowlist profile, without any Gradle (its task file had `test_command: true`). The probe of 23 November (arms `A,C,D`, the previous,
+denylist profile) also ran the real test command in the session (43-45 s) and in the grading (9 s), offline; the tests failed as they must, the scripted edit being a comment. The mock
+gives every answer one message id, so `api_calls` is 1 there. No real session has run.
 
 ```bash
 python3 evals/agent/agent_eval.py --tasks $T index --repo spring-spel-simple-context-restricted-conversion --skip-embeddings --myc $MYC
 python3 evals/agent/agent_eval.py --tasks $T probe --label v183 --task spel-simple-context-restricted-conversion \
-    --conditions A,C,D --bash --profile realistic --timeout 400 --myc $MYC --grep SimpleEvaluationContext --callers withMethodResolvers \
+    --conditions none,C,D --bash --profile realistic --timeout 400 --myc $MYC --grep SimpleEvaluationContext --callers withMethodResolvers \
     --edit-file spring-expression/src/main/java/org/springframework/expression/spel/support/SimpleEvaluationContext.java \
     --edit-old "public final class SimpleEvaluationContext implements EvaluationContext {" \
     --edit-new "public final class SimpleEvaluationContext implements EvaluationContext { // probe" \

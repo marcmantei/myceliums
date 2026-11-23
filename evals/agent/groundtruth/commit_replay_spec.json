@@ -22,8 +22,7 @@
      ],
      "applied": "question replaced by this checker's text (wrong facts; its own text is not reviewed again)"
     }
-   },
-   "weak_test": "not enforced by the test command: spring-core/.../DefaultConversionService.java (comment only; cannot be enforced). There are no other gold code dependents: editing SimpleEvaluationContext alone passes."
+   }
   },
   {
    "id": "client-observation-nonstandard-method-none",
@@ -65,7 +64,8 @@
    },
    "build_overlay": [
     "spring-webmvc/spring-webmvc.gradle"
-   ]
+   ],
+   "weak_test": "A passing solution may skip all MVC and WebFlux call sites (webmvc tests are not run; the WebFlux test asserts only the context error). Even the core requirement is unchecked: recordHandledException implemented as context.setError(error) passes every listed test, because hasError and the 'exception' key value come from the context and no handler's onError / Observation.error call is asserted. Not enforced: UserController.java, UserController.java, ResponseEntityExceptionHandler.java, ResponseStatusExceptionResolver.java, ExceptionHandlerExceptionResolver.java, ResponseEntityExceptionHandler.java, DefaultHandlerExceptionResolver.java."
   },
   {
    "id": "spel-default-nesting-depth-200",
@@ -115,7 +115,22 @@
    "review": {
     "verdict": "ok",
     "comment": "Every new name the tests use is stated: DEFAULT_MAX_NESTED_PATH_DEPTH=100, set/getMaxNestedPathDepth on ConfigurablePropertyAccessor (tests call them on AbstractPropertyAccessor; adding them there is a dependent) and on DataBinder, the message suffix, the negative-value IAE message, and the DataBinder 'already initialized' ISE text. The depth semantics (limit inclusive, 0 still allows simple/indexed/mapped access) are also stated. The last sentence (keep recursing through the protected getPropertyAccessorForPropertyPath) borders on over-specification. It is justified: BeanWrapperTests counts 3 invocations of an override, and a depth-threading private recursion would fail that test. The parent already recurses this way, so the sentence only forbids a regression. The test_command adds DirectFieldAccessorTests, which is not in the overlay; that is correct because it inherits from the changed abstract AbstractPropertyAccessorTests. The deep-path tests (100_000 segments) are deterministic once the depth check runs before the recursion."
-   }
+   },
+   "untested": "In DataBinder only nested record arguments are tested for constructor binding; a passing solution may omit the limit for indexed and mapped parameters (createList/createMap/createArray/createIndexedValue), which the question explicitly requires. DataBinder's own rejection of negative values is not tested either.",
+   "equivalents": [
+    [
+     "spring-beans/src/main/java/org/springframework/beans/AbstractPropertyAccessor.java",
+     "spring-beans/src/main/java/org/springframework/beans/AbstractNestablePropertyAccessor.java"
+    ],
+    [
+     "spring-context/src/main/java/org/springframework/validation/BeanPropertyBindingResult.java",
+     "spring-context/src/main/java/org/springframework/validation/DataBinder.java"
+    ],
+    [
+     "spring-context/src/main/java/org/springframework/validation/DirectFieldBindingResult.java",
+     "spring-context/src/main/java/org/springframework/validation/DataBinder.java"
+    ]
+   ]
   },
   {
    "id": "spel-parser-configuration-builder",
@@ -186,7 +201,8 @@
    "review": {
     "verdict": "ok",
     "comment": "MediaType.APPLICATION_JSONL / APPLICATION_JSONL_VALUE stated; ordering 'directly after application/x-ndjson' is stated (HttpMessageWriterViewTests uses containsExactly). MVC content-type behaviour stated (ReactiveTypeHandlerTests). Not mentioned: spring-mvc.xsd, three adoc pages, the individual codecs - good for the dependent metric."
-   }
+   },
+   "weak_test": "A passing solution needs only MediaType, the default MIME types of JacksonJsonEncoder and ReactiveTypeHandler. All other codecs (Gson, Jackson 2, Jackson decoder, Kotlin, Protobuf) may be skipped, and 'treat it as a streaming media type' is not checked for any codec, including JacksonJsonEncoder. Not enforced: GsonEncoder.java, Jackson2CodecSupport.java, Jackson2JsonEncoder.java, JacksonJsonDecoder.java, KotlinSerializationJsonDecoder.java, KotlinSerializationJsonEncoder.java, ProtobufJsonEncoder.java, spring-mvc.xsd."
   },
   {
    "id": "test-context-cache-pause-mode",
@@ -204,7 +220,8 @@
     "verdict": "ok",
     "comment": "It states everything the tests need: CONTEXT_CACHE_PAUSE_PROPERTY_NAME = \"spring.test.context.cache.pause\", the nested enum ContextCache.PauseMode {ALWAYS, NEVER}, the static ContextCacheUtils.retrievePauseMode() defaulting to ALWAYS, case-insensitive parsing with whitespace stripped (the tests use \"\\talways\\u000B\", which trim()/strip() both handle), the exact IllegalArgumentException message, and new DefaultContextCache(int, PauseMode). The test helpers (ContextCacheTestUtils, TestContextTestUtils.buildTestContext, EventTracker, DisplayNameCustomizerFactory) exist at the parent. No leaks: the SpringProperties Javadoc @see and the two adoc pages are left as dependents. Three primaries is justified because the question names all three types and each gets new public API; 6 dependents remain. The description is detailed, but every detail is asserted by a test."
    },
-   "replaces": "spel-big-power-result-limit (parent not buildable; same size and docs stratum, one module with code changes as well)"
+   "replaces": "spel-big-power-result-limit (parent not buildable; same size and docs stratum, one module with code changes as well)",
+   "untested": "No test checks that the existing DefaultContextCache() and DefaultContextCache(int) constructors use ContextCacheUtils.retrievePauseMode(): a solution whose old constructors hard-code ALWAYS passes, so the property may have no effect on the real cache."
   },
   {
    "id": "retry-max-attempts-to-max-retries",
@@ -220,7 +237,8 @@
    "review": {
     "verdict": "ok",
     "comment": "This is a public-API rename with unchanged semantics. The tests fail on the parent only through compile errors (Retryable.maxRetries/maxRetriesString, RetryPolicy.withMaxRetries, Builder.maxRetries) and through the changed message texts ('Invalid maxRetries (-1)', the custom-BackOff message). All of these are given verbatim. The dependents (RetryAnnotationBeanPostProcessor, AbstractRetryInterceptor, the MethodRetrySpec record component, the RetryTemplate Javadoc, resilience.adoc) are not named. Most of them surface through compile errors, except the MethodRetrySpec component rename and the docs, so the dependent signal is weaker than in behavioural tasks; still usable. MaxAttemptsRetryPolicyTests is a deleted gold file in the overlay. apply_gold removes deleted overlay files, so the stale test does not break spring-core test compilation. DEFAULT_MAX_RETRIES is not used by the tests but is a legitimate part of the requested API."
-   }
+   },
+   "weak_test": "A passing solution may leave the MethodRetrySpec component named maxAttempts. The tests also do not check that the old names are gone: keeping maxAttempts members as aliases would compile, pass and remove the compile pressure on the two dependents. Not enforced: MethodRetrySpec.java."
   },
   {
    "id": "fn-request-bind-pathvars-headers",
@@ -235,7 +253,8 @@
    "review": {
     "verdict": "ok",
     "comment": "Solvable: the tests now send 'bar' as a header instead of a query parameter and expect it bound. No new public API is needed; the new ExtendedWebExchangeDataBinder(Object) constructor is optional because the (Object, String) constructor exists. 'Both WebFlux and Spring MVC functional endpoints' is a scope phrase from the commit. The test_command covers both overlay classes."
-   }
+   },
+   "weak_test": "A passing solution may skip the new ExtendedWebExchangeDataBinder constructor (harmless). More important: the tests bind only request headers; binding URI path variables, the case the question leads with, is not tested in either stack. Not enforced: ExtendedWebExchangeDataBinder.java."
   },
   {
    "id": "retry-match-exception-causes",
@@ -282,7 +301,8 @@
    "review": {
     "verdict": "ok",
     "comment": "Clean and sufficient. The test expects {2} to resolve to 'String' (simple name). The question states the simple name, the empty-string fallback, and an unchanged default detail. It names only the primary; the adoc message-args table is left as a dependent. The test_command is correct."
-   }
+   },
+   "untested": "Only a String required type is tested. The explicit 'empty string when the required type is unknown' branch is not: ex.getRequiredType().getSimpleName() without a null check passes but throws a NullPointerException for an unknown type."
   },
   {
    "id": "servlet-response-ignore-body-flush",
@@ -297,7 +317,8 @@
    "review": {
     "verdict": "ok",
     "comment": "It states the constant BODY_FLUSH_ENABLED = \"spring.http.response.flush.enabled\", the default no-op body flush, and that true restores pass-through. Both tests are mock-based. 'The property is read when a ServletServerHttpResponse is created' is a small over-specification (reading it lazily would also pass) but harmless. No docs or modules are named. The primary is correct; HttpHeadersReturnValueHandler, StreamingResponseBodyReturnValueHandler and appendix.adoc remain dependents."
-   }
+   },
+   "weak_test": "Only ServletServerHttpResponseTests runs: a solution that makes body flushes a no-op and leaves StreamingResponseBodyReturnValueHandler flushing the (now non-flushing) stream, and HttpHeadersReturnValueHandler unchanged, passes although the question requires streaming cases to keep flushing the response. Not enforced: HttpHeadersReturnValueHandler.java, StreamingResponseBodyReturnValueHandler.java."
   },
   {
    "id": "content-negotiation-no-fallback-mapping",
@@ -425,7 +446,13 @@
      "applied": "question replaced by this checker's text (wrong facts; its own text is not reviewed again)"
     }
    },
-   "weak_test": "not enforced by the test command: spring-context/.../ConfigurationClassBeanDefinitionReader.java: if only ConfigurationClassPostProcessor runs deferred registrars at the end, the early run by the unchanged reader finds no testBean and does nothing, so all tests pass (deferred registrars then run twice).; spring-context/.../ConfigurationClassPostProcessor.java: not enforced on its own; deferring to the end of ConfigurationClassBeanDefinitionReader.loadBeanDefinitions passes too (both test configurations are in one batch). At least one of the two must change (deferredBeanRegistrarWithConditionMet).; ConfigurationClassPostProcessor.getOrder() change, i.e. context-registered deferred registrars running after configuration classes: GenericApplicationContextTests uses no configuration classes.; Ordered/@Order of several deferred registrars.; spring-context/.../annotation/Import.java (comment only)."
+   "weak_test": "A passing solution may invoke imported deferred registrars twice (early in the reader and again at the end), or only at the end of one reader batch. Ordering of several deferred registrars (Ordered/@Order), and programmatic deferred registrars seeing beans from configuration classes (post-processor order), are not tested. Not enforced: ConfigurationClassBeanDefinitionReader.java.",
+   "equivalents": [
+    [
+     "spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassBeanDefinitionReader.java",
+     "spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassPostProcessor.java"
+    ]
+   ]
   },
   {
    "id": "resource-loader-classpath-all-get-resource",
@@ -502,7 +529,8 @@
    "review": {
     "verdict": "ok",
     "comment": "Both new signatures are stated exactly; the tests only call StandardApiVersionDeprecationHandler.handleVersion with the new signatures. Tests cannot check that the handler is actually passed through by the handler mappings, so they mostly verify compilation; the dependents (ApiVersionStrategy.handleDeprecations in both modules, DefaultApiVersionStrategy, StandardApiVersionDeprecationHandler, both AbstractHandlerMapping) are well hidden."
-   }
+   },
+   "untested": "No test checks which handler object is passed. Because ApiVersionStrategy.handleDeprecations is not fixed by the question, a solution that passes any object from DefaultApiVersionStrategy (or adds an overload) and leaves both ApiVersionStrategy and both AbstractHandlerMapping files untouched compiles and passes without supplying the selected handler."
   },
   {
    "id": "bean-provider-parameterized-type-reference",
@@ -524,7 +552,7 @@
      "applied": "question replaced by this reviewer's text (its own text is not reviewed again)"
     }
    },
-   "weak_test": "the dependents are compile errors (the method is abstract), so finding them needs no search"
+   "weak_test": "Enforcement is by compile error only and depends on the method being abstract, which the question demands but no test checks: a default method in BeanFactory passes without touching any dependent. Apart from DefaultListableBeanFactory the bodies are never executed, so a stub there passes."
   },
   {
    "id": "sync-task-executor-concurrency-throttle",
@@ -557,7 +585,8 @@
    "review": {
     "verdict": "ok",
     "comment": "The tests need public setDefaultCharset(Charset) (stated) and UnsupportedCharsetException from setDefaultEncoding(\"BOGUS\") at configuration time (stated). The removed NoSuchMessageException test for 'argh' matches the described behaviour change. Not over-specified. DefaultPropertiesPersister (Javadoc) and the subclasses are left for the agent."
-   }
+   },
+   "weak_test": "Changing AbstractResourceBasedMessageSource alone passes: the requirement that both resource-bundle message sources use the Charset directly when reading files is not observable in the tests. Not enforced: ReloadableResourceBundleMessageSource.java, ResourceBundleMessageSource.java."
   },
   {
    "id": "retryable-method-retry-event",
@@ -585,7 +614,7 @@
     }
    },
    "replaces": "cache-manager-reset-caches (same strata)",
-   "weak_test": "not enforced by the test command: spring-core/.../RetryPolicy.java and spring-context/.../Retryable.java (comment only).; Within primary files: the Integer.MAX_VALUE retry cap in RetryTemplate, the Flux branch, the timeout abort event and the event on interruption have no assertion."
+   "untested": "Only Mono and imperative retry exhaustion are tested. A passing solution may omit the events for multi-value publishers (Flux) and the final event for timeouts (imperative and reactive) and interruption; a post-processor registered directly as a bean is exercised but its events are not asserted."
   },
   {
    "id": "httpexchange-version-mapping",

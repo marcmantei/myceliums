@@ -97,14 +97,23 @@ def gold_paths(task: dict) -> list[str]:
     return [g if isinstance(g, str) else g["path"] for g in task.get("gold_files") or []]
 
 
-def changed_files(workdir: Path, baseline: dict[str, str] | None = None) -> list[str]:
+def changed_files(workdir: Path, baseline: dict[str, str] | None = None, base: str | None = None) -> list[str]:
     """Files that differ from ``HEAD`` in the working copy: modified, added,
     deleted, renamed (both paths) and untracked (``git status``).
+
+    With ``base`` (a commit) they are the files that differ from it, so that
+    changes the agent committed count like uncommitted ones.
 
     ``baseline`` (from :func:`snapshot` before the session) leaves out the
     files the harness changed and the agent did not touch afterwards: what
     ``myc setup-claude`` writes in arm C (``CLAUDE.md``, ``.mcp.json``)."""
     files = _status_files(workdir)
+    if base:
+        out = subprocess.run(["git", "-C", str(workdir), "diff", "--name-only", "--no-renames", "-z", base],
+                             capture_output=True, text=True, timeout=120)
+        if out.returncode != 0:
+            raise RuntimeError(f"git diff {base} failed in {workdir}: {out.stderr.strip()[:200]}")
+        files = sorted(set(files) | {f for f in out.stdout.split("\0") if f})
     if baseline:
         files = [f for f in files if f not in baseline or _digest(workdir / f) != baseline[f]]
     return files
@@ -152,6 +161,42 @@ def _prf(gold: set[str], got: set[str]) -> dict:
             "n_gold": len(gold), "n_changed": len(got)}
 
 
+def report_lines(rows: list[dict]) -> list[str]:
+    """Edit tasks per condition, over all tasks and without those whose test
+    command does not enforce every gold dependent (``weak_test``)."""
+    rows = [r for r in rows if r.get("edit")]
+    if not any("weak_test" in r for r in rows):
+        return []
+
+    def mean(vals):
+        vals = [v for v in vals if v is not None]
+        return f"{sum(vals) / len(vals):.2f}" if vals else "–"
+
+    def part(r, key, field="recall"):
+        return ((r["edit"].get("files_by_kind") or {}).get(key) or {}).get(field)
+
+    def kept(r, key):
+        k = ((r["edit"].get("dependents") or {}).get("by_kind") or {}).get(key) or {}
+        return 1 - len(k["forgotten"]) / k["n"] if k.get("n") else None
+
+    out = ["## Edit tasks", "",
+           "Means over sessions. *Success* is the test command. A task is weakly tested when its test command does not "
+           "enforce every gold dependent (`weak_test` in the task file); its success says less, so the table gives both. "
+           "*Code*: recall of gold files whose code changes; *remote*, *docs*, *tests*: share of those dependents touched.",
+           "", "| Condition | Tasks | Sessions | Success | Code | Code precision | Remote | Docs | Tests |",
+           "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for name, keep in (("all", lambda r: True), ("without weakly tested", lambda r: not r.get("weak_test"))):
+        for c in sorted({r["condition"] for r in rows}):
+            own = [r for r in rows if r["condition"] == c and keep(r)]
+            if own:
+                out.append(f"| `{c}` | {name} | {len(own)} | {mean([float(r['edit']['success']) for r in own])} | "
+                           f"{mean([part(r, 'code_changed') for r in own])} | "
+                           f"{mean([part(r, 'code_changed', 'precision') for r in own])} | "
+                           f"{mean([kept(r, 'remote') for r in own])} | {mean([kept(r, 'docs') for r in own])} | "
+                           f"{mean([kept(r, 'tests') for r in own])} |")
+    return out + [""]
+
+
 def grade_edit(task: dict, changed: list[str], tests: dict | None, threshold: float = 0.8) -> dict:
     """Grade the files a session changed against the task's gold files."""
     gold = set(gold_paths(task))
@@ -166,7 +211,7 @@ def grade_edit(task: dict, changed: list[str], tests: dict | None, threshold: fl
     if "strata" in task:
         skip = {x["path"] for x in task["gold_files"] if x.get("comment_only")}
         keep = lambda fs: {f for f in fs if file_kind(f) == "code" and f not in skip and ".gradle" not in f.rsplit("/", 1)[-1]}  # noqa: E731
-        by_kind["code_changed"] = _prf(keep(gold), keep(got))
+        by_kind["code_changed"] = _prf(keep(gold), keep(with_equivalents(task, got)))
     forgotten = forgotten_dependents(task, got)
     overall = _prf(gold, got)
     passed = None if tests is None else bool(tests.get("passed"))
@@ -203,6 +248,7 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
         isinstance(g, dict) and "status" in g for g in task.get("gold_files") or []) and "strata" in task else ())
     out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in kinds},
            "other_module": {"n": 0, "forgotten": []}}
+    changed = with_equivalents(task, changed)
     for f in sorted(set(gold_paths(task)) - primary):
         kind = file_kind(f)
         if kind == "code":
@@ -220,6 +266,17 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
             out["by_kind"][kind]["forgotten"].append(f)
             if far:
                 out["other_module"]["forgotten"].append(f)
+    return out
+
+
+def with_equivalents(task: dict, changed: set[str]) -> set[str]:
+    """``changed`` plus the gold files of every group of ``equivalents`` one
+    member of which was changed: places where the same part of the change can
+    go, so choosing one never counts as forgetting the other (#183)."""
+    out = set(changed)
+    for group in task.get("equivalents") or []:
+        if out & set(group):
+            out |= set(group)
     return out
 
 

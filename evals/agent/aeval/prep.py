@@ -394,6 +394,9 @@ def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list
                             f"{repo['gold_commit'][:12]}; run `agent_eval.py precheck-edit`")
         elif (pre.get("test_overlay") or None) != (t.get("test_overlay") or None):
             problems.append(f"{tid}: the precheck ran with another test_overlay; run `agent_eval.py precheck-edit`")
+    for group in t.get("equivalents") or []:
+        if len(group) < 2 or not set(group) <= set(paths):
+            problems.append(f"{tid}: equivalents must be groups of gold files: {group}")
     for a in t.get("allowed_commands") or []:
         if isinstance(a, str) and a.split():
             continue
