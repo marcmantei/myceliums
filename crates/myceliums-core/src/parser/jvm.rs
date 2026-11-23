@@ -103,7 +103,7 @@ impl SourceParser {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let name = self.node_text(name_node, source).to_string();
                     symbols.push(ParsedSymbol {
-                        name,
+                        name: name.clone(),
                         kind: SymbolKind::Interface,
                         start_line: node.start_position().row as u32 + 1,
                         end_line: node.end_position().row as u32 + 1,
@@ -112,7 +112,27 @@ impl SourceParser {
                         parent_name: parent.map(|s| s.to_string()),
                         metadata: None,
                     });
+                    // Its elements are methods: `ann.value()` calls one (#177).
+                    if let Some(body) = node.child_by_field_name("body") {
+                        self.extract_java_symbols(body, source, symbols, Some(&name));
+                        return;
+                    }
                 }
+            }
+            "annotation_type_element_declaration" => {
+                if let Some(name_node) = node.child_by_field_name("name") {
+                    symbols.push(ParsedSymbol {
+                        name: self.node_text(name_node, source).to_string(),
+                        kind: SymbolKind::Method,
+                        start_line: node.start_position().row as u32 + 1,
+                        end_line: node.end_position().row as u32 + 1,
+                        signature: self.extract_java_signature(node, source),
+                        content: self.node_text(node, source).to_string(),
+                        parent_name: parent.map(|s| s.to_string()),
+                        metadata: None,
+                    });
+                }
+                return;
             }
             "method_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
@@ -223,7 +243,7 @@ impl SourceParser {
             .map(|n| self.node_text(n, source).to_string());
         let line = node.start_position().row as u32 + 1;
         match (node.kind(), name) {
-            ("method_declaration", Some(name)) => {
+            ("method_declaration" | "annotation_type_element_declaration", Some(name)) => {
                 if let Some(ty) = node.child_by_field_name("type") {
                     out.push(DeclaredTypes {
                         name,
@@ -284,13 +304,21 @@ impl SourceParser {
         supertypes
     }
 
+    /// The declaration up to its body: annotations, modifiers, name and the
+    /// whole parameter list, also for a method without a body whose
+    /// annotations stand on lines of their own (`@Deprecated(since = "6.0")`,
+    /// `@SuppressWarnings({"a", "b"})` before the name, #177).
     fn extract_java_signature(&self, node: Node, source: &[u8]) -> String {
         let text = self.node_text(node, source);
-        if let Some(pos) = text.find('{') {
-            text[..pos].trim().to_string()
-        } else {
-            text.lines().next().unwrap_or("").trim().to_string()
-        }
+        let end = node
+            .child_by_field_name("body")
+            .map_or(text.len(), |body| body.start_byte() - node.start_byte());
+        text.get(..end)
+            .unwrap_or(text)
+            .trim()
+            .trim_end_matches(';')
+            .trim_end()
+            .to_string()
     }
 
     pub(super) fn extract_java_calls(
@@ -560,6 +588,19 @@ impl SourceParser {
                     None => steps.push(ExpressionStep::Ident(name)),
                 }
                 steps.push(ExpressionStep::Call);
+            }
+            // `Outer.this`: the enclosing instance, a value of type Outer.
+            "field_access"
+                if node
+                    .child_by_field_name("field")
+                    .is_some_and(|f| f.kind() == "this") =>
+            {
+                match node.child_by_field_name("object") {
+                    Some(object) => steps.push(ExpressionStep::New(java_type_name(
+                        self.node_text(object, source),
+                    ))),
+                    None => steps.push(ExpressionStep::This),
+                }
             }
             "field_access" => {
                 if let Some(object) = node.child_by_field_name("object") {

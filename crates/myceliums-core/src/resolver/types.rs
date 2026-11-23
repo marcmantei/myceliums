@@ -102,13 +102,22 @@ impl CallResolver {
             },
             ExpressionStep::New(name) => self.type_ty(site, name, depth + 1),
             ExpressionStep::Literal => Ty::External,
-            ExpressionStep::Ident(name) => self.ident_ty(site, name, depth + 1),
+            ExpressionStep::Ident(name) => {
+                let called = rest.first() == Some(&ExpressionStep::Call);
+                self.ident_ty(site, name, called, depth + 1)
+            }
             ExpressionStep::Field(_) | ExpressionStep::Call | ExpressionStep::Index => Ty::Unknown,
         };
-        for step in rest {
+        let methods_apart = super::separate_method_namespace(site.file);
+        for (i, step) in rest.iter().enumerate() {
+            // `x.name()` in Java is a method even where x has a field `name`.
+            let method = methods_apart && rest.get(i + 1) == Some(&ExpressionStep::Call);
             ty = match (ty, step) {
                 (Ty::External, _) => return Ty::External,
                 (Ty::Unknown, _) => return Ty::Unknown,
+                (Ty::Instance(class), ExpressionStep::Field(name)) if method => {
+                    self.member_value(class, name, depth + 1)
+                }
                 (Ty::Instance(class), ExpressionStep::Field(name)) => {
                     match self.field_ty(class, name, depth + 1) {
                         Some(ty) => ty,
@@ -118,6 +127,7 @@ impl CallResolver {
                 (Ty::Class(class), ExpressionStep::Field(name)) => {
                     match self.members_of(class, name).as_slice() {
                         [member] if self.defs[*member].is_class_like() => Ty::Class(*member),
+                        [] if method => self.member_value(class, name, depth + 1),
                         [] => self
                             .field_ty(class, name, depth + 1)
                             .unwrap_or_else(|| self.member_value(class, name, depth + 1)),
@@ -208,21 +218,25 @@ impl CallResolver {
     /// a field or method of the enclosing class (Java), a class, an import, a
     /// function in scope. In a language whose bindings are extracted, a name
     /// none of these knows is a global or built-in: [`Ty::External`].
-    fn ident_ty(&self, site: &Site, name: &str, depth: u32) -> Ty {
+    ///
+    /// `called`: the name is called (`name()`). In Java a call never reaches
+    /// a variable or field, only a method.
+    fn ident_ty(&self, site: &Site, name: &str, called: bool, depth: u32) -> Ty {
         if name == "Self" {
             return self.enclosing_class(site).map_or(Ty::Unknown, Ty::Class);
         }
-        if let Some((file, index, binding)) = self.binding(site, name) {
+        let values = !(called && super::separate_method_namespace(site.file));
+        if let Some((file, index, binding)) = self.binding(site, name).filter(|_| values) {
             return self.binding_ty(file, index, binding, depth);
         }
         if implicit_this(site.family) {
-            for class in self.enclosing_classes(site) {
+            for class in self.enclosing_classes(site).into_iter().filter(|_| values) {
                 if let Some(ty) = self.field_ty(class, name, depth) {
                     return ty;
                 }
             }
             let members: Vec<DefId> = self
-                .enclosing_members(site, name)
+                .enclosing_members(site, name, depth)
                 .into_iter()
                 .filter(|&id| self.defs[id].is_function_like())
                 .collect();
