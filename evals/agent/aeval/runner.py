@@ -637,6 +637,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             api = res.get("api_error_status")
             if (isinstance(api, int) and api in TRANSIENT_API_STATUS) or TRANSIENT_TEXT.search(text or ""):
                 status = "api_error"
+            elif returncode is not None and (returncode < 0 or returncode in (130, 137, 143)):
+                status = "crash"  # killed from outside (SIGINT/SIGKILL/SIGTERM): infrastructure, retried (#182)
             else:
                 status = "error"
         else:

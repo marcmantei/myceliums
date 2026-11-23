@@ -1158,7 +1158,8 @@ and competing jobs is kept for the run.
 
 **Harness change before the main run:** a session cut off by the account's
 usage limit could be recorded as a final `timeout` or `error` (F1 0); it is
-now always `usage_limit`, not final, and re-run
+now always `usage_limit`, not final, and re-run; a session killed from outside
+(SIGKILL, SIGTERM) is a `crash`, also not final
 (`tests/test_schedule.py`, `UsageLimit`). No stored session was affected.
 
 ## Token attribution and cost (#178)

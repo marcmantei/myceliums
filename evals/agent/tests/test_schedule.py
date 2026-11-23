@@ -88,13 +88,13 @@ class InterleavedSchedule(unittest.TestCase):
 class UsageLimit(unittest.TestCase):
     """A session the account's limit cut off is never final: it would count as its arm's failure."""
 
-    def _status(self, *events, timed_out=False):
+    def _status(self, *events, timed_out=False, returncode=0):
         r = _runner(1)
         task = dict(r.tasks[0], answer_kind="symbols", gold=[{"name": "A.b"}])
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / "t.jsonl"
             p.write_text("".join(json.dumps(e) + "\n" for e in events))
-            row = r._summarise(WorkItem(task, "none", 1), 1, p, 1.0, timed_out, 0)
+            row = r._summarise(WorkItem(task, "none", 1), 1, p, 1.0, timed_out, returncode)
         return row["status"], row["final"]
 
     @staticmethod
@@ -109,6 +109,13 @@ class UsageLimit(unittest.TestCase):
     def test_a_limit_that_ends_in_the_timeout(self):
         ev = {"type": "rate_limit_event", "rate_limit_info": {"status": "rejected"}}
         self.assertEqual(self._status(ev, timed_out=True), ("usage_limit", False))
+
+    def test_a_session_killed_from_outside_is_retried(self):
+        res = {"type": "result", "subtype": "error_during_execution", "is_error": True, "result": ""}
+        for code in (-9, -15, 137, 143):
+            self.assertEqual(self._status(res, returncode=code), ("crash", False), code)
+            self.assertEqual(self._status(returncode=code), ("crash", False), code)
+        self.assertEqual(self._status(res, returncode=1), ("error", True))
 
     def test_ordinary_endings_stay_final(self):
         self.assertEqual(self._status(timed_out=True), ("timeout", True))
