@@ -3354,7 +3354,9 @@ public class Uses {
             );
         }
         // `get("/a")` also keeps `get(URI)` (ambiguous): only the argument's
-        // type rules it out, and the resolver selects overloads by arity.
+        // type rules it out, and the resolver selects overloads by arity
+        // (#186).
+        assert!(edges.contains(&edge("fetch", "get", 34)), "{edges:?}");
         for wrong in [edge("all", "slice", 11), edge("all", "slice", 14)] {
             assert!(!edges.contains(&wrong), "{wrong:?} in {edges:?}");
         }

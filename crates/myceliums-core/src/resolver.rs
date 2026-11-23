@@ -875,9 +875,14 @@ impl CallResolver {
 
     /// Of several overloads (Java), the ones that can take `arg_count`
     /// arguments: a varargs method takes its fixed parameters and any
-    /// number more (`get(String, Object...)` takes `get("/")`, #177). One
-    /// left is the target; several are each linked, as ambiguous; none (a
-    /// signature the resolver misread) leaves the candidates as they were.
+    /// number more (`get(String, Object...)` takes `get("/")`, #177).
+    ///
+    /// - Exactly one overload with a readable signature fits: it is the
+    ///   target, `exact` — an overload whose signature the resolver cannot
+    ///   read does not take that away (as before #177).
+    /// - Otherwise the ones that fit, or might (unreadable), are each
+    ///   linked, as ambiguous, when that rules any out.
+    /// - Else the candidates stay as they were.
     fn by_arity(
         &self,
         targets: Vec<(DefId, CallResolution)>,
@@ -886,22 +891,25 @@ impl CallResolver {
         let Some(count) = arg_count.filter(|_| targets.len() > 1) else {
             return targets;
         };
-        let matching: Vec<DefId> = targets
-            .iter()
-            .map(|&(id, _)| id)
-            .filter(|&id| self.defs[id].params.is_none_or(|p| p.accepts(count)))
+        let ids = || targets.iter().map(|&(id, _)| id);
+        let fits: Vec<DefId> = ids()
+            .filter(|&id| self.defs[id].params.is_some_and(|p| p.accepts(count)))
             .collect();
-        match matching.as_slice() {
+        if let [one] = fits.as_slice() {
             // The overloads were found exactly; only their number made the
             // call look ambiguous.
-            [one] => vec![(*one, CallResolution::Exact)],
-            [] => targets,
-            _ if matching.len() < targets.len() => matching
+            return vec![(*one, CallResolution::Exact)];
+        }
+        let may_fit: Vec<DefId> = ids()
+            .filter(|&id| self.defs[id].params.is_none_or(|p| p.accepts(count)))
+            .collect();
+        if !may_fit.is_empty() && may_fit.len() < targets.len() {
+            return may_fit
                 .into_iter()
                 .map(|id| (id, CallResolution::Ambiguous))
-                .collect(),
-            _ => targets,
+                .collect();
         }
+        targets
     }
 
     /// `super(...)`: the base class's constructor, else the base class.
@@ -2292,6 +2300,13 @@ mod tests {
                 signature: "public int add(T row, int copies)".to_string(),
                 uid: "src/Repo.java::Repo.add(T, int)".to_string(),
                 ..method("src/Repo.java", "Repo.add", (5, 9))
+            },
+            // An overload whose signature cannot be read (no `add(` in it)
+            // does not demote the one readable fit to ambiguous.
+            CodeSymbol {
+                signature: "@Generated".to_string(),
+                uid: "src/Repo.java::Repo.add(?)".to_string(),
+                ..method("src/Repo.java", "Repo.add", (10, 12))
             },
             class("src/Report.java", "Report", (1, 5)),
             method("src/Report.java", "Report.Report", (2, 3)),
