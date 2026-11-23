@@ -59,20 +59,16 @@ pub(crate) fn render(
         Subject::Symbol(s) => stats.ambiguous_named(&s.name).map(|a| (s.name.as_str(), a)),
         Subject::Several(_) => None,
     };
-    if hits.is_empty() && ambiguous.is_none() && stats.linked == 0 {
-        return String::new();
-    }
     let label = match subject {
         Subject::Symbol(s) => s.qualified_name.as_str(),
         Subject::Several(label) => label,
     };
-    let mut out = format!("\nDocs mentioning {label}");
-    if hits.is_empty() {
-        out.push_str(": none linked.\n");
-    } else {
+    // Nothing linked says nothing: no line, unless unlinked mentions follow.
+    let mut out = String::new();
+    if !hits.is_empty() {
         let comments = hits.iter().filter(|h| h.in_comment()).count();
         out.push_str(&format!(
-            " ({}: {} in docs, {comments} in doc comments):\n",
+            "\nDocs mentioning {label} ({}: {} in docs, {comments} in doc comments):\n",
             hits.len(),
             hits.len() - comments
         ));
@@ -93,10 +89,12 @@ pub(crate) fn render(
             };
             out.push_str(&format!("Next (docs): {next}\n"));
         }
+    } else if ambiguous.is_some() {
+        out.push('\n');
     }
     if let Some((name, a)) = ambiguous {
         out.push_str(&format!(
-            "Not linked: {} mention(s) of `{name}` that several symbols could be, e.g. {}\n",
+            "Not linked: {} doc mention(s) of `{name}` that several symbols could be, e.g. {}\n",
             a.count,
             a.at.join(", ")
         ));
@@ -187,7 +185,7 @@ mod tests {
             "\nDocs mentioning Store (7: 6 in docs, 1 in doc comments):\n\
              docs/store.adoc\n  :3 section \"Part 0\"\n  :13 section \"Part 1\"\n  :23 section \"Part 2\"\n  :33 section \"Part 3\"\n  :43 section \"Part 4\"\n\
              Next (docs): query_knowledge(repo_id=\"repo\", query=\"src/Store.java:Store\") lists every mention\n\
-             Not linked: 2 mention(s) of `Store` that several symbols could be, e.g. docs/other.md:4\n"
+             Not linked: 2 doc mention(s) of `Store` that several symbols could be, e.g. docs/other.md:4\n"
         );
         // Only doc comments beyond the first five: the member is named.
         let text = render(&hits[5..], Some(&stats), Subject::Symbol(&store), "repo");
@@ -207,9 +205,10 @@ mod tests {
             linked: 3,
             ..Default::default()
         };
+        // Nothing linked: no line at all.
         assert_eq!(
             render(&[], Some(&some), Subject::Several("src/Store.java"), "r"),
-            "\nDocs mentioning src/Store.java: none linked.\n"
+            ""
         );
     }
 }

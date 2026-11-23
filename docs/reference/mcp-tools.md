@@ -352,8 +352,6 @@ dependents, with a `Next:` line (`impact_of_change(repo_id="r",
 symbol_name="x", depth=3)`; for the uncommitted diff the call without a
 diff, which reads `git diff HEAD` again).
 
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
 **Docs mentioning** (#180). Last, in every mode, the docs that name what
 changes: Markdown, MDX and AsciiDoc sections whose code spans, roles or API
 links name it, and doc comments (`{@link}`, `@see`, `<see cref>`, KDoc and

@@ -423,6 +423,7 @@ fn find_mentions(sources: &[CodeSymbol]) -> Vec<Found<'_>> {
 
 static ROLE: OnceLock<Regex> = OnceLock::new();
 static API_LINK: OnceLock<Regex> = OnceLock::new();
+static KDOC_LINK: OnceLock<Regex> = OnceLock::new();
 static JAVADOC_MACRO: OnceLock<Regex> = OnceLock::new();
 
 /// `(line, text, context, syntax)` of every mention in a document, outside
@@ -434,6 +435,10 @@ fn scan_document(content: &str, markup: Markup) -> Vec<(u32, String, String, Syn
     });
     let api = API_LINK.get_or_init(|| {
         Regex::new(r"(?:\{[\w-]*api[\w-]*\}\+*/?|/javadoc-api/)([A-Za-z_][\w/.$]*?)\.html(?:#([^\[\s+]*))?")
+            .expect("valid regex")
+    });
+    let kdoc = KDOC_LINK.get_or_init(|| {
+        Regex::new(r"\{[\w-]*kdoc[\w-]*\}\+*/?[\w.-]+/([A-Za-z_][\w.]*)/([\w/.-]*?)\.html")
             .expect("valid regex")
     });
     let javadoc = JAVADOC_MACRO
@@ -495,6 +500,11 @@ fn scan_document(content: &str, markup: Markup) -> Vec<(u32, String, String, Syn
                 }
                 out.push((n, text, context(), Syntax::ApiLink));
             }
+            for c in kdoc.captures_iter(line) {
+                if let Some(text) = kdoc_target(&c[1], &c[2]) {
+                    out.push((n, text, context(), Syntax::ApiLink));
+                }
+            }
             for c in javadoc.captures_iter(line) {
                 out.push((n, c[1].to_string(), context(), Syntax::ApiLink));
             }
@@ -504,6 +514,40 @@ fn scan_document(content: &str, markup: Markup) -> Vec<(u32, String, String, Syn
         }
     }
     out
+}
+
+/// The symbol a Dokka (KDoc) page names: `package` and the page path under
+/// it, `-co-web-filter/index` (a class, `CoWebFilter`), `-foo/bar-baz` (a
+/// member `Foo.barBaz`), `co-router` (a top-level function `coRouter`);
+/// `None` for the package's own index page.
+fn kdoc_target(package: &str, page: &str) -> Option<String> {
+    let mut names: Vec<String> = Vec::new();
+    for part in page.split('/').filter(|p| !p.is_empty() && *p != "index") {
+        let (class, words) = match part.strip_prefix('-') {
+            Some(rest) => (true, rest),
+            None => (false, part),
+        };
+        let mut name = String::new();
+        for (i, word) in words.split('-').filter(|w| !w.is_empty()).enumerate() {
+            let mut chars = word.chars();
+            if let Some(first) = chars.next() {
+                if class || i > 0 {
+                    name.extend(first.to_uppercase());
+                } else {
+                    name.push(first);
+                }
+                name.push_str(chars.as_str());
+            }
+        }
+        if !is_identifier(&name) {
+            return None;
+        }
+        names.push(name);
+    }
+    if names.is_empty() {
+        return None;
+    }
+    Some(format!("{package}.{}", names.join(".")))
 }
 
 /// An AsciiDoc attribute entry (`:name: value`) or block attribute line
@@ -717,6 +761,37 @@ fn looks_like_code(name: &str) -> bool {
         || name.chars().any(|c| c.is_ascii_digit())
 }
 
+/// Annotation names the JDK, Jakarta EE, JSR 305 or JSpecify declare and
+/// projects declare again (Spring's deprecated `org.springframework.lang.Nullable`):
+/// a bare `@Name` of these is ambiguous, never linked.
+const SHARED_ANNOTATIONS: &[&str] = &[
+    "Nullable",
+    "NonNull",
+    "Nonnull",
+    "NotNull",
+    "NullMarked",
+    "NullUnmarked",
+    "Inject",
+    "Named",
+    "Singleton",
+    "Qualifier",
+    "Scope",
+    "Valid",
+    "PostConstruct",
+    "PreDestroy",
+    "Resource",
+    "Generated",
+    "Override",
+    "Deprecated",
+    "FunctionalInterface",
+    "SuppressWarnings",
+    "SafeVarargs",
+    "Documented",
+    "Retention",
+    "Target",
+    "Inherited",
+];
+
 /// Words a bare code span holds that name no project symbol even when one
 /// is declared with that name: literals, and the standard library types
 /// docs name all the time that a project (or a library it vendors) may
@@ -832,8 +907,20 @@ fn is_module_file(stem: &str) -> bool {
     )
 }
 
-/// A symbol's container path: directories, the file stem unless the first
-/// enclosing type repeats it, and the qualified name's segments.
+/// Languages where a file is no namespace: a name is qualified by its
+/// package (the directories) and its types, not by the file it is in
+/// (Kotlin top-level functions, Go, C#).
+fn file_is_namespace(file: &str) -> bool {
+    let ext = file.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+    !matches!(
+        ext,
+        "java" | "kt" | "kts" | "scala" | "go" | "cs" | "swift" | "php"
+    )
+}
+
+/// A symbol's container path: directories, the file stem (where a file is a
+/// namespace and the first enclosing type does not repeat it), and the
+/// qualified name's segments.
 fn path_of(symbol: &CodeSymbol) -> Vec<&str> {
     let mut path: Vec<&str> = Vec::new();
     let (dirs, file) = symbol
@@ -847,7 +934,7 @@ fn path_of(symbol: &CodeSymbol) -> Vec<&str> {
         .split(['.', ':'])
         .filter(|s| !s.is_empty())
         .collect();
-    if !is_module_file(stem) && qualified.first() != Some(&stem) {
+    if file_is_namespace(file) && !is_module_file(stem) && qualified.first() != Some(&stem) {
         path.push(stem);
     }
     path.extend(qualified);
@@ -953,6 +1040,11 @@ impl<'a> TargetIndex<'a> {
             matched.retain(|s| !is_type(&s.kind) || is_annotation_type(s));
             if matched.is_empty() {
                 return Outcome::Unresolved;
+            }
+            // `@Nullable`, `@Inject`, ...: the JDK, Jakarta and JSpecify
+            // declare them too, and a bare name cannot say whose is meant.
+            if r.segments.len() == 1 && SHARED_ANNOTATIONS.contains(&name) {
+                return Outcome::Ambiguous;
             }
         }
         // A constructor carries its type's name: `Foo` names the type `Foo`,
@@ -1150,6 +1242,159 @@ mod tests {
                 ("run".to_string(), "Store.open".to_string(), 18, true),
             ]
         );
+    }
+
+    #[test]
+    fn kdoc_links_name_classes_members_and_top_level_functions() {
+        assert_eq!(
+            kdoc_target("org.springframework.web.server", "-co-web-filter/index").as_deref(),
+            Some("org.springframework.web.server.CoWebFilter")
+        );
+        assert_eq!(
+            kdoc_target("org.acme", "-store/open-all").as_deref(),
+            Some("org.acme.Store.openAll")
+        );
+        assert_eq!(
+            kdoc_target("org.acme.server", "co-router").as_deref(),
+            Some("org.acme.server.coRouter")
+        );
+        assert_eq!(kdoc_target("org.acme", "index"), None);
+        let targets = vec![
+            sym(
+                "web/src/main/kotlin/org/acme/server/CoWebFilter.kt",
+                "CoWebFilter",
+                SymbolKind::Class,
+                (1, 9),
+            ),
+            // A top-level function: the file is no namespace in Kotlin.
+            sym(
+                "web/src/main/kotlin/org/acme/server/RouterFunctionDsl.kt",
+                "coRouter",
+                SymbolKind::Function,
+                (3, 9),
+            ),
+        ];
+        let content = "== Kotlin\n\nSee {spring-framework-api-kdoc}/web/org.acme.server/-co-web-filter/index.html[filter],\n{spring-framework-api-kdoc}/web/org.acme.server/co-router.html[coRouter DSL]\nand {spring-framework-api-kdoc}/[the index].\n";
+        let sources = vec![
+            doc("docs/kotlin.adoc", content),
+            section("docs/kotlin.adoc", "Kotlin", (1, 5)),
+        ];
+        assert_eq!(
+            links(&sources, &targets),
+            vec![
+                ("Kotlin".to_string(), "CoWebFilter".to_string(), 3),
+                ("Kotlin".to_string(), "coRouter".to_string(), 4),
+            ]
+        );
+    }
+
+    #[test]
+    fn hard_names_stay_ambiguous_or_link_by_their_owner() {
+        let mut nullable = sym(
+            "core/src/main/java/org/acme/lang/Nullable.java",
+            "Nullable",
+            SymbolKind::Interface,
+            (1, 9),
+        );
+        nullable.signature = "public @interface Nullable".to_string();
+        let targets = vec![
+            nullable,
+            // `get()` and `of()`: many owners.
+            sym(
+                "src/main/java/org/acme/Store.java",
+                "Store.get",
+                SymbolKind::Method,
+                (3, 4),
+            ),
+            sym(
+                "src/main/java/org/acme/Cache.java",
+                "Cache.get",
+                SymbolKind::Method,
+                (3, 4),
+            ),
+            sym(
+                "src/main/java/org/acme/Store.java",
+                "Store.of",
+                SymbolKind::Method,
+                (5, 6),
+            ),
+            sym(
+                "src/main/java/org/acme/Cache.java",
+                "Cache.of",
+                SymbolKind::Method,
+                (5, 6),
+            ),
+            // Nested builders of two types.
+            sym(
+                "src/main/java/org/acme/WebClient.java",
+                "WebClient",
+                SymbolKind::Interface,
+                (1, 90),
+            ),
+            sym(
+                "src/main/java/org/acme/WebClient.java",
+                "WebClient.Builder",
+                SymbolKind::Interface,
+                (10, 40),
+            ),
+            sym(
+                "src/main/java/org/acme/RestClient.java",
+                "RestClient.Builder",
+                SymbolKind::Interface,
+                (10, 40),
+            ),
+            // Overloads within one type, and the same name in another type.
+            sym(
+                "src/main/java/org/acme/Store.java",
+                "Store.open",
+                SymbolKind::Method,
+                (7, 8),
+            ),
+            sym(
+                "src/main/java/org/acme/Store.java",
+                "Store.open",
+                SymbolKind::Method,
+                (9, 10),
+            ),
+            sym(
+                "src/main/java/org/acme/Cache.java",
+                "Cache.open",
+                SymbolKind::Method,
+                (7, 8),
+            ),
+        ];
+        let content = "== One\n\nMark it `@Nullable`; call `get()` and `of()`; a `Builder` too.\n\n== Two\n\nA `WebClient` has a `Builder`; `Store#open(String)` opens.\n\n== Three\n\nBoth `Store` and `Cache` have `open()`.\n";
+        let sources = vec![
+            doc("docs/hard.adoc", content),
+            section("docs/hard.adoc", "One", (1, 4)),
+            section("docs/hard.adoc", "Two", (5, 8)),
+            section("docs/hard.adoc", "Three", (9, 11)),
+        ];
+        let all: Vec<CodeSymbol> = [sources.clone(), targets.clone()].concat();
+        let found = links(&sources, &targets);
+        // `Store#open(String)` links both overloads of Store.open, nothing else.
+        assert_eq!(
+            found,
+            vec![
+                ("Two".to_string(), "Store.open".to_string(), 7),
+                ("Two".to_string(), "WebClient".to_string(), 7),
+                ("Two".to_string(), "WebClient.Builder".to_string(), 7),
+            ]
+        );
+        let extracted = extract(&sources, &all, "r");
+        let open_edges = extracted
+            .relationships
+            .iter()
+            .filter(|r| r.target_uid.contains("Store.open"))
+            .count();
+        assert_eq!(open_edges, 2, "both overloads");
+        let ambiguous: Vec<&str> = extracted
+            .stats
+            .ambiguous_by_name
+            .keys()
+            .map(String::as_str)
+            .collect();
+        assert_eq!(ambiguous, vec!["Builder", "Nullable", "get", "of", "open"]);
     }
 
     #[test]

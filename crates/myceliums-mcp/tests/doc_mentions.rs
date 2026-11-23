@@ -259,10 +259,11 @@ async fn impact_and_callers_name_the_docs_that_mention_a_symbol() {
         json!({"repo_id": repo, "symbol_name": "Cache.evict"}),
     )
     .await;
-    assert_eq!(
-        docs(&evict),
-        "Docs mentioning Cache.evict: none linked.\n\
-         Not linked: 1 mention(s) of `evict` that several symbols could be, e.g. docs/guide.adoc:13\n",
+    assert!(!evict.contains("Docs mentioning"), "{evict}");
+    assert!(
+        evict.ends_with(
+            "\n\nNot linked: 1 doc mention(s) of `evict` that several symbols could be, e.g. docs/guide.adoc:13\n"
+        ),
         "{evict}"
     );
 
