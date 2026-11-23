@@ -1,0 +1,134 @@
+{
+  "attempts_total": 270,
+  "bash": true,
+  "claude_version": "2.1.330",
+  "comparisons": "pairwise",
+  "conditions": [
+    "none",
+    "C",
+    "D"
+  ],
+  "date": "2026-11-23",
+  "effort": "medium",
+  "index": {
+    "spring-framework": {
+      "commit": "f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4",
+      "communities": 2322,
+      "embedded": 145670,
+      "files": 10158,
+      "index_exclude_extra": [],
+      "index_seconds": 17698.7,
+      "indexed_at": "2026-11-23T20:26:10.216219+00:00",
+      "myc_sha256": "a42bffce8d3aec06821859835ab35a59bf0c6db264da317374ea5283cabfb27b",
+      "myc_version": "myc 0.3.2",
+      "processes": 37829,
+      "relationships": 492203,
+      "repo": "spring-framework",
+      "repo_id": "spring-framework-f5cc00e9",
+      "symbols": 145670,
+      "work_path": "/private/tmp/aeval182/spring-framework"
+    }
+  },
+  "label": "182-spring",
+  "max_turns": 100,
+  "mcp_tools_offered": 9,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "388c6e1291fd",
+  "myc_sha256": "a42bffce8d3aec06821859835ab35a59bf0c6db264da317374ea5283cabfb27b",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Pre-registered in commit 7b2b2d1 (pushed before the first session); calibration sessions are not pooled. Primary outcome: tokens and cost per solved task. Success and F1 are a harm check: arm A was at the ceiling, so the run cannot show a success gain, and a true loss below about 25-29 points would likely be missed. No significant difference is not evidence of equal success.",
+    "Reading: no difference between C (myc + grep) and A was detected in pooled tokens or cost per solved task (the agent used myc in 13 of 90 C sessions, all deep transitive); D (myc only) cost about 2.3x and used about 2.7x the tokens of A per solved task. Post hoc by category (6 tasks each): D used more tokens than A everywhere except deep transitive (0.73x, interval includes 1). Full reading, verdict and limits: README, Result of the main run (#182).",
+    "Limits: gold agent-labelled, not human-checked; Spring is very likely in the training data (five sessions, C 3 and D 2, answered one concept task exactly without any tool call; SUPPLEMENT.md counts unseen items); 12 comparisons, only McNemar corrected; cost per session and cache writes fell over the run; known myc gaps #186, #187, #188, #194.",
+    "Index: 145,670 of 145,670 symbols embedded in 17,699 s (other jobs running; 98,952 s user CPU, 6.9 GB peak memory, 1.2 GB on disk); fingerprint sha256 fc3c476d228fc2d39c87cb840f73187297919761a03acf742b3dff80033e3a0f (sorted relative path + file sha256, 3,902 files).",
+    "Run 2026-11-23 20:27-22:01 UTC, one session at a time, no retries. Wall times are comparable between the arms only because the schedule interleaves them (load 12-91, median 31, from other jobs). Outside/network audit of all 270 transcripts: outside_audit.json; no session read a gold file or a later Spring version."
+  ],
+  "profile": "realistic",
+  "repos": {
+    "django": {
+      "commit": "2d4add11fd57b05f7ea48e8b3e89e743c9871aa3",
+      "display_name": "Django",
+      "index_exclude_extra": [
+        "tests/**",
+        "docs/**",
+        "js_tests/**",
+        "scripts/**",
+        "extras/**"
+      ],
+      "index_note": "Only the django/ package is indexed (12,443 symbols, 828 files): with tests/ and docs/ included, `myc analyze` produced 41,842 symbols and 328,884 relationships and its community detection had not finished after 9 minutes on the benchmark machine. The agent still sees the whole checkout; every #153 question is about the django/ package.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "django",
+      "ref": "5.1.4",
+      "url": "https://github.com/django/django.git"
+    },
+    "fastapi": {
+      "commit": "5add7a458d629b07311d48261f696b5ac2bb9a5f",
+      "display_name": "FastAPI",
+      "index_exclude_extra": [
+        "docs/**"
+      ],
+      "index_note": "docs/ (1,709 Markdown files in 13 languages) is excluded from the index: with it, `myc analyze` produced 23,941 symbols and its community detection had not finished after 13 minutes on the benchmark machine, before any embedding. The agent still sees docs/.",
+      "language": "python",
+      "language_name": "Python",
+      "name": "fastapi",
+      "ref": "0.162.5",
+      "url": "https://github.com/fastapi/fastapi.git"
+    },
+    "fzf": {
+      "commit": "c7bf2b8eea25952dd257a466c0afa72faae206fb",
+      "display_name": "fzf",
+      "language": "go",
+      "language_name": "Go",
+      "name": "fzf",
+      "ref": "v0.75.0",
+      "url": "https://github.com/junegunn/fzf.git"
+    },
+    "hono": {
+      "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823",
+      "display_name": "hono",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "hono",
+      "ref": "v4.13.18",
+      "url": "https://github.com/honojs/hono.git"
+    },
+    "spring-framework": {
+      "commit": "f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4",
+      "display_name": "Spring Framework",
+      "index_exclude_extra": [],
+      "index_note": "Indexed in myceliums' default configuration: production sources, tests, Kotlin, the reference docs (framework-docs/) and the config files the name references read (#179). The agent sees the same checkout.",
+      "language": "java",
+      "language_name": "Java",
+      "name": "spring-framework",
+      "ref": "v7.1.0",
+      "url": "https://github.com/spring-projects/spring-framework.git"
+    },
+    "vue": {
+      "commit": "7de9e41b61b2d890fd4be408068da75cbeb05709",
+      "display_name": "Vue",
+      "index_exclude_extra": [
+        "packages-private/**",
+        "changelogs/**",
+        "CHANGELOG.md"
+      ],
+      "index_note": "packages-private/ (playgrounds and type-only tests) and the changelogs are not indexed; every #163 question is about packages/*/src or packages/*/__tests__, which are. The agent still sees the whole checkout.",
+      "language": "typescript",
+      "language_name": "TypeScript",
+      "name": "vue",
+      "ref": "v3.5.46",
+      "url": "https://github.com/vuejs/core.git"
+    }
+  },
+  "reps": 3,
+  "retried_runs": [],
+  "runs_final": 270,
+  "schedule": "interleaved",
+  "sessions_launched_ledger": 270,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-java.json",
+  "tasks_sha256": "7674267e102fac2ed96c4108a5ba5d1ea90e90c2c2160212e0bebc428c4d2172",
+  "timeout_s": 1200,
+  "tool_search": null
+}

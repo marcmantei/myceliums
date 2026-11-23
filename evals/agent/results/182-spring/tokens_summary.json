@@ -1,0 +1,629 @@
+{
+  "analysis": {
+    "all": {
+      "C": {
+        "cli_cost": 0.035087495555555556,
+        "cost": {
+          "assistant": 0.0025174555555555556,
+          "base": 0.007585088888888889,
+          "edit": 0.0,
+          "hook": 0.0014103000000000002,
+          "myceliums": 0.00046837777777777775,
+          "other": 0.0,
+          "output": 0.013958777777777777,
+          "read": 0.0006198444444444445,
+          "search": 0.008527622222222222,
+          "unattributed": 0.0
+        },
+        "cost_class": {
+          "cache_read": 0.004217466666666667,
+          "cache_write_1h": 0.01689728888888889,
+          "cache_write_5m": 0.0,
+          "output": 0.013958777777777777,
+          "uncached": 1.3911111111111112e-05
+        },
+        "priced_cost": 0.03508748888888889,
+        "result_tokens": {
+          "assistant": 628.5177777777777,
+          "base": 0.0,
+          "edit": 0.0,
+          "hook": 388.1133333333333,
+          "myceliums": 144.86666666666667,
+          "other": 0.0,
+          "output": 0.0,
+          "read": 150.82444444444445,
+          "search": 2376.4211111111113,
+          "unattributed": 0.0
+        },
+        "sessions": 90,
+        "solved": 90,
+        "tokens": {
+          "assistant": 1381.7077777777777,
+          "base": 38404.65555555555,
+          "edit": 0.0,
+          "hook": 953.3455555555556,
+          "myceliums": 477.55555555555554,
+          "other": 0.0,
+          "output": 1395.8777777777777,
+          "read": 318.89666666666665,
+          "search": 4870.288888888889,
+          "unattributed": 0.0
+        },
+        "tokens_fitted": {
+          "assistant": 1545.3522222222223,
+          "base": 38404.65555555555,
+          "edit": 0.0,
+          "hook": 961.2611111111111,
+          "myceliums": 454.7744444444444,
+          "other": 0.0,
+          "output": 1395.8777777777777,
+          "read": 311.8888888888889,
+          "search": 4728.514444444444,
+          "unattributed": 0.0
+        }
+      },
+      "none": {
+        "cli_cost": 0.039037138888888885,
+        "cost": {
+          "assistant": 0.0030349333333333332,
+          "base": 0.007643855555555555,
+          "edit": 0.0,
+          "hook": 0.0,
+          "myceliums": 0.0,
+          "other": 4.452222222222222e-05,
+          "output": 0.01540311111111111,
+          "read": 0.0012214444444444445,
+          "search": 0.011689299999999998,
+          "unattributed": 0.0
+        },
+        "cost_class": {
+          "cache_read": 0.003983622222222222,
+          "cache_write_1h": 0.019635022222222222,
+          "cache_write_5m": 0.0,
+          "output": 0.01540311111111111,
+          "uncached": 1.533333333333333e-05
+        },
+        "priced_cost": 0.039037133333333335,
+        "result_tokens": {
+          "assistant": 748.2944444444445,
+          "base": 0.0,
+          "edit": 0.0,
+          "hook": 0.0,
+          "myceliums": 0.0,
+          "other": 10.794444444444444,
+          "output": 0.0,
+          "read": 350.5344444444445,
+          "search": 3051.596666666667,
+          "unattributed": 0.0
+        },
+        "sessions": 90,
+        "solved": 89,
+        "tokens": {
+          "assistant": 1975.197777777778,
+          "base": 34077.11111111111,
+          "edit": 0.0,
+          "hook": 0.0,
+          "myceliums": 0.0,
+          "other": 23.38666666666667,
+          "output": 1540.3111111111111,
+          "read": 1039.5333333333333,
+          "search": 7637.915555555556,
+          "unattributed": 0.0
+        },
+        "tokens_fitted": {
+          "assistant": 2208.9055555555556,
+          "base": 34077.11111111111,
+          "edit": 0.0,
+          "hook": 0.0,
+          "myceliums": 0.0,
+          "other": 13.594444444444445,
+          "output": 1540.3111111111111,
+          "read": 982.7377777777778,
+          "search": 7470.787777777778,
+          "unattributed": 0.0
+        }
+      },
+      "per_solved_cost": {
+        "a": 0.03508748888888889,
+        "a_hi": 0.04406929388888889,
+        "a_lo": 0.02730815,
+        "b": 0.03947575280898877,
+        "b_hi": 0.051210303409090885,
+        "b_lo": 0.029654243539325845,
+        "diff": -0.004388263920099875,
+        "diff_hi": 0.0010903016666666608,
+        "diff_lo": -0.012068679885057474,
+        "n_tasks": 30,
+        "ratio": 0.8888364728259052,
+        "ratio_hi": 1.0314625482005975,
+        "ratio_lo": 0.7402751670678249,
+        "skipped": 0,
+        "solved_a": 90.0,
+        "solved_b": 89.0
+      },
+      "per_solved_tokens": {
+        "a": 47802.32777777778,
+        "a_hi": 58724.76211111111,
+        "a_lo": 38457.31911111111,
+        "b": 46813.606741573036,
+        "b_hi": 60848.23978461944,
+        "b_lo": 35096.740323970036,
+        "diff": 988.7210362047408,
+        "diff_hi": 9053.012999999999,
+        "diff_lo": -9616.837868773942,
+        "n_tasks": 30,
+        "ratio": 1.021120377279683,
+        "ratio_hi": 1.2253991013387213,
+        "ratio_lo": 0.8281061904996783,
+        "skipped": 0,
+        "solved_a": 90.0,
+        "solved_b": 89.0
+      }
+    }
+  },
+  "analysis_by_arm": {
+    "C": {
+      "all": {
+        "C": {
+          "cli_cost": 0.035087495555555556,
+          "cost": {
+            "assistant": 0.0025174555555555556,
+            "base": 0.007585088888888889,
+            "edit": 0.0,
+            "hook": 0.0014103000000000002,
+            "myceliums": 0.00046837777777777775,
+            "other": 0.0,
+            "output": 0.013958777777777777,
+            "read": 0.0006198444444444445,
+            "search": 0.008527622222222222,
+            "unattributed": 0.0
+          },
+          "cost_class": {
+            "cache_read": 0.004217466666666667,
+            "cache_write_1h": 0.01689728888888889,
+            "cache_write_5m": 0.0,
+            "output": 0.013958777777777777,
+            "uncached": 1.3911111111111112e-05
+          },
+          "priced_cost": 0.03508748888888889,
+          "result_tokens": {
+            "assistant": 628.5177777777777,
+            "base": 0.0,
+            "edit": 0.0,
+            "hook": 388.1133333333333,
+            "myceliums": 144.86666666666667,
+            "other": 0.0,
+            "output": 0.0,
+            "read": 150.82444444444445,
+            "search": 2376.4211111111113,
+            "unattributed": 0.0
+          },
+          "sessions": 90,
+          "solved": 90,
+          "tokens": {
+            "assistant": 1381.7077777777777,
+            "base": 38404.65555555555,
+            "edit": 0.0,
+            "hook": 953.3455555555556,
+            "myceliums": 477.55555555555554,
+            "other": 0.0,
+            "output": 1395.8777777777777,
+            "read": 318.89666666666665,
+            "search": 4870.288888888889,
+            "unattributed": 0.0
+          },
+          "tokens_fitted": {
+            "assistant": 1545.3522222222223,
+            "base": 38404.65555555555,
+            "edit": 0.0,
+            "hook": 961.2611111111111,
+            "myceliums": 454.7744444444444,
+            "other": 0.0,
+            "output": 1395.8777777777777,
+            "read": 311.8888888888889,
+            "search": 4728.514444444444,
+            "unattributed": 0.0
+          }
+        },
+        "none": {
+          "cli_cost": 0.039037138888888885,
+          "cost": {
+            "assistant": 0.0030349333333333332,
+            "base": 0.007643855555555555,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.0,
+            "other": 4.452222222222222e-05,
+            "output": 0.01540311111111111,
+            "read": 0.0012214444444444445,
+            "search": 0.011689299999999998,
+            "unattributed": 0.0
+          },
+          "cost_class": {
+            "cache_read": 0.003983622222222222,
+            "cache_write_1h": 0.019635022222222222,
+            "cache_write_5m": 0.0,
+            "output": 0.01540311111111111,
+            "uncached": 1.533333333333333e-05
+          },
+          "priced_cost": 0.039037133333333335,
+          "result_tokens": {
+            "assistant": 748.2944444444445,
+            "base": 0.0,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.0,
+            "other": 10.794444444444444,
+            "output": 0.0,
+            "read": 350.5344444444445,
+            "search": 3051.596666666667,
+            "unattributed": 0.0
+          },
+          "sessions": 90,
+          "solved": 89,
+          "tokens": {
+            "assistant": 1975.197777777778,
+            "base": 34077.11111111111,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.0,
+            "other": 23.38666666666667,
+            "output": 1540.3111111111111,
+            "read": 1039.5333333333333,
+            "search": 7637.915555555556,
+            "unattributed": 0.0
+          },
+          "tokens_fitted": {
+            "assistant": 2208.9055555555556,
+            "base": 34077.11111111111,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.0,
+            "other": 13.594444444444445,
+            "output": 1540.3111111111111,
+            "read": 982.7377777777778,
+            "search": 7470.787777777778,
+            "unattributed": 0.0
+          }
+        },
+        "per_solved_cost": {
+          "a": 0.03508748888888889,
+          "a_hi": 0.04406929388888889,
+          "a_lo": 0.02730815,
+          "b": 0.03947575280898877,
+          "b_hi": 0.051210303409090885,
+          "b_lo": 0.029654243539325845,
+          "diff": -0.004388263920099875,
+          "diff_hi": 0.0010903016666666608,
+          "diff_lo": -0.012068679885057474,
+          "n_tasks": 30,
+          "ratio": 0.8888364728259052,
+          "ratio_hi": 1.0314625482005975,
+          "ratio_lo": 0.7402751670678249,
+          "skipped": 0,
+          "solved_a": 90.0,
+          "solved_b": 89.0
+        },
+        "per_solved_tokens": {
+          "a": 47802.32777777778,
+          "a_hi": 58724.76211111111,
+          "a_lo": 38457.31911111111,
+          "b": 46813.606741573036,
+          "b_hi": 60848.23978461944,
+          "b_lo": 35096.740323970036,
+          "diff": 988.7210362047408,
+          "diff_hi": 9053.012999999999,
+          "diff_lo": -9616.837868773942,
+          "n_tasks": 30,
+          "ratio": 1.021120377279683,
+          "ratio_hi": 1.2253991013387213,
+          "ratio_lo": 0.8281061904996783,
+          "skipped": 0,
+          "solved_a": 90.0,
+          "solved_b": 89.0
+        }
+      }
+    },
+    "D": {
+      "all": {
+        "D": {
+          "cli_cost": 0.0907957388888889,
+          "cost": {
+            "assistant": 0.007475133333333333,
+            "base": 0.012381244444444444,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.03449947777777778,
+            "other": 1.57e-05,
+            "output": 0.024213444444444444,
+            "read": 0.011179777777777778,
+            "search": 0.0010309,
+            "unattributed": 0.0
+          },
+          "cost_class": {
+            "cache_read": 0.01077331111111111,
+            "cache_write_1h": 0.05578377777777777,
+            "cache_write_5m": 0.0,
+            "output": 0.024213444444444444,
+            "uncached": 2.52e-05
+          },
+          "priced_cost": 0.09079573333333334,
+          "result_tokens": {
+            "assistant": 1758.8622222222223,
+            "base": 0.0,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 7948.3788888888885,
+            "other": 3.7311111111111113,
+            "output": 0.0,
+            "read": 2654.2544444444443,
+            "search": 278.8811111111111,
+            "unattributed": 0.0
+          },
+          "sessions": 90,
+          "solved": 89,
+          "tokens": {
+            "assistant": 6749.98,
+            "base": 67863.3111111111,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 37267.72,
+            "other": 11.575555555555555,
+            "output": 2421.3444444444444,
+            "read": 8277.59111111111,
+            "search": 1521.5355555555557,
+            "unattributed": 0.0
+          },
+          "tokens_fitted": {
+            "assistant": 6324.732222222223,
+            "base": 67863.3111111111,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 37959.11,
+            "other": 9.943333333333335,
+            "output": 2421.3444444444444,
+            "read": 8193.304444444444,
+            "search": 1341.3133333333333,
+            "unattributed": 0.0
+          }
+        },
+        "none": {
+          "cli_cost": 0.039037138888888885,
+          "cost": {
+            "assistant": 0.0030349333333333332,
+            "base": 0.007643855555555555,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.0,
+            "other": 4.452222222222222e-05,
+            "output": 0.01540311111111111,
+            "read": 0.0012214444444444445,
+            "search": 0.011689299999999998,
+            "unattributed": 0.0
+          },
+          "cost_class": {
+            "cache_read": 0.003983622222222222,
+            "cache_write_1h": 0.019635022222222222,
+            "cache_write_5m": 0.0,
+            "output": 0.01540311111111111,
+            "uncached": 1.533333333333333e-05
+          },
+          "priced_cost": 0.039037133333333335,
+          "result_tokens": {
+            "assistant": 748.2944444444445,
+            "base": 0.0,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.0,
+            "other": 10.794444444444444,
+            "output": 0.0,
+            "read": 350.5344444444445,
+            "search": 3051.596666666667,
+            "unattributed": 0.0
+          },
+          "sessions": 90,
+          "solved": 89,
+          "tokens": {
+            "assistant": 1975.197777777778,
+            "base": 34077.11111111111,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.0,
+            "other": 23.38666666666667,
+            "output": 1540.3111111111111,
+            "read": 1039.5333333333333,
+            "search": 7637.915555555556,
+            "unattributed": 0.0
+          },
+          "tokens_fitted": {
+            "assistant": 2208.9055555555556,
+            "base": 34077.11111111111,
+            "edit": 0.0,
+            "hook": 0.0,
+            "myceliums": 0.0,
+            "other": 13.594444444444445,
+            "output": 1540.3111111111111,
+            "read": 982.7377777777778,
+            "search": 7470.787777777778,
+            "unattributed": 0.0
+          }
+        },
+        "per_solved_cost": {
+          "a": 0.09181591011235955,
+          "a_hi": 0.11934921735827374,
+          "a_lo": 0.0666746574906367,
+          "b": 0.03947575280898877,
+          "b_hi": 0.051210303409090885,
+          "b_lo": 0.029654243539325845,
+          "diff": 0.052340157303370785,
+          "diff_hi": 0.08197357120141015,
+          "diff_lo": 0.02508744390520372,
+          "n_tasks": 30,
+          "ratio": 2.325881169553092,
+          "ratio_hi": 3.421225321699433,
+          "ratio_lo": 1.5555790204792999,
+          "skipped": 0,
+          "solved_a": 89.0,
+          "solved_b": 89.0
+        },
+        "per_solved_tokens": {
+          "a": 125507.58651685393,
+          "a_hi": 169533.86862643677,
+          "a_lo": 87517.28105366162,
+          "b": 46813.606741573036,
+          "b_hi": 60848.23978461944,
+          "b_lo": 35096.740323970036,
+          "diff": 78693.9797752809,
+          "diff_hi": 126260.47516666667,
+          "diff_lo": 37097.9814760101,
+          "n_tasks": 30,
+          "ratio": 2.6810065545621877,
+          "ratio_hi": 4.174076153628475,
+          "ratio_lo": 1.6919566149991667,
+          "skipped": 0,
+          "solved_a": 89.0,
+          "solved_b": 89.0
+        }
+      }
+    }
+  },
+  "arm": "C",
+  "arms": [
+    "C",
+    "D"
+  ],
+  "base": "none",
+  "crosscheck": {
+    "available": true,
+    "fit": {
+      "constant": 33.08,
+      "features": {
+        "hook": {
+          "coef": 1.7987,
+          "n_calls": 137,
+          "tokens_per_char": 0.4497
+        },
+        "myceliums": {
+          "coef": 1.6823,
+          "n_calls": 331,
+          "tokens_per_char": 0.4206
+        },
+        "read": {
+          "coef": 1.584,
+          "n_calls": 148,
+          "tokens_per_char": 0.396
+        },
+        "reply": {
+          "coef": 2.858,
+          "n_calls": 955,
+          "tokens_per_char": 0.7145
+        },
+        "search": {
+          "coef": 1.6916,
+          "n_calls": 532,
+          "tokens_per_char": 0.4229
+        },
+        "thinking": {
+          "coef": 0.831,
+          "n_calls": 378
+        }
+      },
+      "left_out": [
+        "other"
+      ],
+      "n_calls": 955,
+      "r2": 0.9923
+    },
+    "rates": {
+      "hook": 1.7987,
+      "myceliums": 1.6823,
+      "read": 1.584,
+      "reply": 2.858,
+      "search": 1.6916,
+      "thinking": 0.831
+    }
+  },
+  "excluded": [],
+  "label": "182-spring",
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "prices": {
+    "claude-sonnet-5-5": {
+      "cache_read": 0.1,
+      "cache_write_1h": 4.0,
+      "cache_write_5m": 2.5,
+      "input": 2.0,
+      "output": 10.0
+    }
+  },
+  "prices_as_of": "2026-11-03",
+  "prices_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "reconciliation": {
+    "input_tokens_attributed": 19156617.7,
+    "input_tokens_session_totals": 19156618,
+    "max_abs_cost_diff_usd": 5.000000000143778e-07,
+    "max_abs_session_gap_tokens": 0.1,
+    "methods": [
+      "usage-delta"
+    ],
+    "residual": {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 0
+    },
+    "sessions": 270,
+    "sessions_with_residual": 0
+  },
+  "search_audit": {
+    "C": {
+      "bash_blocked": 0,
+      "bash_calls": 130,
+      "blind_reads": 1,
+      "files_read": 12,
+      "flagged": 86,
+      "grep_glob_calls": 89,
+      "interpreted_calls": 0,
+      "interpreted_ran": 0,
+      "max_reads_per_turn": 12,
+      "reads": 12,
+      "search_attempts": 129,
+      "search_blocked": 0,
+      "search_leaks": 129,
+      "sessions": 90
+    },
+    "D": {
+      "bash_blocked": 107,
+      "bash_calls": 181,
+      "blind_reads": 8,
+      "files_read": 261,
+      "flagged": 0,
+      "grep_glob_calls": 0,
+      "interpreted_calls": 0,
+      "interpreted_ran": 0,
+      "max_reads_per_turn": 161,
+      "reads": 273,
+      "search_attempts": 93,
+      "search_blocked": 93,
+      "search_leaks": 0,
+      "sessions": 90
+    },
+    "none": {
+      "bash_blocked": 0,
+      "bash_calls": 123,
+      "blind_reads": 0,
+      "files_read": 20,
+      "flagged": 84,
+      "grep_glob_calls": 135,
+      "interpreted_calls": 0,
+      "interpreted_ran": 0,
+      "max_reads_per_turn": 20,
+      "reads": 21,
+      "search_attempts": 112,
+      "search_blocked": 0,
+      "search_leaks": 112,
+      "sessions": 90
+    }
+  },
+  "tasks": 30
+}

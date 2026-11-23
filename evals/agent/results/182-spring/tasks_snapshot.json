@@ -1,0 +1,272 @@
+[
+ {
+  "id": "spring-concept-aop-proxy-kind",
+  "repo": "spring-framework",
+  "type": "concept",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "Spring AOP can create a proxy either as a JDK dynamic proxy that implements interfaces or as a generated subclass of the target class. Given a finished proxy configuration (target, interfaces, flags), where is the final choice between the two kinds made? Name the method that makes this choice from the configuration, not the code that fills in the configuration beforehand. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
+  "category": "concept"
+ },
+ {
+  "id": "spring-concept-mvc-best-match",
+  "repo": "spring-framework",
+  "type": "concept",
+  "answer_kind": "symbols",
+  "n_gold": 2,
+  "question": "In Spring MVC on the Servlet stack (not WebFlux), several annotated controller methods can match the same request. Where is the most specific of them chosen (and a tie between the two best rejected as ambiguous), and where is it defined which of two matching request mappings is more specific for the current request? Name the method that selects the winner and the method that compares two complete request mappings. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
+  "category": "concept"
+ },
+ {
+  "id": "spring-concept-singleton-cycle",
+  "repo": "spring-framework",
+  "type": "concept",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "In the bean container, a singleton bean can be requested again while it is still being created, for example through a circular constructor dependency that no early reference can satisfy. Where does the container notice that this singleton is already being created and fail with an error? Name the method that contains this check for singletons. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
+  "category": "concept"
+ },
+ {
+  "id": "spring-concept-spel-overload-choice",
+  "repo": "spring-framework",
+  "type": "concept",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "When a Spring Expression Language expression calls a method on an object and the object's class has several methods of that name, where is it decided which Java method is invoked (an exact argument match first, then the closest match, then one that needs argument conversion, failing when several need conversion)? Name the method that makes this choice. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
+  "category": "concept"
+ },
+ {
+  "id": "spring-concept-tx-rollback-rules",
+  "repo": "spring-framework",
+  "type": "concept",
+  "answer_kind": "symbols",
+  "n_gold": 2,
+  "question": "With declarative transactions, a transactional method can be configured with rules that say for which exception types the transaction is rolled back and for which it still commits. When such a method throws, where is it decided which configured rule applies to the thrown exception (when several rules match, which one wins) and how a single rule is matched against the exception's class and its superclasses? Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
+  "category": "concept"
+ },
+ {
+  "id": "spring-concept-webflux-response-content-type",
+  "repo": "spring-framework",
+  "type": "concept",
+  "answer_kind": "symbols",
+  "n_gold": 1,
+  "question": "In Spring WebFlux, when the value returned by an annotated controller method is written as the response body or rendered through a view, where is the response's content type chosen by matching what the client accepts against what the server can produce (including the producible types declared on the mapping)? Name the method that makes this choice. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
+  "category": "concept"
+ },
+ {
+  "id": "spring-blast-interface-method",
+  "repo": "spring-framework",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 10,
+  "question": "If the private method `ClassUtils.findInterfaceMethodIfPossible` in spring-core (`org.springframework.util.ClassUtils`) changed its behaviour, which production Java files hold code that could be affected through calls, up to three levels up? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `ClassUtils.findInterfaceMethodIfPossible`; level 2 is every method that calls a level-1 method. List every file that contains a call to `ClassUtils.findInterfaceMethodIfPossible`, to a level-1 method or to a level-2 method, once, as a path relative to the repository root. A file that only declares one of these methods, without containing such a call, is not listed.",
+  "category": "deep_transitive"
+ },
+ {
+  "id": "spring-blast-java-language-interface",
+  "repo": "spring-framework",
+  "type": "blast_radius",
+  "answer_kind": "files",
+  "n_gold": 11,
+  "question": "If `ClassUtils.isJavaLanguageInterface` in spring-core (`org.springframework.util.ClassUtils`) changed its behaviour, which production Java files hold code that could be affected through calls, up to three levels up? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `ClassUtils.isJavaLanguageInterface`; level 2 is every method that calls a level-1 method. List every file that contains a call to `ClassUtils.isJavaLanguageInterface`, to a level-1 method or to a level-2 method, once, as a path relative to the repository root. A file that only declares one of these methods, without containing such a call, is not listed.",
+  "category": "deep_transitive"
+ },
+ {
+  "id": "spring-tc-auto-proxy-creator",
+  "repo": "spring-framework",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 12,
+  "question": "Which methods call `AopConfigUtils.registerOrEscalateApcAsRequired` (spring-aop, `org.springframework.aop.config.AopConfigUtils`) directly, call such a caller, or call a caller of such a caller, that is, every caller up to three levels up the call chain? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `AopConfigUtils.registerOrEscalateApcAsRequired`; level 2 is every method that calls a level-1 method; level 3 is every method that calls a level-2 method. List every method of levels 1 to 3 once, as `Type.method`, where `Type` is the simple name of the class that declares the method (for a nested class, its own simple name). Do not list `AopConfigUtils.registerOrEscalateApcAsRequired` itself.",
+  "category": "deep_transitive"
+ },
+ {
+  "id": "spring-tc-do-with-local-fields",
+  "repo": "spring-framework",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 21,
+  "question": "Which methods call `ReflectionUtils.doWithLocalFields` (spring-core, `org.springframework.util.ReflectionUtils`) directly, call such a caller, or call a caller of such a caller, that is, every caller up to three levels up the call chain? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `ReflectionUtils.doWithLocalFields`; level 2 is every method that calls a level-1 method; level 3 is every method that calls a level-2 method. List every method of levels 1 to 3 once, as `Type.method`, where `Type` is the simple name of the class that declares the method (for a nested class, its own simple name). Do not list `ReflectionUtils.doWithLocalFields` itself.",
+  "category": "deep_transitive"
+ },
+ {
+  "id": "spring-tc-jackson-binding-hints",
+  "repo": "spring-framework",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 17,
+  "question": "Which methods call `BindingReflectionHintsRegistrar.forEachJacksonAnnotation` (a private method of spring-core's `org.springframework.aot.hint.BindingReflectionHintsRegistrar`) directly, call such a caller, or call a caller of such a caller, that is, every caller up to three levels up the call chain? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `BindingReflectionHintsRegistrar.forEachJacksonAnnotation`; level 2 is every method that calls a level-1 method; level 3 is every method that calls a level-2 method. List every method of levels 1 to 3 once, as `Type.method`, where `Type` is the simple name of the class that declares the method (for a nested class, its own simple name). Do not list `BindingReflectionHintsRegistrar.forEachJacksonAnnotation` itself.",
+  "category": "deep_transitive"
+ },
+ {
+  "id": "spring-tc-resolvable-type-seen",
+  "repo": "spring-framework",
+  "type": "transitive_callers",
+  "answer_kind": "symbols",
+  "n_gold": 12,
+  "question": "Which methods call `ResolvableType.currentTypeSeen` (the private helper in spring-core's `org.springframework.core.ResolvableType` that records the types already visited) directly, call such a caller, or call a caller of such a caller, that is, every caller up to three levels up the call chain? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `ResolvableType.currentTypeSeen`; level 2 is every method that calls a level-1 method; level 3 is every method that calls a level-2 method. List every method of levels 1 to 3 once, as `Type.method`, where `Type` is the simple name of the class that declares the method (for a nested class, its own simple name). Do not list `ResolvableType.currentTypeSeen` itself.",
+  "category": "deep_transitive"
+ },
+ {
+  "id": "spring-dispatch-bean-factory-post-processors",
+  "repo": "spring-framework",
+  "type": "dispatch",
+  "answer_kind": "names",
+  "n_gold": 10,
+  "question": "During application context refresh, `PostProcessorRegistrationDelegate` (spring-context) calls `postProcessBeanFactory(ConfigurableListableBeanFactory)` on each registered post-processor through the interface `org.springframework.beans.factory.config.BeanFactoryPostProcessor`. Which framework classes' implementations of that method can run there? A class counts if it declares its own method body for that method, either because it implements the interface (or abstract class) directly or through any chain of superclasses and superinterfaces. A class that only inherits the body from a superclass does not count; abstract declarations do not count. Anonymous classes and lambdas or method references do not count. Default methods declared in interfaces do not count. Methods of the same name that do not implement this interface (for example protected template methods of application context classes) do not count. Consider only the production Java sources of the repository (`*/src/main/java` in every module; not tests, test fixtures, Kotlin files, `framework-docs/` samples or `buildSrc/`). List each class once by its simple name.",
+  "category": "dispatch"
+ },
+ {
+  "id": "spring-dispatch-cache-manager-get-cache",
+  "repo": "spring-framework",
+  "type": "dispatch",
+  "answer_kind": "names",
+  "n_gold": 6,
+  "question": "For every cache operation, `AbstractCacheResolver.resolveCaches(...)` (spring-context) calls `getCache(String)` on its `org.springframework.cache.CacheManager`. Which classes' implementations of `CacheManager.getCache(String)` can run there? A class counts if it declares its own method body for that method, either because it implements the interface (or abstract class) directly or through any chain of superclasses and superinterfaces. A class that only inherits the body from a superclass does not count; abstract declarations do not count. Anonymous classes and lambdas or method references do not count. An abstract class that declares a body counts. Consider only the production Java sources of the repository (`*/src/main/java` in every module; not tests, test fixtures, Kotlin files, `framework-docs/` samples or `buildSrc/`). List each class once by its simple name.",
+  "category": "dispatch"
+ },
+ {
+  "id": "spring-dispatch-mvc-return-value-handlers",
+  "repo": "spring-framework",
+  "type": "dispatch",
+  "answer_kind": "names",
+  "n_gold": 16,
+  "question": "In Spring MVC, after a controller method returns, `HandlerMethodReturnValueHandlerComposite.handleReturnValue` (package `org.springframework.web.method.support`) selects a handler and calls `handleReturnValue(...)` on it through the interface `org.springframework.web.method.support.HandlerMethodReturnValueHandler`. Which classes' implementations of that method can run there? A class counts if it declares its own method body for that method, either because it implements the interface (or abstract class) directly or through any chain of superclasses and superinterfaces. A class that only inherits the body from a superclass does not count; abstract declarations do not count. Anonymous classes and lambdas or method references do not count. Only implementations of this interface count, not of other interfaces with the same simple name. The composite class itself is not part of the question. Consider only the production Java sources of the repository (`*/src/main/java` in every module; not tests, test fixtures, Kotlin files, `framework-docs/` samples or `buildSrc/`). List each class once by its simple name.",
+  "category": "dispatch"
+ },
+ {
+  "id": "spring-dispatch-spel-property-read",
+  "repo": "spring-framework",
+  "type": "dispatch",
+  "answer_kind": "names",
+  "n_gold": 8,
+  "question": "When a SpEL expression reads a property, `PropertyOrFieldReference` (spring-expression) calls `read(EvaluationContext, Object, String)` on the accessors it found, through the interface `org.springframework.expression.PropertyAccessor`. Which classes' implementations of that `read` method can run? A class counts if it declares its own method body for that method, either because it implements the interface (or abstract class) directly or through any chain of superclasses and superinterfaces. A class that only inherits the body from a superclass does not count; abstract declarations do not count. Anonymous classes and lambdas or method references do not count. Nested (static or inner) named classes count and are written by their own simple name. Other accessor interfaces (for example index accessors) are not part of the question. Consider only the production Java sources of the repository (`*/src/main/java` in every module; not tests, test fixtures, Kotlin files, `framework-docs/` samples or `buildSrc/`). List each class once by its simple name.",
+  "category": "dispatch"
+ },
+ {
+  "id": "spring-dispatch-task-executor-execute",
+  "repo": "spring-framework",
+  "type": "dispatch",
+  "answer_kind": "names",
+  "n_gold": 12,
+  "question": "`ExecutorServiceAdapter.execute(Runnable)` (spring-core, package `org.springframework.core.task.support`) delegates to `execute(Runnable)` of the `org.springframework.core.task.TaskExecutor` it wraps. Which classes' implementations of `TaskExecutor.execute(Runnable)` (the one-argument method) can run there? A class counts if it declares its own method body for that method, either because it implements the interface (or abstract class) directly or through any chain of superclasses and superinterfaces. A class that only inherits the body from a superclass does not count; abstract declarations do not count. Anonymous classes and lambdas or method references do not count. Only classes that are `TaskExecutor`s count: classes that implement just `java.util.concurrent.Executor` or extend JDK executor classes do not. Nested (static, inner or private) named classes count and are written by their own simple name. Consider only the production Java sources of the repository (`*/src/main/java` in every module; not tests, test fixtures, Kotlin files, `framework-docs/` samples or `buildSrc/`). List each class once by its simple name.",
+  "category": "dispatch"
+ },
+ {
+  "id": "spring-dispatch-tx-begin-hooks",
+  "repo": "spring-framework",
+  "type": "dispatch",
+  "answer_kind": "symbols",
+  "n_gold": 10,
+  "question": "`AbstractPlatformTransactionManager.getTransaction(...)` (spring-tx, package `org.springframework.transaction.support`) first calls its abstract method `doGetTransaction()` and, when it starts a new transaction, its abstract method `doBegin(Object, TransactionDefinition)`. Which implementations of these two methods can run there? List every method that overrides `doGetTransaction()` or `doBegin(Object, TransactionDefinition)` of `AbstractPlatformTransactionManager` in a subclass (directly or through intermediate superclasses). Methods with the same names in other class hierarchies (for example the reactive transaction support) do not count. Consider only the production Java sources of the repository (`*/src/main/java` in every module; not tests, test fixtures, Kotlin files, `framework-docs/` samples or `buildSrc/`). Write each as `ClassName.methodName`.",
+  "category": "dispatch"
+ },
+ {
+  "id": "spring-byname-aot-runtime-hints-registrars",
+  "repo": "spring-framework",
+  "type": "by_name",
+  "answer_kind": "files",
+  "n_gold": 22,
+  "question": "During ahead-of-time (AOT) processing, Spring automatically applies the `RuntimeHintsRegistrar` implementations that modules register in their `META-INF/spring/aot.factories` files under the key `org.springframework.aot.hint.RuntimeHintsRegistrar`. Which Java source files declare the registrars registered that way? Only production resources count (`src/main/resources` of every module; not test resources). Registrars that are only imported with `@ImportRuntimeHints`, and classes registered under other keys, do not count. List the repository-relative paths of the `.java` files that declare them (for a nested class, the file of its top-level class).",
+  "category": "by_name"
+ },
+ {
+  "id": "spring-byname-aspects-by-string",
+  "repo": "spring-framework",
+  "type": "by_name",
+  "answer_kind": "names",
+  "n_gold": 11,
+  "question": "The spring-aspects module (AspectJ aspects and their configuration classes) is optional at run time, so other modules refer to some of its classes only by their fully qualified class name written in a Java string literal, without a compile-time dependency. Which classes declared in spring-aspects' production sources are named that way in the production Java code of the other modules (`*/src/main/java` outside spring-aspects)? Mentions in comments or Javadoc, and names in XML, XSD or other resource files, do not count. List each class once by its simple name.",
+  "category": "by_name"
+ },
+ {
+  "id": "spring-byname-default-test-execution-listeners",
+  "repo": "spring-framework",
+  "type": "by_name",
+  "answer_kind": "names",
+  "n_gold": 12,
+  "question": "When a test class does not declare its own test execution listeners, which `TestExecutionListener` classes does the Spring TestContext framework (spring-test) register by default? Only production resources count (`src/main/resources` of every module; not test resources). Do not list listeners that are only used when a test declares them explicitly. List each class by its simple name.",
+  "category": "by_name"
+ },
+ {
+  "id": "spring-byname-spring-test-string-classes",
+  "repo": "spring-framework",
+  "type": "by_name",
+  "answer_kind": "names",
+  "n_gold": 13,
+  "question": "Which Spring Framework classes, annotations or interfaces (types in `org.springframework` packages) does the production Java code of the spring-test module (`spring-test/src/main/java`) name by their fully qualified name in a string literal, for example to load them reflectively or to check whether they are present? Strings that are bean names, logger or logging category names, or package names are not types and do not count; neither do mentions in comments or Javadoc. List each type once by its simple name.",
+  "category": "by_name"
+ },
+ {
+  "id": "spring-byname-sql-error-code-databases",
+  "repo": "spring-framework",
+  "type": "by_name",
+  "answer_kind": "names",
+  "n_gold": 11,
+  "question": "Spring JDBC translates vendor-specific SQL error codes into its exception hierarchy using error code mappings that ship with the framework and are loaded at run time. For which database products does spring-jdbc ship such a mapping out of the box? Answer with the identifier under which each built-in mapping is registered (its bean id), one per database product. Only production resources count (`src/main/resources` of every module; not test resources). A custom file an application may add does not count.",
+  "category": "by_name"
+ },
+ {
+  "id": "spring-byname-xml-namespace-handlers",
+  "repo": "spring-framework",
+  "type": "by_name",
+  "answer_kind": "names",
+  "n_gold": 15,
+  "question": "Spring's XML bean definition reader maps each XML namespace URI (such as the `context`, `tx` or `mvc` namespaces) to a handler class that parses that namespace's elements. Which handler classes does the framework register for a namespace URI? Only production resources count (`src/main/resources` of every module; not test resources). Abstract base classes that are not registered for a namespace do not count. List each class once by its simple name.",
+  "category": "by_name"
+ },
+ {
+  "id": "spring-docs-caffeine-cache-manager",
+  "repo": "spring-framework",
+  "type": "docs",
+  "answer_kind": "files",
+  "n_gold": 10,
+  "question": "Suppose the class `CaffeineCacheManager` (`org.springframework.cache.caffeine`, module spring-context-support) were renamed. Which files of the reference documentation must be updated? A page that only names its package or the Caffeine library does not count. The reference documentation consists of the AsciiDoc pages under `framework-docs/modules/` and the documentation code samples under `framework-docs/src/main/` (Java, Kotlin and XML files included into those pages). A file must be updated when it names the class (in prose, a code listing, an import, a fully qualified class name, or an API link) or when its code uses it. List every such file once, as a path relative to the repository root. Files outside `framework-docs/` (Javadoc, source code, tests) do not count.",
+  "category": "docs"
+ },
+ {
+  "id": "spring-docs-default-message-listener-container",
+  "repo": "spring-framework",
+  "type": "docs",
+  "answer_kind": "files",
+  "n_gold": 15,
+  "question": "Suppose the class `DefaultMessageListenerContainer` (`org.springframework.jms.listener`) were renamed. Which files of the reference documentation must be updated? Other listener containers (for example `SimpleMessageListenerContainer`) are not renamed. The reference documentation consists of the AsciiDoc pages under `framework-docs/modules/` and the documentation code samples under `framework-docs/src/main/` (Java, Kotlin and XML files included into those pages). A file must be updated when it names the class (in prose, a code listing, an import, a fully qualified class name, or an API link) or when its code uses it. List every such file once, as a path relative to the repository root. Files outside `framework-docs/` (Javadoc, source code, tests) do not count.",
+  "category": "docs"
+ },
+ {
+  "id": "spring-docs-freemarker-template-loader-path",
+  "repo": "spring-framework",
+  "type": "docs",
+  "answer_kind": "files",
+  "n_gold": 10,
+  "question": "Suppose the setter `setTemplateLoaderPath(String)` of `FreeMarkerConfigurationFactory` (`org.springframework.ui.freemarker`, module spring-context-support) were renamed, and with it the bean property `templateLoaderPath` it defines. Which files of the reference documentation must be updated? Calls through any subclass count (for example the FreeMarker configurers of Spring MVC and of WebFlux), and so does an XML bean definition that sets the property `templateLoaderPath`. The plural setter `setTemplateLoaderPaths` / property `templateLoaderPaths` and XML namespace elements that do not name the property are not affected. The reference documentation consists of the AsciiDoc pages under `framework-docs/modules/` and the documentation code samples under `framework-docs/src/main/` (Java, Kotlin and XML files included into those pages). A file must be updated when it names the setter or its property (in prose, a code listing, an import, a fully qualified class name, or an API link) or when its code calls it. List every such file once, as a path relative to the repository root. Files outside `framework-docs/` (Javadoc, source code, tests) do not count.",
+  "category": "docs"
+ },
+ {
+  "id": "spring-docs-handler-method-validation-exception",
+  "repo": "spring-framework",
+  "type": "docs",
+  "answer_kind": "files",
+  "n_gold": 14,
+  "question": "Suppose the exception class `HandlerMethodValidationException` (`org.springframework.web.method.annotation`, module spring-web, used by both Spring MVC and WebFlux) were renamed. Which files of the reference documentation must be updated? A name that merely contains it as part of a longer identifier (for example a sample class whose own name starts with it) does not count by itself. The reference documentation consists of the AsciiDoc pages under `framework-docs/modules/` and the documentation code samples under `framework-docs/src/main/` (Java, Kotlin and XML files included into those pages). A file must be updated when it names the class (in prose, a code listing, an import, a fully qualified class name, or an API link) or when its code uses it. List every such file once, as a path relative to the repository root. Files outside `framework-docs/` (Javadoc, source code, tests) do not count.",
+  "category": "docs"
+ },
+ {
+  "id": "spring-docs-mvc-configure-view-resolvers",
+  "repo": "spring-framework",
+  "type": "docs",
+  "answer_kind": "files",
+  "n_gold": 14,
+  "question": "Suppose the callback method `configureViewResolvers` of Spring MVC's `WebMvcConfigurer` interface (`org.springframework.web.servlet.config.annotation`) were renamed. Which files of the reference documentation must be updated? WebFlux's `WebFluxConfigurer` has a method of the same name; it is not renamed, and files that only use the WebFlux one do not count. The reference documentation consists of the AsciiDoc pages under `framework-docs/modules/` and the documentation code samples under `framework-docs/src/main/` (Java, Kotlin and XML files included into those pages). A file must be updated when it names the Spring MVC method (in prose, a code listing, an import, a fully qualified class name, or an API link) or when its code implements or calls it. List every such file once, as a path relative to the repository root. Files outside `framework-docs/` (Javadoc, source code, tests) do not count.",
+  "category": "docs"
+ },
+ {
+  "id": "spring-docs-stomp-configure-message-broker",
+  "repo": "spring-framework",
+  "type": "docs",
+  "answer_kind": "files",
+  "n_gold": 16,
+  "question": "Suppose the callback method `configureMessageBroker` of `WebSocketMessageBrokerConfigurer` (`org.springframework.web.socket.config.annotation`) were renamed. Which files of the reference documentation must be updated? The reference documentation consists of the AsciiDoc pages under `framework-docs/modules/` and the documentation code samples under `framework-docs/src/main/` (Java, Kotlin and XML files included into those pages). A file must be updated when it names the method (in prose, a code listing, an import, a fully qualified class name, or an API link) or when its code implements or calls it. List every such file once, as a path relative to the repository root. Files outside `framework-docs/` (Javadoc, source code, tests) do not count.",
+  "category": "docs"
+ }
+]

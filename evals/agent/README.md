@@ -886,7 +886,8 @@ different degrees: does myceliums change success, F1, tokens and cost per
 solved task, and in which category? This section
 is the prepared measurement: task set, gold labels, review, index and run
 configuration, and the budget, written before any session; what ran since is under
-[Calibration and pre-registration](#calibration-and-pre-registration-of-the-main-run-182).
+[Calibration and pre-registration](#calibration-and-pre-registration-of-the-main-run-182),
+the outcome under [Result](#result-of-the-main-run-182).
 
 **Repository.** Spring Framework v7.1.0 (`spring-framework` in
 [`repos.json`](repos.json), commit `f2e4863de60e`, the #177 Java sets'
@@ -1161,6 +1162,114 @@ usage limit could be recorded as a final `timeout` or `error` (F1 0); it is
 now always `usage_limit`, not final, and re-run; a session killed from outside
 (SIGKILL, SIGTERM) is a `crash`, also not final
 (`tests/test_schedule.py`, `UsageLimit`). No stored session was affected.
+
+### Result of the main run (#182)
+
+270 sessions on 2026-11-23, 20:27-22:01 UTC ([report](results/182-spring/REPORT.md),
+[tokens](results/182-spring/TOKENS.md), [supplement](results/182-spring/SUPPLEMENT.md),
+[audit](results/182-spring/outside_audit.json)): all `ok`, no retry, no usage
+limit, no isolation problem, $14.84 (A 3.51, C 3.16, D 8.17; the ~$70 estimate
+assumed 20 turns, A took 4.1). The index was built with the binary of
+`388c6e1` (sha256 `a42bffce8d3a`): 145,670 of 145,670 symbols embedded, 17,699 s
+on a loaded machine, of which 17,626 s embedding; 1.2 GB; fingerprint in the
+report's notes.
+
+| | A (grep) | C (myc + grep) | D (myc only) |
+|---|---:|---:|---:|
+| Solved sessions (of 90) | 89 | 90 | 89 |
+| Mean F1 | 0.996 | 0.997 | 0.985 |
+| Tokens per solved task (input + output) | 46.8k | 47.8k | 125.5k |
+| — uncached / cache write / cache read / output | 0.0 / 5.0 / 40.3 / 1.6k | 0.0 / 4.2 / 42.2 / 1.4k | 0.0 / 14.1 / 108.9 / 2.4k |
+| Cost per solved task (USD) | 0.0395 | 0.0351 | 0.0918 |
+| Turns per session | 4.1 | 3.7 | 10.6 |
+| Sessions that used myceliums | 0 | 13 | 78 |
+
+| Pair | Tasks solved in one arm only (first : second), McNemar p (Holm) | ΔF1 | Tokens per solved, ratio | Cost per solved, ratio |
+|---|---|---:|---:|---:|
+| A vs C | 0 : 0, p = 1 (1) | −0.001 [−0.010, +0.005] | 0.98× [0.82×, 1.22×] | 1.13× [0.97×, 1.37×] |
+| A vs D | 0 : 0, p = 1 (1) | +0.011 [−0.003, +0.026] | 0.37× [0.24×, 0.59×] | 0.43× [0.29×, 0.65×] |
+| C vs D | 0 : 0, p = 1 (1) | +0.012 [+0.000, +0.027] | 0.38× [0.25×, 0.58×] | 0.38× [0.26×, 0.57×] |
+
+(Ratios first ÷ second: below 1 the first arm spends less.) 12 comparisons, only
+the McNemar tests corrected.
+
+**Reading.**
+
+* **Offering myceliums next to grep (C): no difference detected** in tokens or
+  cost per solved task; both intervals include 1 (C ÷ A: tokens 1.02× [0.83×,
+  1.23×], cost 0.89× [0.74×, 1.03×]). The agent hardly used it: 13 of 90
+  sessions, 14 calls, all in the deep-transitive category. In the other 77
+  sessions C is the same agent with a larger first prompt (11.0k against 8.8k
+  tokens). Per category (post hoc) C used more tokens than A on docs (1.26×
+  [1.13×, 1.38×]), dispatch (1.22× [1.03×, 1.44×]) and by-name (1.12× [1.01×,
+  1.24×]), at no higher cost (0.90×, 0.89×, 1.01×).
+* **Replacing grep with myceliums (D) cost 2.3× [1.6×, 3.4×] as much and 2.7×
+  [1.7×, 4.2×] the tokens per solved task** as A. Of the 77.8k extra
+  tokens per session, 37.3k are myceliums results, 33.8k the base context re-read
+  over more turns, 7.2k file reads, 4.8k replies; search output is 6.1k less. Part
+  of it is the arm's own friction: the allowlist hook refused 107 commands, 93
+  of them searches, in 88 of the 90 sessions (no search got through; no session
+  was flagged by the search audit).
+* **Harm check: nothing detected, and little could be.** No task differs at
+  the majority level; a true loss below about 25-29 points would likely be
+  missed, and no significant difference is not evidence of equal success. D's
+  recall is lower on docs (0.919 against 1.000; 13 of the 16 missed files are XML
+  samples of `framework-docs/`) and by-name (0.983).
+* **By category** (6 tasks each; the intervals are post hoc, exploratory):
+  tokens per solved task, D ÷ A: concept 1.4×, dispatch 2.4×, by-name 4.1×, docs
+  12×, and deep transitive 0.73× [0.42×, 1.17×] (cost 0.65× [0.39×, 1.01×]), the
+  only category whose point estimate is below 1; C ÷ A there 0.83× [0.46×,
+  1.26×]. The deep-transitive intervals include 1: a hypothesis for a new
+  set, not a finding.
+* **What this does not answer:** whether myceliums raises success. Arm A was
+  at the ceiling (99 %), so the hypothesis of #182 could not be tested; that
+  needs a new, harder, pre-registered set, on code the model has not seen.
+
+**Verdict for the Clausohm decision.** On this evidence there is no reason to
+expect better answers or lower cost from adding myceliums to a capable agent
+with grep for tasks of this kind; a small loss or gain cannot be ruled out.
+Replacing search by myceliums was clearly dearer here. The one lead worth testing is
+deep multi-hop caller questions. The evidence is from an open-source code base
+the model knows; it says little about a private one.
+
+**Limits.**
+
+* *Gold*: agent-labelled and agent-reviewed; no person has checked it.
+* *Memorisation*: Spring is very likely in the training data. Answer items never
+  seen in tool output (lenient): A 8 of 956, C 16 of 951, D 8 of 922; in
+  the concept category A 2, C 7, D 5 of 24. A lower bound. Five sessions answered `spring-concept-mvc-best-match` exactly without any tool
+  call (C 3 of 3, D 2 of 3, A 0 of 3), although the prompt says to investigate.
+  Another 10 of D's 90 sessions made no myceliums call and read a file whose path
+  was neither in the question nor in any tool output. Results may not
+  transfer to a private code base. (Strict matching shows 84 for D; for the other
+  76 file name and parent directory appear, but not the full path.)
+* *Time drift and caching*: the arms are interleaved, so they share the same
+  hours, but the cost per session fell over the run (A 0.049, 0.036, 0.032 USD in
+  repetitions 1-3) with the cache-write tokens (A 7.6k, 3.8k, 3.4k; C 6.4k, 3.1k,
+  3.2k; D 16.0k, 12.4k, 13.4k), which fits 1-hour prompt caches shared between
+  sessions. Absolute costs depend on it, and a real deployment may not have it.
+* *Wall time* (A 14.1, C 13.4, D 28.2 s) is comparable between arms only because
+  of the interleaving: load was 12-91 (median 31) on 10 cores from other jobs (a
+  Gradle process in 3 of 95 minutes);
+  nothing is claimed about absolute times.
+* *Emphasis chosen after the calibration*: tokens and cost became primary once A
+  was at the ceiling (see above).
+* *myceliums' known gaps on Spring*: same-arity overloads (#186), generic type arguments (#187), method
+  references (#188), dispatch to implementations outside the receiver's static
+  type (#194). Their share in these results was not measured. The most frequent
+  myceliums error was "Symbol ... is ambiguous" for overloaded methods.
+* *No sandbox*: sessions run as the harness's user and could read other files
+  (gold sets, caches) or, in A and C, use the network. `outside_audit.py` (added
+  during the run, after a review of #183, without changing the running setup)
+  checked all 270 transcripts. Paths outside the working copy: 24 hits in A,
+  27 in C, 15 in D, of which one is a real access (an A session wrote and ran its own
+  awk helper in `/tmp`); the others are regex text, a refused redirect, two reads of
+  a path that does not exist and a `cd` back to the root. Network: 2 hits, both
+  the file name `websocket.adoc`. D's refusal message shows the path of the hook
+  script, which lies in the eval checkout, in 88 of 90 D sessions; no session
+  followed it. **No session read a gold file or a later Spring version**, so the
+  results with and without such sessions are the same. The audit parses commands
+  statically and misses a path built at run time.
 
 ## Token attribution and cost (#178)
 
