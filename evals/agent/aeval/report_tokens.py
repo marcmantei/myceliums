@@ -226,11 +226,13 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
         rows = rows + others
         conds = sorted({r["condition"] for r in rows})
     base = "none" if "none" in conds else conds[0]
-    arm = next((c for c in conds if c != base), base)
+    arms = [c for c in conds if c != base] or [base]
+    arm = arms[0]
     tasks = sorted({r["task_id"] for r in rows})
     excluded = meta.get("primary_exclude") or {}
     ids = [t for t in tasks if t not in excluded]
     analysis = analyse(rows, ids, base, arm, n_resamples)
+    by_arm = {a: (analysis if a == arm else analyse(rows, ids, base, a, n_resamples)) for a in arms}
     rec = reconciliation(own)
     models = sorted({m for r in rows for m in (r.get("models") or [])})
     prices = {m: price_of(m, load_prices(None)) for m in models}
@@ -240,7 +242,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     summary = {"label": label, "base": base, "arm": arm, "tasks": len(ids), "excluded": sorted(excluded),
                "reconciliation": rec, "analysis": analysis, "models": models, "prices": prices,
                "prices_source": PRICES_SOURCE, "prices_as_of": PRICES_AS_OF, "crosscheck": cross,
-               "search_audit": audit, **({"compared_with": base_label} if base_label else {})}
+               "search_audit": audit, **({"compared_with": base_label} if base_label else {}),
+               **({"arms": arms, "analysis_by_arm": by_arm} if len(arms) > 1 else {})}
 
     L = [f"# Token attribution: {label}", ""]
     L.append(f"Where the tokens of the sessions in [`REPORT.md`](REPORT.md) went (#178), attributed per tool from "
@@ -282,9 +285,25 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
              f"difference per session {rec['max_abs_cost_diff_usd']:.2g} USD.")
     L.append("")
     L.extend(_crosscheck_lines(cross))
+    if len(arms) == 1:
+        L.extend(_arm_lines(analysis, base, arm))
+    else:  # #182: several arms (A/C/D), each against the base
+        for a in arms:
+            L.extend(_arm_lines(by_arm[a], base, a, f": `{a}` against `{base}`"))
+    L.extend(_audit_lines(audit))
+    L.append("*Tokens* are billed input tokens (every call re-reads the context, so a result counts once per later "
+             "call) and output tokens; *result size* is a result's own size when it entered the context (its share "
+             "of the growth between two calls).")
+    L.append("")
+    return "\n".join(L), summary
+
+
+def _arm_lines(analysis: dict, base: str, arm: str, suffix: str = "") -> list[str]:
+    """The tables of one arm against the base, per budget group."""
+    L: list[str] = []
     for b, g in analysis.items():
         heading = {"all": "All sessions", "all budgets": "All budgets together"}.get(b, f"{b} turns")
-        L.append(f"## {heading}")
+        L.append(f"## {heading}{suffix}")
         L.append("")
         if base not in g or arm not in g:
             continue
@@ -323,12 +342,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
                  f"{_ci(pc, 'a', _usd)} USD, ratio {_ci(pc, 'ratio', _fmt_ratio)}"
                  + (f" ({pt['skipped']} resamples without a solved task skipped)" if pt["skipped"] else "") + ".")
         L.append("")
-    L.extend(_audit_lines(audit))
-    L.append("*Tokens* are billed input tokens (every call re-reads the context, so a result counts once per later "
-             "call) and output tokens; *result size* is a result's own size when it entered the context (its share "
-             "of the growth between two calls).")
-    L.append("")
-    return "\n".join(L), summary
+    return L
 
 
 def _crosscheck_lines(cross: dict) -> list[str]:

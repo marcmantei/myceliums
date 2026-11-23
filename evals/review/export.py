@@ -14,7 +14,7 @@ One item per claim a human can confirm or reject, from:
   every gold symbol, CALLS edge, dynamic call and trap;
 * graph-held-out (graph-gold/held-out/real-repos.json): one item per call site;
 * agent-tasks, agent-tasks-hard, agent-tasks-hard-v1, agent-tasks-outcome,
-  agent-tasks-scale (evals/agent/tasks/*.json): every gold and optional answer, and one
+  agent-tasks-scale, agent-tasks-java (evals/agent/tasks/*.json): every gold and optional answer, and one
   "is the gold set complete?" item per task.
 
 Ids are derived from the labels' own keys (query id, symbol id, caller and
@@ -51,6 +51,7 @@ TASK_FILES = (
     ("agent-tasks-hard-v1", "tasks-hard-v1.json", "#125"),
     ("agent-tasks-outcome", "tasks-outcome.json", "#153"),
     ("agent-tasks-scale", "tasks-scale.json", "#163"),
+    ("agent-tasks-java", "tasks-java.json", "#182"),
 )
 
 MAX_BLOCK = 40     # lines of a definition shown

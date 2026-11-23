@@ -109,8 +109,12 @@ def normalize_file(raw: str, repo: str) -> str:
     return s.lstrip("/")
 
 
-def _symbol_matches(answer: str, name: str) -> bool:
-    """True when a normalised answer item names the normalised gold ``name``."""
+def _symbol_matches(answer: str, name: str, bare: bool = True) -> bool:
+    """True when a normalised answer item names the normalised gold ``name``.
+
+    ``bare=False`` (a task with ``"require_owner": true``, #182) refuses a
+    bare method name for a ``Type.method`` gold item: the answer must name the
+    owner, as the prompt's format rule asks."""
     if not answer or not name:
         return False
     if answer == name:
@@ -119,7 +123,7 @@ def _symbol_matches(answer: str, name: str) -> bool:
         return True
     if "." in answer and name.endswith("." + answer):  # partially qualified answer
         return True
-    if "." not in answer and name.rsplit(".", 1)[-1] == answer:  # bare method name
+    if bare and "." not in answer and name.rsplit(".", 1)[-1] == answer:  # bare method name
         return True
     return False
 
@@ -195,7 +199,8 @@ def grade(task: dict, answer: list[str] | None, success_threshold: float = 0.8) 
         match = _file_matches
     else:
         norm = normalize_symbol
-        match = _symbol_matches
+        bare = not task.get("require_owner")
+        match = lambda a, n: _symbol_matches(a, n, bare)  # noqa: E731
 
     # De-duplicate answers after normalisation, keeping the first spelling.
     seen: set[str] = set()

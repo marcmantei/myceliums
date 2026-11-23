@@ -40,7 +40,7 @@ the labels' own keys, so they are stable across re-exports.
 | `retrieval-test-seeking` | `real-repos/test-seeking.json` | same |
 | `graph-gold` | `graph-gold/<language>.json` | every symbol, CALLS edge, dynamic call and trap |
 | `graph-held-out` | `graph-gold/held-out/real-repos.json` | one per call site |
-| `agent-tasks`, `agent-tasks-hard`, `agent-tasks-hard-v1`, `agent-tasks-outcome`, `agent-tasks-scale` | `evals/agent/tasks/*.json` (#99, #125, #153, #163) | every gold and optional answer, one "is the gold set complete?" per task |
+| `agent-tasks`, `agent-tasks-hard`, `agent-tasks-hard-v1`, `agent-tasks-outcome`, `agent-tasks-scale`, `agent-tasks-java` | `evals/agent/tasks/*.json` (#99, #125, #153, #163, #182) | every gold and optional answer, one "is the gold set complete?" per task |
 
 Snippets come from the pinned checkouts in `~/.cache/myceliums-eval-repos`
 (`real-repos/fetch.sh`) and `~/.cache/myceliums-agent-eval*/repos`
@@ -48,6 +48,8 @@ Snippets come from the pinned checkouts in `~/.cache/myceliums-eval-repos`
 `export.py --check` exits 1 when `items.jsonl` is out of date.
 
 `agent-tasks-scale` (#163) is exported for review only. It has no pre-screen yet, so its labels are unreviewed, and `apply.py`, with or without `--policy`, leaves it out (`common.NOT_APPLIED`) instead of refusing to run; `--reset-datasets-to` does not touch its file either. It joins the applied datasets once it has a complete pre-screen and a review.
+
+`agent-tasks-java` (#182, Spring Framework) has a complete pre-screen by an independent agent (`prescreen/agent-tasks-java.jsonl`: 382 of 383 claims confirmed, 1 wrong) and its own record in `record-182/`: the third agent's decision on the disagreement (`third-check.jsonl`, `reviewer: agent:second-check`; the fix is already in the task file), a provenance line per item (`provenance.jsonl`), and the sample for Marc's spot check (`sample.json`, seed 164, 58 of the 382 confirmed items). It stays in `common.NOT_APPLIED` until Marc has spot-checked it; the command to review it alone is in `evals/agent/README.md` (#182).
 
 ## Pre-screen format
 

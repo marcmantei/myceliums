@@ -18,7 +18,10 @@ body (never the headers) and answers with a fixed script:
 4. if the request offers ``Bash`` but not ``Grep`` (arm ``D``, #178), the
    first answer runs a ``grep`` in the shell, which D's hook must block, and
    the second ``myc callers <symbol>`` alone, which must still run;
-5. everything else ends the turn with a short text.
+5. everything else ends the turn with a short text and an answer block:
+   empty, or (``answers``, used by ``run --mock-api``, #182) the answer
+   listed for the question the session's prompt contains, so the grading
+   and token pipeline sees a real answer.
 
 What the recorded requests show is what ``probe`` reports: which memory files
 reached the context (project CLAUDE.md yes, ``~/.claude/CLAUDE.md`` no),
@@ -78,8 +81,28 @@ def _tool_results(body: dict) -> int:
     return n
 
 
+def session_env(url: str) -> dict[str, str]:
+    """Environment that points a session at the mock API, with a dummy key."""
+    return {"ANTHROPIC_BASE_URL": url, "ANTHROPIC_API_KEY": "probe-not-a-key",
+            "CLAUDE_CODE_OAUTH_TOKEN": "", "DISABLE_TELEMETRY": "1",
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+
+
+def _first_user_text(body: dict) -> str:
+    for m in body.get("messages") or []:
+        if m.get("role") != "user":
+            continue
+        c = m.get("content")
+        if isinstance(c, str):
+            return c
+        return "\n".join(b.get("text", "") for b in c or [] if isinstance(b, dict) and b.get("type") == "text")
+    return ""
+
+
 class MockAPI:
-    def __init__(self, log_dir: Path, grep_pattern: str, callers_symbol: str):
+    def __init__(self, log_dir: Path, grep_pattern: str, callers_symbol: str,
+                 answers: dict[str, list[str]] | None = None):
+        self.answers = answers or {}
         self.log_dir = log_dir
         self.grep_pattern = grep_pattern
         self.callers_symbol = callers_symbol
@@ -166,4 +189,13 @@ class MockAPI:
             return _message([{"type": "tool_use", "id": "toolu_probe_agent", "name": "Agent", "input": {
                 "subagent_type": "code-explorer", "description": "probe",
                 "prompt": f"Who calls {self.callers_symbol}?"}}], "tool_use", model)
-        return _message([{"type": "text", "text": 'probe done\n```json\n{"answer": []}\n```'}], "end_turn", model)
+        return _message([{"type": "text", "text": "probe done\n```json\n"
+                          + json.dumps({"answer": self.answer_for(body)}) + "\n```"}], "end_turn", model)
+
+    def answer_for(self, body: dict) -> list[str]:
+        """The scripted final answer: the one listed for the question in the prompt, else empty."""
+        prompt = _first_user_text(body)
+        for question, answer in self.answers.items():
+            if question and question in prompt:
+                return list(answer)
+        return []

@@ -75,7 +75,17 @@ BASH_SEARCH_RULES = tuple(f"Bash({p}:*)" for p in ("grep", "egrep", "fgrep", "rg
 
 # Run profiles (#178). `realistic`: the turn limit is a safety cap only (100,
 # never stated in the prompt) and every task runs three times.
-PROFILES = {"realistic": {"max_turns": 100, "reps": 3, "prompt_budget": False}}
+# #182: the realistic profile also fixes the interleaved schedule (see
+# runner.Runner.plan), so a profile run always compares its arms over the
+# same stretch of time.
+PROFILES = {"realistic": {"max_turns": 100, "reps": 3, "prompt_budget": False, "schedule": "interleaved"}}
+# Schedules of a run's sessions. `paired` (the default since the pilot): per
+# repetition a shuffled task order, each task's conditions adjacent in a
+# shuffled order. `interleaved` (#182): the same blocks, but the conditions'
+# order within a block is counterbalanced, each condition taking each position
+# equally often per repetition (rotations of a shuffled order), and a run may not
+# be restricted to a subset of its conditions.
+SCHEDULES = ("paired", "interleaved")
 MCP_SERVER_NAME = "myceliums"
 
 

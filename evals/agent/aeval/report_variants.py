@@ -5,7 +5,11 @@ only; ``C``: what ``myc setup-claude --scope project --no-agent`` installs;
 ``E``: the same plus the code-explorer subagent) on the same tasks. Every
 variant is compared with ``A`` by a paired bootstrap over tasks. A run with a
 single condition (the calibration run, ``none``) gets the per-task table and
-the means only.
+the means only. A run exported with ``comparisons: pairwise`` (#182, the
+interleaved A/C/D runs) has no baseline: every pair of conditions is compared
+(McNemar on task success, paired bootstrap on F1, success and spend per
+solved task, Holm over the success tests), and recall and success are given
+per task category.
 
 Like :mod:`aeval.report`, the output is a deterministic function of the
 committed ``results.jsonl``, ``meta.json`` and ``tasks_snapshot.json``.
@@ -18,7 +22,7 @@ from collections import Counter, defaultdict
 
 from . import config
 from .report import _fmt, _fmt_diff, _fmt_ratio
-from .stats import mean, median, paired_bootstrap
+from .stats import exact_sign_test, mean, median, paired_bootstrap, per_success_bootstrap
 
 PREFIX = "mcp__myceliums__"
 
@@ -44,10 +48,18 @@ OUTCOME = {
          "PostToolUse and PreToolUse grep-redirect hooks in .claude/settings.json",
 }
 
+def _myc_calls(r: dict) -> int:
+    """MCP calls, plus ``myc`` runs from Bash where the session had myceliums
+    (#163/#182: with ``--bash`` C and D reach the CLI; in ``none`` a ``myc``
+    command finds no binary and is not a myceliums call)."""
+    cli = r.get("myc_cli_calls") or 0
+    return r["mcp_tool_calls"] + (cli if config.VARIANTS[r["condition"]].mcp else 0)
+
+
 METRICS = [
     # key, label, format, per-run extractor
-    ("myc_used", "Sessions with ≥ 1 myceliums call", "pct", lambda r: 1.0 if r["mcp_tool_calls"] else 0.0),
-    ("myc_calls", "myceliums calls per session", "f1", lambda r: r["mcp_tool_calls"]),
+    ("myc_used", "Sessions with ≥ 1 myceliums call", "pct", lambda r: 1.0 if _myc_calls(r) else 0.0),
+    ("myc_calls", "myceliums calls per session", "f1", _myc_calls),
     ("success", "Success rate (F1 ≥ {thr})", "pct", lambda r: 1.0 if r["success"] else 0.0),
     ("f1", "Mean F1", "f3", lambda r: r["f1"]),
     ("precision", "Mean precision", "f3", lambda r: r["precision"]),
@@ -99,6 +111,110 @@ def analyse(rows, tasks, conditions, baseline, n_resamples=10_000):
     return out
 
 
+def _holm(ps: list[float]) -> list[float]:
+    """Holm-Bonferroni adjusted p-values, in the input order."""
+    order = sorted(range(len(ps)), key=lambda i: ps[i])
+    out, running = [0.0] * len(ps), 0.0
+    for rank, i in enumerate(order):
+        running = max(running, min(1.0, (len(ps) - rank) * ps[i]))
+        out[i] = running
+    return out
+
+
+def pairwise(rows, tasks, conditions, n_resamples=10_000) -> dict:
+    """#182: every pair of conditions, no baseline. A task succeeds in a
+    condition when at least half of its repetitions do (McNemar's exact test
+    over the tasks that succeed in one condition of the pair only); F1 and the
+    success rate are compared per task by a paired bootstrap; tokens (input +
+    output) and the CLI cost per solved task by :func:`per_success_bootstrap`
+    (ratio first ÷ second)."""
+    ids = [t["id"] for t in tasks]
+    succ = _per_task(rows, lambda r: 1.0 if r["success"] else 0.0)
+    f1 = _per_task(rows, lambda r: r["f1"])
+    spend: dict = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0, 0.0]))
+    for r in rows:
+        a = spend[r["task_id"]][r["condition"]]
+        a[0] += (r.get("total_input_tokens") or 0) + (r.get("output_tokens") or 0)
+        a[1] += r.get("cost_usd") or 0.0
+        a[2] += 1.0 if r["success"] else 0.0
+    out = []
+    for i, x in enumerate(conditions):
+        for y in conditions[i + 1:]:
+            both = [t for t in ids if x in succ.get(t, {}) and y in succ.get(t, {})]
+            wins = sum(1 for t in both if succ[t][x] >= 0.5 > succ[t][y])
+            losses = sum(1 for t in both if succ[t][y] >= 0.5 > succ[t][x])
+            per_tok = [(spend[t][x][0], spend[t][x][2], spend[t][y][0], spend[t][y][2]) for t in both]
+            per_usd = [(spend[t][x][1], spend[t][x][2], spend[t][y][1], spend[t][y][2]) for t in both]
+            out.append({"a": x, "b": y, "n_tasks": len(both), "wins": wins, "losses": losses,
+                        "mcnemar_p": exact_sign_test(wins, losses),
+                        "success": paired_bootstrap(_pairs(succ, ids, x, y), n_resamples).as_dict(),
+                        "f1": paired_bootstrap(_pairs(f1, ids, x, y), n_resamples).as_dict(),
+                        "tokens_per_solved": per_success_bootstrap(per_tok, n_resamples),
+                        "cost_per_solved": per_success_bootstrap(per_usd, n_resamples)})
+    for c, p in zip(out, _holm([c["mcnemar_p"] for c in out])):
+        c["mcnemar_p_holm"] = p
+    return {"pairs": out}
+
+
+def by_category(rows, tasks, conditions) -> dict:
+    """#182: recall, success and F1 per task category (``category``, else ``type``) and condition."""
+    cat = {t["id"]: t.get("category") or t["type"] for t in tasks}
+    out: dict = {}
+    for key, fn in (("recall", lambda r: r["recall"]), ("success", lambda r: 1.0 if r["success"] else 0.0),
+                    ("f1", lambda r: r["f1"])):
+        pt = _per_task(rows, fn)
+        for c in conditions:
+            for k in sorted(set(cat.values())):
+                vals = [pt[t][c] for t in cat if cat[t] == k and c in pt.get(t, {})]
+                out.setdefault(k, {"n_tasks": sum(1 for t in cat if cat[t] == k)}).setdefault(c, {})[key] = \
+                    mean(vals) if vals else float("nan")
+    return out
+
+
+def _pairwise_lines(pw: dict, cats: dict, conditions: list[str], thr: float, n_resamples: int) -> list[str]:
+    L = ["## Pairwise comparisons", ""]
+    L.append(f"Every pair of conditions, none of them a baseline. A task counts as solved in a condition when at "
+             f"least half of its repetitions reach F1 ≥ {thr}; McNemar's exact test runs over the tasks solved in "
+             f"one condition of the pair only (first : second). Differences are first − second, averaged over "
+             f"tasks with the repetitions averaged first; spend per solved task is the sum over the sessions "
+             f"divided by the solved sessions, input + output tokens and the CLI cost estimate, ratio "
+             f"first ÷ second. Brackets: 95 % paired bootstrap over tasks ({n_resamples:,} resamples).")
+    L.append("")
+    L.append("| Pair | Tasks | Solved (first : second), McNemar p | Holm p | Δ success | Δ F1 | "
+             "Tokens per solved, ratio | Cost per solved, ratio |")
+    L.append("|---|---:|---|---:|---:|---:|---:|---:|")
+    for c in pw["pairs"]:
+        s, f, tk, us = c["success"], c["f1"], c["tokens_per_solved"], c["cost_per_solved"]
+        L.append(f"| `{c['a']}` vs `{c['b']}` | {c['n_tasks']} | {c['wins']} : {c['losses']}, p = "
+                 f"{c['mcnemar_p']:.2g} | {c['mcnemar_p_holm']:.2g} | "
+                 f"{_fmt_diff(s['diff_mean'], 'pct')} [{_fmt_diff(s['diff_lo'], 'pct')}, {_fmt_diff(s['diff_hi'], 'pct')}] | "
+                 f"{_fmt_diff(f['diff_mean'], 'f3')} [{_fmt_diff(f['diff_lo'], 'f3')}, {_fmt_diff(f['diff_hi'], 'f3')}] | "
+                 f"{_fmt_ratio(tk['ratio'])} [{_fmt_ratio(tk['ratio_lo'])}, {_fmt_ratio(tk['ratio_hi'])}] | "
+                 f"{_fmt_ratio(us['ratio'])} [{_fmt_ratio(us['ratio_lo'])}, {_fmt_ratio(us['ratio_hi'])}] |")
+    L.append("")
+    L.append(f"**Multiplicity.** {len(pw['pairs'])} pairs × 4 primary measures (success, F1, tokens and cost per "
+             f"solved task) = {4 * len(pw['pairs'])} comparisons, plus the per-category table below. Only the "
+             f"success tests are corrected (Holm over the {len(pw['pairs'])} pairs); every interval is a "
+             f"single 95 % interval, not corrected for multiple comparisons. The per-category numbers rest on a "
+             f"few tasks each and are exploratory.")
+    L.append("")
+    L.append("## By category")
+    L.append("")
+    L.append("Means over the category's tasks (repetitions averaged first). Categories differ in how far a single "
+             "text search answers them and are read separately; few tasks each, so direction, not size.")
+    L.append("")
+    L.append("| Category | Tasks | " + " | ".join(f"Recall {c}" for c in conditions) + " | "
+             + " | ".join(f"Success {c}" for c in conditions) + " | " + " | ".join(f"F1 {c}" for c in conditions)
+             + " |")
+    L.append("|---|---:|" + "---:|" * (3 * len(conditions)))
+    for k, m in sorted(cats.items()):
+        cells = ([_fmt(m[c]["recall"], "f3") for c in conditions] + [_fmt(m[c]["success"], "pct") for c in conditions]
+                 + [_fmt(m[c]["f1"], "f3") for c in conditions])
+        L.append(f"| {k} | {m['n_tasks']} | " + " | ".join(cells) + " |")
+    L.append("")
+    return L
+
+
 def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     res_dir = config.RESULTS_DIR / label
     meta = config.load_json(res_dir / "meta.json")
@@ -109,6 +225,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     thr = meta.get("success_threshold", 0.8)
     conditions = [c for c in meta["conditions"] if any(r["condition"] == c for r in rows)]
     baseline = "A" if "A" in conditions else conditions[0]
+    # #182: an interleaved A/C/D run compares every pair; no condition is the baseline.
+    is_pairwise = meta.get("comparisons") == "pairwise" and len(conditions) > 1
     a = analyse(rows, tasks, conditions, baseline, n_resamples)
     by_cond = {c: [r for r in rows if r["condition"] == c] for c in conditions}
 
@@ -148,7 +266,9 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     L.append(f"- **Grading:** set-based precision / recall / F1 against gold sets derived with compiler tooling; "
              f"success = F1 ≥ {thr}.")
     L.append(f"- **Statistics:** repetitions averaged within each task; 95 % percentile bootstrap intervals over "
-             f"tasks ({n_resamples:,} resamples), paired with condition `{baseline}` for the differences.")
+             f"tasks ({n_resamples:,} resamples), "
+             + ("every pair of conditions compared, none of them a baseline (see *Pairwise comparisons*)."
+                if is_pairwise else f"paired with condition `{baseline}` for the differences."))
     L.append("")
     L.append("| Condition | What the session has |")
     L.append("|---|---|")
@@ -171,7 +291,12 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
         L.append(f"| {lab.format(thr=thr)} | " + " | ".join(cells) + " |")
     L.append("")
 
-    others = [c for c in conditions if c != baseline]
+    others = [] if is_pairwise else [c for c in conditions if c != baseline]
+    pw = cats = None
+    if is_pairwise:
+        pw = pairwise(rows, tasks, conditions, n_resamples)
+        cats = by_category(rows, tasks, conditions)
+        L.extend(_pairwise_lines(pw, cats, conditions, thr, n_resamples))
     if others:
         L.append(f"## Paired differences vs {baseline}")
         L.append("")
@@ -329,4 +454,6 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     summary = {"label": label, "threshold": thr, "baseline": baseline, "conditions": conditions,
                "analysis": a, "n_rows": len(rows),
                "statuses": {f"{c}/{s}": n for (c, s), n in sorted(st.items())}}
+    if is_pairwise:
+        summary.update(baseline=None, pairwise=pw, by_category=cats)
     return "\n".join(L) + "\n", summary

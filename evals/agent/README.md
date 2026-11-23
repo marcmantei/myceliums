@@ -877,6 +877,233 @@ python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json exp
 python3 evals/agent/agent_eval.py report my-rerun
 ```
 
+## Java tasks on Spring Framework (#182)
+
+#163/#171 measured mid-size Python/TypeScript repositories with symbol-named
+questions, where grep is strongest, and found parity. #182 asks the same on a
+large Java code base, with task categories where a code graph might help, to
+different degrees: does myceliums change success, F1, tokens and cost per
+solved task, and in which category? This section
+is the prepared measurement: task set, gold labels, review, index and run
+configuration, and the budget. **No session with a model has run**; the runs
+need Marc's budget approval.
+
+**Repository.** Spring Framework v7.1.0 (`spring-framework` in
+[`repos.json`](repos.json), commit `f2e4863de60e`, the #177 Java sets'
+checkout): 11,464 files, 9,295 Java files in 23 Gradle modules, 470 AsciiDoc
+pages. Indexed in myceliums' default configuration (code, tests, Kotlin,
+`framework-docs/`, the config files of #179): 10,158 files, 145,670 symbols,
+492,203 relationships with the binary of `276d9169f443` (main with #179,
+#180, #181 and #190).
+
+**Tasks** ([`tasks/tasks-java.json`](tasks/tasks-java.json); 30, six per
+category; `labelled_by: agent`):
+
+| Category (`type`) | Tasks | Answer | Gold size | Example |
+|---|---:|---|---|---|
+| concept (`concept`) | 6 | methods | 1-2 (+ 35 optional neighbours over the six) | where a transaction's rollback rule for a thrown exception is chosen; where Spring AOP chooses a JDK proxy or a subclass |
+| deep transitive (`transitive_callers`, `blast_radius`) | 4 + 2 | methods / files | 10-21 | every caller up to three levels up of a private or static spring-core/spring-aop method, across 3-5 modules |
+| interface dispatch (`dispatch`) | 6 | classes / methods | 6-16 | which `HandlerMethodReturnValueHandler.handleReturnValue` bodies can run; which `doBegin` overrides of `AbstractPlatformTransactionManager` |
+| by-name references (`by_name`) | 6 | classes / files | 11-22 | the registrars in `META-INF/spring/aot.factories`, the default `TestExecutionListener`s of `spring.factories`, the XML namespace handlers, spring-aspects classes named in string literals |
+| docs to update (`docs`) | 6 | files | 10-16 | the `framework-docs/` pages and documentation samples to update if `WebMvcConfigurer.configureViewResolvers` or `CaffeineCacheManager` were renamed |
+
+**The categories are not equally graph-friendly, and they are reported
+separately.** About 12 of the 30 tasks, all six docs tasks and most by-name
+tasks, can be answered with a single text search for a name the question
+gives, then reading the hits; concept, deep transitive and dispatch tasks need
+several steps. The pooled numbers are therefore no test of "tasks that favour
+a graph"; the report gives recall, success and F1 per category.
+
+Every question states its own rules (scope `*/src/main/java` unless the
+category needs resources or docs; what counts as a call, an implementation or
+a reference; levels; overloads, lambdas, constructors). Concept questions do
+not contain the answer's symbol name. The prompt is the same in every arm and
+names no tool (`tests/test_schedule.py` checks the 30 prompts for tool words).
+The set is **not calibrated**: no session ran, so whether the tasks sit
+between floor and ceiling is unknown until the first repetition.
+
+**Grading notes.** Success stays F1 ≥ 0.8 as in every earlier set. Four of
+the six concept tasks have a single required method (the other two have
+two), so for them success means the exact answer: that method and nothing
+beyond its optional neighbours (listed per task, neutral in grading); a
+second wrong method already gives F1 0.67. Recall per category is reported
+next to success so that this is visible. Symbol answers of this set must
+name the owner (`"require_owner": true`, the prompt's `Type.method` rule): a
+bare method name, accepted in the earlier sets, counts as wrong here.
+Answers carry no package, so a class name that exists in two modules still
+matches either one: `AbstractHandlerMethodMapping.lookupHandlerMethod` and
+`RequestMappingInfo.compareTo` (gold of the Spring MVC concept task) also
+name the WebFlux classes of the same names. This leniency is the same in
+every arm.
+
+**Gold.** Traced by reading the code and the docs, never from myceliums
+output: `git grep` per level and reading each call site's receiver type
+(deep transitive), plain-text type-hierarchy and call-site helpers
+([`groundtruth/java/javahier.py`](groundtruth/java/javahier.py),
+[`groundtruth/java/jcalls.py`](groundtruth/java/jcalls.py)) cross-checked with
+`git grep` (dispatch), the factories/handlers/XML files and string literals
+(by name), word-boundary search over `framework-docs/` and reading every hit
+(docs). Each task records its method in `gold_method`; each gold item has an
+evidence line that `check-tasks` re-verifies.
+
+**Review** (owner policy `owner-2026-11-22`, as for #164). An independent
+second agent re-derived every task's set from the code (its own caller levels,
+its own hierarchy scanner, its own reading of the resources and docs) and
+judged all 383 claims (316 required answers, 37 optional answers, 30 "is the
+gold complete?"): 382 confirmed, 1 wrong
+([`../review/prescreen/agent-tasks-java.jsonl`](../review/prescreen/agent-tasks-java.jsonl)).
+A third agent decided the disagreement: the optional answer
+`BeanDefinitionRegistryPostProcessor` was removed, because its only body is
+an interface default method, which the question excludes
+([`../review/record-182/`](../review/record-182/): `third-check.jsonl`,
+`provenance.jsonl` with a class per item). No person has reviewed the set;
+each task's `review` says so and `reviewed_by` is `null`. For Marc's spot
+check, the review UI serves the dataset `agent-tasks-java` with its own
+sample (58 of the 382 confirmed items, seed 164) and decisions file:
+
+```bash
+python3 evals/review/export.py
+grep '"dataset": "agent-tasks-java"' evals/review/items.jsonl > /tmp/items-182.jsonl
+python3 evals/review/serve.py --items /tmp/items-182.jsonl --sample evals/review/record-182/sample.json \
+    --decisions evals/review/record-182/decisions.jsonl
+```
+
+**Arms.** Issue #182's arms map to the harness's conditions, all with `--bash`:
+A (grep, no myceliums) = `none`; C (myceliums + grep) = `C`; D (myceliums
+only) = `D` (see [Arm D](#arm-d-myceliums-only)).
+
+**Schedule.** `--profile realistic` (100-turn cap not stated in the prompt, 3
+repetitions) now also fixes `--schedule interleaved`: per repetition the tasks
+run in a shuffled order, each task's three arms back to back, and the arms'
+order inside the blocks is counterbalanced (rotations of one shuffled order,
+assigned to the tasks at random), so each arm runs first, second and third
+in exactly 10 of the 30 blocks of every repetition. All arms therefore share
+the same stretch of time, unlike #171, where the arms ran nine hours apart.
+An interleaved run refuses `--condition` (one arm alone). Its export records
+`comparisons: pairwise`, and the report then has no baseline: each pair (A vs
+C, A vs D, C vs D) gets McNemar's exact test on task success (a task counts
+as solved in an arm when at least half of its repetitions are, Holm-adjusted
+over the three pairs), paired bootstrap intervals over tasks for the
+difference in success and F1, and tokens (input + output) and cost per solved
+task with their ratio; a multiplicity statement (3 pairs × 4 measures, only
+the success tests corrected) and a per-category table of recall, success and
+F1 follow. `plan` prints the
+order and the balance without running anything; the run directory keeps
+`plan.txt`. The default schedule of earlier runs (`paired`, arms adjacent in a
+random order) is unchanged.
+
+```bash
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-java.json plan --conditions none,C,D --profile realistic
+# 270 sessions: 30 tasks x 3 conditions x 3 reps; schedule interleaved
+#   rep 1: position counts none [10, 10, 10]; C [10, 10, 10]; D [10, 10, 10]   (reps 2 and 3 the same)
+```
+
+**Index** (embeddings included). `index` runs `myc analyze --strict-embeddings`
+with jina-embeddings-v2-base-code (the default; long symbols in several
+chunks). Without embeddings the analysis takes 34 s; embedding is the cost.
+Measured on this machine (shared, 4 CPU-bound build jobs of other sessions
+running): spring-jdbc alone, 4,896 symbols, 426 s, 11.5 symbols/s. For
+145,670 symbols that is **about 3.5 hours** (8 hours at #171's Django rate of
+5 symbols/s on a loaded machine). Peak memory for the analysis without
+embeddings was 3.1 GB in #177.
+
+```bash
+export AEVAL_CACHE=~/.cache/myceliums-agent-eval-182 AEVAL_WORK_ROOT=/private/tmp/aeval182 \
+       FASTEMBED_CACHE_DIR=~/.cache/myceliums-eval-models
+cargo build --release -p myc && mkdir -p $AEVAL_CACHE/bin && cp target/release/myc $AEVAL_CACHE/bin/myc
+python3 evals/agent/agent_eval.py fetch --repo spring-framework
+python3 evals/agent/agent_eval.py index --repo spring-framework          # ~3.5 h on CPU
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-java.json check-tasks
+```
+
+`index --skip-embeddings` builds the graph only (34 s) for `--mock-api`
+checks; `meta.json` records `"embeddings": "skipped"` and a real run refuses
+that index.
+
+**Run** (after approval):
+
+```bash
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-java.json run --label 182-spring \
+    --conditions none,C,D --bash --profile realistic --timeout 1200 --max-retries 2
+python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-java.json export --label 182-spring
+python3 evals/agent/agent_eval.py report 182-spring
+python3 evals/agent/agent_eval.py tokens 182-spring
+```
+
+Sessions of one repository share its working path, so the 270 sessions run
+one after another whatever `--concurrency` says. `--max-utilization` (0.97)
+stops scheduling before the account's limit; a stopped run resumes with the
+same command, and the repetition-major order keeps completed repetitions
+complete.
+
+**Budget estimate** (CLI cost estimate at the published Sonnet 5.5 prices,
+`aeval/tokens.py`). Base: #163's 40-turn sessions (unstated cap, as here),
+per session: none 8.1 turns, 100k input tokens, 4.1k output, $0.101, 36 s;
+C 8.1 turns, 128k, 3.5k, $0.098, 29 s; #171's C re-run 132k and $0.100.
+Each call re-reads the context, so input tokens ≈ turns × first-call size +
+growth per turn × turns² / 2; fitted on #163 the first call is 7.2k (none)
+and 12.6k (C) tokens and the growth 1.3k and 0.8k tokens per turn. Assumed for
+Spring: 20 turns per session (2.5×: answers of 10-22 items over three
+levels or 10-16 doc files in a 9,300-file repository), 1.5× the growth per
+turn (larger grep output), D between A and C (10.5k first call: the tool
+schemas without the routing block; 1.0k × 1.5 growth). Cost: new context is
+a 1-hour cache write ($4/M), the re-read part a cache read ($0.10/M), output
+$10/M, scaled by 0.85, the factor by which this model over-predicts #163's
+none arm.
+
+| Arm | Sessions | Input tokens / session | Output / session | USD / session | Input tokens, arm | USD, arm |
+|---|---:|---:|---:|---:|---:|---:|
+| A (`none`) | 90 | ~520k | ~10k | ~0.28 | ~47M | ~25 |
+| C | 90 | ~490k | ~9k | ~0.24 | ~44M | ~22 |
+| D | 90 | ~510k | ~9k | ~0.25 | ~46M | ~23 |
+| **Total** | **270** | | | | **~137M** (about 90 % cache reads), ~2.5M output | **~70** |
+
+Range: at 12 turns per session about $35, at 30 turns about $140 (input
+tokens grow with the square of the turns). Wall time: #163 spent about 4 s per
+turn; the fixed cost per session (CLI start, working copy and index copy)
+was 9.4 s in the mock-API run below; at 20 turns that is ~90 s per session, **~7 hours** for 270 sessions in sequence (4-11
+hours over the range), plus the index build (~3.5 hours, once). A
+calibration of one repetition of arm A on the 30 tasks (30 sessions, about
+$8) before the main run would show whether the set sits between floor and
+ceiling; it is not part of the 270.
+
+**Calibration rule (fixed before any session).** A calibration, or anything
+seen in the main run, may only fix wrong gold (an item the question's own
+rules contradict, shown from the code) or unclear wording (a rule two careful
+readers apply differently). It never drops, replaces or changes a task
+because of how any arm performed on it: not because a task was too easy, too
+hard or favoured one arm. Every fix is recorded with its reason, and the
+stored answers of all arms are re-graded alike (`regrade`).
+
+**Pipeline check against the mock API** (no model call, no usage; myc at
+`276d9169f443`, Claude Code 2.1.330, the index without embeddings):
+
+* `probe --conditions none,C,D --bash` on `spring-tc-auto-proxy-creator`: no
+  problem in any arm. `none`: `Bash, Glob, Grep, Read`, no myceliums tool, the
+  shell's `myc` not found. C: the 9 core tool schemas up front, the routing
+  block, the SessionStart line (`index: f2e4863 = HEAD`), the grep hint, and
+  `myc callers registerOrEscalateApcAsRequired` from Bash answering from the
+  session's index (3 direct callers). D: `Bash, Read` and the 9 tools; the
+  scripted `grep -rl` refused by the allowlist hook, `myc callers` ran.
+* `run --mock-api --profile realistic --rep 1 --conditions none,C,D --bash`
+  (each session's final answer is the task's gold, `--mock-answers gold`),
+  then `export`, `report` and `tokens`: 90 sessions (30 tasks × 3 arms, the
+  interleaved order) in 14 minutes, every one `ok`, no isolation problem, every
+  answer extracted and graded F1 1.00, so all 30 gold sets survive the
+  answer normalisation. `REPORT.md` has the three arms; the scripted
+  `myc callers` from Bash counts as a myceliums call in C and D (100 % of
+  their sessions) and not in `none`, where no `myc` exists. `TOKENS.md` has a
+  section for C and one for D against `none` (before #182 it showed only the
+  first arm); its search audit counts 30 blocked and 0 leaked searches in D.
+  The mock reports one token per call, so the token tables only show that
+  the pipeline runs; the attribution itself is tested on real transcripts
+  (#178). The mock run's results were not committed.
+
+New in the harness for this: `--schedule`/the profile's interleaved order and
+`plan`, `run --mock-api`, `index --skip-embeddings`, myceliums calls from Bash
+in the variant report, and a token report per arm
+([`tests/test_schedule.py`](tests/test_schedule.py)).
+
 ## Token attribution and cost (#178)
 
 Where do a session's tokens go: into grep output, myceliums output, file
@@ -1115,9 +1342,10 @@ code.
 ### Realistic budget profile
 
 `run --profile realistic` sets `--max-turns 100` as a safety cap only (never
-stated in the prompt; `--prompt-budget` is refused with it) and 3
-repetitions. The profile name is stored in the run's config, so a resumed run
-cannot change it.
+stated in the prompt; `--prompt-budget` is refused with it), 3
+repetitions and (since #182) the interleaved schedule, see
+[#182](#java-tasks-on-spring-framework-182). The profile
+name is stored in the run's config, so a resumed run cannot change it.
 
 ## Replaying myceliums calls (#181)
 
