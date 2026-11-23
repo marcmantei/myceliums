@@ -103,6 +103,7 @@ pub mod demotion;
 /// File dependencies and module coupling metrics.
 pub mod dependencies;
 pub mod dispatch;
+pub mod doc_mentions;
 pub mod drift;
 pub mod dsl;
 pub mod email;
@@ -206,6 +207,7 @@ pub use demotion::{TestPolicy, TestRanking, DEFAULT_TEST_WEIGHT};
 pub use dependencies::{
     compute_file_dependencies, compute_module_coupling, FileDependency, ModuleCoupling,
 };
+pub use doc_mentions::DocMentionStats;
 pub use drift::{detect_drift, drift_score, DriftReport};
 pub use email::{parse_eml, parse_eml_file, EmailAttachment, ParsedEmail};
 pub use embedding_stats::EmbeddingStats;

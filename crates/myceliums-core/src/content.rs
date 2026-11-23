@@ -1,7 +1,9 @@
-//! Line-based parser for content files: Markdown, MDX, and plain text.
+//! Line-based parser for content files: Markdown, MDX, AsciiDoc and plain
+//! text.
 //!
-//! Extracts headings (H1–H6) as `Section` symbols and inline Markdown links
-//! as `ImportInfo` entries. Uses no external parsing crates beyond `regex`,
+//! Extracts headings (Markdown H1–H6, AsciiDoc `=` titles) as `Section`
+//! symbols and links (Markdown links, AsciiDoc `xref:`, `include::` and
+//! `<<file.adoc#…>>`) as `ImportInfo` entries. Uses no external parsing crates beyond `regex`,
 //! which is already in the workspace dependency tree.
 
 use std::sync::OnceLock;
@@ -164,6 +166,135 @@ fn parse_markdown(source: &str) -> ParseResult {
     }
 }
 
+static ADOC_HEADING_RE: OnceLock<Regex> = OnceLock::new();
+static ADOC_LINK_RE: OnceLock<Regex> = OnceLock::new();
+
+fn adoc_heading_re() -> &'static Regex {
+    ADOC_HEADING_RE
+        .get_or_init(|| Regex::new(r"^(={1,6})\s+(\S.*)$").expect("valid AsciiDoc heading regex"))
+}
+
+/// `xref:target[label]`, `include::target[]`, `link:target[label]` and
+/// `<<target.adoc#anchor,label>>`.
+fn adoc_link_re() -> &'static Regex {
+    ADOC_LINK_RE.get_or_init(|| {
+        Regex::new(r"(xref:|include::|link:)([^\[\s]+)\[([^\]]*)\]|<<([^,>#\s]+\.adoc)(?:#[^,>]*)?(?:,([^>]*))?>>")
+            .expect("valid AsciiDoc link regex")
+    })
+}
+
+/// The delimiter of an AsciiDoc block whose lines are not prose — listing
+/// `----`, literal `....`, comment `////`, passthrough `++++` and a Markdown
+/// style fence — or `None` for any other line.
+pub(crate) fn adoc_block_delimiter(line: &str) -> Option<&str> {
+    let t = line.trim_end();
+    if t.starts_with("```") {
+        return Some("```");
+    }
+    ["----", "....", "////", "++++"]
+        .into_iter()
+        .find(|d| t.len() >= 4 && t.chars().all(|c| d.starts_with(c)))
+}
+
+/// Parse AsciiDoc source: the document title (`= Title`) names the
+/// `Document`; each section title (`==` … `======`) is a `Section` that
+/// ends where the next title of the same or a higher level starts. Titles
+/// inside listing, literal, comment and passthrough blocks are skipped.
+fn parse_asciidoc(source: &str) -> ParseResult {
+    let mut symbols: Vec<ParsedSymbol> = Vec::new();
+    let mut imports: Vec<ImportInfo> = Vec::new();
+    let lines: Vec<&str> = source.lines().collect();
+    let total_lines = (lines.len() as u32).max(1);
+    let mut open_sections: Vec<(usize, usize)> = Vec::new();
+    let mut in_block: Option<&str> = None;
+    let mut title: Option<String> = None;
+    symbols.push(ParsedSymbol {
+        name: String::new(),
+        kind: SymbolKind::Document,
+        start_line: 1,
+        end_line: total_lines,
+        signature: String::new(),
+        content: source.to_string(),
+        parent_name: None,
+        metadata: None,
+    });
+    for (idx, line) in lines.iter().enumerate() {
+        let line_no = idx as u32 + 1;
+        if let Some(delimiter) = adoc_block_delimiter(line) {
+            match in_block {
+                None => in_block = Some(delimiter),
+                Some(open) if open == delimiter => in_block = None,
+                Some(_) => {}
+            }
+            continue;
+        }
+        if in_block.is_some() || line.starts_with("//") {
+            continue;
+        }
+        if let Some(caps) = adoc_heading_re().captures(line) {
+            let level = caps[1].len();
+            let raw_text = caps[2].trim();
+            let name = strip_inline_markup(raw_text);
+            if level == 1 {
+                if title.is_none() {
+                    title = Some(name.clone());
+                }
+            } else {
+                while let Some(&(sym_idx, open_level)) = open_sections.last() {
+                    if open_level >= level {
+                        symbols[sym_idx].end_line = line_no.saturating_sub(1).max(1);
+                        open_sections.pop();
+                    } else {
+                        break;
+                    }
+                }
+                open_sections.push((symbols.len(), level));
+                symbols.push(ParsedSymbol {
+                    name,
+                    kind: SymbolKind::Section,
+                    start_line: line_no,
+                    end_line: 0,
+                    signature: format!("{} {}", &caps[1], raw_text),
+                    content: String::new(),
+                    parent_name: None,
+                    metadata: None,
+                });
+            }
+        }
+        for caps in adoc_link_re().captures_iter(line) {
+            let (target, label) = match (caps.get(2), caps.get(4)) {
+                (Some(target), _) => (target.as_str(), caps.get(3)),
+                (None, Some(target)) => (target.as_str(), caps.get(5)),
+                (None, None) => continue,
+            };
+            let target = target.split('#').next().unwrap_or(target);
+            if target.is_empty() || target.contains("://") || target.starts_with('{') {
+                continue;
+            }
+            imports.push(ImportInfo {
+                local_name: label
+                    .map(|l| l.as_str().trim().to_string())
+                    .unwrap_or_default(),
+                source_module: target.to_string(),
+                original_name: None,
+            });
+        }
+    }
+    for (sym_idx, _) in open_sections {
+        symbols[sym_idx].end_line = total_lines;
+    }
+    symbols[0].name = title.unwrap_or_else(|| "document".to_string());
+    ParseResult {
+        symbols,
+        calls: vec![],
+        imports,
+        rationales: vec![],
+        aliases: vec![],
+        bindings: vec![],
+        declared: vec![],
+    }
+}
+
 /// Parse plain-text source: emits a single `Document` symbol, no headings/links.
 fn parse_plain_text(source: &str) -> ParseResult {
     let line_count = source.lines().count() as u32;
@@ -189,7 +320,8 @@ fn parse_plain_text(source: &str) -> ParseResult {
 
 /// Parse a content file and return a `ParseResult` matching the contract of `SourceParser`.
 ///
-/// Dispatches to the Markdown/MDX line parser or the plain-text emitter based on `lang`.
+/// Dispatches to the Markdown/MDX or AsciiDoc line parser or the plain-text
+/// emitter based on `lang`.
 /// Must only be called with a content language (`lang.is_content() == true`).
 ///
 /// The block `myc setup-claude` / `myc setup-codex` manage in a Markdown file
@@ -201,6 +333,7 @@ pub fn parse_content(source: &str, lang: SourceLanguage) -> ParseResult {
         SourceLanguage::Markdown | SourceLanguage::Mdx => {
             parse_markdown(&crate::index_scope::indexed_text(lang, source))
         }
+        SourceLanguage::AsciiDoc => parse_asciidoc(source),
         SourceLanguage::PlainText => parse_plain_text(source),
         // PDF content is pre-converted to markdown by the pdf module.
         #[cfg(feature = "pdf")]
@@ -324,6 +457,46 @@ mod tests {
             .filter(|s| s.kind == SymbolKind::Section)
             .collect();
         assert_eq!(sections.len(), 2);
+    }
+
+    #[test]
+    fn asciidoc_titles_yield_a_document_and_nested_sections() {
+        let src = "= Resources\n:page-section-summary-toc: 1\n\n== Introduction\n\nText.\n\n=== The Resource Interface\n\n[source,java]\n----\n== not a title\n----\n\n== Built-in Implementations\n";
+        let result = parse_content(src, SourceLanguage::AsciiDoc);
+        let doc = &result.symbols[0];
+        assert_eq!(doc.kind, SymbolKind::Document);
+        assert_eq!(doc.name, "Resources");
+        assert!(doc.content.contains("The Resource Interface"));
+        let sections: Vec<(&str, u32, u32)> = result
+            .symbols
+            .iter()
+            .filter(|s| s.kind == SymbolKind::Section)
+            .map(|s| (s.name.as_str(), s.start_line, s.end_line))
+            .collect();
+        assert_eq!(
+            sections,
+            vec![
+                ("Introduction", 4, 14),
+                ("The Resource Interface", 8, 14),
+                ("Built-in Implementations", 15, 15),
+            ]
+        );
+    }
+
+    #[test]
+    fn asciidoc_xrefs_and_includes_yield_imports() {
+        let src = "See xref:core/aot.adoc#anchor[AOT] and <<web.adoc#cors,CORS>>.\ninclude::partials/x.adoc[]\nlink:https://spring.io[site] {spring-framework-api}/core/X.html[`X`]\n";
+        let result = parse_content(src, SourceLanguage::AsciiDoc);
+        let targets: Vec<&str> = result
+            .imports
+            .iter()
+            .map(|i| i.source_module.as_str())
+            .collect();
+        assert_eq!(
+            targets,
+            vec!["core/aot.adoc", "web.adoc", "partials/x.adoc"]
+        );
+        assert_eq!(result.imports[0].local_name, "AOT");
     }
 
     #[test]

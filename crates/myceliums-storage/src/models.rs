@@ -465,6 +465,20 @@ pub struct SymbolMetadata {
     /// structured document template; not read by BM25.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub doc: Option<String>,
+    /// Code references written in that doc comment (`{@link Foo#bar}`,
+    /// `@see Foo`, `<see cref="Foo"/>`, KDoc/rustdoc `[Foo]`), with their
+    /// lines (#180). The analysis resolves them to `MENTIONS` edges.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub doc_refs: Vec<DocRef>,
+}
+
+/// One code reference in a doc comment, as written (#180).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DocRef {
+    /// The reference target as written: `Foo#bar(String)`, `#bar`, `T:Ns.Foo`.
+    pub target: String,
+    /// 1-based line of the reference.
+    pub line: u32,
 }
 
 /// The vector of one body chunk of a long symbol (#157). The header chunk is

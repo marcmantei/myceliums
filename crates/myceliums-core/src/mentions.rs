@@ -1,8 +1,10 @@
 //! Cross-domain mentions extraction.
 //!
-//! Scans content symbols (emails, documents, sections) for references to
-//! code symbols (functions, classes, etc.) and creates `Mentions`
-//! relationships with citation metadata.
+//! Scans e-mails for the names of code symbols (functions, classes, etc.)
+//! and creates `Mentions` relationships with citation metadata. Documents
+//! and doc comments are linked by [`crate::doc_mentions`] instead, from the
+//! code references written in them (#180); the optional LLM pass below
+//! reads every content symbol.
 
 use crate::llm::LlmProvider;
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, SymbolKind};
@@ -121,8 +123,15 @@ pub struct MentionMatch {
     pub line: u32,
     /// ~80 char context window around the mention.
     pub context: String,
-    /// Extraction method: "regex" or "llm".
+    /// Extraction method: "regex", "llm" or "doc-ref".
     pub method: String,
+    /// The mention as written (`Foo#bar()`), for "doc-ref" matches.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// How a "doc-ref" mention was written: `code-span`, `role`,
+    /// `api-link` or `doc-comment`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub syntax: Option<String>,
 }
 
 /// Metadata for a Mentions relationship.
@@ -150,6 +159,13 @@ fn is_code_symbol(kind: &SymbolKind) -> bool {
             | SymbolKind::Enum
             | SymbolKind::Module
     )
+}
+
+/// Returns true for the sources the name-matching pass reads: e-mails. A
+/// document names code in code spans and links, which
+/// [`crate::doc_mentions`] resolves with more care than a bare word match.
+fn is_regex_source(kind: &SymbolKind) -> bool {
+    matches!(kind, SymbolKind::Email)
 }
 
 /// Returns true if the symbol kind is a content symbol (potential mention source).
@@ -192,7 +208,7 @@ fn should_skip_name(name: &str) -> bool {
 }
 
 /// Extract a ~80-char context window around a match position.
-fn extract_context(text: &str, match_start: usize, match_end: usize) -> String {
+pub(crate) fn extract_context(text: &str, match_start: usize, match_end: usize) -> String {
     let window = 40;
     let raw_start = match_start.saturating_sub(window);
     let raw_end = (match_end + window).min(text.len());
@@ -236,10 +252,9 @@ fn line_number_at(text: &str, byte_offset: usize) -> u32 {
     text[..byte_offset.min(text.len())].matches('\n').count() as u32 + 1
 }
 
-/// Extract mentions of code symbols from content symbols.
+/// Extract mentions of code symbols from e-mails.
 ///
-/// Scans all content symbols (emails, documents, sections) for word-boundary
-/// matches of code symbol names. Returns `Mentions` relationships with
+/// Scans every e-mail for word-boundary matches of code symbol names. Returns `Mentions` relationships with
 /// metadata containing match locations and context.
 pub fn extract_mentions(symbols: &[CodeSymbol], repo_id: &str) -> Vec<Relationship> {
     // Separate code symbols (targets) from content symbols (sources)
@@ -250,7 +265,7 @@ pub fn extract_mentions(symbols: &[CodeSymbol], repo_id: &str) -> Vec<Relationsh
 
     let content_symbols: Vec<&CodeSymbol> = symbols
         .iter()
-        .filter(|s| is_content_symbol(&s.kind) && !s.content.is_empty())
+        .filter(|s| is_regex_source(&s.kind) && !s.content.is_empty())
         .collect();
 
     if code_symbols.is_empty() || content_symbols.is_empty() {
@@ -307,6 +322,8 @@ pub fn extract_mentions(symbols: &[CodeSymbol], repo_id: &str) -> Vec<Relationsh
                         line,
                         context,
                         method: "regex".to_string(),
+                        text: None,
+                        syntax: None,
                     });
             }
 
@@ -699,7 +716,9 @@ mod tests {
     }
 
     #[test]
-    fn test_document_symbol_as_source() {
+    fn documents_are_not_matched_by_bare_words() {
+        // A word in prose is not a link (#180): `doc_mentions` links what a
+        // document writes as code.
         let symbols = vec![
             make_code_sym("createUser", SymbolKind::Function),
             make_content_sym(
@@ -709,9 +728,7 @@ mod tests {
             ),
         ];
 
-        let mentions = extract_mentions(&symbols, "test-repo");
-        assert_eq!(mentions.len(), 1);
-        assert_eq!(mentions[0].source_uid, "content-doc1");
+        assert!(extract_mentions(&symbols, "test-repo").is_empty());
     }
 
     // LLM-based mentions tests with mock provider

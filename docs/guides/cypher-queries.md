@@ -59,7 +59,7 @@ The kind of symbol is the `kind` property, filtered with `WHERE`:
 | `REFERENCES` | A string literal or a config file names a symbol by its fully qualified name (`Class.forName("a.b.C")`, `spring.factories`, an XML bean's `class=`, a Django setting; #179). Metadata: `extraction_method: "name-ref"`, `file`, `line`, `name`, `text`, `origin` (`string` or `config`), `count`. The source is the innermost symbol around the string, or the file (config files, module-level code); as for `CONTAINED_BY`, patterns match only the edges from symbols |
 | `RATIONALE_FOR` | A rationale comment explains a symbol |
 | `REPLY_TO` / `SENT_BY` / `RECEIVED_BY` / `HAS_ATTACHMENT` / `PART_OF_CONVERSATION` | E-mail structure |
-| `MENTIONS` | An e-mail body mentions a symbol or person |
+| `MENTIONS` | An e-mail body mentions a symbol or person; a doc section or doc comment names a symbol (#180, `metadata` method `doc-ref`) |
 | `OVERRIDES` | A method overrides or implements a method of a base class, interface or trait (implementation → overridden method, to every one up the hierarchy; #190). Its metadata carries the dispatch confidence. `MATCH (i)-[:OVERRIDES]->(m) WHERE m.qualified_name = 'Shape.area' RETURN i.qualified_name, i.file_path` lists the implementations |
 
 Communities and processes are not graph nodes; use `myc communities` /

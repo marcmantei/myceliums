@@ -13,7 +13,9 @@
 //! embedding template; a `#` comment above a `def` is collected here.
 
 use super::{ParsedSymbol, SourceLanguage};
-use myceliums_storage::{SymbolKind, SymbolMetadata};
+use myceliums_storage::{DocRef, SymbolKind, SymbolMetadata};
+use regex::Regex;
+use std::sync::OnceLock;
 
 /// Most bytes of doc text kept per symbol.
 pub const MAX_DOC_BYTES: usize = 1_000;
@@ -59,7 +61,8 @@ fn style(lang: SourceLanguage) -> Option<Style> {
     })
 }
 
-/// Record the doc comment above each of `symbols` in its metadata.
+/// Record the doc comment above each of `symbols` in its metadata, with the
+/// code references written in it (#180).
 pub(crate) fn attach_docs(source: &str, lang: SourceLanguage, symbols: &mut [ParsedSymbol]) {
     let Some(style) = style(lang) else {
         return;
@@ -69,32 +72,62 @@ pub(crate) fn attach_docs(source: &str, lang: SourceLanguage, symbols: &mut [Par
         if symbol.kind == SymbolKind::Import {
             continue;
         }
-        if let Some(doc) = leading_doc(&lines, symbol.start_line as usize, style) {
-            symbol
-                .metadata
-                .get_or_insert_with(SymbolMetadata::default)
-                .doc = Some(doc);
-        }
+        let Some(comment) = leading_comment(&lines, symbol.start_line as usize, style) else {
+            continue;
+        };
+        let refs = if style == Style::CLike {
+            doc_refs(&comment, lang)
+        } else {
+            Vec::new()
+        };
+        let Some(doc) = joined(&comment) else {
+            continue;
+        };
+        let metadata = symbol.metadata.get_or_insert_with(SymbolMetadata::default);
+        metadata.doc = Some(doc);
+        metadata.doc_refs = refs;
     }
 }
 
 /// The doc comment above the symbol whose first line is `start_line`
-/// (1-based), or `None`.
+/// (1-based), joined into one line, or `None`.
+#[cfg(test)]
 fn leading_doc(lines: &[&str], start_line: usize, style: Style) -> Option<String> {
+    joined(&leading_comment(lines, start_line, style)?)
+}
+
+/// The comment lines' text joined into one line, cut to [`MAX_DOC_BYTES`];
+/// `None` when there is no text.
+fn joined(comment: &[(u32, String)]) -> Option<String> {
+    let text = comment
+        .iter()
+        .flat_map(|(_, l)| l.split_whitespace())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if text.is_empty() {
+        return None;
+    }
+    Some(cut(&text, MAX_DOC_BYTES).to_string())
+}
+
+/// The lines of the doc comment above the symbol whose first line is
+/// `start_line` (1-based), markers stripped, each with its 1-based line
+/// number, top to bottom; `None` if there is none.
+fn leading_comment(lines: &[&str], start_line: usize, style: Style) -> Option<Vec<(u32, String)>> {
     // `j` is the number of lines above the one being looked at.
     let mut j = start_line.checked_sub(1)?.min(lines.len());
     let floor = j.saturating_sub(MAX_LINES);
     while j > floor && is_attribute(lines[j - 1].trim(), style) {
         j -= 1;
     }
-    let mut collected: Vec<String> = Vec::new();
+    let mut collected: Vec<(u32, String)> = Vec::new();
     while j > floor {
         let line = lines[j - 1].trim();
         if line.is_empty() {
             break;
         }
         if let Some(text) = line_comment(line, style) {
-            collected.push(text.to_string());
+            collected.push((j as u32, text.to_string()));
             j -= 1;
             continue;
         }
@@ -105,12 +138,12 @@ fn leading_doc(lines: &[&str], start_line: usize, style: Style) -> Option<String
             break;
         }
         // A block comment ending right above: collect it up to its opening.
-        let mut block: Vec<&str> = Vec::new();
+        let mut block: Vec<(u32, &str)> = Vec::new();
         let mut k = j;
         let mut opened = false;
         while k > floor {
             let l = lines[k - 1].trim();
-            block.push(l);
+            block.push((k as u32, l));
             k -= 1;
             if let Some(at) = l.find(open) {
                 // Code before the opening: a trailing comment of a statement,
@@ -125,21 +158,88 @@ fn leading_doc(lines: &[&str], start_line: usize, style: Style) -> Option<String
         if !opened {
             return None;
         }
-        for l in block {
-            collected.push(strip_block_line(l, open, close).to_string());
+        for (n, l) in block {
+            collected.push((n, strip_block_line(l, open, close).to_string()));
         }
         break;
     }
     collected.reverse();
-    let text = collected
-        .iter()
-        .flat_map(|l| l.split_whitespace())
-        .collect::<Vec<_>>()
-        .join(" ");
-    if text.is_empty() {
+    if collected.is_empty() {
         return None;
     }
-    Some(cut(&text, MAX_DOC_BYTES).to_string())
+    Some(collected)
+}
+
+// The reference syntaxes of doc comments (#180).
+static JAVADOC_LINK: OnceLock<Regex> = OnceLock::new();
+static SEE_TAG: OnceLock<Regex> = OnceLock::new();
+static CREF: OnceLock<Regex> = OnceLock::new();
+static BRACKET_LINK: OnceLock<Regex> = OnceLock::new();
+
+/// The code references in a doc comment's lines: Javadoc/JSDoc/KDoc
+/// `{@link X}`, `{@linkplain X label}` and `@see X`; XML-doc `cref="X"`
+/// (`<see>`, `<seealso>`, `<exception>`); and, in Kotlin, Rust, Go and Dart,
+/// the bracket links `[X]`, `[label][X]` and rustdoc's `[label](path::X)`.
+/// Lines inside a fenced code example are skipped. Targets are kept as
+/// written; resolving them is `doc_mentions`' job.
+fn doc_refs(comment: &[(u32, String)], lang: SourceLanguage) -> Vec<DocRef> {
+    let link = JAVADOC_LINK
+        .get_or_init(|| Regex::new(r"\{@link(?:plain)?\s+([^\s}]+)").expect("valid regex"));
+    let see =
+        SEE_TAG.get_or_init(|| Regex::new(r"(?:^|\s)@see\s+([^\s<\x22]+)").expect("valid regex"));
+    let cref = CREF.get_or_init(|| Regex::new(r#"\bcref\s*=\s*"([^"]+)""#).expect("valid regex"));
+    let bracket = BRACKET_LINK.get_or_init(|| {
+        Regex::new(r"\[([^\[\]\n]+)\](?:\[([^\[\]\n]+)\]|\(([^()\n]+)\))?").expect("valid regex")
+    });
+    let brackets = matches!(
+        lang,
+        SourceLanguage::Kotlin | SourceLanguage::Rust | SourceLanguage::Go | SourceLanguage::Dart
+    );
+    let mut refs: Vec<DocRef> = Vec::new();
+    let mut push = |target: &str, line: u32| {
+        let target = target.trim().trim_matches('`').trim();
+        if !target.is_empty() && !refs.iter().any(|r| r.line == line && r.target == target) {
+            refs.push(DocRef {
+                target: target.to_string(),
+                line,
+            });
+        }
+    };
+    let mut in_fence = false;
+    for (line, text) in comment {
+        if text.starts_with("```") || text.starts_with("~~~") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if in_fence {
+            continue;
+        }
+        for c in link.captures_iter(text) {
+            push(&c[1], *line);
+        }
+        for c in see.captures_iter(text) {
+            push(&c[1], *line);
+        }
+        for c in cref.captures_iter(text) {
+            push(&c[1], *line);
+        }
+        if brackets {
+            for c in bracket.captures_iter(text) {
+                if let Some(target) = c.get(2) {
+                    push(target.as_str(), *line);
+                } else if let Some(path) = c.get(3) {
+                    // rustdoc `[label](crate::Foo)`; a URL or file is no code.
+                    let path = path.as_str();
+                    if !path.contains('/') && !path.contains(".md") && !path.starts_with('#') {
+                        push(path, *line);
+                    }
+                } else {
+                    push(&c[1], *line);
+                }
+            }
+        }
+    }
+    refs
 }
 
 /// Decorator and attribute lines that may sit between a doc comment and the
@@ -299,6 +399,76 @@ mod tests {
                 }
             }
         }
+    }
+
+    fn refs_of(lang: SourceLanguage, source: &str, name: &str) -> Vec<(String, u32)> {
+        let mut parser = SourceParser::new(lang).unwrap();
+        let parsed = parser.parse(source).unwrap();
+        let symbol = parsed
+            .symbols
+            .into_iter()
+            .find(|s| s.name == name)
+            .unwrap_or_else(|| panic!("no symbol {name}"));
+        symbol
+            .metadata
+            .map(|m| m.doc_refs)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|r| (r.target, r.line))
+            .collect()
+    }
+
+    #[test]
+    fn javadoc_links_and_see_tags_are_recorded_with_their_lines() {
+        let source = "class Cache {\n    /**\n     * Evicts like {@link Store#evict(String, int)} and\n     * {@linkplain #clear() clears}; see {@code Ignored}.\n     * <pre>{@link InPre}</pre>\n     * @see org.acme.Store\n     * @see <a href=\"https://x\">site</a>\n     */\n    @Override\n    void evict(String key) {}\n}\n";
+        assert_eq!(
+            refs_of(SourceLanguage::Java, source, "evict"),
+            vec![
+                ("Store#evict(String,".to_string(), 3),
+                ("#clear()".to_string(), 4),
+                ("InPre".to_string(), 5),
+                ("org.acme.Store".to_string(), 6),
+            ]
+        );
+    }
+
+    #[test]
+    fn kdoc_bracket_links_are_recorded() {
+        let source = "/**\n * Wraps a [Store] and calls [Store.open] or [the cache][Cache.get].\n * A [link](https://example.com) is no code.\n *\n * ```kotlin\n * val x = list[0]\n * ```\n */\nclass Wrapper\n";
+        assert_eq!(
+            refs_of(SourceLanguage::Kotlin, source, "Wrapper"),
+            vec![
+                ("Store".to_string(), 2),
+                ("Store.open".to_string(), 2),
+                ("Cache.get".to_string(), 2),
+            ]
+        );
+    }
+
+    #[test]
+    fn xml_doc_crefs_are_recorded() {
+        let source = "namespace Acme {\n    /// <summary>Uses <see cref=\"OrderService.Place(Order)\"/>.</summary>\n    /// <seealso cref=\"T:Acme.Orders.Order\"/>\n    /// <exception cref=\"System.ArgumentException\">bad</exception>\n    public class Checkout {}\n}\n";
+        assert_eq!(
+            refs_of(SourceLanguage::CSharp, source, "Checkout"),
+            vec![
+                ("OrderService.Place(Order)".to_string(), 2),
+                ("T:Acme.Orders.Order".to_string(), 3),
+                ("System.ArgumentException".to_string(), 4),
+            ]
+        );
+    }
+
+    #[test]
+    fn rustdoc_intra_doc_links_are_recorded() {
+        let source = "/// Opens a [`Store`]; see [`Store::open`] and [the cache](crate::cache::Cache).\n/// A [web link](https://example.com).\npub fn start() {}\n";
+        assert_eq!(
+            refs_of(SourceLanguage::Rust, source, "start"),
+            vec![
+                ("Store".to_string(), 1),
+                ("Store::open".to_string(), 1),
+                ("crate::cache::Cache".to_string(), 1),
+            ]
+        );
     }
 
     #[test]

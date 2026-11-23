@@ -1445,12 +1445,25 @@ impl Analyzer {
         // Extract cross-domain mentions (content → code references)
         let mut mention_rels =
             crate::mentions::extract_mentions(&all_symbols, self.store.repo_id());
+        // Docs and doc comments → the symbols they name (#180).
+        let doc_timer = Timer::start();
+        let doc_mentions =
+            crate::doc_mentions::extract(&all_symbols, &all_symbols, self.store.repo_id());
+        info!(
+            "Doc mentions: {} edges; {} mentions linked, {} ambiguous, {} unresolved ({:.0}ms)",
+            doc_mentions.relationships.len(),
+            doc_mentions.stats.linked,
+            doc_mentions.stats.ambiguous,
+            doc_mentions.stats.unresolved,
+            doc_timer.elapsed_ms()
+        );
+        if let Err(e) = doc_mentions.stats.save(&self.store).await {
+            warn!("Failed to record doc mention statistics: {e}");
+        }
+        mention_rels.extend(doc_mentions.relationships);
         let mentions_count = mention_rels.len();
         if mentions_count > 0 {
-            info!(
-                "Extracted {} cross-domain mentions via regex",
-                mentions_count
-            );
+            info!("Extracted {} cross-domain mentions", mentions_count);
         }
 
         // Extract LLM-based semantic mentions if enabled
@@ -2278,7 +2291,21 @@ impl Analyzer {
         }
 
         // Extract cross-domain mentions
-        let mention_rels = crate::mentions::extract_mentions(&all_symbols, self.store.repo_id());
+        let mut mention_rels =
+            crate::mentions::extract_mentions(&all_symbols, self.store.repo_id());
+        // The changed files' docs and doc comments name symbols anywhere in
+        // the project: resolve them against the stored symbols as well
+        // (#180). Mentions in unchanged docs of re-indexed symbols wait for
+        // the next full analysis, as their unlinked calls do.
+        match self.store.get_symbols().await {
+            Ok(mut targets) => {
+                targets.extend(all_symbols.iter().cloned());
+                let doc_mentions =
+                    crate::doc_mentions::extract(&all_symbols, &targets, self.store.repo_id());
+                mention_rels.extend(doc_mentions.relationships);
+            }
+            Err(e) => warn!("Doc mentions skipped: cannot read the stored symbols: {e}"),
+        }
         let mentions_count = mention_rels.len();
         if mentions_count > 0 {
             info!("Extracted {} cross-domain mentions", mentions_count);
@@ -3526,6 +3553,103 @@ public class Uses {
         for wrong in [edge("all", "slice", 11), edge("all", "slice", 14)] {
             assert!(!edges.contains(&wrong), "{wrong:?} in {edges:?}");
         }
+    }
+
+    /// #180: Markdown and AsciiDoc sections, Javadoc, KDoc and XML-doc
+    /// comments get a MENTIONS edge to each symbol they name unambiguously.
+    #[tokio::test]
+    async fn docs_and_doc_comments_mention_the_symbols_they_name() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        let files = [
+            (
+                "src/main/java/org/acme/Store.java",
+                "package org.acme;\n\n/**\n * A store; reads go through {@link Cache#get(String)}.\n */\npublic class Store {\n    /** Opens it, see {@link #evict}. */\n    public void open() {}\n\n    public void evict(String key) {}\n}\n",
+            ),
+            (
+                "src/main/java/org/acme/Cache.java",
+                "package org.acme;\n\npublic class Cache {\n    public String get(String key) { return key; }\n\n    public void open() {}\n}\n",
+            ),
+            (
+                "src/main/kotlin/org/acme/Wrapper.kt",
+                "package org.acme\n\n/** Wraps [Store.evict]. */\nclass Wrapper\n",
+            ),
+            (
+                "src/Acme/Orders/Order.cs",
+                "namespace Acme.Orders {\n    public class Order {}\n}\n",
+            ),
+            (
+                "src/Acme/Checkout.cs",
+                "namespace Acme {\n    /// <summary>Places an <see cref=\"T:Acme.Orders.Order\"/>.</summary>\n    public class Checkout {}\n}\n",
+            ),
+            (
+                "docs/guide.md",
+                "# Guide\n\n## Stores\n\nA `Store` reads with `Cache#get()`.\n\n## Opening\n\nCall `open()` first; `Order` is a C# type.\n",
+            ),
+            (
+                "docs/ref.adoc",
+                "= Reference\n\n== Eviction\n\nUse `evict(String)` on a `Store`, see {acme-api}/org/acme/Store.html#open()[open].\n\n----\n`Cache` in a listing\n----\n",
+            ),
+        ];
+        for (path, source) in files {
+            let path = root.join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, source).unwrap();
+        }
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::new(store, root).set_skip_embeddings(true);
+        analyzer.analyze().await.unwrap();
+        let store = analyzer.store();
+        let symbols = store.get_symbols().await.unwrap();
+        let by_uid: HashMap<&str, &myceliums_storage::CodeSymbol> =
+            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
+        let mut edges: Vec<(String, String, u32)> = Vec::new();
+        for r in store.get_relationships().await.unwrap() {
+            if r.kind != myceliums_storage::RelationshipKind::Mentions {
+                continue;
+            }
+            let meta: crate::mentions::MentionMetadata = serde_json::from_str(&r.metadata).unwrap();
+            assert_eq!(meta.extraction_method, crate::doc_mentions::METHOD);
+            let (from, to) = (by_uid[r.source_uid.as_str()], by_uid[r.target_uid.as_str()]);
+            for m in meta.matches {
+                edges.push((
+                    format!("{}:{}", from.file_path, from.name),
+                    to.qualified_name.clone(),
+                    m.line,
+                ));
+            }
+        }
+        edges.sort();
+        let edge = |from: &str, to: &str, line: u32| (from.to_string(), to.to_string(), line);
+        // `open()` alone names two methods: not linked. `Order` names the
+        // one class of that name, a C# one: linked.
+        let expected = vec![
+            edge("docs/guide.md:Opening", "Order", 9),
+            edge("docs/guide.md:Stores", "Cache.get", 5),
+            edge("docs/guide.md:Stores", "Store", 5),
+            edge("docs/ref.adoc:Eviction", "Store", 5),
+            edge("docs/ref.adoc:Eviction", "Store.evict", 5),
+            edge("docs/ref.adoc:Eviction", "Store.open", 5),
+            edge("src/Acme/Checkout.cs:Checkout", "Order", 2),
+            edge("src/main/java/org/acme/Store.java:Store", "Cache.get", 4),
+            edge("src/main/java/org/acme/Store.java:open", "Store.evict", 7),
+            edge(
+                "src/main/kotlin/org/acme/Wrapper.kt:Wrapper",
+                "Store.evict",
+                3,
+            ),
+        ];
+        assert_eq!(edges, expected);
+        let stats = crate::doc_mentions::DocMentionStats::load(store)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            stats.ambiguous_named("open").map(|a| a.at.clone()),
+            Some(vec!["docs/guide.md:9".to_string()])
+        );
     }
 
     /// #139: an empty `__init__.py` makes `pkg` a package, so `import json`

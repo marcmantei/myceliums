@@ -94,6 +94,8 @@ pub enum SourceLanguage {
     Markdown,
     /// MDX documents.
     Mdx,
+    /// AsciiDoc documents (`.adoc`, `.asciidoc`) (#180).
+    AsciiDoc,
     /// Plain text documents.
     PlainText,
     /// Jupyter notebooks.
@@ -135,6 +137,7 @@ impl SourceLanguage {
             "svelte" => Some(SourceLanguage::Svelte),
             "md" | "markdown" => Some(SourceLanguage::Markdown),
             "mdx" => Some(SourceLanguage::Mdx),
+            "adoc" | "asciidoc" => Some(SourceLanguage::AsciiDoc),
             "txt" => Some(SourceLanguage::PlainText),
             "ipynb" => Some(SourceLanguage::Jupyter),
             #[cfg(feature = "pdf")]
@@ -173,6 +176,7 @@ impl SourceLanguage {
             SourceLanguage::Svelte => "svelte",
             SourceLanguage::Markdown => "markdown",
             SourceLanguage::Mdx => "mdx",
+            SourceLanguage::AsciiDoc => "asciidoc",
             SourceLanguage::PlainText => "plaintext",
             SourceLanguage::Jupyter => "jupyter",
             #[cfg(feature = "pdf")]
@@ -190,7 +194,12 @@ impl SourceLanguage {
         }
         matches!(
             self,
-            Self::Markdown | Self::Mdx | Self::PlainText | Self::Email | Self::Mbox
+            Self::Markdown
+                | Self::Mdx
+                | Self::AsciiDoc
+                | Self::PlainText
+                | Self::Email
+                | Self::Mbox
         )
     }
 
@@ -229,6 +238,7 @@ impl SourceLanguage {
             }
             SourceLanguage::Markdown
             | SourceLanguage::Mdx
+            | SourceLanguage::AsciiDoc
             | SourceLanguage::PlainText
             | SourceLanguage::Jupyter
             | SourceLanguage::Email
@@ -863,6 +873,7 @@ impl SourceParser {
             }
             SourceLanguage::Markdown
             | SourceLanguage::Mdx
+            | SourceLanguage::AsciiDoc
             | SourceLanguage::PlainText
             | SourceLanguage::Email
             | SourceLanguage::Mbox => {
@@ -998,7 +1009,7 @@ mod tests {
         let exts = [
             "ts", "tsx", "js", "py", "go", "rs", "java", "cs", "c", "cpp", "rb", "kt", "swift",
             "php", "lua", "zig", "ps1", "ex", "scala", "m", "dart", "vue", "svelte", "md", "mdx",
-            "txt", "ipynb", "eml", "mbox",
+            "adoc", "asciidoc", "txt", "ipynb", "eml", "mbox",
         ];
         for ext in exts {
             let lang = SourceLanguage::from_extension(ext).unwrap();

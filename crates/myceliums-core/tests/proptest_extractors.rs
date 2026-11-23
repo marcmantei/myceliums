@@ -238,6 +238,7 @@ fn source_parser_rejects_non_tree_sitter_languages() {
     for lang in [
         SourceLanguage::Markdown,
         SourceLanguage::Mdx,
+        SourceLanguage::AsciiDoc,
         SourceLanguage::PlainText,
         SourceLanguage::Jupyter,
         SourceLanguage::Email,

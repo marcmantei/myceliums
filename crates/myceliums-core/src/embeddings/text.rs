@@ -213,6 +213,7 @@ fn static_language_name(lang: crate::parser::SourceLanguage) -> &'static str {
         L::Vue => "vue",
         L::Svelte => "svelte",
         L::Markdown | L::Mdx => "markdown",
+        L::AsciiDoc => "asciidoc",
         L::PlainText => "text",
         L::Jupyter => "notebook",
         #[cfg(feature = "pdf")]
