@@ -44,10 +44,18 @@ OUTCOME = {
          "PostToolUse and PreToolUse grep-redirect hooks in .claude/settings.json",
 }
 
+def _myc_calls(r: dict) -> int:
+    """MCP calls, plus ``myc`` runs from Bash where the session had myceliums
+    (#163/#182: with ``--bash`` C and D reach the CLI; in ``none`` a ``myc``
+    command finds no binary and is not a myceliums call)."""
+    cli = r.get("myc_cli_calls") or 0
+    return r["mcp_tool_calls"] + (cli if config.VARIANTS[r["condition"]].mcp else 0)
+
+
 METRICS = [
     # key, label, format, per-run extractor
-    ("myc_used", "Sessions with ≥ 1 myceliums call", "pct", lambda r: 1.0 if r["mcp_tool_calls"] else 0.0),
-    ("myc_calls", "myceliums calls per session", "f1", lambda r: r["mcp_tool_calls"]),
+    ("myc_used", "Sessions with ≥ 1 myceliums call", "pct", lambda r: 1.0 if _myc_calls(r) else 0.0),
+    ("myc_calls", "myceliums calls per session", "f1", _myc_calls),
     ("success", "Success rate (F1 ≥ {thr})", "pct", lambda r: 1.0 if r["success"] else 0.0),
     ("f1", "Mean F1", "f3", lambda r: r["f1"]),
     ("precision", "Mean precision", "f3", lambda r: r["precision"]),

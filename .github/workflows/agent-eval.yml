@@ -46,6 +46,7 @@ jobs:
           python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-outcome.json check-tasks --schema-only
           python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json check-tasks --schema-only
           python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale-candidates.json check-tasks --schema-only
+          python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-java.json check-tasks --schema-only
       - name: Committed reports match their data
         run: |
           set -e

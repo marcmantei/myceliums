@@ -186,6 +186,8 @@ class RunConfig:
     prompt_budget: bool = False  # state --max-turns in the prompt (#153's budgeted sessions)
     bash: bool = False  # add the Bash tool in every condition (#163)
     profile: str = ""  # #178: the named profile (config.PROFILES) the run's limits came from
+    schedule: str = "paired"  # #182: config.SCHEDULES; "interleaved" counterbalances the arms' order
+    mock_api: bool = False  # #182: every session against the scripted mock API (pipeline check, no model)
 
     def comparable(self) -> dict:
         """Fields that must not change when a run is resumed."""
@@ -207,6 +209,10 @@ class RunConfig:
             d.pop("bash")
         if not d["profile"]:
             d.pop("profile")
+        if d["schedule"] == "paired":  # the order every run before #182 used
+            d.pop("schedule")
+        if not d["mock_api"]:
+            d.pop("mock_api")
         return d
 
 
@@ -305,13 +311,30 @@ class Runner:
         """Repetition-major, shuffled order; conditions adjacent per task.
 
         If a run stops early (usage guard), every completed repetition is a
-        complete paired block over all tasks.
+        complete paired block over all tasks. With ``schedule="interleaved"``
+        (#182) the conditions' order inside each task's block is
+        counterbalanced: per repetition the blocks cycle through the rotations
+        of one shuffled order, assigned to the tasks at random, so each
+        condition runs first, second, ... equally often (exactly, when the
+        number of tasks is a multiple of the number of conditions). The
+        sessions of all arms are thus spread evenly over the run's time,
+        and no arm is systematically the first or last of its block.
         """
         rng = random.Random(self.cfg.seed)
         items: list[WorkItem] = []
         for rep in range(1, self.cfg.reps + 1):
             order = list(self.tasks)
             rng.shuffle(order)
+            if self.cfg.schedule == "interleaved":
+                base = list(self.cfg.conditions)
+                rng.shuffle(base)
+                k = len(base)
+                rotations = [base[i:] + base[:i] for i in range(k)]
+                slots = [rotations[i % k] for i in range(len(order))]
+                rng.shuffle(slots)
+                for task, conds in zip(order, slots):
+                    items.extend(WorkItem(task, c, rep) for c in conds)
+                continue
             for task in order:
                 conds = list(self.cfg.conditions)
                 rng.shuffle(conds)
@@ -335,6 +358,11 @@ class Runner:
         template = self.cache / "index" / repo / "home" / ".myceliums"
         if not (template / "repos.json").exists():
             raise StopRun(f"no index for {repo}; run `agent_eval.py index` first")
+        meta_path = self.cache / "index" / repo / "meta.json"
+        meta = config.load_json(meta_path) if meta_path.exists() else {}
+        if meta.get("embeddings") == "skipped" and not (self.cfg.mock_api or "ANTHROPIC_BASE_URL" in self.cfg.extra_env):
+            raise StopRun(f"the index of {repo} has no embeddings (index --skip-embeddings, for --mock-api "
+                          f"checks only); build it with `agent_eval.py index --repo {repo}`")
         data = tmp / "data"
         home = tmp / "home"
         config.copy_tree(template, data)
@@ -731,6 +759,12 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
     def run(self, only_tasks: set[str] | None = None, reps: list[int] | None = None,
             conditions: list[str] | None = None) -> str | None:
+        if (self.cfg.schedule == "interleaved" and conditions
+                and set(conditions) != set(self.cfg.conditions) and not self.cfg.extra_env):
+            # Running one arm alone would put its sessions into another stretch of
+            # time than the others' (the #171 caveat); `probe` (mock API) may.
+            raise SystemExit("an interleaved run cannot be restricted to some of its conditions "
+                             f"({', '.join(conditions)} of {', '.join(self.cfg.conditions)}); drop --condition")
         self._check_config()
         self.started_at = time.time()
         (self.cache / "tmp").mkdir(parents=True, exist_ok=True)
@@ -740,6 +774,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                  and (not only_tasks or it.task["id"] in only_tasks)
                  and (not reps or it.rep in reps)
                  and (not conditions or it.condition in conditions)]
+        order = self.run_dir / "plan.txt"
+        if not order.exists():  # the planned order, for the record (#182)
+            order.write_text("".join(f"{it.run_id}\n" for it in self.plan()))
         print(f"{len(done)} runs already final, {len(items)} to go "
               f"(concurrency {self.cfg.concurrency})", flush=True)
         sched = Scheduler(items)

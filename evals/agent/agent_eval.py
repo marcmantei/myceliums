@@ -12,6 +12,7 @@ Subcommands (see evals/agent/README.md for the full procedure):
   tokens        per-tool token attribution and cost of a committed run: TOKENS.md (#178)
   precheck-edit check that each edit task's test command fails before the change (#178)
   probe         check a variant's session setup against a mock API (no model call)
+  plan          print a run's session order and how its arms are interleaved (#182)
   toolsel-list  print / save the live tools/list of a myc binary
   toolsel-run   run the tool-selection eval
   toolsel-report render the tool-selection report
@@ -56,7 +57,7 @@ def cmd_fetch(args) -> int:
 def cmd_index(args) -> int:
     only = set(args.repo) if args.repo else None
     prep.index(config.load_repos(), args.myc, args.models_dir, only, record_only=args.record_only,
-               default_config=set(args.default_config or []))
+               default_config=set(args.default_config or []), skip_embeddings=args.skip_embeddings)
     return 0
 
 
@@ -79,12 +80,16 @@ def _run_config(args) -> RunConfig:
             sys.exit(f"unknown condition {c!r}; known: {', '.join(config.CONDITIONS)}")
     max_turns, reps, prompt_budget = args.max_turns, args.reps, getattr(args, "prompt_budget", False)
     profile = getattr(args, "profile", None) or ""
+    schedule = getattr(args, "schedule", None) or ""
     if profile:
         # #178: a named profile fixes the limits; explicit flags that disagree are an error.
         p = config.PROFILES[profile]
         if prompt_budget and not p["prompt_budget"]:
             sys.exit(f"--profile {profile} never states the turn limit in the prompt; drop --prompt-budget")
+        if schedule and schedule != p.get("schedule", "paired"):
+            sys.exit(f"--profile {profile} runs the {p.get('schedule', 'paired')} schedule; drop --schedule")
         max_turns, reps, prompt_budget = p["max_turns"], p["reps"], p["prompt_budget"]
+        schedule = p.get("schedule", "paired")
     return RunConfig(
         label=args.label, model=args.model, effort=args.effort or None, max_turns=max_turns,
         timeout_s=args.timeout, reps=reps, concurrency=args.concurrency,
@@ -96,6 +101,8 @@ def _run_config(args) -> RunConfig:
         prompt_budget=prompt_budget,
         bash=getattr(args, "bash", False),
         profile=profile,
+        schedule=schedule or "paired",
+        mock_api=getattr(args, "mock_api", False),
     )
 
 
@@ -112,8 +119,48 @@ def cmd_run(args) -> int:
         return 1
     runner = Runner(cfg, tasks, repos)
     only = set(args.task) if args.task else None
-    stop = runner.run(only_tasks=only, reps=args.rep or None, conditions=args.condition or None)
+    api = None
+    if cfg.mock_api:
+        # #182: the whole pipeline (schedule, isolation, grading, token rows) against the
+        # scripted mock API: no model call, no usage. Each session ends with the task's
+        # gold answer (--mock-answers gold) or an empty one.
+        from aeval import mockapi
+        log_dir = config.RUNS_DIR / cfg.label / "mock"
+        log_dir.mkdir(parents=True, exist_ok=True)
+        answers = {t["question"]: ([g["name"] for g in t.get("gold", [])] if args.mock_answers == "gold" else [])
+                   for t in tasks}
+        api = mockapi.MockAPI(log_dir, args.mock_grep, args.mock_callers, answers=answers).start()
+        cfg.extra_env = mockapi.session_env(api.url)
+    try:
+        stop = runner.run(only_tasks=only, reps=args.rep or None, conditions=args.condition or None)
+    finally:
+        if api is not None:
+            api.stop()
     return 2 if stop else 0
+
+
+def cmd_plan(args) -> int:
+    """Print a run's session order without running it (#182): every session in
+    order, then per repetition how often each condition takes each position of
+    its task's block, and the mean position of each condition in the run."""
+    cfg = _run_config(args)
+    tasks = config.load_tasks()
+    plan = Runner(cfg, tasks, config.load_repos()).plan()
+    if args.verbose:
+        for i, it in enumerate(plan, 1):
+            print(f"{i:4d}  r{it.rep}  {it.condition:<8} {it.task['id']}")
+    k = len(cfg.conditions)
+    print(f"{len(plan)} sessions: {len(tasks)} tasks x {k} conditions x {cfg.reps} reps; schedule {cfg.schedule}")
+    for rep in range(1, cfg.reps + 1):
+        rows = [it for it in plan if it.rep == rep]
+        counts = {c: [0] * k for c in cfg.conditions}
+        for i, it in enumerate(rows):
+            counts[it.condition][i % k] += 1
+        print(f"  rep {rep}: position counts " + "; ".join(f"{c} {counts[c]}" for c in cfg.conditions))
+    mean = {c: sum(i for i, it in enumerate(plan) if it.condition == c) / max(1, sum(
+        1 for it in plan if it.condition == c)) for c in cfg.conditions}
+    print("  mean index in the run: " + ", ".join(f"{c} {v:.1f}" for c, v in mean.items()))
+    return 0
 
 
 def cmd_probe(args) -> int:
@@ -136,9 +183,7 @@ def cmd_probe(args) -> int:
         log_dir = run_dir / "mock"
         log_dir.mkdir(parents=True)
         api = mockapi.MockAPI(log_dir, args.grep, args.callers).start()
-        cfg.extra_env = {"ANTHROPIC_BASE_URL": api.url, "ANTHROPIC_API_KEY": "probe-not-a-key",
-                         "CLAUDE_CODE_OAUTH_TOKEN": "", "DISABLE_TELEMETRY": "1",
-                         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"}
+        cfg.extra_env = mockapi.session_env(api.url)
         try:
             Runner(cfg, [task], repos).run(only_tasks={task["id"]}, reps=[1], conditions=[cond])
         finally:
@@ -179,6 +224,9 @@ def cmd_export(args) -> int:
         "max_turns": cfg["max_turns"],
         **({"prompt_budget": True} if cfg.get("prompt_budget") else {}),
         **({"bash": True} if cfg.get("bash") else {}),
+        **({"profile": cfg["profile"]} if cfg.get("profile") else {}),
+        **({"schedule": cfg["schedule"]} if cfg.get("schedule") else {}),
+        **({"mock_api": True} if cfg.get("mock_api") else {}),
         "timeout_s": cfg["timeout_s"],
         "reps": cfg["reps"],
         "success_threshold": cfg["success_threshold"],
@@ -450,6 +498,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--repo", action="append")
     s.add_argument("--record-only", action="store_true",
                    help="describe an existing index (needs its analyze.log) instead of rebuilding it")
+    s.add_argument("--skip-embeddings", action="store_true",
+                   help="#182: no vectors (minutes instead of hours), for `run --mock-api` checks only; "
+                        "a real run refuses such an index")
     s.add_argument("--default-config", action="append", metavar="REPO",
                    help="index this repository with myceliums' default configuration, ignoring its "
                         "index_exclude_extra in repos.json (#171: Django with tests/)")
@@ -490,8 +541,31 @@ def main(argv: list[str] | None = None) -> int:
                    help="add the Bash tool in every condition (#163); the myc CLI is then reachable in C")
     s.add_argument("--profile", choices=sorted(config.PROFILES),
                    help="named limits (#178): realistic = --max-turns 100 as a cap only (not in the prompt), "
-                        "3 repetitions")
+                        "3 repetitions, interleaved schedule (#182)")
+    s.add_argument("--schedule", choices=config.SCHEDULES,
+                   help="session order (#182): paired (default) or interleaved (arms' order counterbalanced; "
+                        "no --condition subsets); fixed by --profile realistic")
+    s.add_argument("--mock-api", action="store_true",
+                   help="#182: run every session against the scripted mock API (no model call, no usage) "
+                        "to check the pipeline end to end")
+    s.add_argument("--mock-answers", choices=("gold", "empty"), default="gold",
+                   help="with --mock-api: the final answer of each session (default: the task's gold)")
+    s.add_argument("--mock-grep", default="parseAccept", help="with --mock-api: identifier the scripted grep looks for")
+    s.add_argument("--mock-callers", default="parseAccept", help="with --mock-api: symbol the scripted myc callers asks")
     s.set_defaults(fn=cmd_run)
+
+    s = sub.add_parser("plan", help="print a run's session order and how the arms are interleaved (#182)")
+    s.add_argument("--label", default="plan")
+    s.add_argument("--conditions", required=True)
+    s.add_argument("--reps", type=int, default=3)
+    s.add_argument("--max-turns", type=int, default=40)
+    s.add_argument("--seed", type=int, default=20261112)
+    s.add_argument("--profile", choices=sorted(config.PROFILES))
+    s.add_argument("--schedule", choices=config.SCHEDULES)
+    s.add_argument("--verbose", "-v", action="store_true", help="list every session")
+    s.set_defaults(model="sonnet", effort="medium", timeout=900, concurrency=1, max_retries=0, threshold=0.8,
+                   max_utilization=0.97, max_sessions=None, tool_search=None, claude="claude", myc="",
+                   models_dir="", prompt_budget=False, fn=cmd_plan)
 
     s = sub.add_parser("probe", help="check a variant's session setup against a mock API (no model call)")
     s.add_argument("--label", required=True)

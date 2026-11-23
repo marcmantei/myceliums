@@ -44,7 +44,8 @@ DEFAULT_EXCLUDE = ["node_modules/**", ".git/**", "target/**", "dist/**", "build/
 
 
 def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | None = None,
-          record_only: bool = False, default_config: set[str] | None = None) -> None:
+          record_only: bool = False, default_config: set[str] | None = None,
+          skip_embeddings: bool = False) -> None:
     """Build one myceliums index per repository with ``myc analyze``.
 
     ``myc analyze`` stores its data under ``$HOME/.myceliums``; ``HOME`` is set
@@ -58,6 +59,10 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
     Repositories in ``default_config`` are indexed with myceliums' default
     configuration, without their ``index_exclude_extra`` (#171: the Django
     index with ``tests/``); ``meta.json`` records what was excluded.
+
+    ``skip_embeddings`` (#182) builds the graph without vectors, for pipeline
+    checks against the mock API only; ``meta.json`` says so and ``run``
+    refuses such an index unless the run uses the mock API.
     """
     cache = config.cache_dir()
     for name, r in repos.items():
@@ -83,7 +88,8 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
             env = {"HOME": str(home), "MYCELIUMS_DATA_DIR": str(home / ".myceliums"),
                    "FASTEMBED_CACHE_DIR": models_dir, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
             started = time.time()
-            res = subprocess.run([myc, "analyze", str(work), "--strict-embeddings"],
+            flag = "--skip-embeddings" if skip_embeddings else "--strict-embeddings"
+            res = subprocess.run([myc, "analyze", str(work), flag],
                                  env=env, capture_output=True, text=True)
             took = round(time.time() - started, 1)
             log_path.write_text(res.stdout + res.stderr)
@@ -107,6 +113,7 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
             "processes": _grab(log, r"Processes:\s+([\d,]+)"),
             "index_exclude_extra": extra,
             **({"index_config": "default"} if name in (default_config or set()) else {}),
+            **({"embeddings": "skipped"} if skip_embeddings else {}),
             "myc_version": config.tool_version([myc, "--version"]),
             "myc_sha256": config.sha256_file(Path(myc)),
             "indexed_at": info.get("analyzed_at"),
@@ -140,7 +147,11 @@ TASK_TYPES = {"callers", "callees", "impact", "where", "dead_code", "flow",
               # questions that are not about calls (#163)
               "config",
               # changes graded by the files they touch and a test command (#178)
-              "edit"}
+              "edit",
+              # graph-favouring types of the large Java set (#182): questions without a
+              # symbol name, implementations reached through an interface, classes named in
+              # strings and config files, documentation to update for a change
+              "concept", "dispatch", "by_name", "docs"}
 
 
 def check_tasks(tasks: list[dict], repos: dict[str, dict], check_evidence: bool = True) -> list[str]:

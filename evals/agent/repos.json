@@ -1,5 +1,5 @@
 {
-  "description": "Pinned target repositories. Fetched into the cache (agent_eval.py fetch), never vendored. Chosen as mid-size, actively maintained projects in three languages myceliums parses: an application (fzf, Go), a library with many small modules (hono, TypeScript) and a library whose repository is dominated by docs and tests (fastapi, Python). Django (Python) was added for the outcome eval (#153): a large framework with many same-named methods across apps. Vue (vuejs/core, TypeScript) was added for the outcome eval at scale (#163): a large TypeScript monorepo with its tests.",
+  "description": "Pinned target repositories. Fetched into the cache (agent_eval.py fetch), never vendored. Chosen as mid-size, actively maintained projects in three languages myceliums parses: an application (fzf, Go), a library with many small modules (hono, TypeScript) and a library whose repository is dominated by docs and tests (fastapi, Python). Django (Python) was added for the outcome eval (#153): a large framework with many same-named methods across apps. Vue (vuejs/core, TypeScript) was added for the outcome eval at scale (#163): a large TypeScript monorepo with its tests. Spring Framework (Java) was added for the graph-favouring eval on a large Java repository (#182): ~9,300 Java files in 23 Gradle modules, the repository of the #177 Java CALLS sets.",
   "repos": [
     {
       "name": "fzf",
@@ -63,6 +63,17 @@
         "CHANGELOG.md"
       ],
       "index_note": "packages-private/ (playgrounds and type-only tests) and the changelogs are not indexed; every #163 question is about packages/*/src or packages/*/__tests__, which are. The agent still sees the whole checkout."
+    },
+    {
+      "name": "spring-framework",
+      "display_name": "Spring Framework",
+      "language": "java",
+      "language_name": "Java",
+      "url": "https://github.com/spring-projects/spring-framework.git",
+      "ref": "v7.1.0",
+      "commit": "f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4",
+      "index_exclude_extra": [],
+      "index_note": "Indexed in myceliums' default configuration: production sources, tests, Kotlin, the reference docs (framework-docs/) and the config files the name references read (#179). The agent sees the same checkout."
     }
   ]
 }
