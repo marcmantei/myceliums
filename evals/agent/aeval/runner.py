@@ -37,6 +37,7 @@ from pathlib import Path
 from . import config
 from .editgrade import apply_gold, changed_files, gold_paths, grade_edit, run_test, snapshot, wrapper_problem
 from . import isolation
+from .prep import strip_history
 from .grading import Grade, extract_answer, grade, is_success
 from .stream import MCP_PREFIX, check_isolation, parse_transcript
 from .searchaudit import audit as search_audit
@@ -414,6 +415,8 @@ class Runner:
         home = tmp / "home"
         config.copy_tree(template, data)
         home.mkdir()
+        if self.repos[repo].get("isolated"):
+            strip_history(data)
         registry = json.loads((data / "repos.json").read_text())
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         for info in registry["repos"].values():

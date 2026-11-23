@@ -154,6 +154,8 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
             derived = verify_derived(log, name, work, myc, env, cache, record_difference)
             derived["base"] = str(base)
             base = home
+        if base is not None:
+            strip_history(home / ".myceliums")
         registry = config.load_json(home / ".myceliums" / "repos.json")
         (info,) = registry["repos"].values()
         if info.get("analyzed_commit") != r["commit"]:
@@ -214,6 +216,16 @@ def measured(log: str, home: Path) -> dict:
     if m := re.search(r"(\d+)\s+maximum resident set size", log):
         out["peak_rss_bytes"] = int(m.group(1))
     return out
+
+
+def strip_history(data: Path) -> None:
+    """Remove from an index's data directory what it keeps of *earlier*
+    analyses: the graph snapshots of ``myc diff`` (ten, about 190 MB each for
+    Spring). An index derived from a newer commit's would otherwise hold that
+    commit's symbols, which a session on an older parent must not see."""
+    for d in (data / "snapshots",):
+        if d.exists():
+            config.remove_tree(d, data)
 
 
 def verify_derived(log: str, name: str, work: Path, myc: str, env: dict, cache: Path,

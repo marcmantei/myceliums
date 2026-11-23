@@ -383,7 +383,7 @@ SEARCH_SHELL = frozenset({"grep", "egrep", "fgrep", "rg", "find", "ls", "cat", "
                           "awk", "sort", "uniq", "cut", "git grep", "git ls-files", "git blame"})
 ISOLATED_TOOLS = frozenset({"Bash", "Read", "Edit", "Write", "Grep", "Glob", "ToolSearch", "TodoWrite"})
 # `myc` subcommands that read the index; the others serve, write configuration or reach out (`email`).
-MYC_READS = frozenset({"analyze", "callers", "callees", "communities", "context", "diff", "impact", "knowledge", "list",
+MYC_READS = frozenset({"analyze", "callers", "callees", "communities", "context", "impact", "knowledge", "list",
                        "path", "processes", "query", "search", "semantic-search", "stats", "status"})
 NETWORK_PROGRAMS = frozenset({"curl", "wget", "nc", "ncat", "netcat", "telnet", "ssh", "scp", "sftp", "rsync", "ftp",
                               "openssl", "dig", "nslookup", "host", "ping", "gh", "git fetch", "git pull", "git clone",

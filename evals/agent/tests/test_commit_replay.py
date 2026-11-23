@@ -297,7 +297,7 @@ class Isolation(unittest.TestCase):
                         f"for f in {s}/*; do cat $f; done", "cd .. && ls", "sed -n '1r /etc/passwd' a.java",
                         "python3 -c 'print(open(1))'", "bash -c 'cat /etc/passwd'", "awk 'BEGIN{system(1)}'", "env",
                         "./evil.sh", "/bin/cat a.java", "xargs cat", "eval ls", "tee x", "perl -e 1", "node x",
-                        "sort -o ../x a.java", "myc serve", "myc email sync", "myc setup-claude", "git diff --ext-diff", "xargs cat", "X=1", "rg --pre cat x", "git grep -Ocat x", "cat .git/config", "echo $(cat a)"):
+                        "sort -o ../x a.java", "myc serve", "myc diff", "myc email sync", "myc setup-claude", "git diff --ext-diff", "xargs cat", "X=1", "rg --pre cat x", "git grep -Ocat x", "cat .git/config", "echo $(cat a)"):
                 self.assertIsNotNone(self.why("Bash", search, command=cmd), (search, cmd))
             for cmd in ("curl https://x.org", "wget x", "git fetch origin", "git pull", "git clone x", "git remote -v",
                         "git ls-remote https://x", "nc x 1", "ssh x", "gh api x", "mvn x", "java -version"):
@@ -629,7 +629,13 @@ class SharedPathAndDerivedIndex(unittest.TestCase):
             reg = {"repos": {"i": {"path": str(root / "work/shared")}}}
             (base / ".myceliums/repos.json").write_text(json.dumps(reg))
             with mock.patch.dict(os.environ, env):
+                for h in (base / ".myceliums/snapshots/r",):  # what `myc diff` keeps of earlier (newer) commits
+                    h.mkdir(parents=True)
+                    (h / "future.json").write_text("symbols of a later commit")
                 prep.index(repos, str(fake), "m", base=base)
+                for n in repos:
+                    self.assertEqual(list((root / f"cache/index/{n}/home").rglob("future.json")), [])
+                self.assertTrue((base / ".myceliums/snapshots/r/future.json").exists())  # the base is left alone
                 metas = {n: config.load_json(root / f"cache/index/{n}/meta.json") for n in repos}
                 self.assertEqual(metas["new"]["derived"]["base"], str(base))
                 self.assertEqual(metas["old"]["derived"]["base"], str(root / "cache/index/new/home"))
