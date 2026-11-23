@@ -188,8 +188,8 @@ follow them: the callers of an implementation include the callers of the
 methods it overrides, and the callees of a call include the implementations
 of the method it binds (at most 8 per call; the rest are named in
 `incomplete`, with `explain_symbol` on the method as the next step). Such a
-hit is marked `dispatch via I.m, confidence c` instead of a resolution label
-(`resolved` in `find_callers`/`find_callees`). The confidence falls with the
+hit is marked `(dispatch via I.m, confidence c)` instead of a resolution label
+(in `resolved` with `detail: "full"`). The confidence falls with the
 number of implementations (0.9 for one, 0.2 beyond 16) and is lower when the
 overridden method has a body of its own. Overrides of `toString`, `equals`,
 `hashCode` and the like are not followed, `ambiguous` edges and `super.m()`
