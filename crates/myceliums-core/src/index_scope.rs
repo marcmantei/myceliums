@@ -183,6 +183,14 @@ impl IndexScope {
         Some(language)
     }
 
+    /// Whether `.myceliums.toml`'s `include`/`exclude` globs let `rel` in,
+    /// whatever its extension: the config files the name-reference pass
+    /// reads (#179) follow them too.
+    pub fn admits(&self, rel: &Path) -> bool {
+        !self.include.as_ref().is_some_and(|inc| !inc.is_match(rel))
+            && !self.exclude.as_ref().is_some_and(|exc| exc.is_match(rel))
+    }
+
     /// Whether a file of `len` bytes is within `max_file_size_kb`.
     pub fn within_size(&self, len: u64) -> bool {
         self.max_size.is_none_or(|max| len <= max)

@@ -80,7 +80,12 @@ impl MyceliumsMcp {
             )
             .await?;
         match detail {
-            Detail::Compact => text(list.compact("callers")),
+            Detail::Compact => text(
+                list.compact("callers")
+                    + &self
+                        .name_refs_of(&repo_id, &params.symbol_name, crate::name_refs::Way::Into)
+                        .await,
+            ),
             Detail::Full => full_json(&list.into_callers()),
         }
     }
@@ -112,7 +117,12 @@ impl MyceliumsMcp {
             )
             .await?;
         match detail {
-            Detail::Compact => text(list.compact("callees")),
+            Detail::Compact => text(
+                list.compact("callees")
+                    + &self
+                        .name_refs_of(&repo_id, &params.symbol_name, crate::name_refs::Way::OutOf)
+                        .await,
+            ),
             Detail::Full => full_json(&list.into_callees()),
         }
     }
@@ -167,6 +177,18 @@ impl MyceliumsMcp {
         };
         let block = trace_gaps(&call, from, to, chains.as_ref(), deeper, stats.as_ref());
         let body = format::format_call_chains(from, to, chains.as_ref(), max_depth, page, &block);
+        // Strings on the flow that name symbols, and places naming `to`
+        // (#179): a step no CALLS edge shows.
+        let on_flow: Vec<&myceliums_storage::CodeSymbol> = match &chains {
+            Ok(c) => c
+                .shortest
+                .iter()
+                .map(|(s, _)| *s)
+                .chain(c.on_chains.iter().map(|step| step.symbol))
+                .collect(),
+            Err(_) => vec![from],
+        };
+        let body = body + &crate::name_refs::flow_sections(&symbols, &relationships, &on_flow, to);
         self.graph_text(&graph, body).await
     }
 

@@ -31,6 +31,7 @@ mod format;
 pub mod http_security;
 mod incomplete;
 mod index_status;
+mod name_refs;
 mod navigation;
 mod observe;
 mod output;

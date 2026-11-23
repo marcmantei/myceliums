@@ -1008,8 +1008,11 @@ impl Store {
                 .await?;
         }
 
-        // Delete relationships where source or target is a symbol/file from this file
-        if tables.contains(&"relationships".to_string()) && !symbol_uids.is_empty() {
+        // Delete relationships where source or target is a symbol/file from
+        // this file (a config file's node has edges but no symbols, #179).
+        if tables.contains(&"relationships".to_string())
+            && !(symbol_uids.is_empty() && file_uids.is_empty())
+        {
             let table = self.db.open_table("relationships").execute().await?;
             let all_uids: Vec<&str> = symbol_uids
                 .iter()

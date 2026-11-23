@@ -916,6 +916,7 @@ impl Analyzer {
                                 rel_path: rel_path.clone(),
                                 language: *lang,
                                 parse_result: result,
+                                names: None,
                             })
                         } else {
                             let mut parser = match SourceParser::new(*lang) {
@@ -941,6 +942,9 @@ impl Analyzer {
                                     rel_path: rel_path.clone(),
                                     language: *lang,
                                     parse_result: result,
+                                    names: crate::name_refs::file_candidates(
+                                        rel_path, *lang, source,
+                                    ),
                                 }),
                                 Err(e) => {
                                     warn!("Skipping {} — parse error: {}", rel_path, e);
@@ -984,7 +988,17 @@ impl Analyzer {
         skipped_count += parallel_skipped;
 
         let repo_id = self.store.repo_id().to_string();
-        for file_result in parse_results {
+        // What the name-reference pass needs (#179): the Java/Kotlin
+        // packages and the string literals that may be names.
+        let mut name_layout = crate::name_refs::Layout::new(&self.repo_path);
+        let mut name_candidates: Vec<crate::name_refs::FileCandidates> = Vec::new();
+        for mut file_result in parse_results {
+            if let Some(package) =
+                crate::name_refs::declared_package(&file_result.parse_result.imports)
+            {
+                name_layout.set_package(&file_result.rel_path, package);
+            }
+            name_candidates.extend(file_result.names.take());
             let symbols = parser::to_code_symbols(
                 &file_result.parse_result.symbols,
                 &file_result.rel_path,
@@ -1458,6 +1472,34 @@ impl Analyzer {
             }
         }
 
+        // Strings and config files that name a symbol by its qualified name
+        // (#179).
+        let name_ref_timer = Timer::start();
+        let name_refs = match IndexScope::new(self.config.as_ref()) {
+            Ok(scope) => crate::name_refs::link_repository(
+                &self.repo_path,
+                &scope,
+                name_candidates,
+                &all_symbols,
+                &all_files,
+                &mut name_layout,
+                self.store.repo_id(),
+            ),
+            Err(e) => {
+                warn!("Name references skipped: {e}");
+                Default::default()
+            }
+        };
+        info!(
+            "Name references: {} edges ({} names linked, {} ambiguous, {} config files) ({:.0}ms)",
+            name_refs.relationships.len(),
+            name_refs.linked,
+            name_refs.ambiguous,
+            name_refs.config_files.len(),
+            name_ref_timer.elapsed_ms()
+        );
+        self.store.store_files(&name_refs.config_files).await?;
+
         // Store remaining symbols, files, and all relationships.
         // When batch_size > 0, most symbols/files were already flushed during
         // parsing — only post-processing additions (rationale, conversation)
@@ -1478,6 +1520,7 @@ impl Analyzer {
         all_rels.extend(rationale_rels);
         all_rels.extend(email_rels);
         all_rels.extend(mention_rels);
+        all_rels.extend(name_refs.relationships);
 
         // Write relationships in batches when configured
         if config.batch_size > 0 {
@@ -1720,8 +1763,18 @@ impl Analyzer {
             .collect();
 
         self.register_js_project(&mut resolver, &source_files);
+        // Changed config files whose names link to symbols (#179).
+        let changed_resources: Vec<(PathBuf, String, crate::name_refs::ResourceKind)> =
+            changed_paths
+                .iter()
+                .filter_map(|p| {
+                    let rel = p.strip_prefix(&self.repo_path).ok()?;
+                    let kind = crate::name_refs::resource_kind(rel)?;
+                    Some((p.clone(), rel.to_string_lossy().replace('\\', "/"), kind))
+                })
+                .collect();
 
-        if source_files.is_empty() {
+        if source_files.is_empty() && changed_resources.is_empty() {
             return Ok(AnalysisResult {
                 symbol_count: 0,
                 file_count: 0,
@@ -1756,6 +1809,15 @@ impl Analyzer {
             })
             .collect();
         self.forget_unlinked_calls(&changed_rel, &[]).await;
+        for (_, rel, _) in &changed_resources {
+            self.store.delete_file_data(rel).await.with_context(|| {
+                format!(
+                    "Failed to delete stale name references of {rel} during incremental re-index"
+                )
+            })?;
+        }
+        let mut name_layout = crate::name_refs::Layout::new(&self.repo_path);
+        let mut name_candidates: Vec<crate::name_refs::FileCandidates> = Vec::new();
         for (path, _) in &source_files {
             let rel_path = path
                 .strip_prefix(&self.repo_path)
@@ -2059,6 +2121,10 @@ impl Analyzer {
             for sym in &symbols {
                 resolver.register_symbol(sym);
             }
+            if let Some(package) = crate::name_refs::declared_package(&result.imports) {
+                name_layout.set_package(&rel_path, package);
+            }
+            name_candidates.extend(crate::name_refs::file_candidates(&rel_path, *lang, &source));
 
             let file_node = FileNode {
                 uid: Uuid::new_v4().to_string(),
@@ -2173,9 +2239,40 @@ impl Analyzer {
             info!("Extracted {} cross-domain mentions", mentions_count);
         }
 
+        // The changed files' strings and config files name symbols anywhere
+        // in the project (#179). Names in unchanged files of re-indexed
+        // symbols come back at the next full analysis, as their calls do.
+        name_candidates.extend(
+            changed_resources
+                .iter()
+                .filter_map(|(path, rel, kind)| crate::name_refs::read_resource(path, rel, *kind)),
+        );
+        let name_refs = if name_candidates.is_empty() {
+            crate::name_refs::Linked::default()
+        } else {
+            match self.store.get_symbols().await {
+                Ok(mut targets) => {
+                    targets.extend(all_symbols.iter().cloned());
+                    crate::name_refs::link(
+                        &name_candidates,
+                        &all_symbols,
+                        &targets,
+                        &all_files,
+                        &mut name_layout,
+                        self.store.repo_id(),
+                    )
+                }
+                Err(e) => {
+                    warn!("Name references skipped: cannot read the stored symbols: {e}");
+                    Default::default()
+                }
+            }
+        };
+
         // Store
         self.store.store_symbols(&all_symbols).await?;
         self.store.store_files(&all_files).await?;
+        self.store.store_files(&name_refs.config_files).await?;
 
         let mut all_rels = call_rels;
         all_rels.extend(override_rels);
@@ -2184,6 +2281,7 @@ impl Analyzer {
         all_rels.extend(rationale_rels);
         all_rels.extend(email_rels);
         all_rels.extend(mention_rels);
+        all_rels.extend(name_refs.relationships);
         self.store.store_relationships(&all_rels).await?;
 
         // Generate embeddings if not skipped and feature enabled.
@@ -2717,6 +2815,8 @@ struct FileParseResult {
     rel_path: String,
     language: SourceLanguage,
     parse_result: parser::ParseResult,
+    /// String literals that may name symbols by qualified name (#179).
+    names: Option<crate::name_refs::FileCandidates>,
 }
 
 /// Metadata tracked per email symbol during analysis for thread reconstruction.
