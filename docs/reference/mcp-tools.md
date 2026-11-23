@@ -71,14 +71,48 @@ Cypher query, a value outside an enum, a missing or empty required argument,
 mutually exclusive options — are JSON-RPC `invalid_params` errors. Only genuine
 server faults (I/O, storage) are `internal_error`.
 
-**Output.** A tool whose answer is a report or prose returns it as plain text
-content — no JSON envelope, no `structuredContent`, no output schema. A tool
-whose answer is a record or a list (`find_callers`, `find_callees`,
-`find_dead_code`, `list_repos`, `get_stats`, `get_file_symbols`,
+**Output.** A tool whose answer is a report, prose or a list an agent reads
+returns it as plain text content — no JSON envelope, no `structuredContent`,
+no output schema. A tool whose answer is a record or a list
+(`find_dead_code`, `list_repos`, `get_stats`, `get_file_symbols`,
 `get_communities`, `get_community_detail`, and the deprecated `get_callers`,
 `get_callees`, `get_symbol_definition`) returns typed `structuredContent`
 with an `outputSchema` describing it, plus the same JSON as text content, as
 the MCP specification recommends.
+
+**Compact lists (#181).** Every tool result stays in the agent's context for
+the rest of the session and is re-sent with every later model call, so the
+navigation tools answer compactly: `find_callers`, `find_callees`,
+`impact_of_change` (symbol and file mode) and `trace_flow` list one line per
+hit, `qualified_name kind :start-end` (the lines to read; `:start` for a
+one-line symbol), under a heading line with its file, each file once. A file heading plus a qualified name is a handle
+(`src/db.ts:Database.findById`) that every symbol parameter accepts, so
+`explain_symbol` shows any hit in full (source, signature, callers,
+callees). `find_callers`/`find_callees` take `detail: "full"` for the
+previous JSON with every field and each hit's signature. Replayed over the
+265 myceliums calls of the #163/#171 agent sessions with `agent_eval.py
+replay` ([`evals/agent/aeval/replay.py`](../../evals/agent/aeval/replay.py);
+[report](../../evals/agent/results/2026-11-23-compact-output/REPLAY.md)),
+the answers shrank from 1,104,910 to 505,145 characters (`find_callers`
+−56 %, `find_callees` −58 %, `impact_of_change` −31 %, `trace_flow` −18 %).
+For every call of the four tools both builds give the same hits (file,
+qualified name, start line, depth or chain position, `via`, edge marks),
+totals, `Incomplete` reasons and `Next` step, and the same text for error
+results; the replay checks this per call.
+
+**Tool definitions (#181).** The names, descriptions and input schemas of the
+exposed tools go to the model with every call. The descriptions say what a
+tool answers and when to use it; how to read results (the `Index:` line,
+paging, `Incomplete`/`Next`, edge marks) is said once per request, in the
+server instructions (which Claude Code re-sends with every request, like the
+tool definitions). Input schemas carry no `$schema`, `title`, `format`, a
+`minimum` of 0, or the `null` an optional field would add to `type` and
+`enum`; optional is what `required` leaves out. For the default (`core`)
+profile this cut the tool definitions an agent receives from 11,847 to 6,697
+characters (2,807 to 1,592 tokens in `o200k_base`, an OpenAI tokenizer
+used for the ratio, not Claude's; the server instructions grew from 1,548 to
+1,778 characters). `tests/tools_list_snapshot.rs` fails when either grows
+more than 10 % past these sizes.
 
 **Symbols.** Every symbol parameter accepts a short name, a qualified name, or
 `file_path:qualified_name`. When a name matches several symbols — two files
@@ -92,11 +126,14 @@ schema; a larger `limit` is clamped, `offset` is capped at 100,000). Lists
 that the core builds from hash maps are sorted before paging, so pages never
 overlap or skip. When a list is cut, the result says so —
 `Showing 1-20 of 312 — call again with offset=20 for more.` (structured
-results carry the same text in a `notice` field) — so a cut is never silent.
+results carry the same text in a `notice` field; the compact
+`find_callers`/`find_callees` say it once, as the `page:` reason of their
+`Incomplete` block) — so a cut is never silent.
 Top-N rankings that cannot know their total say `more exist` instead.
 `search_code` in hybrid mode pages within its top 100 results (with `rerank`,
 within the top 50, which are reranked whatever the page). `impact_of_change`
-pages one list of changed symbols (or dependents), affected symbols and files. `cypher_query` pages its rows
+pages one list of changed symbols, affected symbols and files (diff mode) or
+of dependents (symbol and file mode). `cypher_query` pages its rows
 the same way (default 50, max 500), and `GROUP BY` results keep a fixed
 order; in
 multi-column rows a value longer than 60 characters is cut with a visible `…`
@@ -137,9 +174,10 @@ rather than `up to date`, and without git it says the freshness is unknown.
 how its target was picked: `exact` (a qualified name only one symbol has),
 `import` (through the module graph), `name-match` (a bare name only one symbol
 has) or `ambiguous` (several symbols share the name; one was picked).
-`find_callers`/`find_callees` return it as `resolved`; `explain_symbol`,
-`trace_flow`, `impact_of_change`, `find_path` and `get_review_context` mark the
-heuristic ones as `(resolved: name-match)` / `(resolved: ambiguous)`. Indexes built before this
+`find_callers`/`find_callees` with `detail: "full"` return it as `resolved`;
+their compact lines, `explain_symbol`, `trace_flow`, `impact_of_change`,
+`find_path` and `get_review_context` mark the heuristic ones as
+`(resolved: name-match)` / `(resolved: ambiguous)`. Indexes built before this
 label existed get it derived at query time (`ambiguous` if the name is shared,
 else `name-match`); re-run `analyze` to record the exact labels.
 
@@ -208,20 +246,43 @@ type/superclasses when known, and its direct callers and callees (the first
 
 ### `find_callers`
 
-Who calls this function or method? Structured result (`CallersOutput`): the
-callers with name, qualified name, kind, file, line range, `depth`, `via` (for
-depth > 1, the name of the symbol one step closer) and `resolved` (the CALLS
-edge resolution), ordered by depth, then file and line, plus `total_count`,
-`depth_limited` (the depth limit left callers out), `index_status`, a paging
-`notice` and, when the list is not the whole answer, `incomplete` (#169):
-`reasons` (the depth limit of a transitive walk, the page, call sites named
-like a listed symbol that got no CALLS edge), `branches_cut` and `next`, the
-exact call that continues (`find_callers(repo_id="r", symbol_name="x",
-depth=3)`). Direct
-callers are the whole answer to `depth` 1, so its depth limit is no reason.
-See [walks that stop early](../guides/call-resolution-limitations.md#walks-that-stop-early).
-The symbols, depths, `via` names and order are those `myc callers --json`
-prints (pinned by an end-to-end test).
+Who calls this function or method? Text result (#181): the `Index:` line,
+`N callers of <name>` (with `up to depth D` for a transitive walk), then one
+line per caller under its file, in the order of the walk (by depth, then file
+and line; each file once, at its first caller):
+
+```text
+Index: django, commit 2d4add1 = HEAD, up to date.
+
+21 callers of get_default_renderer up to depth 3:
+django/forms/forms.py
+  BaseForm.__init__ Method :71-125
+django/forms/widgets.py
+  Widget._render Method :281-284
+  Widget.render Method :276-279 [depth 2 via _render]
+django/template/autoreload.py
+  reset_loaders Function :33-45
+  template_changed Function :55-61 [depth 2 via reset_loaders] (resolved: name-match)
+```
+
+A caller past depth 1 carries `[depth N via X]` (X: the symbol one step
+closer); a CALLS edge matched by name only carries `(resolved: …)`. When the
+list is not the whole answer, an `Incomplete (N branch(es) not followed)`
+block follows (#169): the depth limit of a transitive walk, the page, call
+sites named like a listed symbol that got no CALLS edge — and a `Next:` line
+with the exact call that continues (`find_callers(repo_id="r",
+symbol_name="x", depth=3)`). Direct callers are the whole answer to `depth`
+1, so its depth limit is no reason. See [walks that stop
+early](../guides/call-resolution-limitations.md#walks-that-stop-early).
+
+`detail: "full"` answers with the JSON of `CallersOutput` as text: the
+callers with name, qualified name, kind, file, line range, `depth`, `via`,
+`resolved` and `signature`, plus `total_count`, `depth_limited` (the depth
+limit left callers out), `index_status`, a paging `notice` and `incomplete`
+(`reasons`, `branches_cut`, `next`). The deprecated `get_callers` returns the
+same object, without signatures, as `structuredContent`. The symbols,
+depths, `via` names and order are those `myc callers --json` prints (pinned
+by an end-to-end test).
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -229,15 +290,17 @@ prints (pinned by an end-to-end test).
 | `repo_id` | string | no | working directory | Repository ID |
 | `depth` | integer | no | `1` | Hops to follow; 1 = direct callers only (max 10) |
 | `limit` / `offset` | integer | no | `20` / `0` | Page (max 200) |
+| `detail` | `compact` \| `full` | no | `compact` | `full`: JSON with every field and signatures |
 
 ### `find_callees`
 
 What does this function or method call? Same parameters and shape as
-`find_callers` (`CalleesOutput`, list `callees`), following CALLS edges
-forwards. Its `incomplete` names the calls the walked symbols make that got
-no CALLS edge though they may reach project code (through a variable or
-callback, more than two candidates, a name not bound in scope), each with
-file and line.
+`find_callers` (`N callees of <name>`; with `detail: "full"`,
+`CalleesOutput` with list `callees`), following CALLS edges forwards. Its
+`Incomplete` block names the calls the walked symbols make that got no CALLS
+edge though they may reach project code (through a variable or callback,
+more than two candidates, a name not bound in scope), each with file and
+line.
 
 ### `impact_of_change`
 
@@ -246,9 +309,11 @@ What could break if I change this? Give at most one of `symbol_name`,
 
 * **Symbol or file:** every symbol that calls or imports it (for a file: any
   symbol the file defines), transitively up to `depth`, in sections *Direct
-  dependents* (these must change too if a signature changes), *Indirect
-  dependents* (with depth and `via`) and *Files with dependents* (nearest
-  depth). IMPORTS edges are marked `[imports]`, name-matched CALLS edges
+  dependents* (these must change too if a signature changes) and *Indirect
+  dependents* (with `[depth N via X]`), each one line per dependent,
+  `qualified_name kind :start-end`, under its file (#181; the file headings
+  replace the former *Files with dependents* section, the first line counts
+  the files). IMPORTS edges are marked `[imports]`, name-matched CALLS edges
   `(resolved: …)`.
 * **Diff (default):** the impact report of the uncommitted diff (`git diff
   HEAD` in the repository) or of the `diff` passed: changed symbols, symbols
@@ -269,7 +334,7 @@ diff, which reads `git diff HEAD` again).
 | `diff` | string | no | `git diff HEAD` | A unified diff |
 | `repo_id` | string | no | working directory | Repository ID |
 | `depth` | integer | no | `2` | Hops to follow (max 10) |
-| `limit` / `offset` | integer | no | `50` / `0` | Page over report lines (max 500) |
+| `limit` / `offset` | integer | no | `50` / `0` | Page over report lines, or dependents (max 500) |
 
 ### `trace_flow`
 
@@ -277,8 +342,8 @@ How does control get from one function to another? Follows CALLS edges from
 `from_symbol` towards `to_symbol`. Text result: the shortest call chain (each
 step with kind, file and line; name-matched edges marked), then every symbol
 strictly between the two ends that lies on a chain of the shortest length —
-or up to `extra_calls` longer — with the chain length and its distance from
-the start. When `to_symbol` is not reachable within `max_depth` calls the
+or up to `extra_calls` longer — one line per symbol under its file, marked
+`[chain N, call K]`: K calls from the start on a chain of N calls (#181). When `to_symbol` is not reachable within `max_depth` calls the
 result says so, with how many symbols were reached, and suggests what to try
 (swap the ends, a larger `max_depth`, `find_callers`). A cut flow is never
 presented as complete (#169): an `Incomplete (N branch(es) not followed)`

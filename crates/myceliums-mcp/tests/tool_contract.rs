@@ -131,6 +131,30 @@ fn bullet_items(text: &str) -> Vec<String> {
     items
 }
 
+/// Hits of a compact list (#181): `  line` entries under a file heading,
+/// each tagged with its section heading (a line ending in `:`) and file.
+/// Lines of an `Incomplete` block are not hits.
+fn grouped_items(text: &str) -> Vec<String> {
+    let mut section = String::new();
+    let mut file = String::new();
+    let mut items = Vec::new();
+    for line in text.lines() {
+        if line.starts_with("Incomplete (") {
+            section.clear();
+        } else if line.ends_with(':') && !line.starts_with(' ') {
+            section = line.to_string();
+            file.clear();
+        } else if let Some(item) = line.strip_prefix("  ") {
+            if !section.is_empty() && !file.is_empty() && !item.starts_with("- ") {
+                items.push(format!("{section}|{file}|{item}"));
+            }
+        } else if !line.is_empty() {
+            file = line.to_string();
+        }
+    }
+    items
+}
+
 /// Follows the `offset=` each page's notice names, from offset 0 to the
 /// end, and returns every item seen, in order.
 async fn walk_pages(
@@ -165,13 +189,27 @@ async fn assert_pages_partition(
     args: Value,
     items_of: fn(&str) -> Vec<String>,
 ) {
+    assert_pages_partition_by(client, tool, args, items_of, 2).await;
+}
+
+/// [`assert_pages_partition`] with pages of `limit` items.
+async fn assert_pages_partition_by(
+    client: &Client,
+    tool: &str,
+    args: Value,
+    items_of: fn(&str) -> Vec<String>,
+    limit: usize,
+) {
     let mut whole_args = args.clone();
     whole_args["limit"] = json!(500);
     let whole = items_of(&ok_text(client, tool, whole_args).await);
-    assert!(whole.len() > 2, "{tool}: too few items to page: {whole:?}");
+    assert!(
+        whole.len() > limit,
+        "{tool}: too few items to page: {whole:?}"
+    );
     // Several walks: an unstable order would show up as overlap or gaps.
     for _ in 0..3 {
-        let paged = walk_pages(client, tool, args.clone(), 2, items_of).await;
+        let paged = walk_pages(client, tool, args.clone(), limit, items_of).await;
         let mut unique = paged.clone();
         unique.sort();
         unique.dedup();
@@ -428,12 +466,14 @@ diff --git a/src/services/user.ts b/src/services/user.ts
         bullet_items,
     )
     .await;
-    // Symbol mode pages over dependents and files the same way.
-    assert_pages_partition(
+    // Symbol mode pages over its dependents, grouped by file, the same way
+    // (the fixture has two: pages of one).
+    assert_pages_partition_by(
         &client,
         "impact_of_change",
         json!({"repo_id": harness::REPO_ID, "symbol_name": harness::fixture::FIND_BY_ID}),
-        bullet_items,
+        grouped_items,
+        1,
     )
     .await;
     assert_pages_partition(
@@ -659,22 +699,46 @@ async fn text_tools_send_plain_text_and_structured_tools_typed_json() {
 
     // A structured tool: typed structuredContent, the same JSON as text
     // content (MCP spec), and an output schema that describes it.
-    let result = call(
-        &client,
-        "find_callers",
-        json!({"repo_id": harness::REPO_ID, "symbol_name": harness::fixture::FIND_BY_ID}),
-    )
-    .await
-    .unwrap();
+    let result = call(&client, "list_repos", json!({})).await.unwrap();
     let structured = result.structured_content.clone().expect("structured");
     let as_text: Value = serde_json::from_str(&text_of(&result)).expect("JSON text");
     assert_eq!(as_text, structured);
-    let schema = schema_of("find_callers").expect("output schema");
+    let schema = schema_of("list_repos").expect("output schema");
     let properties = schema["properties"].as_object().unwrap();
     for key in structured.as_object().unwrap().keys() {
         assert!(properties.contains_key(key), "{key} not in the schema");
     }
-    assert!(schema_of("list_repos").is_some());
+
+    // find_callers/find_callees answer in compact text (#181): no
+    // structuredContent, whose JSON would be the text an agent reads.
+    for tool in ["find_callers", "find_callees"] {
+        assert!(schema_of(tool).is_none(), "{tool}");
+        let result = call(
+            &client,
+            tool,
+            json!({"repo_id": harness::REPO_ID, "symbol_name": harness::fixture::GET_USER}),
+        )
+        .await
+        .unwrap();
+        assert!(result.structured_content.is_none(), "{tool}");
+        assert!(text_of(&result).starts_with("Index: "), "{tool}");
+    }
+}
+
+#[tokio::test]
+async fn input_schemas_carry_no_boilerplate() {
+    // Every schema is sent with every model call (#181).
+    let client = connect().await;
+    for tool in client.list_all_tools().await.expect("tools/list") {
+        let schema = serde_json::to_string(&*tool.input_schema).unwrap();
+        for noise in ["\"$schema\"", "\"title\":\"", "\"format\":", "\"null\""] {
+            assert!(
+                !schema.contains(noise),
+                "{}: {noise} in {schema}",
+                tool.name
+            );
+        }
+    }
 }
 
 // ── Toolsets ─────────────────────────────────────────────────────────────
@@ -733,49 +797,74 @@ async fn core_tools_answer_the_common_structural_questions() {
     let client = connect_with(Toolsets::default()).await;
     let repo = harness::REPO_ID;
 
-    // Who calls findById? Direct callers by default, deeper on request.
-    let direct = ok_json(
+    // Who calls findById? Direct callers by default, one line each under
+    // its file (#181); deeper on request.
+    let direct = ok_text(
         &client,
         "find_callers",
         json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID}),
     )
     .await;
-    let names = |v: &Value, key: &str| -> Vec<String> {
-        v[key]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|c| c["name"].as_str().unwrap().to_string())
-            .collect()
-    };
-    assert_eq!(names(&direct, "callers"), ["getUser"], "{direct}");
-    let deep = ok_json(
+    let hits = grouped_items(&direct);
+    assert_eq!(hits.len(), 1, "{direct}");
+    assert!(
+        hits[0].ends_with("|src/services/user.ts|UserService.getUser Method :16-18"),
+        "{direct}"
+    );
+    let deep = ok_text(
         &client,
         "find_callers",
         json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID, "depth": 2}),
     )
     .await;
-    let main = deep["callers"]
+    assert!(
+        deep.contains("callers of findById up to depth 2:"),
+        "{deep}"
+    );
+    assert!(
+        grouped_items(&deep)
+            .iter()
+            .any(|h| h.contains("|src/index.ts|main Function :")
+                && h.ends_with("[depth 2 via getUser]")),
+        "main calls getUser: {deep}"
+    );
+    // Everything, signatures included, on request.
+    let full = ok_text(
+        &client,
+        "find_callers",
+        json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID, "depth": 2, "detail": "full"}),
+    )
+    .await;
+    let full: Value = serde_json::from_str(&full).expect("detail=full is JSON");
+    let main = full["callers"]
         .as_array()
         .unwrap()
         .iter()
         .find(|c| c["name"] == "main")
-        .unwrap_or_else(|| panic!("main calls getUser: {deep}"));
+        .unwrap_or_else(|| panic!("main calls getUser: {full}"));
     assert_eq!(main["depth"], 2);
     assert_eq!(main["via"], "getUser", "{main}");
+    assert!(
+        main["signature"]
+            .as_str()
+            .is_some_and(|s| s.contains("main")),
+        "{main}"
+    );
 
     // What does main call?
-    let callees = ok_json(
+    let callees = ok_text(
         &client,
         "find_callees",
         json!({"repo_id": repo, "symbol_name": "main"}),
     )
     .await;
-    let callee_names = names(&callees, "callees");
+    let callees = grouped_items(&callees);
     assert!(
-        callee_names.contains(&"getUser".to_string())
-            && callee_names.contains(&"formatName".to_string()),
-        "{callees}"
+        callees
+            .iter()
+            .any(|h| h.contains("|UserService.getUser Method :"))
+            && callees.iter().any(|h| h.contains("|formatName Function :")),
+        "{callees:?}"
     );
 
     // How does main reach findById?
@@ -806,19 +895,19 @@ async fn core_tools_answer_the_common_structural_questions() {
         json!({"repo_id": repo, "symbol_name": harness::fixture::FIND_BY_ID}),
     )
     .await;
-    let items = bullet_items(&impact);
+    let items = grouped_items(&impact);
     assert!(
-        items
-            .iter()
-            .any(|i| i.starts_with("Direct dependents") && i.contains("UserService.getUser")),
+        items.iter().any(|i| i.starts_with("Direct dependents")
+            && i.contains("|src/services/user.ts|UserService.getUser Method :")),
         "{impact}"
     );
     assert!(
         items
             .iter()
-            .any(|i| i.starts_with("Files with dependents") && i.contains("src/index.ts")),
+            .any(|i| i.starts_with("Indirect dependents") && i.contains("|src/index.ts|main ")),
         "{impact}"
     );
+    assert!(!impact.contains("Files with dependents"), "{impact}");
     let by_file = ok_text(
         &client,
         "impact_of_change",
@@ -881,17 +970,28 @@ async fn core_tools_answer_the_common_structural_questions() {
 }
 
 /// What an alias and its replacement must agree on: an error's text, or the
-/// structured content without the freshness line, or the text without the
+/// structured content (or JSON text: `detail: full`) without the freshness
+/// line and the signatures only `detail: full` adds, or the text without the
 /// freshness line and the random ids of untrusted frames.
 fn comparable(result: &CallToolResult) -> Value {
     if result.is_error == Some(true) {
         return json!({"error": text_of(result)});
     }
-    if let Some(mut structured) = result.structured_content.clone() {
+    let text = text_of(result);
+    let json = result.structured_content.clone().or_else(|| {
+        serde_json::from_str::<Value>(&text)
+            .ok()
+            .filter(Value::is_object)
+    });
+    if let Some(mut structured) = json {
         structured["index_status"] = Value::Null;
+        for list in ["callers", "callees"] {
+            for item in structured[list].as_array_mut().into_iter().flatten() {
+                item.as_object_mut().unwrap().remove("signature");
+            }
+        }
         return structured;
     }
-    let text = text_of(result);
     let body = text.split_once("\n\n").map_or(text.as_str(), |(_, b)| b);
     Value::String(
         body.lines()
@@ -954,13 +1054,13 @@ diff --git a/src/services/user.ts b/src/services/user.ts
             "get_callers",
             json!({"repo_id": repo, "symbol_name": find}),
             "find_callers",
-            json!({"repo_id": repo, "symbol_name": find, "depth": 3}),
+            json!({"repo_id": repo, "symbol_name": find, "depth": 3, "detail": "full"}),
         ),
         (
             "get_callees",
             json!({"repo_id": repo, "symbol_name": "main"}),
             "find_callees",
-            json!({"repo_id": repo, "symbol_name": "main", "depth": 3}),
+            json!({"repo_id": repo, "symbol_name": "main", "depth": 3, "detail": "full"}),
         ),
         (
             "detect_impact",

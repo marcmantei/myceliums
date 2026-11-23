@@ -33,7 +33,7 @@ Every CALLS edge records how its target was found in its metadata (`line:<n>;res
 
 ### Walks that stop early
 
-`trace_flow`, `find_callers`/`find_callees` (and `myc callers`/`myc callees`) with a depth, and `impact_of_change` (and `myc impact`) never present a cut walk as complete (#169). When they stopped short they add an `Incomplete (N branch(es) not followed)` block — in `find_callers`/`find_callees` the `incomplete` object (`reasons`, `branches_cut`, `next`) — right under the first line, with one reason per cut and a `Next:` step that is the exact call to continue:
+`trace_flow`, `find_callers`/`find_callees` (and `myc callers`/`myc callees`) with a depth, and `impact_of_change` (and `myc impact`) never present a cut walk as complete (#169). When they stopped short they add an `Incomplete (N branch(es) not followed)` block — in `find_callers`/`find_callees` after the list, and with `detail: "full"` as the `incomplete` object (`reasons`, `branches_cut`, `next`); elsewhere right under the first line, with one reason per cut and a `Next:` step that is the exact call to continue:
 
 | reason | when | next step |
 |---|---|---|

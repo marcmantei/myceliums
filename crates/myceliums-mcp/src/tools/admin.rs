@@ -7,7 +7,7 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "analyze",
-        description = "Index a project into the knowledge graph: parses 20+ languages (TypeScript/JavaScript, Python, Go, Rust, Java, Kotlin, C/C++, C#, Ruby, PHP, Swift, …) plus Markdown, PDF and email, extracts symbols and call edges, detects communities and traces execution flows, then answers; symbols are embedded for search by meaning in the background afterwards (progress in the Index line of every result and in server_stats). Reuses a fresh index unless force=true. Writes only to the myceliums data directory, never to the project.",
+        description = "Index a project (20+ languages, Markdown, PDF, email) into the graph. Run it when there is no index or the Index line says stale. Reuses a fresh index unless force=true; embeddings for search by meaning follow in the background. Writes only to the myceliums data directory.",
         annotations(
             read_only_hint = false,
             destructive_hint = false,
@@ -48,7 +48,7 @@ impl MyceliumsMcp {
 
     #[tool(
         name = "list_repos",
-        description = "List the analyzed repositories (id, name, path, when and from which commit they were indexed, size). Tools default to the repository of the working directory; pass another one's id as repo_id.",
+        description = "List the indexed repositories: id, path, indexed commit. Tools default to the repository of the working directory; pass another id as repo_id.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,

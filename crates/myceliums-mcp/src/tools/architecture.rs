@@ -6,7 +6,7 @@ use super::prelude::*;
 impl MyceliumsMcp {
     #[tool(
         name = "find_dead_code",
-        description = "Which functions and methods are never called? Lists those with no incoming CALLS edge, optionally only under a file or directory (path). A candidate list, not proof: entry points, callbacks and calls the resolver missed look unused too; skip known ones with exclude_patterns.",
+        description = "Which functions and methods are never called? Candidates with no incoming CALLS edge, optionally under path. Entry points and callbacks look unused too: skip them with exclude_patterns.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,

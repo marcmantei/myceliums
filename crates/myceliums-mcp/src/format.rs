@@ -586,6 +586,72 @@ fn heuristic_mark(resolved: Option<&str>) -> String {
     }
 }
 
+/// `qualified_name kind :start-end`: a hit on a line under its file's
+/// heading (see [`group_by_file`]).
+fn hit_line(s: &myceliums_storage::CodeSymbol) -> String {
+    format!(
+        "{} {} {}",
+        s.qualified_name,
+        s.kind,
+        line_range(s.start_line, s.end_line)
+    )
+}
+
+/// `:start-end`, or `:start` for a one-line symbol: the lines to read.
+pub(crate) fn line_range(start: u32, end: u32) -> String {
+    if end > start {
+        format!(":{start}-{end}")
+    } else {
+        format!(":{start}")
+    }
+}
+
+/// Lists hits compactly (#181): each file once, as a heading line, and its
+/// hits indented under it in their order. Files come in the order of their
+/// first hit, so a list sorted by depth stays near-sorted.
+pub(crate) fn group_by_file<'a>(hits: impl IntoIterator<Item = (&'a str, String)>) -> String {
+    let mut files: Vec<(&str, Vec<String>)> = Vec::new();
+    for (file, line) in hits {
+        match files.iter_mut().find(|(f, _)| *f == file) {
+            Some((_, lines)) => lines.push(line),
+            None => files.push((file, vec![line])),
+        }
+    }
+    let mut out = String::new();
+    for (file, lines) in files {
+        out.push_str(file);
+        out.push('\n');
+        for line in lines {
+            out.push_str("  ");
+            out.push_str(&line);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// Renders one page of `(section heading, file, line)` items: each heading
+/// once, its items grouped by file under it.
+fn sections_by_file(items: &[(&str, &str, String)]) -> String {
+    let mut out = String::new();
+    let mut start = 0;
+    while start < items.len() {
+        let heading = items[start].0;
+        let end = items[start..]
+            .iter()
+            .position(|(h, _, _)| *h != heading)
+            .map_or(items.len(), |n| start + n);
+        out.push_str(&format!("\n{heading}\n"));
+        out.push_str(&group_by_file(
+            items[start..end]
+                .iter()
+                .map(|(_, file, line)| (*file, line.clone())),
+        ));
+        start = end;
+    }
+    out
+}
+
 /// Renders `trace_flow`: the shortest call chain from `from` to `to`, then
 /// one page of every symbol on a chain within the widened length. `gaps` is
 /// the `Incomplete:` block (#169), right under the first line so a cut flow
@@ -647,26 +713,29 @@ pub fn format_call_chains(
             .on_chains
             .iter()
             .map(|c| {
-                format!(
-                    "{} [chain of {}, call {} from the start]",
-                    symbol_line(c.symbol),
-                    c.chain_len,
-                    c.from_start
+                (
+                    c.symbol.file_path.as_str(),
+                    format!(
+                        "{} [chain {}, call {}]",
+                        hit_line(c.symbol),
+                        c.chain_len,
+                        c.from_start
+                    ),
                 )
             })
             .collect::<Vec<_>>(),
     );
     out.push_str(&format!(
-        "\nEvery symbol between them on a chain of {span} calls ({total}):\n"
+        "\nEvery symbol between them on a chain of {span} calls ({total}; [chain N, call K]: \
+         K calls from the start on a chain of N):\n"
     ));
-    for line in &lines.items {
-        out.push_str(&format!("  * {line}\n"));
-    }
+    out.push_str(&group_by_file(lines.items.iter().cloned()));
     lines.with_notice(out)
 }
 
-/// Renders the symbol/file mode of `impact_of_change`: one page over direct
-/// dependents, indirect dependents, then the files that hold them.
+/// Renders the symbol/file mode of `impact_of_change`: one page over direct,
+/// then indirect dependents, each grouped by file (#181; the file headings
+/// replace the separate list of files).
 pub fn format_dependents(
     subject: &str,
     hits: &[crate::navigation::Hit],
@@ -676,19 +745,10 @@ pub fn format_dependents(
     const DIRECT: &str =
         "Direct dependents (call or import it; update them if its signature changes):";
     const INDIRECT: &str = "Indirect dependents (depth 2+):";
-    const FILES: &str = "Files with dependents (nearest depth):";
 
-    let mut nearest: std::collections::BTreeMap<&str, u32> = std::collections::BTreeMap::new();
-    for hit in hits {
-        let d = nearest
-            .entry(hit.symbol.file_path.as_str())
-            .or_insert(hit.depth);
-        *d = (*d).min(hit.depth);
-    }
-    let mut files: Vec<(&str, u32)> = nearest.into_iter().collect();
-    files.sort_by_key(|(path, d)| (*d, *path));
-
-    let mut lines: Vec<(&str, String)> = Vec::new();
+    let files: std::collections::BTreeSet<&str> =
+        hits.iter().map(|h| h.symbol.file_path.as_str()).collect();
+    let mut lines: Vec<(&str, &str, String)> = Vec::new();
     for hit in hits {
         let kind = if hit.edge.kind == myceliums_storage::RelationshipKind::Imports {
             " [imports]"
@@ -696,28 +756,29 @@ pub fn format_dependents(
             ""
         };
         let mark = heuristic_mark(hit.resolved);
+        let file = hit.symbol.file_path.as_str();
         if hit.depth == 1 {
-            lines.push((DIRECT, format!("{}{kind}{mark}", symbol_line(hit.symbol))));
+            lines.push((
+                DIRECT,
+                file,
+                format!("{}{kind}{mark}", hit_line(hit.symbol)),
+            ));
         } else {
             let via = hit
                 .via
-                .map(|v| format!(", via {}", v.name))
+                .map(|v| format!(" via {}", v.name))
                 .unwrap_or_default();
             lines.push((
                 INDIRECT,
+                file,
                 format!(
                     "{} [depth {}{via}]{kind}{mark}",
-                    symbol_line(hit.symbol),
+                    hit_line(hit.symbol),
                     hit.depth
                 ),
             ));
         }
     }
-    lines.extend(
-        files
-            .iter()
-            .map(|(path, d)| (FILES, format!("{path} (depth {d})"))),
-    );
 
     let direct = hits.iter().filter(|h| h.depth == 1).count();
     let mut out = format!(
@@ -734,14 +795,7 @@ pub fn format_dependents(
         return out;
     }
     let lines = page.take(lines);
-    let mut section = "";
-    for (heading, line) in &lines.items {
-        if *heading != section {
-            section = heading;
-            out.push_str(&format!("\n{heading}\n"));
-        }
-        out.push_str(&format!("  * {line}\n"));
-    }
+    out.push_str(&sections_by_file(&lines.items));
     lines.with_notice(out)
 }
 

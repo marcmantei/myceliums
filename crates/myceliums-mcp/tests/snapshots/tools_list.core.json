@@ -9,49 +9,33 @@
       "openWorldHint": false,
       "readOnlyHint": false
     },
-    "description": "Index a project into the knowledge graph: parses 20+ languages (TypeScript/JavaScript, Python, Go, Rust, Java, Kotlin, C/C++, C#, Ruby, PHP, Swift, …) plus Markdown, PDF and email, extracts symbols and call edges, detects communities and traces execution flows, then answers; symbols are embedded for search by meaning in the background afterwards (progress in the Index line of every result and in server_stats). Reuses a fresh index unless force=true. Writes only to the myceliums data directory, never to the project.",
+    "description": "Index a project (20+ languages, Markdown, PDF, email) into the graph. Run it when there is no index or the Index line says stale. Reuses a fresh index unless force=true; embeddings for search by meaning follow in the background. Writes only to the myceliums data directory.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "force": {
-          "description": "Force full re-analysis even if cache is fresh (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Re-index even if the index is fresh",
+          "type": "boolean"
         },
         "max_age_minutes": {
-          "description": "Maximum cache age in minutes before re-analysis (default: 60)",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "description": "Reuse an index younger than this (default 60)",
+          "type": "integer"
         },
         "path": {
-          "description": "Path to the project directory to analyze",
+          "description": "Project directory",
           "type": "string"
         },
         "skip_communities": {
-          "description": "Skip community detection (default: false); only community tools need it",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Only the community tools need them",
+          "type": "boolean"
         },
         "skip_embeddings": {
-          "description": "Skip embedding generation for faster analysis (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Faster, but no search by meaning",
+          "type": "boolean"
         }
       },
       "required": [
         "path"
       ],
-      "title": "AnalyzeParams",
       "type": "object"
     },
     "name": "analyze"
@@ -66,36 +50,26 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Show a function, method or class with everything needed to understand it before changing it: its source, signature, file and line range, and who calls it and what it calls (with how each call edge was resolved).",
+    "description": "Show a function, method or class before changing it: source, signature, location, direct callers and callees. Also the follow-up for one hit of another tool.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "max_source_lines": {
-          "description": "Most source lines shown; longer bodies are cut with a note (default 120, max 5000)",
-          "format": "uint",
+          "description": "Source lines shown (default 120)",
           "maximum": 5000,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
-          "description": "Symbol: name, qualified name, or file_path:qualified_name",
+          "description": "Name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
       "required": [
         "symbol_name"
       ],
-      "title": "ExplainSymbolParams",
       "type": "object"
     },
     "name": "explain_symbol"
@@ -110,196 +84,46 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "What does this function or method call? Lists the functions a symbol calls with file and line; depth > 1 follows the calls further down. Each callee carries how its CALLS edge was resolved (exact, import, name-match, ambiguous). `incomplete` lists calls the graph could not link (callbacks, ambiguous names) and the depth cut, with the call that continues.",
+    "description": "What does this function or method call? Callees grouped by file, with line; depth > 1 follows the calls further down.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
-          "description": "Hops to follow: 1 = direct only (default 1, max 10)",
-          "format": "uint32",
+          "description": "Hops; 1 = direct only (default)",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
+        },
+        "detail": {
+          "description": "compact (default): a line per hit; full: JSON with signatures",
+          "enum": [
+            "compact",
+            "full"
+          ],
+          "type": "string"
         },
         "limit": {
-          "description": "Max symbols per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
-          "description": "Symbol: name, qualified name, or file_path:qualified_name",
+          "description": "Name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
       "required": [
         "symbol_name"
       ],
-      "title": "FindCallsParams",
       "type": "object"
     },
-    "name": "find_callees",
-    "outputSchema": {
-      "$defs": {
-        "CalleeItem": {
-          "properties": {
-            "depth": {
-              "description": "Calls between this symbol and the one asked about (1 = direct).",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "end_line": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "file_path": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            },
-            "qualified_name": {
-              "type": "string"
-            },
-            "resolved": {
-              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
-              "type": "string"
-            },
-            "start_line": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "via": {
-              "description": "For depth > 1: the name of the symbol one step closer to the one\nasked about.",
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "name",
-            "qualified_name",
-            "kind",
-            "file_path",
-            "start_line",
-            "end_line",
-            "depth",
-            "resolved"
-          ],
-          "type": "object"
-        },
-        "Incomplete": {
-          "description": "Why a graph walk is not the whole answer.",
-          "properties": {
-            "branches_cut": {
-              "description": "Places not followed: symbols one more step would add, plus unlinked call sites.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "next": {
-              "description": "The call that continues the walk.",
-              "type": "string"
-            },
-            "reasons": {
-              "description": "One per cut: depth limit, page, calls or call sites without a CALLS edge.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "reasons",
-            "branches_cut",
-            "next"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "callees": {
-          "items": {
-            "$ref": "#/$defs/CalleeItem"
-          },
-          "type": "array"
-        },
-        "depth_limited": {
-          "type": "boolean"
-        },
-        "incomplete": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Incomplete"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Set when this is not the whole answer: why, and the call that continues."
-        },
-        "index_status": {
-          "description": "Index freshness: analyzed commit vs current HEAD.",
-          "type": "string"
-        },
-        "notice": {
-          "description": "Set when results were cut: how to fetch the next page.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "symbol_name": {
-          "type": "string"
-        },
-        "total_count": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "index_status",
-        "symbol_name",
-        "callees",
-        "total_count",
-        "depth_limited"
-      ],
-      "title": "CalleesOutput",
-      "type": "object"
-    }
+    "name": "find_callees"
   },
   {
     "_meta": {
@@ -311,196 +135,46 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Who calls this function or method? Lists the callers of a symbol with file and line; depth > 1 adds the callers' callers. Each caller carries how its CALLS edge was resolved (exact, import, name-match, ambiguous): verify name-match and ambiguous ones. `incomplete` says what the walk did not follow (depth limit, unlinked call sites) and the call that continues it.",
+    "description": "Who calls this function or method? Callers grouped by file, with line; depth > 1 adds the callers' callers.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
-          "description": "Hops to follow: 1 = direct only (default 1, max 10)",
-          "format": "uint32",
+          "description": "Hops; 1 = direct only (default)",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
+        },
+        "detail": {
+          "description": "compact (default): a line per hit; full: JSON with signatures",
+          "enum": [
+            "compact",
+            "full"
+          ],
+          "type": "string"
         },
         "limit": {
-          "description": "Max symbols per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
-          "description": "Symbol: name, qualified name, or file_path:qualified_name",
+          "description": "Name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
       "required": [
         "symbol_name"
       ],
-      "title": "FindCallsParams",
       "type": "object"
     },
-    "name": "find_callers",
-    "outputSchema": {
-      "$defs": {
-        "CallerItem": {
-          "properties": {
-            "depth": {
-              "description": "Calls between this symbol and the one asked about (1 = direct).",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "end_line": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "file_path": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "name": {
-              "type": "string"
-            },
-            "qualified_name": {
-              "type": "string"
-            },
-            "resolved": {
-              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
-              "type": "string"
-            },
-            "start_line": {
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "via": {
-              "description": "For depth > 1: the name of the symbol one step closer to the one\nasked about.",
-              "type": [
-                "string",
-                "null"
-              ]
-            }
-          },
-          "required": [
-            "name",
-            "qualified_name",
-            "kind",
-            "file_path",
-            "start_line",
-            "end_line",
-            "depth",
-            "resolved"
-          ],
-          "type": "object"
-        },
-        "Incomplete": {
-          "description": "Why a graph walk is not the whole answer.",
-          "properties": {
-            "branches_cut": {
-              "description": "Places not followed: symbols one more step would add, plus unlinked call sites.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "next": {
-              "description": "The call that continues the walk.",
-              "type": "string"
-            },
-            "reasons": {
-              "description": "One per cut: depth limit, page, calls or call sites without a CALLS edge.",
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            }
-          },
-          "required": [
-            "reasons",
-            "branches_cut",
-            "next"
-          ],
-          "type": "object"
-        }
-      },
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "properties": {
-        "callers": {
-          "items": {
-            "$ref": "#/$defs/CallerItem"
-          },
-          "type": "array"
-        },
-        "depth_limited": {
-          "type": "boolean"
-        },
-        "incomplete": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Incomplete"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Set when this is not the whole answer: why, and the call that continues."
-        },
-        "index_status": {
-          "description": "Index freshness: analyzed commit vs current HEAD.",
-          "type": "string"
-        },
-        "notice": {
-          "description": "Set when results were cut: how to fetch the next page.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "symbol_name": {
-          "type": "string"
-        },
-        "total_count": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "index_status",
-        "symbol_name",
-        "callers",
-        "total_count",
-        "depth_limited"
-      ],
-      "title": "CallersOutput",
-      "type": "object"
-    }
+    "name": "find_callers"
   },
   {
     "_meta": {
@@ -512,53 +186,30 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Which functions and methods are never called? Lists those with no incoming CALLS edge, optionally only under a file or directory (path). A candidate list, not proof: entry points, callbacks and calls the resolver missed look unused too; skip known ones with exclude_patterns.",
+    "description": "Which functions and methods are never called? Candidates with no incoming CALLS edge, optionally under path. Entry points and callbacks look unused too: skip them with exclude_patterns.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "exclude_patterns": {
-          "description": "Comma-separated substrings; symbols whose name contains one are skipped (e.g. known entry points)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Comma-separated name substrings to skip (known entry points)",
+          "type": "string"
         },
         "limit": {
-          "description": "Max symbols per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "path": {
-          "description": "Only functions in this file, or under this directory (repository-relative, e.g. src/utils/)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Only under this repository-relative file or directory",
+          "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
-      "title": "FindDeadCodeParams",
       "type": "object"
     },
     "name": "find_dead_code",
@@ -648,70 +299,40 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "What could break if I change this? For a symbol or a file: every function that calls or imports it, directly and transitively, and the files to check; direct dependents must change too if a signature changes. With neither: the impact of the uncommitted diff (git diff HEAD), or of the diff you pass. An `Incomplete:` block names what the walk did not follow (depth limit, unlinked call sites) and the next call.",
+    "description": "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "depth": {
-          "description": "Hops to follow from the changed code (default 2, max 10)",
-          "format": "uint32",
+          "description": "Hops (default 2)",
           "maximum": 10,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "diff": {
-          "description": "A unified diff of the change (default when neither symbol_name nor file_path is given: `git diff HEAD` in the repository)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Unified diff (default without symbol_name/file_path: git diff HEAD)",
+          "type": "string"
         },
         "file_path": {
-          "description": "The file you plan to change (repository-relative): all symbols it defines",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Repository-relative file to change",
+          "type": "string"
         },
         "limit": {
-          "description": "Max report lines per page (default 50, max 500)",
-          "format": "uint",
+          "description": "Page size in lines (default 50)",
           "maximum": 500,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Report lines to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "symbol_name": {
-          "description": "The symbol you plan to change (name, qualified name, or file_path:qualified_name). Give at most one of symbol_name, file_path, diff",
-          "type": [
-            "string",
-            "null"
-          ]
+          "description": "Symbol to change (name, qualified name, or file_path:qualified_name). At most one of symbol_name, file_path, diff",
+          "type": "string"
         }
       },
-      "title": "ImpactOfChangeParams",
       "type": "object"
     },
     "name": "impact_of_change"
@@ -726,32 +347,19 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "List the analyzed repositories (id, name, path, when and from which commit they were indexed, size). Tools default to the repository of the working directory; pass another one's id as repo_id.",
+    "description": "List the indexed repositories: id, path, indexed commit. Tools default to the repository of the working directory; pass another id as repo_id.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "limit": {
-          "description": "Max repos per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Repos to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         }
       },
-      "title": "ListReposParams",
       "type": "object"
     },
     "name": "list_repos",
@@ -844,87 +452,56 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "Find where something is implemented: functions, methods, classes and types by name (parseConfig, Item.AsString) or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code; results give kind, file and line range. mode=auto (default) ranks by keyword and meaning when the index has embeddings. Test code ranks below product code unless tests=include or tests=prefer.",
+    "description": "Find where something is implemented: functions, classes and types by name or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code: one line per hit with kind, file and lines.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "explain": {
-          "description": "Show the scoring breakdown of each result (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Show each result's score breakdown",
+          "type": "boolean"
         },
         "limit": {
-          "description": "Max results per page (default 20, max 100)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 100,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "mode": {
-          "description": "auto (default): hybrid when the index has embeddings, else keyword. keyword: names and signatures, no model. semantic: meaning only. hybrid: both, fused",
+          "description": "auto (default): hybrid with embeddings, else keyword",
           "enum": [
             "auto",
             "keyword",
             "semantic",
-            "hybrid",
-            null
+            "hybrid"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "offset": {
-          "description": "Results to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "query": {
-          "description": "What to find: a name (parseConfig, Item.AsString) or what the code does (builds the Set-Cookie header)",
+          "description": "A name (parseConfig, Item.AsString) or what the code does",
           "type": "string"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "rerank": {
-          "description": "Rerank the top 50 hybrid results with a cross-encoder: slower, more precise (default: false)",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "description": "Cross-encoder rerank of the hybrid top 50: slower, more precise",
+          "type": "boolean"
         },
         "tests": {
-          "description": "Test code (test files and directories such as *_test.go, *.test.ts, tests/, and #[cfg(test)] modules): demote (default) ranks it below product code, include ranks it like product code, prefer ranks it first. Use include or prefer to find tests",
+          "description": "Test code: demote (default), include, or prefer (to find tests)",
           "enum": [
             "demote",
             "include",
-            "prefer",
-            null
+            "prefer"
           ],
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         }
       },
       "required": [
         "query"
       ],
-      "title": "SearchCodeParams",
       "type": "object"
     },
     "name": "search_code"
@@ -939,63 +516,38 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "How does control get from one function to another? Follows calls from from_symbol down to to_symbol and lists the shortest call chain plus every function on a chain of that length (extra_calls widens it), with file and line. An `Incomplete:` block names what is not listed (longer chains, depth limit, calls without a CALLS edge) and the next call; read the source before calling a flow complete.",
+    "description": "How does control get from one function to another? The shortest call chain from from_symbol to to_symbol, plus every function on a chain of that length (extra_calls widens it), with file and line.",
     "inputSchema": {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
       "properties": {
         "extra_calls": {
-          "description": "Also list symbols on chains up to this many calls longer than the shortest (default 0, max 5)",
-          "format": "uint32",
+          "description": "Also list chains up to this many calls longer than the shortest (default 0)",
           "maximum": 5,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "from_symbol": {
-          "description": "Where the flow starts: name, qualified name, or file_path:qualified_name",
+          "description": "Start: name, qualified name, or file_path:qualified_name",
           "type": "string"
         },
         "limit": {
-          "description": "Max symbols per page (default 20, max 200)",
-          "format": "uint",
+          "description": "Page size (default 20)",
           "maximum": 200,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "max_depth": {
-          "description": "Longest chain searched, in calls (default 12, max 30)",
-          "format": "uint32",
+          "description": "Longest chain in calls (default 12)",
           "maximum": 30,
           "minimum": 1,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "offset": {
-          "description": "Symbols to skip, for the next page (default 0)",
-          "format": "uint",
-          "maximum": 100000,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": "integer"
         },
         "repo_id": {
-          "description": "Repository ID (default: the indexed repository containing the working directory)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": "string"
         },
         "to_symbol": {
-          "description": "Where the flow ends: name, qualified name, or file_path:qualified_name",
+          "description": "End: name, qualified name, or file_path:qualified_name",
           "type": "string"
         }
       },
@@ -1003,7 +555,6 @@
         "from_symbol",
         "to_symbol"
       ],
-      "title": "TraceFlowParams",
       "type": "object"
     },
     "name": "trace_flow"

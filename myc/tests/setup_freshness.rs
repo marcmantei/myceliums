@@ -116,8 +116,10 @@ fn index_line_and_analyze(data: &Path, project: &Path) -> (String, String) {
         ],
     );
     assert_ne!(results[0]["isError"], true, "{}", results[0]);
-    let line = results[0]["structuredContent"]["index_status"]
+    let line = results[0]["content"][0]["text"]
         .as_str()
+        .and_then(|text| text.lines().next())
+        .filter(|line| line.starts_with("Index: "))
         .unwrap_or_else(|| panic!("an index line: {}", results[0]))
         .to_string();
     assert_ne!(results[1]["isError"], true, "{}", results[1]);

@@ -1119,6 +1119,44 @@ stated in the prompt; `--prompt-budget` is refused with it) and 3
 repetitions. The profile name is stored in the run's config, so a resumed run
 cannot change it.
 
+## Replaying myceliums calls (#181)
+
+`agent_eval.py replay` measures a change to myceliums' answer format or tool
+definitions without a model: it takes every `mcp__myceliums__*` call from a
+run's transcripts, sends it again to two `myc` builds over stdio (both on the
+same index, `repo_id` dropped so the server resolves the repository from the
+working copy), and writes `results/<label>/REPLAY.md` and
+`replay_summary.json`:
+
+* sizes: the tool definitions as Claude Code sends them to the model (name
+  with the `mcp__myceliums__` prefix, description, input schema), the server
+  instructions, the `tools/list` JSON, and the answers per tool, in
+  characters and characters / 4, plus `o200k_base` tokens when `tiktoken` is
+  importable. `o200k_base` is an OpenAI tokenizer, not Claude's: it shows the
+  ratio, not Claude's token count (#178 measures Claude tokens from usage).
+* equivalence, per call: the same hits (file, qualified name, start line,
+  depth or chain position, `via`, `[imports]` and `resolved` marks), totals,
+  `Incomplete` reasons and `Next` step, read from the JSON of
+  `find_callers`/`find_callees`, the older bullet lists or the compact lists
+  grouped by file; error results must be the same text. The command exits 1
+  when a call differs.
+
+The working copies must be the repositories at the run's commits, with the
+run's index exclusions in `.myceliums.toml` (`index_exclude_extra` in
+`results/<label>/meta.json`); `--index` indexes them first
+(`myc analyze --skip-embeddings`, enough for the graph tools) into `--data`,
+which also serves as `HOME`.
+
+```bash
+# #181: the #163/#171 calls against origin/main and the branch (REPLAY.md in results/2026-11-23-compact-output)
+uv run --no-project --with tiktoken python evals/agent/agent_eval.py replay 2026-11-23-compact-output \
+  --runs-root ../myceliums-eval-163-outcome-scale/evals/agent/runs \
+  --runs-root ../myceliums-eval-171-rerun-c/evals/agent/runs --run-glob '2026-11-22-*-t*' \
+  --before /tmp/myc-before --after /tmp/myc-after --before-name "origin/main fbbf24f" --after-name feat-181-compact-output \
+  --work django=/tmp/r181/work/django --work vue=/tmp/r181/work/vue --data /tmp/r181/data --index
+python3 evals/agent/agent_eval.py replay 2026-11-23-compact-output --check   # CI: REPLAY.md matches its data
+```
+
 ## Tool-selection eval
 
 [`toolsel/intents.json`](toolsel/intents.json) holds 56 natural-language

@@ -60,4 +60,7 @@ jobs:
             if [ -f "$dir/toolsel_results.jsonl" ]; then
               python3 evals/agent/agent_eval.py toolsel-report "$label" --check
             fi
+            if [ -f "$dir/replay_summary.json" ]; then
+              python3 evals/agent/agent_eval.py replay "$label" --check
+            fi
           done

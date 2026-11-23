@@ -564,6 +564,9 @@ pub struct CallerItem {
     /// How the CALLS edge reaching this symbol was resolved:
     /// exact | import | name-match | ambiguous.
     pub resolved: String,
+    /// The declaration line; only with `detail: full` (#181).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]
@@ -599,6 +602,9 @@ pub struct CalleeItem {
     /// How the CALLS edge reaching this symbol was resolved:
     /// exact | import | name-match | ambiguous.
     pub resolved: String,
+    /// The declaration line; only with `detail: full` (#181).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
 }
 
 #[derive(Serialize, schemars::JsonSchema)]

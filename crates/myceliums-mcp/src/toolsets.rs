@@ -301,6 +301,11 @@ pub(crate) fn select<S>(mut router: ToolRouter<S>, toolsets: &Toolsets) -> ToolR
 }
 
 fn decorate(tool: &mut Tool) {
+    let mut schema = serde_json::Value::Object((*tool.input_schema).clone());
+    compact_schema(&mut schema);
+    if let serde_json::Value::Object(schema) = schema {
+        tool.input_schema = std::sync::Arc::new(schema);
+    }
     match toolset_of(&tool.name) {
         Some(Toolset::Core) => {
             let mut meta = tool.meta.take().unwrap_or_default();
@@ -323,10 +328,87 @@ fn decorate(tool: &mut Tool) {
     }
 }
 
+/// Drops what an agent does not need from a generated input schema (#181).
+/// The schema is sent with every model call, so each keyword costs tokens in
+/// every turn of a session. Removed: `$schema`, `title`, `format` (the
+/// bounds that matter stay as `minimum`/`maximum`), a `minimum` of 0, and
+/// the `null` that an `Option` adds to `type` and `enum`: a property outside
+/// `required` is optional already, and the handlers accept `null` either
+/// way. Property names are never touched, only the keywords of each schema.
+pub(crate) fn compact_schema(schema: &mut serde_json::Value) {
+    use serde_json::Value;
+    let Value::Object(map) = schema else {
+        return;
+    };
+    for keyword in ["$schema", "title", "format"] {
+        map.remove(keyword);
+    }
+    if map.get("minimum").and_then(Value::as_u64) == Some(0) {
+        map.remove("minimum");
+    }
+    if let Some(Value::Array(types)) = map.get_mut("type") {
+        types.retain(|t| t != "null");
+        if types.len() == 1 {
+            let only = types.remove(0);
+            map.insert("type".into(), only);
+        }
+    }
+    if let Some(Value::Array(values)) = map.get_mut("enum") {
+        values.retain(|v| !v.is_null());
+    }
+    for key in ["properties", "$defs", "definitions"] {
+        if let Some(Value::Object(children)) = map.get_mut(key) {
+            children.values_mut().for_each(compact_schema);
+        }
+    }
+    for key in ["anyOf", "oneOf", "allOf", "prefixItems"] {
+        if let Some(Value::Array(children)) = map.get_mut(key) {
+            children.iter_mut().for_each(compact_schema);
+        }
+    }
+    for key in ["items", "additionalProperties"] {
+        if let Some(child) = map.get_mut(key) {
+            compact_schema(child);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::MyceliumsMcp;
+
+    #[test]
+    fn schemas_lose_boilerplate_but_keep_names_bounds_and_required() {
+        let mut schema = serde_json::json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "title": "P",
+            "type": "object",
+            "required": ["title"],
+            "properties": {
+                "title": {"type": "string", "description": "a param named title"},
+                "format": {"type": ["string", "null"], "enum": ["a", "b", null]},
+                "limit": {"type": ["integer", "null"], "format": "uint", "minimum": 1, "maximum": 200},
+                "offset": {"type": ["integer", "null"], "format": "uint", "minimum": 0},
+                "tags": {"type": ["array", "null"], "items": {"type": "string", "format": "x"}}
+            }
+        });
+        compact_schema(&mut schema);
+        assert_eq!(
+            schema,
+            serde_json::json!({
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                    "title": {"type": "string", "description": "a param named title"},
+                    "format": {"type": "string", "enum": ["a", "b"]},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+                    "offset": {"type": "integer"},
+                    "tags": {"type": "array", "items": {"type": "string"}}
+                }
+            })
+        );
+    }
 
     #[test]
     fn the_catalog_names_every_routed_tool_exactly_once() {
