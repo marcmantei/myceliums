@@ -1,0 +1,51 @@
+{
+  "available": true,
+  "fit": {
+    "constant": 43.45,
+    "features": {
+      "hook": {
+        "coef": 1.6698,
+        "n_calls": 265,
+        "tokens_per_char": 0.4174
+      },
+      "myceliums": {
+        "coef": 1.7832,
+        "n_calls": 118,
+        "tokens_per_char": 0.4458
+      },
+      "read": {
+        "coef": 1.7355,
+        "n_calls": 37,
+        "tokens_per_char": 0.4339
+      },
+      "reply": {
+        "coef": 1.9246,
+        "n_calls": 850,
+        "tokens_per_char": 0.4812
+      },
+      "search": {
+        "coef": 1.7108,
+        "n_calls": 728,
+        "tokens_per_char": 0.4277
+      },
+      "thinking": {
+        "coef": 1.0714,
+        "n_calls": 448
+      }
+    },
+    "left_out": [
+      "edit",
+      "other"
+    ],
+    "n_calls": 850,
+    "r2": 0.9802
+  },
+  "rates": {
+    "hook": 1.6698,
+    "myceliums": 1.7832,
+    "read": 1.7355,
+    "reply": 1.9246,
+    "search": 1.7108,
+    "thinking": 1.0714
+  }
+}

@@ -66,9 +66,10 @@ SEARCH_TOOLS = ("Grep", "Glob")
 # Edit tasks (#178) add these in every condition; they are never offered on
 # question tasks.
 EDIT_TOOLS = ("Edit", "Write")
-# Bash search denied in D by permission rule as well as by the hook (the rule
-# only matches a command that starts with the program; the hook sees every
-# program of a pipeline). See aeval/bashcmd.py.
+# A second layer in D: permission rules that deny the common search programs
+# (they only match a command that starts with the program). The first layer
+# is the hook's allowlist, which sees every program of a command
+# (aeval/bashcmd.py).
 BASH_SEARCH_RULES = tuple(f"Bash({p}:*)" for p in ("grep", "egrep", "fgrep", "rg", "ag", "ack", "find", "fd",
                                                    "locate", "git grep"))
 

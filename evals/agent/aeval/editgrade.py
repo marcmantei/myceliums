@@ -7,18 +7,27 @@ task carries
 
 * ``gold_files``: ``[{"path": "...", "status": "M" | "A" | "D"}, ...]`` (a
   bare string is a modified file);
-* ``dependents`` (optional): the gold files that depend on the core change
-  (call sites, re-exports, tests of the changed code), the ones an agent
-  forgets; default: every gold file;
+* ``primary_files`` (optional): the gold file(s) holding the core change;
+  every other gold file is a **dependent** (a call site, a re-export, a test,
+  a doc page that has to follow);
 * ``test_command`` (optional): a shell command, run in the working copy after
-  the session, that must exit 0.
+  the session, that must exit 0; ``precheck`` records that it **fails** on
+  the pinned (parent) commit before any agent runs (:func:`precheck`,
+  ``agent_eval.py precheck-edit``), so passing it means the change was made;
+* ``allowed_commands`` (optional): build/test command prefixes arm D's Bash
+  allowlist admits (default: the test command).
 
 Grading, after the session, from ``git status`` of the working copy:
 
 * (a) the test command's exit status (``tests_passed``; ``None`` without one);
 * (b) file-level recall and precision against ``gold_files``, overall and
   separately for code, tests and docs (:func:`file_kind`);
-* (c) forgotten dependents: the ``dependents`` the agent did not touch.
+* (c) forgotten dependents, with ``primary_files``: the dependents the agent
+  did not touch, split into ``docs``, ``tests``, ``remote`` (code in another
+  directory than every primary file: another module) and ``local`` (code next
+  to a primary file). Without ``primary_files`` every gold file would be a
+  dependent and the metric would equal 1 − recall, so it is not reported
+  (``None``).
 
 A session succeeds when the test command passes; without one, when the
 file-level F1 over code files (all files if the gold has no code file)
@@ -34,21 +43,38 @@ import time
 from pathlib import Path
 
 KINDS = ("code", "tests", "docs")
-_DOC_EXT = (".md", ".rst", ".txt", ".adoc")
-_TEST_NAME = re.compile(r"(^test_.*\.py$|_test\.(py|go)$|\.(test|spec)\.[cm]?[jt]sx?$|Test\.java$|_spec\.rb$)")
-_TEST_DIR = re.compile(r"(^|/)(tests?|__tests__|spec|testing)/")
+_DOC_EXT = (".md", ".adoc", ".rst")
+_DOC_DIR = re.compile(r"(^|/)(docs|framework-docs)/")
+_MAIN_SET = re.compile(r"(^|/)src/main/")
+_TEST_SET = re.compile(r"(^|/)src/(test|testFixtures|integrationTest)/")
+_TEST_DIR = re.compile(r"(^|/)(tests|__tests__)/")
+_TEST_NAME = re.compile(r"(^test_.*\.py$|_test\.(py|go)$|\.(test|spec)\.[cm]?[jt]sx?$|Tests?\.(java|kt)$|_spec\.rb$)")
 
 
 def file_kind(path: str) -> str:
-    """``tests``, ``docs`` or ``code`` by path: test directories and test
-    file names first, then documentation (``docs/``, ``.md``, ``.rst``,
-    ``.txt``, ``.adoc``, ``CHANGELOG``/``README``), everything else code."""
+    """``code``, ``tests`` or ``docs`` by path, first rule that matches:
+
+    1. a Java/Gradle source set decides: ``src/main/**`` is code (also inside
+       a module named ``spring-test/``), ``src/test/**``, ``src/testFixtures/**``
+       and ``src/integrationTest/**`` are tests (fixtures count as tests);
+    2. docs: ``*.md``, ``*.adoc``, ``*.rst``, and anything under a ``docs/``
+       or ``framework-docs/`` tree (Django's ``docs/*.txt``); other ``.txt``
+       files (``CMakeLists.txt``, ``requirements.txt``) are not docs;
+    3. tests: anything under ``tests/`` or ``__tests__/``, and test file names
+       (``test_*.py``, ``*_test.py``, ``*_test.go``, ``*.test.ts``,
+       ``*.spec.js``, ``*Test.java``, ``*Tests.kt``, ``*_spec.rb``); a library
+       package named ``test`` (``django/test/``) is code;
+    4. everything else is code.
+    """
     name = path.rsplit("/", 1)[-1]
+    if _MAIN_SET.search(path):
+        return "code"
+    if _TEST_SET.search(path):
+        return "tests"
+    if name.lower().endswith(_DOC_EXT) or _DOC_DIR.search(path):
+        return "docs"
     if _TEST_DIR.search(path) or _TEST_NAME.search(name):
         return "tests"
-    if (path.startswith("docs/") or "/docs/" in path or name.lower().endswith(_DOC_EXT)
-            or name.upper().startswith(("CHANGELOG", "README"))):
-        return "docs"
     return "code"
 
 
@@ -99,9 +125,7 @@ def grade_edit(task: dict, changed: list[str], tests: dict | None, threshold: fl
         c = {f for f in got if file_kind(f) == kind}
         if g or c:
             by_kind[kind] = _prf(g, c)
-    dependents = task.get("dependents")
-    dependents = gold_paths({"gold_files": dependents}) if dependents is not None else sorted(gold)
-    forgotten = sorted(set(dependents) - got)
+    forgotten = forgotten_dependents(task, got)
     overall = _prf(gold, got)
     passed = None if tests is None else bool(tests.get("passed"))
     if passed is not None:
@@ -113,13 +137,51 @@ def grade_edit(task: dict, changed: list[str], tests: dict | None, threshold: fl
         "files_changed": sorted(got),
         "file_precision": overall["precision"], "file_recall": overall["recall"], "file_f1": overall["f1"],
         "files_by_kind": by_kind,
-        "dependents_forgotten": forgotten,
-        "n_dependents": len(dependents),
+        "dependents_forgotten": forgotten["forgotten"] if forgotten else None,
+        "dependents": forgotten,
         "files_extra": sorted(got - gold),
         "tests_passed": passed,
         "test": tests,
         "success": success,
     }
+
+
+def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
+    """Dependents (gold files other than ``primary_files``) the agent did not
+    touch, by kind; None without ``primary_files``."""
+    primary = task.get("primary_files")
+    if not primary:
+        return None
+    primary = set(primary)
+    primary_dirs = {p.rsplit("/", 1)[0] if "/" in p else "" for p in primary}
+    out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in ("docs", "tests", "remote", "local")}}
+    for f in sorted(set(gold_paths(task)) - primary):
+        kind = file_kind(f)
+        if kind == "code":
+            kind = "local" if (f.rsplit("/", 1)[0] if "/" in f else "") in primary_dirs else "remote"
+        out["n"] += 1
+        out["by_kind"][kind]["n"] += 1
+        if f not in changed:
+            out["forgotten"].append(f)
+            out["by_kind"][kind]["forgotten"].append(f)
+    return out
+
+
+def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: int = 900) -> dict:
+    """Run the task's test command on a fresh copy of the pinned checkout
+    (the gold commit's parent) before any agent runs. The test must fail
+    there, or passing it after a session would prove nothing. Returns the
+    record ``check-tasks`` expects in the task's ``precheck``."""
+    from .config import copy_tree, remove_tree
+    work = scratch / f"precheck-{task['id']}"
+    copy_tree(checkout, work)
+    try:
+        res = run_test(task["test_command"], work, timeout_s)
+    finally:
+        remove_tree(work, scratch)
+    return {"fails_on_parent": not res["passed"] and not res["timed_out"], "returncode": res["returncode"], "timed_out": res["timed_out"],
+            "commit": commit, "command": task["test_command"],
+            "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 
 def run_test(command: str, workdir: Path, timeout_s: int = 900, env: dict | None = None) -> dict:

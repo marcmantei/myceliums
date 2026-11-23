@@ -34,9 +34,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import config
-from .editgrade import changed_files, grade_edit, run_test
+from .editgrade import changed_files, gold_paths, grade_edit, run_test
 from .grading import Grade, extract_answer, grade, is_success
 from .stream import MCP_PREFIX, check_isolation, parse_transcript
+from .searchaudit import audit as search_audit
 from .tokens import attribute
 
 NOSEARCH_HOOK = Path(__file__).resolve().parent / "bashcmd.py"
@@ -111,6 +112,14 @@ When you are done, reply with a short summary of what you changed."""
 
 def is_edit_task(task: dict) -> bool:
     return task.get("answer_kind") == "diff"
+
+
+def allowed_commands(task: dict) -> list[str]:
+    """The task's own build/test commands, which arm D's Bash allowlist
+    admits: ``allowed_commands`` (word prefixes), else the test command."""
+    if task.get("allowed_commands") is not None:
+        return list(task["allowed_commands"])
+    return [task["test_command"]] if task.get("test_command") else []
 
 
 def build_prompt(task: dict, repo: dict, budget_turns: int | None = None) -> str:
@@ -409,11 +418,15 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         tools += config.EDIT_TOOLS if is_edit_task(item.task) else ()
         return tools
 
-    def _nosearch_settings(self, tmp: Path) -> Path:
-        """Settings for D (#178): a PreToolUse hook on Bash that blocks every
-        command running a search program (aeval/bashcmd.py), passed with
-        ``--settings`` so it applies whatever the setting sources are."""
-        hook = f"{shlex.quote(sys.executable)} -I {shlex.quote(str(NOSEARCH_HOOK))} hook"
+    def _nosearch_settings(self, tmp: Path, task: dict | None = None) -> Path:
+        """Settings for D (#178): a PreToolUse hook on Bash that lets a command
+        through only if every program it runs is on the allowlist
+        (aeval/bashcmd.py: ``myc``, plain file operations, git without search,
+        and the task's own build/test commands), passed with ``--settings`` so
+        it applies whatever the setting sources are."""
+        allow = allowed_commands(task or {})
+        hook = (f"{shlex.quote(sys.executable)} -I {shlex.quote(str(NOSEARCH_HOOK))} hook"
+                + "".join(f" --allow {shlex.quote(a)}" for a in allow))
         settings = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": hook}]}]}}
         path = tmp / "nosearch-settings.json"
         path.write_text(json.dumps(settings, indent=1))
@@ -494,7 +507,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             if self.cfg.tool_search is not None:
                 extra["ENABLE_TOOL_SEARCH"] = self.cfg.tool_search
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
-            settings = self._nosearch_settings(tmp) if variant.no_search else None
+            settings = self._nosearch_settings(tmp, task) if variant.no_search else None
             if settings is not None:
                 (out_dir / "settings.json").write_text(settings.read_text())
             cmd = self._command(item, mcp_path, settings)
@@ -577,7 +590,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         cli = myc_cli_calls(t.tool_calls)
         usage = t.usage()
         if g is None:
-            missed = edit["dependents_forgotten"]
+            missed = sorted(set(gold_paths(item.task)) - set(edit["files_changed"]))
             g = Grade(edit["file_precision"], edit["file_recall"], edit["file_f1"],
                       len(edit["files_changed"]) - len(edit["files_extra"]), len(edit["files_extra"]), 0,
                       len(item.task.get("gold_files") or []), len(edit["files_changed"]), True,
@@ -637,8 +650,10 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "max_utilization": t.max_utilization,
             "finished_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         }
-        # #178: where the tokens went, and the cost by cache class.
+        # #178: where the tokens went, the cost by cache class, and whether the agent searched.
         row.update(attribute(str(transcript)).as_row())
+        prompt_path = transcript.parent / "prompt.txt"
+        row["search_audit"] = search_audit(str(transcript), prompt_path.read_text() if prompt_path.exists() else "")
         if edit is not None:
             row["edit"] = edit
         return row

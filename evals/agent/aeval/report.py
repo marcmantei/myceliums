@@ -38,7 +38,8 @@ COMPACT_FIELDS = [
     "incomplete_results", "next_followed", "next_kinds", "source_after_hint",
     # token attribution and cost by cache class (#178); edit-task grading
     "attribution_method", "tokens_by_category", "tokens_by_class", "result_tokens_by_category", "thinking_tokens",
-    "attribution_residual", "cost_by_category", "cost_by_class", "priced_cost_usd", "edit",
+    "attribution_residual", "cost_by_category", "cost_by_class", "priced_cost_usd", "edit", "models",
+    "estimated_tokens_by_category", "search_audit",
 ]
 
 METRICS = [

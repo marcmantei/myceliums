@@ -72,10 +72,11 @@ CLASSES = ("uncached", "cache_write_5m", "cache_write_1h", "cache_read")
 EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 CHARS_PER_TOKEN = 4.0
 
-# Published Claude API list prices, USD per million tokens (platform docs,
-# cached 2026-11-03). Cache writes are 1.25x (5-minute) and 2x (1-hour) the
-# input price; cache reads differ by model. The table is checked against the
-# CLI's own cost of the #163 sessions (see tests/test_tokens.py and README).
+# Published Claude API list prices, USD per million tokens. Cache writes are
+# 1.25x (5-minute) and 2x (1-hour) the input price; cache reads differ by
+# model. Checked against the CLI's own cost of all 240 #163/#171 sessions
+# (equal to 5e-7 USD; tests/test_tokens.py, README).
+PRICES_SOURCE = "https://platform.claude.com/docs/en/about-claude/pricing"
 PRICES_AS_OF = "2026-11-03"
 PRICES: dict[str, dict[str, float]] = {
     "claude-sonnet-5-5": {"input": 2.0, "cache_write_5m": 2.5, "cache_write_1h": 4.0, "cache_read": 0.10,
@@ -166,7 +167,7 @@ class _Thread:
     """One conversation: the main agent, or a subagent (by its Agent call id)."""
 
     segments: list = field(default_factory=list)  # [category, tokens]
-    pending: list = field(default_factory=list)  # [category, estimated tokens]
+    pending: list = field(default_factory=list)  # [category, estimated tokens, feature]
     ctx: float | None = None
     calls: int = 0
 
@@ -189,6 +190,10 @@ class Attribution:
     cost_usd: float | None = None
     cli_cost_usd: float | None = None
     unpriced: list = field(default_factory=list)
+    samples: list = field(default_factory=list)  # (growth, {feature: chars/4 estimate}) per main-thread call
+
+    def models(self) -> list[str]:
+        return sorted(set(self.per_call) | set(self.totals))
 
     # ---- derived -----------------------------------------------------------
     def input_by_category(self) -> dict[str, float]:
@@ -206,9 +211,11 @@ class Attribution:
         r = lambda d: {k: round(v, 1) for k, v in d.items() if v}  # noqa: E731
         return {
             "attribution_method": self.method,
+            "models": self.models(),
             "tokens_by_category": r(self.by_category()),
             "tokens_by_class": r({k: sum(v[k] for v in self.tokens.values()) for k in CLASSES}),
             "result_tokens_by_category": r(self.result_tokens),
+            "estimated_tokens_by_category": r(self.estimated_tokens),
             "thinking_tokens": self.thinking_tokens,
             "attribution_residual": dict(self.residual),
             "cost_by_category": {k: round(v, 6) for k, v in self.cost.items() if v},
@@ -226,7 +233,8 @@ def _add_usage(acc: dict, model: str, u: dict) -> None:
 
 def _lay(att: Attribution, th: _Thread, cr: int, w5m: int, w1h: int, ctx: float) -> None:
     """Lay one call's usage over the thread's segments, in order."""
-    bounds = [("cache_read", cr), ("cache_write_5m", w5m), ("cache_write_1h", w1h)]
+    # Longer-lived cache entries come first in a prompt (1-hour before 5-minute breakpoints).
+    bounds = [("cache_read", cr), ("cache_write_1h", w1h), ("cache_write_5m", w5m)]
     edges, pos = [], 0.0
     for cls, n in bounds:
         edges.append((cls, pos, pos + n))
@@ -242,9 +250,13 @@ def _lay(att: Attribution, th: _Thread, cr: int, w5m: int, w1h: int, ctx: float)
         start = end
 
 
-def attribute(path: str, prices: dict | None = None) -> Attribution:
-    """Attribute the tokens of one stream-json transcript."""
+def attribute(path: str, prices: dict | None = None, rates: dict | None = None) -> Attribution:
+    """Attribute the tokens of one stream-json transcript.
+
+    ``rates`` (feature -> multiplier, from :func:`fit_rates`) re-weights the
+    chars/4 estimates before a growth is split; default: all 1."""
     prices = PRICES if prices is None else prices
+    rates = rates or {}
     att = Attribution()
     threads: dict = {}
     calls_by_id: dict[str, tuple[str, dict]] = {}  # tool_use id -> (name, input)
@@ -276,7 +288,7 @@ def attribute(path: str, prices: dict | None = None) -> Attribution:
                 except (ValueError, AttributeError):
                     text = ""
                 if text:
-                    thread(None).pending.append(["hook", len(text) / CHARS_PER_TOKEN])
+                    thread(None).pending.append(["hook", len(text) / CHARS_PER_TOKEN, "hook"])
             elif typ == "assistant":
                 msg = ev.get("message") or {}
                 th = thread(key)
@@ -290,7 +302,7 @@ def attribute(path: str, prices: dict | None = None) -> Attribution:
                         _add_usage(att.per_call, model, u)
                     else:
                         missing_usage = True
-                        ctx = (th.ctx or 0.0) + sum(w for _, w in th.pending)
+                        ctx = (th.ctx or 0.0) + sum(w for _, w, _ in th.pending)
                         cr, w5m, w1h = 0, 0, 0
                     if th.ctx is None:
                         th.segments.append(["base", float(ctx)])
@@ -303,17 +315,23 @@ def attribute(path: str, prices: dict | None = None) -> Attribution:
                             for s in th.segments:
                                 s[1] *= scale
                         elif delta > 0:
-                            weight = sum(w for _, w in th.pending)
+                            weights = [w * rates.get(f, 1.0) for _, w, f in th.pending]
+                            weight = sum(weights)
                             if weight > 0:
-                                for cat, w in th.pending:
+                                for (cat, _, _), w in zip(th.pending, weights):
                                     th.segments.append([cat, delta * w / weight])
                                     att.result_tokens[cat] += delta * w / weight
                             else:
                                 th.segments.append(["other", float(delta)])
                                 att.result_tokens["other"] += delta
-                    for cat, w in th.pending:
-                        att.estimated_tokens[cat] += w
-                    th.pending = [["assistant", 0.0]]
+                        if u and key is None:  # a sample for the cross-check (aeval/tokens.fit_rates)
+                            feats: dict = {}
+                            for _, w, f in th.pending:
+                                feats[f] = feats.get(f, 0.0) + w
+                            att.samples.append((delta, feats))
+                        for cat, w, _ in th.pending:
+                            att.estimated_tokens[cat] += w
+                    th.pending = [["assistant", 0.0, "reply"], ["assistant", 0.0, "thinking"]]
                     before = {c: dict(v) for c, v in att.tokens.items()}
                     _lay(att, th, cr, w5m, w1h, ctx)
                     classes = {k: sum(att.tokens[c][k] - before[c][k] for c in INPUT_CATEGORIES) for k in CLASSES}
@@ -323,7 +341,7 @@ def attribute(path: str, prices: dict | None = None) -> Attribution:
                     att.calls += 1
                     msg_thinking[mid] = thinking_estimate.pop(key, 0)
                 # The reply's own size: it is part of the next call's context.
-                size = 0.0
+                size, thought = 0.0, 0.0
                 for b in msg.get("content") or []:
                     if b.get("type") == "text":
                         size += len(b.get("text") or "")
@@ -331,9 +349,11 @@ def attribute(path: str, prices: dict | None = None) -> Attribution:
                         size += len(b.get("name") or "") + len(json.dumps(b.get("input") or {}))
                         calls_by_id[b.get("id")] = (b.get("name"), b.get("input") or {})
                     elif b.get("type") == "thinking":
-                        size += len(b.get("thinking") or "") or msg_thinking.pop(mid, 0) * CHARS_PER_TOKEN
-                if th.pending and th.pending[0][0] == "assistant":
+                        text = b.get("thinking") or ""
+                        thought += len(text) / CHARS_PER_TOKEN if text else msg_thinking.pop(mid, 0)
+                if len(th.pending) >= 2 and th.pending[0][2] == "reply" and th.pending[1][2] == "thinking":
                     th.pending[0][1] += size / CHARS_PER_TOKEN
+                    th.pending[1][1] += thought
             elif typ == "user":
                 content = (ev.get("message") or {}).get("content")
                 th = thread(key)
@@ -343,11 +363,12 @@ def attribute(path: str, prices: dict | None = None) -> Attribution:
                             continue
                         if b.get("type") == "tool_result":
                             name, inp = calls_by_id.get(b.get("tool_use_id"), ("?", {}))
-                            th.pending.append([category_of(name, inp), _text_len(b.get("content")) / CHARS_PER_TOKEN])
+                            cat = category_of(name, inp)
+                            th.pending.append([cat, _text_len(b.get("content")) / CHARS_PER_TOKEN, cat])
                         elif b.get("type") == "text" and th.ctx is not None:
-                            th.pending.append(["other", len(b.get("text") or "") / CHARS_PER_TOKEN])
+                            th.pending.append(["other", len(b.get("text") or "") / CHARS_PER_TOKEN, "other"])
                 elif isinstance(content, str) and th.ctx is not None:
-                    th.pending.append(["other", len(content) / CHARS_PER_TOKEN])
+                    th.pending.append(["other", len(content) / CHARS_PER_TOKEN, "other"])
             elif typ == "result":
                 result = ev
 
@@ -454,3 +475,76 @@ def _price(att: Attribution, call_classes: list, prices: dict) -> None:
                 att.cost[c] += class_cost[k] * att.tokens[c][k] / totals_by_class[k]
     att.cost["output"] = out_cost
     att.cost_usd = None if att.unpriced else sum(att.cost_classes.values())
+
+
+# --------------------------------------------------------------------------
+# Cross-check of the split
+# --------------------------------------------------------------------------
+
+FEATURES = ("reply", "thinking", "hook", "myceliums", "search", "read", "edit", "other")
+MIN_NONZERO = 20  # a feature present in fewer calls is not fitted (rate 1)
+
+
+def _solve(a: list[list[float]], b: list[float]) -> list[float] | None:
+    """Gaussian elimination with partial pivoting; None when singular."""
+    n = len(b)
+    m = [row[:] + [b[i]] for i, row in enumerate(a)]
+    for i in range(n):
+        piv = max(range(i, n), key=lambda r: abs(m[r][i]))
+        if abs(m[piv][i]) < 1e-12:
+            return None
+        m[i], m[piv] = m[piv], m[i]
+        for r in range(n):
+            if r != i and m[r][i]:
+                f = m[r][i] / m[i][i]
+                m[r] = [x - f * y for x, y in zip(m[r], m[i])]
+    return [m[i][n] / m[i][i] for i in range(n)]
+
+
+def fit_rates(samples: list[tuple[float, dict]]) -> dict:
+    """Least-squares fit of each call's measured context growth on the
+    chars/4 estimates of what arrived before it, one coefficient per feature
+    plus a constant per call (#178).
+
+    This checks the split independently of the reconciliation: the split
+    divides a growth in proportion to the estimates, which is fair between two
+    kinds of content (myceliums results and grep output, say) only if the
+    estimate undercounts both by the same factor. A fitted coefficient is the
+    measured tokens per estimated token of that feature (per character: divided
+    by 4; for ``thinking`` the unit is the CLI's thinking-token estimate).
+    Features present in fewer than :data:`MIN_NONZERO` calls, or constant
+    over all calls, are left out.
+    """
+    counts = {f: sum(1 for _, x in samples if x.get(f)) for f in FEATURES}
+
+    def varies(f: str) -> bool:  # a constant feature is indistinguishable from the constant term
+        vals = [x.get(f, 0.0) for _, x in samples]
+        return max(vals) - min(vals) > 1e-9
+
+    feats = [f for f in FEATURES if counts[f] >= MIN_NONZERO and varies(f)]
+    rows = [[x.get(f, 0.0) for f in feats] + [1.0] for _, x in samples]
+    y = [d for d, _ in samples]
+    k = len(feats) + 1
+    out = {"n_calls": len(samples), "features": {}, "constant": None, "r2": None,
+           "left_out": sorted(f for f in FEATURES if counts[f] and f not in feats)}
+    if len(rows) <= k:
+        return out
+    ata = [[sum(r[i] * r[j] for r in rows) for j in range(k)] for i in range(k)]
+    aty = [sum(r[i] * yy for r, yy in zip(rows, y)) for i in range(k)]
+    coef = _solve(ata, aty)
+    if coef is None:
+        return out
+    mean_y = sum(y) / len(y)
+    ss_tot = sum((v - mean_y) ** 2 for v in y)
+    ss_res = sum((yy - sum(c * v for c, v in zip(coef, r))) ** 2 for r, yy in zip(rows, y))
+    for f, c in zip(feats, coef):
+        out["features"][f] = {"coef": round(c, 4), "n_calls": counts[f],
+                              **({"tokens_per_char": round(c / CHARS_PER_TOKEN, 4)} if f != "thinking" else {})}
+    out["constant"] = round(coef[-1], 2)
+    out["r2"] = round(1 - ss_res / ss_tot, 4) if ss_tot else None
+    return out
+
+
+def rates_of(fit: dict) -> dict[str, float]:
+    """Multipliers for :func:`attribute` from a fit (unfitted features: 1)."""
+    return {f: max(0.0, v["coef"]) for f, v in (fit.get("features") or {}).items()}

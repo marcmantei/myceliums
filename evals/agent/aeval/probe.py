@@ -115,7 +115,7 @@ def summarise(run_dir: Path, condition: str) -> dict:
         offered = sorted(set(names) & set(config.SEARCH_TOOLS))
         if offered:
             problems.append(f"search tools offered in a no-search arm: {offered}")
-        if findings["search_result"] is not None and "Searching is not available" not in findings["search_result"]:
+        if findings["search_result"] is not None and not any(m in findings["search_result"] for m in ("This session has no search", "Searching is not available")):
             problems.append(f"grep in Bash was not blocked: {findings['search_result'][:120]!r}")
     if variant.mcp and not findings["myc_tools_with_schema"]:
         problems.append("no myceliums tool schema in the first request")

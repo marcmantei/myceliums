@@ -150,7 +150,7 @@ class MockAPI:
             return _message([{"type": "text", "text": "subagent done"}], "end_turn", model)
         if "Grep" not in tools and "Bash" in tools and "Agent" not in tools and done < 2:
             cmd = (f"grep -rl {self.grep_pattern} . | head -3" if done == 0
-                   else f"myc callers {self.callers_symbol} 2>&1 | head -5")
+                   else f"myc callers {self.callers_symbol} 2>&1")
             tid = "toolu_probe_search" if done == 0 else "toolu_probe_bash"
             return _message([{"type": "tool_use", "id": tid, "name": "Bash",
                               "input": {"command": cmd, "description": "probe"}}], "tool_use", model)

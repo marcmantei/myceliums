@@ -27,8 +27,9 @@ DESCRIPTIONS = {
     "A": "the myceliums MCP server only (default core toolset, 9 tools loaded up front)",
     "C": "A + what `myc setup-claude --scope project --no-agent` writes: the routing block in CLAUDE.md, "
          "the SessionStart, PostToolUse and PreToolUse grep-redirect hooks in .claude/settings.json",
-    "D": "myceliums only (#178): the MCP server and `Read`; `Grep` and `Glob` denied, search commands in Bash "
-         "(grep, rg, find, ag, git grep, ...) blocked by a PreToolUse hook; edit tools on edit tasks",
+    "D": "myceliums only (#178): the MCP server and `Read`; `Grep` and `Glob` denied; Bash, if offered, limited "
+         "by a PreToolUse hook to an allowlist (`myc`, plain file operations, git without search, the task's own "
+         "build/test commands); edit tools on edit tasks",
     "E": "C + the `code-explorer` subagent (`myc setup-claude --scope project`) and the Agent tool, "
          "with Claude Code's built-in subagents denied",
 }

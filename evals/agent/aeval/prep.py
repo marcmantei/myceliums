@@ -219,10 +219,24 @@ def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list
             problems.append(f"{tid}: gold file {path} (status {status}) does not match the pinned checkout")
     if len(paths) != len(set(paths)):
         problems.append(f"{tid}: duplicate gold files")
-    for d in t.get("dependents") or []:
-        dp = d if isinstance(d, str) else d.get("path")
-        if dp not in paths:
-            problems.append(f"{tid}: dependent {dp} is not a gold file")
-    if "test_command" in t and not isinstance(t["test_command"], str):
-        problems.append(f"{tid}: test_command must be a string")
+    for p in t.get("primary_files") or []:
+        if p not in paths:
+            problems.append(f"{tid}: primary file {p} is not a gold file")
+    if paths and t.get("primary_files") is not None and set(t["primary_files"]) >= set(paths):
+        problems.append(f"{tid}: primary_files cover every gold file; leave out the dependents")
+    if "dependents" in t:
+        problems.append(f"{tid}: `dependents` is replaced by `primary_files` (every other gold file is a dependent)")
+    if "test_command" in t:
+        if not isinstance(t["test_command"], str) or not t["test_command"].strip():
+            problems.append(f"{tid}: test_command must be a non-empty string")
+        pre = t.get("precheck") or {}
+        if pre.get("command") != t.get("test_command") or pre.get("commit") != repos[t["repo"]]["commit"]:
+            problems.append(f"{tid}: no precheck of this test command on the pinned commit; run "
+                            f"`agent_eval.py precheck-edit`")
+        elif not pre.get("fails_on_parent"):
+            problems.append(f"{tid}: the test command does not fail on the pinned (parent) commit, so passing it "
+                            f"proves nothing")
+    for a in t.get("allowed_commands") or []:
+        if not isinstance(a, str) or not a.split():
+            problems.append(f"{tid}: bad allowed command {a!r}")
     return problems

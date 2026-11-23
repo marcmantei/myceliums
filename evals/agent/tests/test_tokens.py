@@ -3,6 +3,7 @@ task, arm D ("myceliums only"), edit-task grading and the realistic profile."""
 
 import io
 import json
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -53,41 +54,66 @@ def _tool(tid, name, **inp):
     return {"type": "tool_use", "id": tid, "name": name, "input": inp}
 
 
+# Commands #163 agents ran, and the bypasses the review of #185 listed.
+SEARCH_FORMS = [
+    "cd django; grep -rn x . | head", 'bash -c "grep -rn x ."', "sh -c 'rg foo'", "timeout 10 grep x f",
+    "timeout -s KILL 5 rg x", "nice -n 5 grep x", "stdbuf -oL grep x", "xargs -n 1 grep x", "git -C . grep foo",
+    "git --no-pager grep foo", "\\grep foo", "eval grep foo", "ugrep x", "awk '/x/' f", "perl -ne 'print if /x/' f",
+    "sed -n '/re/p' f", "git ls-files", "ls -R src", "tree src", "git log -S foo", "echo $(find . -name '*.py')",
+    'echo "== $(grep -rl x .)"', "for f in a b; do grep -n x $f; done",
+    "cd p; for s in a.ts:1; do f=${s%:*}; n=${s#*:}; awk -v n=$n 'NR<=n' $f; done",
+]
+HEREDOC_WRITE = "cat " + ">" + " f.py <<'EOF'\ngrep x\nEOF"
+
+
 class BashClassifier(unittest.TestCase):
     def test_programs_of_a_pipeline(self):
-        self.assertEqual(bashcmd.classify("cd django; grep -rn x . | head"), "search")
         self.assertEqual(bashcmd.classify("sed -n 1,9p a.py"), "read")
         self.assertEqual(bashcmd.classify("sed -n 1,9p a.py && rg foo"), "search")
         self.assertEqual(bashcmd.classify("myc callers x 2>&1 | grep -v y"), "myceliums")
         self.assertEqual(bashcmd.classify("/tmp/bin/myc impact X"), "myceliums")
         self.assertEqual(bashcmd.classify("sed -i 's/a/b/' f.py"), "edit")
         self.assertEqual(bashcmd.classify("ls -la src && git log -1"), "other")
-        self.assertEqual(bashcmd.classify("FOO=1 xargs -0 grep x < files"), "search")
-        self.assertEqual(bashcmd.classify("git grep -n parseAccept"), "search")
-        self.assertEqual(bashcmd.classify("echo $(find . -name '*.py')"), "search")
+        self.assertEqual(bashcmd.classify('myc search_code "a|b; grep"'), "myceliums")  # quoted: one word
+        self.assertEqual(bashcmd.classify(HEREDOC_WRITE), "read")  # the heredoc body is not run
+        self.assertEqual(bashcmd.classify("python3 - <<'E'\nimport os\nE"), "other")
+        self.assertTrue(bashcmd.interpreted("cd x; python3 - <<'E'\nprint(1)\nE"))
 
-    def test_search_programs(self):
-        self.assertEqual(bashcmd.search_programs("cat a | grep b; find . -name c; ag d; fd e"),
-                         ["grep", "find", "ag", "fd"])
-        self.assertEqual(bashcmd.search_programs("myc callers grep_helper; cat grep.py"), [])
+    def test_every_search_form_is_search(self):
+        for cmd in SEARCH_FORMS:
+            self.assertEqual(bashcmd.classify(cmd), "search", cmd)
 
-    def test_hook_blocks_search_and_lets_the_rest_through(self):
+    def test_d_allowlist(self):
+        for cmd in SEARCH_FORMS + ["python3 - <<'E'\nimport os\nE", "cat a.py", "head -5 a.py", "echo hi",
+                                   "myc callers x | head -5", "node -e 'x'", 'myc x "unclosed', HEREDOC_WRITE]:
+            self.assertFalse(bashcmd.allowed(cmd)[0], cmd)
+        for cmd in ("myc callers parseAccept", "cd src && myc impact X 2>/dev/null", "git status", "git diff --stat",
+                    "git add -A && git commit -m x", "git log -p -3", "mkdir -p a && touch a/b.py", "true"):
+            self.assertTrue(bashcmd.allowed(cmd)[0], cmd)
+        self.assertTrue(bashcmd.allowed("python -m pytest tests/x.py -q", ["python -m pytest"])[0])
+        self.assertFalse(bashcmd.allowed("python -m pytest x; grep y z", ["python -m pytest"])[0])
+        self.assertFalse(bashcmd.allowed("python -c 'import os'", ["python -m pytest"])[0])
+
+    def test_hook_blocks_outside_the_allowlist(self):
         err = io.StringIO()
         ev = {"tool_name": "Bash", "tool_input": {"command": "cat x.py | rg foo"}}
-        self.assertEqual(bashcmd.hook(io.StringIO(json.dumps(ev)), err), 2)
-        self.assertIn("`rg`", err.getvalue())
-        for cmd in ("myc callers parseAccept", "sed -n 1,40p src/a.ts", "ls src"):
-            ev = {"tool_name": "Bash", "tool_input": {"command": cmd}}
-            self.assertEqual(bashcmd.hook(io.StringIO(json.dumps(ev)), io.StringIO()), 0, cmd)
-        self.assertEqual(bashcmd.hook(io.StringIO("not json"), io.StringIO()), 0)
+        self.assertEqual(bashcmd.hook([], io.StringIO(json.dumps(ev)), err), 2)
+        self.assertIn("`cat`, `rg`", err.getvalue())
+        self.assertIn("This session has no search", err.getvalue())
+        ok = {"tool_name": "Bash", "tool_input": {"command": "./gradlew test --tests X"}}
+        self.assertEqual(bashcmd.hook(["--allow", "./gradlew test"], io.StringIO(json.dumps(ok)), io.StringIO()), 0)
+        self.assertEqual(bashcmd.hook([], io.StringIO(json.dumps(ok)), io.StringIO()), 2)
+        self.assertEqual(bashcmd.hook([], io.StringIO(json.dumps({"tool_name": "Read"})), io.StringIO()), 0)
+        self.assertEqual(bashcmd.hook([], io.StringIO("not json"), io.StringIO()), 2)
 
     def test_hook_runs_standalone_in_isolated_mode(self):
-        # The session runs `python3 -I bashcmd.py hook`: no package imports allowed.
-        ev = json.dumps({"tool_name": "Bash", "tool_input": {"command": "grep -rn x ."}})
-        res = subprocess.run([sys.executable, "-I", str(Path(bashcmd.__file__)), "hook"], input=ev,
-                             capture_output=True, text=True, cwd=tempfile.gettempdir())
-        self.assertEqual(res.returncode, 2, res.stderr)
-        self.assertIn("Searching is not available", res.stderr)
+        # The session runs `python3 -I bashcmd.py hook ...`: no package imports allowed.
+        script = str(Path(bashcmd.__file__))
+        for cmd, rc in (('bash -c "grep -rn x ."', 2), ("myc callers x", 0), ("make check", 0)):
+            ev = json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}})
+            res = subprocess.run([sys.executable, "-I", script, "hook", "--allow", "make check"], input=ev,
+                                 capture_output=True, text=True, cwd=tempfile.gettempdir())
+            self.assertEqual(res.returncode, rc, (cmd, res.stderr))
 
     def test_tool_categories(self):
         self.assertEqual(category_of("mcp__myceliums__find_callers", {}), "myceliums")
@@ -171,6 +197,22 @@ class Attribution(unittest.TestCase):
         cost = (14 * p["input"] + 9977 * p["cache_write_1h"] + 104141 * p["cache_read"] + 2485 * p["output"]) / 1e6
         self.assertAlmostEqual(cost, 0.0752001, places=9)
 
+    def test_one_hour_writes_come_before_five_minute_writes(self):
+        # Call 2 writes 100 tokens at 1 h and 200 at 5 min: the earlier part of its growth (the reply,
+        # then the Grep result) is the 1-hour write.
+        mixed = {"input_tokens": 0, "cache_creation_input_tokens": 300, "cache_read_input_tokens": 1000,
+                 "output_tokens": 1, "cache_creation": {"ephemeral_1h_input_tokens": 100,
+                                                        "ephemeral_5m_input_tokens": 200}}
+        ev = [_asst("m1", [{"type": "text", "text": "r" * 400}], _usage(0, 1000, 0)),
+              _results(),
+              {"type": "user", "message": {"content": "u" * 800}},
+              _asst("m2", [{"type": "text", "text": "done"}], mixed),
+              _final(0, 1300, 1000, 2)]
+        a = attribute(_write(ev))
+        self.assertAlmostEqual(a.tokens["assistant"]["cache_write_1h"], 100)
+        self.assertAlmostEqual(a.tokens["assistant"]["cache_write_5m"], 0)
+        self.assertAlmostEqual(a.tokens["other"]["cache_write_5m"], 200)
+
     def test_residual_is_kept_as_unattributed(self):
         ev = self._session()
         ev[-1] = _final(5 + 7, 1550 + 30, 2300, 900)  # a call the transcript does not show
@@ -228,6 +270,8 @@ class Attribution(unittest.TestCase):
     def test_row_fields(self):
         row = attribute(_write(self._session())).as_row()
         self.assertEqual(row["attribution_method"], "usage-delta")
+        self.assertEqual(row["models"], [M])
+        self.assertAlmostEqual(row["estimated_tokens_by_category"]["myceliums"], 100.0)
         self.assertEqual(set(row["tokens_by_category"]) - {"output"},
                          {"base", "myceliums", "search", "hook", "read", "assistant"})
         self.assertIn("cache_write_1h", row["cost_by_class"])
@@ -248,6 +292,91 @@ class Attribution(unittest.TestCase):
         a = attribute(_write(ev), prices={})
         self.assertIsNone(a.cost_usd)
         self.assertEqual(a.unpriced, [M])
+
+
+def _calls_session(rng, true):
+    """A session whose context growth follows ``true`` tokens per char for each part."""
+    ev, ctx = [], 1000
+    ev.append(_asst("m0", [_tool("t0", "Grep"), _tool("c1", "mcp__myceliums__x"), _tool("r1", "Read")],
+                    _usage(0, ctx, 0)))
+    for i in range(1, 25):
+        myc, grep, read = (rng.randint(0, 4000) for _ in range(3))
+        ev.append(_results(("t%d" % (i - 1), "g" * grep)))
+        ev[-1]["message"]["content"].append({"type": "tool_result", "tool_use_id": "c%d" % i, "content": "m" * myc})
+        ev[-1]["message"]["content"].append({"type": "tool_result", "tool_use_id": "r%d" % i, "content": "x" * read})
+        reply = 3 * len("{}") + len("Grep") + len("mcp__myceliums__x") + len("Read")  # the previous reply
+        grow = int(true["search"] * grep + true["myceliums"] * myc + true["read"] * read + true["reply"] * reply
+                   + 30 + rng.randint(-3, 3))
+        ev.append(_asst("m%d" % i, [_tool("t%d" % i, "Grep"), _tool("c%d" % (i + 1), "mcp__myceliums__x"),
+                                    _tool("r%d" % (i + 1), "Read")], _usage(0, grow, ctx)))
+        ctx += grow
+    ev.append(_final(0, ctx, 0, 1))
+    return ev
+
+
+class CrossCheck(unittest.TestCase):
+    def test_the_fit_recovers_known_rates(self):
+        import random
+        from aeval.tokens import fit_rates
+        rng = random.Random(3)
+        true = {"search": 0.40, "myceliums": 0.50, "read": 0.30, "reply": 0.45}
+        samples = []
+        for _ in range(4):
+            samples += attribute(_write(_calls_session(rng, true))).samples
+        fit = fit_rates(samples)
+        self.assertGreater(fit["r2"], 0.99)
+        for f in ("search", "myceliums", "read"):
+            self.assertAlmostEqual(fit["features"][f]["tokens_per_char"], true[f], delta=0.01)
+        self.assertNotIn("thinking", fit["features"])
+
+    def test_fitted_rates_move_the_split(self):
+        from aeval.tokens import rates_of
+        ev = [_asst("m1", [_tool("t1", "Grep"), _tool("t2", "mcp__myceliums__x")], _usage(0, 1000, 0)),
+              _results(("t1", "g" * 400), ("t2", "m" * 400)),
+              _asst("m2", [{"type": "text", "text": "x"}], _usage(0, 230, 1000)),
+              _final(0, 1230, 1000, 2)]
+        plain = attribute(_write(ev))
+        fitted = attribute(_write(ev), rates=rates_of({"features": {"myceliums": {"coef": 2.0},
+                                                                    "search": {"coef": 1.0}}}))
+        self.assertAlmostEqual(plain.result_tokens["myceliums"], plain.result_tokens["search"])
+        self.assertAlmostEqual(fitted.result_tokens["myceliums"] / fitted.result_tokens["search"], 2.0, places=1)
+        self.assertAlmostEqual(fitted.total_input(), plain.total_input())
+
+    def test_committed_crosscheck(self):
+        # The fit over the 850 main-agent calls of #163, as committed: R² and the rates of
+        # myceliums results and grep output agree within 10 %.
+        cross = config.load_json(config.RESULTS_DIR / "2026-11-22-scale" / "tokens_crosscheck.json")
+        fit = cross["fit"]
+        self.assertEqual(fit["n_calls"], 850)
+        self.assertGreater(fit["r2"], 0.95)
+        m, g = fit["features"]["myceliums"]["coef"], fit["features"]["search"]["coef"]
+        self.assertLess(abs(m / g - 1), 0.10)
+
+
+class SearchAudit(unittest.TestCase):
+    def test_counts_and_flags(self):
+        from aeval.searchaudit import audit
+        blocked = "PreToolUse:Bash hook error: [...]: This session has no search and only a few shell commands"
+        ev = [
+            _asst("m1", [_tool("b1", "Bash", command="git -C . grep foo"),
+                         _tool("b2", "Bash", command="myc callers foo"),
+                         _tool("r1", "Read", file_path="/w/src/known.ts")], _usage(0, 10, 0)),
+            _results(("b1", blocked), ("b2", "foo: 2 callers in src/caller.ts"), ("r1", "...")),
+            _asst("m2", [_tool("r2", "Read", file_path="/w/src/caller.ts")]
+                  + [_tool("x%d" % i, "Read", file_path="/w/src/blind%d.ts" % i) for i in range(5)],
+                  _usage(0, 10, 10)),
+            _asst("m3", [_tool("b3", "Bash", command="python3 - <<'E'\nimport os\nE")], _usage(0, 10, 20)),
+            _results(("b3", "a\nb")),
+            _final(0, 30, 30, 1),
+        ]
+        a = audit(_write(ev), prompt="Who calls foo in src/known.ts?")
+        self.assertEqual((a["search_attempts"], a["search_blocked"], a["search_leaks"]), (1, 1, 0))
+        self.assertEqual((a["interpreted_calls"], a["interpreted_ran"]), (1, 1))
+        self.assertEqual((a["reads"], a["files_read"], a["blind_reads"], a["max_reads_per_turn"]), (7, 7, 5, 6))
+        self.assertTrue(a["flagged"])
+        clean = audit(_write(ev[:2] + [_final(0, 10, 0, 1)]), prompt="src/known.ts")
+        self.assertFalse(clean["flagged"])
+        self.assertEqual(clean["blind_reads"], 0)
 
 
 class PerSolved(unittest.TestCase):
@@ -280,7 +409,7 @@ def _trow(task, cond, b, cost, solved, cats):
             "tokens_by_category": cats, "result_tokens_by_category": {k: v / 4 for k, v in cats.items()},
             "tokens_by_class": {}, "thinking_tokens": 0, "attribution_residual": {"input_tokens": 0},
             "cost_by_category": {k: cost * v / sum(cats.values()) for k, v in cats.items()},
-            "cost_by_class": {"cache_read": cost / 2, "output": cost / 2}, "priced_cost_usd": cost}
+            "cost_by_class": {"cache_read": cost / 2, "output": cost / 2}, "priced_cost_usd": cost, "models": [M]}
 
 
 class TokenReport(unittest.TestCase):
@@ -300,6 +429,9 @@ class TokenReport(unittest.TestCase):
                                           {"base": 1500, "myceliums": 300, "search": 100, "output": 40}))
                 (base / "tokens.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
                 (base / "meta.json").write_text(json.dumps({"primary_exclude": {"t3": "no data"}}))
+                (base / "tokens_crosscheck.json").write_text(json.dumps({"available": True, "fit": {
+                    "n_calls": 40, "r2": 0.97, "constant": 30.0, "left_out": ["edit"],
+                    "features": {"search": {"coef": 1.7, "n_calls": 40, "tokens_per_char": 0.425}}}}))
                 self.assertTrue(report_tokens.write("base"))
                 self.assertTrue(report_tokens.write("base", check=True))
                 text = (base / "TOKENS.md").read_text()
@@ -307,6 +439,11 @@ class TokenReport(unittest.TestCase):
                 self.assertIn("Tables cover the 3 tasks", text)
                 self.assertIn("| myceliums results (MCP + `myc` CLI) | 0 | 300 | +300 |", text)
                 self.assertIn("## All budgets together", text)
+                self.assertIn("`claude-sonnet-5-5`: uncached input $2", text)
+                self.assertIn("https://platform.claude.com/docs/en/about-claude/pricing", text)
+                self.assertIn("| search | 40 | 1.700 | 0.425 |", text)
+                self.assertIn("zero by construction", text)
+                self.assertEqual(summary["models"], [M])
                 g = summary["analysis"]["10"]
                 self.assertEqual((g["none"]["solved"], g["C"]["solved"]), (3, 2))
                 self.assertAlmostEqual(g["per_solved_cost"]["b"], 0.10)
@@ -353,8 +490,12 @@ def _runner(conditions=("A", "D"), **kw):
 EDIT_TASK = {"id": "hono-edit-x", "repo": "hono", "type": "edit", "answer_kind": "diff",
              "question": "Rename parseAccept to parseAcceptHeader everywhere.", "rationale": "unit",
              "gold_files": ["src/utils/accept.ts", {"path": "src/utils/accept.test.ts", "status": "M"},
-                            {"path": "docs/accept.md", "status": "A"}],
-             "dependents": ["src/utils/accept.test.ts"], "test_command": "true"}
+                            {"path": "docs/accept.md", "status": "A"}, "src/helper/accepts/accepts.ts",
+                            "src/utils/mime.ts"],
+             "primary_files": ["src/utils/accept.ts"], "test_command": "npx vitest run src/utils/accept.test.ts",
+             "precheck": {"fails_on_parent": True, "returncode": 1, "timed_out": False,
+                          "commit": "f6fbaf0299c48eea9e656e03e2ffe7ac755e8823", "command": "npx vitest run src/utils/accept.test.ts",
+                          "checked_at": "2026-11-23T00:00:00Z"}}
 
 
 class ArmD(unittest.TestCase):
@@ -362,9 +503,16 @@ class ArmD(unittest.TestCase):
         r, tasks = _runner(bash=True)
         it = WorkItem(tasks[0], "D", 1)
         with tempfile.TemporaryDirectory() as tmp:
-            settings = r._nosearch_settings(Path(tmp))
+            settings = r._nosearch_settings(Path(tmp), EDIT_TASK)
             cmd = r._command(it, Path("/x/mcp.json"), settings)
             hook = json.loads(settings.read_text())["hooks"]["PreToolUse"][0]
+            # The hook command, run as the session runs it, admits the task's test command only.
+            argv = shlex.split(hook["hooks"][0]["command"])
+            for command, rc in (("npx vitest run src/utils/accept.test.ts", 0), ("npx tsx x.ts", 2),
+                                ("git -C . grep x", 2)):
+                ev = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+                res = subprocess.run(argv, input=ev, capture_output=True, text=True)
+                self.assertEqual(res.returncode, rc, (command, res.stderr))
         tools = cmd[cmd.index("--tools") + 1].split(",")
         self.assertEqual(sorted(tools), ["Bash", "Read", "ToolSearch"])
         denied = cmd[cmd.index("--disallowedTools") + 1].split(",")
@@ -453,33 +601,62 @@ def _git(*args, cwd):
 
 class EditTasks(unittest.TestCase):
     def test_file_kind(self):
-        self.assertEqual(editgrade.file_kind("src/utils/accept.ts"), "code")
-        self.assertEqual(editgrade.file_kind("src/utils/accept.test.ts"), "tests")
-        self.assertEqual(editgrade.file_kind("tests/test_views.py"), "tests")
-        self.assertEqual(editgrade.file_kind("django/test/utils.py"), "tests")
-        self.assertEqual(editgrade.file_kind("pkg/server_test.go"), "tests")
-        self.assertEqual(editgrade.file_kind("docs/ref/settings.txt"), "docs")
-        self.assertEqual(editgrade.file_kind("CHANGELOG.md"), "docs")
-        self.assertEqual(editgrade.file_kind("django/conf/global_settings.py"), "code")
+        cases = {
+            "src/utils/accept.ts": "code", "src/utils/accept.test.ts": "tests", "tests/test_views.py": "tests",
+            "django/test/utils.py": "code",  # Django's test framework is library code
+            "django/contrib/auth/test_utils.py": "tests", "pkg/server_test.go": "tests",
+            "spring-test/src/main/java/org/x/MockMvc.java": "code",  # src/main wins over the module name
+            "spring-web/src/test/java/org/x/FooTests.java": "tests",
+            "spring-core/src/testFixtures/java/org/x/Fixture.java": "tests",
+            "spring-core/src/integrationTest/java/org/x/ItTest.java": "tests",
+            "spring-core/src/main/java/org/x/FooTest.java": "code",
+            "docs/ref/settings.txt": "docs", "framework-docs/modules/ROOT/pages/web.adoc": "docs",
+            "CHANGELOG.md": "docs", "README.rst": "docs", "CMakeLists.txt": "code", "requirements.txt": "code",
+            "django/conf/global_settings.py": "code",
+        }
+        for path, kind in cases.items():
+            self.assertEqual(editgrade.file_kind(path), kind, path)
 
     def test_grading_by_kind_and_forgotten_dependents(self):
-        g = editgrade.grade_edit(EDIT_TASK, ["src/utils/accept.ts", "src/other.ts"], None)
-        self.assertEqual(g["files_by_kind"]["code"], {"precision": 0.5, "recall": 1.0, "f1": 0.6667, "tp": 1,
-                                                      "n_gold": 1, "n_changed": 2})
+        g = editgrade.grade_edit(EDIT_TASK, ["src/utils/accept.ts", "src/utils/mime.ts", "src/other.ts"], None)
+        self.assertEqual(g["files_by_kind"]["code"], {"precision": 0.6667, "recall": 0.6667, "f1": 0.6667, "tp": 2,
+                                                      "n_gold": 3, "n_changed": 3})
         self.assertEqual(g["files_by_kind"]["tests"]["recall"], 0.0)
         self.assertEqual(g["files_by_kind"]["docs"]["recall"], 0.0)
-        self.assertEqual(g["dependents_forgotten"], ["src/utils/accept.test.ts"])
+        dep = g["dependents"]
+        self.assertEqual(dep["n"], 4)  # every gold file except the primary one
+        self.assertEqual(dep["by_kind"]["tests"], {"n": 1, "forgotten": ["src/utils/accept.test.ts"]})
+        self.assertEqual(dep["by_kind"]["docs"], {"n": 1, "forgotten": ["docs/accept.md"]})
+        self.assertEqual(dep["by_kind"]["remote"], {"n": 1, "forgotten": ["src/helper/accepts/accepts.ts"]})
+        self.assertEqual(dep["by_kind"]["local"], {"n": 1, "forgotten": []})  # mime.ts sits next to accept.ts
+        self.assertEqual(len(g["dependents_forgotten"]), 3)
         self.assertEqual(g["files_extra"], ["src/other.ts"])
-        self.assertAlmostEqual(g["file_recall"], 1 / 3, places=3)
-        self.assertFalse(g["success"])  # no test result: code F1 0.67 < 0.8
-        self.assertTrue(editgrade.grade_edit(EDIT_TASK, ["src/utils/accept.ts"], None)["success"])
-        # With a test command, the test decides.
+        self.assertAlmostEqual(g["file_recall"], 2 / 5, places=3)
+        # With a test command, the test decides; without, code-file F1 against the threshold.
+        self.assertFalse(g["success"])
         self.assertTrue(editgrade.grade_edit(EDIT_TASK, ["src/other.ts"], {"passed": True})["success"])
         self.assertFalse(editgrade.grade_edit(EDIT_TASK, list(editgrade.gold_paths(EDIT_TASK)),
                                               {"passed": False})["success"])
-        no_dep = dict(EDIT_TASK)
-        no_dep.pop("dependents")
-        self.assertEqual(len(editgrade.grade_edit(no_dep, [], None)["dependents_forgotten"]), 3)
+        code = ["src/utils/accept.ts", "src/utils/mime.ts", "src/helper/accepts/accepts.ts"]
+        self.assertTrue(editgrade.grade_edit(EDIT_TASK, code, None)["success"])
+        # Without primary files every gold file would be a dependent (= 1 - recall): not reported.
+        no_primary = {k: v for k, v in EDIT_TASK.items() if k != "primary_files"}
+        g = editgrade.grade_edit(no_primary, [], None)
+        self.assertIsNone(g["dependents"])
+        self.assertIsNone(g["dependents_forgotten"])
+
+    def test_precheck_requires_the_test_to_fail_before_the_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo, scratch = Path(tmp) / "repo", Path(tmp) / "scratch"
+            repo.mkdir()
+            scratch.mkdir()
+            (repo / "a.py").write_text("x = 1\n")
+            task = {"id": "t", "test_command": "grep -q 'x = 2' a.py"}
+            rec = editgrade.precheck(task, repo, scratch, "abc")
+            self.assertTrue(rec["fails_on_parent"])
+            self.assertEqual((rec["commit"], rec["command"], rec["returncode"]), ("abc", task["test_command"], 1))
+            self.assertFalse(editgrade.precheck(dict(task, test_command="true"), repo, scratch, "abc")["fails_on_parent"])
+            self.assertEqual(list(scratch.iterdir()), [])  # the copy is removed
 
     def test_changed_files_and_test_command_in_a_working_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -504,9 +681,15 @@ class EditTasks(unittest.TestCase):
     def test_edit_task_schema(self):
         repos = config.load_repos()
         self.assertEqual(check_tasks([EDIT_TASK], repos, check_evidence=False), [])
-        bad = dict(EDIT_TASK, gold_files=[{"path": "x", "status": "Z"}], dependents=["y"], type="callers")
+        bad = dict(EDIT_TASK, gold_files=[{"path": "x", "status": "Z"}], primary_files=["y"], type="callers",
+                   dependents=["x"])
         problems = check_tasks([bad], repos, check_evidence=False)
-        self.assertEqual(len(problems), 3, problems)
+        self.assertEqual(len(problems), 4, problems)
+        # The test command must have been prechecked, on this pin, and fail there.
+        for pre, word in ((None, "no precheck"), (dict(EDIT_TASK["precheck"], commit="other"), "no precheck"),
+                          (dict(EDIT_TASK["precheck"], fails_on_parent=False), "does not fail")):
+            t = dict(EDIT_TASK, precheck=pre)
+            self.assertTrue(any(word in p for p in check_tasks([t], repos, check_evidence=False)), word)
 
     def test_edit_tasks_get_the_edit_tools_and_their_own_prompt(self):
         repos = config.load_repos()
@@ -541,8 +724,9 @@ class EditTasks(unittest.TestCase):
         self.assertEqual(row["isolation_problems"], [])
         self.assertTrue(row["success"])
         self.assertEqual(row["tp"], 2)
-        self.assertEqual(row["missed"], [])
-        self.assertAlmostEqual(row["recall"], 2 / 3, places=3)
+        self.assertEqual(row["missed"], ["docs/accept.md", "src/helper/accepts/accepts.ts", "src/utils/mime.ts"])
+        self.assertAlmostEqual(row["recall"], 2 / 5, places=3)
+        self.assertIn("search_audit", row)
         self.assertEqual(row["edit"]["files_by_kind"]["tests"]["recall"], 1.0)
 
 

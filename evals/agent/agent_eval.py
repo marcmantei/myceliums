@@ -10,6 +10,7 @@ Subcommands (see evals/agent/README.md for the full procedure):
   export        copy the final rows + metadata of a run into results/<label>/
   report        render results/<label>/REPORT.md (--check: verify it is current)
   tokens        per-tool token attribution and cost of a committed run: TOKENS.md (#178)
+  precheck-edit check that each edit task's test command fails before the change (#178)
   probe         check a variant's session setup against a mock API (no model call)
   toolsel-list  print / save the live tools/list of a myc binary
   toolsel-run   run the tool-selection eval
@@ -289,6 +290,32 @@ def cmd_tokens(args) -> int:
     return 0
 
 
+def cmd_precheck_edit(args) -> int:
+    """Run every edit task's test command on the pinned (parent) commit and
+    record the result in the task file (#178): it must fail there."""
+    from aeval import editgrade
+    path = config.tasks_file()
+    data = config.load_json(path)
+    repos = config.load_repos()
+    scratch = config.cache_dir() / "tmp"
+    scratch.mkdir(parents=True, exist_ok=True)
+    bad = 0
+    for t in data["tasks"]:
+        if t.get("answer_kind") != "diff" or not t.get("test_command"):
+            continue
+        if args.task and t["id"] not in args.task:
+            continue
+        checkout = config.cache_dir() / "repos" / t["repo"]
+        rec = editgrade.precheck(t, checkout, scratch, repos[t["repo"]]["commit"],
+                                 int(t.get("test_timeout_s", 900)))
+        t["precheck"] = rec
+        bad += not rec["fails_on_parent"]
+        print(f"{t['id']}: test command {'fails' if rec['fails_on_parent'] else 'does NOT fail'} on the parent "
+              f"(exit {rec['returncode']}{', timed out' if rec['timed_out'] else ''})")
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
+    return 1 if bad else 0
+
+
 def _profile_intents(myc: str, toolsets: str) -> tuple[list[dict], list[dict], list[str]]:
     """The profile's tools, the intents it is scored on, and intent problems
     (checked against the full tool list, so renames fail loudly in any profile)."""
@@ -466,6 +493,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("label")
     s.add_argument("--check", action="store_true")
     s.set_defaults(fn=cmd_report)
+
+    s = sub.add_parser("precheck-edit", help="check that each edit task's test command fails on the pinned "
+                       "(parent) commit, and record it in the task file (#178)")
+    s.add_argument("--task", action="append", help="only these task ids")
+    s.set_defaults(fn=cmd_precheck_edit)
 
     s = sub.add_parser("tokens", help="per-tool token attribution and cost of a committed run (#178)")
     s.add_argument("label")
