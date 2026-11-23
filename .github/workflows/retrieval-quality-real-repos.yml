@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Free runner disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install protoc
@@ -103,7 +103,7 @@ jobs:
           echo "repos=real-repos-${pins}" >> "$GITHUB_OUTPUT"
       - name: Restore model weights
         id: model-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/myceliums-eval-models
           key: ${{ steps.keys.outputs.models }}
@@ -112,7 +112,7 @@ jobs:
         run: target/debug/retrieval-eval --fetch-models
       - name: Restore repository checkouts
         id: repo-cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/myceliums-eval-repos
           key: ${{ steps.keys.outputs.repos }}
@@ -122,7 +122,7 @@ jobs:
         run: crates/myceliums-benchmarks/real-repos/fetch.sh
       - name: Save repository checkouts
         if: steps.repo-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/myceliums-eval-repos
           key: ${{ steps.keys.outputs.repos }}
@@ -136,7 +136,7 @@ jobs:
           nice -n 10 target/debug/real-repo-eval --out real-repo-report.json --summary "$GITHUB_STEP_SUMMARY" | tee real-repo.txt
       - name: Upload the report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: real-repo-retrieval-report
           path: |
@@ -152,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Free runner disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install protoc
@@ -162,7 +162,7 @@ jobs:
           toolchain: stable
       - name: Build
         run: cargo build --release -p myceliums-benchmarks --bin real-repo-eval --bin real-repo-compare --locked
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: evaluator-release
           path: |
@@ -181,7 +181,7 @@ jobs:
       matrix:
         variant: ${{ fromJSON(inputs.variants) }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Free runner disk space
         run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install protoc
@@ -203,7 +203,7 @@ jobs:
           echo "EVAL=target/debug/real-repo-eval" >> "$GITHUB_ENV"
       - name: Fetch the release evaluator
         if: ${{ inputs.release }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: evaluator-release
           path: target/release
@@ -223,7 +223,7 @@ jobs:
           pins="$(jq -c '.repos' crates/myceliums-benchmarks/real-repos/queries.json | sha256sum | cut -c1-16)"
           echo "repos=real-repos-${pins}" >> "$GITHUB_OUTPUT"
       - name: Restore repository checkouts
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/myceliums-eval-repos
           key: ${{ steps.keys.outputs.repos }}
@@ -262,7 +262,7 @@ jobs:
             --out "calibration-${{ matrix.variant.id }}.json" | tee "calibration-${{ matrix.variant.id }}.txt"
       - name: Upload the report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: variant-${{ matrix.variant.id }}
           path: |
@@ -278,7 +278,7 @@ jobs:
     needs: variant
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install protoc
         if: ${{ !inputs.release }}
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
@@ -298,11 +298,11 @@ jobs:
           mkdir -p target/release && cp target/debug/real-repo-compare target/release/
       - name: Fetch the release comparison
         if: ${{ inputs.release }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: evaluator-release
           path: target/release
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: variant-*
           merge-multiple: true
@@ -322,7 +322,7 @@ jobs:
             --out compare.json --summary "$GITHUB_STEP_SUMMARY" | tee compare.txt
       - name: Upload the comparison
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: variant-comparison
           path: |
