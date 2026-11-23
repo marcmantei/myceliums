@@ -110,6 +110,18 @@ tasks:
 > repetition, and the labels are not reviewed. The 4-turn budget was not
 > re-run.
 
+The Java eval ([#182](../../evals/agent/README.md#result-of-the-main-run-182),
+23 November 2026, [report](../../evals/agent/results/182-spring/REPORT.md)) ran
+30 questions about Spring Framework with Sonnet 5.5, 3 repetitions per arm:
+grep only (A), myceliums next to grep as `setup-claude` installs it (C) and
+myceliums only (D). Arm A solved 89 of 90 sessions, so the run cannot show a gain
+in success. C was not measurably dearer or cheaper than A per solved task (tokens
+1.02× [0.83×, 1.23×]); the agent called a myceliums tool in 13 of 90 sessions, all
+on deep caller questions. Replacing grep (D) used 2.7× [1.7×, 4.2×] the tokens.
+**C lacked the project's own instructions:** Spring has an `AGENTS.md`, and the
+`CLAUDE.md` that `setup-claude` writes shadows it (#200). With its 1,804 tokens added
+to C's calls, C would be about 1.16× A in tokens (a point estimate).
+
 This guide describes five ways to route an agent to myceliums, from soft to
 hard, and what `myc setup-claude` installs for each.
 

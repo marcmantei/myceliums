@@ -199,6 +199,18 @@ def _git_head(path: Path) -> str:
                           capture_output=True, text=True).stdout.strip()
 
 
+def mixed_claude_versions(rows: list[dict]) -> dict[str, dict]:
+    """Final sessions per Claude Code version and condition, with the repetitions they are in; empty when all
+    sessions ran one version."""
+    final = {r["run_id"]: r for r in rows if r.get("final")}
+    out: dict[str, dict] = {}
+    for r in final.values():
+        v = out.setdefault(str(r.get("claude_version")), {"sessions": {}, "reps": []})
+        v["sessions"][r["condition"]] = v["sessions"].get(r["condition"], 0) + 1
+        v["reps"] = sorted({*v["reps"], r["rep"]})
+    return dict(sorted(out.items())) if len(out) > 1 else {}
+
+
 def cmd_export(args) -> int:
     run_dir = config.RUNS_DIR / args.label
     cfg = config.load_json(run_dir / "config.json")
@@ -243,6 +255,9 @@ def cmd_export(args) -> int:
         "sessions_launched_ledger": launched,
         "notes": args.note or [],
     }
+    versions = mixed_claude_versions(rows)
+    if versions:  # the CLI was updated while the run was going (#182)
+        meta["claude_versions"] = versions
     if cfg.get("conditions"):  # runs other than the pilot's with/without
         meta["conditions"] = cfg["conditions"]
         # --tasks names the file the run used (it may have been renamed since).

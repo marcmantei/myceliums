@@ -1197,19 +1197,40 @@ the McNemar tests corrected.
 
 * **Offering myceliums next to grep (C): no difference detected** in tokens or
   cost per solved task; both intervals include 1 (C ÷ A: tokens 1.02× [0.83×,
-  1.23×], cost 0.89× [0.74×, 1.03×]). The agent hardly used it: 13 of 90
-  sessions, 14 calls, all in the deep-transitive category. In the other 77
-  sessions C is the same agent with a larger first prompt (11.0k against 8.8k
-  tokens). Per category (post hoc) C used more tokens than A on docs (1.26×
+  1.23×], cost 0.89× [0.74×, 1.03×]). **This comparison is confounded (#200):** A
+  and D had Spring's own `AGENTS.md` (4,262 characters: build, code style, Javadoc,
+  tests, commits, and one line on where reference docs and their snippets live, which
+  the docs tasks ask about) in their context, C did not: the `CLAUDE.md` that
+  `myc setup-claude` writes takes its place. Seen in the probe's requests: the
+  text is in all of A's and D's and in none of C's. Its size, from first-call
+  usage at equal prompt length against #163's `none` sessions (same CLI, no
+  instruction file): 1,804 tokens. With it added to each of C's model calls and
+  behaviour held fixed, C ÷ A is **1.16×** in tokens instead of 1.02×, and 0.90× to
+  1.08× in cost instead of 0.89×, depending on caching (point estimates; whether C
+  would have behaved differently with the file is unknown). The 2,162 tokens between
+  C's and A's first calls are the same on both CLI versions. C's first prompt, 11.0k
+  tokens against A's 8.8k, is thus about 4.0k above A's without that file. #163 and
+  #171 are not affected: Django and Vue (and the pilot's fastapi, hono and fzf) have
+  no `AGENTS.md`, `CLAUDE.md` or `.claude/` at their pins.
+* **C did not use what it had** (post hoc): a myceliums call in 13 of 18
+  deep-transitive sessions (14 calls) and in **0 of 72** others, with the MCP
+  server connected, the routing block, the SessionStart line and 142 grep hints in
+  place. The agent chose grep. By category (post hoc) C used more tokens than A on docs (1.26×
   [1.13×, 1.38×]), dispatch (1.22× [1.03×, 1.44×]) and by-name (1.12× [1.01×,
   1.24×]), at no higher cost (0.90×, 0.89×, 1.01×).
 * **Replacing grep with myceliums (D) cost 2.3× [1.6×, 3.4×] as much and 2.7×
   [1.7×, 4.2×] the tokens per solved task** as A. Of the 77.8k extra
   tokens per session, 37.3k are myceliums results, 33.8k the base context re-read
-  over more turns, 7.2k file reads, 4.8k replies; search output is 6.1k less. Part
-  of it is the arm's own friction: the allowlist hook refused 107 commands, 93
-  of them searches, in 88 of the 90 sessions (no search got through; no session
-  was flagged by the search audit).
+  in more model calls (A 3.8, C 3.5, D 6.3 per session; `num_turns`, shown as turns
+  above, is tool calls + 1), 7.2k file reads, 4.8k replies; search output is 6.1k less. Post
+  hoc: the hook refused 107 commands, 93 of them searches, in 88 of the 90 sessions
+  (no search got through, no session flagged). Model calls made only for refused
+  commands, with the re-reads of what they added, are 13.4 % of D's input; without
+  them D ÷ A would be 2.33× in tokens (the review, with another definition: 11 %,
+  2.41×). The rest is `search_code` (217 calls, 5.4k characters each, with file
+  paths cut to `.../File.java`), 30 ambiguous-symbol errors and the extra calls. **D
+  is not a fair proxy for myceliums on docs and by-name tasks**: what they ask for
+  (text in pages, XML and factories files) is searched for with text search.
 * **Harm check: nothing detected, and little could be.** No task differs at
   the majority level; a true loss below about 25-29 points would likely be
   missed, and no significant difference is not evidence of equal success. D's
@@ -1227,7 +1248,9 @@ the McNemar tests corrected.
 
 **Verdict for the Clausohm decision.** On this evidence there is no reason to
 expect better answers or lower cost from adding myceliums to a capable agent
-with grep for tasks of this kind; a small loss or gain cannot be ruled out.
+with grep for tasks of this kind; a small loss or gain cannot be ruled out, and
+C was measured without the project's own instructions (#200; about 1.16× A's
+tokens with them, by a point estimate).
 Replacing search by myceliums was clearly dearer here. The one lead worth testing is
 deep multi-hop caller questions. The evidence is from an open-source code base
 the model knows; it says little about a private one.
@@ -1243,11 +1266,19 @@ the model knows; it says little about a private one.
   was neither in the question nor in any tool output. Results may not
   transfer to a private code base. (Strict matching shows 84 for D; for the other
   76 file name and parent directory appear, but not the full path.)
+* *Two CLI versions*: the CLI was updated during the run. 46 sessions from
+  21:46 UTC (A 15, C 15, D 16, all repetition 3) ran Claude Code 2.1.331, the other
+  224 ran 2.1.330 ([post hoc](results/182-spring/POSTHOC.md)). Without repetition 3, C ÷ A is 0.97× [0.74×,
+  1.20×] in tokens and 0.86× [0.67×, 1.03×] in cost (all: 1.02×, 0.89×), D ÷ A 2.56×
+  [1.58×, 4.10×] and 2.16× [1.45×, 3.15×] (all: 2.68×, 2.33×).
+* *Instruction files differ between the arms* (#200), see above.
 * *Time drift and caching*: the arms are interleaved, so they share the same
   hours, but the cost per session fell over the run (A 0.049, 0.036, 0.032 USD in
   repetitions 1-3) with the cache-write tokens (A 7.6k, 3.8k, 3.4k; C 6.4k, 3.1k,
   3.2k; D 16.0k, 12.4k, 13.4k), which fits 1-hour prompt caches shared between
-  sessions. Absolute costs depend on it, and a real deployment may not have it.
+  sessions. 31 sessions
+  (A 12, C 16, D 3) have no cache write at all. Cost ratios need care for that
+  reason: a real deployment may not have those caches.
 * *Wall time* (A 14.1, C 13.4, D 28.2 s) is comparable between arms only because
   of the interleaving: load was 12-91 (median 31) on 10 cores from other jobs (a
   Gradle process in 3 of 95 minutes);
@@ -1267,7 +1298,7 @@ the model knows; it says little about a private one.
   a path that does not exist and a `cd` back to the root. Network: 2 hits, both
   the file name `websocket.adoc`. D's refusal message shows the path of the hook
   script, which lies in the eval checkout, in 88 of 90 D sessions; no session
-  followed it. **No session read a gold file or a later Spring version**, so the
+  followed it (later runs execute the hook from a neutral copy). **No session read a gold file or a later Spring version**, so the
   results with and without such sessions are the same. The audit parses commands
   statically and misses a path built at run time.
 

@@ -1,0 +1,8 @@
+{
+ "agents_tokens_intercept": 1796.6620421768675,
+ "agents_tokens_at_mean_prompt": 1803.7415794766976,
+ "n163": 30,
+ "slope182": 0.32895800021888955,
+ "slope163": 0.324457340778438,
+ "d_blocked_input_share": 0.13406893229466738
+}

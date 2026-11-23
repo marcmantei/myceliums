@@ -242,7 +242,11 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     L.append("## Setup")
     L.append("")
     L.append(f"- **Date:** {meta.get('date')}")
-    L.append(f"- **Agent:** Claude Code {meta.get('claude_version')}, `--model {meta.get('model_alias')}` "
+    mixed = meta.get("claude_versions") or {}
+    cli = (" and ".join(f"{v} ({', '.join(f'{c} {n}' for c, n in sorted(m['sessions'].items()))}; repetitions "
+                         f"{', '.join(map(str, m['reps']))})" for v, m in mixed.items())
+           + " (**updated during the run**)" if mixed else meta.get("claude_version"))
+    L.append(f"- **Agent:** Claude Code {cli}, `--model {meta.get('model_alias')}` "
              f"(resolved: `{meta.get('model')}`), `--effort {meta.get('effort')}`, "
              f"`--max-turns {meta.get('max_turns')}`, timeout {meta.get('timeout_s')} s per session"
              + ("; the prompt states the turn limit (the same text in every condition)"

@@ -85,6 +85,32 @@ class InterleavedSchedule(unittest.TestCase):
         self.assertFalse(runner.run_dir.exists())  # refused before anything was written
 
 
+class MixedVersionsAndHookPath(unittest.TestCase):
+    """#182 review: a CLI update during a run is disclosed; D's refusals do not show where the gold lies."""
+
+    def test_mixed_claude_versions(self):
+        row = lambda i, c, v, rep, final=True: {"run_id": i, "condition": c, "claude_version": v,  # noqa: E731
+                                                "rep": rep, "final": final}
+        rows = [row("a", "none", "1", 1), row("b", "D", "1", 1), row("c", "D", "2", 3), row("d", "C", "3", 1, False)]
+        self.assertEqual(agent_eval.mixed_claude_versions(rows),
+                         {"1": {"sessions": {"none": 1, "D": 1}, "reps": [1]}, "2": {"sessions": {"D": 1}, "reps": [3]}})
+        self.assertEqual(agent_eval.mixed_claude_versions(rows[:2]), {})
+
+    def test_the_hook_runs_from_a_neutral_copy(self):
+        import subprocess
+        r = _runner(1)
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory(prefix="hook-") as hd:
+            s = json.loads(r._nosearch_settings(Path(tmp), None, Path(hd)).read_text())
+            cmd = s["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+            self.assertNotIn(str(config.EVAL_DIR), cmd)
+            self.assertNotIn(str(config.cache_dir()), cmd)
+            for command, rc in (("grep -rn x .", 2), ("git status", 0)):
+                ev = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+                p = subprocess.run(cmd, shell=True, input=ev, capture_output=True, text=True)
+                self.assertEqual(p.returncode, rc, p.stderr)
+                self.assertNotIn(str(config.EVAL_DIR), p.stderr)
+
+
 class UsageLimit(unittest.TestCase):
     """A session the account's limit cut off is never final: it would count as its arm's failure."""
 
