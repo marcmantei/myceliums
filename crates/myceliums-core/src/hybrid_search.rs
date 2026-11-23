@@ -399,7 +399,9 @@ fn fuse_ranked(
         params.rrf_k,
         params.tests.depth_for(limit),
     );
-    params.tests.top(fused, limit, |r| r.symbol.is_test())
+    params
+        .tests
+        .top(fused, limit, |r| params.tests.demoted_class(&r.symbol))
 }
 
 /// Semantic search: the `limit` persisted vectors nearest to `query_vector`
@@ -418,7 +420,7 @@ pub async fn semantic_search(
     let nearest = vectors
         .nearest(query_vector, tests.depth_for(limit))
         .await?;
-    Ok(tests.top(nearest, limit, |(symbol, _)| symbol.is_test()))
+    Ok(tests.top(nearest, limit, |(symbol, _)| tests.demoted_class(symbol)))
 }
 
 /// Vector leg of hybrid search: fetch nearest persisted-vector candidates for a
@@ -497,7 +499,7 @@ fn reranked_order(
         })
         .collect();
 
-    tests.apply(reranked_results, |r| r.symbol.is_test())
+    tests.apply(reranked_results, |r| tests.demoted_class(&r.symbol))
 }
 
 #[cfg(test)]
