@@ -68,10 +68,10 @@ pub(crate) async fn cmd_delete(repo: &str) -> Result<()> {
     let info = registry.remove(&repo_id).unwrap();
     registry.save()?;
 
+    // The index directory, or the link to its generation with the
+    // generation (#175).
     let db_path = RepoRegistry::repo_db_path(&data_dir(), &repo_id);
-    if db_path.exists() {
-        std::fs::remove_dir_all(&db_path)?;
-    }
+    myceliums_core::remove_index(&db_path)?;
 
     println!("Deleted: {} ({})", info.name, repo_id);
     Ok(())
@@ -102,7 +102,8 @@ pub(crate) fn find_orphans() -> Result<Vec<(String, PathBuf, u64)>> {
     myceliums_core::recover_leftovers(&data_path);
     for entry in std::fs::read_dir(&data_path)? {
         let entry = entry?;
-        if entry.file_type()?.is_dir() {
+        // A directory, or a link to an index generation (#175).
+        if entry.path().is_dir() {
             let dir_name = entry.file_name().to_string_lossy().to_string();
             if myceliums_core::is_internal_entry(&dir_name) {
                 continue;
@@ -254,7 +255,7 @@ pub(crate) async fn cmd_clean(
         println!();
         if auto_yes || prompt_yes_no("Delete orphaned directories?")? {
             for (name, path, _) in &found {
-                std::fs::remove_dir_all(path)?;
+                myceliums_core::remove_index(path)?;
                 println!("  Deleted: {}", name);
             }
             println!("Done.");
