@@ -204,6 +204,18 @@ pub enum TestsParam {
     Prefer,
 }
 
+/// How `search_code` ranks doc sections and documents (#180).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[schemars(inline)]
+pub enum DocsParam {
+    // Docs rank below code.
+    #[default]
+    Demote,
+    // Docs rank like code.
+    Include,
+}
+
 impl From<TestsParam> for myceliums_core::TestRanking {
     fn from(tests: TestsParam) -> Self {
         match tests {
@@ -252,6 +264,8 @@ pub struct SearchCodeParams {
     pub explain: Option<bool>,
     /// Test code: demote (default), include, or prefer (to find tests)
     pub tests: Option<TestsParam>,
+    /// Doc sections: demote (default) or include
+    pub docs: Option<DocsParam>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema, Default)]

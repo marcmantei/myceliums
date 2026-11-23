@@ -21,7 +21,7 @@ fn diff_or_git(diff: Option<String>, repo_id: &str) -> Result<String, ToolError>
 impl MyceliumsMcp {
     #[tool(
         name = "impact_of_change",
-        description = "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
+        description = "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file, then the docs naming it. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
         annotations(
             read_only_hint = true,
             destructive_hint = false,
@@ -592,6 +592,7 @@ impl MyceliumsMcp {
             (None, None, None) => format!("impact_of_change(repo_id={repo_id:?}, "),
         };
         let stats = crate::index_status::call_resolution(&graph.store()).await;
+        let params_file = params.file_path.clone();
         let (subject, roots) = match (params.symbol_name, params.file_path) {
             (Some(name), _) => {
                 let s = navigation::resolve(&symbols, &name)?;
@@ -641,17 +642,44 @@ impl MyceliumsMcp {
                         navigation::dependents_bounded(&symbols, &relationships, &roots, depth);
                     let block =
                         impact_gaps(&roots, &hits, cut, depth, stats.as_ref(), &repo_id, &again);
-                    with_gaps(format::format_impact_report(&report, page), &block)
+                    let docs = crate::docs::section(
+                        &graph.store(),
+                        &symbols,
+                        &relationships,
+                        &roots,
+                        crate::docs::Subject::Several("the changed symbols"),
+                        &repo_id,
+                    )
+                    .await;
+                    with_gaps(format::format_impact_report(&report, page), &block) + &docs
                 };
                 return self.graph_text(&graph, body).await;
             }
         };
         let (hits, cut) = navigation::dependents_bounded(&symbols, &relationships, &roots, depth);
         let block = impact_gaps(&roots, &hits, cut, depth, stats.as_ref(), &repo_id, &again);
+        // The docs that name what changes (#180).
+        let docs_label = match (roots.first(), &params_file) {
+            (Some(first), Some(_)) => first.file_path.as_str(),
+            _ => subject.as_str(),
+        };
+        let docs_subject = match (&roots[..], &params_file) {
+            ([one], None) => crate::docs::Subject::Symbol(one),
+            _ => crate::docs::Subject::Several(docs_label),
+        };
+        let docs = crate::docs::section(
+            &graph.store(),
+            &symbols,
+            &relationships,
+            &roots,
+            docs_subject,
+            &repo_id,
+        )
+        .await;
         let body = with_gaps(
             format::format_dependents(&subject, &hits, depth, page),
             &block,
-        );
+        ) + &docs;
         self.graph_text(&graph, body).await
     }
 }

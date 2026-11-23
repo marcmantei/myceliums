@@ -147,6 +147,56 @@ memory to every run, for a report that is never gated. For the numbers, see
 `docs/guides/call-resolution-limitations.md`. Both sets have
 `reviewed_by: null` until the review workflow has been through them.
 
+## Doc-mention sets (#180): one held out, one for development
+
+Doc MENTIONS edges link a doc section or a doc comment to the symbols it
+names. These sets measure them on the spring-framework reference docs at the
+same pinned v7.1.0 checkout as the Java sets.
+`held-out/sample_doc_mentions.py` draws mention-shaped tokens from the
+AsciiDoc pages of `framework-docs/modules/` (`git ls-files`, a seeded regex,
+no myceliums), outside listing, literal, comment and passthrough blocks, in
+three strata: inline code spans (not the curved quotes `` "`word`" ``),
+`xref:` macros, and links into the Javadoc (`{spring-framework-api}/…/Foo.html#bar()`;
+v7.1.0 writes no `javadoc:` macro, so its API links stand in for them). Each
+item lists the declaration it denotes, found by reading the page and the
+code; the set's `rules` say what counts (types, methods with annotation
+attributes, constants; never JDK, Jakarta, Reactor or test code; an `xref:`
+targets the symbol its label names, if any).
+
+- **`held-out/doc-mentions-spring-heldout.json`, held out** (`--heldout`,
+  seed 4180): 30 code spans, 10 `xref:` macros, 10 API links, disjoint from
+  the dev set. Its recorded score (precision 24/24, recall 24/26) is from
+  the matcher frozen at commit `550dae6` of #193 (`2a3a70d` after the rebase
+  onto #192; the matcher is the same). It was first scored on an uncommitted
+  tree with the same result; the changes in between came from the review of
+  #193 (KDoc links, `@Nullable`-style shared annotation names, files that
+  are no namespace), not from this set's misses. The set's `scoring` field
+  says the same.
+- **`held-out/doc-mentions-spring-dev.json`, dev** (seed 180): 15 + 5 + 5.
+  Two rules came from reading its misses and a sample of all Spring links:
+  a constructor carries its type's name (`DeferredResult` is the class, not
+  also its constructors), and `@Name` only names an annotation type
+  (`@Resource` is Jakarta's annotation, not Spring's `Resource`).
+
+**What recall covers.** Only the three drawn forms: backtick code spans,
+`xref:` macros and `{spring-framework-api}` links. Not sampled, and not
+matched: 384 `<<anchor>>` cross-references (doc-to-doc anchors; a code span
+in their label is matched as a code span), plain-text names outside code
+spans (about 900 CamelCase names and about 180 qualified names by the
+review's count of #193), and the 12 `{spring-framework-api-kdoc}` links
+(matched since the review, not sampled). A doc that names a symbol only in
+prose is therefore missed whatever these numbers say.
+
+`graph-eval` scores both whenever the checkout is present, reusing the
+analysis of the Java sets: per item, the predictions are the doc MENTIONS
+edges from the item's file that record a match on its line for its text (for
+an `xref:`, a code span in its label). Precision is items linked correctly
+over items linked; recall is items with a target linked correctly over items
+with a target. It also prints the repository-wide edge count by source and
+syntax, the linked, ambiguous and unresolved mentions, and the analysis
+time. Never gated; both sets have `labelled_by: agent` and
+`reviewed_by: null`.
+
 ## Review status
 
 **Labelled by an agent; checked in #164 under an owner policy, mostly not by

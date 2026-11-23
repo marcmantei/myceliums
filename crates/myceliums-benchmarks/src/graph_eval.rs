@@ -22,11 +22,14 @@
 //! - [`report`] — report/baseline format and Markdown.
 //! - [`gate`] — the CI gate against the recorded baseline.
 //! - [`held_out`] — the held-out real-repository set, reported, not gated.
+//! - [`doc_mentions`] — the doc-mention sets of spring-framework (#180),
+//!   reported, not gated.
 //!
 //! Run it with `cargo run -p myceliums-benchmarks --bin graph-eval`. It is
 //! offline and needs no model weights. See `graph-gold/README.md` for the
 //! labelling rules.
 
+pub mod doc_mentions;
 pub mod extract;
 pub mod gate;
 pub mod gold;

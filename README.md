@@ -41,7 +41,7 @@ These are capabilities, not measured outcomes. Measured on 30 code-understanding
 ### Key capabilities
 
 - **23 languages** — TypeScript, JavaScript, Python, Go, Rust, Java, C#, C, C++, Ruby, Kotlin, Swift, PHP, TSX, Lua, Zig, PowerShell, Elixir, Scala, Objective-C, Dart, Vue, Svelte
-- **Content files** — Markdown, MDX, and plain text indexed alongside code (headings as Section symbols, links as References edges)
+- **Content files** — Markdown, MDX, AsciiDoc and plain text indexed alongside code (headings as Section symbols, links as References edges); a section's code spans and API links, and doc comments' `{@link}`/`@see`/`<see cref>`/`[X]` links, become MENTIONS edges to the symbols they name, so `impact_of_change` lists the docs to update
 - **Cypher queries** — Query your codebase like a database: `MATCH (s)-[:CALLS]->(t) RETURN t.name`
 - **Token-optimized reviews** — `get_review_context` returns minimal structural summaries (signatures, callers, callees) instead of full source
 - **Interactive visualization** — `myc serve` launches a D3.js force-directed graph explorer in your browser
@@ -141,6 +141,7 @@ myc serve
 |---|---|---|
 | Markdown | `.md`, `.markdown` | headings (H1–H6) as Section symbols, `[text](path)` links as References edges |
 | MDX | `.mdx` | same as Markdown; JSX blocks treated as prose |
+| AsciiDoc | `.adoc`, `.asciidoc` | `=` titles as Section symbols, `xref:`/`include::`/`<<file.adoc#…>>` as References edges; listing, literal, comment and passthrough blocks skipped |
 | Plain text | `.txt` | Document symbol only |
 | PDF | `.pdf` | converted to Markdown via `opendataloader-pdf`, then parsed as Markdown (requires `pdf` feature flag and `opendataloader-pdf` CLI) |
 

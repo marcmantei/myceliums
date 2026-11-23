@@ -105,6 +105,8 @@ const NON_CODE_TYPES: &[&str] = &[
     "md",
     "markdown",
     "mdx",
+    "adoc",
+    "asciidoc",
     "txt",
     "log",
     "lock",

@@ -245,6 +245,15 @@ and line range.
 | `rerank` | bool | no | `false` | Rerank the top 50 hybrid results with a cross-encoder |
 | `explain` | bool | no | `false` | Show the scoring breakdown of each result |
 | `tests` | enum | no | `demote` | Test code: `demote` ranks it below product code, `include` ranks it like product code, `prefer` ranks it first. See [Test code](#test-code) |
+| `docs` | enum | no | `demote` | Doc sections and documents (Markdown, MDX, AsciiDoc, plain text): `demote` ranks them below code by the test-code weight, `include` ranks them like code (#180) |
+
+Docs rank below code by default (#180) because a doc page that repeats a
+query's words would push code out of a code search. On spring-framework
+v7.1.0, indexing its 470 AsciiDoc pages put doc pages into the keyword top 10
+of 4 of 15 code-intent queries (8 hits). With `docs: "demote"` that dropped
+to 2 queries (3 hits). The demotion places a doc at position `p` as if it
+were at `p / 0.2`, like test code (#146). `docs: "include"` restores the
+plain ranking. The CLI (`myc search`) and the library rank docs like code.
 
 `auto` decides from the embedding metadata recorded at index time and never
 loads a model for an index built with `skip_embeddings`. An explicit
@@ -294,6 +303,11 @@ with the exact call that continues (`find_callers(repo_id="r",
 symbol_name="x", depth=3)`). Direct callers are the whole answer to `depth`
 1, so its depth limit is no reason. See [walks that stop
 early](../guides/call-resolution-limitations.md#walks-that-stop-early).
+
+After the callers (and their `Incomplete` block), a **Docs mentioning**
+section lists the docs that name the symbol, so they are updated with it
+(#180); its format is under [`impact_of_change`](#impact_of_change). The
+JSON of `detail: "full"` does not carry it.
 
 `detail: "full"` answers with the JSON of `CallersOutput` as text: the
 callers with name, qualified name, kind, file, line range, `depth`, `via`,
@@ -346,6 +360,37 @@ step adds) and unlinked call sites named like the changed symbols or their
 dependents, with a `Next:` line (`impact_of_change(repo_id="r",
 symbol_name="x", depth=3)`; for the uncommitted diff the call without a
 diff, which reads `git diff HEAD` again).
+
+**Docs mentioning** (#180). Last, in every mode, the docs that name what
+changes: Markdown, MDX and AsciiDoc sections whose code spans, roles or API
+links name it, and doc comments (`{@link}`, `@see`, `<see cref>`, KDoc and
+rustdoc `[X]`) of other symbols — for a type, its members too. The count,
+then the first five, each `:line` under its file with the section's title or
+`doc comment of X`, and `[X]` when the doc names a member or, for a file or
+diff, which symbol. More than five end with `Next (docs):` and the
+`query_knowledge` call that lists every mention (knowledge toolset; the walk's own
+`Next:` line stays the walk's). A bare name that several symbols carry is
+not linked; for a symbol, `Not linked:` counts those mentions of its name,
+with up to three places to read. An index built before #180, or one whose
+docs name no symbol, shows no section.
+
+On spring-framework v7.1.0, `impact_of_change(symbol_name="RetryTemplate")`
+ends with:
+
+```text
+Docs mentioning RetryTemplate (18: 1 in docs, 17 in doc comments):
+framework-docs/modules/ROOT/pages/core/resilience.adoc
+  :328 section "Programmatic Retry Support"
+spring-context/src/main/java/org/springframework/resilience/annotation/Retryable.java
+  :35 doc comment of Retryable
+spring-context/src/main/java/org/springframework/resilience/retry/AbstractRetryInterceptor.java
+  :48 doc comment of AbstractRetryInterceptor
+spring-context/src/main/java/org/springframework/resilience/retry/MethodRetryEvent.java
+  :59 doc comment of MethodRetryEvent.getFailure
+spring-core/src/main/java/org/springframework/core/retry/RetryListener.java
+  :25 doc comment of RetryListener
+Next (docs): query_knowledge(repo_id="spring-framework-c15e4211", query="spring-core/src/main/java/org/springframework/core/retry/RetryTemplate.java:RetryTemplate") lists every mention
+```
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
@@ -702,7 +747,13 @@ Search indexed emails by keyword, with optional person and date filters. Returns
 
 ### `query_knowledge`
 
-Query cross-domain knowledge: find emails and documents that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels.
+Query cross-domain knowledge: find emails, documents and doc comments that mention code symbols. Returns source citations with exact line numbers and context snippets. Useful for discovering how code is discussed in documentation and communication channels.
+
+A query that names one code symbol exactly (a `file_path:qualified_name`
+handle, a qualified name, a unique short name) lists the mentions of that
+symbol and, for a type, of its members; any other query searches symbols by
+keyword first (#180). The `Next (docs):` line of `impact_of_change` and
+`find_callers` uses the handle form.
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|

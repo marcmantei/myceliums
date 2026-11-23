@@ -73,7 +73,7 @@ pub fn search_symbols_ranked(
     tests: &TestPolicy,
 ) -> Vec<SearchResult> {
     tests.apply(search_symbols_impl(symbols, query, explain), |r| {
-        r.symbol.is_test()
+        tests.demoted_class(&r.symbol)
     })
 }
 

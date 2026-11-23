@@ -11,8 +11,9 @@
 //! false positive and negative; writes the full detail to
 //! `graph-gold/report.json`. Then scores the held-out real-repository sets
 //! (`graph-gold/held-out/`) when the pinned checkouts are present
-//! (`real-repos/fetch.sh` and `held-out/fetch_java.sh`, `$MYC_EVAL_REPOS_DIR`):
-//! reported, never gated.
+//! (`real-repos/fetch.sh` and `held-out/fetch_java.sh`, `$MYC_EVAL_REPOS_DIR`),
+//! and the doc-mention sets of spring-framework (#180): reported, never
+//! gated.
 //!
 //! Without `--check-baseline` the run is a report: the exit status is
 //! non-zero only when the evaluation itself cannot run. With it, the run
@@ -26,6 +27,8 @@
 
 use anyhow::{Context, Result};
 use myceliums_benchmarks::eval::corpus::fixtures_root;
+use myceliums_benchmarks::graph_eval::doc_mentions::{self, DocMentionSet};
+use myceliums_benchmarks::graph_eval::extract::ExtractionCache;
 use myceliums_benchmarks::graph_eval::gate;
 use myceliums_benchmarks::graph_eval::gold::GoldSet;
 use myceliums_benchmarks::graph_eval::held_out::{self, HeldOutSet};
@@ -132,14 +135,25 @@ async fn main() -> Result<()> {
     // section says so.
     match held_out::repos_dir() {
         Some(dir) => {
+            // One analysis per checkout, shared by every set that reads it.
+            let mut cache = ExtractionCache::default();
             for held_out_set in HeldOutSet::all()?.into_iter().filter(|set| {
                 options
                     .held_out_filter
                     .as_deref()
                     .is_none_or(|name| set.name.contains(name))
             }) {
-                let held_out_report = held_out::run(&held_out_set, &dir).await?;
+                let held_out_report = held_out::run(&held_out_set, &dir, &mut cache).await?;
                 text.push_str(&held_out::markdown(&held_out_set, &held_out_report));
+            }
+            for set in DocMentionSet::all()?.into_iter().filter(|set| {
+                options
+                    .held_out_filter
+                    .as_deref()
+                    .is_none_or(|name| set.name.contains(name))
+            }) {
+                let report = doc_mentions::run(&set, &dir, &mut cache).await?;
+                text.push_str(&doc_mentions::markdown(&set, &report));
             }
         }
         None => text.push_str(

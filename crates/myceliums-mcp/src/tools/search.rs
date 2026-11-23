@@ -25,7 +25,10 @@ const RERANK_WINDOW: usize = 50;
 fn unclassified_notice(graph: &Graph<'_>, tests: &TestPolicy) -> Option<&'static str> {
     let stale = graph.info().classification_version
         < myceliums_storage::schema::SYMBOL_CLASSIFICATION_VERSION;
-    (stale && !tests.is_neutral()).then_some(
+    // About test code only: docs are kinds, not a classification.
+    let reorders_tests =
+        tests.ranking != myceliums_core::TestRanking::Include && !tests.is_neutral();
+    (stale && reorders_tests).then_some(
         "Note: this index was built before test code was classified, so tests rank like \
          product code. Re-run analyze to rank them below it.",
     )
@@ -43,12 +46,14 @@ fn demoted_rows<'a>(
     }
     let rows: Vec<String> = page
         .enumerate()
-        .filter(|(_, symbol)| tests.demotes(symbol.is_test()))
+        .filter(|(_, symbol)| tests.demotes(tests.demoted_class(symbol)))
         .map(|(i, _)| (i + 1).to_string())
         .collect();
-    let class = match tests.ranking {
-        myceliums_core::TestRanking::Prefer => "product code",
-        _ => "test code",
+    let class = match (tests.ranking, tests.docs) {
+        (myceliums_core::TestRanking::Prefer, _) => "product code",
+        (myceliums_core::TestRanking::Include, _) => "docs",
+        (_, true) => "test code or docs",
+        (_, false) => "test code",
     };
     (!rows.is_empty()).then(|| {
         format!(
@@ -483,7 +488,9 @@ impl MyceliumsMcp {
         let page = Page::new(params.limit, params.offset, SEARCH);
         let explain = params.explain.unwrap_or(false);
         let rerank = params.rerank.unwrap_or(false);
-        let tests = TestPolicy::new(params.tests.unwrap_or_default().into());
+        // Doc sections rank below code unless asked for (#180).
+        let tests = TestPolicy::new(params.tests.unwrap_or_default().into())
+            .demoting_docs(params.docs.unwrap_or_default() == DocsParam::Demote);
         let query = params.query.as_str();
         let body = match params.mode.unwrap_or_default() {
             SearchMode::Keyword => {

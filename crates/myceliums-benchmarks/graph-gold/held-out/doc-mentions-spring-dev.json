@@ -1,0 +1,321 @@
+{
+  "description": "Dev set of 25 symbol mentions (inline code spans, xrefs, Javadoc links) drawn by sample_doc_mentions.py (seed 180) from the spring-framework v7.1.0 AsciiDoc reference docs, each labelled with the declaration(s) it denotes by reading the docs and code, never from myceliums output.",
+  "role": "dev",
+  "labelled_by": "agent",
+  "reviewed_by": null,
+  "seed": 180,
+  "sampler": "crates/myceliums-benchmarks/graph-gold/held-out/sample_doc_mentions.py",
+  "fetch": "crates/myceliums-benchmarks/graph-gold/held-out/fetch_java.sh",
+  "repos": {
+    "spring-framework": "f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4"
+  },
+  "rules": "A target is a declaration in spring-framework's main sources (class, interface, enum, record, annotation type, method including annotation attributes, constant); bean property names, XML elements/attributes, configuration keys, SpEL syntax, bean names, literals, keywords, HTTP headers, CLI options and packages are not targets. Types outside the repository (JDK, Jakarta/Servlet/JMS, Reactor, Micrometer, Selenium) are not targets even when the repository has a same-named type, and test sources (src/test, src/testFixtures) never are; example code under framework-docs/src/main counts only when the sentence names the example class shown there (e.g. via include-code), and classes in inline doc snippets have no target. Among same-named main declarations the one matching the page's package/topic is chosen, all of them only when the page could truly mean either. A method mention covers all its overloads and is given once as Type.method (the declaring supertype if inherited); an api-link's target is what its URL denotes (class page or anchored member), regardless of the label. An xref's target is the symbol named by its label, none when the label is prose or empty. @Foo denotes annotation type Foo; a nested type is dotted (WebClient.Builder); an enum constant (Propagation.NEVER) denotes its enum type. Labels were made by reading the docs and code at the pinned commit with cat/sed/git grep, never from myceliums output.",
+  "scoring": "Recorded scores: precision 14/14, recall 14/16, matcher at commit 550dae6 (2a3a70d after the rebase onto #192). The rules were tuned on this set.",
+  "items": [
+    {
+      "id": "dev-01",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/appendix/xsd-schemas.adoc",
+      "line": 72,
+      "text": "static",
+      "targets": [],
+      "why": "the Java keyword `static` (a static field of FieldRetrievingFactoryBean's target), a keyword, not a declaration"
+    },
+    {
+      "id": "dev-02",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc",
+      "line": 1117,
+      "text": "WebClient.Builder",
+      "targets": [
+        {
+          "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/WebClient.java",
+          "symbol": "WebClient.Builder"
+        }
+      ],
+      "why": "the builder of the reactive WebClient whose defaultStatusHandler is meant: nested interface Builder in WebClient (spring-webflux)"
+    },
+    {
+      "id": "dev-03",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/hierarchies.adoc",
+      "line": 28,
+      "text": "hierarchyMode",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/annotation/DirtiesContext.java",
+          "symbol": "DirtiesContext.hierarchyMode"
+        }
+      ],
+      "why": "the hierarchyMode attribute of @DirtiesContext, an annotation method declared in DirtiesContext (spring-test)"
+    },
+    {
+      "id": "dev-04",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/testing/mockmvc/htmlunit/webdriver.adoc",
+      "line": 317,
+      "text": "css",
+      "targets": [],
+      "why": "`css` is the Selenium @FindBy lookup attribute (external library), not a Spring declaration"
+    },
+    {
+      "id": "dev-05",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc-functional.adoc",
+      "line": 739,
+      "text": "accept",
+      "targets": [
+        {
+          "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/function/RequestPredicates.java",
+          "symbol": "RequestPredicates.accept"
+        }
+      ],
+      "why": "the accept(...) request predicate used inside nest(...) in the Spring MVC functional routing example: static RequestPredicates.accept in spring-webmvc (the Kotlin tab uses RouterFunctionDsl.accept, which delegates to it)"
+    },
+    {
+      "id": "dev-06",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc",
+      "line": 93,
+      "text": "body",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/client/RestClient.java",
+          "symbol": "RestClient.ResponseSpec.body"
+        }
+      ],
+      "why": "the body(Class)/body(ParameterizedTypeReference) method called after retrieve() on RestClient: declared in the nested interface RestClient.ResponseSpec (spring-web)"
+    },
+    {
+      "id": "dev-07",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-async.adoc",
+      "line": 249,
+      "text": "DeferredResult",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/context/request/async/DeferredResult.java",
+          "symbol": "DeferredResult"
+        }
+      ],
+      "why": "Spring MVC async return value type DeferredResult, declared in spring-web org.springframework.web.context.request.async"
+    },
+    {
+      "id": "dev-08",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/testing/mockmvc/htmlunit/webdriver.adoc",
+      "line": 582,
+      "text": "MockMvc",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/web/servlet/MockMvc.java",
+          "symbol": "MockMvc"
+        }
+      ],
+      "why": "the MockMvc instance used to build the HtmlUnit WebDriver: class MockMvc in spring-test"
+    },
+    {
+      "id": "dev-09",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-servlet/handlermapping-path.adoc",
+      "line": 33,
+      "text": "urlDecode=false",
+      "targets": [],
+      "why": "`urlDecode=false` is a bean-property setting of UrlPathHelper written as a literal, not a declaration"
+    },
+    {
+      "id": "dev-10",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/data-access/transaction/declarative/applying-more-than-just-tx-advice.adoc",
+      "line": 213,
+      "text": "fooService",
+      "targets": [],
+      "why": "`fooService` is a bean name"
+    },
+    {
+      "id": "dev-11",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/integration/jms/using.adoc",
+      "line": 308,
+      "text": "Session",
+      "targets": [],
+      "why": "`Session` is the JMS API jakarta.jms.Session created from a Connection, external to the repository"
+    },
+    {
+      "id": "dev-12",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/data-access/jdbc/simple.adoc",
+      "line": 615,
+      "text": "out",
+      "targets": [],
+      "why": "`out` is a stored-procedure OUT parameter mode, a SQL keyword"
+    },
+    {
+      "id": "dev-13",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-dynamicpropertysource.adoc",
+      "line": 33,
+      "text": "DynamicPropertyRegistry",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/context/DynamicPropertyRegistry.java",
+          "symbol": "DynamicPropertyRegistry"
+        }
+      ],
+      "why": "argument type of a @DynamicPropertySource method: interface DynamicPropertyRegistry in spring-test org.springframework.test.context"
+    },
+    {
+      "id": "dev-14",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/resources.adoc",
+      "line": 113,
+      "text": "Resource",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/Resource.java",
+          "symbol": "Resource"
+        }
+      ],
+      "why": "Spring's Resource abstraction interface, declared in spring-core org.springframework.core.io"
+    },
+    {
+      "id": "dev-15",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/data-access/transaction/declarative/tx-decl-explained.adoc",
+      "line": 45,
+      "text": "@Transactional",
+      "targets": [
+        {
+          "file": "spring-tx/src/main/java/org/springframework/transaction/annotation/Transactional.java",
+          "symbol": "Transactional"
+        }
+      ],
+      "why": "Spring's @Transactional annotation (transactionManager attribute), declared in spring-tx org.springframework.transaction.annotation"
+    },
+    {
+      "id": "dev-16",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/websocket/server.adoc",
+      "line": 156,
+      "text": "xref:web/webflux-websocket.adoc#webflux-websocket-server-cors[See equivalent in the Reactive stack]",
+      "targets": [],
+      "why": "xref label is prose (\"See equivalent in the Reactive stack\"), names no symbol"
+    },
+    {
+      "id": "dev-17",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-methods/return-types.adoc",
+      "line": 15,
+      "text": "xref:web/webmvc/mvc-controller/ann-methods/responsebody.adoc[`@ResponseBody`]",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/bind/annotation/ResponseBody.java",
+          "symbol": "ResponseBody"
+        }
+      ],
+      "why": "xref label `@ResponseBody` names the annotation ResponseBody in spring-web org.springframework.web.bind.annotation"
+    },
+    {
+      "id": "dev-18",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/testing/integration.adoc",
+      "line": 81,
+      "text": "xref:testing/testcontext-framework/ctx-management/caching.adoc[Context Caching]",
+      "targets": [],
+      "why": "xref label \"Context Caching\" is prose, names no symbol"
+    },
+    {
+      "id": "dev-19",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/config.adoc",
+      "line": 301,
+      "text": "xref:web/webmvc/mvc-config/message-converters.adoc[See equivalent in the Servlet stack]",
+      "targets": [],
+      "why": "xref label is prose (\"See equivalent in the Servlet stack\"), names no symbol"
+    },
+    {
+      "id": "dev-20",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-methods/arguments.adoc",
+      "line": 54,
+      "text": "xref:web/webflux/controller/ann-methods/requestparam.adoc[`@RequestParam`]",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/bind/annotation/RequestParam.java",
+          "symbol": "RequestParam"
+        }
+      ],
+      "why": "xref label `@RequestParam` names the annotation RequestParam in spring-web org.springframework.web.bind.annotation (shared by WebFlux)"
+    },
+    {
+      "id": "dev-21",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/executing-sql.adoc",
+      "line": 400,
+      "text": "{spring-framework-api}/test/context/jdbc/Sql.html[`@Sql`]",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/context/jdbc/Sql.java",
+          "symbol": "Sql"
+        }
+      ],
+      "why": "Javadoc link to the @Sql annotation in spring-test org.springframework.test.context.jdbc"
+    },
+    {
+      "id": "dev-22",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+      "line": 300,
+      "text": "{spring-framework-api}/aop/interceptor/ConcurrencyThrottleInterceptor.html[`ConcurrencyThrottleInterceptor`]",
+      "targets": [
+        {
+          "file": "spring-aop/src/main/java/org/springframework/aop/interceptor/ConcurrencyThrottleInterceptor.java",
+          "symbol": "ConcurrencyThrottleInterceptor"
+        }
+      ],
+      "why": "Javadoc link to class ConcurrencyThrottleInterceptor in spring-aop org.springframework.aop.interceptor"
+    },
+    {
+      "id": "dev-23",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/dispatcher-handler.adoc",
+      "line": 15,
+      "text": "{spring-framework-api}/web/server/adapter/WebHttpHandlerBuilder.html[`WebHttpHandlerBuilder`]",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/server/adapter/WebHttpHandlerBuilder.java",
+          "symbol": "WebHttpHandlerBuilder"
+        }
+      ],
+      "why": "Javadoc link to class WebHttpHandlerBuilder in spring-web org.springframework.web.server.adapter"
+    },
+    {
+      "id": "dev-24",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-config/static-resources.adoc",
+      "line": 24,
+      "text": "{spring-framework-api}/web/servlet/resource/ResourceResolver.html[`ResourceResolver`]",
+      "targets": [
+        {
+          "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/resource/ResourceResolver.java",
+          "symbol": "ResourceResolver"
+        }
+      ],
+      "why": "Javadoc link to web/servlet/resource/ResourceResolver: the Spring MVC interface in spring-webmvc (not the WebFlux one in web.reactive.resource)"
+    },
+    {
+      "id": "dev-25",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/core/appendix/xsd-schemas.adoc",
+      "line": 73,
+      "text": "{spring-framework-api}/beans/factory/config/FieldRetrievingFactoryBean.html#setStaticField(java.lang.String)[`staticField`]",
+      "targets": [
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/config/FieldRetrievingFactoryBean.java",
+          "symbol": "FieldRetrievingFactoryBean.setStaticField"
+        }
+      ],
+      "why": "link anchor #setStaticField(java.lang.String) denotes the setter FieldRetrievingFactoryBean.setStaticField in spring-beans"
+    }
+  ]
+}

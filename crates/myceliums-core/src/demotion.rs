@@ -19,6 +19,7 @@
 //! and confirmed on its held-out split
 //! (`crates/myceliums-benchmarks/benchmarks/METHODOLOGY.md`).
 
+use myceliums_storage::{CodeSymbol, SymbolKind};
 use serde::{Deserialize, Serialize};
 
 /// Rank weight of a demoted symbol by default: a test at position `p` is
@@ -83,6 +84,12 @@ pub struct TestPolicy {
     /// Rank weight of a moved symbol, in `(0, 1]`: at position `p` it is
     /// placed as if at `p / weight`. `1` reorders nothing.
     pub weight: f64,
+    /// Doc sections and documents are moved down too, by the same weight
+    /// (#180): the MCP `search_code` sets it, so a doc page that repeats a
+    /// query's words does not push code out of a code search. Off by
+    /// default: the library, the CLI and the retrieval evaluations rank docs
+    /// like code.
+    pub docs: bool,
 }
 
 impl Default for TestPolicy {
@@ -105,6 +112,7 @@ impl TestPolicy {
         Self {
             ranking,
             weight: DEFAULT_TEST_WEIGHT,
+            docs: false,
         }
     }
 
@@ -119,6 +127,7 @@ impl TestPolicy {
         Self {
             ranking: TestRanking::Demote,
             weight,
+            docs: false,
         }
     }
 
@@ -130,9 +139,28 @@ impl TestPolicy {
         }
     }
 
+    /// This policy with doc sections and documents moved down as well.
+    pub fn demoting_docs(mut self, docs: bool) -> Self {
+        self.docs = docs;
+        self
+    }
+
     /// True when this policy leaves every ranking as it is.
     pub fn is_neutral(&self) -> bool {
-        self.ranking == TestRanking::Include || self.weight() >= 1.0
+        (self.ranking == TestRanking::Include && !self.docs) || self.weight() >= 1.0
+    }
+
+    /// The class [`apply`](Self::apply) and [`top`](Self::top) move by, for
+    /// `symbol`: test code; with [`docs`](Self::docs), doc sections and
+    /// documents too (under `prefer`, which moves product code down, a doc
+    /// counts as product code). Pass it as their `is_test` argument.
+    pub fn demoted_class(&self, symbol: &CodeSymbol) -> bool {
+        let doc = self.docs && matches!(symbol.kind, SymbolKind::Section | SymbolKind::Document);
+        match self.ranking {
+            TestRanking::Demote => symbol.is_test() || doc,
+            TestRanking::Include => doc,
+            TestRanking::Prefer => symbol.is_test() && !doc,
+        }
     }
 
     /// How deep a ranking must be fetched so that its first `limit` entries
@@ -158,7 +186,8 @@ impl TestPolicy {
     fn moves(&self, is_test: bool) -> bool {
         match self.ranking {
             TestRanking::Demote => is_test,
-            TestRanking::Include => false,
+            // Only reached with `docs`: the class is then the docs alone.
+            TestRanking::Include => is_test,
             TestRanking::Prefer => !is_test,
         }
     }
@@ -253,6 +282,7 @@ mod tests {
         let policy = TestPolicy {
             ranking: TestRanking::Prefer,
             weight: 0.25,
+            docs: false,
         };
         let ranked = policy.apply(ranking("abCd"), |i| i.1);
         // keys: a 4, b 8, C 3, d 16
@@ -306,5 +336,59 @@ mod tests {
         }
         assert!("exclude".parse::<TestRanking>().is_err());
         assert_eq!(TestRanking::default(), TestRanking::Demote);
+    }
+
+    fn symbol(kind: SymbolKind, test: bool) -> CodeSymbol {
+        CodeSymbol {
+            uid: format!("{kind}-{test}"),
+            name: "x".to_string(),
+            qualified_name: "x".to_string(),
+            kind,
+            file_path: "x".to_string(),
+            start_line: 1,
+            end_line: 1,
+            signature: String::new(),
+            content: String::new(),
+            repo_id: "r".to_string(),
+            metadata: test.then(|| r#"{"test":true}"#.to_string()),
+        }
+    }
+
+    #[test]
+    fn docs_move_down_only_when_asked() {
+        let code = symbol(SymbolKind::Function, false);
+        let test = symbol(SymbolKind::Function, true);
+        let doc = symbol(SymbolKind::Section, false);
+        let ranking = vec![&doc, &code, &test];
+        let order = |policy: TestPolicy| -> Vec<String> {
+            policy
+                .apply(ranking.clone(), |s| policy.demoted_class(s))
+                .iter()
+                .map(|s| s.uid.clone())
+                .collect()
+        };
+        // Default: docs rank like code (the library and the evaluations).
+        assert_eq!(
+            order(TestPolicy::default()),
+            ["Section-false", "Function-false", "Function-true"]
+        );
+        // `search_code`: docs below code, with the tests.
+        assert_eq!(
+            order(TestPolicy::default().demoting_docs(true)),
+            ["Function-false", "Section-false", "Function-true"]
+        );
+        // Tests included, docs still demoted.
+        let included = TestPolicy::include().demoting_docs(true);
+        assert!(!included.is_neutral());
+        assert_eq!(
+            order(included),
+            ["Function-false", "Function-true", "Section-false"]
+        );
+        assert!(TestPolicy::include().is_neutral());
+        // Prefer: product code and docs below tests.
+        assert_eq!(
+            order(TestPolicy::new(TestRanking::Prefer).demoting_docs(true))[0],
+            "Function-true"
+        );
     }
 }

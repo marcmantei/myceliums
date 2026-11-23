@@ -299,7 +299,7 @@
       "openWorldHint": false,
       "readOnlyHint": true
     },
-    "description": "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
+    "description": "What breaks if I change this? For a symbol or a file: everything that calls or imports it, direct and transitive, grouped by file, then the docs naming it. With neither: the uncommitted diff (git diff HEAD) or the diff you pass.",
     "inputSchema": {
       "properties": {
         "depth": {
@@ -455,6 +455,14 @@
     "description": "Find where something is implemented: functions, classes and types by name or by what the code does (\"builds the Set-Cookie header\"). Use it instead of grep to locate code: one line per hit with kind, file and lines.",
     "inputSchema": {
       "properties": {
+        "docs": {
+          "description": "Doc sections: demote (default) or include",
+          "enum": [
+            "demote",
+            "include"
+          ],
+          "type": "string"
+        },
         "explain": {
           "description": "Show each result's score breakdown",
           "type": "boolean"
