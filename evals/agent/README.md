@@ -885,8 +885,8 @@ large Java code base, with task categories where a code graph might help, to
 different degrees: does myceliums change success, F1, tokens and cost per
 solved task, and in which category? This section
 is the prepared measurement: task set, gold labels, review, index and run
-configuration, and the budget. **No session with a model has run**; the runs
-need Marc's budget approval.
+configuration, and the budget, written before any session; what ran since is under
+[Calibration and pre-registration](#calibration-and-pre-registration-of-the-main-run-182).
 
 **Repository.** Spring Framework v7.1.0 (`spring-framework` in
 [`repos.json`](repos.json), commit `f2e4863de60e`, the #177 Java sets'
@@ -1103,6 +1103,63 @@ New in the harness for this: `--schedule`/the profile's interleaved order and
 `plan`, `run --mock-api`, `index --skip-embeddings`, myceliums calls from Bash
 in the variant report, and a token report per arm
 ([`tests/test_schedule.py`](tests/test_schedule.py)).
+
+### Calibration and pre-registration of the main run (#182)
+
+Written on 2026-11-23 **after** the calibration and **before any session of
+arm C or D**, and before the first session of the main run.
+
+**Calibration** ([report](results/182-spring-calibration/REPORT.md),
+[tokens](results/182-spring-calibration/TOKENS.md),
+[supplement](results/182-spring-calibration/SUPPLEMENT.md)): arm A, 30 tasks,
+one repetition, `--bash --max-turns 100 --timeout 1200`. 29 of 30 solved, mean
+F1 0.989, mean 4.0 turns (median 3, at most 12), 45k input and 1.6k output
+tokens per session, $1.47 in total ($0.049 per session). The harness's grades
+were re-derived independently from the raw transcripts (30 of 30 equal). No
+session used a path outside its working copy; the checkout is clean at the
+pin. The one miss, `spring-blast-interface-method`, lists ten files one caller
+level beyond the question's rule; its ten gold files were checked again with
+`git grep`. **No task, gold label or wording was changed.**
+
+1. **Success is at the ceiling.** Arm A can be improved on by at most about
+   one task, so this run cannot show a success gain for myceliums, whatever
+   the truth is. The task set was meant to be hard for text search and is not
+   (the rule above forbids changing it for that).
+2. **Primary outcome: tokens and cost per solved task**, for A vs C, A vs D
+   and C vs D, with input split into uncached, cache write and cache read,
+   plus output and turns (`supplement.py`, `report`, `tokens`). **Success and
+   F1 are a harm check.** This emphasis was chosen after seeing arm A's
+   calibration and before any session of C or D. What the harm check can
+   detect with 30 tasks × 3 repetitions (a task is solved when at least 2 of
+   3 sessions are): with no task going the other way, an arm must lose 6 of
+   30 tasks for McNemar's exact p < 0.05 uncorrected (p = 0.031), 7 for the
+   smallest Holm-adjusted p of the three pairs (7: p = 0.016, × 3 = 0.047).
+   80 % power needs a true loss of about 25 (uncorrected) or 29 (Holm)
+   percentage points. Smaller harm goes undetected: no significant difference
+   is **not** evidence of equal success. The intervals on spend are 95 %
+   paired bootstraps over tasks, not corrected for the number of comparisons.
+3. **No pooling.** The calibration sessions are not part of the main run's
+   results.
+4. **Validity threat: memorisation.** Spring Framework is very likely in the
+   model's training data, which may be part of the ceiling. `supplement.py`
+   counts, per arm and category, the answer items that never appeared in the
+   session's tool output (calibration: 3 of 326, all correct). That is a lower
+   bound: a name the agent remembered and then confirmed with one search
+   counts as seen. Results may not transfer to a private code base.
+5. **Estimate correction.** The budget above (~$70 for 270 sessions) assumed
+   20 turns per session; the calibration measured 4.0. The new estimate is
+   about $12 at the planned cost ratios of C and D to A, about $31 if C and D
+   each cost three times A.
+
+**Wall time** is not an outcome: the calibration overlapped the index build
+and other jobs (load 60-200 on 10 cores). The main run starts after the index
+is built and the #183 Gradle prechecks have ended; a per-minute log of load
+and competing jobs is kept for the run.
+
+**Harness change before the main run:** a session cut off by the account's
+usage limit could be recorded as a final `timeout` or `error` (F1 0); it is
+now always `usage_limit`, not final, and re-run
+(`tests/test_schedule.py`, `UsageLimit`). No stored session was affected.
 
 ## Token attribution and cost (#178)
 

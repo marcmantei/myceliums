@@ -1,0 +1,32 @@
+{
+  "available": true,
+  "fit": {
+    "constant": 292.2,
+    "features": {
+      "reply": {
+        "coef": 1.7354,
+        "n_calls": 84,
+        "tokens_per_char": 0.4338
+      },
+      "search": {
+        "coef": 1.5989,
+        "n_calls": 78,
+        "tokens_per_char": 0.3997
+      },
+      "thinking": {
+        "coef": 0.3637,
+        "n_calls": 29
+      }
+    },
+    "left_out": [
+      "read"
+    ],
+    "n_calls": 84,
+    "r2": 0.894
+  },
+  "rates": {
+    "reply": 1.7354,
+    "search": 1.5989,
+    "thinking": 0.3637
+  }
+}
