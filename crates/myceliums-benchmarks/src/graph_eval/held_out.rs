@@ -39,9 +39,9 @@ use myceliums_storage::CodeSymbol;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use super::extract::{extract, Extraction};
+use super::extract::{Extraction, ExtractionCache};
 use super::report::wilson;
 use myceliums_core::dispatch::DispatchIndex;
 
@@ -317,38 +317,46 @@ pub fn repos_dir() -> Option<std::path::PathBuf> {
     Some(cache.join("myceliums-eval-repos"))
 }
 
+/// The checkout of `repo` under `repos_dir` when it is at `pin`; otherwise
+/// why it cannot be scored.
+pub fn pinned_checkout(repos_dir: &Path, repo: &str, pin: &str) -> Result<PathBuf, String> {
+    let dir = repos_dir.join(repo);
+    let head = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&dir)
+        .output()
+        .ok()
+        .filter(|out| out.status.success())
+        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
+    match head {
+        None => Err(format!("{repo}: no checkout at {}", dir.display())),
+        Some(head) if head != pin => {
+            Err(format!("{repo}: checkout at {head}, not the pinned {pin}"))
+        }
+        Some(_) => Ok(dir),
+    }
+}
+
 /// Analyze every pinned repository found at `repos_dir` and score it.
 /// A repository that is missing or at another commit is skipped, with the
-/// reason.
-pub async fn run(set: &HeldOutSet, repos_dir: &Path) -> Result<HeldOutReport> {
+/// reason. Analyses are shared through `cache`.
+pub async fn run(
+    set: &HeldOutSet,
+    repos_dir: &Path,
+    cache: &mut ExtractionCache,
+) -> Result<HeldOutReport> {
     let mut report = HeldOutReport::default();
     for (repo, pin) in &set.repos {
-        let dir = repos_dir.join(repo);
-        let head = std::process::Command::new("git")
-            .args(["rev-parse", "HEAD"])
-            .current_dir(&dir)
-            .output()
-            .ok()
-            .filter(|out| out.status.success())
-            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string());
-        match head {
-            None => {
-                report
-                    .skipped
-                    .push(format!("{repo}: no checkout at {}", dir.display()));
+        let dir = match pinned_checkout(repos_dir, repo, pin) {
+            Ok(dir) => dir,
+            Err(reason) => {
+                report.skipped.push(reason);
                 continue;
             }
-            Some(head) if head != *pin => {
-                report
-                    .skipped
-                    .push(format!("{repo}: checkout at {head}, not the pinned {pin}"));
-                continue;
-            }
-            Some(_) => {}
-        }
-        let extraction = extract(&dir).await?;
+        };
+        let extraction = cache.get(&dir).await?;
         let pairs: Vec<&Pair> = set.pairs.iter().filter(|p| p.repo == *repo).collect();
-        let mut scored = score_set(set, repo, &pairs, &extraction);
+        let mut scored = score_set(set, repo, &pairs, extraction);
         scored.analysis_secs = extraction.analysis_secs;
         scored.calls_edges = extraction.calls.len();
         scored.overrides_edges = extraction.overrides.len();
@@ -357,7 +365,7 @@ pub async fn run(set: &HeldOutSet, repos_dir: &Path) -> Result<HeldOutReport> {
             let pairs: Vec<&Pair> = fixed.pairs.iter().filter(|p| p.repo == *repo).collect();
             report
                 .corrected
-                .push(score_set(&fixed, repo, &pairs, &extraction));
+                .push(score_set(&fixed, repo, &pairs, extraction));
             report.corrections = applied;
         }
     }

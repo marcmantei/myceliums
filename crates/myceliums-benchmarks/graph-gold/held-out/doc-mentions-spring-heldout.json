@@ -1,0 +1,595 @@
+{
+  "description": "Held-out set of 50 symbol mentions (inline code spans, xrefs, Javadoc links) drawn by sample_doc_mentions.py --heldout (seed 4180) from the spring-framework v7.1.0 AsciiDoc reference docs, each labelled with the declaration(s) it denotes by reading the docs and code, never from myceliums output.",
+  "role": "held-out",
+  "labelled_by": "agent",
+  "reviewed_by": null,
+  "seed": 4180,
+  "sampler": "crates/myceliums-benchmarks/graph-gold/held-out/sample_doc_mentions.py --heldout",
+  "fetch": "crates/myceliums-benchmarks/graph-gold/held-out/fetch_java.sh",
+  "repos": {
+    "spring-framework": "f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4"
+  },
+  "rules": "A target is a declaration in spring-framework's main sources (class, interface, enum, record, annotation type, method including annotation attributes, constant); bean property names, XML elements/attributes, configuration keys, SpEL syntax, bean names, literals, keywords, HTTP headers, CLI options and packages are not targets. Types outside the repository (JDK, Jakarta/Servlet/JMS, Reactor, Micrometer, Selenium) are not targets even when the repository has a same-named type, and test sources (src/test, src/testFixtures) never are; example code under framework-docs/src/main counts only when the sentence names the example class shown there (e.g. via include-code), and classes in inline doc snippets have no target. Among same-named main declarations the one matching the page's package/topic is chosen, all of them only when the page could truly mean either. A method mention covers all its overloads and is given once as Type.method (the declaring supertype if inherited); an api-link's target is what its URL denotes (class page or anchored member), regardless of the label. An xref's target is the symbol named by its label, none when the label is prose or empty. @Foo denotes annotation type Foo; a nested type is dotted (WebClient.Builder); an enum constant (Propagation.NEVER) denotes its enum type. Labels were made by reading the docs and code at the pinned commit with cat/sed/git grep, never from myceliums output.",
+  "items": [
+    {
+      "id": "heldout-01",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc",
+      "line": 373,
+      "text": "Collection",
+      "targets": [],
+      "why": "`Collection` is java.util.Collection (JDK)"
+    },
+    {
+      "id": "heldout-02",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/integration/observability.adoc",
+      "line": 354,
+      "text": "WebClient.Builder",
+      "targets": [
+        {
+          "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/WebClient.java",
+          "symbol": "WebClient.Builder"
+        }
+      ],
+      "why": "the WebClient builder on which an ObservationRegistry is configured: nested interface WebClient.Builder in spring-webflux"
+    },
+    {
+      "id": "heldout-03",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/data-access/jdbc/advanced.adoc",
+      "line": 152,
+      "text": "?",
+      "targets": [],
+      "why": "`?` is the JDBC placeholder syntax, a literal"
+    },
+    {
+      "id": "heldout-04",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/validation.adoc",
+      "line": 24,
+      "text": "PropertyEditor",
+      "targets": [],
+      "why": "`PropertyEditor` is java.beans.PropertyEditor, part of the JavaBeans specification (JDK)"
+    },
+    {
+      "id": "heldout-05",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/reactive-spring.adoc",
+      "line": 599,
+      "text": "MultipartHttpMessageReader",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/multipart/MultipartHttpMessageReader.java",
+          "symbol": "MultipartHttpMessageReader"
+        }
+      ],
+      "why": "the WebFlux multipart reader class MultipartHttpMessageReader in spring-web org.springframework.http.codec.multipart"
+    },
+    {
+      "id": "heldout-06",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/expressions/language-ref/operator-safe-navigation.adoc",
+      "line": 416,
+      "text": "?.",
+      "targets": [],
+      "why": "`?.` is SpEL safe-navigation operator syntax"
+    },
+    {
+      "id": "heldout-07",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/aop/using-aspectj.adoc",
+      "line": 238,
+      "text": "@EnableSpringConfigured",
+      "targets": [
+        {
+          "file": "spring-aspects/src/main/java/org/springframework/context/annotation/aspectj/EnableSpringConfigured.java",
+          "symbol": "EnableSpringConfigured"
+        }
+      ],
+      "why": "the @EnableSpringConfigured annotation in spring-aspects org.springframework.context.annotation.aspectj"
+    },
+    {
+      "id": "heldout-08",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+      "line": 622,
+      "text": "Actor",
+      "targets": [],
+      "why": "`Actor` is a domain class in an inline doc snippet, not declared in the repository"
+    },
+    {
+      "id": "heldout-09",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/tx.adoc",
+      "line": 71,
+      "text": "Propagation.NEVER",
+      "targets": [
+        {
+          "file": "spring-tx/src/main/java/org/springframework/transaction/annotation/Propagation.java",
+          "symbol": "Propagation"
+        }
+      ],
+      "why": "`Propagation.NEVER` is an enum constant; enum constants are not symbols, so the target is the enum Propagation in spring-tx org.springframework.transaction.annotation"
+    },
+    {
+      "id": "heldout-10",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/javaconfig.adoc",
+      "line": 68,
+      "text": "OrderServiceTest",
+      "targets": [],
+      "why": "`OrderServiceTest` is a test class in an inline doc snippet, not declared in the repository"
+    },
+    {
+      "id": "heldout-11",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/integration/cache/annotations.adoc",
+      "line": 634,
+      "text": "@CacheEvict",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/cache/annotation/CacheEvict.java",
+          "symbol": "CacheEvict"
+        }
+      ],
+      "why": "the @CacheEvict caching annotation in spring-context org.springframework.cache.annotation"
+    },
+    {
+      "id": "heldout-12",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-methods/arguments.adoc",
+      "line": 100,
+      "text": "@SessionAttributes",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/bind/annotation/SessionAttributes.java",
+          "symbol": "SessionAttributes"
+        }
+      ],
+      "why": "the class-level @SessionAttributes annotation in spring-web org.springframework.web.bind.annotation (used by WebFlux)"
+    },
+    {
+      "id": "heldout-13",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/integration/observability.adoc",
+      "line": 80,
+      "text": "ServerRequestObservationContext",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/server/observation/ServerRequestObservationContext.java",
+          "symbol": "ServerRequestObservationContext"
+        }
+      ],
+      "why": "Spring MVC (Servlet filter) observation context: org.springframework.http.server.observation.ServerRequestObservationContext in spring-web, not the reactive one in http.server.reactive.observation"
+    },
+    {
+      "id": "heldout-14",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-requestmapping.adoc",
+      "line": 647,
+      "text": "@HttpExchange",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/service/annotation/HttpExchange.java",
+          "symbol": "HttpExchange"
+        }
+      ],
+      "why": "the @HttpExchange annotation in spring-web org.springframework.web.service.annotation"
+    },
+    {
+      "id": "heldout-15",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/new-framework.adoc",
+      "line": 77,
+      "text": "Mono",
+      "targets": [],
+      "why": "`Mono` is a Reactor type, external to the repository"
+    },
+    {
+      "id": "heldout-16",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/context-introduction.adoc",
+      "line": 653,
+      "text": "#root.event",
+      "targets": [],
+      "why": "`#root.event` is SpEL expression syntax"
+    },
+    {
+      "id": "heldout-17",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/websocket/stomp/user-destination.adoc",
+      "line": 71,
+      "text": "broadcast=false",
+      "targets": [
+        {
+          "file": "spring-messaging/src/main/java/org/springframework/messaging/simp/annotation/SendToUser.java",
+          "symbol": "SendToUser.broadcast"
+        }
+      ],
+      "why": "`broadcast=false` sets the broadcast attribute of @SendToUser: annotation method SendToUser.broadcast in spring-messaging org.springframework.messaging.simp.annotation"
+    },
+    {
+      "id": "heldout-18",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/aop/schema.adoc",
+      "line": 647,
+      "text": "<aop:aspect>",
+      "targets": [],
+      "why": "`<aop:aspect>` is an XML element"
+    },
+    {
+      "id": "heldout-19",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/testing/support-jdbc.adoc",
+      "line": 10,
+      "text": "JdbcTestUtils",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/jdbc/JdbcTestUtils.java",
+          "symbol": "JdbcTestUtils"
+        }
+      ],
+      "why": "utility class JdbcTestUtils in spring-test org.springframework.test.jdbc (named in the text)"
+    },
+    {
+      "id": "heldout-20",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-methods/return-types.adoc",
+      "line": 62,
+      "text": "@ModelAttribute",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/bind/annotation/ModelAttribute.java",
+          "symbol": "ModelAttribute"
+        }
+      ],
+      "why": "the @ModelAttribute annotation in spring-web org.springframework.web.bind.annotation (WebFlux return value)"
+    },
+    {
+      "id": "heldout-21",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/new-framework.adoc",
+      "line": 93,
+      "text": "WebHandler",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/server/WebHandler.java",
+          "symbol": "WebHandler"
+        }
+      ],
+      "why": "the WebHandler API of spring-web: interface org.springframework.web.server.WebHandler"
+    },
+    {
+      "id": "heldout-22",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc",
+      "line": 348,
+      "text": "SpringProperties",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/SpringProperties.java",
+          "symbol": "SpringProperties"
+        }
+      ],
+      "why": "the SpringProperties mechanism: final class SpringProperties in spring-core org.springframework.core"
+    },
+    {
+      "id": "heldout-23",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/integration/observability.adoc",
+      "line": 206,
+      "text": "@ExceptionHandler",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/bind/annotation/ExceptionHandler.java",
+          "symbol": "ExceptionHandler"
+        }
+      ],
+      "why": "Spring MVC @ExceptionHandler methods: annotation ExceptionHandler in spring-web org.springframework.web.bind.annotation"
+    },
+    {
+      "id": "heldout-24",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/factory-scopes.adoc",
+      "line": 279,
+      "text": "Session",
+      "targets": [],
+      "why": "`Session` is the HTTP (Servlet) session, external to the repository"
+    },
+    {
+      "id": "heldout-25",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/dependencies/factory-autowire.adoc",
+      "line": 33,
+      "text": "ref",
+      "targets": [],
+      "why": "`ref` is an XML element of the beans schema"
+    },
+    {
+      "id": "heldout-26",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-exceptionhandler.adoc",
+      "line": 193,
+      "text": "java.util.Map",
+      "targets": [],
+      "why": "`java.util.Map` is a JDK type"
+    },
+    {
+      "id": "heldout-27",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc-view/mvc-jsp.adoc",
+      "line": 524,
+      "text": "items",
+      "targets": [],
+      "why": "`items` is an attribute of the Spring JSP form tag (a tag attribute, not a declaration)"
+    },
+    {
+      "id": "heldout-28",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/data-access/jdbc/connections.adoc",
+      "line": 82,
+      "text": "DataSource",
+      "targets": [],
+      "why": "`DataSource` is javax.sql.DataSource (JDK) that SmartDataSource extends"
+    },
+    {
+      "id": "heldout-29",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/dependencies/factory-collaborators.adoc",
+      "line": 103,
+      "text": "ThingThree",
+      "targets": [],
+      "why": "`ThingThree` is a class in an inline doc snippet (package x.y), not declared in the repository"
+    },
+    {
+      "id": "heldout-30",
+      "stratum": "code-span",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/factory-scopes.adoc",
+      "line": 455,
+      "text": "userManager",
+      "targets": [],
+      "why": "`userManager` is a bean name"
+    },
+    {
+      "id": "heldout-31",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/nav.adoc",
+      "line": 279,
+      "text": "xref:web/webflux/controller/ann-methods/requestheader.adoc[]",
+      "targets": [],
+      "why": "xref with empty label [] in the nav; names no symbol"
+    },
+    {
+      "id": "heldout-32",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/ann-rest-exceptions.adoc",
+      "line": 45,
+      "text": "xref:web/webflux/config.adoc[WebFlux Config]",
+      "targets": [],
+      "why": "xref label \"WebFlux Config\" is prose, names no symbol"
+    },
+    {
+      "id": "heldout-33",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux-websocket.adoc",
+      "line": 355,
+      "text": "xref:core/databuffer-codec.adoc[Data Buffers and Codecs]",
+      "targets": [],
+      "why": "xref label \"Data Buffers and Codecs\" is prose, names no symbol"
+    },
+    {
+      "id": "heldout-34",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/nav.adoc",
+      "line": 121,
+      "text": "xref:data-access/transaction/declarative/txadvice-settings.adoc[]",
+      "targets": [],
+      "why": "xref with empty label [] in the nav; names no symbol"
+    },
+    {
+      "id": "heldout-35",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux/reactive-spring.adoc",
+      "line": 380,
+      "text": "xref:web/webflux-cors.adoc[CORS]",
+      "targets": [],
+      "why": "xref label \"CORS\" names a topic, not a symbol"
+    },
+    {
+      "id": "heldout-36",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-servlet/exceptionhandlers.adoc",
+      "line": 24,
+      "text": "xref:web/webmvc/mvc-ann-rest-exceptions.adoc[Error Responses]",
+      "targets": [],
+      "why": "xref label \"Error Responses\" is prose, names no symbol"
+    },
+    {
+      "id": "heldout-37",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webflux-functional.adoc",
+      "line": 614,
+      "text": "xref:web/webflux/dispatcher-handler.adoc[`DispatcherHandler`]",
+      "targets": [
+        {
+          "file": "spring-webflux/src/main/java/org/springframework/web/reactive/DispatcherHandler.java",
+          "symbol": "DispatcherHandler"
+        }
+      ],
+      "why": "xref label `DispatcherHandler` names the WebFlux class DispatcherHandler in spring-webflux org.springframework.web.reactive"
+    },
+    {
+      "id": "heldout-38",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/nav.adoc",
+      "line": 175,
+      "text": "xref:web/webmvc/mvc-controller/ann-methods/typeconversion.adoc[]",
+      "targets": [],
+      "why": "xref with empty label [] in the nav; names no symbol"
+    },
+    {
+      "id": "heldout-39",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/definition.adoc",
+      "line": 193,
+      "text": "xref:core/beans/java/bean-annotation.adoc[Using the `@Bean` Annotation]",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/context/annotation/Bean.java",
+          "symbol": "Bean"
+        }
+      ],
+      "why": "xref label \"Using the `@Bean` Annotation\" names the annotation Bean in spring-context org.springframework.context.annotation"
+    },
+    {
+      "id": "heldout-40",
+      "stratum": "xref",
+      "file": "framework-docs/modules/ROOT/pages/web/webmvc/filters.adoc",
+      "line": 102,
+      "text": "xref:web/webmvc/mvc-caching.adoc[HTTP Caching]",
+      "targets": [],
+      "why": "xref label \"HTTP Caching\" is prose, names no symbol"
+    },
+    {
+      "id": "heldout-41",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/annotation-config.adoc",
+      "line": 52,
+      "text": "{spring-framework-api}/beans/factory/annotation/AutowiredAnnotationBeanPostProcessor.html[`AutowiredAnnotationBeanPostProcessor`]",
+      "targets": [
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/annotation/AutowiredAnnotationBeanPostProcessor.java",
+          "symbol": "AutowiredAnnotationBeanPostProcessor"
+        }
+      ],
+      "why": "Javadoc link to class AutowiredAnnotationBeanPostProcessor in spring-beans org.springframework.beans.factory.annotation"
+    },
+    {
+      "id": "heldout-42",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/data-access/transaction/declarative/annotations.adoc",
+      "line": 89,
+      "text": "{spring-framework-api}/transaction/annotation/EnableTransactionManagement.html[javadoc]",
+      "targets": [
+        {
+          "file": "spring-tx/src/main/java/org/springframework/transaction/annotation/EnableTransactionManagement.java",
+          "symbol": "EnableTransactionManagement"
+        }
+      ],
+      "why": "Javadoc link (label \"javadoc\") to the @EnableTransactionManagement annotation in spring-tx org.springframework.transaction.annotation"
+    },
+    {
+      "id": "heldout-43",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+      "line": 328,
+      "text": "{spring-framework-api}/core/retry/RetryTemplate.html[`RetryTemplate`]",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/retry/RetryTemplate.java",
+          "symbol": "RetryTemplate"
+        }
+      ],
+      "why": "Javadoc link to class RetryTemplate in spring-core org.springframework.core.retry"
+    },
+    {
+      "id": "heldout-44",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/java/bean-annotation.adoc",
+      "line": 479,
+      "text": "{spring-framework-api}/context/annotation/ConfigurationBeanNameGenerator.html[`ConfigurationBeanNameGenerator`]",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/context/annotation/ConfigurationBeanNameGenerator.java",
+          "symbol": "ConfigurationBeanNameGenerator"
+        }
+      ],
+      "why": "Javadoc link to interface ConfigurationBeanNameGenerator in spring-context org.springframework.context.annotation"
+    },
+    {
+      "id": "heldout-45",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/integration/cache/annotations.adoc",
+      "line": 603,
+      "text": "{spring-framework-api}/cache/annotation/CachingConfigurer.html[`CachingConfigurer`]",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/cache/annotation/CachingConfigurer.java",
+          "symbol": "CachingConfigurer"
+        }
+      ],
+      "why": "Javadoc link to interface CachingConfigurer in spring-context org.springframework.cache.annotation"
+    },
+    {
+      "id": "heldout-46",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/web/websocket/fallback.adoc",
+      "line": 91,
+      "text": "{spring-framework-api}/web/socket/sockjs/support/SockJsHttpRequestHandler.html[`SockJsHttpRequestHandler`]",
+      "targets": [
+        {
+          "file": "spring-websocket/src/main/java/org/springframework/web/socket/sockjs/support/SockJsHttpRequestHandler.java",
+          "symbol": "SockJsHttpRequestHandler"
+        }
+      ],
+      "why": "Javadoc link to class SockJsHttpRequestHandler in spring-websocket org.springframework.web.socket.sockjs.support"
+    },
+    {
+      "id": "heldout-47",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/data-access/oxm.adoc",
+      "line": 37,
+      "text": "{spring-framework-api}/oxm/Unmarshaller.html[`Unmarshaller`]",
+      "targets": [
+        {
+          "file": "spring-oxm/src/main/java/org/springframework/oxm/Unmarshaller.java",
+          "symbol": "Unmarshaller"
+        }
+      ],
+      "why": "Javadoc link to Spring's O/X interface org.springframework.oxm.Unmarshaller in spring-oxm (not the JAXB one)"
+    },
+    {
+      "id": "heldout-48",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/core/beans/context-introduction.adoc",
+      "line": 271,
+      "text": "{spring-framework-api}/context/support/ReloadableResourceBundleMessageSource.html[`ReloadableResourceBundleMessageSource`]",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/context/support/ReloadableResourceBundleMessageSource.java",
+          "symbol": "ReloadableResourceBundleMessageSource"
+        }
+      ],
+      "why": "Javadoc link to class ReloadableResourceBundleMessageSource in spring-context org.springframework.context.support"
+    },
+    {
+      "id": "heldout-49",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+      "line": 733,
+      "text": "{spring-framework-api}/test/util/AopTestUtils.html#getUltimateTargetObject(java.lang.Object)[`AopTestUtils.getUltimateTargetObject(...)`]",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/util/AopTestUtils.java",
+          "symbol": "AopTestUtils.getUltimateTargetObject"
+        }
+      ],
+      "why": "link anchor #getUltimateTargetObject(java.lang.Object) denotes the static method AopTestUtils.getUltimateTargetObject in spring-test org.springframework.test.util"
+    },
+    {
+      "id": "heldout-50",
+      "stratum": "api-link",
+      "file": "framework-docs/modules/ROOT/pages/core/aot.adoc",
+      "line": 660,
+      "text": "{spring-framework-api}/aot/hint/annotation/RegisterReflectionForBinding.html[`@RegisterReflectionForBinding`]",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/aot/hint/annotation/RegisterReflectionForBinding.java",
+          "symbol": "RegisterReflectionForBinding"
+        }
+      ],
+      "why": "Javadoc link to the @RegisterReflectionForBinding annotation in spring-core org.springframework.aot.hint.annotation"
+    }
+  ]
+}
