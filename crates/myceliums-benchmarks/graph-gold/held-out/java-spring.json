@@ -1,0 +1,2150 @@
+{
+  "description": "Held-out Java CALLS set (#177): call sites of spring-framework v7.1.0 drawn by sample_java_sites.py (seed 177) — 60 at random from the production sources and 5 per hard Java case from a targeted stratum — each traced to its targets by reading the code at the pinned commit, never from myceliums output. Scored like real-repos.json, per (caller, callee name) pair, with precision and recall per case; reported by graph-eval, never gated.",
+  "labelled_by": "agent",
+  "reviewed_by": null,
+  "rules": "Sites are drawn by sample_java_sites.py (seed 177) and read in the order of the draw. Strata: `random` takes the first 60 sites that qualify; each case stratum takes the first 5 that qualify and really are that case. A site is skipped when it is not a call made inside a named method or constructor (a declaration, an annotation, a string, a comment, a field initialiser, an abstract or interface method declaration), when it repeats a pair already taken, or, in a case stratum, when it is not that case (a static import of a library method, a field Spring does not inject, a type that is not an interface or abstract class). The caller is the innermost named method or constructor containing the call, including methods of anonymous classes and enum constant bodies; calls in lambdas belong to the enclosing method. A pair lists every project symbol the caller's calls of that name bind to under javac's rules: the declaration of the receiver's static type (inherited declarations where the class does not declare it; the overload javac selects) and, where the call dispatches, every override of it in the repository (found by git grep over the subtypes). `new X(...)` targets the class X and its matching constructor. An empty list means no call of that name in the caller binds to a project symbol: a JDK or library method, a method inherited from a library base class, an implicit member with no declaration (a record accessor). Annotation elements (`ann.value()`) are interface methods and are targets. Method references (`Type::m`) are labelled with what they reference but are not calls under the fixture rules: they are reported apart and left out of the totals. `inner-anonymous` is set mechanically: the caller's declaration is indented two levels or more (spring-framework indents with tabs).",
+  "fetch": "crates/myceliums-benchmarks/graph-gold/held-out/fetch_java.sh",
+  "repos": {
+    "spring-framework": "f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4"
+  },
+  "report_only": [
+    "method-ref"
+  ],
+  "cases": {
+    "dispatch": "the call goes through an interface or abstract (or overridden) method: the declaration the receiver's static type binds, plus every override in the repository",
+    "overload": "the callee name has several overloads in view; the target is the one javac picks (arity alone may not decide)",
+    "generics": "the receiver's type comes from a type argument (List<DataBuffer>.get(0)) or a type-parameter bound (C extends X)",
+    "inner-anonymous": "the caller is a method of a nested, inner, local or anonymous class (enum constant bodies included)",
+    "lambda": "the call is written inside a lambda body; it belongs to the enclosing method",
+    "method-ref": "a method reference (Type::m, this::m). Not a call under the fixture rules (invokedynamic), so these pairs are reported apart and left out of the totals",
+    "static-import": "a bare call bound by a static import of a project method (`import static org.springframework...`)",
+    "injected-field": "the receiver is a field Spring injects (@Autowired, @Resource, @Inject, @MockitoBean) or a constructor-injected field",
+    "inherited-library": "the class extends a library type and the call reaches a method inherited from it: no project target"
+  },
+  "pairs": [
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-websocket/src/main/java/org/springframework/web/socket/config/annotation/WebMvcStompEndpointRegistry.java",
+      "caller": "WebMvcStompEndpointRegistry",
+      "caller_line": 67,
+      "call_line": 83,
+      "callee": "getTimeToFirstMessage",
+      "targets": [
+        {
+          "file": "spring-websocket/src/main/java/org/springframework/web/socket/config/annotation/WebSocketTransportRegistration.java",
+          "name": "getTimeToFirstMessage",
+          "line": 162
+        }
+      ],
+      "cases": [],
+      "why": "transportRegistration is a WebSocketTransportRegistration parameter; SubProtocolWebSocketHandler.getTimeToFirstMessage is a namesake"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-core-test/src/main/java/org/springframework/aot/agent/InstrumentedBridgeMethods.java",
+      "caller": "methodinvoke",
+      "caller_line": 333,
+      "call_line": 342,
+      "callee": "invoke",
+      "targets": [],
+      "cases": [],
+      "why": "java.lang.reflect.Method.invoke"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-messaging/src/main/java/org/springframework/messaging/simp/annotation/support/SimpAnnotationMethodMessageHandler.java",
+      "caller": "setDestinationPrefixes",
+      "caller_line": 166,
+      "call_line": 167,
+      "callee": "setDestinationPrefixes",
+      "targets": [
+        {
+          "file": "spring-messaging/src/main/java/org/springframework/messaging/handler/invocation/AbstractMethodMessageHandler.java",
+          "name": "setDestinationPrefixes",
+          "line": 128
+        }
+      ],
+      "cases": [],
+      "why": "super.setDestinationPrefixes: the base class AbstractMethodMessageHandler, not the override itself"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-jdbc/src/main/java/org/springframework/jdbc/core/metadata/CallMetaDataContext.java",
+      "caller": "reconcileParameters",
+      "caller_line": 312,
+      "call_line": 381,
+      "callee": "get",
+      "targets": [],
+      "cases": [],
+      "why": "declaredParams is a java.util.Map, getOutParameterNames() a List: every get is a library call"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-test/src/main/java/org/springframework/test/context/support/AbstractDirtiesContextTestExecutionListener.java",
+      "caller": "beforeOrAfterTestMethod",
+      "caller_line": 88,
+      "call_line": 104,
+      "callee": "methodMode",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/annotation/DirtiesContext.java",
+          "name": "methodMode",
+          "line": 104
+        }
+      ],
+      "cases": [],
+      "why": "methodAnn is a DirtiesContext; methodMode() is an element of that annotation type (an interface method)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-context/src/main/java/org/springframework/scheduling/concurrent/ReschedulingRunnable.java",
+      "caller": "schedule",
+      "caller_line": 74,
+      "call_line": 80,
+      "callee": "getClock",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/scheduling/support/SimpleTriggerContext.java",
+          "name": "getClock",
+          "line": 129
+        }
+      ],
+      "cases": [],
+      "why": "triggerContext field is a SimpleTriggerContext, which declares getClock"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/http/converter/xml/AbstractXmlHttpMessageConverter.java",
+      "caller": "writeInternal",
+      "caller_line": 84,
+      "call_line": 88,
+      "callee": "StreamResult",
+      "targets": [],
+      "cases": [],
+      "why": "new javax.xml.transform.stream.StreamResult"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/web/util/pattern/PathPatternRouteMatcher.java",
+      "caller": "toString",
+      "caller_line": 121,
+      "call_line": 122,
+      "callee": "value",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/util/pattern/PathPatternRouteMatcher.java",
+          "name": "value",
+          "line": 115
+        }
+      ],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "implicit this in the nested PathContainerRoute: its own value()"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-expression/src/main/java/org/springframework/expression/spel/standard/InternalSpelExpressionParser.java",
+      "caller": "maybeEatConstructorReference",
+      "caller_line": 815,
+      "call_line": 832,
+      "callee": "eatExpression",
+      "targets": [
+        {
+          "file": "spring-expression/src/main/java/org/springframework/expression/spel/standard/InternalSpelExpressionParser.java",
+          "name": "eatExpression",
+          "line": 173
+        }
+      ],
+      "cases": [],
+      "why": "private method of the same class"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-beans/src/main/java/org/springframework/beans/PropertyPath.java",
+      "caller": "subPath",
+      "caller_line": 163,
+      "call_line": 167,
+      "callee": "size",
+      "targets": [],
+      "cases": [],
+      "why": "List.size on segments and subSegments"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/server/RequestPredicates.java",
+      "caller": "acceptedMediaTypes",
+      "caller_line": 806,
+      "call_line": 809,
+      "callee": "singletonList",
+      "targets": [],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "java.util.Collections.singletonList"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/function/DefaultServerRequest.java",
+      "caller": "size",
+      "caller_line": 596,
+      "call_line": 597,
+      "callee": "getAttributeNames",
+      "targets": [],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "servletRequest is a jakarta HttpServletRequest: library"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/resource/ResourceUrlProvider.java",
+      "caller": "resolveResourceUrl",
+      "caller_line": 148,
+      "call_line": 157,
+      "callee": "getValue",
+      "targets": [],
+      "cases": [],
+      "why": "java.util.Map.Entry.getValue"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-tx/src/main/java/org/springframework/transaction/reactive/AbstractReactiveTransactionManager.java",
+      "caller": "handleExistingTransaction",
+      "caller_line": 185,
+      "call_line": 197,
+      "callee": "suspend",
+      "targets": [
+        {
+          "file": "spring-tx/src/main/java/org/springframework/transaction/reactive/AbstractReactiveTransactionManager.java",
+          "name": "suspend",
+          "line": 304
+        }
+      ],
+      "cases": [],
+      "why": "private suspend of the same class; the local variable named suspend does not shadow a method in Java"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-test/src/main/java/org/springframework/test/json/AbstractJsonContentAssert.java",
+      "caller": "isEqualTo",
+      "caller_line": 242,
+      "call_line": 244,
+      "callee": "compare",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/json/AbstractJsonContentAssert.java",
+          "name": "compare",
+          "line": 490
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "compare(CharSequence, JsonComparator), not the (CharSequence, JsonCompareMode) overload with the same arity"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/condition/ProducesRequestCondition.java",
+      "caller": "getMatchingExpressions",
+      "caller_line": 224,
+      "call_line": 229,
+      "callee": "add",
+      "targets": [],
+      "cases": [],
+      "why": "List.add"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/DefaultClientRequestObservationConvention.java",
+      "caller": "extractPath",
+      "caller_line": 119,
+      "call_line": 121,
+      "callee": "startsWith",
+      "targets": [],
+      "cases": [],
+      "why": "String.startsWith"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/DefaultExchangeStrategiesBuilder.java",
+      "caller": "DefaultExchangeStrategies",
+      "caller_line": 82,
+      "call_line": 84,
+      "callee": "getReaders",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/CodecConfigurer.java",
+          "name": "getReaders",
+          "line": 88
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/support/BaseCodecConfigurer.java",
+          "name": "getReaders",
+          "line": 95
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "inner-anonymous"
+      ],
+      "why": "codecConfigurer is a ClientCodecConfigurer, whose getReaders comes from CodecConfigurer; BaseCodecConfigurer overrides it"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-core/src/main/java/org/springframework/core/annotation/AnnotationAwareOrderComparator.java",
+      "caller": "sort",
+      "caller_line": 107,
+      "call_line": 109,
+      "callee": "sort",
+      "targets": [],
+      "cases": [],
+      "why": "java.util.List.sort, not a recursive AnnotationAwareOrderComparator.sort"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/web/client/DefaultResponseErrorHandler.java",
+      "caller": "getErrorMessage",
+      "caller_line": 191,
+      "call_line": 195,
+      "callee": "StringBuilder",
+      "targets": [],
+      "cases": [],
+      "why": "java.lang.StringBuilder"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/DefaultWebClient.java",
+      "caller": "exchangeToMono",
+      "caller_line": 414,
+      "call_line": 419,
+      "callee": "releaseIfNotConsumed",
+      "targets": [
+        {
+          "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/DefaultWebClient.java",
+          "name": "releaseIfNotConsumed",
+          "line": 198
+        },
+        {
+          "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/DefaultWebClient.java",
+          "name": "releaseIfNotConsumed",
+          "line": 202
+        }
+      ],
+      "cases": [
+        "overload",
+        "inner-anonymous",
+        "lambda"
+      ],
+      "why": "static overloads of the outer DefaultWebClient, called from lambdas in the inner DefaultRequestBodyUriSpec: one and two arguments"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/AbstractMessageWriterResultHandler.java",
+      "caller": "getMediaTypesFor",
+      "caller_line": 294,
+      "call_line": 298,
+      "callee": "getWritableMediaTypes",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/HttpMessageWriter.java",
+          "name": "getWritableMediaTypes",
+          "line": 66
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/EncoderHttpMessageWriter.java",
+          "name": "getWritableMediaTypes",
+          "line": 106
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "overload"
+      ],
+      "why": "HttpMessageWriter<?> loop variable: the one-argument default method; EncoderHttpMessageWriter overrides it; the no-argument overload is not called"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-beans/src/main/java/org/springframework/beans/factory/support/DefaultListableBeanFactory.java",
+      "caller": "resolveMultipleBeans",
+      "caller_line": 1792,
+      "call_line": 1798,
+      "callee": "findAutowireCandidates",
+      "targets": [
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/support/DefaultListableBeanFactory.java",
+          "name": "findAutowireCandidates",
+          "line": 1958
+        }
+      ],
+      "cases": [],
+      "why": "protected method of the same class"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/server/DefaultServerRequestBuilder.java",
+      "caller": "attribute",
+      "caller_line": 183,
+      "call_line": 185,
+      "callee": "put",
+      "targets": [],
+      "cases": [],
+      "why": "Map.put"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-context-support/src/main/java/org/springframework/scheduling/quartz/SchedulerFactoryBean.java",
+      "caller": "createScheduler",
+      "caller_line": 653,
+      "call_line": 657,
+      "callee": "currentThread",
+      "targets": [],
+      "cases": [],
+      "why": "Thread.currentThread"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-beans/src/main/java/org/springframework/beans/factory/xml/DefaultBeanDefinitionDocumentReader.java",
+      "caller": "processBeanDefinition",
+      "caller_line": 302,
+      "call_line": 303,
+      "callee": "parseBeanDefinitionElement",
+      "targets": [
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/xml/BeanDefinitionParserDelegate.java",
+          "name": "parseBeanDefinitionElement",
+          "line": 401
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "delegate is a BeanDefinitionParserDelegate: the one-argument overload"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-test/src/main/java/org/springframework/mock/web/MockHttpServletRequest.java",
+      "caller": "addParameters",
+      "caller_line": 577,
+      "call_line": 578,
+      "callee": "notNull",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/util/Assert.java",
+          "name": "notNull",
+          "line": 180
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "Assert.notNull(Object, String), not the (Object, Supplier) overload with the same arity"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/http/codec/xml/Jaxb2Helper.java",
+      "caller": "findQNames",
+      "caller_line": 69,
+      "call_line": 85,
+      "callee": "getName",
+      "targets": [],
+      "cases": [],
+      "why": "Class.getName"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-core/src/main/java/org/springframework/util/LinkedCaseInsensitiveMap.java",
+      "caller": "remove",
+      "caller_line": 473,
+      "call_line": 481,
+      "callee": "get",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/util/LinkedCaseInsensitiveMap.java",
+          "name": "get",
+          "line": 168
+        }
+      ],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "LinkedCaseInsensitiveMap.this.get from the inner EntrySet"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-expression/src/main/java/org/springframework/expression/spel/support/ReflectivePropertyAccessor.java",
+      "caller": "read",
+      "caller_line": 174,
+      "call_line": 196,
+      "callee": "Property",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/convert/Property.java",
+          "name": "Property",
+          "line": 51
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/convert/Property.java",
+          "name": "Property",
+          "line": 72
+        }
+      ],
+      "cases": [],
+      "why": "new org.springframework.core.convert.Property (imported), four-argument constructor"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-core/src/main/java/org/springframework/util/StringUtils.java",
+      "caller": "unqualify",
+      "caller_line": 557,
+      "call_line": 558,
+      "callee": "lastIndexOf",
+      "targets": [],
+      "cases": [],
+      "why": "String.lastIndexOf"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ModelAndViewResolverMethodReturnValueHandler.java",
+      "caller": "handleReturnValue",
+      "caller_line": 82,
+      "call_line": 90,
+      "callee": "getModel",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/method/support/ModelAndViewContainer.java",
+          "name": "getModel",
+          "line": 118
+        },
+        {
+          "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/ModelAndView.java",
+          "name": "getModel",
+          "line": 253
+        }
+      ],
+      "cases": [],
+      "why": "mavContainer.getModel() (ModelAndViewContainer) and mav.getModel() (ModelAndView)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-r2dbc/src/main/java/org/springframework/r2dbc/core/binding/Bindings.java",
+      "caller": "apply",
+      "caller_line": 213,
+      "call_line": 214,
+      "callee": "bind",
+      "targets": [
+        {
+          "file": "spring-r2dbc/src/main/java/org/springframework/r2dbc/core/binding/BindMarker.java",
+          "name": "bind",
+          "line": 48
+        },
+        {
+          "file": "spring-r2dbc/src/main/java/org/springframework/r2dbc/core/binding/IndexedBindMarkers.java",
+          "name": "bind",
+          "line": 86
+        },
+        {
+          "file": "spring-r2dbc/src/main/java/org/springframework/r2dbc/core/binding/NamedBindMarkers.java",
+          "name": "bind",
+          "line": 101
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "inner-anonymous"
+      ],
+      "why": "getBindMarker() (inherited from Binding) returns the BindMarker interface; IndexedBindMarker and NamedBindMarker implement bind; NamedParameterUtils.bind is a private namesake"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-jms/src/main/java/org/springframework/jms/connection/TransactionAwareConnectionFactoryProxy.java",
+      "caller": "createContext",
+      "caller_line": 213,
+      "call_line": 214,
+      "callee": "createContext",
+      "targets": [],
+      "cases": [],
+      "why": "getTargetConnectionFactory() returns jakarta.jms.ConnectionFactory: library, not a recursive call"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/config/WebFluxConfigurerComposite.java",
+      "caller": "configurePathMatching",
+      "caller_line": 98,
+      "call_line": 99,
+      "callee": "forEach",
+      "targets": [],
+      "cases": [],
+      "why": "List.forEach"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/web/service/registry/HttpServiceProxyRegistryFactoryBean.java",
+      "caller": "afterPropertiesSet",
+      "caller_line": 110,
+      "call_line": 112,
+      "callee": "notNull",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/util/Assert.java",
+          "name": "notNull",
+          "line": 180
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "Assert.notNull(Object, String) twice"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-expression/src/main/java/org/springframework/expression/spel/standard/InternalSpelExpressionParser.java",
+      "caller": "maybeEatConstructorReference",
+      "caller_line": 815,
+      "call_line": 839,
+      "callee": "eatToken",
+      "targets": [
+        {
+          "file": "spring-expression/src/main/java/org/springframework/expression/spel/standard/InternalSpelExpressionParser.java",
+          "name": "eatToken",
+          "line": 958
+        }
+      ],
+      "cases": [],
+      "why": "private method of the same class"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/function/SseServerResponse.java",
+      "caller": "complete",
+      "caller_line": 243,
+      "call_line": 252,
+      "callee": "setErrorResult",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/context/request/async/DeferredResult.java",
+          "name": "setErrorResult",
+          "line": 278
+        }
+      ],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "deferredResult field is a DeferredResult<?>"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/http/server/reactive/ServletHttpHandlerAdapter.java",
+      "caller": "delegateComplete",
+      "caller_line": 324,
+      "call_line": 326,
+      "callee": "onComplete",
+      "targets": [],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "jakarta.servlet.AsyncListener.onComplete"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-websocket/src/main/java/org/springframework/web/socket/server/standard/SpringConfigurator.java",
+      "caller": "getEndpointInstance",
+      "caller_line": 63,
+      "call_line": 80,
+      "callee": "findAnnotation",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/annotation/AnnotationUtils.java",
+          "name": "findAnnotation",
+          "line": 570
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "AnnotationUtils.findAnnotation(Class, Class): the most specific of three two-argument overloads (AnnotatedElement, Method, Class)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractBeanDefinition.java",
+      "caller": "overrideFrom",
+      "caller_line": 321,
+      "call_line": 376,
+      "callee": "setSynthetic",
+      "targets": [
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractBeanDefinition.java",
+          "name": "setSynthetic",
+          "line": 1135
+        }
+      ],
+      "cases": [],
+      "why": "method of the same class"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-websocket/src/main/java/org/springframework/web/socket/config/annotation/WebMvcStompWebSocketEndpointRegistration.java",
+      "caller": "setAllowedOrigins",
+      "caller_line": 93,
+      "call_line": 94,
+      "callee": "clear",
+      "targets": [],
+      "cases": [],
+      "why": "List.clear"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/RequestMappingHandlerMapping.java",
+      "caller": "createRequestMappingInfo",
+      "caller_line": 368,
+      "call_line": 374,
+      "callee": "contentType",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/service/annotation/HttpExchange.java",
+          "name": "contentType",
+          "line": 166
+        }
+      ],
+      "cases": [],
+      "why": "httpExchange is an HttpExchange annotation; contentType() is its element"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-beans/src/main/java/org/springframework/beans/factory/xml/AbstractSimpleBeanDefinitionParser.java",
+      "caller": "isEligibleAttribute",
+      "caller_line": 164,
+      "call_line": 165,
+      "callee": "equals",
+      "targets": [],
+      "cases": [],
+      "why": "String.equals"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-test/src/main/java/org/springframework/test/context/aot/MergedContextConfigurationRuntimeHints.java",
+      "caller": "loadGetResourceBasePathMethod",
+      "caller_line": 163,
+      "call_line": 165,
+      "callee": "getMethod",
+      "targets": [],
+      "cases": [],
+      "why": "Class.getMethod"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/web/server/session/InMemoryWebSessionStore.java",
+      "caller": "createWebSession",
+      "caller_line": 139,
+      "call_line": 146,
+      "callee": "boundedElastic",
+      "targets": [],
+      "cases": [],
+      "why": "reactor Schedulers.boundedElastic"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-core/src/main/java/org/springframework/aot/hint/AbstractTypeReference.java",
+      "caller": "hashCode",
+      "caller_line": 92,
+      "call_line": 93,
+      "callee": "getCanonicalName",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/aot/hint/TypeReference.java",
+          "name": "getCanonicalName",
+          "line": 45
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/aot/hint/ReflectionTypeReference.java",
+          "name": "getCanonicalName",
+          "line": 52
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/aot/hint/SimpleTypeReference.java",
+          "name": "getCanonicalName",
+          "line": 82
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/aot/generate/GeneratedTypeReference.java",
+          "name": "getCanonicalName",
+          "line": 51
+        }
+      ],
+      "cases": [
+        "dispatch"
+      ],
+      "why": "implicit this in an abstract class: the abstract TypeReference.getCanonicalName it implements; its three subclasses override it"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/web/context/support/StaticWebApplicationContext.java",
+      "caller": "postProcessBeanFactory",
+      "caller_line": 131,
+      "call_line": 137,
+      "callee": "registerEnvironmentBeans",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/context/support/WebApplicationContextUtils.java",
+          "name": "registerEnvironmentBeans",
+          "line": 218
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "WebApplicationContextUtils.registerEnvironmentBeans with three arguments"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/http/server/reactive/ReactorUriHelper.java",
+      "caller": "createUri",
+      "caller_line": 34,
+      "call_line": 38,
+      "callee": "scheme",
+      "targets": [],
+      "cases": [],
+      "why": "reactor-netty HttpServerRequest.scheme"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-core/src/main/java/org/springframework/core/SimpleAliasRegistry.java",
+      "caller": "resolveAliases",
+      "caller_line": 160,
+      "call_line": 179,
+      "callee": "remove",
+      "targets": [],
+      "cases": [],
+      "why": "Map.remove and List.remove"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-context/src/main/java/org/springframework/context/i18n/LocaleContextThreadLocalAccessor.java",
+      "caller": "getValue",
+      "caller_line": 44,
+      "call_line": 45,
+      "callee": "getLocaleContext",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/context/i18n/LocaleContextHolder.java",
+          "name": "getLocaleContext",
+          "line": 134
+        }
+      ],
+      "cases": [],
+      "why": "static LocaleContextHolder.getLocaleContext()"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/http/server/ServletRequestHeadersAdapter.java",
+      "caller": "equals",
+      "caller_line": 465,
+      "call_line": 466,
+      "callee": "toMultiValueMap",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/server/ServletRequestHeadersAdapter.java",
+          "name": "toMultiValueMap",
+          "line": 469
+        }
+      ],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "private method of the same nested class; ServletResponseHeadersAdapter and CollectionUtils have namesakes"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/web/service/invoker/HttpRequestValues.java",
+      "caller": "addRequestParameter",
+      "caller_line": 408,
+      "call_line": 409,
+      "callee": "initRequestParams",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/service/invoker/HttpRequestValues.java",
+          "name": "initRequestParams",
+          "line": 426
+        }
+      ],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "private method of the nested Builder"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractBeanFactory.java",
+      "caller": "getBean",
+      "caller_line": 231,
+      "call_line": 234,
+      "callee": "doGetBean",
+      "targets": [
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/support/AbstractBeanFactory.java",
+          "name": "doGetBean",
+          "line": 249
+        }
+      ],
+      "cases": [],
+      "why": "protected method of the same class"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-context/src/main/java/org/springframework/scheduling/config/TaskExecutorFactoryBean.java",
+      "caller": "determinePoolSizeRange",
+      "caller_line": 97,
+      "call_line": 105,
+      "callee": "length",
+      "targets": [],
+      "cases": [],
+      "why": "String.length"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-web/src/main/java/org/springframework/http/codec/CodecConfigurerRuntimeHints.java",
+      "caller": "registerHints",
+      "caller_line": 39,
+      "call_line": 42,
+      "callee": "registerTypes",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/aot/hint/ReflectionHints.java",
+          "name": "registerTypes",
+          "line": 185
+        }
+      ],
+      "cases": [],
+      "why": "hints.reflection() returns ReflectionHints (RuntimeHints.reflection)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-context/src/main/java/org/springframework/cache/interceptor/CacheAspectSupport.java",
+      "caller": "executeSynchronized",
+      "caller_line": 431,
+      "call_line": 449,
+      "callee": "exceptionallyCompose",
+      "targets": [],
+      "cases": [],
+      "why": "CompletableFuture.exceptionallyCompose"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/AbstractMessageConverterMethodProcessor.java",
+      "caller": "determineCompatibleMediaTypes",
+      "caller_line": 577,
+      "call_line": 584,
+      "callee": "getMostSpecificMediaType",
+      "targets": [
+        {
+          "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/AbstractMessageConverterMethodProcessor.java",
+          "name": "getMostSpecificMediaType",
+          "line": 595
+        }
+      ],
+      "cases": [],
+      "why": "private method of the same class"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerMapping.java",
+      "caller": "createRequestMappingInfo",
+      "caller_line": 265,
+      "call_line": 292,
+      "callee": "checkMultipleAnnotations",
+      "targets": [
+        {
+          "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerMapping.java",
+          "name": "checkMultipleAnnotations",
+          "line": 336
+        },
+        {
+          "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestMappingHandlerMapping.java",
+          "name": "checkMultipleAnnotations",
+          "line": 345
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "two calls: the two-argument instance overload (line 284) and the four-argument static one (line 292)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "random",
+      "file": "spring-core/src/main/java/org/springframework/util/MultiValueMapAdapter.java",
+      "caller": "addAll",
+      "caller_line": 71,
+      "call_line": 72,
+      "callee": "size",
+      "targets": [],
+      "cases": [
+        "lambda"
+      ],
+      "why": "List.size inside a lambda"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "dispatch",
+      "file": "spring-aop/src/main/java/org/springframework/aop/framework/AbstractAdvisingBeanPostProcessor.java",
+      "caller": "postProcessAfterInitialization",
+      "caller_line": 88,
+      "call_line": 101,
+      "callee": "getAdvisorCount",
+      "targets": [
+        {
+          "file": "spring-aop/src/main/java/org/springframework/aop/framework/Advised.java",
+          "name": "getAdvisorCount",
+          "line": 122
+        },
+        {
+          "file": "spring-aop/src/main/java/org/springframework/aop/framework/AdvisedSupport.java",
+          "name": "getAdvisorCount",
+          "line": 297
+        }
+      ],
+      "cases": [
+        "dispatch"
+      ],
+      "why": "advised is an Advised (instanceof pattern variable); AdvisedSupport overrides the default method"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "dispatch",
+      "file": "spring-web/src/main/java/org/springframework/web/service/registry/AbstractHttpServiceRegistrar.java",
+      "caller": "isCandidateComponent",
+      "caller_line": 349,
+      "call_line": 350,
+      "callee": "getMetadata",
+      "targets": [
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/annotation/AnnotatedBeanDefinition.java",
+          "name": "getMetadata",
+          "line": 42
+        },
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/annotation/AnnotatedGenericBeanDefinition.java",
+          "name": "getMetadata",
+          "line": 98
+        },
+        {
+          "file": "spring-context/src/main/java/org/springframework/context/annotation/ScannedGenericBeanDefinition.java",
+          "name": "getMetadata",
+          "line": 69
+        },
+        {
+          "file": "spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassBeanDefinitionReader.java",
+          "name": "getMetadata",
+          "line": 484
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "inner-anonymous"
+      ],
+      "why": "parameter of interface type AnnotatedBeanDefinition; its three implementations override getMetadata (ConfigurationClass, SimpleAnnotationMetadataReadingVisitor and others are namesakes)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "dispatch",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/DefaultWebClient.java",
+      "caller": "uri",
+      "caller_line": 232,
+      "call_line": 234,
+      "callee": "toUriString",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/util/UriBuilder.java",
+          "name": "toUriString",
+          "line": 282
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/util/DefaultUriBuilderFactory.java",
+          "name": "toUriString",
+          "line": 468
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/util/UriComponentsBuilder.java",
+          "name": "toUriString",
+          "line": 350
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "inner-anonymous"
+      ],
+      "why": "local of interface type UriBuilder; DefaultUriBuilder and UriComponentsBuilder implement it; UriComponents.toUriString is a namesake on another hierarchy"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "dispatch",
+      "file": "spring-core/src/main/java/org/springframework/asm/ClassVisitor.java",
+      "caller": "visitField",
+      "caller_line": 347,
+      "call_line": 354,
+      "callee": "visitField",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/asm/ClassVisitor.java",
+          "name": "visitField",
+          "line": 347
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/asm/ClassWriter.java",
+          "name": "visitField",
+          "line": 440
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/cglib/core/ClassEmitter.java",
+          "name": "visitField",
+          "line": 280
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/cglib/transform/AbstractClassFilterTransformer.java",
+          "name": "visitField",
+          "line": 78
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/cglib/transform/ClassVisitorTee.java",
+          "name": "visitField",
+          "line": 60
+        }
+      ],
+      "cases": [
+        "dispatch"
+      ],
+      "why": "cv is a ClassVisitor field: delegation to ClassVisitor.visitField (bound to itself); subclasses override it"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "dispatch",
+      "file": "spring-webflux/src/main/java/org/springframework/web/reactive/result/condition/ParamsRequestCondition.java",
+      "caller": "matchValue",
+      "caller_line": 172,
+      "call_line": 174,
+      "callee": "getRequest",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/server/ServerWebExchange.java",
+          "name": "getRequest",
+          "line": 65
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/server/ServerWebExchangeDecorator.java",
+          "name": "getRequest",
+          "line": 67
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/server/adapter/DefaultServerWebExchange.java",
+          "name": "getRequest",
+          "line": 210
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/server/DefaultServerWebExchangeBuilder.java",
+          "name": "getRequest",
+          "line": 105
+        },
+        {
+          "file": "spring-webflux/src/main/java/org/springframework/web/reactive/function/server/DefaultServerRequestBuilder.java",
+          "name": "getRequest",
+          "line": 391
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "inner-anonymous"
+      ],
+      "why": "parameter of interface type ServerWebExchange; its implementations override getRequest"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "overload",
+      "file": "spring-test/src/main/java/org/springframework/test/context/support/TestPropertySourceUtils.java",
+      "caller": "findRepeatableAnnotations",
+      "caller_line": 411,
+      "call_line": 415,
+      "callee": "findRepeatableAnnotations",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/context/support/TestPropertySourceUtils.java",
+          "name": "findRepeatableAnnotations",
+          "line": 419
+        }
+      ],
+      "cases": [
+        "overload",
+        "generics"
+      ],
+      "why": "the two-argument overload calls the four-argument one, not itself"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "overload",
+      "file": "spring-test/src/main/java/org/springframework/test/context/jdbc/SqlScriptsTestExecutionListener.java",
+      "caller": "executeSqlScripts",
+      "caller_line": 219,
+      "call_line": 224,
+      "callee": "executeSqlScripts",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/context/jdbc/SqlScriptsTestExecutionListener.java",
+          "name": "executeSqlScripts",
+          "line": 281
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "four calls, all with a Set<Sql> first: the (Set, TestContext, ExecutionPhase, boolean) overload, not the (Sql, ExecutionPhase, TestContext, boolean) one of the same arity, nor the caller itself"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "overload",
+      "file": "spring-beans/src/main/java/org/springframework/beans/factory/annotation/InitDestroyAnnotationBeanPostProcessor.java",
+      "caller": "postProcessBeforeDestruction",
+      "caller_line": 234,
+      "call_line": 235,
+      "callee": "findLifecycleMetadata",
+      "targets": [
+        {
+          "file": "spring-beans/src/main/java/org/springframework/beans/factory/annotation/InitDestroyAnnotationBeanPostProcessor.java",
+          "name": "findLifecycleMetadata",
+          "line": 261
+        }
+      ],
+      "cases": [
+        "overload"
+      ],
+      "why": "the one-argument overload (Class), not (RootBeanDefinition, Class)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "overload",
+      "file": "spring-core/src/main/java/org/springframework/core/io/buffer/DataBuffer.java",
+      "caller": "toByteBuffer",
+      "caller_line": 419,
+      "call_line": 420,
+      "callee": "toByteBuffer",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/DataBuffer.java",
+          "name": "toByteBuffer",
+          "line": 435
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/DataBufferWrapper.java",
+          "name": "toByteBuffer",
+          "line": 212
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/DefaultDataBuffer.java",
+          "name": "toByteBuffer",
+          "line": 401
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/JettyVirtualDataBuffer.java",
+          "name": "toByteBuffer",
+          "line": 228
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/NettyDataBuffer.java",
+          "name": "toByteBuffer",
+          "line": 306
+        },
+        {
+          "file": "spring-webflux/src/main/java/org/springframework/web/reactive/socket/adapter/JettyWebSocketHandlerAdapter.java",
+          "name": "toByteBuffer",
+          "line": 278
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "overload"
+      ],
+      "why": "default toByteBuffer() calls the abstract toByteBuffer(int, int) on this; implementations override it"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "overload",
+      "file": "spring-context/src/main/java/org/springframework/context/support/ResourceBundleMessageSource.java",
+      "caller": "newBundle",
+      "caller_line": 390,
+      "call_line": 417,
+      "callee": "loadBundle",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/context/support/ResourceBundleMessageSource.java",
+          "name": "loadBundle",
+          "line": 274
+        },
+        {
+          "file": "spring-context/src/main/java/org/springframework/context/support/ResourceBundleMessageSource.java",
+          "name": "loadBundle",
+          "line": 296
+        }
+      ],
+      "cases": [
+        "overload",
+        "inner-anonymous",
+        "inherited-library"
+      ],
+      "why": "from the inner MessageSourceControl (extends ResourceBundle.Control): the outer class's loadBundle(Reader) at line 417 and loadBundle(InputStream) at line 422"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "generics",
+      "file": "spring-web/src/main/java/org/springframework/http/codec/multipart/MultipartWriterSupport.java",
+      "caller": "generatePartHeaders",
+      "caller_line": 149,
+      "call_line": 154,
+      "callee": "getBytes",
+      "targets": [],
+      "cases": [
+        "generics"
+      ],
+      "why": "entry is a Map.Entry<String, List<String>>: getKey() is a String, String.getBytes"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "generics",
+      "file": "spring-context/src/main/java/org/springframework/scheduling/support/QuartzCronField.java",
+      "caller": "weekdayNearestTo",
+      "caller_line": 259,
+      "call_line": 285,
+      "callee": "plus",
+      "targets": [],
+      "cases": [
+        "generics",
+        "lambda"
+      ],
+      "why": "temporal has a type-parameter bound in java.time (Temporal): library plus"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "generics",
+      "file": "spring-jms/src/main/java/org/springframework/jms/config/AbstractJmsListenerContainerFactory.java",
+      "caller": "createListenerContainer",
+      "caller_line": 208,
+      "call_line": 260,
+      "callee": "setObservationRegistry",
+      "targets": [
+        {
+          "file": "spring-jms/src/main/java/org/springframework/jms/listener/AbstractMessageListenerContainer.java",
+          "name": "setObservationRegistry",
+          "line": 563
+        }
+      ],
+      "cases": [
+        "generics"
+      ],
+      "why": "instance is a C, bound AbstractMessageListenerContainer; the factory's own setObservationRegistry and JmsTemplate's are namesakes"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "generics",
+      "file": "spring-web/src/main/java/org/springframework/http/converter/multipart/MultipartParser.java",
+      "caller": "parseHeaders",
+      "caller_line": 402,
+      "call_line": 406,
+      "callee": "factory",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/DataBuffer.java",
+          "name": "factory",
+          "line": 69
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/DataBufferWrapper.java",
+          "name": "factory",
+          "line": 58
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/DefaultDataBuffer.java",
+          "name": "factory",
+          "line": 103
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/JettyVirtualDataBuffer.java",
+          "name": "factory",
+          "line": 85
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/io/buffer/NettyDataBuffer.java",
+          "name": "factory",
+          "line": 68
+        },
+        {
+          "file": "spring-webflux/src/main/java/org/springframework/web/reactive/socket/adapter/JettyWebSocketHandlerAdapter.java",
+          "name": "factory",
+          "line": 135
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "generics",
+        "inner-anonymous"
+      ],
+      "why": "buffers is a List<DataBuffer>: get(0) is a DataBuffer, DataBuffer.factory() and its overrides"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "generics",
+      "file": "spring-web/src/main/java/org/springframework/http/server/reactive/AbstractListenerWriteFlushProcessor.java",
+      "caller": "handleSourceCompleted",
+      "caller_line": 336,
+      "call_line": 346,
+      "callee": "onComplete",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/server/reactive/AbstractListenerWriteFlushProcessor.java",
+          "name": "onComplete",
+          "line": 411
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/server/reactive/AbstractListenerWriteFlushProcessor.java",
+          "name": "onComplete",
+          "line": 273
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/server/reactive/AbstractListenerWriteFlushProcessor.java",
+          "name": "onComplete",
+          "line": 297
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/server/reactive/AbstractListenerWriteFlushProcessor.java",
+          "name": "onComplete",
+          "line": 328
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/server/reactive/AbstractListenerWriteFlushProcessor.java",
+          "name": "onComplete",
+          "line": 373
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/server/reactive/AbstractListenerWriteFlushProcessor.java",
+          "name": "onComplete",
+          "line": 388
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "generics",
+        "inner-anonymous"
+      ],
+      "why": "state is an AtomicReference<State>: get() is a State, State.onComplete(processor) and its overrides in the enum constant bodies; the processor's no-argument onComplete is a namesake"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inner-anonymous",
+      "file": "spring-test/src/main/java/org/springframework/test/web/servlet/client/DefaultRestTestClient.java",
+      "caller": "uri",
+      "caller_line": 200,
+      "call_line": 202,
+      "callee": "uri",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/client/RestClient.java",
+          "name": "uri",
+          "line": 554
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/client/DefaultRestClient.java",
+          "name": "uri",
+          "line": 313
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "overload",
+        "generics",
+        "inner-anonymous"
+      ],
+      "why": "requestHeadersUriSpec is a RestClient.RequestBodyUriSpec: uri(URI) from UriSpec<S>, implemented by DefaultRestClient's DefaultRequestBodyUriSpec; not the caller itself"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inner-anonymous",
+      "file": "spring-beans/src/main/java/org/springframework/beans/BeanUtils.java",
+      "caller": "instantiateClass",
+      "caller_line": 906,
+      "call_line": 918,
+      "callee": "getParameters",
+      "targets": [],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "in the nested KotlinDelegate: kotlin.reflect.KFunction.getParameters"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inner-anonymous",
+      "file": "spring-core/src/main/java/org/springframework/core/io/buffer/DataBufferUtils.java",
+      "caller": "failed",
+      "caller_line": 765,
+      "call_line": 770,
+      "callee": "iterator",
+      "targets": [],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "in the nested ReadCompletionHandler: the implicit accessor of the record Attachment, which has no declaration"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inner-anonymous",
+      "file": "spring-web/src/main/java/org/springframework/http/ResponseCookie.java",
+      "caller": "validatePath",
+      "caller_line": 426,
+      "call_line": 433,
+      "callee": "IllegalArgumentException",
+      "targets": [],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "in the nested Rfc6265Utils: java.lang.IllegalArgumentException"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inner-anonymous",
+      "file": "spring-core/src/main/java/org/springframework/core/annotation/TypeMappedAnnotations.java",
+      "caller": "tryAdvance",
+      "caller_line": 567,
+      "call_line": 591,
+      "callee": "accept",
+      "targets": [],
+      "cases": [
+        "inner-anonymous"
+      ],
+      "why": "in the inner AggregatesSpliterator: java.util.function.Consumer.accept"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "lambda",
+      "file": "spring-web/src/main/java/org/springframework/http/client/reactive/JettyClientHttpRequest.java",
+      "caller": "writeWith",
+      "caller_line": 93,
+      "call_line": 99,
+      "callee": "getContentType",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/client/reactive/JettyClientHttpRequest.java",
+          "name": "getContentType",
+          "line": 129
+        }
+      ],
+      "cases": [
+        "lambda"
+      ],
+      "why": "own private getContentType() inside a lambda; the many other getContentType methods are namesakes"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "lambda",
+      "file": "spring-context/src/main/java/org/springframework/cache/interceptor/CacheAspectSupport.java",
+      "caller": "executeSynchronized",
+      "caller_line": 1134,
+      "call_line": 1161,
+      "callee": "invokeOperation",
+      "targets": [
+        {
+          "file": "spring-context/src/main/java/org/springframework/cache/interceptor/CacheAspectSupport.java",
+          "name": "invokeOperation",
+          "line": 408
+        }
+      ],
+      "cases": [
+        "inner-anonymous",
+        "lambda"
+      ],
+      "why": "from the inner ReactiveCachingHandler, inside a lambda: the outer CacheAspectSupport.invokeOperation"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "lambda",
+      "file": "spring-web/src/main/java/org/springframework/http/converter/multipart/PartGenerator.java",
+      "caller": "switchToFile",
+      "caller_line": 322,
+      "call_line": 330,
+      "callee": "onBody",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/converter/multipart/PartGenerator.java",
+          "name": "onBody",
+          "line": 406
+        }
+      ],
+      "cases": [
+        "inner-anonymous",
+        "lambda"
+      ],
+      "why": "fileState is a local FileState: its onBody, in a lambda and directly; the other State classes' onBody are namesakes"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "lambda",
+      "file": "spring-messaging/src/main/java/org/springframework/messaging/handler/annotation/reactive/PayloadMethodArgumentResolver.java",
+      "caller": "decodeContent",
+      "caller_line": 214,
+      "call_line": 245,
+      "callee": "decode",
+      "targets": [
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/codec/Decoder.java",
+          "name": "decode",
+          "line": 93
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/codec/AbstractCharSequenceDecoder.java",
+          "name": "decode",
+          "line": 180
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/codec/ByteArrayDecoder.java",
+          "name": "decode",
+          "line": 49
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/codec/ByteBufferDecoder.java",
+          "name": "decode",
+          "line": 52
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/codec/DataBufferDecoder.java",
+          "name": "decode",
+          "line": 67
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/codec/NettyByteBufDecoder.java",
+          "name": "decode",
+          "line": 52
+        },
+        {
+          "file": "spring-core/src/main/java/org/springframework/core/codec/ResourceDecoder.java",
+          "name": "decode",
+          "line": 67
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/AbstractJacksonDecoder.java",
+          "name": "decode",
+          "line": 183
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/json/AbstractJackson2Decoder.java",
+          "name": "decode",
+          "line": 207
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/json/GsonDecoder.java",
+          "name": "decode",
+          "line": 89
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/protobuf/ProtobufDecoder.java",
+          "name": "decode",
+          "line": 156
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/xml/Jaxb2XmlDecoder.java",
+          "name": "decode",
+          "line": 178
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/http/codec/protobuf/ProtobufJsonDecoder.java",
+          "name": "decode",
+          "line": 142
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "overload",
+        "lambda"
+      ],
+      "why": "Decoder<?> loop variable, decode(DataBuffer, ResolvableType, MimeType, Map) inside lambdas, and its overrides; the Flux decode(Publisher, ...) overloads have the same arity and are not called"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "lambda",
+      "file": "spring-test/src/main/java/org/springframework/test/web/servlet/result/JsonPathResultMatchers.java",
+      "caller": "isEmpty",
+      "caller_line": 147,
+      "call_line": 148,
+      "callee": "getContent",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/web/servlet/result/JsonPathResultMatchers.java",
+          "name": "getContent",
+          "line": 238
+        }
+      ],
+      "cases": [
+        "lambda"
+      ],
+      "why": "own private getContent(MvcResult) inside the returned lambda"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "static-import",
+      "file": "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandlerTests.java",
+      "caller": "supportsRestController",
+      "caller_line": 106,
+      "call_line": 119,
+      "callee": "on",
+      "targets": [
+        {
+          "file": "spring-web/src/testFixtures/java/org/springframework/web/testfixture/method/ResolvableMethod.java",
+          "name": "on",
+          "line": 260
+        }
+      ],
+      "cases": [
+        "static-import"
+      ],
+      "why": "import static ...testfixture.method.ResolvableMethod.on (test fixtures of spring-web)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "static-import",
+      "file": "spring-test/src/test/java/org/springframework/test/web/servlet/samples/standalone/resultmatchers/XpathAssertionTests.java",
+      "caller": "booleanCase",
+      "caller_line": 141,
+      "call_line": 145,
+      "callee": "get",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/web/servlet/request/MockMvcRequestBuilders.java",
+          "name": "get",
+          "line": 56
+        }
+      ],
+      "cases": [
+        "overload",
+        "static-import"
+      ],
+      "why": "import static MockMvcRequestBuilders.get: get(String, Object...), not get(URI)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "static-import",
+      "file": "spring-web/src/test/java/org/springframework/web/server/adapter/DefaultServerWebExchangeCheckNotModifiedTests.java",
+      "caller": "checkModifiedTimestamp",
+      "caller_line": 99,
+      "call_line": 101,
+      "callee": "get",
+      "targets": [
+        {
+          "file": "spring-web/src/testFixtures/java/org/springframework/web/testfixture/http/server/reactive/MockServerHttpRequest.java",
+          "name": "get",
+          "line": 122
+        }
+      ],
+      "cases": [
+        "static-import"
+      ],
+      "why": "import static ...testfixture.http.server.reactive.MockServerHttpRequest.get"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "static-import",
+      "file": "spring-test/src/test/java/org/springframework/test/web/servlet/samples/standalone/resultmatchers/HeaderAssertionTests.java",
+      "caller": "stringWithMatcherAndCorrectResponseHeaderValue",
+      "caller_line": 96,
+      "call_line": 98,
+      "callee": "header",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/web/servlet/result/MockMvcResultMatchers.java",
+          "name": "header",
+          "line": 175
+        },
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/web/servlet/request/AbstractMockHttpServletRequestBuilder.java",
+          "name": "header",
+          "line": 387
+        }
+      ],
+      "cases": [
+        "static-import"
+      ],
+      "why": "the static import MockMvcResultMatchers.header() (line 98) and get(...).header(name, value) on the request builder (line 97)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "static-import",
+      "file": "spring-test/src/test/java/org/springframework/test/context/aot/samples/web/WebSpringVintageTests.java",
+      "caller": "test",
+      "caller_line": 62,
+      "call_line": 68,
+      "callee": "get",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/web/servlet/request/MockMvcRequestBuilders.java",
+          "name": "get",
+          "line": 56
+        }
+      ],
+      "cases": [
+        "overload",
+        "static-import"
+      ],
+      "why": "import static MockMvcRequestBuilders.get: get(String, Object...)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "injected-field",
+      "file": "spring-context/src/test/java/org/springframework/context/annotation/CommonAnnotationBeanPostProcessorTests.java",
+      "caller": "lazyResolutionWithResourceField",
+      "caller_line": 450,
+      "call_line": 456,
+      "callee": "setName",
+      "targets": [
+        {
+          "file": "spring-beans/src/testFixtures/java/org/springframework/beans/testfixture/beans/ITestBean.java",
+          "name": "setName",
+          "line": 34
+        },
+        {
+          "file": "spring-beans/src/testFixtures/java/org/springframework/beans/testfixture/beans/TestBean.java",
+          "name": "setName",
+          "line": 182
+        },
+        {
+          "file": "spring-context/src/test/java/org/springframework/jmx/export/annotation/AnnotationTestBean.java",
+          "name": "setName",
+          "line": 58
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "injected-field"
+      ],
+      "why": "bean.testBean is the @Resource @Lazy ITestBean field of LazyResourceFieldInjectionBean: ITestBean.setName; TestBean and AnnotationTestBean implement it"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "injected-field",
+      "file": "spring-test/src/test/java/org/springframework/test/web/servlet/samples/context/JavaConfigTests.java",
+      "caller": "verifyRootWacSupport",
+      "caller_line": 140,
+      "call_line": 149,
+      "callee": "getServletContext",
+      "targets": [
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/context/WebApplicationContext.java",
+          "name": "getServletContext",
+          "line": 103
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/context/support/AbstractRefreshableWebApplicationContext.java",
+          "name": "getServletContext",
+          "line": 97
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/context/support/GenericWebApplicationContext.java",
+          "name": "getServletContext",
+          "line": 132
+        },
+        {
+          "file": "spring-web/src/main/java/org/springframework/web/context/support/StaticWebApplicationContext.java",
+          "name": "getServletContext",
+          "line": 73
+        },
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/web/servlet/setup/StubWebApplicationContext.java",
+          "name": "getServletContext",
+          "line": 105
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "injected-field"
+      ],
+      "why": "wac is an @Autowired WebApplicationContext field (and root a local of that type): WebApplicationContext.getServletContext and its implementations; WebApplicationObjectSupport, ServletContextResource and others are namesakes"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "injected-field",
+      "file": "spring-test/src/test/java/org/springframework/test/context/bean/override/mockito/typelevel/MockitoBeansByTypeIntegrationTests.java",
+      "caller": "configureMocks",
+      "caller_line": 78,
+      "call_line": 93,
+      "callee": "greeting",
+      "targets": [
+        {
+          "file": "spring-test/src/test/java/org/springframework/test/context/bean/override/mockito/typelevel/Service.java",
+          "name": "greeting",
+          "line": 20
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "injected-field"
+      ],
+      "why": "@Autowired fields of types Service01..Service07 and the constructor-injected ConstructorService01, all extending Service, which declares greeting()"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "injected-field",
+      "file": "spring-orm/src/test/java/org/springframework/orm/jpa/hibernate/HibernateNativeEntityManagerFactoryIntegrationTests.java",
+      "caller": "sharedSession",
+      "caller_line": 105,
+      "call_line": 119,
+      "callee": "createQuery",
+      "targets": [],
+      "cases": [
+        "injected-field"
+      ],
+      "why": "@Autowired Hibernate Session and StatelessSession fields: library createQuery"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "injected-field",
+      "file": "spring-test/src/test/java/org/springframework/test/context/aot/samples/bean/override/MockitoBeanJupiterTests.java",
+      "caller": "test",
+      "caller_line": 59,
+      "call_line": 61,
+      "callee": "generateMessage",
+      "targets": [
+        {
+          "file": "spring-test/src/test/java/org/springframework/test/context/aot/samples/common/MessageService.java",
+          "name": "generateMessage",
+          "line": 25
+        },
+        {
+          "file": "spring-test/src/test/java/org/springframework/test/context/aot/samples/common/DefaultMessageService.java",
+          "name": "generateMessage",
+          "line": 26
+        },
+        {
+          "file": "spring-test/src/test/java/org/springframework/test/context/aot/samples/common/SpanishMessageService.java",
+          "name": "generateMessage",
+          "line": 26
+        },
+        {
+          "file": "spring-test/src/test/java/org/springframework/test/context/aot/samples/management/ManagementMessageService.java",
+          "name": "generateMessage",
+          "line": 32
+        }
+      ],
+      "cases": [
+        "dispatch",
+        "injected-field"
+      ],
+      "why": "@MockitoBean MessageService field: MessageService.generateMessage and its implementations"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inherited-library",
+      "file": "spring-core/src/main/java/org/springframework/util/ConcurrentReferenceHashMap.java",
+      "caller": "release",
+      "caller_line": 1329,
+      "call_line": 1330,
+      "callee": "enqueue",
+      "targets": [],
+      "cases": [
+        "inner-anonymous",
+        "inherited-library"
+      ],
+      "why": "the nested SoftEntryReference extends java.lang.ref.SoftReference: enqueue is inherited from java.lang.ref.Reference; the project Reference interface it implements does not declare it"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inherited-library",
+      "file": "spring-test/src/main/java/org/springframework/mock/web/MockCookie.java",
+      "caller": "toString",
+      "caller_line": 206,
+      "call_line": 211,
+      "callee": "getDomain",
+      "targets": [],
+      "cases": [
+        "inherited-library"
+      ],
+      "why": "MockCookie extends jakarta.servlet.http.Cookie and does not override getDomain"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inherited-library",
+      "file": "spring-web/src/main/java/org/springframework/http/codec/multipart/MultipartParser.java",
+      "caller": "emitComplete",
+      "caller_line": 186,
+      "call_line": 187,
+      "callee": "cancel",
+      "targets": [],
+      "cases": [
+        "inherited-library"
+      ],
+      "why": "MultipartParser extends reactor's BaseSubscriber: cancel is inherited; the project's many cancel methods are namesakes"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inherited-library",
+      "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/tags/ArgumentTag.java",
+      "caller": "doEndTag",
+      "caller_line": 73,
+      "call_line": 84,
+      "callee": "findAncestorWithClass",
+      "targets": [],
+      "cases": [
+        "inherited-library"
+      ],
+      "why": "static TagSupport.findAncestorWithClass, inherited through jakarta BodyTagSupport"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "inherited-library",
+      "file": "spring-beans/src/main/java/org/springframework/beans/propertyeditors/StringTrimmerEditor.java",
+      "caller": "getAsText",
+      "caller_line": 85,
+      "call_line": 86,
+      "callee": "getValue",
+      "targets": [],
+      "cases": [
+        "inherited-library"
+      ],
+      "why": "java.beans.PropertyEditorSupport.getValue, not overridden"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "method-ref",
+      "file": "spring-web/src/main/java/org/springframework/web/client/DefaultRestClientBuilder.java",
+      "caller": "messageConverters",
+      "caller_line": 377,
+      "call_line": 380,
+      "callee": "add",
+      "targets": [],
+      "cases": [
+        "method-ref"
+      ],
+      "why": "converters::add: java.util.List.add"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "method-ref",
+      "file": "spring-webmvc/src/main/java/org/springframework/web/servlet/function/RequestPredicates.java",
+      "caller": "ParamPredicate",
+      "caller_line": 992,
+      "call_line": 996,
+      "callee": "equals",
+      "targets": [],
+      "cases": [
+        "inner-anonymous",
+        "method-ref"
+      ],
+      "why": "value::equals: String.equals"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "method-ref",
+      "file": "spring-messaging/src/main/java/org/springframework/messaging/simp/stomp/StompHeaders.java",
+      "caller": "addAll",
+      "caller_line": 448,
+      "call_line": 449,
+      "callee": "addAll",
+      "targets": [
+        {
+          "file": "spring-messaging/src/main/java/org/springframework/messaging/simp/stomp/StompHeaders.java",
+          "name": "addAll",
+          "line": 442
+        }
+      ],
+      "cases": [
+        "overload",
+        "method-ref"
+      ],
+      "why": "this::addAll as a BiConsumer: addAll(String, List), not the caller addAll(MultiValueMap)"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "method-ref",
+      "file": "spring-test/src/main/java/org/springframework/test/web/servlet/client/XpathAssertions.java",
+      "caller": "getResponseHeaders",
+      "caller_line": 46,
+      "call_line": 47,
+      "callee": "getResponseHeaders",
+      "targets": [
+        {
+          "file": "spring-test/src/main/java/org/springframework/test/web/servlet/client/ExchangeResult.java",
+          "name": "getResponseHeaders",
+          "line": 148
+        }
+      ],
+      "cases": [
+        "method-ref"
+      ],
+      "why": "ExchangeResult::getResponseHeaders (same package), not the caller itself or HeaderAssertions.getResponseHeaders"
+    },
+    {
+      "repo": "spring-framework",
+      "stratum": "method-ref",
+      "file": "spring-web/src/main/java/org/springframework/web/service/registry/AbstractHttpServiceRegistrar.java",
+      "caller": "register",
+      "caller_line": 301,
+      "call_line": 302,
+      "callee": "getName",
+      "targets": [],
+      "cases": [
+        "inner-anonymous",
+        "method-ref"
+      ],
+      "why": "Class::getName"
+    }
+  ]
+}

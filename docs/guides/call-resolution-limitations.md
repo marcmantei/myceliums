@@ -153,6 +153,33 @@ The gold fixtures cannot show how the rules generalise. Two checks on real code:
 
 The miss: Hono's `Context.redirect` calls `this.newResponse(...)`, and both are class fields holding arrow functions, which the TypeScript extractor does not extract as methods. The wrong edge: flask's `app.send_static_file(...)` on an untyped `app` fixture is linked to both `Flask.send_static_file` and `Blueprint.send_static_file` (`ambiguous`). These labels are an agent's, not yet reviewed; 22 positive pairs give wide intervals.
 
+**The Java set** (`held-out/java-spring.json`, #177): spring-framework v7.1.0, 105 pairs drawn by `sample_java_sites.py` (seed 177) — 60 at random from the production sources, 5 per hard Java case — and traced by reading the code. 100 count towards the totals (the 5 method references are reported apart), 61 of them with a project target. Before #177 `myc analyze` did not finish on this repository: resolving `class X extends Outer.Base` looked `Outer` up among X's own members, which resolved X's bases again with the recursion depth reset to 0, until the stack overflowed (after parsing, 5 s in). The rows below are with that fixed, then with the five other fixes of #177:
+
+| | recall | precision |
+|---|---:|---:|
+| `origin/main` | — (stack overflow) | — |
+| crash fixed | 47 / 61 = 0.77 (0.65–0.86) | 52 / 58 = 0.90 (0.79–0.95) |
+| all #177 fixes | **56 / 61 = 0.92 (0.82–0.96)** | **61 / 69 = 0.88 (0.79–0.94)** |
+
+The five other fixes: annotation elements are methods (`ann.methodMode()` had no target); a Java local or field does not hide a method of the same name (`int suspend = suspend(tx)`, `hints.reflection()` where the class also has a field `reflection`); `Outer.this.m()` is a call on the enclosing instance; a varargs overload takes any number of trailing arguments (`get("/")` was bound to `get(URI)` alone, because `get(String, Object...)` had no parameter count); a bodiless method whose annotations stand on their own line keeps its parameter count. Per case, after the fixes (a pair can be several cases; 95% Wilson intervals in the `graph-eval` output):
+
+| case | pairs | recall | precision |
+|---|---:|---:|---:|
+| interface / abstract dispatch | 18 | 15 / 18 | 16 / 17 |
+| overloads | 19 | 16 / 19 | 19 / 26 |
+| generics | 7 | 1 / 5 | 1 / 2 |
+| nested and anonymous classes | 27 | 14 / 17 | 16 / 16 |
+| lambdas | 8 | 6 / 6 | 7 / 9 |
+| static imports | 5 | 5 / 5 | 5 / 7 |
+| Spring-injected fields | 5 | 4 / 4 | 4 / 4 |
+| library base classes | 6 | 1 / 1 | 2 / 2 |
+| none of these | 39 | 16 / 16 | 17 / 17 |
+| method references (not counted) | 5 | 0 / 2 | — |
+
+What is left: 7 of the 8 wrong edges are overloads with the same number of parameters (`Assert.notNull(x, "msg")` is linked to both `notNull(Object, String)` and `notNull(Object, Supplier)`, `ambiguous`); the eighth is a lambda parameter of unknown type matched by name. 3 of the 5 misses are receivers typed through generics (`List<DataBuffer>.get(0).factory()`, `C extends AbstractMessageListenerContainer`), 2 are overload sets of three or more with the same arity, which get no edge. Method references produce no edge at all. Dispatch is linked to the declaration the receiver binds, as everywhere, and the gold accepts that: an implementation's callers through the interface stay invisible, which matters in interface-heavy Java code. The labels are an agent's, not reviewed yet.
+
+**Cost on spring-framework** (release build, embeddings off, one run on a shared machine): 9,688 files, 144,051 symbols, 158,733 CALLS edges (433,905 relationships), 181,592 call sites linked and 342,129 not (311,711 into libraries); discover 0.5 s, parse 5.0 s, resolve and store 18.4 s, communities 3.1 s, processes 0.9 s; 30.4 s wall, 3.06 GB peak RSS (sampled once a second: 0.94 GB after parsing, 1.34 GB while resolving, 1.87 GB for communities).
+
 **Whole-repository changes** (CALLS edges, each repository analyzed on its own):
 
 | repository | language | edges before | after | after: exact / import / name-match / ambiguous |
@@ -179,7 +206,7 @@ No type inference: a receiver's type is known only when a declaration in view sa
 | TypeScript / JavaScript | call forms, `new`, `super(...)`; named, default and namespace imports, `require`, `export … from` re-exports; parameter, variable and field annotations, constructor parameter properties, `this.x = …`; declared return types; `extends`/`implements`; interface and abstract methods | inferred types (`const x = f()` where `f` declares no return type); types of destructured values; class fields holding arrow functions are not methods (no symbol, no caller); calls inside top-level arrow functions passed as arguments (`describe`/`it` callbacks) have no named caller |
 | Go | call forms; import paths to package directories, aliases, dot imports; receivers, parameters, `:=`/`var` declarations, composite literals, struct fields; result types; embedding; interface method sets | interface dispatch links the interface method, not implementations; type parameters; method values; variables holding closures; build tags (a type declared in two variant files: calls inside each file stay in it, a call from elsewhere links one variant) |
 | Rust | call forms, paths (`Type::f`, `module::f`, `Self::f`); `use` paths, `mod`; parameters, `let` bindings, statics and consts, struct fields; return types (`-> Self`); `impl Trait for Type` (trait default methods); calls written in macro arguments (bare calls and `self.m()`) | trait dispatch on generic `T: Trait` and trait objects beyond the trait's declaration; methods reached through `Deref` (`Box`, `Rc`); other calls inside macros; trait impls for library types |
-| Java | call forms, `new`, `super(...)`; class, static and wildcard imports, same-package classes; parameters, locals, `var`, fields, record components; return types; `extends`/`implements`; implicit `this`; overloads by argument count | overloads with the same count (needs argument types); generics; members inherited from library classes; static wildcard imports; anonymous classes |
+| Java | call forms, `new`, `super(...)`; class, static and wildcard imports, same-package classes; parameters, locals, `var`, fields, record components; return types; `extends`/`implements`; implicit `this`, `Outer.this`; annotation elements; overloads by argument count, varargs included; methods apart from variables and fields of the same name | overloads with the same count (needs argument types); generics (type arguments, type-parameter bounds); method references; types of lambda parameters; members inherited from library classes; static wildcard imports |
 | other languages | caller by position, language family, scope preference (file, imports, directory, family) | call forms, receivers and bindings: a call on an object may link to any function or method of that name; their accuracy is not measured |
 
 For every language: dynamic dispatch is linked to the statically bound declaration (`self.render_row()` in a base class goes to the base class's `render_row`, not to overrides; `sink.write()` on a `Sink` interface goes to `Sink.write`, not to `ConsoleSink.write`). So **an implementation of an interface, trait or abstract method gets no callers from calls made through the interface**: `find_callers` and `impact_of_change` on `ConsoleSink.write` miss them — look at the interface method's callers too. Calls through function values, callbacks, reflection and dynamic imports have no static target and no edge.
@@ -213,5 +240,5 @@ A missing edge is now the more likely error, especially in untyped code: a metho
 - Implementations for interface and trait dispatch (today the declaration is the target).
 - Return types without annotations: a function whose body returns a constructor call (`return cls(...)`) could type its result.
 - Call forms and bindings for C/C++, C#, Kotlin, Swift and the other extractors.
-- A human review of the gold labels, and a gold set drawn from a real repository rather than written fixtures.
+- A human review of the gold labels (the Java held-out set of #177 has none yet).
 - Optional LSP enrichment for compiler-grade resolution.

@@ -79,6 +79,35 @@ from those callers to symbols of that name — and prints it after the gate.
 **It is never gated**: the pairs are few, and an agent labelled them (checked
 in #164 under an owner policy; see "Review status"). Numbers: `docs/guides/call-resolution-limitations.md`.
 
+## Held-out Java set (#177)
+
+`held-out/java-spring.json` measures Java CALLS edges on a large real
+repository: spring-framework at the v7.1.0 release
+(`f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4`, ~9,700 Java and Kotlin files).
+`held-out/sample_java_sites.py` (seed 177, a seeded regex over `git ls-files`,
+no myceliums) draws 60 sites at random from the production sources and 5 per
+hard Java case from a targeted stratum each: interface or abstract dispatch,
+overloads, generics, nested and anonymous classes, lambdas, method references,
+static imports of project methods, Spring-injected fields (most of them in
+tests, where spring-framework injects) and methods inherited from library
+base classes. Each pair names the cases it is an instance of; the set's
+`rules` give the skip rules, the caller rule and what a target is. 105 pairs;
+63 call a project symbol.
+
+Where a call dispatches, the gold lists the statically bound declaration and
+every override in the repository (found with `git grep` over the subtypes),
+as the fixture rule accepts overrides. Method references (`Type::m`) are not
+calls under the fixture rules (`invokedynamic`), so their 5 pairs are
+reported per case and left out of the totals.
+
+`graph-eval` scores the set like `real-repos.json` when the checkout is there
+(`held-out/fetch_java.sh`, into the same cache directory), and adds a
+precision/recall row per case. It is not in CI's corpus: analysing the
+repository takes about 30 s and 3 GB of memory on top of every run, for a
+report that is never gated. Numbers: `docs/guides/call-resolution-limitations.md`.
+Labelled by an agent; `reviewed_by` is `null` until the review workflow has
+been through it.
+
 ## Review status
 
 **Labelled by an agent; checked in #164 under an owner policy, mostly not by
