@@ -387,6 +387,40 @@ symbol at both ends is `invalid_params`.
 | `extra_calls` | integer | no | `0` | Also list symbols on chains up to this many calls longer than the shortest (max 5) |
 | `limit` / `offset` | integer | no | `20` / `0` | Page over the listed symbols (max 200) |
 
+### Referenced by name
+
+`find_callers`, `find_callees`, `impact_of_change` (symbol and file mode) and
+`trace_flow` end with a section on the places that name a symbol by its fully
+qualified name in a string or a config file (#179): `Class.forName("a.b.C")`,
+`@ConditionalOnClass(name = …)`, `spring.factories`, `*.imports`,
+`META-INF/services/*`, an XML bean's `class=`, a properties or YAML value, a
+Django setting. No CALLS edge shows these. The section follows the answer (and
+its `Incomplete`/`Next` block), lists at most 8 places grouped by file and is
+left out when there are none:
+
+```text
+Referenced by name (3: strings and config files naming it):
+src/main/java/org/acme/autoconfigure/AcmeAutoConfiguration.java
+  :3 in AcmeAutoConfiguration: @ConditionalOnClass(name = "org.acme.client.AcmeClient")
+  :6 in AcmeAutoConfiguration.client: return Class.forName("org.acme.client.AcmeClient");
+src/main/resources/beans.xml
+  :2 <bean id="client" class="org.acme.client.AcmeClient"/>
+```
+
+- `find_callers` and `impact_of_change`: places naming the symbol (for a type,
+  also `Type#member` names of its members, marked `→ member`; for a file, any
+  symbol it defines).
+- `find_callees`: `Names by qualified name (N: …)`, the symbols the symbol's
+  strings name, under their files, `(named at file:line)`.
+- `trace_flow`: what the symbols on the chains name (when there is no chain,
+  the symbols the walk reached), then the places naming `to_symbol`. A step
+  done by name (`import_string("a.b.Handler")`) shows up here although no
+  call chain reaches it.
+
+Past 8 places, a `Next (by name):` line gives the `grep -rnF` that lists them
+all. `detail: "full"` answers are unchanged. What links and what does not:
+[references by name](../guides/call-resolution-limitations.md#references-by-name-179).
+
 ### `find_dead_code`
 
 Which functions and methods are never called? Lists the functions and methods

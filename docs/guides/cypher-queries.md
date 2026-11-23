@@ -56,7 +56,7 @@ The kind of symbol is the `kind` property, filtered with `WHERE`:
 | `CONTAINED_BY` | A symbol is defined in a file (symbol → `File`). Relationship patterns connect symbols only, so this edge matches nothing in Cypher; filter on `s.file_path` instead |
 | `MEMBER_OF` | A method or field belongs to its class, struct or other container (member → container) |
 | `STEP_IN_PROCESS` | Symbol is a step of a traced process |
-| `REFERENCES` | A document links to another document or code file |
+| `REFERENCES` | A string literal or a config file names a symbol by its fully qualified name (`Class.forName("a.b.C")`, `spring.factories`, an XML bean's `class=`, a Django setting; #179). Metadata: `extraction_method: "name-ref"`, `file`, `line`, `name`, `text`, `origin` (`string` or `config`), `count`. The source is the innermost symbol around the string, or the file (config files, module-level code); as for `CONTAINED_BY`, patterns match only the edges from symbols |
 | `RATIONALE_FOR` | A rationale comment explains a symbol |
 | `REPLY_TO` / `SENT_BY` / `RECEIVED_BY` / `HAS_ATTACHMENT` / `PART_OF_CONVERSATION` | E-mail structure |
 | `MENTIONS` | An e-mail body mentions a symbol or person |
