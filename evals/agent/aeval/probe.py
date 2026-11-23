@@ -97,7 +97,11 @@ def summarise(run_dir: Path, condition: str) -> dict:
         "tool_calls": [(c["name"], c.get("parent")) for c in t.tool_calls] if t else None,
         "hook_events": len(t.hook_events) if t else None,
         "bash_result": _tool_result_text(main, "toolu_probe_bash")[:400] or None,
-        "search_result": _tool_result_text(main, "toolu_probe_search")[:400] or None,
+        # The hook's refusal echoes its own command line first (long with a task's
+        # --allow-json), so keep enough to reach the message.
+        "search_result": _tool_result_text(main, "toolu_probe_search")[:3000] or None,
+        # #183: the task's test command, which D's allowlist must let run.
+        "test_result": _tool_result_text(main, "toolu_probe_test")[:300] or None,
     }
     problems = []
     if findings["user_claude_md_loaded"]:

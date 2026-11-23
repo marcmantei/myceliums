@@ -1686,13 +1686,29 @@ python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-repla
 Arms A (MCP server), C (what `myc setup-claude --no-agent` installs) and D
 (myceliums only, Bash allowlisted to file operations, git and `./gradlew`
 test runs); every arm has `Bash`, `Edit` and `Write`. Realistic profile:
-100-turn cap not stated in the prompt, 3 repetitions; the run order is
-repetition-major with tasks shuffled and the three arms adjacent per task in
-shuffled order (interleaved). Each session gets a fresh copy of its task's
+100-turn cap not stated in the prompt, 3 repetitions and the interleaved schedule of #182
+(repetition-major, tasks shuffled, the three arms adjacent per task with
+their order counterbalanced). Each session gets a fresh copy of its task's
 parent at `/tmp/aeval/spring-<task>` and, in A/C/D, a fresh copy of that
 parent's index. Index: `myc analyze --strict-embeddings` of the whole
 checkout (tests and `framework-docs/` included; AsciiDoc is indexed since
-#180), built from `main` at `276d916` (#180 merged). INDEX
+#180), built from `main` at `276d916` (#180 merged).
+
+**Index cost, measured on one parent** (`mime-type-parameter-names-case-insensitive`,
+8-core benchmark Mac): the graph alone (`index --skip-embeddings`) took
+73 s for 10,109 files, 143,541 symbols, 485,247 relationships and 39,899 doc
+mentions, 668 MB on disk. With embeddings (`--strict-embeddings`, the
+configuration of every earlier run) the build was still embedding after
+2 hours and was stopped there; at Vue's rate in #163 (15,750 symbols in
+1,163 s) a Spring parent takes about 3 hours, so 20 parents about 60 hours,
+and the vectors add about 0.4 GB per index (143k × 768 floats), about 1.1 GB
+each, 22 GB for 20, more than the machine has free. Embeddings cannot be
+shared between parents. Two ways to run it, for Marc to decide: graph-only
+indexes for every arm (search_code falls back to BM25; 25 minutes and 13 GB
+for 20), or embedded indexes built and deleted task by task (60 hours of
+indexing). Graph-only for real sessions needs `run` to accept an index
+built with `--skip-embeddings`, which it refuses since #182 (mock runs only).
+The budget below assumes graph-only.
 
 **Budget estimate** (not measured; from #163/#171 scaled to edit tasks).
 #163/#171 question sessions with Bash at 40 turns: 8 turns, 100-136k input
@@ -1714,10 +1730,11 @@ of the final context and 8-30k output.
 | Wall time per session (model + agent's Gradle runs + grading) | 6 min | 12 min | 25 min |
 | Wall time, concurrency 3 | 6 h | 12 h | 25 h |
 
-Plus, once: 20 indexes (INDEXTIME) and the prechecks (40 Gradle runs). A pilot
+Plus, once: 20 graph-only indexes (25 min; about 60 h with embeddings) and
+the prechecks (40 Gradle runs). A pilot
 of one repetition (60 sessions, ~$50) would replace these assumptions with
-measurements before the full run. Disk: 20 checkouts 2 GB, 20 indexes
-(INDEXSIZE each), `~/.gradle` 3-5 GB (11 Gradle versions among the parents,
+measurements before the full run. Disk: 20 checkouts 2 GB, 20 graph-only indexes
+13 GB (0.67 GB each), `~/.gradle` 3-5 GB (11 Gradle versions among the parents,
 9.1.0-9.9.0, each with its own distribution and caches, plus the shared
 dependency and build caches).
 
@@ -1730,7 +1747,27 @@ prechecks and for the sessions, whose agents run Gradle too. Until then the
 task file fails `check-tasks` (no precheck), and CI checks its schema with
 the unit tests only (`tests/test_commit_replay.py`).
 
-**Mock validation.** PROBE
+**Mock validation** (no model call): `probe --profile realistic --bash` on
+`mime-type-parameter-names-case-insensitive` against the graph-only index, with
+the scripted session searching, calling `myc callers parseMimeType`, reading
+and editing `MimeType.java` and running the task's test command:
+
+| Arm | Isolation | Tools offered | Search | Graded |
+|---|---|---|---|---|
+| A | ok | Bash, Edit, Glob, Grep, Read, Write + 9 myceliums tools | Grep ran | 1 file changed (code recall 1/2, `MediaType.java` forgotten as an other-module dependent, both tests forgotten), overlay of 2 test files applied, test command ran (exit 1: no network for Gradle) |
+| C | ok, routing block loaded | as A | Grep ran | as A; setup-claude's `CLAUDE.md`/`.mcp.json` not counted |
+| D | ok | Bash, Edit, Read, Write + 9 myceliums tools | `grep` refused by the hook | as A; the hook let `./gradlew ... --tests ...` run, `myc callers` answered from the index |
+
+```bash
+export JAVA_HOME=...; T=evals/agent/tasks/tasks-commit-replay.json
+python3 evals/agent/agent_eval.py --tasks $T index --repo spring-mime-type-parameter-names-case-insensitive --skip-embeddings --myc $MYC
+python3 evals/agent/agent_eval.py --tasks $T probe --label v183 --task mime-type-parameter-names-case-insensitive \
+    --conditions A,C,D --bash --profile realistic --myc $MYC --grep parseMimeType --callers parseMimeType \
+    --edit-file spring-core/src/main/java/org/springframework/util/MimeType.java \
+    --edit-old "public class MimeType implements Comparable<MimeType>, Serializable {" \
+    --edit-new "public class MimeType implements Comparable<MimeType>, Serializable { // probe" \
+    --edit-command "./gradlew --no-daemon --console=plain :spring-core:test --tests org.springframework.util.MimeTypeTests :spring-web:test --tests org.springframework.http.MediaTypeTests"
+```
 
 ## Replaying myceliums calls (#181)
 
