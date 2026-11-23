@@ -1,5 +1,5 @@
 {
- "description": "Graph-favouring tasks on a large Java repository (issue #182): 30 questions over Spring Framework v7.1.0 (f2e4863de60e), six per category: concept questions without the answer's symbol name, deep transitive callers and blast radius (three levels, across Gradle modules), implementations reached through an interface or abstract method (dispatch), classes reached by name (factories files, XML namespace handlers, string literals), and documentation files to update for a change. Gold sets were traced by reading the code and docs with git grep and two plain-text helpers (groundtruth/java/javahier.py for type hierarchies, groundtruth/java/jcalls.py for call sites), never from myceliums output; each task's gold_method says how. Each gold item lists an evidence line that check-tasks re-verifies. Labels drafted by an agent and checked item by item by an independent second agent; disagreements decided by a third agent (evals/review, dataset agent-tasks-java). A person has not reviewed them yet.",
+ "description": "Tasks on a large Java repository (issue #182), in categories where a code graph might help to different degrees (several, all docs and most by-name tasks, can be answered with one text search; the categories are reported separately): 30 questions over Spring Framework v7.1.0 (f2e4863de60e), six per category: concept questions without the answer's symbol name, deep transitive callers and blast radius (three levels, across Gradle modules), implementations reached through an interface or abstract method (dispatch), classes reached by name (factories files, XML namespace handlers, string literals), and documentation files to update for a change. Gold sets were traced by reading the code and docs with git grep and two plain-text helpers (groundtruth/java/javahier.py for type hierarchies, groundtruth/java/jcalls.py for call sites), never from myceliums output; each task's gold_method says how. Each gold item lists an evidence line that check-tasks re-verifies. Labels drafted by an agent and checked item by item by an independent second agent; disagreements decided by a third agent (evals/review, dataset agent-tasks-java). A person has not reviewed them yet.",
  "labelled_by": "agent",
  "repo_commit": "f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4",
  "tasks": [
@@ -9,6 +9,7 @@
    "type": "concept",
    "category": "concept",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "Spring AOP can create a proxy either as a JDK dynamic proxy that implements interfaces or as a generated subclass of the target class. Given a finished proxy configuration (target, interfaces, flags), where is the final choice between the two kinds made? Name the method that makes this choice from the configuration, not the code that fills in the configuration beforehand. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
    "gold": [
     {
@@ -70,6 +71,7 @@
    "type": "concept",
    "category": "concept",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "In Spring MVC on the Servlet stack (not WebFlux), several annotated controller methods can match the same request. Where is the most specific of them chosen (and a tie between the two best rejected as ambiguous), and where is it defined which of two matching request mappings is more specific for the current request? Name the method that selects the winner and the method that compares two complete request mappings. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
    "gold": [
     {
@@ -146,6 +148,7 @@
    "type": "concept",
    "category": "concept",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "In the bean container, a singleton bean can be requested again while it is still being created, for example through a circular constructor dependency that no early reference can satisfy. Where does the container notice that this singleton is already being created and fail with an error? Name the method that contains this check for singletons. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
    "gold": [
     {
@@ -211,6 +214,7 @@
    "type": "concept",
    "category": "concept",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "When a Spring Expression Language expression calls a method on an object and the object's class has several methods of that name, where is it decided which Java method is invoked (an exact argument match first, then the closest match, then one that needs argument conversion, failing when several need conversion)? Name the method that makes this choice. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
    "gold": [
     {
@@ -268,6 +272,7 @@
    "type": "concept",
    "category": "concept",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "With declarative transactions, a transactional method can be configured with rules that say for which exception types the transaction is rolled back and for which it still commits. When such a method throws, where is it decided which configured rule applies to the thrown exception (when several rules match, which one wins) and how a single rule is matched against the exception's class and its superclasses? Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
    "gold": [
     {
@@ -336,6 +341,7 @@
    "type": "concept",
    "category": "concept",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "In Spring WebFlux, when the value returned by an annotated controller method is written as the response body or rendered through a view, where is the response's content type chosen by matching what the client accepts against what the server can produce (including the producible types declared on the mapping)? Name the method that makes this choice. Name only the method(s) that make this decision, not the methods that call them or the code that acts on the result. Consider only the production Java sources (`*/src/main/java`). Write each method as `Type.method` (list overloads once).",
    "gold": [
     {
@@ -674,6 +680,7 @@
    "type": "transitive_callers",
    "category": "deep_transitive",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "Which methods call `AopConfigUtils.registerOrEscalateApcAsRequired` (spring-aop, `org.springframework.aop.config.AopConfigUtils`) directly, call such a caller, or call a caller of such a caller, that is, every caller up to three levels up the call chain? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `AopConfigUtils.registerOrEscalateApcAsRequired`; level 2 is every method that calls a level-1 method; level 3 is every method that calls a level-2 method. List every method of levels 1 to 3 once, as `Type.method`, where `Type` is the simple name of the class that declares the method (for a nested class, its own simple name). Do not list `AopConfigUtils.registerOrEscalateApcAsRequired` itself.",
    "gold": [
     {
@@ -831,6 +838,7 @@
    "type": "transitive_callers",
    "category": "deep_transitive",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "Which methods call `ReflectionUtils.doWithLocalFields` (spring-core, `org.springframework.util.ReflectionUtils`) directly, call such a caller, or call a caller of such a caller, that is, every caller up to three levels up the call chain? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `ReflectionUtils.doWithLocalFields`; level 2 is every method that calls a level-1 method; level 3 is every method that calls a level-2 method. List every method of levels 1 to 3 once, as `Type.method`, where `Type` is the simple name of the class that declares the method (for a nested class, its own simple name). Do not list `ReflectionUtils.doWithLocalFields` itself.",
    "gold": [
     {
@@ -1087,6 +1095,7 @@
    "type": "transitive_callers",
    "category": "deep_transitive",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "Which methods call `BindingReflectionHintsRegistrar.forEachJacksonAnnotation` (a private method of spring-core's `org.springframework.aot.hint.BindingReflectionHintsRegistrar`) directly, call such a caller, or call a caller of such a caller, that is, every caller up to three levels up the call chain? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `BindingReflectionHintsRegistrar.forEachJacksonAnnotation`; level 2 is every method that calls a level-1 method; level 3 is every method that calls a level-2 method. List every method of levels 1 to 3 once, as `Type.method`, where `Type` is the simple name of the class that declares the method (for a nested class, its own simple name). Do not list `BindingReflectionHintsRegistrar.forEachJacksonAnnotation` itself.",
    "gold": [
     {
@@ -1299,6 +1308,7 @@
    "type": "transitive_callers",
    "category": "deep_transitive",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "Which methods call `ResolvableType.currentTypeSeen` (the private helper in spring-core's `org.springframework.core.ResolvableType` that records the types already visited) directly, call such a caller, or call a caller of such a caller, that is, every caller up to three levels up the call chain? Consider only the production Java sources (`src/main/java` of every module); tests, Kotlin sources, `integration-tests/`, `buildSrc/` and `framework-docs/` do not count. A call counts for a method when it binds to that method at compile time: an unqualified, `this.` or `super.` call inside its class, a call qualified with its class name (or through a static import), or a call on a variable, field or expression whose declared type is the method's class. A call through an interface or superclass method counts for that interface or superclass method only, not for the classes that implement or override it; naming a class in a string, an annotation or a configuration file is not a call. Method references (`Type::method`, `this::method`) count as calls. A call inside a lambda, anonymous class or local class counts for the enclosing named method. All overloads of a method (same name, same class) count as one method. Constructors count as methods named `Type.Type`. Level 1 is every method that calls `ResolvableType.currentTypeSeen`; level 2 is every method that calls a level-1 method; level 3 is every method that calls a level-2 method. List every method of levels 1 to 3 once, as `Type.method`, where `Type` is the simple name of the class that declares the method (for a nested class, its own simple name). Do not list `ResolvableType.currentTypeSeen` itself.",
    "gold": [
     {
@@ -2163,6 +2173,7 @@
    "type": "dispatch",
    "category": "dispatch",
    "answer_kind": "symbols",
+   "require_owner": true,
    "question": "`AbstractPlatformTransactionManager.getTransaction(...)` (spring-tx, package `org.springframework.transaction.support`) first calls its abstract method `doGetTransaction()` and, when it starts a new transaction, its abstract method `doBegin(Object, TransactionDefinition)`. Which implementations of these two methods can run there? List every method that overrides `doGetTransaction()` or `doBegin(Object, TransactionDefinition)` of `AbstractPlatformTransactionManager` in a subclass (directly or through intermediate superclasses). Methods with the same names in other class hierarchies (for example the reactive transaction support) do not count. Consider only the production Java sources of the repository (`*/src/main/java` in every module; not tests, test fixtures, Kotlin files, `framework-docs/` samples or `buildSrc/`). Write each as `ClassName.methodName`.",
    "gold": [
     {
@@ -2656,7 +2667,7 @@
    ],
    "optional": [],
    "rationale": "22 registrars in 9 modules reached only by name from aot.factories. The answer needs the step from the names in a config file to the declaring source files; spring-test also registers StandardTestRuntimeHints under the different key TestRuntimeHintsRegistrar (trap), and many other RuntimeHintsRegistrar classes are only used via @ImportRuntimeHints (traps for listing all implementations).",
-   "gold_method": "`git ls-files '*/src/main/resources/META-INF/spring/aot.factories'` (11 files), read every entry under the key org.springframework.aot.hint.RuntimeHintsRegistrar (22 names), mapped each name to its source with `git ls-files '*/src/main/java/<package path>/<Class>.java'` (nested HttpServiceProxyRegistryRuntimeHints -> HttpServiceProxyRegistryFactoryBean.java) and read each declaration line `implements RuntimeHintsRegistrar`.",
+   "gold_method": "`git ls-files '*/src/main/resources/META-INF/spring/aot.factories'` (12 files, 9 of them with this key), read every entry under the key org.springframework.aot.hint.RuntimeHintsRegistrar (22 names), mapped each name to its source with `git ls-files '*/src/main/java/<package path>/<Class>.java'` (nested HttpServiceProxyRegistryRuntimeHints -> HttpServiceProxyRegistryFactoryBean.java) and read each declaration line `implements RuntimeHintsRegistrar`.",
    "verified_with": [
     "git ls-files",
     "reading"
@@ -3484,7 +3495,7 @@
    ],
    "optional": [],
    "rationale": "DefaultNamespaceHandlerResolver loads the handler classes by name from META-INF/spring.handlers files in 10 modules (15 handlers); no Java code references them. NamespaceHandlerSupport (abstract) is a near-miss.",
-   "gold_method": "Read DefaultNamespaceHandlerResolver (DEFAULT_HANDLER_MAPPINGS_LOCATION = \"META-INF/spring.handlers\"); `git ls-files '*/src/main/resources/META-INF/spring.handlers'` (10 files) and read each entry (15 classes). Cross-checked: `javahier.py ROOT subtypes org.springframework.beans.factory.xml.NamespaceHandler` lists the same 15 plus abstract NamespaceHandlerSupport.",
+   "gold_method": "Read DefaultNamespaceHandlerResolver (DEFAULT_HANDLER_MAPPINGS_LOCATION = \"META-INF/spring.handlers\"); `git ls-files '*/src/main/resources/META-INF/spring.handlers'` (9 files) and read each entry (15 classes). Cross-checked: `javahier.py ROOT subtypes org.springframework.beans.factory.xml.NamespaceHandler` lists the same 15 plus abstract NamespaceHandlerSupport.",
    "verified_with": [
     "git ls-files",
     "reading",
@@ -4303,7 +4314,7 @@
    ],
    "optional": [],
    "rationale": "Docs-to-update for an interface method that exists twice (MVC and WebFlux configurers): every MVC sample overrides it, every AsciiDoc listing of the name belongs to WebFlux. Answering needs the override relation, not just the name.",
-   "gold_method": "`git grep -l -w configureViewResolvers -- framework-docs/modules framework-docs/src/main` gives 18 files. Read the imports/supertype of each: the 14 Java/Kotlin samples under framework-docs/src/main implement `org.springframework.web.servlet.config.annotation.WebMvcConfigurer` (gold); the 4 AsciiDoc pages (web/webflux-functional.adoc, web/webflux-view.adoc, web/webflux/config.adoc and their listings) override `WebFluxConfigurer.configureViewResolvers` (excluded). No MVC page names the method in prose.",
+   "gold_method": "`git grep -l -w configureViewResolvers -- framework-docs/modules framework-docs/src/main` gives 17 files. Read the imports/supertype of each: the 14 Java/Kotlin samples under framework-docs/src/main implement `org.springframework.web.servlet.config.annotation.WebMvcConfigurer` (gold); the 3 AsciiDoc pages (web/webflux-functional.adoc, web/webflux-view.adoc, web/webflux/config.adoc, in their listings) override `WebFluxConfigurer.configureViewResolvers` (excluded). No MVC page names the method in prose.",
    "verified_with": [
     "git grep",
     "reading"

@@ -96,7 +96,8 @@ def export(label: str, extra_meta: dict) -> Path:
     # The report is rendered from this snapshot, not from the live tasks.json,
     # so later edits to the task set cannot silently change a committed report.
     snapshot = [{"id": t["id"], "repo": t["repo"], "type": t["type"], "answer_kind": t["answer_kind"],
-                 "n_gold": len(t["gold"]), "question": t["question"]} for t in config.load_tasks()]
+                 "n_gold": len(t["gold"]), "question": t["question"],
+                 **({"category": t["category"]} if t.get("category") else {})} for t in config.load_tasks()]
     (out_dir / "tasks_snapshot.json").write_text(json.dumps(snapshot, indent=1, ensure_ascii=False) + "\n")
     meta = dict(extra_meta)
     meta["tasks_sha256"] = config.sha256_file(config.tasks_file())

@@ -148,7 +148,7 @@ TASK_TYPES = {"callers", "callees", "impact", "where", "dead_code", "flow",
               "config",
               # changes graded by the files they touch and a test command (#178)
               "edit",
-              # graph-favouring types of the large Java set (#182): questions without a
+              # types of the large Java set (#182): questions without a
               # symbol name, implementations reached through an interface, classes named in
               # strings and config files, documentation to update for a change
               "concept", "dispatch", "by_name", "docs"}

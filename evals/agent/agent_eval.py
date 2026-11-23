@@ -227,6 +227,8 @@ def cmd_export(args) -> int:
         **({"profile": cfg["profile"]} if cfg.get("profile") else {}),
         **({"schedule": cfg["schedule"]} if cfg.get("schedule") else {}),
         **({"mock_api": True} if cfg.get("mock_api") else {}),
+        # #182: an interleaved run compares every pair of its conditions, without a baseline.
+        **({"comparisons": "pairwise"} if cfg.get("schedule") == "interleaved" else {}),
         "timeout_s": cfg["timeout_s"],
         "reps": cfg["reps"],
         "success_threshold": cfg["success_threshold"],

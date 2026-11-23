@@ -241,5 +241,94 @@ class ThreeArmReports(unittest.TestCase):
         self.assertEqual(_myc_calls({"condition": "A", "mcp_tool_calls": 2}), 2)  # rows before #163
 
 
+class PairwiseReport(unittest.TestCase):
+    """#182: an interleaved run's report compares every pair (McNemar, bootstrap, spend per solved task,
+    multiplicity) and gives recall and success per category; earlier runs keep their baseline report."""
+
+    @staticmethod
+    def _row(task: str, cond: str, rep: int, ok: bool) -> dict:
+        return {"run_id": f"{task}__{cond}__r{rep}", "task_id": task, "condition": cond, "rep": rep,
+                "status": "ok", "success": ok, "f1": 1.0 if ok else 0.5, "precision": 1.0,
+                "recall": 1.0 if ok else 0.4, "total_input_tokens": 1000, "first_turn_input_tokens": 100,
+                "output_tokens": 50, "cost_usd": 0.01, "tool_calls": 4, "num_turns": 5, "wall_s": 10.0,
+                "mcp_tool_calls": 0 if cond == "none" else 2, "myc_cli_calls": 0, "tool_calls_by_name": {"Read": 2},
+                "tool_errors": {}, "first_tool": "Read", "subagent_mcp_tool_calls": 0}
+
+    def _render(self, comparisons: str | None):
+        from aeval import report_variants
+        fails = {"none": set(), "C": {"t0", "t1"}, "D": {"t0", "t1", "t2", "t3"}}
+        rows = [self._row(f"t{i}", c, r, f"t{i}" not in fails[c]) for i in range(6) for c in ARMS for r in (1, 2, 3)]
+        tasks = [{"id": f"t{i}", "repo": "fzf", "type": "callers", "answer_kind": "symbols", "n_gold": 3,
+                  "question": "q", "category": "concept" if i < 3 else "docs"} for i in range(6)]
+        meta = {"conditions": list(ARMS), "success_threshold": 0.8, "reps": 3, "bash": True,
+                **({"comparisons": comparisons} if comparisons else {})}
+        with tempfile.TemporaryDirectory() as d:
+            old = config.RESULTS_DIR
+            config.RESULTS_DIR = Path(d)
+            try:
+                res = Path(d) / "pw"
+                res.mkdir()
+                (res / "meta.json").write_text(json.dumps(meta))
+                (res / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+                (res / "tasks_snapshot.json").write_text(json.dumps(tasks))
+                return report_variants.render("pw", n_resamples=200)
+            finally:
+                config.RESULTS_DIR = old
+
+    def test_every_pair_without_a_baseline(self):
+        text, summary = self._render("pairwise")
+        self.assertIsNone(summary["baseline"])
+        pairs = {(p["a"], p["b"]): p for p in summary["pairwise"]["pairs"]}
+        self.assertEqual(set(pairs), {("none", "C"), ("none", "D"), ("C", "D")})
+        self.assertEqual((pairs[("none", "C")]["wins"], pairs[("none", "C")]["losses"]), (2, 0))
+        self.assertEqual((pairs[("none", "D")]["wins"], pairs[("none", "D")]["losses"]), (4, 0))
+        self.assertEqual((pairs[("C", "D")]["wins"], pairs[("C", "D")]["losses"]), (2, 0))
+        self.assertAlmostEqual(pairs[("none", "D")]["mcnemar_p"], 0.125)
+        self.assertGreaterEqual(pairs[("none", "C")]["mcnemar_p_holm"], pairs[("none", "C")]["mcnemar_p"])
+        # D solved 2 of 6 tasks (6 sessions) against none's 18 sessions, at the same spend per session
+        self.assertAlmostEqual(pairs[("none", "D")]["tokens_per_solved"]["ratio"], 6 / 18)
+        self.assertNotIn("Paired differences vs", text)
+        self.assertIn("## Pairwise comparisons", text)
+        self.assertIn("**Multiplicity.**", text)
+        cats = summary["by_category"]
+        self.assertEqual(cats["concept"]["D"]["success"], 0.0)
+        self.assertEqual(cats["docs"]["D"]["success"], 2 / 3)
+        self.assertAlmostEqual(cats["concept"]["C"]["recall"], (0.4 + 0.4 + 1.0) / 3)
+
+    def test_runs_without_the_flag_keep_the_baseline_report(self):
+        text, summary = self._render(None)
+        self.assertEqual(summary["baseline"], "none")
+        self.assertIn("Paired differences vs none", text)
+        self.assertNotIn("Pairwise comparisons", text)
+
+
+class RequireOwner(unittest.TestCase):
+    """#182: a task with ``require_owner`` does not accept a bare method name."""
+
+    TASK = {"id": "x", "repo": "spring-framework", "answer_kind": "symbols", "require_owner": True,
+            "gold": [{"name": "RequestMappingInfoHandlerMapping.getMappingComparator"}],
+            "optional": [{"name": "RequestMappingInfo.compareTo"}]}
+
+    def test_bare_name_is_a_false_positive(self):
+        g = grade(self.TASK, ["getMappingComparator"])
+        self.assertEqual((g.tp, g.fp), (0, 1))
+        g = grade(self.TASK, ["compareTo"])  # not even neutral
+        self.assertEqual((g.neutral, g.fp), (0, 1))
+
+    def test_owner_and_qualified_forms_match(self):
+        for ans in ("RequestMappingInfoHandlerMapping.getMappingComparator",
+                    "org.springframework.web.servlet.mvc.method.RequestMappingInfoHandlerMapping#getMappingComparator",
+                    "RequestMappingInfoHandlerMapping.getMappingComparator(HttpServletRequest)"):
+            self.assertEqual(grade(self.TASK, [ans]).f1, 1.0, ans)
+
+    def test_other_sets_still_accept_bare_names(self):
+        task = {k: v for k, v in self.TASK.items() if k != "require_owner"}
+        self.assertEqual(grade(task, ["getMappingComparator"]).f1, 1.0)
+
+    def test_every_java_symbol_task_requires_the_owner(self):
+        tasks = json.loads(JAVA_TASKS.read_text())["tasks"]
+        self.assertTrue(all(t.get("require_owner") for t in tasks if t["answer_kind"] == "symbols"))
+
+
 if __name__ == "__main__":
     unittest.main()

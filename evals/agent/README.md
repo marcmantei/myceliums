@@ -877,12 +877,13 @@ python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json exp
 python3 evals/agent/agent_eval.py report my-rerun
 ```
 
-## Graph-favouring tasks on a large Java repository (#182)
+## Java tasks on Spring Framework (#182)
 
 #163/#171 measured mid-size Python/TypeScript repositories with symbol-named
-questions, where grep is strongest, and found parity. #182 asks the same on
-questions where a code graph should help, on a large Java code base: does
-myceliums change success, F1, tokens and cost per solved task? This section
+questions, where grep is strongest, and found parity. #182 asks the same on a
+large Java code base, with task categories where a code graph might help, to
+different degrees: does myceliums change success, F1, tokens and cost per
+solved task, and in which category? This section
 is the prepared measurement: task set, gold labels, review, index and run
 configuration, and the budget. **No session with a model has run**; the runs
 need Marc's budget approval.
@@ -906,6 +907,13 @@ category; `labelled_by: agent`):
 | by-name references (`by_name`) | 6 | classes / files | 11-22 | the registrars in `META-INF/spring/aot.factories`, the default `TestExecutionListener`s of `spring.factories`, the XML namespace handlers, spring-aspects classes named in string literals |
 | docs to update (`docs`) | 6 | files | 10-16 | the `framework-docs/` pages and documentation samples to update if `WebMvcConfigurer.configureViewResolvers` or `CaffeineCacheManager` were renamed |
 
+**The categories are not equally graph-friendly, and they are reported
+separately.** About 12 of the 30 tasks, all six docs tasks and most by-name
+tasks, can be answered with a single text search for a name the question
+gives, then reading the hits; concept, deep transitive and dispatch tasks need
+several steps. The pooled numbers are therefore no test of "tasks that favour
+a graph"; the report gives recall, success and F1 per category.
+
 Every question states its own rules (scope `*/src/main/java` unless the
 category needs resources or docs; what counts as a call, an implementation or
 a reference; levels; overloads, lambdas, constructors). Concept questions do
@@ -913,6 +921,20 @@ not contain the answer's symbol name. The prompt is the same in every arm and
 names no tool (`tests/test_schedule.py` checks the 30 prompts for tool words).
 The set is **not calibrated**: no session ran, so whether the tasks sit
 between floor and ceiling is unknown until the first repetition.
+
+**Grading notes.** Success stays F1 ≥ 0.8 as in every earlier set. Four of
+the six concept tasks have a single required method (the other two have
+two), so for them success means the exact answer: that method and nothing
+beyond its optional neighbours (listed per task, neutral in grading); a
+second wrong method already gives F1 0.67. Recall per category is reported
+next to success so that this is visible. Symbol answers of this set must
+name the owner (`"require_owner": true`, the prompt's `Type.method` rule): a
+bare method name, accepted in the earlier sets, counts as wrong here.
+Answers carry no package, so a class name that exists in two modules still
+matches either one: `AbstractHandlerMethodMapping.lookupHandlerMethod` and
+`RequestMappingInfo.compareTo` (gold of the Spring MVC concept task) also
+name the WebFlux classes of the same names. This leniency is the same in
+every arm.
 
 **Gold.** Traced by reading the code and the docs, never from myceliums
 output: `git grep` per level and reading each call site's receiver type
@@ -957,7 +979,15 @@ order inside the blocks is counterbalanced (rotations of one shuffled order,
 assigned to the tasks at random), so each arm runs first, second and third
 in exactly 10 of the 30 blocks of every repetition. All arms therefore share
 the same stretch of time, unlike #171, where the arms ran nine hours apart.
-An interleaved run refuses `--condition` (one arm alone). `plan` prints the
+An interleaved run refuses `--condition` (one arm alone). Its export records
+`comparisons: pairwise`, and the report then has no baseline: each pair (A vs
+C, A vs D, C vs D) gets McNemar's exact test on task success (a task counts
+as solved in an arm when at least half of its repetitions are, Holm-adjusted
+over the three pairs), paired bootstrap intervals over tasks for the
+difference in success and F1, and tokens (input + output) and cost per solved
+task with their ratio; a multiplicity statement (3 pairs × 4 measures, only
+the success tests corrected) and a per-category table of recall, success and
+F1 follow. `plan` prints the
 order and the balance without running anything; the run directory keeps
 `plan.txt`. The default schedule of earlier runs (`paired`, arms adjacent in a
 random order) is unchanged.
@@ -1036,6 +1066,14 @@ hours over the range), plus the index build (~3.5 hours, once). A
 calibration of one repetition of arm A on the 30 tasks (30 sessions, about
 $8) before the main run would show whether the set sits between floor and
 ceiling; it is not part of the 270.
+
+**Calibration rule (fixed before any session).** A calibration, or anything
+seen in the main run, may only fix wrong gold (an item the question's own
+rules contradict, shown from the code) or unclear wording (a rule two careful
+readers apply differently). It never drops, replaces or changes a task
+because of how any arm performed on it: not because a task was too easy, too
+hard or favoured one arm. Every fix is recorded with its reason, and the
+stored answers of all arms are re-graded alike (`regrade`).
 
 **Pipeline check against the mock API** (no model call, no usage; myc at
 `276d9169f443`, Claude Code 2.1.330, the index without embeddings):
@@ -1306,7 +1344,7 @@ code.
 `run --profile realistic` sets `--max-turns 100` as a safety cap only (never
 stated in the prompt; `--prompt-budget` is refused with it), 3
 repetitions and (since #182) the interleaved schedule, see
-[#182](#graph-favouring-tasks-on-a-large-java-repository-182). The profile
+[#182](#java-tasks-on-spring-framework-182). The profile
 name is stored in the run's config, so a resumed run cannot change it.
 
 ## Replaying myceliums calls (#181)
