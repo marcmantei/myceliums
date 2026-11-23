@@ -189,9 +189,41 @@ Per case on the dev set (all strata; development numbers). "Targets reached" cou
 | none of these | 39 | 16 / 16 | 17 / 17 | 1.00 |
 | method references (not counted) | 5 | 0 / 2 | — | 0.00 |
 
-**Dispatch recall is per call, not per implementation.** A dispatch pair counts as found when an edge reaches any accepted target, and that target is almost always the interface or abstract method. Only 21% of dispatch targets get an edge on the dev set, and 27% on the held-out set (7 dispatch pairs). The callers of an implementation through its interface stay invisible (#190). The dev set's other gaps: receivers typed through generics (`List<DataBuffer>.get(0).factory()`, `C extends AbstractMessageListenerContainer`; #187), overload sets of one arity (#186), and method references, which produce no edge (#188).
+**Dispatch recall is per call, not per implementation.** A dispatch pair counts as found when an edge reaches any accepted target, and that target is almost always the interface or abstract method. Only 21% of dispatch targets get a CALLS edge on the dev set, and 27% on the held-out set (7 dispatch pairs). Dispatch (#190, [below](#dispatch-190)) reaches the implementations without adding CALLS edges. The dev set's other gaps: receivers typed through generics (`List<DataBuffer>.get(0).factory()`, `C extends AbstractMessageListenerContainer`; #187), overload sets of one arity (#186), and method references, which produce no edge (#188).
 
 **Cost on spring-framework** (release build, embeddings off, one run on a shared machine): 9,688 files, 144,051 symbols, 158,733 CALLS edges (433,905 relationships), 181,592 call sites linked and 342,129 not (311,711 into libraries); discover 0.5 s, parse 5.0 s, resolve and store 18.4 s, communities 3.1 s, processes 0.9 s; 30.4 s wall, 3.06 GB peak RSS (sampled once a second: 0.94 GB after parsing, 1.34 GB while resolving, 1.87 GB for communities).
+
+### Dispatch (#190)
+
+A call through an interface, abstract or overridden method keeps its CALLS edge to the declaration the receiver's static type binds. The analysis also records an **OVERRIDES** edge from every method to each base-class, interface or trait method it overrides, up the whole hierarchy (static and private methods and constructors excluded; the parameter count must agree where both signatures give it; Go embedding does not override). Dispatch is derived from the two when a tool walks the graph, never stored as CALLS:
+
+- callers of an implementation (`find_callers`, `impact_of_change`, `myc callers`, `myc impact`) include the callers of every method it overrides;
+- callees of a call (`find_callees`, `trace_flow`) include the implementations of the method it binds, at most 8 per call in a list (the rest are counted in `Incomplete`; `trace_flow` searches all of them);
+- `explain_symbol` lists what a method overrides and its implementations; `find_dead_code` does not list an implementation of a called method.
+
+Such a hit says `dispatch via I.m, confidence c`. The confidence is a fixed table, not a fitted probability:
+
+| implementations of the overridden method | 1 | 2-3 | 4-8 | 9-16 | more |
+|---|---:|---:|---:|---:|---:|
+| interface or abstract method | 0.9 | 0.8 | 0.6 | 0.4 | 0.2 |
+| method with a body of its own | 0.7 | 0.6 | 0.5 | 0.3 | 0.1 |
+
+Not followed: overrides of the methods every object has (`toString`, `equals`, `hashCode`, `clone`, `finalize`; C# `ToString`, `Equals`, `GetHashCode`; JS `toString`, `valueOf`, `toJSON`; Python `__str__`, `__repr__`, `__eq__`, `__hash__`, ...), which are recorded with `universal` in the edge metadata; `ambiguous` CALLS edges (two namesakes, or overloads the argument count does not tell apart: following both on the dev set added 20 wrong targets for 7 right ones); `super.m()` calls from an override of `m`. In languages whose extractor records no call forms (C#, Kotlin), a call matched by name to a method and its overrides links the method they override, which dispatch then follows; before, three or more such candidates got no edge.
+
+Measured on spring-framework (graph-eval, never gated). "Targets reached": gold targets that a CALLS edge or dispatch reaches. Dispatch targets are the implementations dispatch adds to a pair's CALLS edges; a target the gold does not list is wrong.
+
+| set | targets reached, CALLS only | with dispatch | dispatch targets correct |
+|---|---:|---:|---:|
+| dev, dispatch case (18 pairs; development numbers) | 0.21 (0.13–0.31) | **0.64 (0.53–0.74)** | 33 / 33 |
+| dev, all counted pairs (random and targeted strata) | — | — | 33 / 34 = 0.97 |
+| **held-out, dispatch case (7 pairs, scored once)** | 0.27 (0.14–0.44) | **0.97 (0.83–0.99)** | 21 / 24 |
+| **held-out, all 60 pairs (scored once)** | 0.59 (0.46–0.71) | **0.96 (0.88–0.99)** | **21 / 29 = 0.72 (0.54–0.85)** |
+
+CALLS precision and recall are unchanged on both sets and on the fixtures. The held-out set has only 7 dispatch pairs, so its intervals are wide. Its 8 wrong dispatch targets: 4 overrides in classes beside the receiver's static type (`ClassEmitter.begin_method` called on a `BeanMapEmitter`, whose method is inherited: dispatch reaches every override of `ClassEmitter.begin_method`, not only those below `BeanMapEmitter`), 3 overrides in JMH benchmark sources (`src/jmh`), which the labels leave out, and 1 call on `this` in a base class reaching a subclass override, which the labels leave out though the JVM would run it. On the dev set the one wrong target is an override in test sources. On the five fixture languages, dispatch adds 9 targets (Java 3, TypeScript 3, Rust 2, Python 1), all of them targets the gold accepts.
+
+What stays out: the 12 implementations of `Decoder.decode` behind an `ambiguous` edge on the dev set (two four-parameter overloads), implementations of library interfaces (no project declaration to link), and dispatch restricted to subtypes of the receiver's static type (a follow-up). An incremental re-index computes overrides among the changed files only, like their calls; the next full analysis restores the rest.
+
+**Cost.** On spring-framework (debug build, embeddings off, a shared machine): 16,521 OVERRIDES edges next to 160,114 CALLS edges; the override pass takes 0.77–0.80 s. Four analyses each, alternating with `origin/main` on a loaded machine: 105–108 s after, 92–104 s before (about +6% at the medians; storing the extra edges is the rest). CALLS edges go from 158,733 to 160,114 through the Kotlin changes (member calls named by the method; calls to a method and its overrides).
 
 **Whole-repository changes** (CALLS edges, each repository analyzed on its own):
 
@@ -218,11 +250,11 @@ No type inference: a receiver's type is known only when a declaration in view sa
 | Python | call forms; `import`/`from … import` (absolute, relative, `*`, re-exports); parameter annotations, assignments, module-level annotated values, `self.x = …` fields, `cls` in classmethods; return annotations; base classes | untyped parameters (most real code: method calls fall back to the name); bases that are parameters or call results (members fall back to the name); return types without annotations; `super()` beyond the first base; decorators that replace functions; `__getattr__`, monkeypatching |
 | TypeScript / JavaScript | call forms, `new`, `super(...)`; named, default and namespace imports, `require`, `export … from` re-exports; parameter, variable and field annotations, constructor parameter properties, `this.x = …`; declared return types; `extends`/`implements`; interface and abstract methods | inferred types (`const x = f()` where `f` declares no return type); types of destructured values; class fields holding arrow functions are not methods (no symbol, no caller); calls inside top-level arrow functions passed as arguments (`describe`/`it` callbacks) have no named caller |
 | Go | call forms; import paths to package directories, aliases, dot imports; receivers, parameters, `:=`/`var` declarations, composite literals, struct fields; result types; embedding; interface method sets | interface dispatch links the interface method, not implementations; type parameters; method values; variables holding closures; build tags (a type declared in two variant files: calls inside each file stay in it, a call from elsewhere links one variant) |
-| Rust | call forms, paths (`Type::f`, `module::f`, `Self::f`); `use` paths, `mod`; parameters, `let` bindings, statics and consts, struct fields; return types (`-> Self`); `impl Trait for Type` (trait default methods); calls written in macro arguments (bare calls and `self.m()`) | trait dispatch on generic `T: Trait` and trait objects beyond the trait's declaration; methods reached through `Deref` (`Box`, `Rc`); other calls inside macros; trait impls for library types |
+| Rust | call forms, paths (`Type::f`, `module::f`, `Self::f`); `use` paths, `mod`; parameters, `let` bindings, statics and consts, struct fields; return types (`-> Self`); `impl Trait for Type` (trait default methods; its methods override the trait's, so dispatch reaches them); calls written in macro arguments (bare calls and `self.m()`) | calls on a generic `T: Trait` or a trait object whose trait method the resolver does not bind; methods reached through `Deref` (`Box`, `Rc`); other calls inside macros; trait impls for library types |
 | Java | call forms, `new`, `super(...)`; class, static and wildcard imports, same-package classes; parameters, locals, `var`, fields, record components; return types; `extends`/`implements`; implicit `this`, `Outer.this`; annotation elements; overloads by argument count, varargs included; methods apart from variables and fields of the same name | overloads with the same count (needs argument types); generics (type arguments, type-parameter bounds); method references; types of lambda parameters; members inherited from library classes; static wildcard imports |
 | other languages | caller by position, language family, scope preference (file, imports, directory, family) | call forms, receivers and bindings: a call on an object may link to any function or method of that name; their accuracy is not measured |
 
-For every language: dynamic dispatch is linked to the statically bound declaration (`self.render_row()` in a base class goes to the base class's `render_row`, not to overrides; `sink.write()` on a `Sink` interface goes to `Sink.write`, not to `ConsoleSink.write`). So **an implementation of an interface, trait or abstract method gets no callers from calls made through the interface** (#190; on spring-framework 21–27% of the implementations a dispatch call may run get an edge): `find_callers` and `impact_of_change` on `ConsoleSink.write` miss them — look at the interface method's callers too. Calls through function values, callbacks, reflection and dynamic imports have no static target and no edge.
+For every language: a CALLS edge links dynamic dispatch to the statically bound declaration (`self.render_row()` in a base class goes to the base class's `render_row`; `sink.write()` on a `Sink` interface goes to `Sink.write`). The walks add the overrides through OVERRIDES edges ([dispatch](#dispatch-190)): `find_callers` on `ConsoleSink.write` lists the callers of `Sink.write`, marked `dispatch via Sink.write`. Dispatch reaches every override of the bound method, also those in classes that are not subtypes of the receiver's static type. Calls through function values, callbacks, reflection and dynamic imports have no static target and no edge.
 
 ## Interpreting results: confidence guidelines
 
@@ -236,10 +268,11 @@ For every language: dynamic dispatch is linked to the statically bound declarati
 - `ambiguous` edges: one of the two targets is usually wrong.
 - `name-match` edges for a method call on an untyped value (`x.load()` where nothing declares `x`), or on an instance of a class with an unresolved base: the method may belong to a library type.
 - Callers and callees in languages without call forms (see the table above).
+- Hits marked `dispatch via …`: a call through an interface or base method may run this implementation. The lower the confidence, the more implementations share the call.
 
 ### Missing edges
 
-A missing edge is now the more likely error, especially in untyped code: a method call on a value of unknown type whose name three or more classes share gets no edge; a call through a variable, parameter or callback never does; an interface or abstract method's implementations get no callers from calls through the interface. "No callers" does not mean "unused": `find_callers`, `find_callees`, `trace_flow` and `impact_of_change` list the call sites they could not follow in their `Incomplete` block ([walks that stop early](#walks-that-stop-early)).
+A missing edge is now the more likely error, especially in untyped code: a method call on a value of unknown type whose name three or more classes share gets no edge; a call through a variable, parameter or callback never does; an implementation gets no callers through a library interface or through an `ambiguous` call. "No callers" does not mean "unused": `find_callers`, `find_callees`, `trace_flow` and `impact_of_change` list the call sites they could not follow in their `Incomplete` block ([walks that stop early](#walks-that-stop-early)).
 
 ## Recommended practices
 
@@ -250,7 +283,7 @@ A missing edge is now the more likely error, especially in untyped code: a metho
 
 ## Future work
 
-- Implementations for interface and trait dispatch (today the declaration is the target; #190).
+- Dispatch restricted to subtypes of the receiver's static type, and through `ambiguous` overloads once argument types select them (#186).
 - Java: overloads selected by argument types (#186), generics (#187), method references (#188).
 - Return types without annotations: a function whose body returns a constructor call (`return cls(...)`) could type its result.
 - Call forms and bindings for C/C++, C#, Kotlin, Swift and the other extractors.

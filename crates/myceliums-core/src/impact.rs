@@ -543,6 +543,41 @@ index abc..def 100644
         assert!(report.indirectly_affected.iter().any(|a| a.name == "bar"));
     }
 
+    /// #190: a change to an implementation reaches the callers of the
+    /// interface method it implements, labelled as dispatch.
+    #[test]
+    fn a_changed_implementation_reaches_callers_through_its_interface() {
+        let symbols = vec![
+            make_symbol("iface", "send", "src/port.java", 1, 3),
+            make_symbol("impl", "send", "src/smtp.java", 5, 15),
+            make_symbol("caller", "notify", "src/alerts.java", 1, 9),
+        ];
+        let overrides = Relationship {
+            uid: "impl->iface".into(),
+            source_uid: "impl".into(),
+            target_uid: "iface".into(),
+            kind: RelationshipKind::Overrides,
+            repo_id: "test".into(),
+            metadata: crate::dispatch::DispatchConfidence {
+                overridden: crate::dispatch::OverriddenKind::Abstract,
+                implementations: 1,
+                abstract_override: false,
+                universal: false,
+            }
+            .to_metadata(),
+        };
+        let relationships = vec![make_call_rel("caller", "iface"), overrides];
+        let diff = "diff --git a/src/smtp.java b/src/smtp.java\n--- a/src/smtp.java\n+++ b/src/smtp.java\n@@ -10,1 +10,2 @@\n+changed\n";
+        let report = detect_impact(diff, &symbols, &relationships, 1);
+        assert_eq!(report.directly_changed[0].name, "send");
+        let caller = report
+            .indirectly_affected
+            .iter()
+            .find(|a| a.name == "notify")
+            .expect("the caller through the interface is affected");
+        assert_eq!(caller.relationship, "dispatch caller");
+    }
+
     #[test]
     fn test_empty_diff() {
         let report = detect_impact("", &[], &[], 2);

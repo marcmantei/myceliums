@@ -60,6 +60,7 @@ The kind of symbol is the `kind` property, filtered with `WHERE`:
 | `RATIONALE_FOR` | A rationale comment explains a symbol |
 | `REPLY_TO` / `SENT_BY` / `RECEIVED_BY` / `HAS_ATTACHMENT` / `PART_OF_CONVERSATION` | E-mail structure |
 | `MENTIONS` | An e-mail body mentions a symbol or person |
+| `OVERRIDES` | A method overrides or implements a method of a base class, interface or trait (implementation → overridden method, to every one up the hierarchy; #190). Its metadata carries the dispatch confidence. `MATCH (i)-[:OVERRIDES]->(m) WHERE m.qualified_name = 'Shape.area' RETURN i.qualified_name, i.file_path` lists the implementations |
 
 Communities and processes are not graph nodes; use `myc communities` /
 `myc processes` or the MCP tools for them.

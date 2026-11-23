@@ -10,6 +10,7 @@ scores what it extracts against these labels.
 cargo run -p myceliums-benchmarks --bin graph-eval                      # report
 cargo run -p myceliums-benchmarks --bin graph-eval -- --check-baseline  # gate, as CI runs it
 cargo run -p myceliums-benchmarks --bin graph-eval -- --update-baseline # re-record
+cargo run -p myceliums-benchmarks --bin graph-eval -- --held-out spring-dev  # only the real-repository sets whose file name contains spring-dev
 ```
 
 The run is offline and needs no model weights. It prints Markdown tables
@@ -34,6 +35,13 @@ push and pull request (since #139). It fails the build when
   between the two TypeScript fixtures is a false positive, not a crossing);
 - the baseline was recorded against other labels or fixtures, or lacks a
   setup.
+
+Dispatch (#190) is reported next to the CALLS tables, never gated and never
+part of the CALLS scores: per language, the implementations that dispatch
+adds to the CALLS edges (through OVERRIDES edges, see
+`docs/guides/call-resolution-limitations.md`), and how many of them the gold
+accepts as the call's target (an overriding implementation is among the
+`also_accept` targets of a dispatch call).
 
 Per-language and per-label numbers are reported, not gated: 43–59 edges per
 language (25 in the monorepo set) are too few. An intended drop is accepted by re-recording the
@@ -113,7 +121,12 @@ dispatches, the gold lists the statically bound declaration and every
 override in the repository, found with `git grep` over the subtypes. The
 fixture rule accepts overrides, so a dispatch pair counts as found when it
 reaches the interface method. Targets reached shows how many of the
-implementations a dispatch call may run are linked (#190). Method references
+implementations a dispatch call may run are linked by CALLS edges; the
+column *with dispatch* counts those dispatch reaches too (#190), and
+*dispatch targets* gives how many of the implementations dispatch adds are
+gold targets. Each set's report also gives the analysis time and its CALLS
+and OVERRIDES edge counts, the dispatch targets that are wrong, and the
+targets of found pairs that neither reaches. Method references
 (`Type::m`) are not calls under the fixture rules (`invokedynamic`), so their
 5 dev pairs are reported per case and left out of the totals.
 
