@@ -136,13 +136,10 @@ impl Hit<'_> {
         format!("{}{}", self.symbol.name, self.mark())
     }
 
-    /// How the hit was reached, for `resolved` fields: the edge's label, or
-    /// `dispatch via Base.m, confidence 0.8`.
-    pub(crate) fn resolution(&self) -> String {
-        match &self.dispatch {
-            Some(dispatch) => dispatch.describe(),
-            None => self.resolved.unwrap_or("exact").to_string(),
-        }
+    /// Where a dispatch hit came from (`via Base.m, confidence 0.8`), for
+    /// the `dispatch` field next to the `resolved` status label.
+    pub(crate) fn dispatch_provenance(&self) -> Option<String> {
+        self.dispatch.as_ref().map(Dispatch::provenance)
     }
 
     /// ` (dispatch via Base.m, confidence 0.8)` for a hit reached through
@@ -495,6 +492,7 @@ mod tests {
                 implementations: impls,
                 abstract_override: false,
                 universal: false,
+                ambiguous: false,
             }
             .to_metadata();
             rels.push(overrides);
@@ -511,8 +509,8 @@ mod tests {
         assert_eq!(names, ["notify (dispatch via Port.send, confidence 0.8)"]);
         assert_eq!(callers[0].resolved, Some(DISPATCH));
         assert_eq!(
-            callers[0].resolution(),
-            "dispatch via Port.send, confidence 0.8"
+            callers[0].dispatch_provenance().as_deref(),
+            Some("via Port.send, confidence 0.8")
         );
         // impact_of_change on the implementation reaches the caller too.
         let deps = dependents(&s, &r, &[impl0], 1);

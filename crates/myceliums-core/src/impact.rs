@@ -563,6 +563,7 @@ index abc..def 100644
                 implementations: 1,
                 abstract_override: false,
                 universal: false,
+                ambiguous: false,
             }
             .to_metadata(),
         };

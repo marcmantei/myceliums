@@ -572,8 +572,12 @@ pub struct CallerItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
     /// How the CALLS edge reaching this symbol was resolved:
-    /// exact | import | name-match | ambiguous.
+    /// exact | import | name-match | ambiguous | dispatch.
     pub resolved: String,
+    /// For `resolved: dispatch`: through which overridden method, and how
+    /// likely (`via Base.m, confidence 0.8`; #190).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dispatch: Option<String>,
     /// The declaration line; only with `detail: full` (#181).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,
@@ -610,8 +614,12 @@ pub struct CalleeItem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
     /// How the CALLS edge reaching this symbol was resolved:
-    /// exact | import | name-match | ambiguous.
+    /// exact | import | name-match | ambiguous | dispatch.
     pub resolved: String,
+    /// For `resolved: dispatch`: through which overridden method, and how
+    /// likely (`via Base.m, confidence 0.8`; #190).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dispatch: Option<String>,
     /// The declaration line; only with `detail: full` (#181).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<String>,

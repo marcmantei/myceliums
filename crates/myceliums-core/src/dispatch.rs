@@ -52,7 +52,14 @@ pub struct DispatchConfidence {
     pub abstract_override: bool,
     /// A method every object has (`toString`, `equals`, ...): never followed.
     pub universal: bool,
+    /// Several overloads of the base class fit the overriding method and
+    /// the parameter types do not tell which it overrides: an edge to each,
+    /// at most [`AMBIGUOUS_CONFIDENCE`].
+    pub ambiguous: bool,
 }
+
+/// The highest confidence of an ambiguous OVERRIDES edge.
+pub const AMBIGUOUS_CONFIDENCE: f32 = 0.2;
 
 impl DispatchConfidence {
     /// How likely a call bound to the overridden method runs this
@@ -65,7 +72,8 @@ impl DispatchConfidence {
     /// | interface / abstract | 0.9 | 0.8 | 0.6 | 0.4 | 0.2 |
     /// | method with a body | 0.7 | 0.6 | 0.5 | 0.3 | 0.1 |
     ///
-    /// A universal method (`toString`, ...) is 0.1.
+    /// A universal method (`toString`, ...) is 0.1; an ambiguous edge at
+    /// most [`AMBIGUOUS_CONFIDENCE`].
     pub fn confidence(&self) -> f32 {
         if self.universal {
             return 0.1;
@@ -77,9 +85,14 @@ impl DispatchConfidence {
             n if n <= WIDE_DISPATCH => 3,
             _ => 4,
         };
-        match self.overridden {
+        let confidence: f32 = match self.overridden {
             OverriddenKind::Abstract => [0.9, 0.8, 0.6, 0.4, 0.2][tier],
             OverriddenKind::Concrete => [0.7, 0.6, 0.5, 0.3, 0.1][tier],
+        };
+        if self.ambiguous {
+            confidence.min(AMBIGUOUS_CONFIDENCE)
+        } else {
+            confidence
         }
     }
 
@@ -90,7 +103,8 @@ impl DispatchConfidence {
 
     /// The edge metadata:
     /// `overrides:<abstract|concrete>;impls:<n>;confidence:<c>`, then
-    /// `;abstract-override` and `;universal` where they apply.
+    /// `;abstract-override`, `;universal` and `;ambiguous-overload` where
+    /// they apply.
     pub fn to_metadata(&self) -> String {
         let kind = match self.overridden {
             OverriddenKind::Abstract => "abstract",
@@ -107,6 +121,9 @@ impl DispatchConfidence {
         if self.universal {
             out.push_str(";universal");
         }
+        if self.ambiguous {
+            out.push_str(";ambiguous-overload");
+        }
         out
     }
 
@@ -117,6 +134,7 @@ impl DispatchConfidence {
         let mut implementations = 0;
         let mut abstract_override = false;
         let mut universal = false;
+        let mut ambiguous = false;
         for part in metadata.split(';') {
             match part.split_once(':') {
                 Some(("overrides", "abstract")) => overridden = Some(OverriddenKind::Abstract),
@@ -124,6 +142,7 @@ impl DispatchConfidence {
                 Some(("impls", n)) => implementations = n.parse().unwrap_or(0),
                 _ if part == "abstract-override" => abstract_override = true,
                 _ if part == "universal" => universal = true,
+                _ if part == "ambiguous-overload" => ambiguous = true,
                 _ => {}
             }
         }
@@ -132,6 +151,7 @@ impl DispatchConfidence {
             implementations,
             abstract_override,
             universal,
+            ambiguous,
         })
     }
 }
@@ -259,8 +279,14 @@ pub struct Dispatch<'a> {
 impl Dispatch<'_> {
     /// `dispatch via Base.m, confidence 0.8`, for tool output.
     pub fn describe(&self) -> String {
+        format!("dispatch {}", self.provenance())
+    }
+
+    /// `via Base.m, confidence 0.8`: where the dispatch came from, apart
+    /// from the `dispatch` status label.
+    pub fn provenance(&self) -> String {
         format!(
-            "dispatch via {}, confidence {:.1}",
+            "via {}, confidence {:.1}",
             self.base.qualified_name, self.confidence
         )
     }
@@ -302,6 +328,7 @@ mod tests {
             implementations,
             abstract_override: false,
             universal: false,
+            ambiguous: false,
         };
         let abs: Vec<f32> = [1, 3, 8, 16, 17]
             .iter()
@@ -323,12 +350,21 @@ mod tests {
             implementations: 4,
             abstract_override: true,
             universal: true,
+            ambiguous: true,
         };
         let meta = record.to_metadata();
         assert_eq!(
             meta,
-            "overrides:concrete;impls:4;confidence:0.1;abstract-override;universal"
+            "overrides:concrete;impls:4;confidence:0.1;abstract-override;universal;ambiguous-overload"
         );
+        let ambiguous = DispatchConfidence {
+            overridden: OverriddenKind::Abstract,
+            implementations: 1,
+            abstract_override: false,
+            universal: false,
+            ambiguous: true,
+        };
+        assert_eq!(ambiguous.confidence(), AMBIGUOUS_CONFIDENCE);
         assert_eq!(DispatchConfidence::from_metadata(&meta), Some(record));
         assert_eq!(
             DispatchConfidence::from_metadata("line:3;resolved:exact"),
@@ -410,6 +446,31 @@ mod fixture_tests {
                         "{} -> {}",
                         self.name(&r.source_uid),
                         self.name(&r.target_uid)
+                    )
+                })
+                .collect();
+            out.sort();
+            out
+        }
+
+        /// `source:line -> target:line (confidence)` per OVERRIDES edge,
+        /// sorted: tells overloads apart.
+        fn overrides_at(&self) -> Vec<String> {
+            let at = |uid: &str| {
+                let s = self.symbols.iter().find(|s| s.uid == uid).unwrap();
+                format!("{}:{}", s.qualified_name, s.start_line)
+            };
+            let mut out: Vec<String> = self
+                .relationships
+                .iter()
+                .filter(|r| r.kind == RelationshipKind::Overrides)
+                .map(|r| {
+                    let c = super::DispatchConfidence::from_metadata(&r.metadata).unwrap();
+                    format!(
+                        "{} -> {} ({:.1})",
+                        at(&r.source_uid),
+                        at(&r.target_uid),
+                        c.confidence()
                     )
                 })
                 .collect();
@@ -633,6 +694,100 @@ mod fixture_tests {
         assert_eq!(
             g.walk("Square.area", CallDirection::Callers),
             ["total (via Shape.area, 0.8)"]
+        );
+    }
+
+    /// Java: an implementation overrides the overload whose parameter types
+    /// it shares; a type parameter matches any type; default methods are
+    /// overridable; final, static and private methods are not.
+    #[tokio::test]
+    async fn java_overrides_respect_overloads_generics_and_modifiers() {
+        let g = Graph::of(&[
+            (
+                "p/Handler.java",
+                "package p;\n\npublic interface Handler<T> {\n    void handle(String event);\n\n    void handle(Integer event);\n\n    T convert(T input);\n\n    default String describe() {\n        return \"handler\";\n    }\n\n    default void log() {\n    }\n}\n",
+            ),
+            (
+                "p/Base.java",
+                "package p;\n\npublic class Base {\n    public final void fixedStep() {\n    }\n\n    public static void util() {\n    }\n\n    private void secret() {\n    }\n\n    public void open() {\n    }\n}\n",
+            ),
+            (
+                "p/Impl.java",
+                "package p;\n\npublic class Impl extends Base implements Handler<String> {\n    public void handle(String event) {\n    }\n\n    public String convert(String input) {\n        return input;\n    }\n\n    public String describe() {\n        return \"impl\";\n    }\n\n    public void fixedStep() {\n    }\n\n    public static void util() {\n    }\n\n    private void secret() {\n    }\n\n    public void open() {\n    }\n}\n",
+            ),
+            (
+                "p/Relay.java",
+                "package p;\n\npublic class Relay<X> implements Handler<X> {\n    public void handle(X event) {\n    }\n}\n",
+            ),
+        ])
+        .await;
+        assert_eq!(
+            g.overrides_at(),
+            [
+                // The default method has a body: a concrete method.
+                "Impl.convert:7 -> Handler.convert:8 (0.9)",
+                "Impl.describe:11 -> Handler.describe:10 (0.7)",
+                // handle(String), not handle(Integer).
+                "Impl.handle:4 -> Handler.handle:4 (0.8)",
+                "Impl.open:24 -> Base.open:13 (0.7)",
+                // handle(X) fits both overloads: an edge to each, ambiguous.
+                "Relay.handle:4 -> Handler.handle:4 (0.2)",
+                "Relay.handle:4 -> Handler.handle:6 (0.2)",
+            ]
+        );
+    }
+
+    /// C#: only `virtual`/`abstract`/`override` methods are overridden,
+    /// only by `override`; `new` hides. Kotlin: only `open` methods, only
+    /// by `override`.
+    #[tokio::test]
+    async fn csharp_and_kotlin_overrides_follow_their_modifiers() {
+        let g = Graph::of(&[
+            (
+                "Zoo/Animal.cs",
+                "namespace Zoo\n{\n    public class Animal\n    {\n        public virtual string Speak() { return \"\"; }\n\n        public string Name() { return \"\"; }\n\n        public virtual void Eat() { }\n    }\n\n    public class Dog : Animal\n    {\n        public override string Speak() { return \"woof\"; }\n\n        public new string Name() { return \"dog\"; }\n\n        public new void Eat() { }\n    }\n}\n",
+            ),
+            (
+                "zoo/Base.kt",
+                "package zoo\n\nopen class Keeper {\n    fun closed() {\n    }\n\n    open fun opened() {\n    }\n}\n\nclass Junior : Keeper() {\n    fun closed() {\n    }\n\n    override fun opened() {\n    }\n}\n",
+            ),
+        ])
+        .await;
+        assert_eq!(
+            g.overrides_at(),
+            [
+                "Dog.Speak:14 -> Animal.Speak:5 (0.7)",
+                "Junior.opened:15 -> Keeper.opened:7 (0.7)",
+            ]
+        );
+    }
+
+    /// Rust: a trait's method is implemented by `impl Trait for Type`, not
+    /// by a namesake in another type's inherent impl. TypeScript: a class
+    /// implements an interface only when it says so, not by its shape.
+    #[tokio::test]
+    async fn rust_traits_and_typescript_shapes_do_not_over_link() {
+        let g = Graph::of(&[
+            (
+                "src/lib.rs",
+                "pub trait Shape {\n    fn area(&self) -> f64;\n}\n\npub struct Square;\n\nimpl Shape for Square {\n    fn area(&self) -> f64 {\n        1.0\n    }\n}\n\npub struct Plot;\n\nimpl Plot {\n    pub fn area(&self) -> f64 {\n        2.0\n    }\n}\n",
+            ),
+            (
+                "web/shapes.ts",
+                "export interface Figure {\n  area(): number;\n}\n\nexport class Tile implements Figure {\n  area(): number {\n    return 1;\n  }\n}\n\nexport class Lookalike {\n  area(): number {\n    return 2;\n  }\n}\n\nexport function total(figure: Figure): number {\n  return figure.area();\n}\n",
+            ),
+        ])
+        .await;
+        assert_eq!(
+            g.overrides_at(),
+            [
+                "Square.area:8 -> Shape.area:2 (0.9)",
+                "Tile.area:6 -> Figure.area:2 (0.9)",
+            ]
+        );
+        assert_eq!(
+            g.walk("total", CallDirection::Callees),
+            ["Figure.area", "Tile.area (via Figure.area, 0.9)"]
         );
     }
 }

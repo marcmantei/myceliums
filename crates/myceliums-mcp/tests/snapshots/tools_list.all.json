@@ -746,6 +746,13 @@
               "minimum": 0,
               "type": "integer"
             },
+            "dispatch": {
+              "description": "For `resolved: dispatch`: through which overridden method, and how\nlikely (`via Base.m, confidence 0.8`; #190).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "end_line": {
               "format": "uint32",
               "minimum": 0,
@@ -764,7 +771,7 @@
               "type": "string"
             },
             "resolved": {
-              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
+              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous | dispatch.",
               "type": "string"
             },
             "signature": {
@@ -934,6 +941,13 @@
               "minimum": 0,
               "type": "integer"
             },
+            "dispatch": {
+              "description": "For `resolved: dispatch`: through which overridden method, and how\nlikely (`via Base.m, confidence 0.8`; #190).",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "end_line": {
               "format": "uint32",
               "minimum": 0,
@@ -952,7 +966,7 @@
               "type": "string"
             },
             "resolved": {
-              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous.",
+              "description": "How the CALLS edge reaching this symbol was resolved:\nexact | import | name-match | ambiguous | dispatch.",
               "type": "string"
             },
             "signature": {

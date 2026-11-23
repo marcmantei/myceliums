@@ -49,6 +49,7 @@ use myceliums_core::dispatch::DispatchIndex;
 const SET: &str = include_str!("../../graph-gold/held-out/real-repos.json");
 const JAVA_SET: &str = include_str!("../../graph-gold/held-out/java-spring-heldout.json");
 const JAVA_DEV_SET: &str = include_str!("../../graph-gold/held-out/java-spring-dev.json");
+const CORRECTIONS: &str = include_str!("../../graph-gold/held-out/label-corrections.json");
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct HeldOutSet {
@@ -219,6 +220,88 @@ pub struct RepoScore {
 pub struct HeldOutReport {
     pub repos: Vec<RepoScore>,
     pub skipped: Vec<String>,
+    /// The same repositories scored on the corrected labels
+    /// (`label-corrections.json`), when a correction applies to the set.
+    pub corrected: Vec<RepoScore>,
+    /// The corrections applied, as `file::caller → callee (+n targets)`.
+    pub corrections: Vec<String>,
+}
+
+/// One correction of `label-corrections.json`: targets a pair's labels
+/// missed under the set's own rule.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Correction {
+    pub set: String,
+    pub file: String,
+    pub caller: String,
+    pub callee: String,
+    pub call_line: u32,
+    pub add_targets: Vec<Target>,
+    pub why: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct Corrections {
+    corrections: Vec<Correction>,
+}
+
+/// The committed corrections (`held-out/label-corrections.json`).
+pub fn corrections() -> Result<Vec<Correction>> {
+    let parsed: Corrections =
+        serde_json::from_str(CORRECTIONS).context("parsing held-out/label-corrections.json")?;
+    Ok(parsed.corrections)
+}
+
+impl HeldOutSet {
+    /// The set with `corrections` applied (those naming it), and what was
+    /// applied; `None` when none names it. Fails when a correction matches
+    /// no pair, or adds a target the pair already has.
+    pub fn corrected(&self, corrections: &[Correction]) -> Result<Option<(Self, Vec<String>)>> {
+        let mine: Vec<&Correction> = corrections.iter().filter(|c| c.set == self.name).collect();
+        if mine.is_empty() {
+            return Ok(None);
+        }
+        let mut set = self.clone();
+        let mut applied = Vec::new();
+        for c in mine {
+            let is = |p: &Pair| {
+                p.file == c.file
+                    && p.caller == c.caller
+                    && p.callee == c.callee
+                    && p.call_line == c.call_line
+            };
+            let count = set.pairs.iter().filter(|p| is(p)).count();
+            if count != 1 {
+                bail!(
+                    "correction {}::{} → {} matches {count} pairs of {}",
+                    c.file,
+                    c.caller,
+                    c.callee,
+                    self.name
+                );
+            }
+            let pair = set.pairs.iter_mut().find(|p| is(p)).expect("counted above");
+            for t in &c.add_targets {
+                if pair
+                    .targets
+                    .iter()
+                    .any(|have| have.file == t.file && have.line == t.line)
+                {
+                    bail!("correction adds {}:{} twice", t.file, t.line);
+                }
+                pair.targets.push(t.clone());
+            }
+            applied.push(format!(
+                "{}::{} → `{}` (+{} target{})",
+                c.file,
+                c.caller,
+                c.callee,
+                c.add_targets.len(),
+                if c.add_targets.len() == 1 { "" } else { "s" }
+            ));
+        }
+        Ok(Some((set, applied)))
+    }
 }
 
 /// The checkout directory: `$MYC_EVAL_REPOS_DIR`, else
@@ -270,6 +353,13 @@ pub async fn run(set: &HeldOutSet, repos_dir: &Path) -> Result<HeldOutReport> {
         scored.calls_edges = extraction.calls.len();
         scored.overrides_edges = extraction.overrides.len();
         report.repos.push(scored);
+        if let Some((fixed, applied)) = set.corrected(&corrections()?)? {
+            let pairs: Vec<&Pair> = fixed.pairs.iter().filter(|p| p.repo == *repo).collect();
+            report
+                .corrected
+                .push(score_set(&fixed, repo, &pairs, &extraction));
+            report.corrections = applied;
+        }
     }
     Ok(report)
 }
@@ -571,6 +661,9 @@ pub fn markdown(set: &HeldOutSet, report: &HeldOutReport) -> String {
             s.repo, s.analysis_secs, s.calls_edges, s.overrides_edges
         );
     }
+    if !report.corrected.is_empty() {
+        out.push_str(&corrected_table(set, report));
+    }
     if set.stratified() {
         out.push_str(&breakdown(
             "\nPer stratum (the targeted strata draw the hard cases on purpose):\n",
@@ -650,6 +743,83 @@ pub fn markdown(set: &HeldOutSet, report: &HeldOutReport) -> String {
         if !wrong.is_empty() {
             let _ = writeln!(out, "\nWrong edges ({case}, report only): {}", list(&wrong));
         }
+    }
+    out
+}
+
+/// The headline numbers on the labels as committed and on the corrected
+/// labels, side by side: the counted pairs, and the dispatch case.
+fn corrected_table(set: &HeldOutSet, report: &HeldOutReport) -> String {
+    let sum = |scores: &mut dyn Iterator<Item = &RepoScore>| {
+        let mut sum = RepoScore::default();
+        for s in scores {
+            sum.with_target += s.with_target;
+            sum.found += s.found;
+            sum.edges += s.edges;
+            sum.correct += s.correct;
+            sum.targets += s.targets;
+            sum.targets_reached += s.targets_reached;
+            sum.targets_reached_dispatch += s.targets_reached_dispatch;
+            sum.dispatch_edges += s.dispatch_edges;
+            sum.dispatch_correct += s.dispatch_correct;
+        }
+        sum
+    };
+    // A stratified set's totals are its random stratum: count both strata.
+    let counted = |repos: &[RepoScore]| {
+        sum(&mut repos.iter().flat_map(|r| {
+            if r.strata.is_empty() {
+                vec![r]
+            } else {
+                r.strata.iter().collect()
+            }
+        }))
+    };
+    let case = |repos: &[RepoScore]| {
+        sum(&mut repos
+            .iter()
+            .flat_map(|r| &r.cases)
+            .filter(|c| c.repo == "dispatch"))
+    };
+    let rows = [
+        (
+            "counted pairs",
+            counted(&report.repos),
+            counted(&report.corrected),
+        ),
+        (
+            "dispatch case",
+            case(&report.repos),
+            case(&report.corrected),
+        ),
+    ];
+    let mut out = format!(
+        "\nOn the corrected labels (`held-out/label-corrections.json`: {}). Each metric as committed → corrected; \
+         \"CALLS only\" counts CALLS edges, \"with dispatch\" adds the dispatch targets:\n\n",
+        list(&report.corrections.iter().collect::<Vec<_>>())
+    );
+    let _ = writeln!(
+        out,
+        "| {} | CALLS recall | CALLS precision | targets reached, CALLS only | targets reached, with dispatch | dispatch precision | CALLS and dispatch precision |",
+        if set.stratified() { "pairs (all strata)" } else { "pairs" }
+    );
+    let _ = writeln!(out, "|---|---:|---:|---:|---:|---:|---:|");
+    for (name, a, b) in rows {
+        let both = |part: fn(&RepoScore) -> (usize, usize)| {
+            let (pa, wa) = part(&a);
+            let (pb, wb) = part(&b);
+            format!("{} → {}", rate(pa, wa), rate(pb, wb))
+        };
+        let _ = writeln!(
+            out,
+            "| {name} | {} | {} | {} | {} | {} | {} |",
+            both(|s| (s.found, s.with_target)),
+            both(|s| (s.correct, s.edges)),
+            both(|s| (s.targets_reached, s.targets)),
+            both(|s| (s.targets_reached_dispatch, s.targets)),
+            both(|s| (s.dispatch_correct, s.dispatch_edges)),
+            both(|s| (s.correct + s.dispatch_correct, s.edges + s.dispatch_edges)),
+        );
     }
     out
 }
@@ -769,6 +939,31 @@ mod tests {
 
     /// #177: the dev set — 60 random sites and 5 per case stratum, every
     /// case represented by at least five pairs, one pinned release.
+    /// Every label correction names one pair and adds targets it lacks.
+    #[test]
+    fn label_corrections_apply_to_one_pair_each() {
+        let corrections = corrections().unwrap();
+        assert!(!corrections.is_empty());
+        let mut applied = 0;
+        for set in HeldOutSet::all().unwrap() {
+            if let Some((fixed, notes)) = set.corrected(&corrections).unwrap() {
+                applied += notes.len();
+                let before: usize = set.pairs.iter().map(|p| p.targets.len()).sum();
+                let after: usize = fixed.pairs.iter().map(|p| p.targets.len()).sum();
+                let added: usize = corrections
+                    .iter()
+                    .filter(|c| c.set == set.name)
+                    .map(|c| c.add_targets.len())
+                    .sum();
+                assert_eq!(after, before + added, "{}", set.name);
+            }
+        }
+        assert_eq!(applied, corrections.len());
+        for c in &corrections {
+            assert!(!c.why.is_empty());
+        }
+    }
+
     #[test]
     fn the_java_dev_set_covers_every_case() {
         let set = HeldOutSet::java_dev().unwrap();

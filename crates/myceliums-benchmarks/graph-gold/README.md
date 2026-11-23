@@ -130,6 +130,16 @@ targets of found pairs that neither reaches. Method references
 (`Type::m`) are not calls under the fixture rules (`invokedynamic`), so their
 5 dev pairs are reported per case and left out of the totals.
 
+**Label corrections** (`held-out/label-corrections.json`, #190): gold
+targets a set's labels missed under its own rule, each with the pair, the
+source lines and the reason. The sets stay as committed; `graph-eval` scores
+each set as committed and, where a correction applies, again on the
+corrected labels, and prints both side by side (CALLS recall and
+precision, targets reached with CALLS only and with dispatch, dispatch
+precision). A test checks that every correction names exactly one pair and
+adds targets it lacks. The corrections so far came from reviewing wrong
+dispatch targets, so they only fix omissions some edge reached.
+
 `graph-eval` scores both sets when the checkout is present
 (`held-out/fetch_java.sh` puts it into the same cache directory). Neither
 set is in CI's corpus: analysing the repository adds about 30 s and 3 GB of

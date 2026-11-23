@@ -540,9 +540,9 @@ pub struct CallResolver {
     prepared: bool,
     base_memo: types::BaseMemo,
     stats: CallResolutionStats,
-    /// (method, overridden method) pairs, once computed for this
+    /// (method, overridden method, ambiguous) triples, once computed for this
     /// preparation (#190).
-    override_pairs: Option<Vec<(DefId, DefId)>>,
+    override_pairs: Option<Vec<(DefId, DefId, bool)>>,
     /// Method → the methods it overrides, from `override_pairs`.
     overridden: HashMap<DefId, Vec<DefId>>,
 }
