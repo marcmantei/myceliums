@@ -1590,7 +1590,7 @@ tests, at least two build modules touched (`framework-docs` counts), and a
 parent that builds with the Java 25 toolchain: **151 candidates**. 34 were
 picked for a public API or behaviour change a description can state
 (no pure refactoring or deprecation), and stratified by files, code modules
-and docs; 20 are the task set, 12 are reserves
+and docs; 20 are the task set, 13 are reserves
 (`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
 fails.
 
@@ -1599,7 +1599,7 @@ fails.
 | `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 2 | yes | 1 |
 | `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 | yes | 2 |
 | `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 | yes | 3 |
-| `test-context-cache-pause-mode` | 9711db787e | 9 (4/3/2) | 2 | yes | 3 |
+| `spel-big-power-result-limit` | 8a92c19e4d | 8 (4/2/2) | 2 | yes | 2 |
 | `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 | yes | 1 |
 | `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | yes | 2 |
 | `fn-request-bind-pathvars-headers` | a9a404266c | 7 (3/2/2) | 2 | yes | 1 |
@@ -1635,7 +1635,7 @@ that the method is abstract as in the commit; without it a one-line default
 method would have passed). With it the implementations are compile errors, so this task says
 little about forgotten dependents. These four texts were not reviewed again. The seventh, a reserve, had to name a
 dependent (a Kotlin extension its module's tests compile against) and was
-dropped (later one more went into the set: 12 reserves). No human has reviewed the descriptions.
+dropped (13 reserves are left). No human has reviewed the descriptions.
 Scope words an issue would use ("for both Spring MVC and WebFlux") are allowed
 and noted in the spec.
 
@@ -1644,7 +1644,7 @@ task file's own `repos` (the parent; `gold_commit` the replayed commit),
 `gold_files` (the commit's name-status, renames as delete + add),
 `test_overlay` (the commit's test files, fixtures included), the default test
 command (`./gradlew --offline --no-scan --no-daemon --console=plain :module:test --tests ...` over
-the changed test classes; two tasks narrow it, see the spec), arm D's
+the changed test classes; three tasks narrow it, see the spec), arm D's
 `allowed_commands` (`./gradlew` with task paths, `--tests` filters and a few
 flags, `--offline --no-scan` required; `-I`, `-D`, `-P`, `-p`, `--init-script` are refused) and the strata.
 
@@ -1778,7 +1778,7 @@ runs. One at a time, low priority, 4 Gradle workers, beside the #182 index build
 | `observation-record-handled-exception` | compile, 106 s | 2 of 2 | 88, 47 s |
 | `beans-max-nested-path-depth` | compile, 160 s | 2 of 2 | 94, 38 s |
 | `jsonl-media-type-support` | compile, 410 s | 2 of 2 | 111, 32 s |
-| `test-context-cache-pause-mode` | not run | | |
+| `spel-big-power-result-limit` | parent not buildable | | |
 | `retry-max-attempts-to-max-retries` | compile, 304 s | 2 of 2 | 135, 40 s |
 | `fn-request-bind-pathvars-headers` | tests, 550 s | 2 of 2 | 138, 41 s |
 | `jdbcclient-batch-entry-dsl` | compile, 275 s | 2 of 2 | 100, 69 s |
@@ -1795,22 +1795,37 @@ runs. One at a time, low priority, 4 Gradle workers, beside the #182 index build
 | `bean-provider-parameterized-type-reference` | not run | | |
 | `message-source-default-charset` | not run | | |
 
-* **Dropped:** `spel-big-power-result-limit`: its parent needs
-  `micrometer-bom:1.18.0-INTERNAL-SNAPSHOT`, which neither Spring repository
-  has. Replaced by the reserve `test-context-cache-pause-mode` (same strata); 12
-  reserves are left.
-* **Not run (7).** Gradle distributions 9.1.0, 9.3.1, 9.4.1 and 9.8.2 are missing, and of
-  each build's 21 BOMs and root plugins these: `test-context-cache-pause-mode`
-  (9.2.1, on disk) 9; `servlet-response-ignore-body-flush` (9.3.1) 6;
-  `message-source-default-charset` (9.3.1) 5; `client-builders-...` and
-  `http-range-...` (9.8.2) 1 each; `deferred-bean-registrar-contains-bean` (9.4.1) 1;
-  `bean-provider-...` (9.1.0) 8. Further artifacts may be missing. One online warm-up per
-  Gradle version is needed before they can run offline.
+* **Without an online pass: 7 of 20.** `spel-big-power-result-limit`
+  failed because its parent needs `micrometer-bom:1.18.0-INTERNAL-SNAPSHOT`, which Gradle did not
+  find in either Spring repository (missing, no connection error), so it will probably
+  fail offline too; `test-context-cache-pause-mode` (a reserve, same strata) is its stand-in.
+  `servlet-response-ignore-body-flush` and `bean-provider-parameterized-type-reference`
+  never got past the wrapper's download.
+* **Not in the cache, not fetched.** Distributions: 9.1.0, 9.3.1 and 9.8.2 were put
+  there as zips by hand, with their published SHA-256 compared (same origin; Spring pins no
+  checksum; unpacking by the wrapper not tried yet); **9.4.1** is missing
+  (`deferred-bean-registrar-contains-bean`, and the reserve `form-converter-map-payloads`)
+  and 9.8.1 (a reserve). Of each build's 21 BOMs and root plugins: `servlet-response-...` 6,
+  `message-source-default-charset` 5, `bean-provider-...` 8, `deferred-bean-...` 1,
+  `client-builders-...` and `http-range-...` 1 each, the stand-in 9 (names:
+  micrometer, reactor, netty, jetty, junit, mockito, groovy and jackson BOMs, `kotlin-gradle-plugin`
+  2.2.20, `io.spring.nullability`). Further artifacts may be missing.
 * **Reproducibility risk:** six of the 20 parents depend on unpinned `-SNAPSHOT` BOMs
-  (micrometer 1.18.0, reactor 2026.0.0; `beans-max-nested-path-depth` reactor
+  (micrometer 1.18.0, reactor 2026.0.0, not counting `spel-big-power-result-limit`; `beans-max-nested-path-depth` reactor
   only). Offline, Gradle takes the cached snapshot; a lost cache may not be recoverable.
 * `~/.gradle` grew from 0 to 6.1 GB with seven complete distributions; forecast
-  for the ten versions of the kept tasks: 8-9 GB.
+  for the eleven versions of the kept tasks: 8-9 GB.
+
+**The wrapper must never connect.** `gradlew --offline` does not cover the wrapper's
+own download of its distribution, and the firewall on this machine attributes
+that connection to `gradle-wrapper.jar` at the path of the working copy. Each
+precheck used a new path (`.../precheck-<task>/`), deleted afterwards, so a firewall
+rule never matched twice and asked again every time; that explains the
+timeouts of 23 November while nobody answered. Since then every precheck uses one path, the
+sessions one path (`work_name`), and `wrapper_problem` refuses to start Gradle when the
+distribution is not complete on disk (unpacked with its `.ok` marker, or a whole
+zip): before a run's first session, before each session, before each precheck and before the
+grading test (an agent may have edited the wrapper properties).
 
 **Network-free builds.** Test commands start with `./gradlew --offline --no-scan`;
 arm D's pattern requires both flags and refuses `--scan`,

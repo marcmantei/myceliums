@@ -292,6 +292,74 @@ class SharedPathAndDerivedIndex(unittest.TestCase):
                     prep.index(repos, str(fake), "m", only={"new"}, base=base)
 
 
+class WrapperGuard(unittest.TestCase):
+    URL = "https\\://services.gradle.org/distributions/gradle-9.9.0-bin.zip"
+
+    def _setup(self, root):
+        co = root / "co"
+        (co / "gradle/wrapper").mkdir(parents=True)
+        (co / "gradle/wrapper/gradle-wrapper.properties").write_text(f"distributionBase=GRADLE_USER_HOME\ndistributionUrl={self.URL}\n")
+        # The wrapper's own directory for this URL (seen on disk).
+        return co, root / "g/wrapper/dists/gradle-9.9.0-bin/k7t1gqg1ujh3kgq8oiu7hqi4", {"GRADLE_USER_HOME": str(root / "g")}
+
+    def test_only_a_complete_distribution_passes(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as tmp:
+            co, d, env = self._setup(Path(tmp))
+            self.assertIn("the wrapper would download it", editgrade.wrapper_problem(co, env))
+            d.mkdir(parents=True)
+            (d / "gradle-9.9.0-bin.zip.part").write_bytes(b"half")  # interrupted download
+            (d / "gradle-9.9.0-bin.zip").write_bytes(b"PK\x03\x04 truncated")
+            self.assertIsNotNone(editgrade.wrapper_problem(co, env))
+            with zipfile.ZipFile(d / "gradle-9.9.0-bin.zip", "w") as z:
+                z.writestr("gradle-9.9.0/bin/gradle", "x")
+            self.assertIsNone(editgrade.wrapper_problem(co, env))
+            (d / "gradle-9.9.0-bin.zip").unlink()
+            (d / "gradle-9.9.0-bin.zip.ok").write_text("")  # a marker without the unpacked distribution
+            self.assertIsNotNone(editgrade.wrapper_problem(co, env))
+            (d / "gradle-9.9.0/bin").mkdir(parents=True)
+            (d / "gradle-9.9.0/bin/gradle").write_text("x")
+            self.assertIsNone(editgrade.wrapper_problem(co, env))
+            self.assertIsNone(editgrade.wrapper_problem(Path(tmp), env))  # no wrapper, nothing to check
+
+    def test_precheck_starts_nothing_without_it_and_uses_one_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            co, d, env = self._setup(root)
+            scratch = root / "scratch"
+            scratch.mkdir()
+            ran = root / "ran"
+            task = {"id": "t", "test_command": f"pwd > {ran}; exit 1"}
+            with self.assertRaises(SystemExit) as e:
+                editgrade.precheck(task, co, scratch, "c", env=env)
+            self.assertIn("no Gradle was started", str(e.exception))
+            self.assertFalse(ran.exists())
+            (d / "gradle-9.9.0/bin").mkdir(parents=True)
+            (d / "gradle-9.9.0/bin/gradle").write_text("x")
+            (d / "gradle-9.9.0-bin.zip.ok").write_text("")
+            paths = set()
+            for tid in ("t", "u"):
+                editgrade.precheck(dict(task, id=tid), co, scratch, "c", env=env)
+                paths.add(ran.read_text().strip())
+            self.assertEqual(len(paths), 1)
+
+    def test_a_run_refuses_before_its_first_session(self):
+        from aeval.runner import Runner, RunConfig
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            co, d, env = self._setup(root)
+            (root / "cache/repos").mkdir(parents=True)
+            co.rename(root / "cache/repos/r")
+            repo = {"name": "r", "commit": "c", "session_env": env}
+            with mock.patch.dict(os.environ, {"AEVAL_CACHE": str(root / "cache")}), \
+                    mock.patch.object(config, "RUNS_DIR", root / "runs"):
+                r = Runner(RunConfig(label="x", conditions=("A",), reps=1), [{"id": "t", "repo": "r"}], {"r": repo})
+                r._session = lambda *a: self.fail("a session was started")
+                with self.assertRaises(SystemExit) as e:
+                    r.run()
+            self.assertIn("the wrapper would download it", str(e.exception))
+
+
 class TaskFile(unittest.TestCase):
     def test_commit_replay_task_file_schema(self):
         path = Path(__file__).resolve().parents[1] / "tasks" / "tasks-commit-replay.json"

@@ -68,6 +68,28 @@
    ]
   },
   {
+   "name": "spring-spel-big-power-result-limit",
+   "display_name": "Spring Framework",
+   "language": "java",
+   "language_name": "Java",
+   "url": "https://github.com/spring-projects/spring-framework.git",
+   "ref": "parent of 8a92c19e4dc7",
+   "commit": "ee1874ac52a0da4fda8ca9c315d9119f2b7f986e",
+   "gold_commit": "8a92c19e4dc7de87a6dfc7ce85920c6a2446320d",
+   "gradle": "9.7.0",
+   "java_toolchain": "25",
+   "work_name": "spring-framework",
+   "parent_date": "2026-08-14T09:19:58+02:00",
+   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
+   "session_env": {
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
+    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
+   },
+   "env_from_caller": [
+    "JAVA_HOME"
+   ]
+  },
+  {
    "name": "spring-jsonl-media-type-support",
    "display_name": "Spring Framework",
    "language": "java",
@@ -80,28 +102,6 @@
    "java_toolchain": "25",
    "work_name": "spring-framework",
    "parent_date": "2026-03-17T11:59:45+01:00",
-   "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
-   "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
-    "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9"
-   },
-   "env_from_caller": [
-    "JAVA_HOME"
-   ]
-  },
-  {
-   "name": "spring-test-context-cache-pause-mode",
-   "display_name": "Spring Framework",
-   "language": "java",
-   "language_name": "Java",
-   "url": "https://github.com/spring-projects/spring-framework.git",
-   "ref": "parent of 9711db787e0d",
-   "commit": "d3a385d2225f622fe164953e1ac76e0e4bc5967c",
-   "gold_commit": "9711db787e0db5e7d569119491e723c720b684a2",
-   "gradle": "9.2.1",
-   "java_toolchain": "25",
-   "work_name": "spring-framework",
-   "parent_date": "2026-01-09T19:52:22+01:00",
    "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`.",
    "session_env": {
     "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]",
@@ -745,6 +745,86 @@
    }
   },
   {
+   "id": "spel-big-power-result-limit",
+   "repo": "spring-spel-big-power-result-limit",
+   "type": "edit",
+   "answer_kind": "diff",
+   "question": "A SpEL power operation on a BigDecimal or BigInteger base (for example `#bd ^ 1000000`) can be extremely expensive in time and memory, and nothing limits it. Add a configurable limit on the estimated result size of such power operations. The estimate in bits is the bit length of the base multiplied by the exponent, where the bit length is BigInteger.bitLength() for a BigInteger and the bit length of unscaledValue() for a BigDecimal. A result exactly at the limit is allowed. If the estimate exceeds the limit, throw a SpelEvaluationException at the position of the power operator with the new message code `SpelMessage.MAX_BIG_POWER_RESULT_EXCEEDED`, whose inserts are, in order, the base bit length, the exponent and the configured maximum. In SpelParserConfiguration, add `DEFAULT_MAX_BIG_POWER_BITS = 1_000_000`, a new canonical constructor `SpelParserConfiguration(SpelCompilerMode, ClassLoader, boolean, boolean, int, int, int, int maximumBigPowerBits)` that rejects non-positive values, and `getMaximumBigPowerBits()`. The default can also be set globally via a JVM system property or Spring property named `spring.expression.maxBigPowerBits`, exposed as the constant `SPRING_EXPRESSION_MAX_BIG_POWER_BITS_PROPERTY_NAME`. Integer.MAX_VALUE removes the limit.",
+   "rationale": "The commit limits BigDecimal/BigInteger power results in SpEL via a new SpelParserConfiguration setting (default 1,000,000 bits, overridable through SpringProperties) and a new SpelMessage. Primary files are the configuration class and SpelMessage, both named. Dependents: OperatorPower (the AST node that must do the check), the @see list in SpringProperties (spring-core), the parser-configuration section of evaluation.adoc and the Spring properties table in appendix.adoc.",
+   "source": {
+    "commit": "8a92c19e4dc7de87a6dfc7ce85920c6a2446320d",
+    "subject": "Limit result size of BigDecimal/BigInteger power operations in SpEL",
+    "date": "2026-08-14",
+    "issue": "gh-37034"
+   },
+   "gold_files": [
+    {
+     "path": "framework-docs/modules/ROOT/pages/appendix.adoc",
+     "status": "M"
+    },
+    {
+     "path": "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc",
+     "status": "M"
+    },
+    {
+     "path": "spring-core/src/main/java/org/springframework/core/SpringProperties.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/main/java/org/springframework/expression/spel/SpelMessage.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/main/java/org/springframework/expression/spel/ast/OperatorPower.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/test/java/org/springframework/expression/spel/AbstractExpressionTests.java",
+     "status": "M"
+    },
+    {
+     "path": "spring-expression/src/test/java/org/springframework/expression/spel/EvaluationTests.java",
+     "status": "M"
+    }
+   ],
+   "primary_files": [
+    "spring-expression/src/main/java/org/springframework/expression/spel/SpelParserConfiguration.java",
+    "spring-expression/src/main/java/org/springframework/expression/spel/SpelMessage.java"
+   ],
+   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.EvaluationTests",
+   "test_overlay": [
+    "spring-expression/src/test/java/org/springframework/expression/spel/AbstractExpressionTests.java",
+    "spring-expression/src/test/java/org/springframework/expression/spel/EvaluationTests.java"
+   ],
+   "allowed_commands": [
+    {
+     "prefix": "./gradlew",
+     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
+    }
+   ],
+   "test_timeout_s": 1800,
+   "strata": {
+    "files": 8,
+    "files_by_kind": {
+     "code": 4,
+     "tests": 2,
+     "docs": 2
+    },
+    "code_modules": 2,
+    "modules": [
+     "framework-docs",
+     "spring-core",
+     "spring-expression"
+    ],
+    "docs": true,
+    "size": "M"
+   }
+  },
+  {
    "id": "jsonl-media-type-support",
    "repo": "spring-jsonl-media-type-support",
    "type": "edit",
@@ -854,92 +934,6 @@
     ],
     "docs": true,
     "size": "L"
-   }
-  },
-  {
-   "id": "test-context-cache-pause-mode",
-   "repo": "spring-test-context-cache-pause-mode",
-   "type": "edit",
-   "answer_kind": "diff",
-   "question": "Since Spring Framework 7.0 the TestContext framework pauses inactive application contexts in the context cache and restarts them when they are needed again. When pausing or restarting Lifecycle components is slow, this slows down the whole test suite, so it must be possible to disable pausing completely through a JVM system property or Spring property named \"spring.test.context.cache.pause\", exposed as ContextCache.CONTEXT_CACHE_PAUSE_PROPERTY_NAME. Introduce a nested enum ContextCache.PauseMode with the constants ALWAYS (the default and the current behaviour) and NEVER (inactive contexts are never paused). Add a static method ContextCacheUtils.retrievePauseMode() that reads the property and returns ALWAYS when it is not set. It parses the value case-insensitively, ignoring leading and trailing whitespace. For an unknown value it throws an IllegalArgumentException with the message \"Unsupported value '<value>' for property 'spring.test.context.cache.pause'\". DefaultContextCache gets a new constructor DefaultContextCache(int maxSize, PauseMode pauseMode), and its existing constructors use the retrieved pause mode. With NEVER, a context is not paused when its last test class stops using it.",
-   "rationale": "The commit adds the spring.test.context.cache.pause property with PauseMode ALWAYS/NEVER, the parsing logic in ContextCacheUtils, and a pause-mode-aware DefaultContextCache. The three spring-test types are primary because the tests call all of them directly. The remaining dependents are the SpringProperties Javadoc cross-reference in spring-core, the appendix and the context-caching AsciiDoc pages.",
-   "source": {
-    "commit": "9711db787e0db5e7d569119491e723c720b684a2",
-    "subject": "Introduce Spring property to disable context pausing for tests",
-    "date": "2026-01-11",
-    "issue": "gh-36117"
-   },
-   "gold_files": [
-    {
-     "path": "framework-docs/modules/ROOT/pages/appendix.adoc",
-     "status": "M"
-    },
-    {
-     "path": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc",
-     "status": "M"
-    },
-    {
-     "path": "spring-core/src/main/java/org/springframework/core/SpringProperties.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/context/cache/ContextCache.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/context/cache/ContextCacheUtils.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/main/java/org/springframework/test/context/cache/DefaultContextCache.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/test/java/org/springframework/test/context/cache/ContextCachePauseModeTests.java",
-     "status": "A"
-    },
-    {
-     "path": "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheTests.java",
-     "status": "M"
-    },
-    {
-     "path": "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheUtilsTests.java",
-     "status": "M"
-    }
-   ],
-   "primary_files": [
-    "spring-test/src/main/java/org/springframework/test/context/cache/ContextCache.java",
-    "spring-test/src/main/java/org/springframework/test/context/cache/ContextCacheUtils.java",
-    "spring-test/src/main/java/org/springframework/test/context/cache/DefaultContextCache.java"
-   ],
-   "test_command": "./gradlew --offline --no-scan --no-daemon --console=plain :spring-test:test --tests org.springframework.test.context.cache.ContextCachePauseModeTests --tests org.springframework.test.context.cache.ContextCacheTests --tests org.springframework.test.context.cache.ContextCacheUtilsTests",
-   "test_overlay": [
-    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCachePauseModeTests.java",
-    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheTests.java",
-    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheUtilsTests.java"
-   ],
-   "allowed_commands": [
-    {
-     "prefix": "./gradlew",
-     "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
-    }
-   ],
-   "test_timeout_s": 1800,
-   "strata": {
-    "files": 9,
-    "files_by_kind": {
-     "code": 4,
-     "tests": 3,
-     "docs": 2
-    },
-    "code_modules": 2,
-    "modules": [
-     "framework-docs",
-     "spring-core",
-     "spring-test"
-    ],
-    "docs": true,
-    "size": "M"
    }
   },
   {

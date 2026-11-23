@@ -35,7 +35,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import config
-from .editgrade import apply_gold, changed_files, gold_paths, grade_edit, run_test, snapshot
+from .editgrade import apply_gold, changed_files, gold_paths, grade_edit, run_test, snapshot, wrapper_problem
 from .grading import Grade, extract_answer, grade, is_success
 from .stream import MCP_PREFIX, check_isolation, parse_transcript
 from .searchaudit import audit as search_audit
@@ -568,6 +568,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         hook_dir = Path(tempfile.mkdtemp(prefix="hook-")) if variant.no_search else None
         try:
             workdir = self._prepare_workspace(item.repo)
+            if problem := wrapper_problem(workdir, config.repo_env(repo)):
+                raise StopRun(f"{item.run_id}: {problem}")
             mcp_path, bin_dir = self._prepare_mcp(item, tmp, workdir, out_dir)
             (out_dir / "mcp.json").write_text(mcp_path.read_text())
             extra = dict(self.cfg.extra_env)
@@ -635,8 +637,12 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         if item.task.get("test_command"):
             if overlay:
                 apply_gold(workdir, config.gold_dir(item.repo), item.task, overlay)
-            tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)),
-                             config.repo_env(self.repos[item.repo]))
+            env = config.repo_env(self.repos[item.repo])
+            if problem := wrapper_problem(workdir, env):  # the agent changed the wrapper: never let it connect
+                tests = {"command": item.task["test_command"], "passed": False, "returncode": None,
+                         "timed_out": False, "seconds": 0.0, "output_tail": problem, "output": problem}
+            else:
+                tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)), env)
         if tests is not None:  # the row keeps the tail, the session directory the whole log
             (out_dir / "test.log").write_text(tests.pop("output", ""))
         g = grade_edit(item.task, changed, tests, self.cfg.success_threshold)
@@ -827,6 +833,11 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         order = self.run_dir / "plan.txt"
         if not order.exists():  # the planned order, for the record (#182)
             order.write_text("".join(f"{it.run_id}\n" for it in self.plan()))
+        # Before the first session: every wrapper distribution of the run is on disk (#183).
+        missing = {p for it in items if (self.cache / "repos" / it.repo).is_dir()
+                   and (p := wrapper_problem(self.cache / "repos" / it.repo, self.repos[it.repo].get("session_env")))}
+        if missing:
+            raise SystemExit("\n".join(sorted(missing)))
         print(f"{len(done)} runs already final, {len(items)} to go "
               f"(concurrency {self.cfg.concurrency})", flush=True)
         sched = Scheduler(items, work_names={n: config.work_name(r) for n, r in self.repos.items()})

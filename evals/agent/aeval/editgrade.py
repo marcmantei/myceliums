@@ -44,11 +44,13 @@ reaches the run's success threshold.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import re
 import shutil
+import zipfile
 import subprocess
 import time
 from pathlib import Path
@@ -241,6 +243,39 @@ def gold_name_status(gold: Path) -> dict[str, str]:
     return json.loads((gold / "gold.json").read_text())["files"]
 
 
+def wrapper_problem(checkout: Path, env: dict | None = None) -> str | None:
+    """Why running ``checkout``'s Gradle wrapper would open a connection: its
+    distribution is not complete on disk. None when it is (unpacked with its
+    ``.ok`` marker, or a whole zip the wrapper unpacks itself), or when there
+    is no wrapper (#183).
+
+    The wrapper ignores ``--offline`` for its own download, and a firewall sees
+    that download as coming from ``gradle-wrapper.jar`` at the path of this
+    working copy, so it must never get that far."""
+    props = checkout / "gradle" / "wrapper" / "gradle-wrapper.properties"
+    if not props.is_file():
+        return None
+    m = re.search(r"^distributionUrl\s*=\s*(\S+)", props.read_text(), re.M)
+    if not m:
+        return f"{props}: no distributionUrl"
+    url = m.group(1).replace("\\:", ":")
+    name = url.rsplit("/", 1)[-1]
+    n, digest = int.from_bytes(hashlib.md5(url.encode()).digest(), "big"), ""
+    while n:
+        n, r = divmod(n, 36)
+        digest = "0123456789abcdefghijklmnopqrstuvwxyz"[r] + digest
+    env = env or {}
+    home = Path(env.get("GRADLE_USER_HOME") or Path(env.get("HOME") or os.environ.get("HOME", "/")) / ".gradle")
+    where = home / "wrapper" / "dists" / name.removesuffix(".zip") / digest
+    zip_path = where / name
+    if (where / (name + ".ok")).exists() and any(where.glob("*/bin/gradle")):
+        return None
+    if zip_path.is_file() and zipfile.is_zipfile(zip_path):
+        return None
+    return (f"Gradle distribution {name} is not complete in {where}: the wrapper would download it. "
+            f"Put the zip there first; no Gradle was started")
+
+
 def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: int = 900,
              gold: Path | None = None, env: dict | None = None, gold_commit: str | None = None,
              gold_runs: int = 1, log_dir: Path | None = None) -> dict:
@@ -252,7 +287,15 @@ def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: 
     the test must pass. Returns the record ``check-tasks`` expects in the
     task's ``precheck``."""
     from .config import copy_tree, remove_tree
-    work = scratch / f"precheck-{task['id']}"
+    if problem := wrapper_problem(checkout, env):
+        raise SystemExit(f"{task['id']}: {problem}")
+    # One fixed path for every task: a firewall knows a wrapper by its path.
+    work = scratch / "precheck-work"
+    lock = open(scratch.with_name(scratch.name + ".precheck.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise SystemExit("another precheck is running; prechecks share one working path") from None
     if work.exists():  # left by an interrupted precheck
         remove_tree(work, scratch)
     copy_tree(checkout, work)
@@ -271,6 +314,7 @@ def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: 
             after = runs[-1]
     finally:
         remove_tree(work, scratch)
+        lock.close()
     kind = failure_kind(res)
     rec = {"fails_on_parent": not res["passed"] and kind not in ("timeout", "infrastructure", "no_tests"),
            "parent_failure": kind, "returncode": res["returncode"], "timed_out": res["timed_out"],
@@ -300,7 +344,7 @@ def failure_kind(res: dict) -> str | None:
     if res["timed_out"]:
         return "timeout"
     out = res.get("output") or res.get("output_tail") or ""
-    for kind, pattern in (("infrastructure", r"Could not (?:GET|HEAD|download|resolve all)|Downloading from .* failed|"
+    for kind, pattern in (("infrastructure", r"is not complete in .*: the wrapper would download|Could not (?:GET|HEAD|download|resolve all)|Downloading from .* failed|"
                                              r"No matching toolchain|Cannot find a Java installation|UnknownHostException"),
                           ("no_tests", r"No tests found for given includes"),
                           ("compile", r"Execution failed for task ':[\w:-]*compile\w*'"),
