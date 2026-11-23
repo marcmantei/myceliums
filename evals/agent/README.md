@@ -1752,18 +1752,20 @@ runs, not measured). The call counts and context sizes above are assumptions;
 a pilot of one repetition (60 sessions) would replace them. Disk: 20 parents
 about 2 GB, graph-only indexes 0.67 GB each, embedded ones larger (not
 measured; about 1.1 GB if vectors add 0.4 GB, so 22 GB for 20, close to all the
-free space: build, run and delete task by task), `~/.gradle` not measured
-(nothing downloaded yet; the parents use 11 Gradle versions).
+free space: build, run and delete task by task), `~/.gradle`
+1.8 GB after two of 11 Gradle versions, still growing.
 
-**Blocked: Java cannot connect on the benchmark machine.** Connections from
-`java` (Homebrew JDK 23 and Temurin JDK 25) to the internet time out while
-`curl`, `git` and Python connect and loopback works. Little Snitch runs on the
-machine and is the likely cause, but its log showed nothing about `java` and
-its rules were not readable, so this is not confirmed. Until `java` can connect,
-Gradle cannot download its distribution, no precheck has run, and the test
-commands themselves are unproven (none has been seen to pass). `check-tasks` then
-reports every task as not prechecked; CI covers the task file with unit tests
-only (`tests/test_commit_replay.py`).
+**Prechecks: 1 of 20 done.** `precheck-edit --gold-runs 2` runs the tests on
+the parent with the commit's tests (must fail, and for a compile or test
+failure, not a failed download), then twice on the whole commit with Gradle's
+`--rerun`, because the build cache could otherwise answer without running
+them. `spel-simple-context-restricted-conversion`: parent fails to compile the
+tests (212 s), commit passes 2 of 2 (42 s, 33 s). All times were taken beside the
+#182 index build (10 cores busy, Gradle at 4 workers and low priority) and have to
+be re-timed. Java had no network on this machine until 23 November, 19:00.
+`~/.gradle` was 1.8 GB after two Gradle versions of 11. The other 19 test
+commands are unproven, so `check-tasks` reports them as not prechecked and CI
+covers the task file with unit tests only (`tests/test_commit_replay.py`).
 
 **Mock validation** (no model call; run on the per-task paths, before the shared path). It shows the pipeline, not a passing grade: the scripted edit is a comment, so the tests would fail even with a working Gradle. `probe --profile realistic --bash` on
 `mime-type-parameter-names-case-insensitive` against the graph-only index, with

@@ -15,7 +15,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-11-13T14:45:13+01:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -35,7 +35,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-11-06T14:58:30+01:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -55,7 +55,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-10-06T09:28:43+01:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -75,7 +75,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-08-20T18:17:01+02:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -95,7 +95,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-03-26T15:08:58+01:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -115,7 +115,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-01-09T19:52:22+01:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -135,7 +135,7 @@
    "work_name": "spring-framework",
    "parent_date": "2025-10-09T17:45:17+02:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -155,7 +155,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-03-16T11:16:48+01:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -175,7 +175,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-03-10T20:09:20+01:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -195,7 +195,7 @@
    "work_name": "spring-framework",
    "parent_date": "2025-10-10T18:45:32+02:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -215,7 +215,7 @@
    "work_name": "spring-framework",
    "parent_date": "2025-12-22T15:34:41+01:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -235,7 +235,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-10-13T10:18:09+02:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -255,7 +255,7 @@
    "work_name": "spring-framework",
    "parent_date": "2026-08-31T12:57:32+02:00",
    "session_env": {
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process"
    },
    "env_from_caller": [
     "JAVA_HOME"
@@ -311,7 +311,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 5,
     "files_by_kind": {
@@ -369,7 +369,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 3,
     "files_by_kind": {
@@ -472,7 +472,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 13,
     "files_by_kind": {
@@ -567,7 +567,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 11,
     "files_by_kind": {
@@ -637,7 +637,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 6,
     "files_by_kind": {
@@ -723,7 +723,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 9,
     "files_by_kind": {
@@ -809,7 +809,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 9,
     "files_by_kind": {
@@ -898,7 +898,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 10,
     "files_by_kind": {
@@ -993,7 +993,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 11,
     "files_by_kind": {
@@ -1061,7 +1061,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 5,
     "files_by_kind": {
@@ -1151,7 +1151,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 10,
     "files_by_kind": {
@@ -1212,7 +1212,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 4,
     "files_by_kind": {
@@ -1274,7 +1274,7 @@
      "args": "(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--info|--stacktrace|--continue|--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "test_timeout_s": 900,
+   "test_timeout_s": 1800,
    "strata": {
     "files": 4,
     "files_by_kind": {

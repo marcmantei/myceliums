@@ -635,6 +635,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 apply_gold(workdir, config.gold_dir(item.repo), item.task, overlay)
             tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)),
                              config.repo_env(self.repos[item.repo]))
+        if tests is not None:  # the row keeps the tail, the session directory the whole log
+            (out_dir / "test.log").write_text(tests.pop("output", ""))
         g = grade_edit(item.task, changed, tests, self.cfg.success_threshold)
         if overlay:
             g["test_overlay"] = list(overlay)

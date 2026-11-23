@@ -101,6 +101,11 @@ class CommitReplay(unittest.TestCase):
         self.assertTrue(rec["fails_on_parent"])
         self.assertTrue(rec["passes_on_gold"])
         self.assertEqual((rec["gold_commit"], rec["test_overlay"]), (self.gold, self.task["test_overlay"]))
+        flaky = dict(self.task, test_command=TEST + " && test ! -f ran && touch ran")  # passes once only
+        rec2 = editgrade.precheck(flaky, checkout, scratch, self.parent, gold=config.gold_dir("r183"),
+                                  gold_commit=self.gold, gold_runs=2, log_dir=self.root / "logs")
+        self.assertEqual((rec2["passes_on_gold"], rec2["gold_passes"], rec2["gold_runs"]), (False, 1, 2))
+        self.assertEqual(len(list((self.root / "logs").iterdir())), 3)
         self.assertIn("seconds_parent", rec)
         self.assertIn("seconds_gold", rec)
         self.assertEqual(list(scratch.iterdir()), [])
@@ -183,6 +188,22 @@ class CommitReplay(unittest.TestCase):
 
 
 class GradleCommands(unittest.TestCase):
+    def test_failure_kinds_and_rerun(self):
+        def kind(out, passed=False, timed_out=False):
+            return editgrade.failure_kind({"passed": passed, "timed_out": timed_out, "output": out})
+        self.assertIsNone(kind("", passed=True))
+        self.assertEqual(kind("", timed_out=True), "timeout")
+        self.assertEqual(kind("> Task :spring-core:compileTestJava FAILED\nExecution failed for task "
+                              "':spring-core:compileTestJava'."), "compile")
+        self.assertEqual(kind("12 tests completed, 1 failed\nThere were failing tests."), "tests")
+        self.assertEqual(kind("Execution failed for task ':spring-core:compileJava'.\n> Could not resolve all files"),
+                         "infrastructure")  # a download error is not evidence about the change
+        self.assertEqual(kind("Downloading from https://x/gradle.zip failed: timeout"), "infrastructure")
+        self.assertEqual(kind("No tests found for given includes: [x]"), "no_tests")
+        self.assertEqual(kind("boom"), "other")
+        self.assertEqual(editgrade.rerun_command("./gradlew -q :a-b:test --tests x.YTests :c:test"),
+                         "./gradlew -q :a-b:test --rerun --tests x.YTests :c:test --rerun")
+
     def test_default_test_command(self):
         files = [("M", "spring-web/src/main/java/org/x/A.java"),
                  ("M", "spring-web/src/test/java/org/x/ATests.java"),

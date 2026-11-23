@@ -60,7 +60,7 @@ GRADLE_ARGS = (r"(?:(?:--no-daemon|--console=plain|--offline|-q|--quiet|-i|--inf
 SESSION_ENV = {
     # One build per session and no Kotlin daemon left behind: daemons would
     # outlive the session and pile up across Gradle versions.
-    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process",
+    "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process",
 }
 
 
@@ -192,7 +192,7 @@ def cmd_build(args) -> int:
             "gold_files": gold, "primary_files": s["primary_files"],
             "test_command": cmd, "test_overlay": overlay,
             "allowed_commands": [{"prefix": "./gradlew", "args": GRADLE_ARGS}],
-            "test_timeout_s": s.get("test_timeout_s", 900),
+            "test_timeout_s": s.get("test_timeout_s", 1800),
             "strata": {"files": sp["files"], "files_by_kind": sp["kinds"], "code_modules": len(sp["code_modules"]),
                        "modules": sp["modules"], "docs": sp["kinds"]["docs"] > 0,
                        "size": "S" if sp["files"] <= 5 else "M" if sp["files"] <= 12 else "L"},

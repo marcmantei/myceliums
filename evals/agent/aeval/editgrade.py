@@ -242,7 +242,8 @@ def gold_name_status(gold: Path) -> dict[str, str]:
 
 
 def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: int = 900,
-             gold: Path | None = None, env: dict | None = None, gold_commit: str | None = None) -> dict:
+             gold: Path | None = None, env: dict | None = None, gold_commit: str | None = None,
+             gold_runs: int = 1, log_dir: Path | None = None) -> dict:
     """Run the task's test command on a fresh copy of the pinned checkout
     (the gold commit's parent) before any agent runs, with the task's
     ``test_overlay`` applied (the commit's own tests). The test must fail
@@ -252,6 +253,8 @@ def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: 
     task's ``precheck``."""
     from .config import copy_tree, remove_tree
     work = scratch / f"precheck-{task['id']}"
+    if work.exists():  # left by an interrupted precheck
+        remove_tree(work, scratch)
     copy_tree(checkout, work)
     after = None
     try:
@@ -260,22 +263,62 @@ def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: 
         res = run_test(task["test_command"], work, timeout_s, env)
         if gold is not None:
             apply_gold(work, gold, task)
-            after = run_test(task["test_command"], work, timeout_s, env)
+            # Executed for real: Gradle's (remote) build cache could otherwise
+            # answer, and a repetition would be up to date.
+            runs = [run_test(rerun_command(task["test_command"]), work, timeout_s, env)]
+            while len(runs) < gold_runs and runs[-1]["passed"]:
+                runs.append(run_test(rerun_command(task["test_command"]), work, timeout_s, env))
+            after = runs[-1]
     finally:
         remove_tree(work, scratch)
-    rec = {"fails_on_parent": not res["passed"] and not res["timed_out"], "returncode": res["returncode"], "timed_out": res["timed_out"],
+    kind = failure_kind(res)
+    rec = {"fails_on_parent": not res["passed"] and kind not in ("timeout", "infrastructure", "no_tests"),
+           "parent_failure": kind, "returncode": res["returncode"], "timed_out": res["timed_out"],
            "commit": commit, "command": task["test_command"], "seconds_parent": res["seconds"],
            "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     if task.get("test_overlay"):
         rec["test_overlay"] = list(task["test_overlay"])
     if after is not None:
         rec.update({"passes_on_gold": after["passed"], "gold_commit": gold_commit, "gold_returncode": after["returncode"],
-                    "gold_timed_out": after["timed_out"], "seconds_gold": after["seconds"]})
+                    "gold_timed_out": after["timed_out"], "seconds_gold": runs[0]["seconds"],
+                    "gold_runs": len(runs), "gold_passes": sum(r["passed"] for r in runs),
+                    "gold_failure": failure_kind(after), "seconds_gold_runs": [r["seconds"] for r in runs]})
+    if log_dir is not None:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        for n, r in [("parent", res)] + [(f"gold{i}", r) for i, r in enumerate(runs if gold is not None else [], 1)]:
+            (log_dir / f"{task['id']}.{n}.log").write_text(r["output"])
     return rec
 
 
+def failure_kind(res: dict) -> str | None:
+    """Why a test run failed: ``tests`` (they ran and failed), ``compile``,
+    ``infrastructure`` (a download, the wrapper or the toolchain), ``no_tests``
+    (a filter matched nothing), ``timeout`` or ``other``; None when it passed.
+    Only ``tests`` and ``compile`` say something about the change (#183)."""
+    if res["passed"]:
+        return None
+    if res["timed_out"]:
+        return "timeout"
+    out = res.get("output") or res.get("output_tail") or ""
+    for kind, pattern in (("infrastructure", r"Could not (?:GET|HEAD|download|resolve all)|Downloading from .* failed|"
+                                             r"No matching toolchain|Cannot find a Java installation|UnknownHostException"),
+                          ("no_tests", r"No tests found for given includes"),
+                          ("compile", r"Execution failed for task ':[\w:-]*compile\w*'"),
+                          ("tests", r"There were failing tests|\d+ tests? completed, \d+ failed")):
+        if re.search(pattern, out):
+            return kind
+    return "other"
+
+
+def rerun_command(command: str) -> str:
+    """The command with Gradle's ``--rerun`` on each ``test`` task, so that a
+    repetition runs the tests instead of taking them from the build cache."""
+    return re.sub(r"(:[\w-]+:test)(?=\s|$)", r"\1 --rerun", command)
+
+
 def run_test(command: str, workdir: Path, timeout_s: int = 900, env: dict | None = None) -> dict:
-    """Run a task's test command in the working copy (``/bin/sh -c``);
+    """Run a task's test command in the working copy (``/bin/sh -c``), keeping
+    the whole output in ``output``;
     ``env`` is added to a minimal environment (``PATH``, ``HOME``)."""
     started = time.time()
     base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/tmp")}
@@ -286,4 +329,4 @@ def run_test(command: str, workdir: Path, timeout_s: int = 900, env: dict | None
     except subprocess.TimeoutExpired as exc:
         rc, out, timed_out = None, str(exc.stdout or "") + str(exc.stderr or ""), True
     return {"command": command, "passed": rc == 0, "returncode": rc, "timed_out": timed_out,
-            "seconds": round(time.time() - started, 2), "output_tail": out[-2000:]}
+            "seconds": round(time.time() - started, 2), "output_tail": out[-2000:], "output": out}

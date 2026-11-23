@@ -435,15 +435,16 @@ def cmd_precheck_edit(args) -> int:
         repo = repos[t["repo"]]
         gold = config.gold_dir(t["repo"]) if repo.get("gold_commit") else None
         rec = editgrade.precheck(t, checkout, scratch, repo["commit"], int(t.get("test_timeout_s", 900)),
-                                 gold=gold, env=config.repo_env(repo), gold_commit=repo.get("gold_commit"))
+                                 gold=gold, env=config.repo_env(repo), gold_commit=repo.get("gold_commit"),
+                                 gold_runs=args.gold_runs, log_dir=Path(args.logs) if args.logs else None)
         t["precheck"] = rec
         ok = rec["fails_on_parent"] and rec.get("passes_on_gold", True)
         bad += not ok
         line = (f"{t['id']}: test command {'fails' if rec['fails_on_parent'] else 'does NOT fail'} on the parent "
-                f"(exit {rec['returncode']}{', timed out' if rec['timed_out'] else ''}, {rec['seconds_parent']:.0f} s)")
+                f"(exit {rec['returncode']}{', timed out' if rec['timed_out'] else ''}, {rec['parent_failure']}, {rec['seconds_parent']:.0f} s)")
         if gold is not None:
             line += (f"; {'passes' if rec['passes_on_gold'] else 'does NOT pass'} on the gold commit "
-                     f"(exit {rec['gold_returncode']}, {rec['seconds_gold']:.0f} s)")
+                     f"({rec['gold_passes']}/{rec['gold_runs']} runs, {rec['gold_failure']}, {rec['seconds_gold_runs']} s)")
         print(line, flush=True)
         # Written after every task, so a long precheck run keeps what it has.
         path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
@@ -666,6 +667,9 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("precheck-edit", help="check that each edit task's test command fails on the pinned "
                        "(parent) commit, and record it in the task file (#178)")
     s.add_argument("--task", action="append", help="only these task ids")
+    s.add_argument("--gold-runs", type=int, default=1, help="#183: run the tests this often on the gold commit "
+                   "(executed, not cached); all must pass, or the task is flaky")
+    s.add_argument("--logs", help="directory for the full test output of every run")
     s.set_defaults(fn=cmd_precheck_edit)
 
     s = sub.add_parser("tokens", help="per-tool token attribution and cost of a committed run (#178)")
