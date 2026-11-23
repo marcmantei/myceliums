@@ -15,7 +15,10 @@ body (never the headers) and answers with a fixed script:
    ``myc callers <symbol>`` and a ``grep`` in the shell, so the probe shows
    whether the CLI reaches the session's index and the grep hook fires on
    Bash too;
-4. everything else ends the turn with a short text.
+4. if the request offers ``Bash`` but not ``Grep`` (arm ``D``, #178), the
+   first answer runs a ``grep`` in the shell, which D's hook must block, and
+   the second ``myc callers <symbol>`` alone, which must still run;
+5. everything else ends the turn with a short text.
 
 What the recorded requests show is what ``probe`` reports: which memory files
 reached the context (project CLAUDE.md yes, ``~/.claude/CLAUDE.md`` no),
@@ -145,6 +148,12 @@ class MockAPI:
                 return _message([{"type": "tool_use", "id": "toolu_probe_sub", "name": "mcp__myceliums__find_callers",
                                   "input": {"symbol_name": self.callers_symbol}}], "tool_use", model)
             return _message([{"type": "text", "text": "subagent done"}], "end_turn", model)
+        if "Grep" not in tools and "Bash" in tools and "Agent" not in tools and done < 2:
+            cmd = (f"grep -rl {self.grep_pattern} . | head -3" if done == 0
+                   else f"myc callers {self.callers_symbol} 2>&1")
+            tid = "toolu_probe_search" if done == 0 else "toolu_probe_bash"
+            return _message([{"type": "tool_use", "id": tid, "name": "Bash",
+                              "input": {"command": cmd, "description": "probe"}}], "tool_use", model)
         if done == 0 and "Grep" in tools:
             return _message([{"type": "tool_use", "id": "toolu_probe_grep", "name": "Grep",
                               "input": {"pattern": self.grep_pattern, "output_mode": "files_with_matches"}}],

@@ -9,6 +9,8 @@ Subcommands (see evals/agent/README.md for the full procedure):
   run           run the sessions (resumable) for a label
   export        copy the final rows + metadata of a run into results/<label>/
   report        render results/<label>/REPORT.md (--check: verify it is current)
+  tokens        per-tool token attribution and cost of a committed run: TOKENS.md (#178)
+  precheck-edit check that each edit task's test command fails before the change (#178)
   probe         check a variant's session setup against a mock API (no model call)
   toolsel-list  print / save the live tools/list of a myc binary
   toolsel-run   run the tool-selection eval
@@ -74,16 +76,25 @@ def _run_config(args) -> RunConfig:
     for c in conditions:
         if c not in config.CONDITIONS:
             sys.exit(f"unknown condition {c!r}; known: {', '.join(config.CONDITIONS)}")
+    max_turns, reps, prompt_budget = args.max_turns, args.reps, getattr(args, "prompt_budget", False)
+    profile = getattr(args, "profile", None) or ""
+    if profile:
+        # #178: a named profile fixes the limits; explicit flags that disagree are an error.
+        p = config.PROFILES[profile]
+        if prompt_budget and not p["prompt_budget"]:
+            sys.exit(f"--profile {profile} never states the turn limit in the prompt; drop --prompt-budget")
+        max_turns, reps, prompt_budget = p["max_turns"], p["reps"], p["prompt_budget"]
     return RunConfig(
-        label=args.label, model=args.model, effort=args.effort or None, max_turns=args.max_turns,
-        timeout_s=args.timeout, reps=args.reps, concurrency=args.concurrency,
+        label=args.label, model=args.model, effort=args.effort or None, max_turns=max_turns,
+        timeout_s=args.timeout, reps=reps, concurrency=args.concurrency,
         max_retries=args.max_retries, success_threshold=args.threshold,
         max_utilization=args.max_utilization, max_sessions=args.max_sessions, seed=args.seed,
         tool_search=args.tool_search, claude=config.resolve_claude(args.claude),
         myc=args.myc, models_dir=args.models_dir, conditions=conditions,
         tasks_file=os.environ.get("AEVAL_TASKS", ""), stop_after_s=getattr(args, "stop_after", None),
-        prompt_budget=getattr(args, "prompt_budget", False),
+        prompt_budget=prompt_budget,
         bash=getattr(args, "bash", False),
+        profile=profile,
     )
 
 
@@ -265,6 +276,46 @@ def cmd_report(args) -> int:
     return 0
 
 
+def cmd_tokens(args) -> int:
+    """Attribute a committed run's tokens per tool (#178) and render TOKENS.md."""
+    from aeval import report_tokens
+    if not args.check and not args.render_only:
+        root = Path(args.runs_root) if args.runs_root else None
+        print(f"wrote {report_tokens.collect(args.label, root, args.prices)}")
+    ok = report_tokens.write(args.label, check=args.check)
+    if args.check:
+        print("TOKENS.md is current" if ok else "TOKENS.md / tokens_summary.json do not match tokens.jsonl")
+        return 0 if ok else 1
+    print(f"wrote {config.RESULTS_DIR / args.label / 'TOKENS.md'}")
+    return 0
+
+
+def cmd_precheck_edit(args) -> int:
+    """Run every edit task's test command on the pinned (parent) commit and
+    record the result in the task file (#178): it must fail there."""
+    from aeval import editgrade
+    path = config.tasks_file()
+    data = config.load_json(path)
+    repos = config.load_repos()
+    scratch = config.cache_dir() / "tmp"
+    scratch.mkdir(parents=True, exist_ok=True)
+    bad = 0
+    for t in data["tasks"]:
+        if t.get("answer_kind") != "diff" or not t.get("test_command"):
+            continue
+        if args.task and t["id"] not in args.task:
+            continue
+        checkout = config.cache_dir() / "repos" / t["repo"]
+        rec = editgrade.precheck(t, checkout, scratch, repos[t["repo"]]["commit"],
+                                 int(t.get("test_timeout_s", 900)))
+        t["precheck"] = rec
+        bad += not rec["fails_on_parent"]
+        print(f"{t['id']}: test command {'fails' if rec['fails_on_parent'] else 'does NOT fail'} on the parent "
+              f"(exit {rec['returncode']}{', timed out' if rec['timed_out'] else ''})")
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
+    return 1 if bad else 0
+
+
 def _profile_intents(myc: str, toolsets: str) -> tuple[list[dict], list[dict], list[str]]:
     """The profile's tools, the intents it is scored on, and intent problems
     (checked against the full tool list, so renames fail loudly in any profile)."""
@@ -386,13 +437,16 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--myc", default=_default_myc())
     s.add_argument("--models-dir", default=_default_models())
     s.add_argument("--conditions", help="comma-separated conditions of this run (default with,without; "
-                   "variant matrix: A,C,E; calibration: none)")
+                   "variant matrix: A,C,E; calibration: none; myceliums only: D)")
     s.add_argument("--stop-after", type=int, help="start no new session after this many seconds "
                    "(running ones finish), to run a long matrix in bounded chunks")
     s.add_argument("--prompt-budget", action="store_true",
                    help="state the turn limit (--max-turns) in the prompt, identically in every condition (#153)")
     s.add_argument("--bash", action="store_true",
                    help="add the Bash tool in every condition (#163); the myc CLI is then reachable in C")
+    s.add_argument("--profile", choices=sorted(config.PROFILES),
+                   help="named limits (#178): realistic = --max-turns 100 as a cap only (not in the prompt), "
+                        "3 repetitions")
     s.set_defaults(fn=cmd_run)
 
     s = sub.add_parser("probe", help="check a variant's session setup against a mock API (no model call)")
@@ -439,6 +493,20 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("label")
     s.add_argument("--check", action="store_true")
     s.set_defaults(fn=cmd_report)
+
+    s = sub.add_parser("precheck-edit", help="check that each edit task's test command fails on the pinned "
+                       "(parent) commit, and record it in the task file (#178)")
+    s.add_argument("--task", action="append", help="only these task ids")
+    s.set_defaults(fn=cmd_precheck_edit)
+
+    s = sub.add_parser("tokens", help="per-tool token attribution and cost of a committed run (#178)")
+    s.add_argument("label")
+    s.add_argument("--runs-root", help="directory holding the run's transcripts (default: evals/agent/runs)")
+    s.add_argument("--prices", help="JSON file {model: {input, cache_write_5m, cache_write_1h, cache_read, output}} "
+                   "in USD per million tokens, merged over the built-in table")
+    s.add_argument("--render-only", action="store_true", help="re-render TOKENS.md from the committed tokens.jsonl")
+    s.add_argument("--check", action="store_true", help="verify TOKENS.md matches tokens.jsonl")
+    s.set_defaults(fn=cmd_tokens)
 
     toolsets_help = ("myc mcp toolset profile to offer (default all; `core` is myc's own default "
                      "and is scored on the intents it can answer)")

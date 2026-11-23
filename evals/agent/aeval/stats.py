@@ -119,3 +119,51 @@ def exact_sign_test(wins: int, losses: int) -> float:
     k = min(wins, losses)
     tail = sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n
     return min(1.0, 2 * tail)
+
+
+def per_success_bootstrap(
+    per_task: list[tuple[float, float, float, float]],
+    n_resamples: int = 10_000,
+    seed: int = 0,
+    alpha: float = 0.05,
+) -> dict:
+    """Spend per solved task in two conditions, paired over tasks (#178).
+
+    ``per_task`` holds one ``(spend_a, solved_a, spend_b, solved_b)`` tuple per
+    task: the spend (tokens or USD) summed over that task's sessions in each
+    condition and the number of those sessions that succeeded. The statistic
+    is a ratio of sums, ``sum(spend) / sum(solved)`` over the tasks, so a task
+    no session solved still adds its spend. The bootstrap resamples tasks with
+    replacement (the same indices for both conditions); a resample in which a
+    condition solved nothing has no value and is skipped (``skipped``).
+    """
+    nan = float("nan")
+    k = len(per_task)
+
+    def stat(idx) -> tuple[float, float]:
+        sa = sum(per_task[i][1] for i in idx)
+        sb = sum(per_task[i][3] for i in idx)
+        a = sum(per_task[i][0] for i in idx) / sa if sa else nan
+        b = sum(per_task[i][2] for i in idx) / sb if sb else nan
+        return a, b
+
+    a, b = stat(range(k))
+    out = {"n_tasks": k, "a": a, "b": b, "ratio": a / b if b == b and a == a and b else nan,
+           "diff": a - b, "solved_a": sum(t[1] for t in per_task), "solved_b": sum(t[3] for t in per_task)}
+    rng = random.Random(seed)
+    sa_, sb_, ratios, diffs, skipped = [], [], [], [], 0
+    for _ in range(n_resamples if k else 0):
+        x, y = stat([rng.randrange(k) for _ in range(k)])
+        if x != x or y != y or not y:
+            skipped += 1
+            continue
+        sa_.append(x)
+        sb_.append(y)
+        ratios.append(x / y)
+        diffs.append(x - y)
+    for name, xs in (("a", sa_), ("b", sb_), ("ratio", ratios), ("diff", diffs)):
+        xs.sort()
+        out[name + "_lo"] = percentile(xs, alpha / 2)
+        out[name + "_hi"] = percentile(xs, 1 - alpha / 2)
+    out["skipped"] = skipped
+    return out

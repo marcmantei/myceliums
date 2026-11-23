@@ -24,8 +24,9 @@ RESULTS_DIR = EVAL_DIR / "results"  # compact, committed results
 # server, used for calibration) and the integration variants `A`, `C`, `E`,
 # which all load project settings and CLAUDE.md files from the working copy
 # (`--setting-sources project`) and differ only in what `myc setup-claude`
-# put there; see VARIANTS.
-CONDITIONS = ("with", "without", "none", "A", "C", "E")
+# put there; see VARIANTS. #178 adds `D`, "myceliums only": the MCP server and
+# `Read`, with every way to search denied.
+CONDITIONS = ("with", "without", "none", "A", "C", "D", "E")
 
 
 @dataclass(frozen=True)
@@ -36,6 +37,7 @@ class Variant:
     setup_claude: bool = False  # `myc setup-claude --scope project` files in the working copy
     agent: bool = False  # ... including the code-explorer subagent, and the Agent tool
     legacy: bool = False  # the pilot's flags: no setting sources, CLAUDE.md disabled
+    no_search: bool = False  # #178: Grep and Glob denied, search commands in Bash blocked by a hook
 
 
 VARIANTS = {
@@ -44,6 +46,7 @@ VARIANTS = {
     "none": Variant(mcp=False),
     "A": Variant(mcp=True),
     "C": Variant(mcp=True, setup_claude=True),
+    "D": Variant(mcp=True, no_search=True),
     "E": Variant(mcp=True, setup_claude=True, agent=True),
 }
 
@@ -59,6 +62,20 @@ EXPLORER_AGENT = "code-explorer"
 # the CLI may drop it, so the isolation check treats it as optional.
 BUILTIN_TOOLS = ("Read", "Grep", "Glob", "ToolSearch")
 REQUIRED_TOOLS = ("Read", "Grep", "Glob")
+SEARCH_TOOLS = ("Grep", "Glob")
+# Edit tasks (#178) add these in every condition; they are never offered on
+# question tasks.
+EDIT_TOOLS = ("Edit", "Write")
+# A second layer in D: permission rules that deny the common search programs
+# (they only match a command that starts with the program). The first layer
+# is the hook's allowlist, which sees every program of a command
+# (aeval/bashcmd.py).
+BASH_SEARCH_RULES = tuple(f"Bash({p}:*)" for p in ("grep", "egrep", "fgrep", "rg", "ag", "ack", "find", "fd",
+                                                   "locate", "git grep"))
+
+# Run profiles (#178). `realistic`: the turn limit is a safety cap only (100,
+# never stated in the prompt) and every task runs three times.
+PROFILES = {"realistic": {"max_turns": 100, "reps": 3, "prompt_budget": False}}
 MCP_SERVER_NAME = "myceliums"
 
 

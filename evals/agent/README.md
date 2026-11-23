@@ -90,6 +90,21 @@ the Django index again has no `tests/` (#172). At 10 turns C solved 89 %
 (none 96 %, old C 89 %; −7 pp [−19, +0], p = 0.5). The arms ran about nine
 hours apart.
 
+**Token attribution, 23 November 2026** (#178, no new sessions):
+[method and numbers](#token-attribution-and-cost-178). Read afterwards from
+the #163 and #171 transcripts. The per-call usage adds up to the CLI's totals
+in every session (a check that no model call is missing, not of the split);
+a least-squares fit of each call's growth confirms that myceliums results and
+grep output cost the same per character (0.446 and 0.428 tokens), so the
+split treats them alike. With myceliums the agent read about half the grep
+output (−9.0k tokens per session in #163) and about as much myceliums output
+and hook text instead (+8.8k); C's sessions were larger because its bigger
+system prompt is re-read on every call (+21.9k), but that is cached input, so
+cost per solved task was 0.93× [0.78×, 1.10×] of none's. The harness now also
+has a myceliums-only arm (D) with an allowlisted shell and a search audit,
+edit tasks graded by a prechecked test command and changed files, and a
+realistic profile (100-turn cap, 3 repetitions).
+
 ## What is measured
 
 **Tasks** ([`tasks/tasks.json`](tasks/tasks.json)): 30 questions over three
@@ -244,8 +259,8 @@ small model. Environment variables: `AEVAL_CACHE` (default
 Running the agents needs Claude credentials, so no workflow does it. The
 [`agent-eval` workflow](../../.github/workflows/agent-eval.yml) runs only the
 secret-free parts on pull requests: the harness's unit tests, the task-file
-schema check, and a check that every committed `REPORT.md` / `TOOLSEL.md` is
-exactly what the generator produces from the committed results.
+schema check, and a check that every committed `REPORT.md` / `TOOLSEL.md` /
+`TOKENS.md` is exactly what the generator produces from the committed results.
 
 ## Variant matrix (#125)
 
@@ -861,6 +876,248 @@ python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-scale.json exp
     --runs my-rerun-t10,my-rerun-t40 --rerun-of 2026-11-22-scale --primary-exclude-reason "..."
 python3 evals/agent/agent_eval.py report my-rerun
 ```
+
+## Token attribution and cost (#178)
+
+Where do a session's tokens go: into grep output, myceliums output, file
+reads, or the model's own text? Every session row (since #178) and every
+`TOKENS.md` answers it per category, prices the cache classes separately and
+divides by the solved tasks. No model call is needed: it is read from the
+stream-json transcripts ([`aeval/tokens.py`](aeval/tokens.py)).
+
+**Input tokens per category.** Each model call re-sends the whole
+conversation, so a session's input tokens are the sum over its calls of each
+call's context (`input_tokens + cache_creation_input_tokens +
+cache_read_input_tokens`, from the `usage` on the call's assistant events;
+events of one call share a message id and count once). The first call's
+context is the **base** (system prompt, tool definitions, task prompt,
+SessionStart hook text). The growth from one call to the next is what arrived
+in between: the model's previous reply and the tool results (and hook text)
+it led to. That growth, measured, is split over those parts in proportion to
+their size estimated as characters / 4 (for the reply: text and tool-call
+inputs, plus the CLI's `thinking_tokens` estimate, since thinking is replayed
+and its text is not in the transcript). Each part then stays in the context
+for every later call, so a result's billed input is its size times the calls
+after it. A call's usage is laid over the context in order: the first
+`cache_read` tokens are cache reads, the next `cache_creation` tokens cache
+writes (1-hour entries before 5-minute ones, as a prompt orders them), the
+rest uncached. A growth with nothing to explain it goes to *other*; a context
+that shrinks scales the earlier parts down. Without per-call usage the
+context is estimated from characters / 4 alone, scaled to the session total
+(`attribution_method: chars/4`). The chars/4 estimate of each category is
+kept in the rows (`estimated_tokens_by_category`).
+
+**Categories.** `base`; `myceliums` (MCP results and `myc` CLI runs in Bash);
+`hook` (text the hooks add after the first call: in these runs the
+`setup-claude` hooks); `search` (`Grep`, `Glob`, and Bash commands running
+`grep`, `rg`, `ag`, `ack`, `ugrep`, `find`, `fd`, `locate`, `tree`, `awk`,
+`git grep`, `git ls-files`, `ls -R`, `perl -n`, `sed -n '/re/p'` or
+`git log -S/-G/--grep`); `read` (`Read`; Bash `cat`, `sed -n 1,9p`, `head`,
+`tail`, ...); `edit` (`Edit`, `Write`, `sed -i`); `other`; `assistant` (the
+model's earlier replies, re-read); `unattributed` (the residual, below);
+`output` (generated tokens, thinking included, from the result event: the
+per-event `output_tokens` are streaming snapshots and undercount). Bash
+commands are parsed with quotes respected, through `bash -c`, `eval`,
+wrappers (`timeout`, `nice`, `xargs`, `stdbuf`, ...), loops, `$(...)` and
+git's global options; a command that runs several kinds of program gets the
+highest of myceliums > search > edit > read
+([`aeval/bashcmd.py`](aeval/bashcmd.py)). Code run through an interpreter
+(`python3 - <<EOF`, `node -e`) is `other`: its intent is not visible.
+
+**Reconciliation, and what it does not show.** The categories add up, by
+construction, to the summed per-call usage. The residual is the session total
+in the result event's `modelUsage` minus that sum, per model and field. It is
+reported per session (`attribution_residual`) and kept as `unattributed`.
+Over the 240 sessions of #163 and #171 it is 0 in every field and session.
+That proves only that the transcript shows every model call and that the
+per-call usage adds up to the CLI's totals; it says nothing about how a call's
+growth is divided between categories. The cost priced from the table below
+equals the CLI's `total_cost_usd` to within 5 × 10⁻⁷ USD per session.
+
+**Cross-check of the split.** The split is fair between two kinds of content
+(myceliums results and grep output, say) only if chars/4 misjudges both by the
+same factor. `tokens` tests that independently of the reconciliation: it
+fits, by least squares over every main-agent call of the run, the measured
+growth on the chars/4 estimate of each kind of part plus a constant per call
+(`fit_rates`; written to `tokens_crosscheck.json` and shown in `TOKENS.md`),
+then re-splits every growth with the fitted rates (the *fitted split*
+columns). On the 850 calls of #163 (R² = 0.98, 43 tokens of fixed overhead
+per call): 0.446 tokens per character of myceliums results, 0.428 of grep
+output, 0.434 of file reads, 0.417 of hook text, 0.481 of reply text, and
+1.07 tokens per estimated thinking token. Myceliums results and grep output
+differ by 4 %, so the plain split treats them alike; chars/4 undercounts all
+text by about 1.7× but the CLI's thinking estimate hardly at all, so the plain
+split gives the model's re-read replies 10-15 % too much. With the fitted
+rates, C's myceliums tokens rise from 7.5k to 7.8k per session, its search
+tokens from 8.9k to 9.2k, none's search tokens from 17.9k to 18.5k; no
+conclusion below changes. The fit on #171's 288 calls agrees (myceliums
+0.453, search 0.422 tokens per character).
+
+**Cost.** Uncached input, cache writes (5 minutes: 1.25× input; 1 hour: 2×),
+cache reads and output are priced with the published per-token prices of the
+model each call reports (`PRICES` in [`aeval/tokens.py`](aeval/tokens.py),
+from <https://platform.claude.com/docs/en/about-claude/pricing> as of
+2026-11-03; `claude-sonnet-5-5`: input $2, 1-hour write $4, cache read $0.10,
+output $10 per million tokens). Rows and `TOKENS.md` record the model ids
+(`models`). `tokens --prices FILE` merges a JSON table over the built-in one.
+A category's cost is its share of each class's cost. Claude Code writes the
+cache with the 1-hour TTL, so in these runs almost all input is a 1-hour
+cache write or a cache read (no 5-minute writes; at most 46 uncached input
+tokens in a session).
+
+**Per solved task.** Tokens and cost summed over a condition's sessions,
+divided by its solved sessions (a ratio of sums, so unsolved tasks still add
+their spend), with a 95 % paired bootstrap over tasks for each condition and
+for the ratio ([`aeval/stats.py`](aeval/stats.py) `per_success_bootstrap`).
+
+**#163 and #171, attributed afterwards** ([scale](results/2026-11-22-scale/TOKENS.md),
+[re-run](results/2026-11-22-rerun-c/TOKENS.md); 27 tasks of the primary
+analysis; thousands of billed tokens per session, all budgets together):
+
+| Run | Arm | Base | myceliums | Hook | Search | Reads | Replies | Output | Total | USD/session | USD per solved, C ÷ none |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| #163 | none | 44.5 | 0 | 0 | 17.9 | 2.6 | 7.6 | 3.1 | 75.7 | 0.076 | |
+| #163 | C | 66.4 | 7.5 | 1.3 | 8.9 | 1.5 | 5.8 | 2.5 | 93.7 | 0.072 | 0.93× [0.78×, 1.10×] |
+| #171 (10 + 40 turns) | none | 52.7 | 0 | 0 | 24.9 | 3.8 | 10.7 | 3.9 | 96.2 | 0.096 | |
+| #171 (10 + 40 turns) | C (re-run) | 75.1 | 13.0 | 2.0 | 12.5 | 1.8 | 8.8 | 3.2 | 116.5 | 0.093 | 0.99× [0.83×, 1.16×] |
+
+With myceliums the agent read about half as many search tokens (−9.0k per
+session in #163), and the myceliums results plus hook text took about as many
+(+8.8k): the swap was roughly even. What made C's sessions larger is the base:
+C's first call carries ~5.4k more tokens (the nine tool schemas, the CLAUDE.md
+routing block, the SessionStart line), and every call re-reads them (+21.9k
+per session). Because that part is a cheap cache read, C was not more
+expensive per session or per solved task (#163: 0.93× [0.78×, 1.10×] cost per
+solved task, while tokens per solved task were 1.22× [1.01×, 1.45×]). At 40
+turns C used 1.40× [1.17×, 1.73×] the tokens per solved task of none (#171
+re-run: 1.48× [1.08×, 1.96×]), at a cost ratio of 1.07× and 1.13× (both
+intervals include 1).
+
+**Search audit.** Every session row (and `TOKENS.md`) also carries a
+post-hoc audit of the transcript ([`aeval/searchaudit.py`](aeval/searchaudit.py)):
+Grep/Glob calls, Bash search commands (blocked by a hook / ran), interpreter
+calls that ran, Read calls, and *blind reads* (a `Read` of a file whose name
+appeared nowhere before: not in the prompt, an earlier tool input or result,
+or a reply). A session is flagged by any Grep/Glob call, search that ran,
+interpreter that ran, or 5 or more blind reads. In arms with search it
+measures how much the agent searched (#163: 354 Bash search commands and 71
+Grep/Glob calls in the 81 primary none sessions, 223 and 53 in C); in arm D
+every flag is a hole in the isolation.
+
+```bash
+# a committed run whose transcripts are elsewhere; writes tokens.jsonl, tokens_crosscheck.json,
+# TOKENS.md, tokens_summary.json
+python3 evals/agent/agent_eval.py tokens 2026-11-22-scale --runs-root ../myceliums-eval-163-outcome-scale/evals/agent/runs
+python3 evals/agent/agent_eval.py tokens 2026-11-22-scale --check   # CI: TOKENS.md matches the committed data
+```
+
+### Arm D: myceliums only
+
+`--conditions D`: the myceliums MCP server (as in A, no `setup-claude` files)
+and `Read`, with search taken away. `Grep` and `Glob` are not offered and are
+in `--disallowedTools`. With `--bash`, Bash is reduced to an **allowlist**: a
+PreToolUse hook (`python3 -I aeval/bashcmd.py hook`, passed with
+`--settings`) lets a command run only if every program in it is one of:
+
+* `myc`; `cd`, `pwd`, `true`; `mkdir`, `touch`, `mv`, `cp`, `rm`, `chmod`;
+* `git status`, `git diff`, `git add`, `git commit`, `git log`,
+  `git restore`, `git show`, without a search option (`-S`, `-G`, `--grep`,
+  ...) and without a global option that loads configuration, code or another
+  repository (`-c`, `--config-env`, `--exec-path`, `--git-dir`,
+  `--work-tree`, ...): `git -c core.fsmonitor='grep ...' status` would run
+  any command;
+* the task's own build and test commands, matched exactly: each simple
+  command of an `allowed_commands` string (default: the edit task's test
+  command) with the same words, or `{"prefix": ..., "args": REGEX}`, the
+  prefix followed by arguments that match the pattern in full.
+
+Everything else is refused with a message that lists what is allowed:
+`cat`, `head`, `sed`, `echo`, interpreters (`python`, `node`), shells
+(`bash -c`), `eval`, any command substitution, any environment assignment or
+wrapper in front of a command (`GIT_EXTERNAL_DIFF=... git diff`,
+`env GIT_DIR=...`, `nice ...`), any argument naming a path inside `.git`
+(`mv dotgit .git`), `git --output`, and any command that does not parse
+(unbalanced quotes, or a heredoc never closed; heredoc terminators follow
+bash, including `<<-` with tab-indented terminators). File operands of `cd`,
+`mkdir`, `touch`, `mv`, `cp`, `rm`, `chmod` and every redirection target
+(`git show :x > .git/config`, also after a task command) must not contain a
+glob or expansion character (`* ? [ { ~ $`: `cp x .gi?/config`), must not
+name `.git` or a git config, and must stay inside the working copy (the
+hook's `cwd`, followed through `cd`). The same hook refuses `Edit`/`Write`
+outside the working copy, into `.git`, and to `~/.gitconfig` or
+`~/.config/git/`. The harness sets git's configuration through the session's
+environment (`GIT_CONFIG_COUNT`), which the agent cannot change:
+`GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`, `core.hooksPath` an
+empty directory (so `git commit` runs no hook), `core.fsmonitor=false`,
+`core.pager` and `pager.diff/log/show/status` `cat`, `core.editor` and
+`sequence.editor` `true`, `safe.bareRepository=explicit`. `diff.external` is
+not pinned: an empty value makes `git diff` fail ("cannot run"); the only git
+config still read is the working copy's own, which D cannot write. Permission rules (`Bash(grep:*)`, ...) deny the
+common search programs as a second layer. Reading a file goes through `Read`.
+The edit tools are offered on edit tasks, as in every arm. The isolation
+check of every D transcript requires the built-in tools to be exactly `Read`
+(+ `Bash`, + edit tools) with an optional `ToolSearch`, and the search audit
+above counts anything that got through. The regression tests
+(`tests/test_tokens.py`, `DBypasses`) hold every bypass found in review. Over
+the 875 Bash commands of the #163/#171 transcripts the classifier calls 816
+search (`grep` pipelines, `awk`/`sed -n` filters, `$(grep ...)` in loops,
+...), 43 reads, 1 edit and 15 other (interpreter scripts, `ls`); none of the
+875 passes the allowlist. Checked against the mock API
+(`probe --conditions D,A --bash`, myc at `951d041ff9e0`): D was offered
+`Bash` and `Read` only, the scripted `grep -rl parseAccept .` was refused by
+the hook, the scripted `myc callers parseAccept` ran, and the audit counted
+one blocked search and no flag; A was offered `Grep` and `Glob` as before.
+
+**Threat model.** Arm D isolates a *cooperative* agent that has been told,
+by its tool set, not to search: it takes away the search tools and the shell
+commands an agent reaches for, and the transcript audit backs that up. It is
+not a sandbox against an adversarial agent: a determined one could still find
+a way through an allowed program, the reviews of #185 closed the holes found
+so far, not every possible one. Sessions run in a throwaway copy of the
+pinned checkout, and any search-like behaviour that gets through (a search
+command that ran, an interpreter, Grep/Glob, many blind reads) is caught by
+the search audit and reported per session, so a D result is read together
+with its audit counts.
+
+### Edit tasks
+
+A task with `"type": "edit"`, `"answer_kind": "diff"` asks for a change; the
+agent gets `Edit` and `Write` and a prompt without an answer format
+([`aeval/editgrade.py`](aeval/editgrade.py)). The gold is the files a
+reference commit changed (`gold_files`, each `M`, `A` or `D`; for the commit
+replays of #183, the commit on its parent, which is the repository pin).
+`primary_files` names the file(s) of the core change; every other gold file
+is a dependent. Before any agent runs, `agent_eval.py precheck-edit` runs
+each task's `test_command` on a fresh copy of the pinned checkout and records
+the result in the task file (`precheck`); `check-tasks` (and so `run`)
+refuses an edit task whose test command was not prechecked on the current
+pin or does not fail there, because passing it afterwards would prove
+nothing. After the session, before the working copy is replaced, the runner
+records `git status` and the diff and grades: (a) the test command must exit
+0; (b) file-level recall and precision against the gold files, overall and
+separately for code, tests and docs; (c) forgotten dependents, split into
+docs, tests, *remote* code (another directory than every primary file: another
+module) and *local* code (next to a primary file). Without `primary_files`
+every gold file would be a dependent and (c) would equal 1 − recall, so it is
+not reported. A session succeeds when the test command passes, or without one
+when the file-level F1 over code files reaches the threshold.
+
+File kinds, first rule that matches: a Java/Gradle source set decides
+(`src/main/**` is code, also in a module named `spring-test/`; `src/test/**`,
+`src/testFixtures/**` and `src/integrationTest/**` are tests, fixtures
+included); docs are `*.md`, `*.adoc`, `*.rst` and anything under `docs/` or
+`framework-docs/` (so Django's `docs/*.txt`, but not `CMakeLists.txt` or
+`requirements.txt`); tests are anything under `tests/` or `__tests__/` and
+test file names (`test_*.py`, `*_test.go`, `*.test.ts`, `*Test.java`, ...); a
+library package named `test` (`django/test/`) is code; everything else is
+code.
+
+### Realistic budget profile
+
+`run --profile realistic` sets `--max-turns 100` as a safety cap only (never
+stated in the prompt; `--prompt-budget` is refused with it) and 3
+repetitions. The profile name is stored in the run's config, so a resumed run
+cannot change it.
 
 ## Tool-selection eval
 
