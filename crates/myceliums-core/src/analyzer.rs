@@ -1319,21 +1319,22 @@ impl Analyzer {
         // Pass 2: Resolve calls to relationships
         self.check_cancelled()?;
         let graph_construction_timer = Timer::start();
-        let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
-        let call_resolution = resolver.stats().clone();
-        info!(
-            "Resolved {} call relationships ({})",
-            call_rels.len(),
-            call_resolution.summary()
-        );
         // Which methods override which (#190): dispatch is derived from
-        // these and the CALLS edges at query time.
+        // these and the CALLS edges at query time. First, so the timing is
+        // the whole pass (call resolution reuses it).
         let overrides_timer = Timer::start();
         let override_rels = resolver.resolve_overrides(self.store.repo_id());
         info!(
             "Resolved {} override relationships in {:.0} ms",
             override_rels.len(),
             overrides_timer.elapsed_ms()
+        );
+        let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
+        let call_resolution = resolver.stats().clone();
+        info!(
+            "Resolved {} call relationships ({})",
+            call_rels.len(),
+            call_resolution.summary()
         );
         // Kept in the index: the caller tools say how many call sites of a
         // name got no edge. A failed write costs that note, not the index.
