@@ -35,6 +35,8 @@ The *fitted split* columns below re-split every growth with these rates instead 
 
 ## All sessions: `C` against `none`
 
+> **C ÷ none:** confounded (#200). Spring's `AGENTS.md` (1,804 tokens) was in `none`'s context and not in C's. With it added to each of C's model calls, behaviour held fixed (post hoc point estimates): tokens per solved task 1.16× (measured 1.02×), cost 0.90× to 1.08× (measured 0.89×). Ratios here are C ÷ none; tables that list `none` vs `C` show the inverse. Per category: [`POSTHOC.md`](POSTHOC.md).
+
 Sessions: `none` 90 (89 solved), `C` 90 (90 solved). Means per session.
 
 | Category | `none` tokens | `C` tokens | `C` − `none` | `none` USD | `C` USD | result size `none` | result size `C` | fitted split `none` | fitted split `C` |

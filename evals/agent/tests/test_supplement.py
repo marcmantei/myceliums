@@ -32,5 +32,20 @@ class Seen(unittest.TestCase):
             self.assertEqual(supplement.tool_output(p), "C.d")
 
 
+class PairNotes(unittest.TestCase):
+    """#182 review: a confound found after the run is printed next to the pair's numbers."""
+
+    def test_notes_of_a_pair(self):
+        from aeval import config
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            self.assertEqual(config.pair_notes(d), [])
+            (d / "posthoc.json").write_text(json.dumps({"pair_notes": [{"pair": ["C", "none"], "text": "x"},
+                                                                       {"pair": ["D", "C"], "text": "y"}]}))
+            self.assertEqual(config.pair_notes(d, "none", "C"), ["> **C ÷ none:** x", ""])
+            self.assertEqual(config.pair_notes(d, "D", "none"), [])
+            self.assertEqual(len(config.pair_notes(d)), 4)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1191,7 +1191,7 @@ report's notes.
 | C vs D | 0 : 0, p = 1 (1) | +0.012 [+0.000, +0.027] | 0.38× [0.25×, 0.58×] | 0.38× [0.26×, 0.57×] |
 
 (Ratios first ÷ second: below 1 the first arm spends less.) 12 comparisons, only
-the McNemar tests corrected.
+the McNemar tests corrected. The two rows with C are confounded (#200, below).
 
 **Reading.**
 
@@ -1215,19 +1215,35 @@ the McNemar tests corrected.
 * **C did not use what it had** (post hoc): a myceliums call in 13 of 18
   deep-transitive sessions (14 calls) and in **0 of 72** others, with the MCP
   server connected, the routing block, the SessionStart line and 142 grep hints in
-  place. The agent chose grep. By category (post hoc) C used more tokens than A on docs (1.26×
-  [1.13×, 1.38×]), dispatch (1.22× [1.03×, 1.44×]) and by-name (1.12× [1.01×,
-  1.24×]), at no higher cost (0.90×, 0.89×, 1.01×).
+  place. This is only partly a preference for grep: the routing block itself says
+  that "grep/rg stay right for string literals, config values, log messages and
+  non-code files", so on the docs and by-name tasks C partly followed the
+  guidance; on concept and dispatch questions the block points to the graph.
+* **C ÷ A by category** (post hoc, 6 tasks each), measured and with the missing
+  `AGENTS.md` added as above (point estimates, behaviour held fixed; cost from all
+  cache reads to written on every first call;
+  [`POSTHOC.md`](results/182-spring/POSTHOC.md)):
+
+  | Category | Tokens, measured | Tokens, adjusted | Cost, measured | Cost, adjusted |
+  |---|---|---:|---|---:|
+  | docs | 1.26× [1.13×, 1.38×] | 1.43× | 0.90× [0.78×, 0.98×] | 0.92×-1.21× |
+  | dispatch | 1.22× [1.03×, 1.44×] | 1.39× | 0.89× [0.71×, 1.10×] | 0.91×-1.09× |
+  | by-name | 1.12× [1.01×, 1.24×] | 1.27× | 1.01× [0.92×, 1.08×] | 1.03×-1.31× |
+  | concept | 1.05× [0.81×, 1.27×] | 1.20× | 0.99× [0.70×, 1.42×] | 1.01×-1.35× |
+  | deep transitive | 0.83× [0.46×, 1.26×] | 0.92× | 0.80× [0.50×, 1.13×] | 0.81×-0.89× |
+
+  C used more tokens than A on docs, dispatch and by-name; whether it also cost
+  more depends on the caching assumed for the missing file.
 * **Replacing grep with myceliums (D) cost 2.3× [1.6×, 3.4×] as much and 2.7×
   [1.7×, 4.2×] the tokens per solved task** as A. Of the 77.8k extra
   tokens per session, 37.3k are myceliums results, 33.8k the base context re-read
   in more model calls (A 3.8, C 3.5, D 6.3 per session; `num_turns`, shown as turns
   above, is tool calls + 1), 7.2k file reads, 4.8k replies; search output is 6.1k less. Post
   hoc: the hook refused 107 commands, 93 of them searches, in 88 of the 90 sessions
-  (no search got through, no session flagged). Model calls made only for refused
-  commands, with the re-reads of what they added, are 13.4 % of D's input; without
-  them D ÷ A would be 2.33× in tokens (the review, with another definition: 11 %,
-  2.41×). The rest is `search_code` (217 calls, 5.4k characters each, with file
+  (no search got through, no session flagged), in 105 model calls, of which 88 were
+  the session's first call and 17 came later. The 101 calls made only for refused commands are
+  11.5 % of D's input by themselves (D ÷ A without them: 2.38× in tokens), 13.4 %
+  with the re-reads of the refusals (2.33× without both). The rest is `search_code` (217 calls, 5.4k characters each, with file
   paths cut to `.../File.java`), 30 ambiguous-symbol errors and the extra calls. **D
   is not a fair proxy for myceliums on docs and by-name tasks**: what they ask for
   (text in pages, XML and factories files) is searched for with text search.
@@ -1240,7 +1256,8 @@ the McNemar tests corrected.
   tokens per solved task, D ÷ A: concept 1.4×, dispatch 2.4×, by-name 4.1×, docs
   12×, and deep transitive 0.73× [0.42×, 1.17×] (cost 0.65× [0.39×, 1.01×]), the
   only category whose point estimate is below 1; C ÷ A there 0.83× [0.46×,
-  1.26×]. The deep-transitive intervals include 1: a hypothesis for a new
+  1.26×], 0.92× with the confound adjusted. D ÷ C over all tasks is confounded too:
+  2.32× in tokens adjusted, 2.63× measured. The deep-transitive intervals include 1: a hypothesis for a new
   set, not a finding.
 * **What this does not answer:** whether myceliums raises success. Arm A was
   at the ceiling (99 %), so the hypothesis of #182 could not be tested; that

@@ -132,7 +132,7 @@ def render(label: str) -> str:
                                            for t in ids])
                 L.append(f"| `{x}` vs `{y}` | {name} | {fmt(key, d.diff_mean)} [{fmt(key, d.diff_lo)}, "
                          f"{fmt(key, d.diff_hi)}] | {p['ratio']:.2f}× [{p['ratio_lo']:.2f}×, {p['ratio_hi']:.2f}×] |")
-    L += ["", "## Answer items never seen in tool output", "",
+    L += ["", *config.pair_notes(res), "## Answer items never seen in tool output", "",
           "Spring is very likely in the model's training data. An item counts as unseen when it appears in no tool "
           "result of its session (`seen` in `supplement.py`; *strict*: a path in full; *lenient*: a path's file name and "
           "parent directory). It is a lower bound for answers from memory: an item the agent guessed and then confirmed "

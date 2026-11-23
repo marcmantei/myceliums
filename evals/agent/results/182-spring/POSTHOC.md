@@ -11,7 +11,17 @@ A and D loaded the checkout's `AGENTS.md` (4,262 characters); in C the `CLAUDE.m
 | measured | 1.02× [0.83×, 1.23×] | 0.89× [0.74×, 1.03×] |
 | adjusted: AGENTS.md added to each of C's model calls, behaviour held fixed (point estimate) | 1.16× | 0.90× (all cache reads) to 1.08× (written on every first call) |
 
-Whether C would have behaved differently with the file is unknown.
+Whether C would have behaved differently with the file is unknown. D ÷ C is affected the other way: 2.32× in tokens instead of 2.63×. D ÷ A is not affected.
+
+C ÷ A per category (6 tasks each, exploratory; adjusted: point estimates, cost from all cache reads to written on every first call):
+
+| Category | Tokens, measured | Tokens, adjusted | Cost, measured | Cost, adjusted |
+|---|---|---:|---|---:|
+| by_name | 1.12× [1.01×, 1.24×] | 1.27× | 1.01× [0.92×, 1.08×] | 1.03× to 1.31× |
+| concept | 1.05× [0.81×, 1.27×] | 1.20× | 0.99× [0.70×, 1.42×] | 1.01× to 1.35× |
+| deep_transitive | 0.83× [0.46×, 1.26×] | 0.92× | 0.80× [0.50×, 1.13×] | 0.81× to 0.89× |
+| dispatch | 1.22× [1.03×, 1.44×] | 1.39× | 0.89× [0.71×, 1.10×] | 0.91× to 1.09× |
+| docs | 1.26× [1.13×, 1.38×] | 1.43× | 0.90× [0.78×, 0.98×] | 0.92× to 1.21× |
 
 ## Claude Code version
 
@@ -41,7 +51,7 @@ Repetition 3 also has sessions on 2.1.330; leaving it out removes every 2.1.331 
 
 ## Arm D: refused commands
 
-101 model calls in 86 of 90 sessions issued only refused commands. Those calls, plus the re-reads of what they added to the context, are 1,468,357 input tokens, 13.4 % of D's input. Without them D ÷ A would be 2.33× in tokens (measured 2.68×; point estimates, behaviour held fixed).
+101 model calls in 86 of 90 sessions issued only refused commands; those calls alone are 11.5 % of D's input tokens, with the re-reads of what they added to the context 13.4 %. D ÷ A in tokens: measured 2.68×, without the calls 2.38×, without the calls and the re-reads 2.33× (point estimates, behaviour held fixed). 105 model calls had at least one refusal; 88 of them were the session's first call, the rest came later.
 
 `search_code`: 217 calls, mean 5,428 characters. Ambiguous-symbol errors: 30.
 

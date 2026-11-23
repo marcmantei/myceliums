@@ -43,6 +43,10 @@ Difference per session (first − second, tasks as unit, repetitions averaged) a
 | `C` vs `D` | USD | -0.0557 [-0.0838, -0.0298] | 0.38× [0.26×, 0.57×] |
 | `C` vs `D` | turns | -6.9 [-10.3, -4.0] | 0.35× [0.25×, 0.50×] |
 
+> **C ÷ none:** confounded (#200). Spring's `AGENTS.md` (1,804 tokens) was in `none`'s context and not in C's. With it added to each of C's model calls, behaviour held fixed (post hoc point estimates): tokens per solved task 1.16× (measured 1.02×), cost 0.90× to 1.08× (measured 0.89×). Ratios here are C ÷ none; tables that list `none` vs `C` show the inverse. Per category: [`POSTHOC.md`](POSTHOC.md).
+
+> **D ÷ C:** the same confound (#200), the other way round: tokens per solved task 2.32× (measured 2.63×), cost 2.15× to 2.57× (measured 2.62×).
+
 ## Answer items never seen in tool output
 
 Spring is very likely in the model's training data. An item counts as unseen when it appears in no tool result of its session (`seen` in `supplement.py`; *strict*: a path in full; *lenient*: a path's file name and parent directory). It is a lower bound for answers from memory: an item the agent guessed and then confirmed with a tool counts as seen, and one it inferred from what it read can count as unseen.
