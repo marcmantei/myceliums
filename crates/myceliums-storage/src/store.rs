@@ -658,17 +658,27 @@ impl Store {
     }
 
     async fn query_table(&self, table_name: &str) -> Result<Vec<RecordBatch>> {
+        self.query_table_where(table_name, None).await
+    }
+
+    /// The repository's rows of `table_name`, also filtered by `extra` (a
+    /// Lance SQL predicate) when given.
+    async fn query_table_where(
+        &self,
+        table_name: &str,
+        extra: Option<&str>,
+    ) -> Result<Vec<RecordBatch>> {
         let tables = self.table_names().await?;
         if !tables.contains(&table_name.to_string()) {
             return Ok(vec![]);
         }
         let table = self.db.open_table(table_name).execute().await?;
         let escaped_repo_id = escape_lance_str(&self.repo_id);
-        let stream = table
-            .query()
-            .only_if(format!("repo_id = '{}'", escaped_repo_id))
-            .execute()
-            .await?;
+        let predicate = match extra {
+            Some(extra) => format!("repo_id = '{escaped_repo_id}' AND ({extra})"),
+            None => format!("repo_id = '{escaped_repo_id}'"),
+        };
+        let stream = table.query().only_if(predicate).execute().await?;
         let batches: Vec<RecordBatch> = stream.try_collect().await?;
         Ok(batches)
     }
@@ -924,8 +934,25 @@ impl Store {
     /// Returns all relationships stored for this repository.
     pub async fn get_relationships(&self) -> Result<Vec<Relationship>> {
         let batches = self.query_table("relationships").await?;
+        Ok(Self::rels_from_batches(&batches))
+    }
+
+    /// Returns the relationships of one kind (#179: an incremental run reads
+    /// the REFERENCES edges without the rest of the graph).
+    pub async fn get_relationships_of_kind(
+        &self,
+        kind: &RelationshipKind,
+    ) -> Result<Vec<Relationship>> {
+        let predicate = format!("kind = '{}'", escape_lance_str(&kind.to_string()));
+        let batches = self
+            .query_table_where("relationships", Some(&predicate))
+            .await?;
+        Ok(Self::rels_from_batches(&batches))
+    }
+
+    fn rels_from_batches(batches: &[RecordBatch]) -> Vec<Relationship> {
         let mut rels = Vec::new();
-        for batch in &batches {
+        for batch in batches {
             let uids = col_str(batch, "uid");
             let source_uids = col_str(batch, "source_uid");
             let target_uids = col_str(batch, "target_uid");
@@ -944,7 +971,7 @@ impl Store {
                 });
             }
         }
-        Ok(rels)
+        rels
     }
 
     /// Delete all data associated with a specific file path (symbols, file node,
@@ -1008,8 +1035,11 @@ impl Store {
                 .await?;
         }
 
-        // Delete relationships where source or target is a symbol/file from this file
-        if tables.contains(&"relationships".to_string()) && !symbol_uids.is_empty() {
+        // Delete relationships where source or target is a symbol/file from
+        // this file (a config file's node has edges but no symbols, #179).
+        if tables.contains(&"relationships".to_string())
+            && !(symbol_uids.is_empty() && file_uids.is_empty())
+        {
             let table = self.db.open_table("relationships").execute().await?;
             let all_uids: Vec<&str> = symbol_uids
                 .iter()

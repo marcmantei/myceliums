@@ -33,7 +33,9 @@ impl MyceliumsMcp {
         &self,
         Parameters(params): Parameters<ImpactOfChangeParams>,
     ) -> TextResult {
-        retry_on_index_change(|| self.impact_of_change_once(params.clone())).await
+        let answer = retry_on_index_change(|| self.impact_of_change_once(params.clone())).await?;
+        // Places that name it in strings and config files (#179).
+        Ok(answer + &self.name_refs_of_impact(&params).await)
     }
 
     #[tool(
