@@ -341,6 +341,245 @@ def touches_home_git_config(path: str) -> bool:
             or "/.config/git/" in (path or "") + "/")
 
 
+# --- Isolated sessions (#183): one policy for every arm ---------------------
+#
+# The same hook runs in every arm of a repository marked `isolated`. All arms
+# share arm D's allowlist, the Gradle rule and the output pipes; the arms with
+# search additionally get SEARCH_SHELL below, the shell's search and file
+# reading programs. Nothing else differs.
+SEARCH_SHELL = frozenset({"grep", "egrep", "fgrep", "rg", "find", "ls", "cat", "head", "tail", "wc", "nl", "sed",
+                          "sort", "uniq", "cut", "git grep", "git ls-files", "git blame"})
+ISOLATED_TOOLS = frozenset({"Bash", "Read", "Edit", "Write", "Grep", "Glob", "ToolSearch", "TodoWrite"})
+# `myc` subcommands that read the index; the others serve, write configuration or reach out (`email`).
+MYC_READS = frozenset({"analyze", "callers", "callees", "communities", "context", "diff", "impact", "knowledge", "list",
+                       "path", "processes", "query", "search", "semantic-search", "stats", "status"})
+NETWORK_PROGRAMS = frozenset({"curl", "wget", "nc", "ncat", "netcat", "telnet", "ssh", "scp", "sftp", "rsync", "ftp",
+                              "openssl", "dig", "nslookup", "host", "ping", "gh", "git fetch", "git pull", "git clone",
+                              "git push", "git remote", "git ls-remote", "git submodule", "git archive", "npm", "npx",
+                              "pip", "pip3", "brew", "mvn", "gradle", "docker", "open", "java", "javac", "jshell"})
+_FILTER = re.compile(r"^(-n)?-?\d+$|^-n$|^-c$|^--lines=\d+$")  # `tail -50`, `head -n 20`: reads its stdin only
+# Options that run a program, write a file, or read one named indirectly.
+_UNSAFE_OPT = {"find": re.compile(r"^-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls|files0-from)$"),
+               "rg": re.compile(r"^--(pre|pre-glob|hostname-bin|ignore-file|file|search-zip)\b|^-[a-zA-Z]*[fz]"),
+               "grep": re.compile(r"^--(file|exclude-from)\b|^-[a-zA-Z]*f"),
+               "sort": re.compile(r"^--(output|compress-program|files0-from|temporary-directory)\b|^-[a-zA-Z]*[oT]"),
+               "uniq": re.compile(r"^[^-]"), "wc": re.compile(r"^--files0-from"),
+               "git grep": re.compile(r"^-O|^--open-files-in-pager|^--no-index|^-f|^--file"),
+               "git ls-files": re.compile(r"^-X|^--exclude-from"), "git blame": re.compile(r"^--(contents|ignore-revs-file)")}
+_SED_PRINT = re.compile(r"^\d+(,\d+)?p(;\d+(,\d+)?p)*$")
+
+
+def outside(word: str, here: str, root: str) -> bool:
+    """Does ``word`` name, or could the shell make it name, a path outside
+    ``root``? Absolute, ``~``, ``..`` and ``$VAR`` forms, also after ``=`` or
+    ``:`` (``--file=/x``, ``HEAD:/x``)."""
+    if word in DEVICES:
+        return False
+    for part in {word, *re.split(r"[=:,]", word)}:
+        if re.search(r"\$[A-Za-z_{]", part) or part.startswith("~"):
+            return True
+        if (part.startswith("/") or ".." in part.split("/")) and not _inside(part, here, root):
+            return True
+        if part and not part.startswith("-") and os.path.lexists(os.path.join(here, part)) \
+                and not _inside(part, here, root):  # a symlink out
+            return True
+    return False
+
+
+def _pattern_operands(prog: str, args: list[str]) -> set[int]:
+    """Indexes of the arguments that are search patterns, not paths."""
+    if prog not in ("grep", "egrep", "fgrep", "rg", "git grep"):
+        return set()
+    out, i = set(), 0
+    while i < len(args):
+        if args[i] in ("-e", "--regexp") and i + 1 < len(args):
+            out.add(i + 1)
+            i += 1
+        elif args[i].startswith("--regexp="):
+            out.add(i)
+        i += 1
+    if not out:
+        for i, a in enumerate(args):
+            if not a.startswith("-") and (i == 0 or args[i - 1] not in ("-A", "-B", "-C", "-m", "-g", "--glob", "-t",
+                                                                          "--type", "--include", "--exclude")):
+                return {i}
+    return out
+
+
+def isolated_bash(command: str, extra=(), here: str | None = None, root: str | None = None,
+                  search: bool = False) -> tuple[bool, list[str]]:
+    """The Bash policy of an isolated session: ``(ok, what is denied)``.
+    ``here`` is the shell's directory, ``root`` the working copy; ``search``
+    adds :data:`SEARCH_SHELL` (every arm but D)."""
+    here, root = here or root or "/", root or here or "/"
+    if not _inside(here, root, root):
+        return False, ["a shell outside the working copy"]
+    if "$(" in command or "`" in command or "<(" in command or ">(" in command:
+        return False, ["command substitution"]
+    try:
+        cmds, targets = parse(command)
+    except Unparsed:
+        return False, ["unparsable command"]
+    rules, denied = task_rules(extra), []
+    for k, words in enumerate(cmds):
+        bad = [why for idx, t in targets if idx == k for why in [path_problem(t, here, root)] if why]
+        if bad:
+            denied.extend("redirection to " + b for b in bad)
+            continue
+        if _task_allows(words, rules):
+            if os.path.realpath(here) != os.path.realpath(root):
+                denied.append("Gradle outside the working copy's top directory")
+            continue
+        prog, args = program(words)
+        if not prog:
+            if not words or (words[0] not in HEADERS and not all(w in KEYWORDS for w in words)):
+                denied.append(f"`{words[0] if words else ''}`")  # `env`, a bare assignment
+            elif any(outside(w, here, root) for w in words[1:]):
+                denied.append("a path outside the working copy")
+            continue
+        if prog in ("gradlew", "gradle") or (prog in SHELLS and any("gradlew" in a for a in args)):
+            denied.append("Gradle without the required flags, or with an option or task that is not allowed")
+            continue
+        if prog in NETWORK_PROGRAMS:
+            denied.append(prog + " (network)")
+            continue
+        name = words[0]
+        if name != prog.split(" ")[0]:  # a wrapper (`xargs cat` reads names from its input), assignment, keyword, path
+            if name in HEADERS or name in KEYWORDS:
+                name = prog.split(" ")[0]
+            else:
+                denied.append(f"`{name}` in front of a command")
+                continue
+        if "/" in name:
+            denied.append(f"`{name}` (a program by path)")
+            continue
+        if prog in ("head", "tail") and args and all(_FILTER.match(a) for a in args) or prog in ("head", "tail") and not args:
+            continue  # an output pipe, in every arm
+        if prog.startswith("git "):  # its global options too: `git -C /elsewhere log`
+            pre = words[1:words.index(prog[4:], 1)] if prog[4:] in words[1:] else []
+            if pre and pre != ["--no-pager"]:
+                denied.append("git with global options")
+                continue
+        patterns = _pattern_operands(prog, args)
+        if any(i not in patterns and outside(a, here, root) for i, a in enumerate(args)):
+            denied.append("a path outside the working copy")
+            continue
+        if any(i not in patterns and touches_dot_git(a) for i, a in enumerate(args)):
+            denied.append("a path inside .git")
+            continue
+        if prog in PATH_PROGRAMS and any("gradlew" in a or "gradle/wrapper" in a for a in args):
+            denied.append("the Gradle wrapper's files")
+            continue
+        if prog == "myc" and (not args or args[0] not in MYC_READS and args[0] not in ("--help", "--version")):
+            denied.append("that `myc` subcommand")
+            continue
+        if prog.startswith("git ") and any(a in ("--ext-diff", "--textconv") for a in args):
+            denied.append(prog + " with a helper program")
+            continue
+        if search and prog in SEARCH_SHELL:
+            rx = _UNSAFE_OPT.get("grep" if prog in ("egrep", "fgrep") else prog)
+            if rx and any(i not in patterns and rx.search(a) for i, a in enumerate(args)):
+                denied.append(f"`{prog}` with that option")
+            elif prog == "sed" and not (len(args) >= 2 and args[0] == "-n" and _SED_PRINT.match(args[1])
+                                        and not any(a.startswith("-") for a in args[2:])):
+                denied.append("`sed` other than `sed -n 'A,Bp'`")
+            elif prog == "tail" and any(re.match(r"^-[a-zA-Z]*[fF]|^--follow|^--retry", a) for a in args):
+                denied.append("`tail -f`")
+            else:
+                continue
+            continue
+        ok, why = allowed(shlex.join(words), extra, root if prog in PATH_PROGRAMS and here == root else here)
+        if prog in PATH_PROGRAMS and here != root:
+            why = [w for a in args if not a.startswith("-") for w in [path_problem(a, here, root)] if w]
+            ok = not why
+        if not ok:
+            denied.extend(why)
+        elif prog == "cd":
+            here = os.path.realpath(os.path.join(here, ([a for a in args if not a.startswith("-")] or ["."])[0]))
+    return not denied, denied
+
+
+def isolated_tool(tool: str, inp: dict, root: str, here: str | None = None, extra=(), search: bool = False,
+                  readable=()) -> tuple[str, str] | None:
+    """Why a tool call is refused in an isolated session, as ``(kind,
+    reason)`` (``outside``, ``network``, ``gradle`` or ``other``), or None.
+    ``readable``: directories outside the working copy `Read` may use (the
+    session's own saved tool results)."""
+    here = here or root
+    if tool == "Bash":
+        ok, denied = isolated_bash(str(inp.get("command") or ""), extra, here, root, search)
+        if ok:
+            return None
+        text = ", ".join(dict.fromkeys(denied))
+        kind = ("network" if "(network)" in text else "gradle" if "Gradle" in text
+                else "outside" if "outside" in text else "other")
+        return kind, text
+    if tool in ("WebFetch", "WebSearch"):
+        return "network", tool
+    if not (tool in ISOLATED_TOOLS or tool in EDIT_TOOLS or tool.startswith("mcp__myceliums__")):
+        return "other", f"the tool {tool}"
+    if tool in EDIT_TOOLS:
+        path = str(inp.get("file_path") or inp.get("notebook_path") or "")
+        if touches_dot_git(path) or touches_home_git_config(path) or not _inside(path, here, root):
+            return "outside", f"writing {path}"
+        rel = os.path.relpath(os.path.realpath(os.path.join(here, path)), os.path.realpath(root))
+        if rel in ("gradlew", "gradlew.bat") or rel.startswith("gradle/wrapper/"):
+            return "gradle", "writing the Gradle wrapper's files"
+        return None
+    if tool == "Read":
+        path = str(inp.get("file_path") or "")
+        if touches_dot_git(path):
+            return "outside", f"reading {path}"
+        if _inside(path, here, root) or any(_inside(path, r, r) for r in readable):
+            return None
+        return "outside", f"reading {path}"
+    if tool in ("Grep", "Glob"):
+        vals = [str(inp.get(k) or "") for k in (("path", "glob") if tool == "Grep" else ("path", "pattern"))]
+        bad = [v for v in vals if v and (outside(v, here, root) or touches_dot_git(v))]
+        return ("outside", f"{tool} in {bad[0]}") if bad else None
+    if tool.startswith("mcp__"):
+        def strings(v):
+            if isinstance(v, str):
+                yield v
+            elif isinstance(v, dict):
+                for x in v.values():
+                    yield from strings(x)
+            elif isinstance(v, list):
+                for x in v:
+                    yield from strings(x)
+        bad = [v for v in strings(inp) if (v.startswith(("/", "~")) or v.startswith("..") or "/../" in v)
+               and not _inside(os.path.expanduser(v), here, root)]
+        return ("outside", f"{tool} on {bad[0]}") if bad else None
+    return None
+
+
+ISOLATED_MESSAGE = ("Not allowed in this session: {why}. Work only on files of the working copy {root}; there is no "
+                    "network; Bash allows {progs}, and Gradle only as `./gradlew --offline --no-scan "
+                    "--no-build-cache ...` from the top directory.")
+ISOLATED_MARKER = "Not allowed in this session:"
+
+
+def isolated_hook(argv: list[str], stdin=sys.stdin, stderr=sys.stderr) -> int:
+    """PreToolUse hook of an isolated session, for every tool, in every arm."""
+    opts = dict(zip(argv[::2], argv[1::2]))
+    try:
+        event = json.load(stdin)
+        root, search = opts["--root"], opts["--search"] == "yes"
+        tp, sid = str(event.get("transcript_path") or ""), str(event.get("session_id") or "")
+        readable = [os.path.join(os.path.dirname(tp), sid, "tool-results")] if tp and sid else []
+        extra = json.loads(opts.get("--allow-json") or "[]")
+        why = isolated_tool(str(event.get("tool_name") or ""), event.get("tool_input") or {}, root,
+                            event.get("cwd") or root, extra, search, readable)
+    except Exception as exc:  # noqa: BLE001 - a hook that cannot decide refuses
+        stderr.write(f"{ISOLATED_MARKER} the check failed ({type(exc).__name__})\n")
+        return 2
+    if why is None:
+        return 0
+    progs = sorted(D_ALLOWED) + ["head/tail as pipes"] + (sorted(SEARCH_SHELL) if search else [])
+    stderr.write(ISOLATED_MESSAGE.format(why=why[1], root=root, progs=", ".join(progs)) + "\n")
+    return 2
+
+
 def allowed(command: str, extra=(), cwd: str | None = None) -> tuple[bool, list[str]]:
     """Arm D's allowlist: ``(ok, denied programs)``. ``extra`` are the task's
     own build/test commands (:func:`task_rules`); ``cwd`` is the session's
@@ -449,5 +688,7 @@ def hook(argv: list[str], stdin=sys.stdin, stderr=sys.stderr) -> int:
 if __name__ == "__main__":
     if sys.argv[1:2] == ["hook"]:
         sys.exit(hook(sys.argv[2:]))
+    if sys.argv[1:2] == ["isolated-hook"]:
+        sys.exit(isolated_hook(sys.argv[2:]))
     for line in sys.stdin:
         print(classify(line), search_programs(line), allowed(line))

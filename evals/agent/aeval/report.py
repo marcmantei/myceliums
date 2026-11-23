@@ -40,6 +40,8 @@ COMPACT_FIELDS = [
     "attribution_method", "tokens_by_category", "tokens_by_class", "result_tokens_by_category", "thinking_tokens",
     "attribution_residual", "cost_by_category", "cost_by_class", "priced_cost_usd", "edit", "models",
     "estimated_tokens_by_category", "search_audit",
+    # isolated sessions (#183)
+    "isolation_audit",
 ]
 
 METRICS = [

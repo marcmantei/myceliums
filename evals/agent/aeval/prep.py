@@ -218,6 +218,8 @@ def verify_derived(log: str, name: str, work: Path, myc: str, env: dict, cache: 
     finally:
         config.remove_tree(tmp, cache / "tmp")
     got = graph_counts(log)
+    if got != fresh:
+        raise SystemExit(f"{name}: the derived graph differs from a fresh one: {got} against {fresh}")
     return {"vectors_reused": reused, "counts": got, "fresh_graph_counts": fresh, "graph_equal": got == fresh}
 
 
@@ -344,7 +346,7 @@ def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list
         for p in overlay if isinstance(overlay, list) else [overlay]:
             if p not in paths:
                 problems.append(f"{tid}: overlay file {p} is not a gold file")
-            elif file_kind(p) != "tests":
+            elif file_kind(p) != "tests" and p not in (t.get("build_overlay") or []):
                 problems.append(f"{tid}: overlay file {p} is not a test file")
     if root is not None and repo.get("gold_commit"):
         meta = config.gold_dir(t["repo"]) / "gold.json"

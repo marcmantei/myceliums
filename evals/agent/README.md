@@ -1590,40 +1590,46 @@ tests, at least two build modules touched (`framework-docs` counts), and a
 parent that builds with the Java 25 toolchain: **151 candidates**. 34 were
 picked for a public API or behaviour change a description can state
 (no pure refactoring or deprecation), and stratified by files, code modules
-and docs; 20 are the task set, 13 are reserves
+and docs; 20 are the task set, 12 are reserves
 (`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
 fails.
 
-| Task | Commit | Files (code/tests/docs) | Code modules | Docs | Primary files |
-|---|---|---:|---:|---|---:|
-| `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 2 | yes | 1 |
-| `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 | yes | 2 |
-| `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 | yes | 3 |
-| `spel-big-power-result-limit` | 8a92c19e4d | 8 (4/2/2) | 2 | yes | 2 |
-| `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 | yes | 1 |
-| `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | yes | 2 |
-| `fn-request-bind-pathvars-headers` | a9a404266c | 7 (3/2/2) | 2 | yes | 1 |
-| `jdbcclient-batch-entry-dsl` | 833ab4d48f | 6 (2/3/1) | 1 | yes | 1 |
-| `type-mismatch-required-type-arg` | 4847ee80b0 | 3 (1/1/1) | 1 | yes | 1 |
-| `servlet-response-ignore-body-flush` | e0b54e244e | 5 (3/1/1) | 2 | yes | 1 |
-| `content-negotiation-no-fallback-mapping` | 7fbdbd6eb7 | 4 (2/2/0) | 2 | no | 1 |
-| `client-builders-deep-copy-default-headers-cookies` | 4cf6335372 | 6 (3/3/0) | 3 | no | 1 |
-| `http-range-honor-if-range` | 8ab5332639 | 11 (5/6/0) | 2 | no | 1 |
-| `error-response-interceptor-with-request` | d70220eb5d | 11 (7/4/0) | 3 | no | 1 |
-| `mime-type-parameter-names-case-insensitive` | 2028eb3694 | 4 (2/2/0) | 2 | no | 1 |
-| `deferred-bean-registrar-contains-bean` | 7502b92392 | 14 (7/7/0) | 2 | no | 2 |
-| `cache-manager-reset-caches` | 96aadc2b12 | 6 (5/1/0) | 2 | no | 1 |
-| `api-version-deprecation-handler-handler-arg` | b128f59714 | 12 (10/2/0) | 3 | no | 2 |
-| `bean-provider-parameterized-type-reference` | 2e4ca41382 | 7 (6/1/0) | 3 | no | 1 |
-| `message-source-default-charset` | 02af3e7a17 | 5 (4/1/0) | 2 | no | 1 |
-Spread: 6 small (≤ 5 files), 10 medium (6-12), 4 large (13-20); code in one
-module 2, two modules 13, three or more 5; 10 with docs.
+| Task | Commit | Files (code/tests/docs) | Modules whose code changes | Comment-only files | Docs | Primary files |
+|---|---|---:|---:|---:|---|---:|
+| `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 1 | 1 | yes | 1 |
+| `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 |  | yes | 2 |
+| `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 |  | yes | 3 |
+| `spel-big-power-result-limit` | 8a92c19e4d | 8 (4/2/2) | 1 | 1 | yes | 2 |
+| `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 |  | yes | 1 |
+| `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | 1 | yes | 2 |
+| `fn-request-bind-pathvars-headers` | a9a404266c | 7 (3/2/2) | 2 |  | yes | 1 |
+| `jdbcclient-batch-entry-dsl` | 833ab4d48f | 6 (2/3/1) | 1 |  | yes | 1 |
+| `type-mismatch-required-type-arg` | 4847ee80b0 | 3 (1/1/1) | 1 |  | yes | 1 |
+| `servlet-response-ignore-body-flush` | e0b54e244e | 5 (3/1/1) | 2 |  | yes | 1 |
+| `content-negotiation-no-fallback-mapping` | 7fbdbd6eb7 | 4 (2/2/0) | 2 |  | no | 1 |
+| `client-builders-deep-copy-default-headers-cookies` | 4cf6335372 | 6 (3/3/0) | 3 |  | no | 1 |
+| `http-range-honor-if-range` | 8ab5332639 | 11 (5/6/0) | 2 |  | no | 1 |
+| `error-response-interceptor-with-request` | d70220eb5d | 11 (7/4/0) | 3 |  | no | 1 |
+| `mime-type-parameter-names-case-insensitive` | 2028eb3694 | 4 (2/2/0) | 2 |  | no | 1 |
+| `deferred-bean-registrar-contains-bean` | 7502b92392 | 14 (7/7/0) | 2 | 1 | no | 2 |
+| `api-version-deprecation-handler-handler-arg` | b128f59714 | 12 (10/2/0) | 3 |  | no | 2 |
+| `bean-provider-parameterized-type-reference` | 2e4ca41382 | 7 (6/1/0) | 3 |  | no | 1 |
+| `message-source-default-charset` | 02af3e7a17 | 5 (4/1/0) | 1 | 1 | no | 1 |
+| `retryable-method-retry-event` | 92a43c007a | 10 (6/4/0) | 2 | 2 | no | 3 |
+Spread: 6 small (≤ 5 files), 10 medium (6-12), 4 large (13-20); main code changes
+in one module 5, two 10, three or more 5; 10 with docs. The split is computed from
+the diffs: a file in which only comments, Javadoc or imports change does not count for a
+module (six tasks have such gold files; the mining filter and the first versions of this
+table counted them). Grading reports these files and Gradle scripts as their own
+kinds of dependent (`comments`, `build`) and the code recall also without them (`code_changed`).
 
 **Descriptions** were drafted by agents from the commit message, the linked
 issue and the diff ([`groundtruth/commit_replay_spec.json`](groundtruth/commit_replay_spec.json),
 rules: an issue-style change request that names every new public name the
-commit's tests need, may name the type of the core change, and never names
-files, test classes, dependent classes, modules, docs or tests). A second
+commit's tests need, may name the type of the core change, and must not name
+files, test classes, dependent classes, modules, docs or tests; a unit test checks the
+20 for gold class names other than the primary ones, with `@Retryable`, the feature's own
+name, as the one exception). A second
 agent reviewed all 34 for leakage and solvability against the test diff (it
 split them over four sub-agents and itself re-checked nine): 27 ok, 7 to fix.
 Six were replaced by the reviewer's rewrite (two of them among the 20); the
@@ -1632,21 +1638,27 @@ changed again (a class name that also names its counterpart, a wrong fact about 
 conventions, two wrong facts about the overflow, a call-site scope that was
 not stated, and for `bean-provider-parameterized-type-reference`, one of the 20,
 that the method is abstract as in the commit; without it a one-line default
-method would have passed). With it the implementations are compile errors, so this task says
-little about forgotten dependents. These four texts were not reviewed again. The seventh, a reserve, had to name a
+method would have passed). With it the implementations are compile errors, so this task says little
+about forgotten dependents, and only because the test command compiles every changed module
+(before the PR review it did not). The PR review checked these four texts. It also found two that named a gold class
+(`DefaultConversionService`, `@Import`; removed, see the spec) and a weak test:
+`cache-manager-reset-caches` passed with an interface default method alone while its description made the
+gold overrides optional; it was replaced by `retryable-method-retry-event` (same strata). The seventh, a reserve, had to name a
 dependent (a Kotlin extension its module's tests compile against) and was
-dropped (13 reserves are left). No human has reviewed the descriptions.
+dropped (12 reserves are left). No human has reviewed the descriptions.
 Scope words an issue would use ("for both Spring MVC and WebFlux") are allowed
 and noted in the spec.
 
 **What the build derives** (`commit_replay.py build`): one pin per task in the
 task file's own `repos` (the parent; `gold_commit` the replayed commit),
 `gold_files` (the commit's name-status, renames as delete + add),
-`test_overlay` (the commit's test files, fixtures included), the default test
-command (`./gradlew --offline --no-scan --no-daemon --console=plain :module:test --tests ...` over
-the changed test classes; three tasks narrow it, see the spec), arm D's
-`allowed_commands` (`./gradlew` with task paths, `--tests` filters and a few
-flags, `--offline --no-scan` required; `-I`, `-D`, `-P`, `-p`, `--init-script` are refused) and the strata.
+`test_overlay` (the commit's test files, fixtures included; for
+`observation-record-handled-exception` also the Gradle script that gives its overlaid tests
+their test dependency), the test command (`./gradlew --offline --no-scan --no-build-cache`, main and
+test compilation of **every module the commit changes sources in**, then `:module:test --tests ...`
+over the changed test classes; three tasks narrow the tests, see the spec), the Gradle rule of the hook
+(`allowed_commands`: the three flags, options and tasks by exact name, because Gradle expands abbreviations
+such as `bSPP`, and `--tests` with a class or method pattern) and the strata.
 
 **Harness additions.**
 
@@ -1680,6 +1692,7 @@ flags, `--offline --no-scan` required; `-I`, `-D`, `-P`, `-p`, `--init-script` a
 **Run configuration.**
 
 ```bash
+export AEVAL_PROTECT=/private/tmp/aeval183   # scratch of the preparation (contexts, logs)
 export JAVA_HOME=$HOME/.cache/myc-java/jdk/jdk-25.0.5.1+2/Contents/Home   # Spring's build needs a JDK 25 toolchain
 T=evals/agent/tasks/tasks-commit-replay.json
 python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 MB each) + gold files
@@ -1712,8 +1725,8 @@ nothing would be reused, silently (read in the code, not run). Hence one shared 
 * it refuses a base of another path, and an index that reused no vector;
 * newest parent first, each index is derived from its neighbour's, so each
   step embeds one interval of history only;
-* each is compared with a fresh graph-only build of the same working copy
-  (symbols, files, relationships, mentions; `meta.json` `derived`).
+* each must equal a fresh graph-only build of the same working copy in symbols, files, relationships and mentions
+  (`meta.json` `derived`); a difference stops the run.
 
 The base is the #182 run's embedded index of v7.1.0 (same models; its path is
 `/private/tmp/aeval182/spring-framework`, so `AEVAL_WORK_ROOT=/private/tmp/aeval182`),
@@ -1762,7 +1775,7 @@ free space: build, run and delete task by task), `~/.gradle`
 8-9 GB (forecast, below).
 
 **Prechecks: none is valid for the current commands; 13 of 20 passed online on
-23 November** ([records](groundtruth/commit_replay_prechecks_online.json)). The
+23 November** (12 of them still in the set; [records](groundtruth/commit_replay_prechecks_online.json)). The
 test commands have since become offline commands (next paragraph), so all 20
 run again, offline and without competing load. `precheck-edit --gold-runs 2`
 runs the tests on the parent with the commit's tests (must fail, and for a
@@ -1777,8 +1790,8 @@ runs. One at a time, low priority, 4 Gradle workers, beside the #182 index build
 | `spel-simple-context-restricted-conversion` | compile, 212 s | 2 of 2 | 42, 33 s |
 | `observation-record-handled-exception` | compile, 106 s | 2 of 2 | 88, 47 s |
 | `beans-max-nested-path-depth` | compile, 160 s | 2 of 2 | 94, 38 s |
+| `spel-big-power-result-limit` | not run | | |
 | `jsonl-media-type-support` | compile, 410 s | 2 of 2 | 111, 32 s |
-| `spel-big-power-result-limit` | parent not buildable | | |
 | `retry-max-attempts-to-max-retries` | compile, 304 s | 2 of 2 | 135, 40 s |
 | `fn-request-bind-pathvars-headers` | tests, 550 s | 2 of 2 | 138, 41 s |
 | `jdbcclient-batch-entry-dsl` | compile, 275 s | 2 of 2 | 100, 69 s |
@@ -1790,12 +1803,12 @@ runs. One at a time, low priority, 4 Gradle workers, beside the #182 index build
 | `error-response-interceptor-with-request` | compile, 221 s | 2 of 2 | 112, 39 s |
 | `mime-type-parameter-names-case-insensitive` | tests, 135 s | 2 of 2 | 93, 45 s |
 | `deferred-bean-registrar-contains-bean` | not run | | |
-| `cache-manager-reset-caches` | compile, 203 s | 2 of 2 | 153, 59 s |
 | `api-version-deprecation-handler-handler-arg` | compile, 453 s | 2 of 2 | 197, 41 s |
 | `bean-provider-parameterized-type-reference` | not run | | |
 | `message-source-default-charset` | not run | | |
+| `retryable-method-retry-event` | not run | | |
 
-* **Without an online pass: 7 of 20.** `spel-big-power-result-limit`
+* **Without an online pass: 8 of 20** (the six below, `spel-big-power-result-limit` and the new `retryable-method-retry-event`). `spel-big-power-result-limit`
   failed because its parent needs `micrometer-bom:1.18.0-INTERNAL-SNAPSHOT`, which Gradle did not
   find in either Spring repository (missing, no connection error), so it will probably
   fail offline too; `test-context-cache-pause-mode` (a reserve, same strata) is its stand-in.
@@ -1809,7 +1822,7 @@ runs. One at a time, low priority, 4 Gradle workers, beside the #182 index build
   `message-source-default-charset` 5, `bean-provider-...` 8, `deferred-bean-...` 1,
   `client-builders-...` and `http-range-...` 1 each, the stand-in 9 (names:
   micrometer, reactor, netty, jetty, junit, mockito, groovy and jackson BOMs, `kotlin-gradle-plugin`
-  2.2.20, `io.spring.nullability`). Further artifacts may be missing.
+  2.2.20, `io.spring.nullability`; of the new `retryable-method-retry-event`, 9.2.1, not listed yet). Further artifacts may be missing.
 * **Reproducibility risk:** six of the 20 parents depend on unpinned `-SNAPSHOT` BOMs
   (micrometer 1.18.0, reactor 2026.0.0, not counting `spel-big-power-result-limit`; `beans-max-nested-path-depth` reactor
   only). Offline, Gradle takes the cached snapshot; a lost cache may not be recoverable.
@@ -1827,14 +1840,35 @@ distribution is not complete on disk (unpacked with its `.ok` marker, or a whole
 zip): before a run's first session, before each session, before each precheck and before the
 grading test (an agent may have edited the wrapper properties).
 
-**Network-free builds.** Test commands start with `./gradlew --offline --no-scan`;
-arm D's pattern requires both flags and refuses `--scan`,
-`--refresh-dependencies` and every publish task (the first version would have let
-`buildScanPublishPrevious` through, which uploads a stored scan); every arm's prompt
-says the build has no network; and the sessions' `GRADLE_OPTS` send
-HTTP(S) to a closed loopback port, with the Spring build's remote cache
-(`DEVELOCITY_CACHE_SERVER`) there too, for a build started without the flags. Tested
-on the command strings only: **no Gradle has run offline yet**.
+**Network-free builds.** Test commands start with `./gradlew --offline --no-scan
+--no-build-cache`, and the hook (below) holds every arm to the same rule; every arm's prompt says so. No build
+cache means no task output of another arm's session or of a precheck of the gold commit, and no remote cache. The
+sessions' `GRADLE_OPTS` send HTTP(S) to a closed loopback port, with the Spring build's remote cache
+(`DEVELOCITY_CACHE_SERVER`) there too. Tested on command strings only: **no Gradle has run offline yet**.
+
+**Isolation** (repositories marked `isolated`, the same in every arm; [`aeval/isolation.py`](aeval/isolation.py)).
+Before the PR review a session could read the gold files, later parents and the history clone, and A and C could use
+the network.
+
+* One PreToolUse hook on every tool (`bashcmd.py isolated-hook`): Read, Edit, Write, Grep, Glob and myceliums calls
+  stay in the working copy (and the session's own saved tool results); Bash is an allowlist with no path outside, no
+  substitution, no interpreter, no wrapper, no network program (`curl`, `git fetch`, ...); WebFetch, WebSearch and
+  unknown tools are refused; Gradle's wrapper files cannot be changed; a check that fails refuses.
+* All arms share arm D's allowlist, the Gradle rule and `| tail`, `| head`. A and C have **only** search in
+  addition: `Grep`, `Glob` and the shell's search and file reading programs (`grep`, `rg`, `find`, `ls`, `cat`,
+  `sed -n 'A,Bp'`, ...; `SEARCH_SHELL`); a unit test compares the generated settings and tool lists. This makes A and C
+  less free than a user's Claude Code (no `python`, no `awk`, no pipes into other programs).
+* macOS: the session, and the test command that grades it, run under `sandbox-exec`. The kernel refuses the data of
+  the harness cache (gold, parents, indexes), this repository and its sibling checkouts, the history clone, Claude's
+  other session files and the orchestrator's notes to every child process, also to a test the agent wrote;
+  `AEVAL_PROTECT` adds places (set it to the scratch directories of the preparation). Without `sandbox-exec` a run refuses to start.
+* Every row carries `isolation_audit`, from the transcript with tests of its own: attempts, refusals and what ran, per
+  kind (outside, network, Gradle without the flags), protected places in results or edits; `TOKENS.md` counts them per arm.
+* **Limits.** The kernel layer cannot deny the network (the session needs the model's API), so code the agent
+  writes and runs through Gradle could open a connection; names and times of protected files stay visible; the Spring
+  commits are public and may be in the model's training data; this guards a cooperative agent.
+  Checked with unit tests, among them the real sandbox with plain programs; **a session under it (probe) and Gradle
+  under it have not run yet**.
 
 `io.spring.develocity.conventions` (0.0.22 and 0.0.25, read from its source; the scan and
 cache conventions are identical in both, the plugin class differs, and both check `--no-scan`):
@@ -1871,7 +1905,7 @@ python3 evals/agent/agent_eval.py --tasks $T probe --label v183 --task mime-type
     --edit-file spring-core/src/main/java/org/springframework/util/MimeType.java \
     --edit-old "public class MimeType implements Comparable<MimeType>, Serializable {" \
     --edit-new "public class MimeType implements Comparable<MimeType>, Serializable { // probe" \
-    --edit-command "./gradlew --no-daemon --console=plain :spring-core:test --tests org.springframework.util.MimeTypeTests :spring-web:test --tests org.springframework.http.MediaTypeTests"
+    --edit-command "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-core:test --tests org.springframework.util.MimeTypeTests :spring-web:test --tests org.springframework.http.MediaTypeTests"
 ```
 
 ## Replaying myceliums calls (#181)

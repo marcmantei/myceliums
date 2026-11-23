@@ -36,6 +36,7 @@ from pathlib import Path
 
 from . import config
 from .editgrade import apply_gold, changed_files, gold_paths, grade_edit, run_test, snapshot, wrapper_problem
+from . import isolation
 from .grading import Grade, extract_answer, grade, is_success
 from .stream import MCP_PREFIX, check_isolation, parse_transcript
 from .searchaudit import audit as search_audit
@@ -482,6 +483,35 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         tools += config.EDIT_TOOLS if is_edit_task(item.task) else ()
         return tools
 
+    def _isolated_settings(self, item: WorkItem, tmp: Path, workdir: Path) -> Path:
+        """Settings of an isolated session (#183): one PreToolUse hook on every
+        tool, the same in every arm except ``--search`` (aeval/bashcmd.py
+        ``isolated-hook``). The hook's script is copied next to them, because
+        the session may not read this repository."""
+        search = "no" if config.VARIANTS[item.condition].no_search else "yes"
+        script = tmp / "policy" / "bashcmd.py"
+        script.parent.mkdir()
+        script.write_bytes(NOSEARCH_HOOK.read_bytes())
+        hook = " ".join(shlex.quote(x) for x in [
+            sys.executable, "-I", str(script), "isolated-hook", "--root", os.path.realpath(workdir), "--search", search,
+            "--allow-json", json.dumps(allowed_commands(item.task))])
+        path = tmp / "isolated-settings.json"
+        path.write_text(json.dumps({"hooks": {"PreToolUse": [
+            {"matcher": "*", "hooks": [{"type": "command", "command": hook}]}]}}, indent=1))
+        return path
+
+    def _sandbox_profile(self, tmp: Path, workdir: Path, out_dir: Path) -> Path:
+        """The kernel layer (aeval/isolation.py): only this session's own files
+        of the protected places are readable."""
+        if not isolation.available():
+            raise StopRun("an isolated repository (#183) needs macOS's sandbox-exec; not found")
+        path = tmp / "session.sb"
+        hooks = out_dir / "hooks"
+        hooks.mkdir(parents=True, exist_ok=True)
+        path.write_text(isolation.profile([tmp, workdir, hooks, Path(self.cfg.myc), Path(self.cfg.models_dir),
+                                           isolation.project_dir(workdir)]))
+        return path
+
     def _nosearch_settings(self, tmp: Path, task: dict | None = None, hook_dir: Path | None = None) -> Path:
         """Settings for D (#178): a PreToolUse hook on Bash that lets a command
         through only if every program it runs is on the allowlist
@@ -524,6 +554,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "--allowedTools", ",".join(allowed),
         ]
         disallowed = [f"Agent({a})" for a in config.BUILTIN_AGENTS] if variant.agent else []
+        if self.repos[item.repo].get("isolated"):
+            disallowed += ["WebFetch", "WebSearch"]
         if variant.no_search:
             disallowed += list(config.SEARCH_TOOLS) + (list(config.BASH_SEARCH_RULES) if self.cfg.bash else [])
         if disallowed:
@@ -583,7 +615,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 extra["MYCELIUMS_DATA_DIR"] = str(stray)
             if self.cfg.tool_search is not None:
                 extra["ENABLE_TOOL_SEARCH"] = self.cfg.tool_search
-            if variant.no_search:
+            isolated = bool(repo.get("isolated"))
+            if variant.no_search or isolated:
                 extra.update(nosearch_git_env(tmp))
             # #183: what the repository's build needs (JAVA_HOME, Gradle options).
             extra.update(config.repo_env(repo))
@@ -591,10 +624,15 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             # Files the harness changed before the agent starts (setup-claude's
             # CLAUDE.md, .mcp.json) are not the agent's edits.
             baseline = snapshot(workdir) if is_edit_task(task) else None
-            settings = self._nosearch_settings(tmp, task, hook_dir) if variant.no_search else None
+            settings = (self._isolated_settings(item, tmp, workdir) if isolated
+                        else self._nosearch_settings(tmp, task, hook_dir) if variant.no_search else None)
             if settings is not None:
                 (out_dir / "settings.json").write_text(settings.read_text())
             cmd = self._command(item, mcp_path, settings)
+            sandbox = self._sandbox_profile(tmp, workdir, out_dir) if isolated else None
+            if sandbox is not None:
+                (out_dir / "session.sb").write_text(sandbox.read_text())
+                cmd = isolation.sandboxed(cmd, sandbox)
             (out_dir / "command.json").write_text(json.dumps(cmd, indent=1))
             started = time.time()
             timed_out = False
@@ -609,7 +647,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                     timed_out = True
                     _kill_group(proc)
             wall = time.time() - started
-            edit = self._grade_edit(item, workdir, out_dir, baseline) if is_edit_task(task) else None
+            edit = self._grade_edit(item, workdir, out_dir, baseline, sandbox) if is_edit_task(task) else None
         finally:
             config.remove_tree(tmp, self.cache / "tmp")
             if hook_dir is not None:
@@ -620,7 +658,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
         return self._summarise(item, attempt, transcript, wall, timed_out, proc.returncode, edit)
 
-    def _grade_edit(self, item: WorkItem, workdir: Path, out_dir: Path, baseline: dict | None = None) -> dict:
+    def _grade_edit(self, item: WorkItem, workdir: Path, out_dir: Path, baseline: dict | None = None,
+                    sandbox: Path | None = None) -> dict:
         """Grade an edit task's working copy: changed files, then the test
         command, after the commit's own tests (``test_overlay``, #183) are
         written over the agent's working copy."""
@@ -642,7 +681,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 tests = {"command": item.task["test_command"], "passed": False, "returncode": None,
                          "timed_out": False, "seconds": 0.0, "output_tail": problem, "output": problem}
             else:
-                tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)), env)
+                tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)), env,
+                                 isolation.sandboxed([], sandbox) if sandbox else ())
         if tests is not None:  # the row keeps the tail, the session directory the whole log
             (out_dir / "test.log").write_text(tests.pop("output", ""))
         g = grade_edit(item.task, changed, tests, self.cfg.success_threshold)
@@ -766,6 +806,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         row["search_audit"] = search_audit(str(transcript), prompt_path.read_text() if prompt_path.exists() else "")
         if edit is not None:
             row["edit"] = edit
+        if self.repos[item.repo].get("isolated"):
+            row["isolation_audit"] = isolation.audit(
+                str(transcript), str(self.work_root / config.work_name(self.repos[item.repo])))
         return row
 
     # ---- loop ------------------------------------------------------------

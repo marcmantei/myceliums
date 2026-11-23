@@ -5,7 +5,7 @@
    "id": "spel-simple-context-restricted-conversion",
    "commit": "d41495720cbabe30844e65c12765eacf806d2653",
    "issue": null,
-   "question": "SimpleEvaluationContext is meant for evaluating less trusted expressions, but by default it converts values with the shared DefaultConversionService, which can convert a value by reflectively invoking constructors and methods of the target type (a String constructor, static valueOf/of/from, find<Entity>, or to<TargetType>() on the source). By default, SimpleEvaluationContext should instead use a restricted conversion service: a DefaultConversionService without its Object-to-Object converters (ObjectToObjectConverter and IdToEntityConverter). Common conversions such as numbers, booleans, enums, UUID, collections and arrays must keep working, and a conversion that is no longer supported should fail with a ConverterNotFoundException as root cause. A TypeConverter or ConversionService registered via withTypeConverter(...) or withConversionService(...) on the builder is still used as-is. Add `public <S, T> Builder withConverter(Class<S> sourceType, Class<T> targetType, Converter<? super S, ? extends T> converter)` to SimpleEvaluationContext.Builder: it may be called several times and adds converters on top of the default (restricted) conversion service, and build() throws an IllegalStateException if withConverter() was combined with withConversionService() or withTypeConverter(), in either order. Also add `public static final String REFLECTIVE_CONVERSION_PROPERTY_NAME = \"spring.expression.reflectiveConversion\"` to SimpleEvaluationContext: when this flag is set (JVM system property or SpringProperties), the default is a standard DefaultConversionService again, and withConverter() then adds to a standard DefaultConversionService. The flag is checked whenever a context is built, so it can be toggled at runtime.",
+   "question": "SimpleEvaluationContext is meant for evaluating less trusted expressions, but by default it converts values with the framework's shared default conversion service, which can convert a value by reflectively invoking constructors and methods of the target type (a String constructor, static valueOf/of/from, find<Entity>, or to<TargetType>() on the source). By default, SimpleEvaluationContext should instead use a restricted conversion service: one with the same converters as the default except its Object-to-Object converters (ObjectToObjectConverter and IdToEntityConverter). Common conversions such as numbers, booleans, enums, UUID, collections and arrays must keep working, and a conversion that is no longer supported should fail with a ConverterNotFoundException as root cause. A TypeConverter or ConversionService registered via withTypeConverter(...) or withConversionService(...) on the builder is still used as-is. Add `public <S, T> Builder withConverter(Class<S> sourceType, Class<T> targetType, Converter<? super S, ? extends T> converter)` to SimpleEvaluationContext.Builder: it may be called several times and adds converters on top of the default (restricted) conversion service, and build() throws an IllegalStateException if withConverter() was combined with withConversionService() or withTypeConverter(), in either order. Also add `public static final String REFLECTIVE_CONVERSION_PROPERTY_NAME = \"spring.expression.reflectiveConversion\"` to SimpleEvaluationContext: when this flag is set (JVM system property or SpringProperties), the default is the standard, unrestricted conversion service again, and withConverter() then adds to an unrestricted one. The flag is checked whenever a context is built, so it can be toggled at runtime.",
    "primary_files": [
     "spring-expression/src/main/java/org/springframework/expression/spel/support/SimpleEvaluationContext.java"
    ],
@@ -13,7 +13,8 @@
    "notes": "No linked issue. Tests check SpelMessage codes (TYPE_CONVERSION_ERROR, EXCEPTION_DURING_PROPERTY_WRITE, METHOD_NOT_FOUND) and a ConverterNotFoundException root cause, which follow naturally from removing the converters. reflectiveConversionProperty toggles a SpringProperties flag at runtime, so an implementation that caches the flag statically fails; the description says so. The only spring-core change is a comment, so the dependent check for it scores comment-only edits.",
    "review": {
     "verdict": "ok",
-    "comment": "All test-needed API is stated: Builder.withConverter(Class<S>,Class<T>,Converter<? super S,? extends T>), REFLECTIVE_CONVERSION_PROPERTY_NAME='spring.expression.reflectiveConversion', IllegalStateException on combination in either order, ConverterNotFoundException root cause, flag read at build time (test toggles SpringProperties). Naming ObjectToObjectConverter/IdToEntityConverter and 'DefaultConversionService without its Object-to-Object converters' nearly gives away the solution (removeConvertible(Object,Object)) and points at DefaultConversionService, which is a gold dependent (maintenance comment only). The commit message says the same, so it is acceptable issue wording; mild over-specification. Dependents (DefaultConversionService comment, evaluation.adoc, appendix.adoc) are not mentioned."
+    "comment": "All test-needed API is stated: Builder.withConverter(Class<S>,Class<T>,Converter<? super S,? extends T>), REFLECTIVE_CONVERSION_PROPERTY_NAME='spring.expression.reflectiveConversion', IllegalStateException on combination in either order, ConverterNotFoundException root cause, flag read at build time (test toggles SpringProperties). Naming ObjectToObjectConverter/IdToEntityConverter and 'DefaultConversionService without its Object-to-Object converters' nearly gives away the solution (removeConvertible(Object,Object)) and points at DefaultConversionService, which is a gold dependent (maintenance comment only). The commit message says the same, so it is acceptable issue wording; mild over-specification. Dependents (DefaultConversionService comment, evaluation.adoc, appendix.adoc) are not mentioned.",
+    "after_pr_review": "gold class name removed from the question; needs a check"
    }
   },
   {
@@ -53,7 +54,10 @@
    "review": {
     "verdict": "ok",
     "comment": "Both static signatures, the no-op rule with no attribute or entry added (asserted by both 'without observation' tests), reporting via Observation.error before stop, and async completion are all stated. The reactive side can reuse the parent's HttpWebHandlerAdapter handling of the 'ExceptionHandlingWebHandler.handledException' attribute (the agent can find this) or change the adapter, so either way works. test_command leaves out the spring-webmvc overlay tests (ObservedExchange etc.). That is correct: they need the build-file change that adds micrometer-observation-test to spring-webmvc.gradle, which no description can fairly ask for. As a result the MVC dependents (resolvers, ResponseEntityExceptionHandler) are scored only through file comparison, not by tests. The webflux ResponseEntityExceptionHandlerTests may already pass at the parent, because context.setError satisfies hasError. The spring-web tests fail at the parent (the method is missing). Not over-specified."
-   }
+   },
+   "build_overlay": [
+    "spring-webmvc/spring-webmvc.gradle"
+   ]
   },
   {
    "id": "spel-default-nesting-depth-200",
@@ -391,7 +395,7 @@
    "id": "deferred-bean-registrar-contains-bean",
    "commit": "7502b923922d02109b5a3c861033715f973dc3cd",
    "issue": "gh-21497",
-   "question": "BeanRegistrar implementations cannot register beans conditionally on what is already registered, and since they run while configuration classes and other registrations are still being processed, any such check would depend on registration order. Add three methods to BeanRegistry: boolean containsBean(String name), boolean containsBean(Class<?> beanType) and <T> boolean containsBean(ParameterizedTypeReference<T> beanType), which tell whether a bean of that name, type or generic type is already registered. Also add a marker interface org.springframework.context.DeferredBeanRegistrar extends BeanRegistrar for registrars that run at the end of the bean registration phase, after regular bean definition reading and configuration class processing, so that their containsBean checks see all user-registered beans independent of order. Regular BeanRegistrars keep their current timing and therefore only see beans registered before them. Deferred registrars must be supported wherever bean registrars can be registered, whether imported from configuration classes via @Import or registered programmatically with an application context; multiple deferred registrars run in order (Ordered/@Order).",
+   "question": "BeanRegistrar implementations cannot register beans conditionally on what is already registered, and since they run while configuration classes and other registrations are still being processed, any such check would depend on registration order. Add three methods to BeanRegistry: boolean containsBean(String name), boolean containsBean(Class<?> beanType) and <T> boolean containsBean(ParameterizedTypeReference<T> beanType), which tell whether a bean of that name, type or generic type is already registered. Also add a marker interface org.springframework.context.DeferredBeanRegistrar extends BeanRegistrar for registrars that run at the end of the bean registration phase, after regular bean definition reading and configuration class processing, so that their containsBean checks see all user-registered beans independent of order. Regular BeanRegistrars keep their current timing and therefore only see beans registered before them. Deferred registrars must be supported wherever bean registrars can be registered, whether imported by configuration classes or registered programmatically with an application context; multiple deferred registrars run in order (Ordered/@Order).",
    "primary_files": [
     "spring-beans/src/main/java/org/springframework/beans/factory/BeanRegistry.java",
     "spring-context/src/main/java/org/springframework/context/DeferredBeanRegistrar.java"
@@ -400,7 +404,8 @@
    "notes": "The tests depend on five new test-fixture classes under spring-context/src/testFixtures (MyDeferredBeanRegistrar, MyRegularBeanRegistrar, *Configuration, TestBeanConfiguration). The replay harness must copy src/testFixtures files along with src/test, otherwise the tests do not compile. The fully qualified name of DeferredBeanRegistrar is stated because the fixtures import it. Scope wording ('imported via @Import or registered programmatically with an application context') follows the issue's GenericApplicationContext/configuration-class context; the concrete classes are not named. The regular-registrar tests check order-dependence and probably need only containsBean.",
    "review": {
     "verdict": "ok",
-    "comment": "The three containsBean signatures and the FQN org.springframework.context.DeferredBeanRegistrar (imported by the overlay fixtures) are stated. So are the deferred timing (after config class processing / bean definition reading, needed by deferredBeanRegistrarWithConditionMet for both AnnotationConfigApplicationContext and GenericApplicationContext) and the unchanged timing of regular registrars. Type matching for ParameterizedTypeReference<Comparable<Object>> against TestBean follows from 'generic type is already registered'. BeanRegistryAdapter is the only BeanRegistry implementation at the parent, and the agent finds it through compile errors. '@Order/Ordered' ordering is untested and slightly over-specified but harmless. The overlay includes the testFixtures sources, which is correct."
+    "comment": "The three containsBean signatures and the FQN org.springframework.context.DeferredBeanRegistrar (imported by the overlay fixtures) are stated. So are the deferred timing (after config class processing / bean definition reading, needed by deferredBeanRegistrarWithConditionMet for both AnnotationConfigApplicationContext and GenericApplicationContext) and the unchanged timing of regular registrars. Type matching for ParameterizedTypeReference<Comparable<Object>> against TestBean follows from 'generic type is already registered'. BeanRegistryAdapter is the only BeanRegistry implementation at the parent, and the agent finds it through compile errors. '@Order/Ordered' ordering is untested and slightly over-specified but harmless. The overlay includes the testFixtures sources, which is correct.",
+    "after_pr_review": "gold class name (@Import) removed from the question; needs a check"
    }
   },
   {
@@ -460,7 +465,9 @@
    "review": {
     "verdict": "ok",
     "comment": "resetCaches() on CacheManager with clear-but-keep semantics is stated; the hidden JCache test passes with only the interface default method (JCacheCacheManager override is not required), so the test is weak but valid (fails at parent by compilation). Optional tightening: drop the delegating-managers sentence so CompositeCacheManager is found unaided."
-   }
+   },
+   "drop": "weak test: the interface's default method alone passes the commit's test, and the description makes the overrides optional, so a correct minimal change loses file recall; requiring the overrides would mean listing them (independent review of PR #197)",
+   "weak_test": "an interface default method alone passes"
   },
   {
    "id": "api-version-deprecation-handler-handler-arg",
@@ -497,7 +504,8 @@
      "comment": "Reason for fix: the question leaves open whether the method is abstract (as in the commit) or a default method (as the linked issue suggests). A one-line default method in BeanFactory satisfies the question and passes BeanFactoryGenericsTests while touching none of the five dependents (DefaultListableBeanFactory, StaticListableBeanFactory, AbstractApplicationContext, SimpleJndiBeanFactory, StubWebApplicationContext), so a correct answer would score zero recall. Requiring an abstract method makes the dependents compile-forced without naming them; a grep at the parent shows these five are the only classes that need it. Solvability: the test needs only the stated signature; ResolvableType.forType(ParameterizedTypeReference) exists at the parent. SimpleJndiBeanFactory throws UnsupportedOperationException for the ResolvableType variant too, so the equivalence holds there; its message is not asserted. BeanFactoryExtensions.kt is not gold.",
      "applied": "question replaced by this reviewer's text (its own text is not reviewed again)"
     }
-   }
+   },
+   "weak_test": "the dependents are compile errors (the method is abstract), so finding them needs no search"
   },
   {
    "id": "sync-task-executor-concurrency-throttle",
@@ -548,7 +556,7 @@
     "verdict": "ok",
     "comment": "The FQN and accessors of MethodRetryEvent (ApplicationEvent with source MethodInvocation, getMethod/getFailure/isRetryAborted) are stated. So are the event cardinality (one per failed attempt including the initial one, plus one final aborted event with RetryException or the Reactor retry-exhausted exception, none on success) and the exact interrupt message the regex in RetryTemplateTests asserts. Delivery 'through the application's event publisher whenever @Retryable processing is enabled in an application context' covers both @EnableResilientMethods and a RetryAnnotationBeanPostProcessor bean in GenericApplicationContext, which is how the rewritten test helper creates it. It implies the post-processor must pass the publisher on (a dependent, not named). The RetryListener.onRetryableExecution/RetryState API that the agent can use already exists at the parent. The interrupt-message change is an unrelated part bundled in from the same commit, but it is asserted, so it must stay."
    },
-   "reserve": true
+   "replaces": "cache-manager-reset-caches (same strata)"
   },
   {
    "id": "httpexchange-version-mapping",

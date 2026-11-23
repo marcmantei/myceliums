@@ -214,26 +214,198 @@ class GradleCommands(unittest.TestCase):
                  ("D", "spring-core/src/test/java/org/z/GoneTests.java"),
                  ("M", "framework-docs/modules/ROOT/pages/a.adoc")]
         self.assertEqual(commit_replay.default_test_command(files),
-                         "./gradlew --offline --no-scan --no-daemon --console=plain :spring-context:test --tests org.y.CTest "
+                         "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-context:test --tests org.y.CTest "
                          ":spring-web:test --tests org.x.ATests --tests org.x.BTests")
 
-    def test_arm_d_admits_gradle_test_runs_but_nothing_that_loads_code(self):
+    def test_gradle_rule(self):
+        """Exact task names: Gradle expands abbreviations, so nothing looser is safe."""
         rule = [{"prefix": "./gradlew", "args": commit_replay.GRADLE_ARGS}]
-        off = "./gradlew --offline --no-scan "
+        off = "./gradlew --offline --no-scan --no-build-cache "
         ok = [off + "--no-daemon --console=plain :spring-web:test --tests org.x.ATests",
-              "./gradlew :spring-core:compileJava --no-scan --offline", off + "-q :spring-web:test --tests 'org.x.A*'",
-              off + "build"]
-        bad = [off + "-I /tmp/init.gradle :spring-web:test", off + "-Dx=1 test", off + "-Pa=b test",
-               off + "--init-script x test", off + "-p /elsewhere test", off + "test; grep -r x .",
-               off + "test --tests $(grep -l x .)", "gradle --offline --no-scan test",
-               # network: a missing flag, a scan, a refresh, an upload of a stored scan, artifacts
-               "./gradlew test", "./gradlew --offline test", "./gradlew --no-scan test", off + "--scan test",
-               off + "--refresh-dependencies test", off + "buildScanPublishPrevious", off + ":spring-core:publish",
-               off + "publishAllPublicationsToCentral", "./gradlew --offline --no-scanX test"]
-        for c in ok:
-            self.assertTrue(bashcmd.allowed(c, rule)[0], c)
-        for c in bad:
-            self.assertFalse(bashcmd.allowed(c, rule)[0], c)
+              "./gradlew :spring-core:compileJava --no-build-cache --no-scan --offline",
+              off + ":spring-context:test --tests org.x.ApplicationEventPublisherTests",  # "Publish" in a test name
+              off + "-q :spring-web:test --tests 'org.x.A*'", off + "testClasses",
+              off + ":spring-web:test 2>&1 | tail -50", off + ":spring-web:test | head -n 20"]
+        bad = [off + x for x in (
+            "bSPP", "buildScanPub", "buildScanPublishPrevious", ":spring-core:publish", "publishToMavenLocal", "build",
+            "check", "-I /tmp/i.gradle test", "-Dx=1 test", "-Pa=b test", "--init-script x test", "-p /x test",
+            "--scan test", "--refresh-dependencies test", "--build-cache test", "test; curl x.org",
+            "test --tests $(grep -l x .)", ":spring-core:t", "wrapper", "test > ../out")]
+        bad += ["./gradlew test", "./gradlew --offline --no-scan test", "./gradlew --offline --no-build-cache test",
+                "./gradlew --no-scan --no-build-cache test", "gradle --offline --no-scan --no-build-cache test",
+                "sh gradlew --offline --no-scan --no-build-cache test", "./gradlew --offline --no-scanX --no-build-cache test"]
+        for search in (False, True):  # D and the arms with search: one rule
+            for c in ok:
+                self.assertEqual(bashcmd.isolated_bash(c, rule, "/w", "/w", search), (True, []), c)
+            for c in bad:
+                self.assertFalse(bashcmd.isolated_bash(c, rule, "/w", "/w", search)[0], c)
+
+    def test_compile_tasks_and_comment_only(self):
+        files = [("M", "spring-web/src/main/java/A.java"), ("M", "spring-web/src/test/kotlin/BTests.kt"),
+                 ("M", "spring-webmvc/src/main/java/C.java"), ("M", "framework-docs/modules/ROOT/pages/a.adoc"),
+                 ("M", "spring-webmvc/spring-webmvc.gradle")]
+        self.assertEqual(commit_replay.compile_tasks(files), [
+            ":spring-web:compileJava", ":spring-web:compileKotlin", ":spring-web:compileTestJava",
+            ":spring-web:compileTestKotlin", ":spring-webmvc:compileJava", ":spring-webmvc:compileTestJava"])
+        a = 'import a.B;\n/** Doc {@link B}. */\nclass X { String u = "http://x"; // c\n char q = \'"\'; }'
+        self.assertEqual(commit_replay.code_text(a),
+                         commit_replay.code_text('import a.B;\nimport a.C;\nclass X { /* y */ String u = "http://x";\n\n char q = \'"\'; }'))
+        self.assertNotEqual(commit_replay.code_text(a), commit_replay.code_text(a.replace("http://x", "http://y")))
+        sp = commit_replay.spread(files, frozenset({"spring-webmvc/src/main/java/C.java"}))
+        self.assertEqual(sp["code_modules"], ["spring-web"])
+
+    def test_comment_and_build_dependents_are_reported_apart(self):
+        task = {"strata": {}, "primary_files": ["m/src/main/java/a/A.java"], "gold_files": [
+            {"path": "m/src/main/java/a/A.java", "status": "M"}, {"path": "n/src/main/java/b/B.java", "status": "M"},
+            {"path": "n/src/main/java/b/Doc.java", "status": "M", "comment_only": True},
+            {"path": "n/n.gradle", "status": "M"}]}
+        g = editgrade.grade_edit(task, ["m/src/main/java/a/A.java", "n/src/main/java/b/B.java"], {"passed": True})
+        self.assertEqual(g["files_by_kind"]["code_changed"]["recall"], 1.0)
+        self.assertEqual(g["files_by_kind"]["code"]["recall"], 0.5)
+        self.assertEqual(g["dependents"]["by_kind"]["comments"], {"n": 1, "forgotten": ["n/src/main/java/b/Doc.java"]})
+        self.assertEqual(g["dependents"]["by_kind"]["build"], {"n": 1, "forgotten": ["n/n.gradle"]})
+        self.assertEqual(g["dependents"]["other_module"], {"n": 1, "forgotten": []})
+
+
+class Isolation(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(os.path.realpath(self.tmp.name)) / "work" / "spring-framework"
+        (self.root / "spring-core/src").mkdir(parents=True)
+        (self.root / "a.java").write_text("x")
+        self.secret = self.root.parent.parent / "gold"
+        self.secret.mkdir()
+        (self.secret / "f").write_text("secret")
+        (self.root / "link").symlink_to(self.secret)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def why(self, tool, search=True, here=None, readable=(), **inp):
+        return bashcmd.isolated_tool(tool, inp, str(self.root), here or str(self.root), [], search, readable)
+
+    def test_nothing_leaves_the_working_copy_in_any_arm(self):
+        s = str(self.secret)
+        for search in (False, True):
+            for cmd in (f"cat {s}/f", "cat ../../gold/f", "cat link/f", "cat ~/.cache/x", "cat $HOME/x", f"grep -r x {s}",
+                        "grep -rn x ..", f"grep --file={s}/f x", f"rg x {s}", f"find {s} -name f", "find . -exec cat {} +",
+                        "ls /", f"git -C {s} log", f"git show --no-index {s}/f", f"git diff --no-index a.java {s}/f",
+                        f"cat < {s}/f", f"cp {s}/f b", f"head {s}/f", f"myc analyze {s}", f"myc callers x --repo={s}",
+                        f"for f in {s}/*; do cat $f; done", "cd .. && ls", "sed -n '1r /etc/passwd' a.java",
+                        "python3 -c 'print(open(1))'", "bash -c 'cat /etc/passwd'", "awk 'BEGIN{system(1)}'", "env",
+                        "./evil.sh", "/bin/cat a.java", "xargs cat", "eval ls", "tee x", "perl -e 1", "node x",
+                        "sort -o ../x a.java", "myc serve", "myc email sync", "myc setup-claude", "git diff --ext-diff", "xargs cat", "X=1", "rg --pre cat x", "git grep -Ocat x", "cat .git/config", "echo $(cat a)"):
+                self.assertIsNotNone(self.why("Bash", search, command=cmd), (search, cmd))
+            for cmd in ("curl https://x.org", "wget x", "git fetch origin", "git pull", "git clone x", "git remote -v",
+                        "git ls-remote https://x", "nc x 1", "ssh x", "gh api x", "mvn x", "java -version"):
+                self.assertEqual(self.why("Bash", search, command=cmd)[0], "network", cmd)
+            for tool, inp in (("Read", {"file_path": s + "/f"}), ("Read", {"file_path": "../../gold/f"}),
+                              ("Read", {"file_path": str(self.root / "link/f")}), ("Read", {"file_path": ".git/HEAD"}),
+                              ("Write", {"file_path": s + "/g"}), ("Edit", {"file_path": "/etc/hosts"}),
+                              ("Write", {"file_path": "gradle/wrapper/gradle-wrapper.properties"}),
+                              ("Edit", {"file_path": "gradlew"}), ("Grep", {"pattern": "x", "path": s}),
+                              ("Grep", {"pattern": "x", "glob": "../**"}), ("Glob", {"pattern": s + "/*"}),
+                              ("Glob", {"pattern": "**/*.java", "path": ".."}), ("WebFetch", {"url": "https://x"}),
+                              ("WebSearch", {"query": "x"}), ("Task", {"prompt": "x"}), ("NotARealTool", {}),
+                              ("mcp__myceliums__analyze", {"path": s}), ("mcp__myceliums__list_repos", {"x": ["~/y"]}),
+                              ("mcp__other__x", {})):
+                self.assertIsNotNone(self.why(tool, search, **inp), (tool, inp))
+            for tool, inp in (("Read", {"file_path": str(self.root / "a.java")}), ("Read", {"file_path": "a.java"}),
+                              ("Edit", {"file_path": str(self.root / "a.java")}), ("Write", {"file_path": "spring-core/B.java"}),
+                              ("mcp__myceliums__find_callers", {"symbol_name": "MimeType.valueOf"}),
+                              ("mcp__myceliums__analyze", {"path": str(self.root)}), ("ToolSearch", {"query": "x"})):
+                self.assertIsNone(self.why(tool, search, **inp), (tool, inp))
+            for cmd in ("git status", "git diff", "git log --oneline -3", "myc callers MimeType.valueOf | head -20",
+                        "git diff | tail -n 5", "mkdir x", "cd spring-core", "rm a.java", "pwd"):
+                self.assertIsNone(self.why("Bash", search, command=cmd), (search, cmd))
+        # The session's own saved results, and nothing beside them.
+        own = str(self.root.parent.parent / "p" / "sid" / "tool-results")
+        self.assertIsNone(self.why("Read", readable=[own], file_path=own + "/a.txt"))
+        self.assertIsNotNone(self.why("Read", readable=[own], file_path=own + "/../../other/a.txt"))
+
+    def test_arms_differ_only_in_search(self):
+        only_search = ["grep -rn 'String foo(' spring-core", "grep -rn \"a/b\" . | head -5", "grep -n '/users' a.java", "rg -n x spring-core",
+                       "find . -name '*.java'", "ls spring-core", "cat a.java", "head -20 a.java", "sed -n '1,9p' a.java",
+                       "wc -l a.java", "git grep -n foo", "cat a.java | sort | uniq", "git log --oneline | grep x"]
+        for c in only_search:
+            self.assertIsNone(self.why("Bash", True, command=c), c)
+            self.assertIsNotNone(self.why("Bash", False, command=c), c)
+        # The settings the runner writes differ in that one argument; tools differ in Grep and Glob.
+        from aeval.runner import Runner, RunConfig, WorkItem
+        task = {"id": "t", "repo": "r", "answer_kind": "diff", "allowed_commands": [{"prefix": "./gradlew", "args": "x"}]}
+        r = Runner(RunConfig(label="x", conditions=("A", "C", "D"), bash=True, claude="claude"), [task],
+                   {"r": {"name": "r", "commit": "c", "isolated": True}})
+        hooks, tools = {}, {}
+        for cond in ("A", "C", "D"):
+            t = self.root.parent.parent / cond
+            t.mkdir()
+            it = WorkItem(task, cond, 1)
+            st = r._isolated_settings(it, t, self.root)
+            hooks[cond] = json.loads(st.read_text())["hooks"]["PreToolUse"][0]["hooks"][0]["command"].replace(str(t), "T")
+            cmd = r._command(it, Path("/x/mcp.json"), st)
+            tools[cond] = set(cmd[cmd.index("--tools") + 1].split(","))
+            self.assertIn("WebFetch", cmd[cmd.index("--disallowedTools") + 1])
+        self.assertEqual(hooks["A"], hooks["C"])
+        self.assertEqual(hooks["A"].replace("--search yes", "--search no"), hooks["D"])
+        self.assertEqual(tools["A"], tools["C"])
+        self.assertEqual(tools["A"] - tools["D"], {"Grep", "Glob"})
+        self.assertEqual(tools["D"] - tools["A"], set())
+        # The hook as a program: refuses, allows, and refuses when it cannot decide.
+        script = Path(bashcmd.__file__)
+        def run(event):
+            return subprocess.run([sys.executable, "-I", str(script), "isolated-hook", "--root", str(self.root),
+                                   "--search", "no", "--allow-json", "[]"], input=event, capture_output=True, text=True)
+        self.assertEqual(run(json.dumps({"tool_name": "Read", "tool_input": {"file_path": "a.java"}, "cwd": str(self.root)})).returncode, 0)
+        out = run(json.dumps({"tool_name": "Read", "tool_input": {"file_path": str(self.secret / "f")}, "cwd": str(self.root)}))
+        self.assertEqual(out.returncode, 2)
+        self.assertIn(bashcmd.ISOLATED_MARKER, out.stderr)
+        self.assertEqual(run("not json").returncode, 2)
+
+    @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec is macOS")
+    def test_the_kernel_refuses_protected_places(self):
+        from aeval import isolation
+        allowed = self.secret / "session"
+        allowed.mkdir()
+        (allowed / "ok").write_text("fine")
+        prof = self.root.parent / "p.sb"
+        prof.write_text(isolation.profile([allowed], [self.secret]))
+        def run(*cmd):
+            return subprocess.run(isolation.sandboxed(list(cmd), prof), capture_output=True, text=True)
+        self.assertEqual(run("/bin/cat", str(self.root / "a.java")).stdout, "x")
+        self.assertEqual(run("/bin/cat", str(allowed / "ok")).stdout, "fine")
+        for cmd in (("/bin/cat", str(self.secret / "f")), ("/bin/cat", str(self.root / "link/f")), ("/bin/ls", str(self.secret)),
+                    ("/bin/sh", "-c", f"cp {self.secret}/f {self.root}/stolen"), ("/bin/ln", str(self.secret / "f"), str(self.root / "hard"), ),
+                    (sys.executable, "-I", "-c", f"print(open({str(self.secret / 'f')!r}).read())")):
+            res = run(*cmd)
+            self.assertNotIn("secret", res.stdout.replace(str(self.secret), ""), cmd)
+        self.assertFalse((self.root / "stolen").exists() and (self.root / "stolen").read_text())
+        # ... and for the test command that grades a session.
+        t = editgrade.run_test(f"cat {self.secret}/f", self.root, prefix=isolation.sandboxed([], prof))
+        self.assertFalse(t["passed"])
+
+    def test_audit_counts_per_arm(self):
+        from aeval import isolation
+        calls = [("1", "Read", {"file_path": str(self.secret / "f")}, bashcmd.ISOLATED_MARKER + " x", True),
+                 ("2", "Bash", {"command": "curl https://x.org"}, "<html>", False),
+                 ("3", "Bash", {"command": "./gradlew test"}, "BUILD", False),
+                 ("4", "Bash", {"command": f"cat {self.secret}/f"}, "secret", False),
+                 ("5", "Bash", {"command": "grep -rn 'https://x.org/a' spring-core"}, "none", False),
+                 ("6", "Read", {"file_path": str(self.root / "a.java")}, f"see {isolation.protected_roots()[0]}/gold", False),
+                 ("7", "Bash", {"command": "./gradlew --offline --no-scan --no-build-cache test 2>&1 | tail -5"}, "ok", False)]
+        path = self.root.parent / "t.jsonl"
+        with open(path, "w") as fh:
+            for i, name, inp, res, _ in calls:
+                fh.write(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": i, "name": name, "input": inp}]}}) + "\n")
+                fh.write(json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": i, "content": res}]}}) + "\n")
+        a = isolation.audit(str(path), str(self.root))
+        self.assertEqual((a["outside_attempts"], a["outside_blocked"], a["outside_ran"]), (2, 1, 1))
+        self.assertEqual((a["network_attempts"], a["network_ran"]), (1, 1))
+        self.assertEqual((a["gradle_attempts"], a["gradle_ran"]), (1, 1))
+        self.assertEqual((a["protected_in_results"], a["refused_calls"], a["tool_calls"], a["flagged"]), (1, 1, 7, True))
+        s = isolation.summarise([{"condition": "A", "isolation_audit": a}, {"condition": "D", "isolation_audit": a}, {"condition": "D"}])
+        self.assertEqual((s["A"]["sessions"], s["D"]["outside_ran"], s["D"]["flagged"]), (1, 1, 1))
+        self.assertIn("| `D` | 1 | 1 / 1 | 0 / 1 | 0 / 1 | 1 | 0 | 1 |", "\n".join(isolation.report_lines(s)))
+        self.assertEqual(isolation.report_lines({}), [])
 
 
 class SharedPathAndDerivedIndex(unittest.TestCase):
@@ -280,9 +452,11 @@ class SharedPathAndDerivedIndex(unittest.TestCase):
                 self.assertEqual(metas["old"]["derived"]["base"], str(root / "cache/index/new/home"))
                 self.assertEqual(metas["old"]["derived"]["vectors_reused"], 4)
                 self.assertTrue(metas["old"]["derived"]["graph_equal"])
-                (root / "RELS").write_text("9")  # a graph that differs from a fresh build is recorded
-                prep.index(repos, str(fake), "m", only={"new"}, base=base)
-                self.assertFalse(config.load_json(root / "cache/index/new/meta.json")["derived"]["graph_equal"])
+                (root / "RELS").write_text("9")  # a graph that differs from a fresh build stops the run
+                with self.assertRaises(SystemExit) as e:
+                    prep.index(repos, str(fake), "m", only={"new"}, base=base)
+                self.assertIn("differs from a fresh one", str(e.exception))
+                (root / "RELS").write_text("10")
                 (root / "REUSED").write_text("0")
                 with self.assertRaises(SystemExit):  # nothing reused: not a derived index
                     prep.index(repos, str(fake), "m", only={"new"}, base=base)
@@ -360,6 +534,12 @@ class WrapperGuard(unittest.TestCase):
             self.assertIn("the wrapper would download it", str(e.exception))
 
 
+# Dependents a question names all the same; each has to be justified here.
+NAMED_ANYWAY: dict[str, tuple] = {
+    "retryable-method-retry-event": ("Retryable",),  # the feature's public name; its file changes in Javadoc only
+}
+
+
 class TaskFile(unittest.TestCase):
     def test_commit_replay_task_file_schema(self):
         path = Path(__file__).resolve().parents[1] / "tasks" / "tasks-commit-replay.json"
@@ -374,12 +554,25 @@ class TaskFile(unittest.TestCase):
                 self.assertEqual(r["env_from_caller"], ["JAVA_HOME"])
                 self.assertTrue(set(t["test_overlay"]) <= set(editgrade.gold_paths(t)))
                 # Network-free: every command, its environment, arm D and the prompt of every arm.
-                self.assertTrue(t["test_command"].startswith("./gradlew --offline --no-scan "), t["id"])
-                self.assertTrue(bashcmd.allowed(t["test_command"], t["allowed_commands"])[0], t["id"])
-                self.assertFalse(bashcmd.allowed(t["test_command"].replace("--offline ", ""), t["allowed_commands"])[0])
+                self.assertTrue(t["test_command"].startswith("./gradlew --offline --no-scan --no-build-cache "), t["id"])
+                self.assertTrue(r["isolated"])
+                for search in (False, True):
+                    self.assertTrue(bashcmd.isolated_bash(t["test_command"], t["allowed_commands"], "/w", "/w", search)[0], t["id"])
+                    self.assertFalse(bashcmd.isolated_bash(t["test_command"].replace("--offline ", ""), t["allowed_commands"],
+                                                           "/w", "/w", search)[0])
+                # Every module the commit changes sources in is compiled, main and test.
+                for m in {editgrade.module_of(g["path"]) for g in t["gold_files"] if g["path"].endswith((".java", ".kt"))} - {None}:
+                    for what in ("compileJava", "compileTestJava"):
+                        self.assertIn(f":{m}:{what} ", t["test_command"] + " ", t["id"])
+                # No gold class is named, except the primary ones.
+                for g in t["gold_files"]:
+                    cls = g["path"].rsplit("/", 1)[-1].rsplit(".", 1)[0]
+                    if g["path"].endswith((".java", ".kt")) and g["path"] not in t["primary_files"] and g["status"] != "A" \
+                            and cls not in NAMED_ANYWAY.get(t["id"], ()):
+                        self.assertNotRegex(t["question"], rf"(?<![A-Za-z.]){cls}(?![A-Za-z])", t["id"])
                 self.assertIn("-Dhttps.proxyHost=127.0.0.1", r["session_env"]["GRADLE_OPTS"])
                 self.assertEqual(r["session_env"]["DEVELOCITY_CACHE_SERVER"], "http://127.0.0.1:9")
-                self.assertIn("--offline --no-scan", build_prompt(t, r))
+                self.assertIn("--offline --no-scan --no-build-cache", build_prompt(t, r))
                 q = t["question"].lower()
                 for word in ("framework-docs", ".adoc", ".java", "src/main", "src/test"):
                     self.assertNotIn(word, q, (t["id"], word))

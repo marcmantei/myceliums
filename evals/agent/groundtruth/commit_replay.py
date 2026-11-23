@@ -28,8 +28,9 @@ hand (the spec); ``build`` derives everything else from the commit:
   delete + add);
 * ``test_overlay``: the commit's test files (fixtures included), written
   over the working copy (or deleted) before the test command runs;
-* ``test_command`` (unless the spec gives one): ``./gradlew`` with each
-  module's ``test`` task, filtered to the commit's changed test classes;
+* ``test_command``: ``./gradlew``, main and test compilation of every module
+  the commit changes, then (unless the spec names the tests) each module's
+  ``test`` task, filtered to the commit's changed test classes;
 * ``allowed_commands``: ``./gradlew`` with task paths, ``--tests`` filters
   and a few harmless flags, for arm D's Bash allowlist;
 * ``strata``: files, code modules, whether docs change.
@@ -54,18 +55,25 @@ URL = "https://github.com/spring-projects/spring-framework.git"
 EXCLUDE = re.compile(r"^(Upgrade|Bump|Polish|Update copyright|Replace file headers|Revert|Release|Next development|"
                      r"Merge|Update to|Prepare|Format|Apply|Consistent|Fix typo|Remove unused)", re.I)
 MODULE = re.compile(r"^(spring-[a-z-]+|framework-[a-z]+|integration-tests)/")
-# Gradle without the network (#183): dependencies from the warm cache, no
-# remote build cache (Gradle disables it offline), no build scan.
-OFFLINE = "--offline --no-scan"
-# What arm D may pass to ./gradlew: both offline flags are required; nothing
-# that loads code or configuration (-I/-D/-P/-p/--init-script) or reaches the
-# network (--scan, --refresh-dependencies, any publish task:
-# buildScanPublishPrevious would upload a stored build scan).
-GRADLE_ARGS = (r"(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?!.*[pP]ublish)"
-               r"(?:(?:--no-daemon|--console=plain|--offline|--no-scan|-q|--quiet|-i|--info|--stacktrace|--continue|"
-               r"--rerun-tasks|--rerun|:[a-z][a-z-]*:[A-Za-z]+|[a-z][A-Za-z]*|--tests [A-Za-z0-9_.*$#]+)(?: |$))+")
-BUILD_NOTE = ("The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-daemon ...`, with "
-              "fully qualified task paths such as `:spring-core:test --tests ...`.")
+# Gradle without the network and without a build cache (#183): dependencies
+# from the warm cache, no build scan, and no task output carried over from
+# another arm's session or from a precheck of the gold commit.
+FLAGS = ("--offline", "--no-scan", "--no-build-cache")
+OFFLINE = " ".join(FLAGS)
+# What the hook lets any arm pass to ./gradlew: all three flags, harmless
+# options, tasks by exact name (Gradle expands abbreviations, so a pattern
+# would admit `bSPP`, buildScanPublishPrevious), and --tests filters.
+GRADLE_TASKS = ("compileJava", "compileTestJava", "compileKotlin", "compileTestKotlin", "compileTestFixturesJava",
+                "classes", "testClasses", "testFixturesClasses", "test", "checkstyleMain", "checkstyleTest")
+GRADLE_OPTIONS = ("--no-daemon", "--console=plain", *FLAGS, "-q", "--quiet", "-i", "--info", "--stacktrace",
+                  "--continue", "--rerun-tasks", "--rerun")
+GRADLE_ARGS = ("".join(rf"(?=(?:.* )?{f}(?: |$))" for f in FLAGS)
+               + r"(?:(?:" + "|".join(re.escape(o) for o in GRADLE_OPTIONS)
+               + r"|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:" + "|".join(GRADLE_TASKS) + ")"
+               + r"|--tests [A-Za-z0-9_.*$#]+)(?: |$))+")
+BUILD_NOTE = ("The build has no network access. Run Gradle as `./gradlew " + OFFLINE + " --no-daemon ...`, with "
+              "fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` "
+              "or `head`.")
 # A port nobody listens on: a build started without the flags cannot leave
 # the machine either (not verified yet with a real build).
 NOWHERE = "127.0.0.1"
@@ -94,7 +102,26 @@ def name_status(hist: Path, sha: str) -> list[tuple[str, str]]:
     return out
 
 
-def spread(files: list[tuple[str, str]]) -> dict:
+_LITERAL_OR_COMMENT = re.compile(r'"""(?:[^\\]|\\.)*?"""|"(?:[^"\\\n]|\\.)*"|\'(?:[^\'\\\n]|\\.)*\'|//[^\n]*|/\*.*?\*/', re.S)
+
+
+def code_text(source: str) -> str:
+    """Java/Kotlin source without comments (Javadoc), import lines and white space."""
+    s = _LITERAL_OR_COMMENT.sub(lambda m: " " if m.group(0).startswith("/") else m.group(0), source)
+    return "".join("".join(ln for ln in s.splitlines() if not ln.strip().startswith("import ")).split())
+
+
+def comment_only(hist: Path, sha: str, status: str, path: str) -> bool:
+    """A modified source file whose code is the same before and after the
+    commit: only comments, Javadoc or imports (for Javadoc links) changed."""
+    if status != "M" or not path.endswith((".java", ".kt")):
+        return False
+    return code_text(git(hist, "show", f"{sha}^:{path}")) == code_text(git(hist, "show", f"{sha}:{path}"))
+
+
+def spread(files: list[tuple[str, str]], comments: frozenset[str] = frozenset()) -> dict:
+    """The commit's spread; ``code_modules`` are modules whose main code
+    changes (``comments``: files that change in comments only)."""
     kinds = {"code": 0, "tests": 0, "docs": 0}
     modules, code_modules = set(), set()
     for _, path in files:
@@ -102,10 +129,24 @@ def spread(files: list[tuple[str, str]]) -> dict:
         m = MODULE.match(path)
         if m:
             modules.add(m.group(1))
-        if file_kind(path) == "code" and "/src/main/" in path:
+        if file_kind(path) == "code" and "/src/main/" in path and path not in comments:
             code_modules.add(module_of(path))
     return {"files": len(files), "kinds": kinds, "modules": sorted(modules), "code_modules": sorted(code_modules),
             "adoc": any(p.startswith("framework-docs/") and p.endswith(".adoc") for _, p in files)}
+
+
+def compile_tasks(files: list[tuple[str, str]]) -> list[str]:
+    """Main and test compilation of every module the commit changes sources
+    in, so that a change that breaks one of them fails even when no test of
+    that module runs."""
+    mods: dict[str, set[str]] = {}
+    for _, path in files:
+        mod = module_of(path)
+        if mod and path.endswith((".java", ".kt")):
+            mods.setdefault(mod, set()).update({"compileJava", "compileTestJava"})
+            if path.endswith(".kt"):
+                mods[mod].update({"compileKotlin", "compileTestKotlin"})
+    return [f":{m.replace('/', ':')}:{t}" for m in sorted(mods) for t in sorted(mods[m])]
 
 
 def parent_build(hist: Path, sha: str) -> tuple[str, str]:
@@ -181,7 +222,8 @@ def cmd_build(args) -> int:
         sha = git(hist, "rev-parse", s["commit"]).strip()
         parent = git(hist, "rev-parse", f"{sha}^").strip()
         files = name_status(hist, sha)
-        gold = [{"path": p, "status": st} for st, p in files]
+        comments = frozenset(p for st, p in files if comment_only(hist, sha, st, p))
+        gold = [{"path": p, "status": st, **({"comment_only": True} if p in comments else {})} for st, p in files]
         paths = [p for _, p in files]
         for p in s["primary_files"]:
             if p not in paths:
@@ -193,13 +235,17 @@ def cmd_build(args) -> int:
             "url": URL, "ref": f"parent of {sha[:12]}", "commit": parent, "gold_commit": sha,
             "gradle": gradle, "java_toolchain": java, "work_name": "spring-framework",
             "parent_date": git(hist, "show", "-s", "--format=%cI", parent).strip(),
-            "build_note": BUILD_NOTE, "session_env": SESSION_ENV, "env_from_caller": ["JAVA_HOME"],
+            "build_note": BUILD_NOTE, "isolated": True, "session_env": SESSION_ENV, "env_from_caller": ["JAVA_HOME"],
         })
         cmd = s.get("test_command") or default_test_command(files)
         if OFFLINE not in cmd:  # the spec's own commands name modules and tests only
             cmd = cmd.replace("./gradlew ", f"./gradlew {OFFLINE} ", 1)
-        overlay = [p for _, p in files if file_kind(p) == "tests"]
-        sp = spread(files)
+        first = cmd.index(" :")
+        cmd = f"{cmd[:first]} {' '.join(compile_tasks(files))}{cmd[first:]}"
+        # Build scripts only the commit's own tests need (spec): harness side, like the tests.
+        build_overlay = [p for p in s.get("build_overlay", []) if p in paths]
+        overlay = [p for _, p in files if file_kind(p) == "tests"] + build_overlay
+        sp = spread(files, comments)
         task = {
             "id": s["id"], "repo": name, "type": "edit", "answer_kind": "diff",
             "question": s["question"], "rationale": s["rationale"],
@@ -208,9 +254,11 @@ def cmd_build(args) -> int:
                        **({"issue": s["issue"]} if s.get("issue") else {})},
             "gold_files": gold, "primary_files": s["primary_files"],
             "test_command": cmd, "test_overlay": overlay,
+            **({"build_overlay": build_overlay} if build_overlay else {}),
             "allowed_commands": [{"prefix": "./gradlew", "args": GRADLE_ARGS}],
+            **({"weak_test": s["weak_test"]} if s.get("weak_test") else {}),
             "test_timeout_s": s.get("test_timeout_s", 1800),
-            "strata": {"files": sp["files"], "files_by_kind": sp["kinds"], "code_modules": len(sp["code_modules"]),
+            "strata": {"files": sp["files"], "files_by_kind": sp["kinds"], "code_modules": len(sp["code_modules"]), "comment_only": len(comments),
                        "modules": sp["modules"], "docs": sp["kinds"]["docs"] > 0,
                        "size": "S" if sp["files"] <= 5 else "M" if sp["files"] <= 12 else "L"},
         }

@@ -34,7 +34,9 @@ Grading, after the session, from ``git status`` of the working copy:
   directory than every primary file: another module) and ``local`` (code next
   to a primary file). Without ``primary_files`` every gold file would be a
   dependent and the metric would equal 1 − recall, so it is not reported
-  (``None``). ``other_module`` (#183) counts the code dependents in another
+  (``None``). Commit-replay tasks (#183) report two kinds of dependent apart:
+  ``comments`` (gold files that change in comments or imports only) and
+  ``build`` (Gradle scripts). ``other_module`` (#183) counts the code dependents in another
   Gradle/Maven module than every primary file (the path before ``/src/``).
 
 A session succeeds when the test command passes; without one, when the
@@ -160,6 +162,11 @@ def grade_edit(task: dict, changed: list[str], tests: dict | None, threshold: fl
         c = {f for f in got if file_kind(f) == kind}
         if g or c:
             by_kind[kind] = _prf(g, c)
+    # #183: code whose code changes: without comment-only files and build scripts (on both sides).
+    if "strata" in task:
+        skip = {x["path"] for x in task["gold_files"] if x.get("comment_only")}
+        keep = lambda fs: {f for f in fs if file_kind(f) == "code" and f not in skip and ".gradle" not in f.rsplit("/", 1)[-1]}  # noqa: E731
+        by_kind["code_changed"] = _prf(keep(gold), keep(got))
     forgotten = forgotten_dependents(task, got)
     overall = _prf(gold, got)
     passed = None if tests is None else bool(tests.get("passed"))
@@ -190,12 +197,20 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
     primary = set(primary)
     primary_dirs = {p.rsplit("/", 1)[0] if "/" in p else "" for p in primary}
     primary_modules = {module_of(p) for p in primary}
-    out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in ("docs", "tests", "remote", "local")},
+    comments = {g["path"] for g in task.get("gold_files") or [] if isinstance(g, dict) and g.get("comment_only")}
+    # Reported apart only where a task marks them (#183).
+    kinds = ("docs", "tests", "remote", "local") + (("comments", "build") if any(
+        isinstance(g, dict) and "status" in g for g in task.get("gold_files") or []) and "strata" in task else ())
+    out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in kinds},
            "other_module": {"n": 0, "forgotten": []}}
     for f in sorted(set(gold_paths(task)) - primary):
         kind = file_kind(f)
         if kind == "code":
             kind = "local" if (f.rsplit("/", 1)[0] if "/" in f else "") in primary_dirs else "remote"
+            if "comments" in kinds and f in comments:
+                kind = "comments"
+            elif "build" in kinds and f.endswith((".gradle", ".gradle.kts")):
+                kind = "build"
         out["n"] += 1
         out["by_kind"][kind]["n"] += 1
         far = kind in ("remote", "local") and module_of(f) is not None and module_of(f) not in primary_modules
@@ -360,14 +375,16 @@ def rerun_command(command: str) -> str:
     return re.sub(r"(:[\w-]+:test)(?=\s|$)", r"\1 --rerun", command)
 
 
-def run_test(command: str, workdir: Path, timeout_s: int = 900, env: dict | None = None) -> dict:
+def run_test(command: str, workdir: Path, timeout_s: int = 900, env: dict | None = None,
+             prefix=()) -> dict:
     """Run a task's test command in the working copy (``/bin/sh -c``), keeping
     the whole output in ``output``;
-    ``env`` is added to a minimal environment (``PATH``, ``HOME``)."""
+    ``env`` is added to a minimal environment (``PATH``, ``HOME``);
+    ``prefix`` runs it inside a sandbox (aeval/isolation.py)."""
     started = time.time()
     base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/tmp")}
     try:
-        res = subprocess.run(["/bin/sh", "-c", command], cwd=workdir, capture_output=True, text=True,
+        res = subprocess.run([*prefix, "/bin/sh", "-c", command], cwd=workdir, capture_output=True, text=True,
                              timeout=timeout_s, env={**base, **(env or {})})
         rc, out, timed_out = res.returncode, (res.stdout or "") + (res.stderr or ""), False
     except subprocess.TimeoutExpired as exc:

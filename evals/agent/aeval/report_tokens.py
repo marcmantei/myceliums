@@ -31,6 +31,7 @@ from .report import _fmt_ratio
 from .searchaudit import BLIND_READ_LIMIT
 from .searchaudit import audit as search_audit
 from .searchaudit import summarise as audit_summary
+from . import isolation
 from .stats import per_success_bootstrap
 from .tokens import (CATEGORIES, CLASSES, PRICES_AS_OF, PRICES_SOURCE, attribute, fit_rates, load_prices, price_of,
                      rates_of)
@@ -100,6 +101,8 @@ def collect(label: str, runs_root: Path | None = None, prices_file: str | None =
             keep.update({k: row.get(k) for k in TOKEN_FIELDS + ("search_audit",)})
         else:
             raise SystemExit(f"no transcript for {row['run_id']}: {path}")
+        if row.get("isolation_audit"):  # #183
+            keep["isolation_audit"] = row["isolation_audit"]
         out.append(keep)
         atts.append(path)
     cross = {"available": have}
@@ -239,10 +242,11 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     cross_path = res_dir / "tokens_crosscheck.json"
     cross = config.load_json(cross_path) if cross_path.exists() else {"available": False}
     audit = audit_summary([r for r in own if r["task_id"] in ids])
+    isolated = isolation.summarise([r for r in own if r["task_id"] in ids])
     summary = {"label": label, "base": base, "arm": arm, "tasks": len(ids), "excluded": sorted(excluded),
                "reconciliation": rec, "analysis": analysis, "models": models, "prices": prices,
                "prices_source": PRICES_SOURCE, "prices_as_of": PRICES_AS_OF, "crosscheck": cross,
-               "search_audit": audit, **({"compared_with": base_label} if base_label else {}),
+               "search_audit": audit, **({"isolation_audit": isolated} if isolated else {}), **({"compared_with": base_label} if base_label else {}),
                **({"arms": arms, "analysis_by_arm": by_arm} if len(arms) > 1 else {})}
 
     L = [f"# Token attribution: {label}", ""]
@@ -292,6 +296,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
             lines = _arm_lines(by_arm[a], base, a, f": `{a}` against `{base}`")
             L.extend(lines[:2] + config.pair_notes(res_dir, a, base) + lines[2:])
     L.extend(_audit_lines(audit))
+    L.extend(isolation.report_lines(isolated))
     L.append("*Tokens* are billed input tokens (every call re-reads the context, so a result counts once per later "
              "call) and output tokens; *result size* is a result's own size when it entered the context (its share "
              "of the growth between two calls).")
