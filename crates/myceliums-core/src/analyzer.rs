@@ -3222,6 +3222,146 @@ mod tests {
         );
     }
 
+    /// #177: Java resolver gaps found on spring-framework, end to end.
+    /// - `class Child extends Outer.Base` once recursed until the stack
+    ///   overflowed: resolving the base looked up `Outer` among Child's own
+    ///   members, which resolved Child's bases again, with the depth reset;
+    /// - annotation elements are methods (`marker.mode()`);
+    /// - a Java local does not shadow a method (`int suspend = suspend(1)`),
+    ///   nor a field a method of the same name (`this.registry().add()`);
+    /// - `Uses.this.handle()` is a call on the enclosing instance;
+    /// - a varargs overload takes any number of trailing arguments (it was
+    ///   left out, and `get("/a")` bound to `get(URI)` alone);
+    /// - a bodiless method's annotations on their own line do not hide its
+    ///   parameter count.
+    #[tokio::test]
+    async fn java_calls_resolve_like_javac_binds_them() {
+        let dir = TempDir::new().unwrap();
+        let root = make_test_root(&dir);
+        let pkg = root.join("src/pkg");
+        fs::create_dir_all(&pkg).unwrap();
+        let files = [
+            (
+                "Outer.java",
+                "package pkg;\n\npublic class Outer {\n    public static class Base {\n        void hello() {\n        }\n    }\n}\n",
+            ),
+            (
+                "Child.java",
+                "package pkg;\n\npublic class Child extends Outer.Base {\n    void run() {\n        hello();\n    }\n}\n",
+            ),
+            (
+                "Marker.java",
+                "package pkg;\n\npublic @interface Marker {\n    String mode() default \"\";\n}\n",
+            ),
+            (
+                "Registry.java",
+                "package pkg;\n\npublic class Registry {\n    void add(String name) {\n    }\n}\n",
+            ),
+            (
+                "Buffer.java",
+                "package pkg;\n\npublic interface Buffer {\n    default int all() {\n        return slice(0, 1);\n    }\n\n    @Deprecated(since = \"1\")\n    int slice(int a, int b);\n\n    int slice(int a);\n\n    @SuppressWarnings({\"a\", \"b\"}) int slice(int a, int b, int c);\n}\n",
+            ),
+            (
+                "Uses.java",
+                r#"package pkg;
+
+import java.net.URI;
+import java.util.Map;
+
+public class Uses {
+    private Map<String, String> registry;
+
+    String read(Marker marker) {
+        return marker.mode();
+    }
+
+    int suspend(int x) {
+        return x;
+    }
+
+    void handle() {
+        int suspend = suspend(1);
+    }
+
+    Registry registry() {
+        return new Registry();
+    }
+
+    void register() {
+        registry().add("a");
+        this.registry().add("b");
+    }
+
+    String get(String uri, Object... vars) {
+        return uri;
+    }
+
+    String get(URI uri) {
+        return "";
+    }
+
+    void fetch() {
+        get("/a");
+    }
+
+    class Inner {
+        void touch() {
+            Uses.this.handle();
+        }
+    }
+}
+"#,
+            ),
+        ];
+        for (name, source) in files {
+            fs::write(pkg.join(name), source).unwrap();
+        }
+        let store = myceliums_storage::Store::open(&dir.path().join("db"), "test-repo")
+            .await
+            .unwrap();
+        let analyzer = Analyzer::new(store, root).set_skip_embeddings(true);
+        analyzer.analyze().await.unwrap();
+        let store = analyzer.store();
+        let symbols = store.get_symbols().await.unwrap();
+        let by_uid: HashMap<&str, &myceliums_storage::CodeSymbol> =
+            symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
+        let mut edges: Vec<(String, String, u32)> = store
+            .get_relationships()
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|r| r.kind == myceliums_storage::RelationshipKind::Calls)
+            .map(|r| {
+                let (from, to) = (by_uid[r.source_uid.as_str()], by_uid[r.target_uid.as_str()]);
+                (from.name.clone(), to.name.clone(), to.start_line)
+            })
+            .collect();
+        edges.sort();
+        let edge = |from: &str, to: &str, line: u32| (from.to_string(), to.to_string(), line);
+        for expected in [
+            edge("run", "hello", 5),
+            edge("read", "mode", 4),
+            edge("handle", "suspend", 13),
+            edge("register", "registry", 21),
+            edge("register", "add", 4),
+            edge("fetch", "get", 30),
+            edge("touch", "handle", 17),
+            edge("all", "slice", 8),
+        ] {
+            assert!(
+                edges.contains(&expected),
+                "{expected:?} missing from {edges:?}"
+            );
+        }
+        // `get("/a")` also keeps `get(URI)` (ambiguous): only the argument's
+        // type rules it out, and the resolver selects overloads by arity
+        // (#186).
+        assert!(edges.contains(&edge("fetch", "get", 34)), "{edges:?}");
+        for wrong in [edge("all", "slice", 11), edge("all", "slice", 14)] {
+            assert!(!edges.contains(&wrong), "{wrong:?} in {edges:?}");
+        }
+    }
+
     /// #139: an empty `__init__.py` makes `pkg` a package, so `import json`
     /// in `pkg/api.py` is the standard library's `json`, not `pkg/json.py`
     /// (Django's `django/utils/__init__.py` is empty).

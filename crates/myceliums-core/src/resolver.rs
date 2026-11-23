@@ -398,6 +398,15 @@ fn implicit_this(family: &str) -> bool {
     family == "jvm"
 }
 
+/// Files whose language keeps methods apart from variables and fields:
+/// in Java `suspend(tx)` calls a method even where a local `suspend` is in
+/// scope, and `hints.reflection()` calls the method `reflection()` even
+/// where the class also has a field `reflection` (#177). Kotlin and Scala
+/// can call a value that holds a function, so they are not among them.
+fn separate_method_namespace(file: &str) -> bool {
+    file.ends_with(".java")
+}
+
 /// Families where every file of a directory shares one namespace (a Go
 /// package; a Java package for class names).
 fn package_scope(family: &str) -> bool {
@@ -432,9 +441,9 @@ struct Def {
     /// The bases its own symbol metadata names (the rest come from
     /// declarations elsewhere, merged by `prepare`).
     own_bases: Vec<BaseRef>,
-    /// Number of parameters, where it selects among overloads (Java);
-    /// `None` for varargs or elsewhere.
-    params: Option<u32>,
+    /// The parameters, where they select among overloads (Java); `None`
+    /// elsewhere or when the signature is unreadable.
+    params: Option<Params>,
 }
 
 impl Def {
@@ -864,7 +873,16 @@ impl CallResolver {
         }
     }
 
-    /// Of several overloads (Java), the one taking `arg_count` arguments.
+    /// Of several overloads (Java), the ones that can take `arg_count`
+    /// arguments: a varargs method takes its fixed parameters and any
+    /// number more (`get(String, Object...)` takes `get("/")`, #177).
+    ///
+    /// - Exactly one overload with a readable signature fits: it is the
+    ///   target, `exact` — an overload whose signature the resolver cannot
+    ///   read does not take that away (as before #177).
+    /// - Otherwise the ones that fit, or might (unreadable), are each
+    ///   linked, as ambiguous, when that rules any out.
+    /// - Else the candidates stay as they were.
     fn by_arity(
         &self,
         targets: Vec<(DefId, CallResolution)>,
@@ -873,17 +891,25 @@ impl CallResolver {
         let Some(count) = arg_count.filter(|_| targets.len() > 1) else {
             return targets;
         };
-        let matching: Vec<DefId> = targets
-            .iter()
-            .map(|&(id, _)| id)
-            .filter(|&id| self.defs[id].params == Some(count))
+        let ids = || targets.iter().map(|&(id, _)| id);
+        let fits: Vec<DefId> = ids()
+            .filter(|&id| self.defs[id].params.is_some_and(|p| p.accepts(count)))
             .collect();
-        match matching.as_slice() {
+        if let [one] = fits.as_slice() {
             // The overloads were found exactly; only their number made the
             // call look ambiguous.
-            [one] => vec![(*one, CallResolution::Exact)],
-            _ => targets,
+            return vec![(*one, CallResolution::Exact)];
         }
+        let may_fit: Vec<DefId> = ids()
+            .filter(|&id| self.defs[id].params.is_none_or(|p| p.accepts(count)))
+            .collect();
+        if !may_fit.is_empty() && may_fit.len() < targets.len() {
+            return may_fit
+                .into_iter()
+                .map(|id| (id, CallResolution::Ambiguous))
+                .collect();
+        }
+        targets
     }
 
     /// `super(...)`: the base class's constructor, else the base class.
@@ -925,14 +951,14 @@ impl CallResolver {
         let local = self
             .binding(site, name)
             .is_some_and(|(_, _, binding)| binding.scope.1 != u32::MAX);
-        if local {
+        if local && !separate_method_namespace(site.file) {
             return match self.eval(site, &[ExpressionStep::Ident(name.to_string())], 0) {
                 Ty::Class(class) => Ok(vec![(class, CallResolution::Exact)]),
                 _ => Err(Unlinked::ThroughVariable),
             };
         }
         if implicit_this(site.family) {
-            let members = self.enclosing_members(site, name);
+            let members = self.enclosing_members(site, name, 0);
             if !members.is_empty() {
                 return Ok(pick(members, CallResolution::Exact));
             }
@@ -975,13 +1001,14 @@ impl CallResolver {
             .map_or(name, |(_, target)| target.as_str())
     }
 
-    /// Members named `name` of the classes enclosing the caller, innermost
-    /// class first.
     /// Members named `name` of the classes enclosing the caller (or of
-    /// their base classes), innermost class first.
-    fn enclosing_members(&self, site: &Site, name: &str) -> Vec<DefId> {
+    /// their base classes), innermost class first. `depth` is the type
+    /// evaluation's recursion depth: resolving a base class can need this
+    /// lookup again (`class X extends Outer.Base` evaluates `Outer` in X's
+    /// scope), so it must not start over at 0 (#177).
+    fn enclosing_members(&self, site: &Site, name: &str, depth: u32) -> Vec<DefId> {
         for class in self.enclosing_classes(site) {
-            let members = self.methods_on(class, name, 0);
+            let members = self.methods_on(class, name, depth);
             if !members.is_empty() {
                 return members;
             }
@@ -1251,9 +1278,30 @@ impl CallResolver {
     }
 }
 
-/// The number of parameters in a signature (`int add(T row, int copies)` →
-/// 2); `None` for varargs or an unreadable signature.
-fn param_count(signature: &str, name: &str) -> Option<u32> {
+/// A method's parameters, as far as they select an overload by the number
+/// of arguments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Params {
+    /// Declared parameters, a varargs parameter included.
+    count: u32,
+    /// The last parameter is varargs (`Object... args`).
+    varargs: bool,
+}
+
+impl Params {
+    /// Whether a call with `args` arguments can bind to the method.
+    fn accepts(self, args: u32) -> bool {
+        if self.varargs {
+            args + 1 >= self.count
+        } else {
+            args == self.count
+        }
+    }
+}
+
+/// The parameters of a signature (`int add(T row, int copies)` → 2, `get(String
+/// uri, Object... vars)` → 2, varargs); `None` for an unreadable signature.
+fn param_count(signature: &str, name: &str) -> Option<Params> {
     let start = signature.find(&format!("{name}("))? + name.len() + 1;
     let rest = &signature[start..];
     let (mut depth, mut count, mut empty) = (0i32, 0u32, true);
@@ -1261,10 +1309,10 @@ fn param_count(signature: &str, name: &str) -> Option<u32> {
         match c {
             '(' | '<' | '[' | '{' => depth += 1,
             ')' if depth == 0 => {
-                if rest[..i].contains("...") {
-                    return None;
-                }
-                return Some(if empty { 0 } else { count + 1 });
+                return Some(Params {
+                    count: if empty { 0 } else { count + 1 },
+                    varargs: rest[..i].contains("..."),
+                });
             }
             ')' | '>' | ']' | '}' => depth -= 1,
             ',' if depth == 0 => count += 1,
@@ -2252,6 +2300,13 @@ mod tests {
                 signature: "public int add(T row, int copies)".to_string(),
                 uid: "src/Repo.java::Repo.add(T, int)".to_string(),
                 ..method("src/Repo.java", "Repo.add", (5, 9))
+            },
+            // An overload whose signature cannot be read (no `add(` in it)
+            // does not demote the one readable fit to ambiguous.
+            CodeSymbol {
+                signature: "@Generated".to_string(),
+                uid: "src/Repo.java::Repo.add(?)".to_string(),
+                ..method("src/Repo.java", "Repo.add", (10, 12))
             },
             class("src/Report.java", "Report", (1, 5)),
             method("src/Report.java", "Report.Report", (2, 3)),
@@ -3283,15 +3338,41 @@ mod tests {
 
     #[test]
     fn parameter_counts_come_from_signatures() {
+        let fixed = |count| {
+            Some(Params {
+                count,
+                varargs: false,
+            })
+        };
         assert_eq!(
             param_count("public int add(T row, int copies)", "add"),
-            Some(2)
+            fixed(2)
         );
-        assert_eq!(param_count("int size()", "size"), Some(0));
-        assert_eq!(param_count("void put(Map<K, V> m)", "put"), Some(1));
+        assert_eq!(param_count("int size()", "size"), fixed(0));
+        assert_eq!(param_count("void put(Map<K, V> m)", "put"), fixed(1));
+        let join = param_count("static String join(String... cells)", "join").unwrap();
         assert_eq!(
-            param_count("static String join(String... cells)", "join"),
-            None
+            join,
+            Params {
+                count: 1,
+                varargs: true
+            }
+        );
+        let get = param_count(
+            "static Builder get(String uri, @Nullable Object @Nullable ... vars)",
+            "get",
+        )
+        .unwrap();
+        assert!(!get.accepts(0) && get.accepts(1) && get.accepts(3));
+        assert!(join.accepts(0));
+        assert!(fixed(2).unwrap().accepts(2) && !fixed(2).unwrap().accepts(1));
+        // Annotations on lines of their own come first (#177).
+        assert_eq!(
+            param_count(
+                "@Deprecated(since = \"6.0.5\")\n\tByteBuffer toByteBuffer(int index, int length)",
+                "toByteBuffer"
+            ),
+            fixed(2)
         );
     }
 
