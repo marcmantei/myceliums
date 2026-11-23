@@ -153,30 +153,43 @@ The gold fixtures cannot show how the rules generalise. Two checks on real code:
 
 The miss: Hono's `Context.redirect` calls `this.newResponse(...)`, and both are class fields holding arrow functions, which the TypeScript extractor does not extract as methods. The wrong edge: flask's `app.send_static_file(...)` on an untyped `app` fixture is linked to both `Flask.send_static_file` and `Blueprint.send_static_file` (`ambiguous`). These labels are an agent's, not yet reviewed; 22 positive pairs give wide intervals.
 
-**The Java set** (`held-out/java-spring.json`, #177): spring-framework v7.1.0, 105 pairs drawn by `sample_java_sites.py` (seed 177) — 60 at random from the production sources, 5 per hard Java case — and traced by reading the code. 100 count towards the totals (the 5 method references are reported apart), 61 of them with a project target. Before #177 `myc analyze` did not finish on this repository: resolving `class X extends Outer.Base` looked `Outer` up among X's own members, which resolved X's bases again with the recursion depth reset to 0, until the stack overflowed (after parsing, 5 s in). The rows below are with that fixed, then with the five other fixes of #177:
+**Java** (#177, spring-framework v7.1.0, labels by an agent, not reviewed yet). Two sets, because the first one was used to develop the resolver:
 
-| | recall | precision |
+- *The held-out set* (`held-out/java-spring-heldout.json`): 60 call sites drawn at random from the production sources (`sample_java_sites.py --heldout`, seed 4177) **after** the #177 resolver changes were frozen, traced by reading the code, scored once. These are the Java numbers to quote.
+- *The dev set* (`held-out/java-spring-dev.json`, seed 177): 60 random sites plus 5 per hard Java case from targeted strata. The five binding fixes below were found by reading its misses, so its scores are development numbers, not an estimate for unseen code; earlier versions of #177 reported them as held-out, which they were not.
+
+| set (random sites only) | recall | precision |
 |---|---:|---:|
-| `origin/main` | — (stack overflow) | — |
-| crash fixed | 47 / 61 = 0.77 (0.65–0.86) | 52 / 58 = 0.90 (0.79–0.95) |
-| all #177 fixes | **56 / 61 = 0.92 (0.82–0.96)** | **61 / 69 = 0.88 (0.79–0.94)** |
+| **held-out, after #177** | **30 / 31 = 0.97 (0.84–0.99)** | **31 / 36 = 0.86 (0.71–0.94)** |
+| dev, random stratum, after #177 | 32 / 33 = 0.97 (0.85–0.99) | 35 / 38 = 0.92 (0.79–0.97) |
+| dev, targeted strata, after #177 | 24 / 28 = 0.86 (0.69–0.94) | 26 / 31 = 0.84 (0.67–0.93) |
 
-The five other fixes: annotation elements are methods (`ann.methodMode()` had no target); a Java local or field does not hide a method of the same name (`int suspend = suspend(tx)`, `hints.reflection()` where the class also has a field `reflection`); `Outer.this.m()` is a call on the enclosing instance; a varargs overload takes any number of trailing arguments (`get("/")` was bound to `get(URI)` alone, because `get(String, Object...)` had no parameter count); a bodiless method whose annotations stand on their own line keeps its parameter count. Per case, after the fixes (a pair can be several cases; 95% Wilson intervals in the `graph-eval` output):
+On the held-out set, all six errors come from overloads with the same number of parameters (#186): five `ambiguous` edges to an overload the argument types rule out (`Assert.notNull(x, "msg")` → also `notNull(Object, Supplier)`; `ClassUtils.getUserClass(Object)` → also `getUserClass(Class)`), and one miss where three overloads take three arguments (`batchUpdate(String, List, int[])` next to `batchUpdate(String...)`), which gets no edge.
 
-| case | pairs | recall | precision |
-|---|---:|---:|---:|
-| interface / abstract dispatch | 18 | 15 / 18 | 16 / 17 |
-| overloads | 19 | 16 / 19 | 19 / 26 |
-| generics | 7 | 1 / 5 | 1 / 2 |
-| nested and anonymous classes | 27 | 14 / 17 | 16 / 16 |
-| lambdas | 8 | 6 / 6 | 7 / 9 |
-| static imports | 5 | 5 / 5 | 5 / 7 |
-| Spring-injected fields | 5 | 4 / 4 | 4 / 4 |
-| library base classes | 6 | 1 / 1 | 2 / 2 |
-| none of these | 39 | 16 / 16 | 17 / 17 |
-| method references (not counted) | 5 | 0 / 2 | — |
+Before #177, `myc analyze` did not finish on spring-framework. Resolving `class X extends Outer.Base` looked up `Outer` among X's own members. That lookup resolved X's bases again, with the recursion depth reset to 0, until the stack overflowed 5 s in, after parsing. On the dev set's 100 counted pairs (all strata), fixing that alone gives recall 47/61 and precision 52/58. The five binding fixes raise that to 56/61 and 61/69:
 
-What is left: 7 of the 8 wrong edges are overloads with the same number of parameters (`Assert.notNull(x, "msg")` is linked to both `notNull(Object, String)` and `notNull(Object, Supplier)`, `ambiguous`); the eighth is a lambda parameter of unknown type matched by name. 3 of the 5 misses are receivers typed through generics (`List<DataBuffer>.get(0).factory()`, `C extends AbstractMessageListenerContainer`), 2 are overload sets of three or more with the same arity, which get no edge. Method references produce no edge at all. Dispatch is linked to the declaration the receiver binds, as everywhere, and the gold accepts that: an implementation's callers through the interface stay invisible, which matters in interface-heavy Java code. The labels are an agent's, not reviewed yet.
+- annotation elements are methods, so `ann.methodMode()` gets a target;
+- a Java local or field does not hide a method of the same name (`int suspend = suspend(tx)`; `hints.reflection()` where the class also has a field `reflection`);
+- `Outer.this.m()` is a call on the enclosing instance;
+- a varargs overload takes any number of trailing arguments (`get("/")` was bound to `get(URI)` alone);
+- a bodiless method whose annotations stand on their own line keeps its parameter count.
+
+Per case on the dev set (all strata; development numbers). "Targets reached" counts every gold target: for a dispatch call, that is the interface or abstract method plus every implementation the call may run.
+
+| case | pairs | recall | precision | targets reached |
+|---|---:|---:|---:|---:|
+| interface / abstract dispatch | 18 | 15 / 18 | 16 / 17 | **0.21** |
+| overloads | 19 | 16 / 19 | 19 / 26 | 0.46 |
+| generics | 7 | 1 / 5 | 1 / 2 | 0.06 |
+| nested and anonymous classes | 27 | 14 / 17 | 16 / 16 | 0.38 |
+| lambdas | 8 | 6 / 6 | 7 / 9 | 0.37 |
+| static imports | 5 | 5 / 5 | 5 / 7 | 0.83 |
+| Spring-injected fields | 5 | 4 / 4 | 4 / 4 | 0.31 |
+| library base classes | 6 | 1 / 1 | 2 / 2 | 1.00 |
+| none of these | 39 | 16 / 16 | 17 / 17 | 1.00 |
+| method references (not counted) | 5 | 0 / 2 | — | 0.00 |
+
+**Dispatch recall is per call, not per implementation.** A dispatch pair counts as found when an edge reaches any accepted target, and that target is almost always the interface or abstract method. Only 21% of dispatch targets get an edge on the dev set, and 27% on the held-out set (7 dispatch pairs). The callers of an implementation through its interface stay invisible (#190). The dev set's other gaps: receivers typed through generics (`List<DataBuffer>.get(0).factory()`, `C extends AbstractMessageListenerContainer`; #187), overload sets of one arity (#186), and method references, which produce no edge (#188).
 
 **Cost on spring-framework** (release build, embeddings off, one run on a shared machine): 9,688 files, 144,051 symbols, 158,733 CALLS edges (433,905 relationships), 181,592 call sites linked and 342,129 not (311,711 into libraries); discover 0.5 s, parse 5.0 s, resolve and store 18.4 s, communities 3.1 s, processes 0.9 s; 30.4 s wall, 3.06 GB peak RSS (sampled once a second: 0.94 GB after parsing, 1.34 GB while resolving, 1.87 GB for communities).
 
@@ -209,7 +222,7 @@ No type inference: a receiver's type is known only when a declaration in view sa
 | Java | call forms, `new`, `super(...)`; class, static and wildcard imports, same-package classes; parameters, locals, `var`, fields, record components; return types; `extends`/`implements`; implicit `this`, `Outer.this`; annotation elements; overloads by argument count, varargs included; methods apart from variables and fields of the same name | overloads with the same count (needs argument types); generics (type arguments, type-parameter bounds); method references; types of lambda parameters; members inherited from library classes; static wildcard imports |
 | other languages | caller by position, language family, scope preference (file, imports, directory, family) | call forms, receivers and bindings: a call on an object may link to any function or method of that name; their accuracy is not measured |
 
-For every language: dynamic dispatch is linked to the statically bound declaration (`self.render_row()` in a base class goes to the base class's `render_row`, not to overrides; `sink.write()` on a `Sink` interface goes to `Sink.write`, not to `ConsoleSink.write`). So **an implementation of an interface, trait or abstract method gets no callers from calls made through the interface**: `find_callers` and `impact_of_change` on `ConsoleSink.write` miss them — look at the interface method's callers too. Calls through function values, callbacks, reflection and dynamic imports have no static target and no edge.
+For every language: dynamic dispatch is linked to the statically bound declaration (`self.render_row()` in a base class goes to the base class's `render_row`, not to overrides; `sink.write()` on a `Sink` interface goes to `Sink.write`, not to `ConsoleSink.write`). So **an implementation of an interface, trait or abstract method gets no callers from calls made through the interface** (#190; on spring-framework 21–27% of the implementations a dispatch call may run get an edge): `find_callers` and `impact_of_change` on `ConsoleSink.write` miss them — look at the interface method's callers too. Calls through function values, callbacks, reflection and dynamic imports have no static target and no edge.
 
 ## Interpreting results: confidence guidelines
 
@@ -237,7 +250,8 @@ A missing edge is now the more likely error, especially in untyped code: a metho
 
 ## Future work
 
-- Implementations for interface and trait dispatch (today the declaration is the target).
+- Implementations for interface and trait dispatch (today the declaration is the target; #190).
+- Java: overloads selected by argument types (#186), generics (#187), method references (#188).
 - Return types without annotations: a function whose body returns a constructor call (`return cls(...)`) could type its result.
 - Call forms and bindings for C/C++, C#, Kotlin, Swift and the other extractors.
 - A human review of the gold labels (the Java held-out set of #177 has none yet).

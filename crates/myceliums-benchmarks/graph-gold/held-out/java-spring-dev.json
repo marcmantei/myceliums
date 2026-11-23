@@ -1,5 +1,6 @@
 {
-  "description": "Held-out Java CALLS set (#177): call sites of spring-framework v7.1.0 drawn by sample_java_sites.py (seed 177) — 60 at random from the production sources and 5 per hard Java case from a targeted stratum — each traced to its targets by reading the code at the pinned commit, never from myceliums output. Scored like real-repos.json, per (caller, callee name) pair, with precision and recall per case; reported by graph-eval, never gated.",
+  "description": "Java dev CALLS set (#177): call sites of spring-framework v7.1.0 drawn by sample_java_sites.py (seed 177) — 60 at random from the production sources and 5 per hard Java case from a targeted stratum — each traced to its targets by reading the code at the pinned commit, never from myceliums output. Not held out: the #177 resolver fixes were made while reading its misses, so its scores are development numbers (see java-spring-heldout.json for the held-out set). Reported per stratum and per case by graph-eval, never gated.",
+  "role": "dev",
   "labelled_by": "agent",
   "reviewed_by": null,
   "rules": "Sites are drawn by sample_java_sites.py (seed 177) and read in the order of the draw. Strata: `random` takes the first 60 sites that qualify; each case stratum takes the first 5 that qualify and really are that case. A site is skipped when it is not a call made inside a named method or constructor (a declaration, an annotation, a string, a comment, a field initialiser, an abstract or interface method declaration), when it repeats a pair already taken, or, in a case stratum, when it is not that case (a static import of a library method, a field Spring does not inject, a type that is not an interface or abstract class). The caller is the innermost named method or constructor containing the call, including methods of anonymous classes and enum constant bodies; calls in lambdas belong to the enclosing method. A pair lists every project symbol the caller's calls of that name bind to under javac's rules: the declaration of the receiver's static type (inherited declarations where the class does not declare it; the overload javac selects) and, where the call dispatches, every override of it in the repository (found by git grep over the subtypes). `new X(...)` targets the class X and its matching constructor. An empty list means no call of that name in the caller binds to a project symbol: a JDK or library method, a method inherited from a library base class, an implicit member with no declaration (a record accessor). Annotation elements (`ann.value()`) are interface methods and are targets. Method references (`Type::m`) are labelled with what they reference but are not calls under the fixture rules: they are reported apart and left out of the totals. `inner-anonymous` is set mechanically: the caller's declaration is indented two levels or more (spring-framework indents with tabs).",
@@ -1048,7 +1049,7 @@
       "file": "spring-aop/src/main/java/org/springframework/aop/framework/AbstractAdvisingBeanPostProcessor.java",
       "caller": "postProcessAfterInitialization",
       "caller_line": 88,
-      "call_line": 101,
+      "call_line": 103,
       "callee": "getAdvisorCount",
       "targets": [
         {

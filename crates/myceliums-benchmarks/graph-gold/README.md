@@ -79,34 +79,50 @@ from those callers to symbols of that name — and prints it after the gate.
 **It is never gated**: the pairs are few, and an agent labelled them (checked
 in #164 under an owner policy; see "Review status"). Numbers: `docs/guides/call-resolution-limitations.md`.
 
-## Held-out Java set (#177)
+## Java sets (#177): one held out, one for development
 
-`held-out/java-spring.json` measures Java CALLS edges on a large real
-repository: spring-framework at the v7.1.0 release
+Both sets sample spring-framework at the v7.1.0 release
 (`f2e4863de60e6a20e827a0aa3c524ffb3ae96ad4`, ~9,700 Java and Kotlin files).
-`held-out/sample_java_sites.py` (seed 177, a seeded regex over `git ls-files`,
-no myceliums) draws 60 sites at random from the production sources and 5 per
-hard Java case from a targeted stratum each: interface or abstract dispatch,
-overloads, generics, nested and anonymous classes, lambdas, method references,
-static imports of project methods, Spring-injected fields (most of them in
-tests, where spring-framework injects) and methods inherited from library
-base classes. Each pair names the cases it is an instance of; the set's
-`rules` give the skip rules, the caller rule and what a target is. 105 pairs;
-63 call a project symbol.
+`held-out/sample_java_sites.py` draws both with a seeded regex over
+`git ls-files`; it does not use myceliums. The labels come from reading the
+code. Each set's `rules` give the skip rules, the caller rule and what counts
+as a target.
 
-Where a call dispatches, the gold lists the statically bound declaration and
-every override in the repository (found with `git grep` over the subtypes),
-as the fixture rule accepts overrides. Method references (`Type::m`) are not
-calls under the fixture rules (`invokedynamic`), so their 5 pairs are
-reported per case and left out of the totals.
+- **`held-out/java-spring-heldout.json`, held out** (`role: held-out`): 60
+  sites drawn at random from the production sources (`--heldout`, seed 4177).
+  They were drawn after the #177 resolver changes were frozen, and sites
+  whose pair is in the dev set were skipped. 31 call a project symbol. This
+  set gives the Java numbers to quote.
+- **`held-out/java-spring-dev.json`, not held out** (`role: dev`, seed 177):
+  - 60 random sites, plus 5 sites for each hard Java case from a targeted
+    stratum. The cases are interface or abstract dispatch, overloads,
+    generics, nested and anonymous classes, lambdas, method references,
+    static imports of project methods, Spring-injected fields (mostly in
+    tests, where spring-framework injects) and methods inherited from
+    library base classes.
+  - The #177 resolver fixes were made while reading its misses. Its scores
+    are therefore development numbers. An earlier version of #177 called
+    this set held out, which it was not.
+  - Its headline row is the random stratum alone. The targeted strata, which
+    over-represent the hard cases, are reported apart.
 
-`graph-eval` scores the set like `real-repos.json` when the checkout is there
-(`held-out/fetch_java.sh`, into the same cache directory), and adds a
-precision/recall row per case. It is not in CI's corpus: analysing the
-repository takes about 30 s and 3 GB of memory on top of every run, for a
-report that is never gated. Numbers: `docs/guides/call-resolution-limitations.md`.
-Labelled by an agent; `reviewed_by` is `null` until the review workflow has
-been through it.
+Each pair names the cases it is an instance of. `graph-eval` adds a
+precision/recall row per case and per stratum, plus a **targets reached**
+column: the share of all gold targets that got an edge. Where a call
+dispatches, the gold lists the statically bound declaration and every
+override in the repository, found with `git grep` over the subtypes. The
+fixture rule accepts overrides, so a dispatch pair counts as found when it
+reaches the interface method. Targets reached shows how many of the
+implementations a dispatch call may run are linked (#190). Method references
+(`Type::m`) are not calls under the fixture rules (`invokedynamic`), so their
+5 dev pairs are reported per case and left out of the totals.
+
+`graph-eval` scores both sets when the checkout is present
+(`held-out/fetch_java.sh` puts it into the same cache directory). Neither
+set is in CI's corpus: analysing the repository adds about 30 s and 3 GB of
+memory to every run, for a report that is never gated. For the numbers, see
+`docs/guides/call-resolution-limitations.md`. Both sets have
+`reviewed_by: null` until the review workflow has been through them.
 
 ## Review status
 

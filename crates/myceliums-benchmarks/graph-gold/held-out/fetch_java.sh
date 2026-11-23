@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetch the checkout of the held-out Java CALLS set (#177): spring-framework
-# at the commit `java-spring.json` pins (the v7.1.0 release), one commit, no
+# at the commit `java-spring-heldout.json` pins (the v7.1.0 release), one commit, no
 # history, into the same cache directory as `real-repos/fetch.sh`.
 #
 #   crates/myceliums-benchmarks/graph-gold/held-out/fetch_java.sh
@@ -17,7 +17,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cache="${MYC_EVAL_REPOS_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/myceliums-eval-repos}"
 name="spring-framework"
 url="https://github.com/spring-projects/spring-framework.git"
-commit="$(jq -r --arg name "$name" '.repos[$name]' "${here}/java-spring.json")"
+commit="$(jq -r --arg name "$name" '.repos[$name]' "${here}/java-spring-heldout.json")"
 dir="${cache}/${name}"
 
 for tool in git jq; do

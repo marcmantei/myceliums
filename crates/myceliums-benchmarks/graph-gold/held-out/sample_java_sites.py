@@ -1,4 +1,13 @@
-"""Draw call sites for the held-out Java CALLS set (#177).
+"""Draw call sites for the Java CALLS sets (#177).
+
+Two sets, two seeds:
+
+- the dev set (`java-spring-dev.json`, seed 177, all strata below): the
+  #177 resolver fixes were made while reading its misses, so its scores are
+  development numbers;
+- the held-out set (`java-spring-heldout.json`, `--heldout`, seed 4177, the `random`
+  stratum only): drawn after the resolver was frozen, scored once. The
+  labeller skips a site whose (file, caller, callee) pair is in the dev set.
 
 Like `sample_sites.py`, a seeded regex over `git ls-files` of the pinned
 checkout picks the candidates, so the selection does not depend on myceliums.
@@ -11,7 +20,7 @@ Two kinds of strata:
   order, keeps it when it is a call made inside a named method and really is
   the case, and skips it otherwise, until the stratum has its quota.
 
-    python3 -I crates/myceliums-benchmarks/graph-gold/held-out/sample_java_sites.py [checkout]
+    python3 -I crates/myceliums-benchmarks/graph-gold/held-out/sample_java_sites.py [--heldout] [checkout]
 
 Prints `stratum<TAB>file<TAB>line<TAB>callee<TAB>source line` per candidate.
 Default checkout: ~/.cache/myceliums-eval-repos/spring-framework (see
@@ -25,7 +34,9 @@ import subprocess
 import sys
 
 SEED = 177
+HELDOUT_SEED = 4177
 RANDOM_CANDIDATES = 80
+HELDOUT_CANDIDATES = 140
 CASE_CANDIDATES = 30
 
 NOT_CALLS = {
@@ -191,8 +202,17 @@ def strata(root):
 
 
 def main():
-    root = sys.argv[1] if len(sys.argv) > 1 else os.path.expanduser(
+    args = sys.argv[1:]
+    heldout = "--heldout" in args
+    args = [a for a in args if a != "--heldout"]
+    root = args[0] if args else os.path.expanduser(
         "~/.cache/myceliums-eval-repos/spring-framework")
+    if heldout:
+        sites = sorted(set(strata(root)["random"]))
+        rng = random.Random(HELDOUT_SEED)
+        for path, number, callee, text in rng.sample(sites, HELDOUT_CANDIDATES):
+            print(f"heldout\t{path}\t{number}\t{callee}\t{text[:140]}")
+        return
     rng = random.Random(SEED)
     for name, sites in strata(root).items():
         sites = sorted(set(sites))

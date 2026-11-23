@@ -1,17 +1,25 @@
-//! The held-out real-repository CALLS sets: call sites drawn from pinned
-//! open-source repositories and traced to their targets by reading the code
-//! (`graph-gold/held-out/`). The resolver was not developed against them, so
-//! they are the outside check on the fixture numbers. They are reported next
-//! to the fixture gate and never gated: the pairs are few, and the labels are
-//! an agent's.
+//! The real-repository CALLS sets: call sites drawn from pinned open-source
+//! repositories and traced to their targets by reading the code
+//! (`graph-gold/held-out/`). They are reported next to the fixture gate and
+//! never gated: the pairs are few, and the labels are an agent's.
 //!
-//! - `real-repos.json` (#139): 52 sites drawn at random from flask, requests,
-//!   gin and hono.
-//! - `java-spring.json` (#177): 105 sites of spring-framework, 60 at random
-//!   and 5 per hard Java case (interface dispatch, overloads, generics, inner
-//!   and anonymous classes, lambdas, method references, static imports,
-//!   injected fields, library base classes). Each pair names its cases, and
-//!   the report gives precision and recall per case.
+//! - `real-repos.json` (#139, held out): 52 sites drawn at random from flask,
+//!   requests, gin and hono.
+//! - `java-spring-heldout.json` (#177, held out): 60 sites drawn at random
+//!   from spring-framework after the #177 resolver changes were frozen. The
+//!   headline Java numbers.
+//! - `java-spring-dev.json` (#177, **not** held out): 105 sites of
+//!   spring-framework, 60 at random and 5 per hard Java case (interface
+//!   dispatch, overloads, generics, inner and anonymous classes, lambdas,
+//!   method references, static imports, injected fields, library base
+//!   classes). The #177 resolver fixes were made while reading its misses,
+//!   so its scores are development numbers. Its random stratum is the
+//!   headline row; the targeted strata are reported apart.
+//!
+//! A set's `role` says which it is. Each pair may name its cases and its
+//! stratum; the report gives precision and recall per case and per stratum,
+//! and the share of all gold targets reached ("targets reached": for a
+//! dispatch call, how many of the implementations it may run got an edge).
 //!
 //! # Scoring
 //!
@@ -38,7 +46,8 @@ use super::report::wilson;
 
 /// The sets, as committed.
 const SET: &str = include_str!("../../graph-gold/held-out/real-repos.json");
-const JAVA_SET: &str = include_str!("../../graph-gold/held-out/java-spring.json");
+const JAVA_SET: &str = include_str!("../../graph-gold/held-out/java-spring-heldout.json");
+const JAVA_DEV_SET: &str = include_str!("../../graph-gold/held-out/java-spring-dev.json");
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct HeldOutSet {
@@ -46,6 +55,9 @@ pub struct HeldOutSet {
     #[serde(skip)]
     pub name: String,
     pub description: String,
+    /// `held-out` (default) or `dev`: a set the resolver was changed against.
+    #[serde(default)]
+    pub role: Option<String>,
     pub labelled_by: String,
     pub reviewed_by: Option<String>,
     pub rules: String,
@@ -95,14 +107,32 @@ impl HeldOutSet {
         Self::parse(SET, "held-out/real-repos.json")
     }
 
-    /// The spring-framework Java set (#177).
+    /// The held-out spring-framework Java set (#177).
     pub fn java() -> Result<Self> {
-        Self::parse(JAVA_SET, "held-out/java-spring.json")
+        Self::parse(JAVA_SET, "held-out/java-spring-heldout.json")
+    }
+
+    /// The spring-framework Java dev set (#177): not held out.
+    pub fn java_dev() -> Result<Self> {
+        Self::parse(JAVA_DEV_SET, "held-out/java-spring-dev.json")
     }
 
     /// Every committed set, in report order.
     pub fn all() -> Result<Vec<Self>> {
-        Ok(vec![Self::embedded()?, Self::java()?])
+        Ok(vec![Self::embedded()?, Self::java()?, Self::java_dev()?])
+    }
+
+    /// Whether the resolver was changed against this set.
+    pub fn is_dev(&self) -> bool {
+        self.role.as_deref() == Some("dev")
+    }
+
+    /// Whether the pairs come from more than one stratum (random and
+    /// targeted): then the headline is the random stratum alone.
+    pub fn stratified(&self) -> bool {
+        self.pairs
+            .iter()
+            .any(|p| p.stratum.as_deref().is_some_and(|s| s != RANDOM))
     }
 
     fn parse(json: &str, name: &str) -> Result<Self> {
@@ -135,6 +165,13 @@ impl HeldOutSet {
     }
 }
 
+/// The stratum of uniformly drawn sites.
+pub const RANDOM: &str = "random";
+
+fn is_random(pair: &Pair) -> bool {
+    pair.stratum.as_deref().is_none_or(|s| s == RANDOM)
+}
+
 /// One repository's scores.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct RepoScore {
@@ -148,9 +185,16 @@ pub struct RepoScore {
     pub callers_missing: usize,
     pub misses: Vec<String>,
     pub wrong: Vec<String>,
+    /// Gold targets of the pairs with a project target, and how many of them
+    /// got an edge: for a dispatch call, the implementations it may run.
+    pub targets: usize,
+    pub targets_reached: usize,
     /// Per case (`repo` holds the case name), for a set whose pairs name
     /// cases; the last entry, `(no hard case)`, holds the pairs with none.
     pub cases: Vec<RepoScore>,
+    /// For a stratified set: the random stratum, then the targeted ones
+    /// together (`repo` holds the stratum's name).
+    pub strata: Vec<RepoScore>,
 }
 
 /// The whole run: scored repositories, and the ones that could not be.
@@ -217,8 +261,26 @@ pub fn score_set(
     pairs: &[&Pair],
     extraction: &Extraction,
 ) -> RepoScore {
-    let counted: Vec<&Pair> = pairs.iter().copied().filter(|p| set.in_totals(p)).collect();
+    // A stratified set's headline is its random stratum: the targeted
+    // strata over-represent the hard cases.
+    let stratified = set.stratified();
+    let counted: Vec<&Pair> = pairs
+        .iter()
+        .copied()
+        .filter(|p| set.in_totals(p) && (!stratified || is_random(p)))
+        .collect();
     let mut total = score(repo, &counted, extraction);
+    if stratified {
+        let targeted: Vec<&Pair> = pairs
+            .iter()
+            .copied()
+            .filter(|p| set.in_totals(p) && !is_random(p))
+            .collect();
+        total.strata.push(score(RANDOM, &counted, extraction));
+        total
+            .strata
+            .push(score("targeted (case strata)", &targeted, extraction));
+    }
     if !set.cases.is_empty() {
         for case in set.cases.keys() {
             let of_case: Vec<&Pair> = pairs
@@ -267,6 +329,7 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
             .min_by_key(|s| s.end_line - s.start_line);
         let Some(caller) = caller else {
             score.callers_missing += 1;
+            score.targets += pair.targets.len();
             if has_target {
                 score.misses.push(format!(
                     "{}::{} → `{}` (caller not extracted)",
@@ -276,6 +339,7 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
             continue;
         };
         let mut found = false;
+        let mut reached = vec![false; pair.targets.len()];
         for edge in extraction
             .calls
             .iter()
@@ -288,12 +352,16 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
                 continue;
             }
             score.edges += 1;
-            let correct = pair.targets.iter().any(|t| {
+            let hits = |t: &Target| {
                 t.file == target.file_path
                     && t.name == target.name
                     && target.start_line <= t.line
                     && t.line <= target.end_line
-            });
+            };
+            let correct = pair.targets.iter().any(hits);
+            for (i, t) in pair.targets.iter().enumerate() {
+                reached[i] |= hits(t);
+            }
             if correct {
                 score.correct += 1;
                 found = true;
@@ -304,6 +372,8 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
                 ));
             }
         }
+        score.targets += pair.targets.len();
+        score.targets_reached += reached.iter().filter(|r| **r).count();
         if has_target && found {
             score.found += 1;
         } else if has_target {
@@ -326,11 +396,22 @@ fn rate(part: usize, whole: usize) -> String {
 /// The report as Markdown.
 pub fn markdown(set: &HeldOutSet, report: &HeldOutReport) -> String {
     let mut out = String::new();
+    let role = if set.is_dev() {
+        "dev set, not held out: the resolver was changed against it"
+    } else {
+        "held out"
+    };
     let _ = writeln!(
         out,
-        "\n### Held-out real repositories: `{}` (report only, not gated)\n",
+        "\n### Real repositories: `{}` ({role}; report only, not gated)\n",
         set.name
     );
+    if set.stratified() {
+        let _ = writeln!(
+            out,
+            "Stratified: the table below is the `random` stratum alone; the targeted strata follow.\n"
+        );
+    }
     let _ = writeln!(
         out,
         "{} call sites drawn from {} pinned repositories and traced by reading the code \
@@ -394,8 +475,32 @@ pub fn markdown(set: &HeldOutSet, report: &HeldOutReport) -> String {
         rate(total.correct, total.edges),
         total.callers_missing
     );
+    if set.stratified() {
+        out.push_str(&breakdown(
+            "\nPer stratum (the targeted strata draw the hard cases on purpose):\n",
+            "stratum",
+            &[RANDOM, "targeted (case strata)"],
+            report.repos.iter().flat_map(|r| &r.strata),
+        ));
+    }
     if !set.cases.is_empty() {
-        out.push_str(&case_table(set, report));
+        let mut names: Vec<&str> = set.cases.keys().map(String::as_str).collect();
+        names.push("(no hard case)");
+        let title = format!(
+            "\nPer case, all strata (a pair can be several cases; {} pairs are reported here only, not in the totals). \
+             \"Targets reached\": gold targets with an edge — for dispatch, the implementations a call may run:\n",
+            if set.report_only.is_empty() {
+                "no".to_string()
+            } else {
+                set.report_only.join(", ")
+            }
+        );
+        out.push_str(&breakdown(
+            &title,
+            "case",
+            &names,
+            report.repos.iter().flat_map(|r| &r.cases),
+        ));
     }
     let misses: Vec<&String> = report.repos.iter().flat_map(|s| &s.misses).collect();
     let wrong: Vec<&String> = report.repos.iter().flat_map(|s| &s.wrong).collect();
@@ -424,42 +529,35 @@ pub fn markdown(set: &HeldOutSet, report: &HeldOutReport) -> String {
     out
 }
 
-/// Precision and recall per case, summed over the repositories.
-fn case_table(set: &HeldOutSet, report: &HeldOutReport) -> String {
+/// Precision, recall and targets reached per named group (case or
+/// stratum), summed over the repositories.
+fn breakdown<'a>(
+    title: &str,
+    column: &str,
+    names: &[&str],
+    scores: impl Iterator<Item = &'a RepoScore> + Clone,
+) -> String {
     let mut out = String::new();
+    let _ = writeln!(out, "{title}");
     let _ = writeln!(
         out,
-        "\nPer case (a pair can be several cases; {} pairs are reported here only, not in the totals):\n",
-        if set.report_only.is_empty() {
-            "no".to_string()
-        } else {
-            set.report_only.join(", ")
-        }
+        "| {column} | pairs | with a project target | found | recall (95% CI) | edges | correct | precision (95% CI) | targets reached |"
     );
-    let _ = writeln!(
-        out,
-        "| case | pairs | with a project target | found | recall (95% CI) | edges | correct | precision (95% CI) |"
-    );
-    let _ = writeln!(out, "|---|---:|---:|---:|---:|---:|---:|---:|");
-    let mut names: Vec<&str> = set.cases.keys().map(String::as_str).collect();
-    names.push("(no hard case)");
-    for name in names {
+    let _ = writeln!(out, "|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+    for &name in names {
         let mut sum = RepoScore::default();
-        for s in report
-            .repos
-            .iter()
-            .flat_map(|r| &r.cases)
-            .filter(|c| c.repo == name)
-        {
+        for s in scores.clone().filter(|c| c.repo == name) {
             sum.pairs += s.pairs;
             sum.with_target += s.with_target;
             sum.found += s.found;
             sum.edges += s.edges;
             sum.correct += s.correct;
+            sum.targets += s.targets;
+            sum.targets_reached += s.targets_reached;
         }
         let _ = writeln!(
             out,
-            "| {name} | {} | {} | {} | {} | {} | {} | {} |",
+            "| {name} | {} | {} | {} | {} | {} | {} | {} | {} |",
             sum.pairs,
             sum.with_target,
             sum.found,
@@ -467,6 +565,7 @@ fn case_table(set: &HeldOutSet, report: &HeldOutReport) -> String {
             sum.edges,
             sum.correct,
             rate(sum.correct, sum.edges),
+            rate(sum.targets_reached, sum.targets),
         );
     }
     out
@@ -506,11 +605,39 @@ mod tests {
         assert!(set.pairs.iter().all(|p| p.caller_line <= p.call_line));
     }
 
-    /// #177: at least 40 scored sites, 60 random and 5 per case stratum,
-    /// every case represented by at least five pairs, one pinned release.
+    /// #177: the held-out Java set is 60 sites of the random stratum only,
+    /// none of them a pair of the dev set, at the dev set's pinned release.
     #[test]
-    fn the_java_set_covers_every_case() {
+    fn the_java_held_out_set_is_random_and_disjoint_from_the_dev_set() {
         let set = HeldOutSet::java().unwrap();
+        let dev = HeldOutSet::java_dev().unwrap();
+        assert!(!set.is_dev() && dev.is_dev());
+        assert!(!set.stratified() && dev.stratified());
+        assert_eq!(set.repos, dev.repos);
+        assert_eq!(set.pairs.len(), 60);
+        assert!(set.report_only.is_empty());
+        assert!(set
+            .pairs
+            .iter()
+            .all(|p| p.stratum.as_deref() == Some(RANDOM) && set.in_totals(p)));
+        for pair in &set.pairs {
+            assert!(
+                !dev.pairs.iter().any(|d| d.file == pair.file
+                    && d.caller == pair.caller
+                    && d.callee == pair.callee),
+                "{}::{} is in the dev set",
+                pair.file,
+                pair.caller
+            );
+            assert!(pair.caller_line <= pair.call_line);
+        }
+    }
+
+    /// #177: the dev set — 60 random sites and 5 per case stratum, every
+    /// case represented by at least five pairs, one pinned release.
+    #[test]
+    fn the_java_dev_set_covers_every_case() {
+        let set = HeldOutSet::java_dev().unwrap();
         assert_eq!(set.repos.len(), 1);
         assert_eq!(set.labelled_by, "agent");
         let counted = set.pairs.iter().filter(|p| set.in_totals(p)).count();
@@ -628,8 +755,10 @@ mod tests {
         assert_eq!(score.wrong.len(), 1, "get has no project target");
         assert_eq!(score.misses.len(), 1, "gone was not extracted");
 
+        assert_eq!((score.targets, score.targets_reached), (2, 1));
+
         // Per case, with report-only cases left out of the totals.
-        let mut set = HeldOutSet::java().unwrap();
+        let mut set = HeldOutSet::java_dev().unwrap();
         set.cases = BTreeMap::from([
             ("overload".to_string(), String::new()),
             ("method-ref".to_string(), String::new()),
@@ -644,5 +773,57 @@ mod tests {
         assert_eq!((case("overload").pairs, case("overload").found), (1, 1));
         assert_eq!((case("method-ref").pairs, case("method-ref").edges), (1, 1));
         assert_eq!(case("(no hard case)").pairs, 1);
+
+        // A stratified set: the headline is the random stratum alone.
+        cased[1].cases.clear();
+        cased[0].stratum = Some("overload".into());
+        let refs: Vec<&Pair> = cased.iter().collect();
+        let total = score_set(&set, "r", &refs, &extraction);
+        assert_eq!((total.pairs, total.found), (2, 0), "{total:?}");
+        let stratum = |name: &str| total.strata.iter().find(|c| c.repo == name).unwrap();
+        assert_eq!(stratum(RANDOM).pairs, 2);
+        assert_eq!(
+            (
+                stratum("targeted (case strata)").pairs,
+                stratum("targeted (case strata)").found
+            ),
+            (1, 1)
+        );
+    }
+
+    /// A dispatch pair with three gold targets, one linked: found, and one
+    /// of three targets reached.
+    #[test]
+    fn targets_reached_counts_each_gold_target() {
+        let target = |line: u32| Target {
+            file: "b.java".into(),
+            name: "run".into(),
+            line,
+        };
+        let pair = Pair {
+            repo: "r".into(),
+            file: "a.java".into(),
+            caller: "main".into(),
+            caller_line: 1,
+            call_line: 2,
+            callee: "run".into(),
+            targets: vec![target(1), target(4), target(7)],
+            why: String::new(),
+            stratum: None,
+            cases: vec!["dispatch".into()],
+        };
+        let extraction = Extraction {
+            symbols: vec![
+                symbol("main", "a.java", "main", (1, 9)),
+                symbol("iface", "b.java", "run", (1, 2)),
+                symbol("impl", "b.java", "run", (4, 5)),
+            ],
+            calls: vec![call("main", "iface")],
+        };
+        let score = score("r", &[&pair], &extraction);
+        assert_eq!(
+            (score.found, score.targets, score.targets_reached),
+            (1, 3, 1)
+        );
     }
 }
