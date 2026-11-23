@@ -1744,18 +1744,22 @@ The base is the #182 run's embedded index of v7.1.0 (same models; its path is
 used only after that run has finished with the path. v7.1.0 is the better
 base than the oldest parent: 8 of the 20 parents differ from it by at most
 606 files (7 to 606), against 3,039 to 3,296 from the oldest.
-**Not measured yet** (embedding waits for the #182 build): vectors reused,
-time and disk per task, graph equality. This was checked against a stand-in
-`myc` in the unit tests only.
 
-Measured on one parent (`mime-type-parameter-names-case-insensitive`, M1 Max,
-10 cores, machine under other load): the graph alone took 73 s for 10,109
-files, 143,541 symbols, 485,247 relationships and 39,899 doc mentions, 668 MB.
-A full embedded build was stopped by a 2-hour tool limit while still
-embedding; about 3 hours at Vue's #163 rate is an extrapolation across
-different code and load, so no more than an order of magnitude. If derived indexes
-fail, the fallback is graph-only with semantic search off in every arm, which needs
-the #182 guard on `--skip-embeddings` indexes relaxed.
+**Measured** (24 November; [`groundtruth/index_updates.json`](groundtruth/index_updates.json); `myc` `a42bffce`, the binary that built the base; graph and
+embedding code unchanged on `main` since; M1 Max, `nice 15`, load 23-30 from other work; working on a copy of the #182 index):
+
+* **Base:** 17,699 s (4.9 h) for 145,670 vectors, under load. My earlier "about 3 hours" was an extrapolation and too low.
+* **Update on every merge** (the real case, forward in history): the 21 consecutive first-parent commits of Spring's `main` after v7.1.0 (13-23 November; 4 are merge
+  commits, 43, 42, 4 and 2 files): median 42 s, maximum 88 s; about 30 s of it is the full graph rebuild, the rest vectors. Re-embedded symbols:
+  0 to 210 of about 145,500 (median 3); all others reused, proved by the counts in the log. The commit that replaced every file header (9,053 files)
+  re-embedded 38. Peak memory 4.5-7.7 GB. Graph counts equal a fresh graph-only build in the 3 steps compared (first, last, header change).
+* **No change at all** (same commit again): 36 s, 145,670 of 145,670 vectors reused.
+* **Another path** (503 symbols): updating at the same path reused 486 vectors (9.7 s against 55 s); an index moved to another path reused **0**, also after its repository entry and files were put
+  under the new path's id, and so did a copied data directory. So a worktree at another path cannot use a base index today (#198/#184).
+* **Disk:** 0.87 GB per embedded index. `myc diff` keeps ten graph snapshots of about 190 MB beside it (3.1 GB in all after ten updates). They hold **earlier analyses' graphs**: an
+  index derived newest-first would show a session symbols of later commits. The harness removes them from derived indexes and from every session's copy, and `myc diff` is off the Bash allowlist.
+* The task parents lie before v7.1.0, so their derivation runs **backwards** in history; the figures above are the forward case. Their own table (time, re-embedded symbols, graph equality per parent) follows when that job has ended;
+  the first nine, 12 to 582 symbols re-embedded in 52-189 s, all equal a fresh graph.
 
 **Budget estimate** (not measured; from #163/#171 scaled to edit tasks).
 #163/#171 question sessions with Bash at 40 turns: 8 turns, 100-136k input

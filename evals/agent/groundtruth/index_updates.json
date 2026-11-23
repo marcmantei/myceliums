@@ -1,0 +1,826 @@
+{
+ "note": "myc a42bffce8d3a (built from 388c6e1; graph and embedding code as in 276d916), M1 Max, nice 15, load 23-30. Base: the #182 index of v7.1.0 (17,698.7 s with embeddings, under load), a copy. 'disk_bytes' includes myc diff's graph snapshots.",
+ "paths_small_tree": {
+  "base_path_A": {
+   "rc": 0,
+   "seconds": 50.1,
+   "symbols": 503,
+   "files": 46,
+   "relationships": 1280,
+   "mentions": 119,
+   "embedded": 503,
+   "kept": 0,
+   "peak_rss_bytes": 2112454656,
+   "phases_s": {
+    "discover": 0.0,
+    "parse": 0.0,
+    "resolve": 0.0,
+    "communities": 0.0,
+    "processes": 0.0,
+    "embed": 49.9
+   },
+   "disk_bytes": 3649534,
+   "load": 77.28759765625
+  },
+  "fresh_path_B": {
+   "rc": 0,
+   "seconds": 55.1,
+   "symbols": 503,
+   "files": 46,
+   "relationships": 1280,
+   "mentions": 119,
+   "embedded": 503,
+   "kept": 0,
+   "peak_rss_bytes": 2111684608,
+   "phases_s": {
+    "discover": 0.0,
+    "parse": 0.0,
+    "resolve": 0.0,
+    "communities": 0.0,
+    "processes": 0.0,
+    "embed": 54.9
+   },
+   "disk_bytes": 3655525,
+   "load": 102.44189453125
+  },
+  "same_path_update": {
+   "rc": 0,
+   "seconds": 9.7,
+   "symbols": 503,
+   "files": 46,
+   "relationships": 1280,
+   "mentions": 119,
+   "embedded": 503,
+   "kept": 486,
+   "peak_rss_bytes": 2022637568,
+   "phases_s": {
+    "discover": 0.0,
+    "parse": 0.0,
+    "resolve": 0.0,
+    "communities": 0.0,
+    "processes": 0.0,
+    "embed": 9.5
+   },
+   "disk_bytes": 4115989,
+   "load": 100.43896484375
+  },
+  "graph_only_path_B": {
+   "rc": 0,
+   "seconds": 0.2,
+   "symbols": 503,
+   "files": 46,
+   "relationships": 1280,
+   "mentions": 119,
+   "embedded": 0,
+   "kept": 0,
+   "peak_rss_bytes": 73400320,
+   "phases_s": {
+    "discover": 0.0,
+    "parse": 0.0,
+    "resolve": 0.0,
+    "communities": 0.0,
+    "processes": 0.0
+   },
+   "disk_bytes": 1608918,
+   "load": 100.43896484375
+  },
+  "moved_index_update": {
+   "rc": 0,
+   "seconds": 52.7,
+   "symbols": 503,
+   "files": 46,
+   "relationships": 1280,
+   "mentions": 119,
+   "embedded": 503,
+   "kept": 0,
+   "peak_rss_bytes": 2111668224,
+   "phases_s": {
+    "discover": 0.0,
+    "parse": 0.0,
+    "resolve": 0.0,
+    "communities": 0.0,
+    "processes": 0.0,
+    "embed": 52.5
+   },
+   "disk_bytes": 4116421,
+   "load": 99.4169921875
+  },
+  "copied_datadir_other_path": {
+   "rc": 0,
+   "seconds": 53.7,
+   "symbols": 503,
+   "files": 46,
+   "relationships": 1280,
+   "mentions": 119,
+   "embedded": 503,
+   "kept": 0,
+   "peak_rss_bytes": 2114174976,
+   "phases_s": {
+    "discover": 0.0,
+    "parse": 0.0,
+    "resolve": 0.0,
+    "communities": 0.0,
+    "processes": 0.0,
+    "embed": 53.1
+   },
+   "disk_bytes": 7304889,
+   "load": 93.40234375
+  }
+ },
+ "noop_update_v7.1.0": {
+  "update": {
+   "rc": 0,
+   "seconds": 35.8,
+   "symbols": 145670,
+   "files": 10158,
+   "relationships": 492203,
+   "mentions": 40252,
+   "embedded": 145670,
+   "kept": 145670,
+   "peak_rss_bytes": 4607557632,
+   "phases_s": {
+    "discover": 0.1,
+    "parse": 4.5,
+    "resolve": 20.9,
+    "communities": 2.1,
+    "processes": 0.9,
+    "embed": 2.3
+   },
+   "disk_bytes": 1498825760,
+   "load": 60.54931640625
+  },
+  "fresh_graph_only": {
+   "rc": 0,
+   "seconds": 35.4,
+   "symbols": 145670,
+   "files": 10158,
+   "relationships": 492203,
+   "mentions": 40252,
+   "embedded": 0,
+   "kept": 0,
+   "peak_rss_bytes": 3089268736,
+   "phases_s": {
+    "discover": 0.3,
+    "parse": 5.0,
+    "resolve": 23.2,
+    "communities": 3.3,
+    "processes": 1.0
+   },
+   "disk_bytes": 702156573,
+   "load": 48.68115234375
+  }
+ },
+ "forward_chain_first_parent": [
+  {
+   "sha": "f44a23c4540b0f67e7857fb20116a19278daaa93",
+   "subject": "Merge branch '7.0.x'",
+   "merge": true,
+   "files_changed": 43,
+   "shortstat": "43 files changed, 74 insertions(+), 1221 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 64.5,
+    "symbols": 145546,
+    "files": 10157,
+    "relationships": 491775,
+    "mentions": 40212,
+    "embedded": 145546,
+    "kept": 145460,
+    "peak_rss_bytes": 7680966656,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 3.9,
+     "resolve": 21.2,
+     "communities": 3.6,
+     "processes": 1.0,
+     "embed": 29.9
+    },
+    "disk_bytes": 1497536911,
+    "load": 40.59619140625
+   },
+   "fresh_graph_only": {
+    "rc": 0,
+    "seconds": 33.1,
+    "symbols": 145546,
+    "files": 10157,
+    "relationships": 491775,
+    "mentions": 40212,
+    "embedded": 0,
+    "kept": 0,
+    "peak_rss_bytes": 3173335040,
+    "phases_s": {
+     "discover": 0.3,
+     "parse": 4.0,
+     "resolve": 22.2,
+     "communities": 3.1,
+     "processes": 0.9
+    },
+    "disk_bytes": 701382830,
+    "tail": "",
+    "load": 30.3544921875
+   }
+  },
+  {
+   "sha": "2bf5adcf08852afd7da9cc63eb8754270516b7f2",
+   "subject": "Next development version 7.1.1-SNAPSHOT",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 1 insertion(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 37.2,
+    "symbols": 145546,
+    "files": 10157,
+    "relationships": 491775,
+    "mentions": 40212,
+    "embedded": 145546,
+    "kept": 145546,
+    "peak_rss_bytes": 4493459456,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.0,
+     "resolve": 21.7,
+     "communities": 3.3,
+     "processes": 0.9,
+     "embed": 2.7
+    },
+    "disk_bytes": 1696473169,
+    "load": 29.81787109375
+   }
+  },
+  {
+   "sha": "b2be42f539d99420ef66761be2f10ceae90261f3",
+   "subject": "Merge branch '7.0.x'",
+   "merge": true,
+   "files_changed": 4,
+   "shortstat": "4 files changed, 36 insertions(+), 2 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 40.0,
+    "symbols": 145548,
+    "files": 10157,
+    "relationships": 491787,
+    "mentions": 40212,
+    "embedded": 145548,
+    "kept": 145540,
+    "peak_rss_bytes": 5795823616,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.0,
+     "resolve": 22.0,
+     "communities": 2.5,
+     "processes": 1.1,
+     "embed": 5.4
+    },
+    "disk_bytes": 1895435794,
+    "load": 21.8798828125
+   }
+  },
+  {
+   "sha": "4cb62d893e09e23791d661e8d9b35aedee7006d0",
+   "subject": "Merge branch '7.0.x'",
+   "merge": true,
+   "files_changed": 2,
+   "shortstat": "2 files changed, 14 insertions(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 38.8,
+    "symbols": 145549,
+    "files": 10157,
+    "relationships": 491796,
+    "mentions": 40212,
+    "embedded": 145549,
+    "kept": 145545,
+    "peak_rss_bytes": 5543149568,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.1,
+     "resolve": 21.5,
+     "communities": 2.8,
+     "processes": 0.9,
+     "embed": 4.2
+    },
+    "disk_bytes": 2094356775,
+    "load": 16.35595703125
+   }
+  },
+  {
+   "sha": "7ce40c871aafa90fec2d3147fdb9c3c0cdcf26ca",
+   "subject": "Fix broken link to RestTemplate observability docs",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 1 insertion(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 40.6,
+    "symbols": 145549,
+    "files": 10157,
+    "relationships": 491796,
+    "mentions": 40212,
+    "embedded": 145549,
+    "kept": 145548,
+    "peak_rss_bytes": 5699256320,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.1,
+     "resolve": 21.3,
+     "communities": 2.6,
+     "processes": 1.0,
+     "embed": 5.8
+    },
+    "disk_bytes": 2293298873,
+    "load": 19.62646484375
+   }
+  },
+  {
+   "sha": "5f78260f070ceeeb16a6e6308318ec22826cdb55",
+   "subject": "Upgrade fast-xml-parser to 5.12.1",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 1 insertion(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 39.9,
+    "symbols": 145549,
+    "files": 10157,
+    "relationships": 491796,
+    "mentions": 40212,
+    "embedded": 145549,
+    "kept": 145549,
+    "peak_rss_bytes": 4601954304,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.3,
+     "resolve": 24.2,
+     "communities": 2.3,
+     "processes": 0.9,
+     "embed": 2.3
+    },
+    "disk_bytes": 2492234308,
+    "load": 17.166015625
+   }
+  },
+  {
+   "sha": "449af80a0c6e11b8bd60dc0fe3b82f5413af4749",
+   "subject": "Upgrade to Gradle 9.9.1",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 1 insertion(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 42.6,
+    "symbols": 145549,
+    "files": 10157,
+    "relationships": 491796,
+    "mentions": 40212,
+    "embedded": 145549,
+    "kept": 145549,
+    "peak_rss_bytes": 4643323904,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.4,
+     "resolve": 25.5,
+     "communities": 3.4,
+     "processes": 0.9,
+     "embed": 2.4
+    },
+    "disk_bytes": 2691173775,
+    "load": 17.41259765625
+   }
+  },
+  {
+   "sha": "0dbaf9ca5713b47955da988ac9f63cd0ae6dd0de",
+   "subject": "Fix connection holding regression after transaction suspension",
+   "merge": false,
+   "files_changed": 2,
+   "shortstat": "2 files changed, 68 insertions(+), 29 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 46.6,
+    "symbols": 145550,
+    "files": 10157,
+    "relationships": 491811,
+    "mentions": 40212,
+    "embedded": 145550,
+    "kept": 145540,
+    "peak_rss_bytes": 5735202816,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.5,
+     "resolve": 25.1,
+     "communities": 3.3,
+     "processes": 1.0,
+     "embed": 6.5
+    },
+    "disk_bytes": 2890126896,
+    "load": 22.12353515625
+   }
+  },
+  {
+   "sha": "70e1423c7a71dbb15a529de16d8b58d9c08345e9",
+   "subject": "Merge commit 'v7.1.0~1'",
+   "merge": true,
+   "files_changed": 42,
+   "shortstat": "42 files changed, 1220 insertions(+), 73 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 88.5,
+    "symbols": 145674,
+    "files": 10158,
+    "relationships": 492239,
+    "mentions": 40252,
+    "embedded": 145674,
+    "kept": 145464,
+    "peak_rss_bytes": 7708819456,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.8,
+     "resolve": 25.2,
+     "communities": 2.5,
+     "processes": 0.9,
+     "embed": 48.5
+    },
+    "disk_bytes": 3090472717,
+    "load": 40.8798828125
+   }
+  },
+  {
+   "sha": "088fb71f185e29d933a938f299233f68bfe7848e",
+   "subject": "Ignore container error attribute on async completion",
+   "merge": false,
+   "files_changed": 2,
+   "shortstat": "2 files changed, 26 insertions(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 45.2,
+    "symbols": 145675,
+    "files": 10158,
+    "relationships": 492247,
+    "mentions": 40252,
+    "embedded": 145675,
+    "kept": 145670,
+    "peak_rss_bytes": 5748998144,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 5.4,
+     "resolve": 24.6,
+     "communities": 2.6,
+     "processes": 1.1,
+     "embed": 4.8
+    },
+    "disk_bytes": 3090448812,
+    "load": 42.5625
+   }
+  },
+  {
+   "sha": "7cd9b4e922773621736338b70b79bad40d5e8d03",
+   "subject": "Centralize copyright and license information",
+   "merge": false,
+   "files_changed": 12,
+   "shortstat": "12 files changed, 86 insertions(+), 334 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 47.0,
+    "symbols": 145676,
+    "files": 10159,
+    "relationships": 492248,
+    "mentions": 40252,
+    "embedded": 145676,
+    "kept": 145672,
+    "peak_rss_bytes": 5999575040,
+    "phases_s": {
+     "discover": 0.2,
+     "parse": 4.4,
+     "resolve": 25.4,
+     "communities": 2.2,
+     "processes": 0.9,
+     "embed": 7.2
+    },
+    "disk_bytes": 3090608004,
+    "load": 40.56396484375
+   }
+  },
+  {
+   "sha": "af19c22e86fb1e044250a741f8012ee1dd83c11b",
+   "subject": "Replace file headers with license pointer",
+   "merge": false,
+   "files_changed": 9053,
+   "shortstat": "9053 files changed, 18131 insertions(+), 117676 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 44.3,
+    "symbols": 145676,
+    "files": 10159,
+    "relationships": 492248,
+    "mentions": 40252,
+    "embedded": 145676,
+    "kept": 145638,
+    "peak_rss_bytes": 5622497280,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.5,
+     "resolve": 25.2,
+     "communities": 1.8,
+     "processes": 0.9,
+     "embed": 4.8
+    },
+    "disk_bytes": 3090796068,
+    "load": 33.54345703125
+   },
+   "fresh_graph_only": {
+    "rc": 0,
+    "seconds": 34.6,
+    "symbols": 145676,
+    "files": 10159,
+    "relationships": 492248,
+    "mentions": 40252,
+    "embedded": 0,
+    "kept": 0,
+    "peak_rss_bytes": 3086155776,
+    "phases_s": {
+     "discover": 0.3,
+     "parse": 4.9,
+     "resolve": 24.3,
+     "communities": 2.2,
+     "processes": 0.8
+    },
+    "disk_bytes": 702228168,
+    "tail": "",
+    "load": 42.86328125
+   }
+  },
+  {
+   "sha": "ecd5e5ee2e1fd50c57abe1acd762b7db945309bf",
+   "subject": "Upgrade to Gradle 9.9.2",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 1 insertion(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 45.1,
+    "symbols": 145676,
+    "files": 10159,
+    "relationships": 492248,
+    "mentions": 40252,
+    "embedded": 145676,
+    "kept": 145676,
+    "peak_rss_bytes": 4639064064,
+    "phases_s": {
+     "discover": 0.2,
+     "parse": 5.1,
+     "resolve": 25.9,
+     "communities": 3.3,
+     "processes": 0.9,
+     "embed": 2.4
+    },
+    "disk_bytes": 3090991630,
+    "load": 31.70849609375
+   }
+  },
+  {
+   "sha": "9d3ca1146f5640abbc9cce31140d13313ca73f09",
+   "subject": "Fix `LinkedCaseInsensitiveMap.KeySet.remove()` for `null` values",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 5 insertions(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 40.6,
+    "symbols": 145676,
+    "files": 10159,
+    "relationships": 492250,
+    "mentions": 40252,
+    "embedded": 145676,
+    "kept": 145673,
+    "peak_rss_bytes": 5557485568,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.4,
+     "resolve": 21.8,
+     "communities": 2.3,
+     "processes": 0.9,
+     "embed": 4.5
+    },
+    "disk_bytes": 3091186121,
+    "load": 23.0166015625
+   }
+  },
+  {
+   "sha": "92eb51907932f2eb590147ed48612b8562258566",
+   "subject": "Polish contribution",
+   "merge": false,
+   "files_changed": 2,
+   "shortstat": "2 files changed, 22 insertions(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 41.8,
+    "symbols": 145678,
+    "files": 10159,
+    "relationships": 492254,
+    "mentions": 40252,
+    "embedded": 145678,
+    "kept": 145672,
+    "peak_rss_bytes": 5859033088,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.1,
+     "resolve": 21.4,
+     "communities": 3.4,
+     "processes": 0.9,
+     "embed": 5.0
+    },
+    "disk_bytes": 3091408339,
+    "load": 21.15625
+   }
+  },
+  {
+   "sha": "b34ac80089f828a65a86a8453eb95d2e206fee5e",
+   "subject": "Add @NestedTestConfiguration example to the testing docs",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 79 insertions(+)",
+   "update": {
+    "rc": 0,
+    "seconds": 40.3,
+    "symbols": 145678,
+    "files": 10159,
+    "relationships": 492258,
+    "mentions": 40256,
+    "embedded": 145678,
+    "kept": 145677,
+    "peak_rss_bytes": 5626920960,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.2,
+     "resolve": 21.2,
+     "communities": 2.0,
+     "processes": 0.9,
+     "embed": 5.3
+    },
+    "disk_bytes": 3091615736,
+    "load": 25.75390625
+   }
+  },
+  {
+   "sha": "a5e9021c0c1b0814f6e56f36a79d7169895cc29c",
+   "subject": "Copy builder state in HandlerTypePredicate",
+   "merge": false,
+   "files_changed": 2,
+   "shortstat": "2 files changed, 25 insertions(+), 3 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 42.7,
+    "symbols": 145680,
+    "files": 10159,
+    "relationships": 492262,
+    "mentions": 40256,
+    "embedded": 145680,
+    "kept": 145675,
+    "peak_rss_bytes": 5897502720,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.1,
+     "resolve": 21.6,
+     "communities": 3.9,
+     "processes": 0.9,
+     "embed": 5.1
+    },
+    "disk_bytes": 3091831519,
+    "load": 22.57373046875
+   }
+  },
+  {
+   "sha": "7f391bdfb3b5461af4d639d097df85f2b5621b73",
+   "subject": "Polish contribution",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 7 insertions(+), 4 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 41.0,
+    "symbols": 145680,
+    "files": 10159,
+    "relationships": 492262,
+    "mentions": 40256,
+    "embedded": 145680,
+    "kept": 145678,
+    "peak_rss_bytes": 5834964992,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.1,
+     "resolve": 21.9,
+     "communities": 3.5,
+     "processes": 0.9,
+     "embed": 3.8
+    },
+    "disk_bytes": 3092025083,
+    "load": 22.5771484375
+   }
+  },
+  {
+   "sha": "3db8ed3c90771dd3498e495a00b99b85ab35f03f",
+   "subject": "Use `@SafeVarargs` in HandlerTypePredicate.Builder",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 2 insertions(+), 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 39.6,
+    "symbols": 145680,
+    "files": 10159,
+    "relationships": 492262,
+    "mentions": 40256,
+    "embedded": 145680,
+    "kept": 145677,
+    "peak_rss_bytes": 5412421632,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.1,
+     "resolve": 21.2,
+     "communities": 2.3,
+     "processes": 0.9,
+     "embed": 4.2
+    },
+    "disk_bytes": 3092025589,
+    "load": 24.26171875
+   }
+  },
+  {
+   "sha": "a85686ec92020c5a2f90373227758a38ace5b679",
+   "subject": "Remove obsolete fast-xml-parser version pin",
+   "merge": false,
+   "files_changed": 1,
+   "shortstat": "1 file changed, 1 deletion(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 40.6,
+    "symbols": 145680,
+    "files": 10159,
+    "relationships": 492262,
+    "mentions": 40256,
+    "embedded": 145680,
+    "kept": 145680,
+    "peak_rss_bytes": 4622991360,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.1,
+     "resolve": 21.0,
+     "communities": 5.4,
+     "processes": 0.9,
+     "embed": 2.3
+    },
+    "disk_bytes": 3092038568,
+    "load": 22.88330078125
+   }
+  },
+  {
+   "sha": "9a156f878af1b9fdc24397328794f7f79d4e1693",
+   "subject": "Update AGENTS.md with security considerations",
+   "merge": false,
+   "files_changed": 3,
+   "shortstat": "3 files changed, 21 insertions(+), 4 deletions(-)",
+   "update": {
+    "rc": 0,
+    "seconds": 43.3,
+    "symbols": 145681,
+    "files": 10159,
+    "relationships": 492263,
+    "mentions": 40256,
+    "embedded": 145681,
+    "kept": 145679,
+    "peak_rss_bytes": 5644746752,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.3,
+     "resolve": 24.1,
+     "communities": 3.0,
+     "processes": 0.9,
+     "embed": 4.4
+    },
+    "disk_bytes": 3092049450,
+    "load": 30.28466796875
+   },
+   "fresh_graph_only": {
+    "rc": 0,
+    "seconds": 34.6,
+    "symbols": 145681,
+    "files": 10159,
+    "relationships": 492263,
+    "mentions": 40256,
+    "embedded": 0,
+    "kept": 0,
+    "peak_rss_bytes": 3083829248,
+    "phases_s": {
+     "discover": 0.1,
+     "parse": 4.4,
+     "resolve": 24.7,
+     "communities": 2.2,
+     "processes": 0.9
+    },
+    "disk_bytes": 702265014,
+    "tail": "",
+    "load": 33.3388671875
+   }
+  }
+ ]
+}
