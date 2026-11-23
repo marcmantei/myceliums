@@ -114,9 +114,26 @@ def is_edit_task(task: dict) -> bool:
     return task.get("answer_kind") == "diff"
 
 
-def allowed_commands(task: dict) -> list[str]:
+def nosearch_git_env(tmp: Path) -> dict[str, str]:
+    """Git settings for arm D, set by the harness in the session's environment
+    (the agent cannot change it: the allowlist refuses assignments and
+    ``export``): no hooks (an empty ``core.hooksPath``), no fsmonitor command,
+    no implicit bare repositories, no system config."""
+    hooks = tmp / "no-git-hooks"
+    hooks.mkdir(exist_ok=True)
+    pairs = [("core.hooksPath", str(hooks)), ("core.fsmonitor", "false"), ("safe.bareRepository", "explicit")]
+    env = {"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_COUNT": str(len(pairs))}
+    for i, (k, v) in enumerate(pairs):
+        env[f"GIT_CONFIG_KEY_{i}"] = k
+        env[f"GIT_CONFIG_VALUE_{i}"] = v
+    return env
+
+
+def allowed_commands(task: dict) -> list:
     """The task's own build/test commands, which arm D's Bash allowlist
-    admits: ``allowed_commands`` (word prefixes), else the test command."""
+    admits exactly (aeval/bashcmd.py ``task_rules``): ``allowed_commands``
+    (strings, or ``{"prefix", "args"}`` with an argument pattern), else the
+    test command."""
     if task.get("allowed_commands") is not None:
         return list(task["allowed_commands"])
     return [task["test_command"]] if task.get("test_command") else []
@@ -426,8 +443,10 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         it applies whatever the setting sources are."""
         allow = allowed_commands(task or {})
         hook = (f"{shlex.quote(sys.executable)} -I {shlex.quote(str(NOSEARCH_HOOK))} hook"
-                + "".join(f" --allow {shlex.quote(a)}" for a in allow))
-        settings = {"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": hook}]}]}}
+                + (f" --allow-json {shlex.quote(json.dumps(allow))}" if allow else ""))
+        # Bash: the allowlist; the edit tools: no writes into .git (planted git config could run anything).
+        settings = {"hooks": {"PreToolUse": [{"matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+                                              "hooks": [{"type": "command", "command": hook}]}]}}
         path = tmp / "nosearch-settings.json"
         path.write_text(json.dumps(settings, indent=1))
         return path
@@ -506,6 +525,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 extra["MYCELIUMS_DATA_DIR"] = str(stray)
             if self.cfg.tool_search is not None:
                 extra["ENABLE_TOOL_SEARCH"] = self.cfg.tool_search
+            if variant.no_search:
+                extra.update(nosearch_git_env(tmp))
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
             settings = self._nosearch_settings(tmp, task) if variant.no_search else None
             if settings is not None:

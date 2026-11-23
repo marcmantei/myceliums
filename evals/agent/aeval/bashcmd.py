@@ -35,9 +35,17 @@ The allowlist of arm D (:data:`D_ALLOWED`): ``myc``; ``cd``, ``pwd``,
 ``true``; plain file operations an edit needs (``mkdir``, ``touch``, ``mv``,
 ``cp``, ``rm``, ``chmod``); ``git status``, ``git diff``, ``git add``,
 ``git commit``, ``git log``, ``git restore``, ``git show`` without any
-search option; and the task's own build and test commands (``--allow``
-word prefixes). Everything else is denied, as is any command substitution
-(``$(...)``, backticks, ``<(...)``) and any line that does not parse.
+search option and without global options that load configuration or another
+repository (``-c``, ``--config-env``, ``--exec-path``, ``--git-dir``, ...);
+and exactly the task's own build and test commands (:func:`task_rules`).
+Everything else is denied, as is any command substitution (``$(...)``,
+backticks, ``<(...)``), any environment assignment or wrapper in front of a
+command, any argument that names a path inside ``.git``, and any command
+that does not parse (unbalanced quotes, a heredoc never closed). The same
+hook refuses ``Edit``/``Write`` into ``.git``, and the harness pins
+``core.hooksPath``, ``core.fsmonitor`` and ``safe.bareRepository`` through
+the session's environment, so an allowed git command cannot be made to run a
+program.
 """
 
 from __future__ import annotations
@@ -59,6 +67,7 @@ WRAPPER_OPTS_WITH_VALUE = {"nice": {"-n", "--adjustment"}, "timeout": {"-s", "-k
                            "xargs": {"-I", "-n", "-P", "-d", "-L", "-s", "-E", "-a", "--max-args", "--max-procs"}}
 GIT_OPTS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"})
 GIT_SEARCH_OPTS = re.compile(r"^(--grep|-S|-G|--pickaxe|-L|--find-object)")
+EDIT_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 SEPARATORS = frozenset({"|", "||", "&", "&&", ";", "(", ")", "|&", ";;"})
 
 D_ALLOWED_PROGRAMS = frozenset({"myc", "cd", "pwd", "true", "mkdir", "touch", "mv", "cp", "rm", "chmod"})
@@ -67,7 +76,8 @@ D_ALLOWED = sorted(D_ALLOWED_PROGRAMS) + [f"git {s}" for s in sorted(D_ALLOWED_G
 
 
 class Unparsed(ValueError):
-    """A line :mod:`shlex` cannot split (unbalanced quotes)."""
+    """A command :mod:`shlex` cannot split (unbalanced quotes), or one whose
+    heredoc is still open at the end."""
 
 
 def _tokens(line: str) -> list[str]:
@@ -88,10 +98,13 @@ def simple_commands(command: str) -> list[list[str]]:
     """The word lists of every simple command in ``command``; heredoc bodies
     are skipped (raises :class:`Unparsed`)."""
     out: list[list[str]] = []
-    heredoc: list[str] = []  # delimiters still to be met
+    heredoc: list[tuple[str, bool]] = []  # (delimiter, leading tabs stripped: `<<-`) still to be met
     for line in (command or "").splitlines():
         if heredoc:
-            if line.strip() == heredoc[0]:
+            # As bash: the terminator is the delimiter alone on its line, after
+            # leading tabs only for `<<-`.
+            delim, tabs = heredoc[0]
+            if (line.lstrip("\t") if tabs else line) == delim:
                 heredoc.pop(0)
             continue
         if not line.strip() or line.lstrip().startswith("#"):
@@ -109,14 +122,21 @@ def simple_commands(command: str) -> list[list[str]]:
                 # a redirection: drop its fd (`2>`) and its target (`/dev/null`, `1`, a heredoc word)
                 if cur and cur[-1].isdigit():
                     cur.pop()
-                if t.startswith("<<") and t != "<<<" and i + 1 < len(toks):
-                    heredoc.append(toks[i + 1].strip("'\""))
+                if t in ("<<", "<<-") and i + 1 < len(toks):
+                    word, tabs = toks[i + 1], t == "<<-"
+                    if word == "-" and i + 2 < len(toks):  # `<<- EOF`
+                        i, word, tabs = i + 1, toks[i + 2], True
+                    elif word.startswith("-") and t == "<<":  # `<<-EOF` splits as `<<`, `-EOF`
+                        word, tabs = word[1:], True
+                    heredoc.append((word, tabs))
                 i += 1
             else:
                 cur.append(t)
             i += 1
         if cur:
             out.append(cur)
+    if heredoc:
+        raise Unparsed(f"heredoc {heredoc[0][0]!r} is never closed")
     return out
 
 
@@ -232,28 +252,79 @@ def interpreted(command: str) -> bool:
                for p, _ in programs(command))
 
 
-def allowed(command: str, extra: list[str] = ()) -> tuple[bool, list[str]]:
+# git options that load configuration, code or another repository: `-c
+# core.fsmonitor='grep ...'` runs any command, so none of them is allowed in D.
+GIT_UNSAFE_OPTS = ("-c", "--config-env", "--exec-path", "--git-dir", "--work-tree", "--namespace",
+                   "--super-prefix", "--attr-source", "--list-cmds")
+_DOT_GIT = re.compile(r"(^|[/=])\.git(/|$)")
+
+
+def touches_dot_git(path: str) -> bool:
+    """True when ``path`` has a ``.git`` component (``.git/config``, ``x/.git``)."""
+    return bool(_DOT_GIT.search(path or ""))
+
+
+def task_rules(extra) -> list:
+    """The task's own commands as rules: a string allows each simple command
+    of it exactly (same words); ``{"prefix": "npx vitest run", "args": REGEX}``
+    allows the prefix followed by arguments that, joined by spaces, match REGEX
+    in full."""
+    rules = []
+    for e in extra or ():
+        if isinstance(e, str):
+            if e.strip():
+                rules.extend(("exact", words, None) for words in simple_commands(e))
+        else:
+            rules.append(("pattern", str(e["prefix"]).split(), re.compile(str(e["args"]))))
+    return rules
+
+
+def _task_allows(words: list[str], rules: list) -> bool:
+    for kind, w, rx in rules:
+        if kind == "exact" and words == w:
+            return True
+        if kind == "pattern" and words[:len(w)] == w and rx.fullmatch(" ".join(words[len(w):])):
+            return True
+    return False
+
+
+def allowed(command: str, extra=()) -> tuple[bool, list[str]]:
     """Arm D's allowlist: ``(ok, denied programs)``. ``extra`` are the task's
-    build/test command prefixes (``"python -m pytest"``): a simple command is
-    allowed when its words start with one of them."""
+    own build/test commands (:func:`task_rules`)."""
     if "$(" in command or "`" in command or "<(" in command or ">(" in command:
         return False, ["command substitution"]
     try:
         cmds = simple_commands(command)
     except Unparsed:
         return False, ["unparsable command"]
-    prefixes = [p.split() for p in extra if p.strip()]
+    rules = task_rules(extra)
     denied = []
     for words in cmds:
-        if any(words[:len(p)] == p for p in prefixes):
+        if _task_allows(words, rules):
+            continue
+        head = words[0] if words else ""
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", head):
+            denied.append("environment assignment")  # `GIT_EXTERNAL_DIFF=... git diff`
+            continue
+        if head.lstrip("\\").rsplit("/", 1)[-1] in WRAPPERS:
+            denied.append(head)
+            continue
+        if any(touches_dot_git(w) for w in words):
+            denied.append("a path inside .git")
             continue
         prog, args = program(words)
         if not prog:
             continue
         if prog in D_ALLOWED_PROGRAMS:
             continue
-        if prog.startswith("git ") and prog[4:] in D_ALLOWED_GIT and not any(GIT_SEARCH_OPTS.match(a) for a in args):
-            continue
+        if prog.startswith("git "):
+            pre = words[1:len(words) - len(args) - 1]  # global options before the subcommand
+            if any(o == u or o.startswith(u + "=") or (u == "-c" and o.startswith("-c"))
+                   for o in pre for u in GIT_UNSAFE_OPTS):
+                denied.append("git " + next(o for o in pre if o.startswith("-")).split("=")[0])
+                continue
+            if prog[4:] in D_ALLOWED_GIT and not any(GIT_SEARCH_OPTS.match(a) for a in args):
+                continue
         denied.append(prog)
     return not denied, denied
 
@@ -267,21 +338,36 @@ def hook(argv: list[str], stdin=sys.stdin, stderr=sys.stderr) -> int:
     """PreToolUse hook for ``Bash`` in arm D: exit 2 (block; the reason on
     stderr, which Claude Code shows the model) unless the command passes
     :func:`allowed`; else 0."""
-    extra = [argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--allow"]
+    extra = []
+    for i, a in enumerate(argv[:-1]):
+        if a == "--allow":
+            extra.append(argv[i + 1])
+        elif a == "--allow-json":
+            extra.extend(json.loads(argv[i + 1]))
     try:
         event = json.load(stdin)
     except ValueError:
         stderr.write("unreadable hook input\n")
         return 2
-    if event.get("tool_name") != "Bash":
+    tool, inp = event.get("tool_name"), event.get("tool_input") or {}
+    if tool in EDIT_TOOLS:
+        # Writing into a .git directory could plant config that makes an allowed git command run anything.
+        path = str(inp.get("file_path") or inp.get("notebook_path") or "")
+        if touches_dot_git(path):
+            stderr.write(f"Editing files inside .git is not allowed in this session: {path}\n")
+            return 2
         return 0
-    ok, denied = allowed(str((event.get("tool_input") or {}).get("command") or ""), extra)
+    if tool != "Bash":
+        return 0
+    ok, denied = allowed(str(inp.get("command") or ""), extra)
     if ok:
         return 0
+    shown = [e if isinstance(e, str) else f"{e['prefix']} <{e['args']}>" for e in extra]
     stderr.write(DENY_MESSAGE.format(
         progs=", ".join(f"`{p}`" for p in dict.fromkeys(denied)),
         allowed=", ".join(f"`{p}`" for p in D_ALLOWED),
-        extra=(" and the task's own commands " + ", ".join(f"`{p}`" for p in extra)) if extra else "") + "\n")
+        extra=(" and exactly the task's own commands " + ", ".join(f"`{p}`" for p in shown)) if shown else "")
+        + "\n")
     return 2
 
 

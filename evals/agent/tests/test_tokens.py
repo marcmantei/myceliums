@@ -90,8 +90,8 @@ class BashClassifier(unittest.TestCase):
         for cmd in ("myc callers parseAccept", "cd src && myc impact X 2>/dev/null", "git status", "git diff --stat",
                     "git add -A && git commit -m x", "git log -p -3", "mkdir -p a && touch a/b.py", "true"):
             self.assertTrue(bashcmd.allowed(cmd)[0], cmd)
-        self.assertTrue(bashcmd.allowed("python -m pytest tests/x.py -q", ["python -m pytest"])[0])
-        self.assertFalse(bashcmd.allowed("python -m pytest x; grep y z", ["python -m pytest"])[0])
+        self.assertTrue(bashcmd.allowed("python -m pytest tests/x.py -q", ["python -m pytest tests/x.py -q"])[0])
+        self.assertFalse(bashcmd.allowed("python -m pytest x; grep y z", ["python -m pytest x"])[0])
         self.assertFalse(bashcmd.allowed("python -c 'import os'", ["python -m pytest"])[0])
 
     def test_hook_blocks_outside_the_allowlist(self):
@@ -101,7 +101,10 @@ class BashClassifier(unittest.TestCase):
         self.assertIn("`cat`, `rg`", err.getvalue())
         self.assertIn("This session has no search", err.getvalue())
         ok = {"tool_name": "Bash", "tool_input": {"command": "./gradlew test --tests X"}}
-        self.assertEqual(bashcmd.hook(["--allow", "./gradlew test"], io.StringIO(json.dumps(ok)), io.StringIO()), 0)
+        self.assertEqual(bashcmd.hook(["--allow", "./gradlew test --tests X"], io.StringIO(json.dumps(ok)),
+                                      io.StringIO()), 0)
+        rule = json.dumps([{"prefix": "./gradlew test", "args": r"--tests [\w.]+"}])
+        self.assertEqual(bashcmd.hook(["--allow-json", rule], io.StringIO(json.dumps(ok)), io.StringIO()), 0)
         self.assertEqual(bashcmd.hook([], io.StringIO(json.dumps(ok)), io.StringIO()), 2)
         self.assertEqual(bashcmd.hook([], io.StringIO(json.dumps({"tool_name": "Read"})), io.StringIO()), 0)
         self.assertEqual(bashcmd.hook([], io.StringIO("not json"), io.StringIO()), 2)
@@ -123,6 +126,90 @@ class BashClassifier(unittest.TestCase):
         self.assertEqual(category_of("Edit", {}), "edit")
         self.assertEqual(category_of("ToolSearch", {}), "other")
         self.assertEqual(category_of("Bash", {"command": "head -50 a.py"}), "read")
+
+
+class DBypasses(unittest.TestCase):
+    """Regression tests for the holes the reviews of #185 found in arm D."""
+
+    def test_heredoc_terminators_follow_bash(self):
+        deny = [
+            "true <<-EOF\n\tEOF\ngrep -rn foo .",  # `<<-`: a tab-indented terminator closes the heredoc
+            "true <<- EOF\n\t\tEOF\ngrep -rn foo .",
+            "true <<-'EOF'\n\tEOF\nrg foo",
+            "true <<EOF\ngrep -rn foo .",  # never closed: deny the whole command
+            "true <<EOF\n  EOF\ngrep x",  # `<<`: an indented line does not close it, so it never closes
+            "true <<A <<B\nA\nB\ngrep x",
+        ]
+        for cmd in deny:
+            self.assertFalse(bashcmd.allowed(cmd)[0], cmd)
+        for cmd in ("true <<-EOF\n\tEOF\nmyc callers x", "true <<EOF\ngrep inside the body is data\nEOF\ngit status"):
+            self.assertTrue(bashcmd.allowed(cmd)[0], cmd)
+        self.assertEqual(bashcmd.classify("true <<-EOF\n\tEOF\ngrep -rn foo ."), "search")
+
+    def test_git_cannot_be_made_to_run_a_program(self):
+        for cmd in ("git -c core.fsmonitor='grep -rn foo .' status",
+                    "git -c diff.external='sh -c \"grep -rn foo .\"' diff",
+                    "git -ccore.pager='grep foo' log", "git --config-env=core.pager=X log",
+                    "git --exec-path=/tmp/x status", "git --git-dir=/tmp/x status", "git --work-tree=/ status",
+                    "GIT_EXTERNAL_DIFF=/tmp/x git diff", "GIT_DIR=/tmp/x git status", "env GIT_DIR=/tmp/x git status",
+                    "PAGER='grep x' git log", "nice git status", "mkdir -p x/.git", "mv dotgit .git",
+                    "cp cfg .git/config", "rm -rf .git/hooks"):
+            self.assertFalse(bashcmd.allowed(cmd)[0], cmd)
+        for cmd in ("git -C sub status", "git --no-pager diff --stat", "git add .gitignore", "cp a.py b.py"):
+            self.assertTrue(bashcmd.allowed(cmd)[0], cmd)
+
+    def test_no_edits_inside_dot_git(self):
+        for tool, inp, rc in (("Write", {"file_path": "/w/.git/config"}, 2),
+                              ("Edit", {"file_path": "/w/.git/hooks/pre-commit"}, 2),
+                              ("Write", {"file_path": "/tmp/x/.git/config"}, 2),
+                              ("Write", {"file_path": "/w/src/a.py"}, 0),
+                              ("Edit", {"file_path": "/w/.gitignore"}, 0)):
+            ev = json.dumps({"tool_name": tool, "tool_input": inp})
+            self.assertEqual(bashcmd.hook([], io.StringIO(ev), io.StringIO()), rc, inp)
+
+    def test_task_commands_match_exactly_or_by_their_pattern(self):
+        exact = ["npx vitest run src/a.test.ts"]
+        self.assertTrue(bashcmd.allowed("npx vitest run src/a.test.ts", exact)[0])
+        for cmd in ("npx vitest run src/a.test.ts --config evil.ts", "npx vitest run", "npx vitest"):
+            self.assertFalse(bashcmd.allowed(cmd, exact)[0], cmd)
+        pattern = [{"prefix": "npx vitest run", "args": r"src/[\w/]+\.test\.ts"}]
+        self.assertTrue(bashcmd.allowed("npx vitest run src/utils/b.test.ts", pattern)[0])
+        for cmd in ("npx vitest run src/b.test.ts --config x", "npx vitest run ../x.test.ts", "npx vitest run"):
+            self.assertFalse(bashcmd.allowed(cmd, pattern)[0], cmd)
+        # A compound test command allows each of its simple commands exactly.
+        both = ["cd packages/x && npm test -- --run"]
+        self.assertTrue(bashcmd.allowed("cd packages/x && npm test -- --run", both)[0])
+        self.assertFalse(bashcmd.allowed("npm test -- --run --watch", both)[0])
+        self.assertTrue(check_tasks([dict(EDIT_TASK, allowed_commands=exact + pattern)], config.load_repos(),
+                                    check_evidence=False) == [])
+        bad = dict(EDIT_TASK, allowed_commands=[{"prefix": "npx", "args": "("}, {"prefix": "npx"}, ""])
+        self.assertEqual(len(check_tasks([bad], config.load_repos(), check_evidence=False)), 3)
+
+    def test_the_session_git_env_disables_hooks_and_fsmonitor(self):
+        from aeval.runner import nosearch_git_env
+        with tempfile.TemporaryDirectory() as tmp:
+            w = Path(tmp) / "w"
+            w.mkdir()
+            _git("init", "-q", cwd=w)
+            marker = Path(tmp) / "ran"
+            hook = w / ".git" / "hooks" / "pre-commit"
+            hook.write_text(f"#!/bin/sh\ntouch {marker}\n")
+            hook.chmod(0o755)
+            _git("config", "core.fsmonitor", f"touch {marker}.fsmonitor; false", cwd=w)
+            (w / "a.py").write_text("x = 1\n")
+            base = {"PATH": "/usr/bin:/bin", "HOME": tmp, "GIT_CONFIG_GLOBAL": "/dev/null"}
+            env = {**base, **nosearch_git_env(Path(tmp))}
+            for args in (["add", "a.py"], ["-c", "user.email=e@x", "-c", "user.name=n", "commit", "-qm", "x"],
+                         ["status"]):
+                subprocess.run(["git", *args], cwd=w, env=env, check=True, capture_output=True)
+            self.assertFalse(marker.exists())
+            self.assertFalse(Path(f"{marker}.fsmonitor").exists())
+            # Without it, the same commit would have run the hook.
+            (w / "b.py").write_text("y = 1\n")
+            subprocess.run(["git", "add", "b.py"], cwd=w, env=base, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.email=e@x", "-c", "user.name=n", "commit", "-qm", "y"], cwd=w,
+                           env=base, capture_output=True)
+            self.assertTrue(marker.exists())
 
 
 class Attribution(unittest.TestCase):
@@ -520,7 +607,7 @@ class ArmD(unittest.TestCase):
                         <= set(denied))
         self.assertIn("mcp__myceliums", cmd[cmd.index("--allowedTools") + 1])
         self.assertEqual(cmd[cmd.index("--settings") + 1], str(settings))
-        self.assertEqual(hook["matcher"], "Bash")
+        self.assertEqual(hook["matcher"], "Bash|Edit|Write|MultiEdit|NotebookEdit")
         self.assertIn("bashcmd.py", hook["hooks"][0]["command"])
         self.assertTrue(config.VARIANTS["D"].mcp and not config.VARIANTS["D"].setup_claude)
 

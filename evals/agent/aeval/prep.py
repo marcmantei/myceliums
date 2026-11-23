@@ -237,6 +237,13 @@ def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list
             problems.append(f"{tid}: the test command does not fail on the pinned (parent) commit, so passing it "
                             f"proves nothing")
     for a in t.get("allowed_commands") or []:
-        if not isinstance(a, str) or not a.split():
-            problems.append(f"{tid}: bad allowed command {a!r}")
+        if isinstance(a, str) and a.split():
+            continue
+        if isinstance(a, dict) and set(a) == {"prefix", "args"} and str(a["prefix"]).split():
+            try:
+                re.compile(str(a["args"]))
+                continue
+            except re.error:
+                pass
+        problems.append(f"{tid}: bad allowed command {a!r} (a command, or {{\"prefix\": ..., \"args\": REGEX}})")
     return problems

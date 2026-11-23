@@ -1016,29 +1016,48 @@ python3 evals/agent/agent_eval.py tokens 2026-11-22-scale --check   # CI: TOKENS
 `--conditions D`: the myceliums MCP server (as in A, no `setup-claude` files)
 and `Read`, with search taken away. `Grep` and `Glob` are not offered and are
 in `--disallowedTools`. With `--bash`, Bash is reduced to an **allowlist**: a
-PreToolUse hook (`python3 -I aeval/bashcmd.py hook --allow ...`, passed with
-`--settings`) lets a command run only if every program in it is one of
-`myc`; `cd`, `pwd`, `true`; `mkdir`, `touch`, `mv`, `cp`, `rm`, `chmod`;
-`git status`, `git diff`, `git add`, `git commit`, `git log`, `git restore`,
-`git show` without a search option (`-S`, `-G`, `--grep`, ...); or the task's
-own build and test commands (`allowed_commands` word prefixes, default the
-edit task's test command). Everything else is refused with a message that
-lists what is allowed: `cat`, `head`, `sed`, `echo`, interpreters
-(`python`, `node`), shells (`bash -c`), `eval`, any command substitution and
-any line that does not parse. Permission rules (`Bash(grep:*)`, ...) deny the
+PreToolUse hook (`python3 -I aeval/bashcmd.py hook`, passed with
+`--settings`) lets a command run only if every program in it is one of:
+
+* `myc`; `cd`, `pwd`, `true`; `mkdir`, `touch`, `mv`, `cp`, `rm`, `chmod`;
+* `git status`, `git diff`, `git add`, `git commit`, `git log`,
+  `git restore`, `git show`, without a search option (`-S`, `-G`, `--grep`,
+  ...) and without a global option that loads configuration, code or another
+  repository (`-c`, `--config-env`, `--exec-path`, `--git-dir`,
+  `--work-tree`, ...): `git -c core.fsmonitor='grep ...' status` would run
+  any command;
+* the task's own build and test commands, matched exactly: each simple
+  command of an `allowed_commands` string (default: the edit task's test
+  command) with the same words, or `{"prefix": ..., "args": REGEX}`, the
+  prefix followed by arguments that match the pattern in full.
+
+Everything else is refused with a message that lists what is allowed:
+`cat`, `head`, `sed`, `echo`, interpreters (`python`, `node`), shells
+(`bash -c`), `eval`, any command substitution, any environment assignment or
+wrapper in front of a command (`GIT_EXTERNAL_DIFF=... git diff`,
+`env GIT_DIR=...`, `nice ...`), any argument naming a path inside `.git`
+(`mv dotgit .git`), and any command that does not parse (unbalanced quotes,
+or a heredoc never closed; heredoc terminators follow bash, including `<<-`
+with tab-indented terminators). The same hook refuses `Edit`/`Write` into a
+`.git` directory, so no git configuration can be planted, and the harness
+sets `core.hooksPath` to an empty directory, `core.fsmonitor=false`,
+`safe.bareRepository=explicit` and `GIT_CONFIG_NOSYSTEM` through the
+session's environment (`GIT_CONFIG_COUNT`), which the agent cannot change, so
+`git commit` runs no hook. Permission rules (`Bash(grep:*)`, ...) deny the
 common search programs as a second layer. Reading a file goes through `Read`.
 The edit tools are offered on edit tasks, as in every arm. The isolation
 check of every D transcript requires the built-in tools to be exactly `Read`
 (+ `Bash`, + edit tools) with an optional `ToolSearch`, and the search audit
-above counts anything that got through. Over the 875 Bash commands of the #163/#171
-transcripts the classifier calls 816 search (`grep` pipelines, `awk`/`sed -n`
-filters, `$(grep ...)` in loops, ...), 43 reads, 1 edit and 15 other
-(interpreter scripts, `ls`); none of the 875 passes the allowlist. Checked
-against the mock API (`probe --conditions D,A --bash`, myc at
-`951d041ff9e0`): D was offered `Bash` and `Read` only, the scripted
-`grep -rl parseAccept .` was refused by the hook, the scripted
-`myc callers parseAccept` ran, and the audit counted one blocked search and
-no flag; A was offered `Grep` and `Glob` as before.
+above counts anything that got through. The regression tests
+(`tests/test_tokens.py`, `DBypasses`) hold every bypass found in review. Over
+the 875 Bash commands of the #163/#171 transcripts the classifier calls 816
+search (`grep` pipelines, `awk`/`sed -n` filters, `$(grep ...)` in loops,
+...), 43 reads, 1 edit and 15 other (interpreter scripts, `ls`); none of the
+875 passes the allowlist. Checked against the mock API
+(`probe --conditions D,A --bash`, myc at `951d041ff9e0`): D was offered
+`Bash` and `Read` only, the scripted `grep -rl parseAccept .` was refused by
+the hook, the scripted `myc callers parseAccept` ran, and the audit counted
+one blocked search and no flag; A was offered `Grep` and `Glob` as before.
 
 ### Edit tasks
 

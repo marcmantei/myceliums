@@ -14,8 +14,9 @@ task carries
   the session, that must exit 0; ``precheck`` records that it **fails** on
   the pinned (parent) commit before any agent runs (:func:`precheck`,
   ``agent_eval.py precheck-edit``), so passing it means the change was made;
-* ``allowed_commands`` (optional): build/test command prefixes arm D's Bash
-  allowlist admits (default: the test command).
+* ``allowed_commands`` (optional): the build/test commands arm D's Bash
+  allowlist admits, exactly (strings) or as ``{"prefix", "args": REGEX}``
+  (default: the test command).
 
 Grading, after the session, from ``git status`` of the working copy:
 
