@@ -246,6 +246,17 @@ pub fn format_symbol_context(s: &SymbolContextOutput) -> String {
         s.callees_total,
         "find_callees",
     ));
+    if !s.overrides.is_empty() {
+        out.push_str(&format!("Overrides: {}\n", s.overrides.join(", ")));
+    }
+    if s.implementations_total > 0 {
+        out.push_str(&edge_list(
+            "Implementations",
+            &s.implementations,
+            s.implementations_total,
+            "cypher_query on OVERRIDES edges",
+        ));
+    }
 
     // Show metadata (decorators, return type, superclasses, visibility)
     if let Some(ref meta_json) = s.metadata {
@@ -576,9 +587,12 @@ fn symbol_line(s: &myceliums_storage::CodeSymbol) -> String {
     )
 }
 
-/// ` (resolved: name-match)` for a CALLS edge that was matched by name only.
+/// ` (resolved: name-match)` for a CALLS edge that was matched by name only;
+/// ` (dispatch via Base.m, confidence 0.8)` for a call that reaches its
+/// target through dynamic dispatch (#190).
 fn heuristic_mark(resolved: Option<&str>) -> String {
     match resolved {
+        Some(label) if label.starts_with("dispatch") => format!(" ({label})"),
         Some(label) if crate::repo::CallLabels::is_heuristic(label) => {
             format!(" (resolved: {label})")
         }
@@ -692,7 +706,7 @@ pub fn format_call_chains(
     );
     for (i, (symbol, resolved)) in chains.shortest.iter().enumerate() {
         let arrow = if i == 0 { "   " } else { "-> " };
-        let mark = heuristic_mark(*resolved);
+        let mark = heuristic_mark(resolved.as_deref());
         out.push_str(&format!("  {arrow}{}{mark}\n", symbol_line(symbol)));
     }
 
@@ -755,7 +769,7 @@ pub fn format_dependents(
         } else {
             ""
         };
-        let mark = heuristic_mark(hit.resolved);
+        let mark = hit.mark();
         let file = hit.symbol.file_path.as_str();
         if hit.depth == 1 {
             lines.push((

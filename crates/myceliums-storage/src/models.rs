@@ -203,6 +203,9 @@ pub enum RelationshipKind {
     PartOfConversation,
     /// Email body mentions a code symbol or person
     Mentions,
+    /// A method overrides or implements a method of a base class or
+    /// interface (#190): a call bound to the target may run the source.
+    Overrides,
 }
 
 impl std::fmt::Display for RelationshipKind {
@@ -221,6 +224,7 @@ impl std::fmt::Display for RelationshipKind {
             RelationshipKind::HasAttachment => write!(f, "HAS_ATTACHMENT"),
             RelationshipKind::PartOfConversation => write!(f, "PART_OF_CONVERSATION"),
             RelationshipKind::Mentions => write!(f, "MENTIONS"),
+            RelationshipKind::Overrides => write!(f, "OVERRIDES"),
         }
     }
 }
@@ -243,6 +247,7 @@ impl FromStr for RelationshipKind {
             "HAS_ATTACHMENT" => RelationshipKind::HasAttachment,
             "PART_OF_CONVERSATION" => RelationshipKind::PartOfConversation,
             "MENTIONS" => RelationshipKind::Mentions,
+            "OVERRIDES" => RelationshipKind::Overrides,
             _ => RelationshipKind::Calls,
         })
     }

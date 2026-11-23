@@ -964,7 +964,9 @@ impl CallList {
                 }
                 line.push(']');
             }
-            if crate::repo::CallLabels::is_heuristic(&item.resolved) {
+            if item.resolved.starts_with("dispatch") {
+                line.push_str(&format!(" ({})", item.resolved));
+            } else if crate::repo::CallLabels::is_heuristic(&item.resolved) {
                 line.push_str(&format!(" (resolved: {})", item.resolved));
             }
             (item.file_path.as_str(), line)
@@ -1044,7 +1046,7 @@ impl MyceliumsMcp {
         let start = navigation::resolve(&symbols, name)?;
         let stats = crate::index_status::call_resolution(&graph.store()).await;
         let max_depth = depth.clamp(1, 10);
-        let (hits, cut) =
+        let (hits, cut, dispatch_cut) =
             navigation::walk_calls_bounded(&symbols, &relationships, start, direction, max_depth);
         let total_count = hits.len() as u32;
         let depth_limited = cut.is_cut();
@@ -1084,6 +1086,21 @@ impl MyceliumsMcp {
                 });
             }
         }
+        // Calls through an overridden method with more implementations than
+        // a list shows (#190).
+        for c in &dispatch_cut {
+            gaps.other.push(format!(
+                "dispatch: {} of {} implementations of {} listed",
+                c.listed, c.total, c.base.qualified_name
+            ));
+            gaps.other_branches += c.total - c.listed;
+        }
+        if let Some(c) = dispatch_cut.first() {
+            next.push(format!(
+                "explain_symbol(repo_id={repo_id:?}, symbol_name={:?}) lists its implementations",
+                crate::repo::located_name(c.base)
+            ));
+        }
         // Symbols whose own edges the list shows: the start and every hit
         // short of the depth limit.
         let walked = std::iter::once(start).chain(
@@ -1116,7 +1133,7 @@ impl MyceliumsMcp {
                 depth: h.depth,
                 // The short name, as `myc callers --json` reports it.
                 via: h.via.map(|v| v.name.clone()),
-                resolved: h.resolved.unwrap_or("exact").to_string(),
+                resolved: h.resolution(),
                 signature: Some(h.symbol.signature.clone()),
             })
             .collect();
@@ -1148,6 +1165,7 @@ impl MyceliumsMcp {
         };
         let callers = edges(navigation::Direction::Callers);
         let callees = edges(navigation::Direction::Callees);
+        let (overrides, implementations) = navigation::overrides(&symbols, &relationships, symbol);
         let (content, source_notice) = source_budget(symbol, max_lines);
 
         let output = SymbolContextOutput {
@@ -1163,6 +1181,9 @@ impl MyceliumsMcp {
             callers: callers.into_iter().take(CONTEXT_EDGES).collect(),
             callees_total: callees.len(),
             callees: callees.into_iter().take(CONTEXT_EDGES).collect(),
+            overrides,
+            implementations_total: implementations.len(),
+            implementations: implementations.into_iter().take(CONTEXT_EDGES).collect(),
             metadata: symbol.metadata.clone(),
             source_notice,
         };

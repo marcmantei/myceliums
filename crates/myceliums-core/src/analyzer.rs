@@ -1326,6 +1326,15 @@ impl Analyzer {
             call_rels.len(),
             call_resolution.summary()
         );
+        // Which methods override which (#190): dispatch is derived from
+        // these and the CALLS edges at query time.
+        let overrides_timer = Timer::start();
+        let override_rels = resolver.resolve_overrides(self.store.repo_id());
+        info!(
+            "Resolved {} override relationships in {:.0} ms",
+            override_rels.len(),
+            overrides_timer.elapsed_ms()
+        );
         // Kept in the index: the caller tools say how many call sites of a
         // name got no edge. A failed write costs that note, not the index.
         if let Err(e) = call_resolution.record(&self.store).await {
@@ -1462,6 +1471,7 @@ impl Analyzer {
         }
 
         let mut all_rels = call_rels;
+        all_rels.extend(override_rels);
         all_rels.extend(contained_by_rels);
         all_rels.extend(member_of_rels);
         all_rels.extend(rationale_rels);
@@ -2106,6 +2116,8 @@ impl Analyzer {
         // changed files' callers were marked unknown in the record above.
         let call_rels = resolver.resolve_calls(&all_calls, self.store.repo_id());
         let call_resolution = resolver.stats().clone();
+        // Overrides among the changed files only, like their calls (#190).
+        let override_rels = resolver.resolve_overrides(self.store.repo_id());
 
         // Build CONTAINED_BY relationships
         let mut contained_by_rels: Vec<Relationship> = Vec::new();
@@ -2165,6 +2177,7 @@ impl Analyzer {
         self.store.store_files(&all_files).await?;
 
         let mut all_rels = call_rels;
+        all_rels.extend(override_rels);
         all_rels.extend(contained_by_rels);
         all_rels.extend(member_of_rels_inc);
         all_rels.extend(rationale_rels);

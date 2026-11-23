@@ -19,6 +19,7 @@ use std::path::Path;
 use myceliums_storage::{CodeSymbol, Relationship, RelationshipKind, RepoInfo, SymbolKind};
 use serde::Serialize;
 
+use crate::dispatch::{Dispatch, DispatchCut, DispatchIndex, Override, MAX_LISTED_IMPLEMENTATIONS};
 use crate::search::search_symbols;
 
 /// Approximate token count of `text`: one token per four characters.
@@ -329,6 +330,10 @@ pub struct GraphHit {
     /// through which this one was reached.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub via: Option<String>,
+    /// Set when the hit was reached through dynamic dispatch (#190):
+    /// `dispatch via Base.m, confidence 0.8`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dispatch: Option<String>,
 }
 
 /// Which way to follow `Calls` edges.
@@ -351,8 +356,13 @@ pub struct Reached<'a> {
     pub depth: u32,
     /// For depth > 1: the symbol one step closer to the start.
     pub via: Option<&'a CodeSymbol>,
-    /// The edge through which `symbol` was reached.
+    /// The edge through which `symbol` was reached. For a hit reached by
+    /// dispatch, the CALLS edge to the overridden method.
     pub edge: &'a Relationship,
+    /// Set when the hit was reached through dynamic dispatch (#190): a
+    /// caller of a method the symbol overrides, or an implementation of a
+    /// method the symbol calls.
+    pub dispatch: Option<Dispatch<'a>>,
 }
 
 impl Reached<'_> {
@@ -362,6 +372,7 @@ impl Reached<'_> {
             symbol: SymbolRef::of(self.symbol),
             depth: self.depth,
             via: self.via.map(|v| v.name.clone()),
+            dispatch: self.dispatch.as_ref().map(Dispatch::describe),
         }
     }
 }
@@ -392,13 +403,16 @@ pub struct Walk<'a> {
     pub hits: Vec<Reached<'a>>,
     /// What lies past the depth limit.
     pub cut: DepthCut<'a>,
+    /// Calls whose implementations the walk listed only in part
+    /// ([`MAX_LISTED_IMPLEMENTATIONS`] each), ordered by file and line.
+    pub dispatch_cut: Vec<DispatchCut<'a>>,
 }
 
 /// The [`DepthCut`] of a walk whose symbols at `max_depth` are `last`, over
-/// `next` edges, given every uid it saw.
-fn depth_cut<'a>(
+/// the neighbours `next` gives, given every uid it saw.
+fn depth_cut<'a, 'n>(
     last: impl Iterator<Item = &'a CodeSymbol>,
-    next: &HashMap<&str, Vec<(&'a str, &'a Relationship)>>,
+    next: impl Fn(&str) -> Vec<&'n str>,
     by_uid: &HashMap<&str, &'a CodeSymbol>,
     seen: &HashSet<&str>,
 ) -> DepthCut<'a> {
@@ -406,7 +420,7 @@ fn depth_cut<'a>(
     let mut frontier = Vec::new();
     for symbol in last {
         let mut cut = false;
-        for &(n, _) in next.get(symbol.uid.as_str()).into_iter().flatten() {
+        for n in next(symbol.uid.as_str()) {
             if !seen.contains(n) && by_uid.contains_key(n) {
                 beyond.insert(n);
                 cut = true;
@@ -426,11 +440,79 @@ fn depth_cut<'a>(
     }
 }
 
+/// A neighbour of a symbol in a walk: its uid, the edge that leads there,
+/// and how dispatch got there (if it did).
+type Step<'a> = (&'a str, &'a Relationship, Option<(&'a str, Override<'a>)>);
+
+/// The neighbours of `uid` over `next` edges and, when `dispatch` is given
+/// (CALLS walks), through dynamic dispatch (#190):
+///
+/// - backwards (callers): the callers of every method `uid` overrides;
+/// - forwards (callees): the implementations of every method `uid` calls,
+///   at most [`MAX_LISTED_IMPLEMENTATIONS`] per call, nearest file first;
+///   a call with more is pushed to `cut`.
+///
+/// Direct neighbours come first. Dispatch starts only from CALLS edges that
+/// are not `ambiguous` and are not `super` calls ([`DispatchIndex::dispatches`]).
+fn neighbours_of<'a>(
+    uid: &str,
+    next: &HashMap<&str, Vec<(&'a str, &'a Relationship)>>,
+    dispatch: Option<&DispatchIndex<'a>>,
+    backwards: bool,
+    by_uid: &HashMap<&str, &'a CodeSymbol>,
+    mut cut: Option<&mut Vec<(&'a str, usize)>>,
+) -> Vec<Step<'a>> {
+    let direct = next.get(uid).map(Vec::as_slice).unwrap_or(&[]);
+    let mut out: Vec<Step<'a>> = direct.iter().map(|&(n, e)| (n, e, None)).collect();
+    let Some(index) = dispatch else {
+        return out;
+    };
+    if backwards {
+        for ov in index.overridden(uid) {
+            for &(caller, edge) in next.get(ov.other).map(Vec::as_slice).unwrap_or(&[]) {
+                if index.dispatches(edge) {
+                    out.push((caller, edge, Some((ov.other, *ov))));
+                }
+            }
+        }
+    } else {
+        for &(target, edge) in direct {
+            if !index.dispatches(edge) {
+                continue;
+            }
+            let mut impls: Vec<Override<'a>> = index.implementations(target).to_vec();
+            if impls.is_empty() {
+                continue;
+            }
+            impls.sort_by_key(|ov| {
+                by_uid
+                    .get(ov.other)
+                    .map(|s| (s.file_path.as_str(), s.start_line))
+            });
+            if impls.len() > MAX_LISTED_IMPLEMENTATIONS {
+                if let Some(cut) = cut.as_deref_mut() {
+                    cut.push((target, impls.len()));
+                }
+                impls.truncate(MAX_LISTED_IMPLEMENTATIONS);
+            }
+            out.extend(
+                impls
+                    .into_iter()
+                    .map(|ov| (ov.other, edge, Some((target, ov)))),
+            );
+        }
+    }
+    out
+}
+
 /// Breadth-first walk over `kinds` edges from `starts`, up to `max_depth`.
 ///
 /// `backwards` follows edges from target to source (callers, dependents).
-/// Each symbol is reported once, at its shortest distance. Start symbols are
-/// not reported. Hits are ordered by depth, then file and line.
+/// A walk over CALLS edges also follows dynamic dispatch (#190, see
+/// [`neighbours_of`]); a hit reached that way says so in
+/// [`Reached::dispatch`]. Each symbol is reported once, at its shortest
+/// distance (a direct edge wins over dispatch at the same distance). Start
+/// symbols are not reported. Hits are ordered by depth, then file and line.
 fn walk<'a>(
     symbols: &'a [CodeSymbol],
     relationships: &'a [Relationship],
@@ -449,18 +531,28 @@ fn walk<'a>(
         };
         next.entry(from).or_default().push((to, rel));
     }
+    let index = kinds
+        .contains(&RelationshipKind::Calls)
+        .then(|| DispatchIndex::new(relationships))
+        .filter(|index| !index.is_empty());
 
     let mut seen: HashSet<&str> = starts.iter().map(|s| s.uid.as_str()).collect();
     let mut queue: VecDeque<(&str, u32)> = starts.iter().map(|s| (s.uid.as_str(), 0)).collect();
     let mut hits = Vec::new();
+    let mut cut_calls: Vec<(&str, usize)> = Vec::new();
     while let Some((uid, depth)) = queue.pop_front() {
         if depth >= max_depth {
             continue;
         }
-        let Some(neighbours) = next.get(uid) else {
-            continue;
-        };
-        for &(n, edge) in neighbours {
+        let steps = neighbours_of(
+            uid,
+            &next,
+            index.as_ref(),
+            backwards,
+            &by_uid,
+            Some(&mut cut_calls),
+        );
+        for (n, edge, dispatched) in steps {
             if !seen.insert(n) {
                 continue;
             }
@@ -474,11 +566,19 @@ fn walk<'a>(
             } else {
                 None
             };
+            let dispatch = dispatched.and_then(|(base, ov)| {
+                Some(Dispatch {
+                    base: by_uid.get(base)?,
+                    edge: ov.edge,
+                    confidence: ov.confidence.confidence(),
+                })
+            });
             hits.push(Reached {
                 symbol: sym,
                 depth: depth + 1,
                 via,
                 edge,
+                dispatch,
             });
             queue.push_back((n, depth + 1));
         }
@@ -494,8 +594,39 @@ fn walk<'a>(
         .iter()
         .filter(|h| h.depth == max_depth)
         .map(|h| h.symbol);
-    let cut = depth_cut(last, &next, &by_uid, &seen);
-    Walk { hits, cut }
+    let cut = depth_cut(
+        last,
+        |uid| {
+            neighbours_of(uid, &next, index.as_ref(), backwards, &by_uid, None)
+                .into_iter()
+                .map(|(n, _, _)| n)
+                .collect()
+        },
+        &by_uid,
+        &seen,
+    );
+    let mut dispatch_cut: Vec<DispatchCut> = Vec::new();
+    for (base, total) in cut_calls {
+        let Some(base) = by_uid.get(base).copied() else {
+            continue;
+        };
+        if !dispatch_cut.iter().any(|c| c.base.uid == base.uid) {
+            dispatch_cut.push(DispatchCut {
+                base,
+                total,
+                listed: MAX_LISTED_IMPLEMENTATIONS,
+            });
+        }
+    }
+    dispatch_cut.sort_by(|a, b| {
+        (a.base.file_path.as_str(), a.base.start_line)
+            .cmp(&(b.base.file_path.as_str(), b.base.start_line))
+    });
+    Walk {
+        hits,
+        cut,
+        dispatch_cut,
+    }
 }
 
 /// Callers or callees of `start` over `Calls` edges, up to `max_depth` hops.
@@ -627,6 +758,10 @@ pub struct CallChains<'a> {
     /// One shortest chain, `from` first and `to` last; every symbol after the
     /// first comes with the CALLS edge that reached it.
     pub shortest: Vec<(&'a CodeSymbol, Option<&'a Relationship>)>,
+    /// For each symbol of [`shortest`](Self::shortest), in the same order:
+    /// set when the call reaches it through dynamic dispatch (#190), the
+    /// CALLS edge then binding the method it overrides.
+    pub dispatched: Vec<Option<Dispatch<'a>>>,
     /// Every symbol strictly between the ends on a chain of at most
     /// `shortest + extra` calls, ordered by chain length, then distance from
     /// the start, then file and line.
@@ -663,6 +798,10 @@ impl CallChains<'_> {
 /// reached it on a shortest way (`None` for the start).
 type Distances<'a> = HashMap<&'a str, (u32, Option<(&'a str, &'a Relationship)>)>;
 
+/// A forward step of a call chain: the callee, the CALLS edge, and the
+/// dispatch that reached it, if any.
+type ChainEdge<'a> = (&'a str, &'a Relationship, Option<Dispatch<'a>>);
+
 /// Call chains from `from` to `to`, following `Calls` edges forwards, or
 /// what the search reached when `to` is not reachable within `max_depth`
 /// calls. `extra` widens [`CallChains::on_chains`] to chains up to that many
@@ -676,18 +815,44 @@ pub fn call_chains<'a>(
     extra: u32,
 ) -> Result<CallChains<'a>, NoChain<'a>> {
     let by_uid: HashMap<&str, &CodeSymbol> = symbols.iter().map(|s| (s.uid.as_str(), s)).collect();
-    let mut forward: HashMap<&str, Vec<(&str, &Relationship)>> = HashMap::new();
+    // A call to an overridden method also reaches its implementations
+    // (#190): every one of them, so a chain to any implementation is found.
+    let index = DispatchIndex::new(relationships);
+    let mut forward: HashMap<&str, Vec<ChainEdge>> = HashMap::new();
     let mut backward: HashMap<&str, Vec<&str>> = HashMap::new();
     for rel in relationships
         .iter()
         .filter(|r| r.kind == RelationshipKind::Calls)
     {
         let (s, t) = (rel.source_uid.as_str(), rel.target_uid.as_str());
-        if by_uid.contains_key(s) && by_uid.contains_key(t) {
-            forward.entry(s).or_default().push((t, rel));
-            backward.entry(t).or_default().push(s);
+        let (Some(_), Some(&base)) = (by_uid.get(s), by_uid.get(t)) else {
+            continue;
+        };
+        forward.entry(s).or_default().push((t, rel, None));
+        backward.entry(t).or_default().push(s);
+        if !index.dispatches(rel) {
+            continue;
+        }
+        for ov in index.implementations(t) {
+            if by_uid.contains_key(ov.other) {
+                let dispatch = Dispatch {
+                    base,
+                    edge: ov.edge,
+                    confidence: ov.confidence.confidence(),
+                };
+                forward
+                    .entry(s)
+                    .or_default()
+                    .push((ov.other, rel, Some(dispatch)));
+                backward.entry(ov.other).or_default().push(s);
+            }
         }
     }
+    // Direct calls first: at one distance, a chain prefers them.
+    for edges in forward.values_mut() {
+        edges.sort_by_key(|(_, _, dispatch)| dispatch.is_some());
+    }
+    let mut dispatch_of: HashMap<(&str, &str), Dispatch> = HashMap::new();
 
     let mut from_start: Distances = HashMap::new();
     from_start.insert(from.uid.as_str(), (0, None));
@@ -696,9 +861,12 @@ pub fn call_chains<'a>(
         if d >= max_depth {
             continue;
         }
-        for &(n, rel) in forward.get(uid).map(Vec::as_slice).unwrap_or(&[]) {
+        for &(n, rel, dispatch) in forward.get(uid).map(Vec::as_slice).unwrap_or(&[]) {
             if let std::collections::hash_map::Entry::Vacant(e) = from_start.entry(n) {
                 e.insert((d + 1, Some((uid, rel))));
+                if let Some(dispatch) = dispatch {
+                    dispatch_of.insert((uid, n), dispatch);
+                }
                 queue.push_back((n, d + 1));
             }
         }
@@ -728,7 +896,17 @@ pub fn call_chains<'a>(
             .iter()
             .filter(|(_, d)| *d == max_depth)
             .map(|(s, _)| *s);
-        let cut = depth_cut(last, &forward, &by_uid, &seen);
+        let cut = depth_cut(
+            last,
+            |uid| {
+                forward
+                    .get(uid)
+                    .map(|edges| edges.iter().map(|&(n, _, _)| n).collect())
+                    .unwrap_or_default()
+            },
+            &by_uid,
+            &seen,
+        );
         return Err(NoChain { reached, cut });
     };
 
@@ -747,15 +925,18 @@ pub fn call_chains<'a>(
     }
 
     let mut shortest = Vec::new();
+    let mut dispatched = Vec::new();
     let mut cursor = to.uid.as_str();
     while let Some((_, step)) = from_start.get(cursor) {
         shortest.push((by_uid[cursor], step.map(|(_, rel)| rel)));
+        dispatched.push(step.and_then(|(prev, _)| dispatch_of.get(&(prev, cursor)).copied()));
         match step {
             Some((prev, _)) => cursor = prev,
             None => break,
         }
     }
     shortest.reverse();
+    dispatched.reverse();
 
     let limit = shortest_len.saturating_add(extra).min(max_depth);
     let (mut on_chains, mut longer): (Vec<ChainStep>, Vec<ChainStep>) = from_start
@@ -805,6 +986,7 @@ pub fn call_chains<'a>(
     });
     Ok(CallChains {
         shortest,
+        dispatched,
         on_chains,
         longer,
     })

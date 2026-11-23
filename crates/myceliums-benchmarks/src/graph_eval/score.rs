@@ -32,6 +32,7 @@
 //! shares add up to the overall recall. A label has no recall of its own: the
 //! gold does not say how an edge ought to be resolved.
 
+use myceliums_core::dispatch::DispatchIndex;
 use myceliums_core::CallResolution;
 use myceliums_storage::{CodeSymbol, SymbolKind};
 use serde::{Deserialize, Serialize};
@@ -188,11 +189,28 @@ pub struct CallScore {
     pub false_negatives: Vec<MissedEdge>,
 }
 
+/// Targets dynamic dispatch adds to the CALLS edges (#190): for each CALLS
+/// edge a dispatch may follow, the implementations of its target that the
+/// caller has no CALLS edge to. Correct when the gold lists the caller and
+/// the implementation as an edge (an overriding implementation is among the
+/// `also_accept` targets of a dispatch call). Not part of the CALLS scores.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DispatchScore {
+    pub targets: usize,
+    pub correct: usize,
+    /// Calls the gold lists as runtime-only; not scored.
+    #[serde(default)]
+    pub dynamic: usize,
+    pub wrong: Vec<String>,
+}
+
 /// Everything measured for one language.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct LanguageScore {
     pub symbols: SymbolScore,
     pub calls: CallScore,
+    #[serde(default)]
+    pub dispatch: DispatchScore,
 }
 
 /// Sums over languages: counts only, no lists.
@@ -467,7 +485,51 @@ pub fn score_language(gold: &LanguageGold, extraction: &Extraction, prefix: &str
         false_negatives: calls.false_negatives.len(),
     };
 
-    LanguageScore { symbols, calls }
+    // --- dispatch (#190) --------------------------------------------------------
+    let index = DispatchIndex::new(&extraction.overrides);
+    let direct: BTreeSet<(&str, &str)> = extraction
+        .calls
+        .iter()
+        .map(|r| (r.source_uid.as_str(), r.target_uid.as_str()))
+        .collect();
+    let mut dispatched: BTreeSet<(&str, &str)> = BTreeSet::new();
+    for call in extraction.calls.iter().filter(|r| {
+        by_uid
+            .get(r.source_uid.as_str())
+            .is_some_and(|source| mine(source))
+            && index.dispatches(r)
+    }) {
+        for ov in index.implementations(&call.target_uid) {
+            if !direct.contains(&(call.source_uid.as_str(), ov.other)) {
+                dispatched.insert((call.source_uid.as_str(), ov.other));
+            }
+        }
+    }
+    let mut dispatch = DispatchScore::default();
+    for (source, target) in dispatched {
+        let pair = gold_of_uid
+            .get(source)
+            .copied()
+            .zip(gold_of_uid.get(target).copied());
+        if pair.is_some_and(|p| dynamic.contains(&p)) {
+            dispatch.dynamic += 1;
+            continue;
+        }
+        dispatch.targets += 1;
+        if pair.is_some_and(|p| primary.contains_key(&p) || alternate.contains_key(&p)) {
+            dispatch.correct += 1;
+        } else {
+            dispatch
+                .wrong
+                .push(format!("{} → {}", display(source), display(target)));
+        }
+    }
+
+    LanguageScore {
+        symbols,
+        calls,
+        dispatch,
+    }
 }
 
 /// The documented trap a wrong edge falls into, if any.
@@ -583,6 +645,7 @@ mod tests {
                 symbol("var", &p("b.py"), "LIMIT", SymbolKind::Constant, (14, 14)),
             ],
             calls,
+            ..Extraction::default()
         }
     }
 

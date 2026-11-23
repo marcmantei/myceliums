@@ -43,6 +43,7 @@ use std::path::Path;
 
 use super::extract::{extract, Extraction};
 use super::report::wilson;
+use myceliums_core::dispatch::DispatchIndex;
 
 /// The sets, as committed.
 const SET: &str = include_str!("../../graph-gold/held-out/real-repos.json");
@@ -189,6 +190,22 @@ pub struct RepoScore {
     /// got an edge: for a dispatch call, the implementations it may run.
     pub targets: usize,
     pub targets_reached: usize,
+    /// Gold targets reached by a CALLS edge or through dispatch (#190): an
+    /// implementation of a method a CALLS edge of the pair binds.
+    pub targets_reached_dispatch: usize,
+    /// Targets dispatch adds to the pairs' CALLS edges, and how many of them
+    /// are gold targets.
+    pub dispatch_edges: usize,
+    pub dispatch_correct: usize,
+    pub wrong_dispatch: Vec<String>,
+    /// Gold targets of found pairs that neither a CALLS edge nor dispatch
+    /// reaches.
+    pub unreached: Vec<String>,
+    /// The analysis that was scored: wall time, CALLS and OVERRIDES edges
+    /// (per repository; zero in per-case and per-stratum scores).
+    pub analysis_secs: f64,
+    pub calls_edges: usize,
+    pub overrides_edges: usize,
     /// Per case (`repo` holds the case name), for a set whose pairs name
     /// cases; the last entry, `(no hard case)`, holds the pairs with none.
     pub cases: Vec<RepoScore>,
@@ -248,7 +265,11 @@ pub async fn run(set: &HeldOutSet, repos_dir: &Path) -> Result<HeldOutReport> {
         }
         let extraction = extract(&dir).await?;
         let pairs: Vec<&Pair> = set.pairs.iter().filter(|p| p.repo == *repo).collect();
-        report.repos.push(score_set(set, repo, &pairs, &extraction));
+        let mut scored = score_set(set, repo, &pairs, &extraction);
+        scored.analysis_secs = extraction.analysis_secs;
+        scored.calls_edges = extraction.calls.len();
+        scored.overrides_edges = extraction.overrides.len();
+        report.repos.push(scored);
     }
     Ok(report)
 }
@@ -313,6 +334,7 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
         repo: repo.to_string(),
         ..RepoScore::default()
     };
+    let dispatch = DispatchIndex::new(&extraction.overrides);
     for pair in pairs {
         score.pairs += 1;
         let has_target = !pair.targets.is_empty();
@@ -340,6 +362,8 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
         };
         let mut found = false;
         let mut reached = vec![false; pair.targets.len()];
+        let mut direct: Vec<&str> = Vec::new();
+        let mut dispatched: Vec<&str> = Vec::new();
         for edge in extraction
             .calls
             .iter()
@@ -351,13 +375,17 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
             if target.name != pair.callee {
                 continue;
             }
+            direct.push(target.uid.as_str());
+            if dispatch.dispatches(edge) {
+                dispatched.extend(
+                    dispatch
+                        .implementations(&target.uid)
+                        .iter()
+                        .map(|o| o.other),
+                );
+            }
             score.edges += 1;
-            let hits = |t: &Target| {
-                t.file == target.file_path
-                    && t.name == target.name
-                    && target.start_line <= t.line
-                    && t.line <= target.end_line
-            };
+            let hits = |t: &Target| hits(t, target);
             let correct = pair.targets.iter().any(hits);
             for (i, t) in pair.targets.iter().enumerate() {
                 reached[i] |= hits(t);
@@ -374,6 +402,39 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
         }
         score.targets += pair.targets.len();
         score.targets_reached += reached.iter().filter(|r| **r).count();
+        // Dispatch (#190): the implementations of what the CALLS edges bind.
+        dispatched.sort_unstable();
+        dispatched.dedup();
+        for uid in dispatched.into_iter().filter(|uid| !direct.contains(uid)) {
+            let Some(target) = by_uid.get(uid) else {
+                continue;
+            };
+            score.dispatch_edges += 1;
+            let mut correct = false;
+            for (i, t) in pair.targets.iter().enumerate() {
+                if hits(t, target) {
+                    reached[i] = true;
+                    correct = true;
+                }
+            }
+            if correct {
+                score.dispatch_correct += 1;
+            } else {
+                score.wrong_dispatch.push(format!(
+                    "{}::{} → {}::{} (line {})",
+                    pair.file, pair.caller, target.file_path, target.qualified_name, pair.call_line
+                ));
+            }
+        }
+        score.targets_reached_dispatch += reached.iter().filter(|r| **r).count();
+        if found {
+            for (t, _) in pair.targets.iter().zip(&reached).filter(|(_, r)| !**r) {
+                score.unreached.push(format!(
+                    "{}::{} → {}:{} (line {})",
+                    pair.file, pair.caller, t.file, t.line, pair.call_line
+                ));
+            }
+        }
         if has_target && found {
             score.found += 1;
         } else if has_target {
@@ -384,6 +445,15 @@ pub fn score(repo: &str, pairs: &[&Pair], extraction: &Extraction) -> RepoScore 
         }
     }
     score
+}
+
+/// Whether the extracted `target` is the gold target `t`: same file and
+/// name, its lines containing the target's line.
+fn hits(t: &Target, target: &CodeSymbol) -> bool {
+    t.file == target.file_path
+        && t.name == target.name
+        && target.start_line <= t.line
+        && t.line <= target.end_line
 }
 
 fn rate(part: usize, whole: usize) -> String {
@@ -462,6 +532,11 @@ pub fn markdown(set: &HeldOutSet, report: &HeldOutReport) -> String {
         total.edges += s.edges;
         total.correct += s.correct;
         total.callers_missing += s.callers_missing;
+        total.targets += s.targets;
+        total.targets_reached += s.targets_reached;
+        total.targets_reached_dispatch += s.targets_reached_dispatch;
+        total.dispatch_edges += s.dispatch_edges;
+        total.dispatch_correct += s.dispatch_correct;
     }
     let _ = writeln!(
         out,
@@ -475,6 +550,27 @@ pub fn markdown(set: &HeldOutSet, report: &HeldOutReport) -> String {
         rate(total.correct, total.edges),
         total.callers_missing
     );
+    let _ = writeln!(
+        out,
+        "\nDispatch (#190, derived from OVERRIDES edges, not CALLS): {} more targets, {} of them gold \
+         (precision {}); precision of CALLS and dispatch together {}. Targets reached {} → {} with dispatch.",
+        total.dispatch_edges,
+        total.dispatch_correct,
+        rate(total.dispatch_correct, total.dispatch_edges),
+        rate(
+            total.correct + total.dispatch_correct,
+            total.edges + total.dispatch_edges
+        ),
+        rate(total.targets_reached, total.targets),
+        rate(total.targets_reached_dispatch, total.targets),
+    );
+    for s in &report.repos {
+        let _ = writeln!(
+            out,
+            "\n{}: analysed in {:.0} s; {} CALLS edges, {} OVERRIDES edges.",
+            s.repo, s.analysis_secs, s.calls_edges, s.overrides_edges
+        );
+    }
     if set.stratified() {
         out.push_str(&breakdown(
             "\nPer stratum (the targeted strata draw the hard cases on purpose):\n",
@@ -510,6 +606,35 @@ pub fn markdown(set: &HeldOutSet, report: &HeldOutReport) -> String {
     if !wrong.is_empty() {
         let _ = writeln!(out, "\nWrong edges: {}", list(&wrong));
     }
+    // A stratified set's totals are its random stratum: list the targeted
+    // strata's dispatch results too.
+    let all_strata: Vec<&RepoScore> = report
+        .repos
+        .iter()
+        .flat_map(|r| {
+            if r.strata.is_empty() {
+                vec![r]
+            } else {
+                r.strata.iter().collect()
+            }
+        })
+        .collect();
+    let wrong_dispatch: Vec<&String> = all_strata.iter().flat_map(|s| &s.wrong_dispatch).collect();
+    if !wrong_dispatch.is_empty() {
+        let _ = writeln!(
+            out,
+            "\nWrong dispatch targets (all strata): {}",
+            list(&wrong_dispatch)
+        );
+    }
+    let unreached: Vec<&String> = all_strata.iter().flat_map(|s| &s.unreached).collect();
+    if !unreached.is_empty() {
+        let _ = writeln!(
+            out,
+            "\nTargets of found pairs reached neither by CALLS nor by dispatch (all strata): {}",
+            list(&unreached)
+        );
+    }
     for case in &set.report_only {
         let scores: Vec<&RepoScore> = report
             .repos
@@ -541,9 +666,12 @@ fn breakdown<'a>(
     let _ = writeln!(out, "{title}");
     let _ = writeln!(
         out,
-        "| {column} | pairs | with a project target | found | recall (95% CI) | edges | correct | precision (95% CI) | targets reached |"
+        "| {column} | pairs | with a project target | found | recall (95% CI) | edges | correct | precision (95% CI) | targets reached | with dispatch | dispatch targets: gold / all |"
     );
-    let _ = writeln!(out, "|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+    let _ = writeln!(
+        out,
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
+    );
     for &name in names {
         let mut sum = RepoScore::default();
         for s in scores.clone().filter(|c| c.repo == name) {
@@ -554,10 +682,13 @@ fn breakdown<'a>(
             sum.correct += s.correct;
             sum.targets += s.targets;
             sum.targets_reached += s.targets_reached;
+            sum.targets_reached_dispatch += s.targets_reached_dispatch;
+            sum.dispatch_edges += s.dispatch_edges;
+            sum.dispatch_correct += s.dispatch_correct;
         }
         let _ = writeln!(
             out,
-            "| {name} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            "| {name} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} / {} |",
             sum.pairs,
             sum.with_target,
             sum.found,
@@ -566,6 +697,9 @@ fn breakdown<'a>(
             sum.correct,
             rate(sum.correct, sum.edges),
             rate(sum.targets_reached, sum.targets),
+            rate(sum.targets_reached_dispatch, sum.targets),
+            sum.dispatch_correct,
+            sum.dispatch_edges,
         );
     }
     out
@@ -737,6 +871,7 @@ mod tests {
                 call("main", "get"),
                 call("main", "other"),
             ],
+            ..Extraction::default()
         };
         let refs: Vec<&Pair> = pairs.iter().collect();
         let score = score("r", &refs, &extraction);
@@ -819,6 +954,7 @@ mod tests {
                 symbol("impl", "b.java", "run", (4, 5)),
             ],
             calls: vec![call("main", "iface")],
+            ..Extraction::default()
         };
         let score = score("r", &[&pair], &extraction);
         assert_eq!(

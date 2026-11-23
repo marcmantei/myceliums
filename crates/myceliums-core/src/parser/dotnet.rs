@@ -1,7 +1,7 @@
 //! .NET-family extraction: C# and PowerShell.
 
 use super::{CallReference, ImportInfo, ParsedSymbol, SourceParser};
-use myceliums_storage::SymbolKind;
+use myceliums_storage::{SymbolKind, SymbolMetadata};
 use tree_sitter::Node;
 
 impl SourceParser {
@@ -27,7 +27,7 @@ impl SourceParser {
                         signature: self.extract_csharp_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: None,
+                        metadata: self.csharp_bases(node, source),
                     });
                     // Recurse into class body with parent set
                     if let Some(body) = node.child_by_field_name("body") {
@@ -47,7 +47,7 @@ impl SourceParser {
                         signature: self.extract_csharp_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: None,
+                        metadata: self.csharp_bases(node, source),
                     });
                     // Recurse into interface body for method signatures
                     if let Some(body) = node.child_by_field_name("body") {
@@ -150,6 +150,27 @@ impl SourceParser {
         for child in node.children(cursor) {
             self.extract_csharp_symbols(child, source, symbols, parent);
         }
+    }
+
+    /// The base class and interfaces of a C# class, struct, record or
+    /// interface (`class OrderService : ServiceBase, IOrderService`), as
+    /// written without generic arguments, for the call resolver (#190).
+    fn csharp_bases(&self, node: Node, source: &[u8]) -> Option<SymbolMetadata> {
+        let base_list = self.find_child_by_kind(node, "base_list")?;
+        let cursor = &mut base_list.walk();
+        let superclasses: Vec<String> = base_list
+            .named_children(cursor)
+            .filter(|n| n.kind() != "argument_list")
+            .map(|n| {
+                let ty = n.child_by_field_name("type").unwrap_or(n);
+                super::jvm::java_type_name(self.node_text(ty, source))
+            })
+            .filter(|name| !name.is_empty())
+            .collect();
+        (!superclasses.is_empty()).then(|| SymbolMetadata {
+            superclasses,
+            ..SymbolMetadata::default()
+        })
     }
 
     fn extract_csharp_signature(&self, node: Node, source: &[u8]) -> String {
@@ -596,6 +617,28 @@ public class UserService
         let name_prop = result.symbols.iter().find(|s| s.name == "Name").unwrap();
         assert_eq!(name_prop.kind, SymbolKind::Variable);
         assert_eq!(name_prop.parent_name.as_deref(), Some("UserService"));
+    }
+
+    #[test]
+    fn csharp_types_record_their_bases() {
+        let mut parser = SourceParser::new(SourceLanguage::CSharp).unwrap();
+        let result = parser
+            .parse(
+                "class Square : Polygon, IShape<int>, Ns.IOther {}\ninterface IShape<T> : IBase {}\nclass Plain {}\n",
+            )
+            .unwrap();
+        let supers = |name: &str| {
+            result
+                .symbols
+                .iter()
+                .find(|s| s.name == name)
+                .and_then(|s| s.metadata.as_ref())
+                .map(|m| m.superclasses.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(supers("Square"), ["Polygon", "IShape", "Ns.IOther"]);
+        assert_eq!(supers("IShape"), ["IBase"]);
+        assert!(supers("Plain").is_empty());
     }
 
     #[test]

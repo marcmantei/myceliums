@@ -355,6 +355,16 @@ pub struct SymbolContextOutput {
     pub callees: Vec<String>,
     /// All callees, including those not listed.
     pub callees_total: usize,
+    /// The methods this one overrides or implements (#190), as
+    /// `file:qualified_name` handles.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub overrides: Vec<String>,
+    /// Concrete implementations of this method, at most one page.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub implementations: Vec<String>,
+    /// All implementations, including those not listed.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub implementations_total: usize,
     pub metadata: Option<String>,
     /// Set when `content` was cut to the source budget: how to get the rest.
     #[serde(skip_serializing_if = "Option::is_none")]

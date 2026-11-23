@@ -4,7 +4,7 @@ use super::{
     BindingValue, CallForm, CallReference, DeclaredTypes, ExpressionStep, ImportInfo, ParsedSymbol,
     SourceParser, TypeBinding, FILE_SCOPE,
 };
-use myceliums_storage::SymbolKind;
+use myceliums_storage::{SymbolKind, SymbolMetadata};
 use tree_sitter::Node;
 
 impl SourceParser {
@@ -772,7 +772,7 @@ impl SourceParser {
                         signature: self.extract_kotlin_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: None,
+                        metadata: self.kotlin_supertypes(node, source),
                     });
                     // Recurse into class_body with class/interface name as parent
                     if let Some(body) = self.find_child_by_kind(node, "class_body") {
@@ -792,7 +792,7 @@ impl SourceParser {
                         signature: self.extract_kotlin_signature(node, source),
                         content: self.node_text(node, source).to_string(),
                         parent_name: parent.map(|s| s.to_string()),
-                        metadata: None,
+                        metadata: self.kotlin_supertypes(node, source),
                     });
                     // Recurse into class_body with object name as parent
                     if let Some(body) = self.find_child_by_kind(node, "class_body") {
@@ -889,6 +889,45 @@ impl SourceParser {
         }
     }
 
+    /// The supertypes of a Kotlin class, interface or object
+    /// (`class A : Base(), Repo<User>`), without generic arguments, for the
+    /// call resolver (#190).
+    fn kotlin_supertypes(&self, node: Node, source: &[u8]) -> Option<SymbolMetadata> {
+        let specifiers = self.find_child_by_kind(node, "delegation_specifiers")?;
+        let cursor = &mut specifiers.walk();
+        let superclasses: Vec<String> = specifiers
+            .named_children(cursor)
+            .filter(|n| n.kind() == "delegation_specifier")
+            .filter_map(|spec| {
+                let cursor = &mut spec.walk();
+                let first = spec
+                    .named_children(cursor)
+                    .find(|c| c.kind() != "annotation")?;
+                let ty = match first.kind() {
+                    "constructor_invocation" | "explicit_delegation" => {
+                        let cursor = &mut first.walk();
+                        let found = first.named_children(cursor).next();
+                        found?
+                    }
+                    _ => first,
+                };
+                // Annotations on the type (`@Ann Named`) are not its name.
+                let text = self.node_text(ty, source);
+                let named = text
+                    .split_whitespace()
+                    .skip_while(|word| word.starts_with('@'))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                Some(java_type_name(&named))
+            })
+            .filter(|name| !name.is_empty())
+            .collect();
+        (!superclasses.is_empty()).then(|| SymbolMetadata {
+            superclasses,
+            ..SymbolMetadata::default()
+        })
+    }
+
     fn extract_kotlin_signature(&self, node: Node, source: &[u8]) -> String {
         let text = self.node_text(node, source);
         if let Some(pos) = text.find('{') {
@@ -924,11 +963,13 @@ impl SourceParser {
                         self.node_text(first_child, source).to_string()
                     }
                     "navigation_expression" => {
-                        // obj.method() — extract the last simple_identifier
+                        // obj.method(): the name after the last dot
+                        // (`identifier` in tree-sitter-kotlin-ng, #190;
+                        // `simple_identifier` in older grammars).
                         let nav_cursor = &mut first_child.walk();
                         let mut last_name = self.node_text(first_child, source).to_string();
                         for nav_child in first_child.children(nav_cursor) {
-                            if nav_child.kind() == "simple_identifier" {
+                            if matches!(nav_child.kind(), "identifier" | "simple_identifier") {
                                 last_name = self.node_text(nav_child, source).to_string();
                             }
                         }
@@ -1665,6 +1706,32 @@ fun main() {
             .unwrap();
         assert!(result.calls.iter().any(|c| c.callee_name == "processData"));
         assert!(result.calls.iter().any(|c| c.callee_name == "println"));
+        // A call on a receiver is named by the method alone (#190).
+        assert!(result
+            .calls
+            .iter()
+            .any(|c| c.callee_name == "getEnvironment"));
+    }
+
+    #[test]
+    fn kotlin_classes_record_their_supertypes() {
+        let mut parser = SourceParser::new(SourceLanguage::Kotlin).unwrap();
+        let result = parser
+            .parse(
+                "class Square(val side: Double) : Polygon(), Repo<User>, @Ann Named by d {\n}\nobject Unit : Shape\n",
+            )
+            .unwrap();
+        let supers = |name: &str| {
+            result
+                .symbols
+                .iter()
+                .find(|s| s.name == name)
+                .and_then(|s| s.metadata.as_ref())
+                .map(|m| m.superclasses.clone())
+                .unwrap_or_default()
+        };
+        assert_eq!(supers("Square"), ["Polygon", "Repo", "Named"]);
+        assert_eq!(supers("Unit"), ["Shape"]);
     }
 
     #[test]

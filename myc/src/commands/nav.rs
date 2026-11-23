@@ -104,6 +104,9 @@ fn hit_line(h: &GraphHit, show_depth: bool) -> String {
     if let Some(via) = &h.via {
         line.push_str(&format!("  via {via}"));
     }
+    if let Some(dispatch) = &h.dispatch {
+        line.push_str(&format!("  ({dispatch})"));
+    }
     line
 }
 
@@ -606,6 +609,7 @@ mod tests {
             symbol: SymbolRef::of(&sym(name, name, "src/x.rs", 3)),
             depth,
             via: via.map(str::to_string),
+            dispatch: None,
         }
     }
 
