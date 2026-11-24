@@ -1579,8 +1579,8 @@ name is stored in the run's config, so a resumed run cannot change it.
 
 Do agents change everything a real change needs, in other modules, tests and
 docs, and does myceliums save tokens per solved task? 20 edit tasks replay
-recent spring-framework commits. **Prepared, not run**: before the first session the pilot and the
-pre-registration below are fixed. The warm-up has run and all 20 prechecks are valid.
+recent spring-framework commits. **Pilot run, main run not**: the pilot and the
+pre-registration below were fixed before the first session. The warm-up has run and all 20 prechecks are valid.
 
 **Mining** ([`groundtruth/commit_replay.py`](groundtruth/commit_replay.py)
 `mine`, over a blobless clone with history): non-merge commits on `main` since
