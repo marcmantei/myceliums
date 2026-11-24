@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context as _, Result};
 use serde_json::{json, Map, Value};
 
-use super::instructions;
+use super::instructions::{self, Project};
 use super::routing::{self, FileChange, Flavor, Owner};
 use crate::setup::editors::write_user_file;
 
@@ -152,10 +152,9 @@ pub struct Targets {
     /// `.claude/rules/myceliums.md`, which hides no other instruction file
     /// and belongs to us, or `~/.claude/CLAUDE.md`.
     pub memory: PathBuf,
-    /// The project's `CLAUDE.md`, where versions before #200 wrote the block.
-    pub old_memory: Option<PathBuf>,
-    /// The home directory, where instruction files may link into the project.
-    pub home: Option<PathBuf>,
+    /// The project, at project scope. Versions before #200 wrote the block
+    /// into its `CLAUDE.md`.
+    pub project: Option<Project>,
     /// Subagent definition.
     pub agent: PathBuf,
     /// Directory that may be removed when uninstalling leaves it empty
@@ -172,8 +171,7 @@ impl Targets {
             mcp_config: root.join(".mcp.json"),
             settings: claude.join("settings.json"),
             memory: claude.join("rules").join(RULES_FILE),
-            old_memory: Some(root.join("CLAUDE.md")),
-            home: dirs::home_dir(),
+            project: Some(Project::new(root)),
             agent: claude.join("agents").join(AGENT_FILE),
             claude_dir: Some(claude),
         }
@@ -187,8 +185,7 @@ impl Targets {
             mcp_config: home.join(".claude.json"),
             settings: claude.join("settings.json"),
             memory: claude.join("CLAUDE.md"),
-            old_memory: None,
-            home: Some(home.to_path_buf()),
+            project: None,
             agent: claude.join("agents").join(AGENT_FILE),
             claude_dir: None,
         }
@@ -556,105 +553,102 @@ fn remove_agent(path: &Path) -> Result<FileChange> {
 
 // ── Routing block ────────────────────────────────────────────────────
 
-/// Fails when a routing block cannot be replaced or removed, before anything
-/// is changed.
-pub(crate) fn check_routing(targets: &Targets) -> Result<()> {
-    routing::check(&targets.memory, Owner::Any)?;
-    match &targets.old_memory {
-        Some(old) if shared_with(targets, old).is_empty() => routing::check(old, Owner::Claude),
-        _ => Ok(()),
+/// What happened to the routing block.
+pub(crate) struct Routed {
+    /// For the report.
+    pub line: String,
+    /// What was left as it is, why, and what to do by hand.
+    pub note: Option<String>,
+}
+
+impl Routed {
+    fn left(note: String) -> Self {
+        Self {
+            line: "left as it is, see the note below".to_string(),
+            note: Some(note),
+        }
     }
 }
 
-/// The project's root and the instruction files that are the same file as its
-/// `CLAUDE.md` at `old`.
-fn shared_with(targets: &Targets, old: &Path) -> Vec<PathBuf> {
-    let root = old.parent().unwrap_or(Path::new("."));
-    instructions::pointers_to(root, old, targets.home.as_deref()).same
+/// Why the file of the routing block is not one to write to. At user scope it
+/// may be a link (dotfiles).
+fn memory_obstacle(targets: &Targets) -> Option<String> {
+    match &targets.project {
+        Some(project) => instructions::file_obstacle(&project.root, &targets.memory),
+        None => routing::obstacle(&targets.memory),
+    }
 }
 
-/// Why a block in the project's `CLAUDE.md` stays there: the file has another
-/// name under which other agents read the block, or a file that imports it
-/// would be left with an import of nothing.
-fn stays_in_old_memory(targets: &Targets) -> Option<String> {
-    let old = targets.old_memory.as_ref()?;
-    if !instructions::has_block(old) {
+/// A block that an older version left in the project's `CLAUDE.md`, and what
+/// keeps it from being removed, as a note for the user.
+fn old_block(targets: &Targets) -> Option<(PathBuf, Option<String>)> {
+    let project = targets.project.as_ref()?;
+    let old = project.root.join("CLAUDE.md");
+    let text = std::fs::read_to_string(&old).ok()?;
+    if let Ok(None) = routing::remove_block(&text, Owner::Claude) {
         return None;
     }
-    let root = old.parent().unwrap_or(Path::new("."));
-    let shared = shared_with(targets, old);
-    if !shared.is_empty() {
-        return Some(format!(
-            "kept in {}, which is the same file as {}: Claude Code reads the block there, and so do the agents that read it under that name (`myc setup-codex` refreshes it, `myc setup-codex --uninstall` removes it)",
-            old.display(),
-            instructions::names(root, &shared)
-        ));
-    }
-    let text = std::fs::read_to_string(old).ok()?;
-    let rest = routing::remove_block(&text, Owner::Claude).ok().flatten()?;
-    let imports = instructions::pointers_to(root, old, targets.home.as_deref()).imports;
-    (rest.trim().is_empty() && !imports.is_empty()).then(|| {
-        format!(
-            "kept in {}, which holds nothing else but is imported by {}: remove that import, then re-run",
-            old.display(),
-            instructions::names(root, &imports)
-        )
-    })
+    let note = instructions::repair_obstacle(project, &old)
+        .map(|reason| instructions::by_hand(&old, &reason));
+    Some((old, note))
 }
 
 /// Writes or refreshes the routing block and removes one that an older
-/// version left in the project's `CLAUDE.md`. A block that has to stay there
-/// is the project's only one. Returns what happened, for the report.
-pub(crate) fn install_routing(targets: &Targets, subagent: bool) -> Result<String> {
-    if let Some(kept) = stays_in_old_memory(targets) {
-        remove_memory_block(targets)?;
-        return Ok(kept);
+/// version left in the project's `CLAUDE.md`. A block that cannot be removed
+/// there keeps Claude Code's only one, and nothing is changed.
+pub(crate) fn install_routing(targets: &Targets, subagent: bool) -> Result<Routed> {
+    if let Some(reason) = memory_obstacle(targets) {
+        return Ok(Routed::left(instructions::by_hand(
+            &targets.memory,
+            &reason,
+        )));
+    }
+    let old = old_block(targets);
+    if let Some((_, Some(note))) = old {
+        return Ok(Routed::left(format!(
+            "{note} Then re-run `myc setup-claude`. Until then Claude Code reads the block there."
+        )));
     }
     let block = routing::routing_block(Flavor::Claude { subagent });
     let change = routing::install_block(&targets.memory, &block)?;
-    let mut outcome = describe(change, &targets.memory);
-    if let Some(old) = remove_old_block(targets)? {
-        outcome.push_str(&format!("; moved out of CLAUDE.md ({old})"));
+    let mut line = describe(change, &targets.memory);
+    if let Some((old, None)) = old {
+        let change = routing::uninstall_block(&old, Owner::Claude, targets.delete_empty())?;
+        line.push_str(&format!(
+            "; moved out of CLAUDE.md ({})",
+            describe(change, &old)
+        ));
     }
-    Ok(outcome)
+    Ok(Routed { line, note: None })
 }
 
-fn remove_memory_block(targets: &Targets) -> Result<FileChange> {
+/// Removes the routing block, and one that an older version left in the
+/// project's `CLAUDE.md`.
+fn remove_routing(targets: &Targets) -> Result<Routed> {
+    if let Some(reason) = memory_obstacle(targets) {
+        return Ok(Routed::left(instructions::by_hand(
+            &targets.memory,
+            &reason,
+        )));
+    }
     let change = routing::uninstall_block(&targets.memory, Owner::Any, targets.delete_empty())?;
-    if change == FileChange::Deleted && targets.scope == Scope::Project {
+    if change == FileChange::Deleted && targets.project.is_some() {
         if let Some(dir) = targets.memory.parent() {
             // Only removes `.claude/rules` when nothing else is in it.
             let _ = std::fs::remove_dir(dir);
         }
     }
-    Ok(change)
-}
-
-fn remove_routing(targets: &Targets) -> Result<String> {
-    let change = remove_memory_block(targets)?;
-    let old = remove_old_block(targets)?;
-    Ok(match (change, old) {
-        (FileChange::Absent, Some(old)) => old,
-        (change, None) => describe(change, &targets.memory),
-        (change, Some(old)) => format!("{}; {old}", describe(change, &targets.memory)),
-    })
-}
-
-/// Removes the block of an older version from the project's `CLAUDE.md`, and
-/// the file with it when it held nothing else and no other file points to it.
-/// A block in a file shared with other agents stays.
-fn remove_old_block(targets: &Targets) -> Result<Option<String>> {
-    let Some(old) = &targets.old_memory else {
-        return Ok(None);
-    };
-    if !shared_with(targets, old).is_empty() {
-        return Ok(stays_in_old_memory(targets));
+    let mut line = describe(change, &targets.memory);
+    let mut note = None;
+    match old_block(targets) {
+        Some((old, None)) => {
+            let change = routing::uninstall_block(&old, Owner::Claude, targets.delete_empty())?;
+            line.push_str(&format!("; {}", describe(change, &old)));
+        }
+        Some((_, left)) => note = left,
+        None => {}
     }
-    let root = old.parent().unwrap_or(Path::new("."));
-    let pointers = instructions::pointers_to(root, old, targets.home.as_deref());
-    let delete_if_empty = targets.delete_empty() && pointers.all().is_empty();
-    let change = routing::uninstall_block(old, Owner::Claude, delete_if_empty)?;
-    Ok((change != FileChange::Absent).then(|| describe(change, old)))
+    Ok(Routed { line, note })
 }
 
 // ── Install / uninstall ──────────────────────────────────────────────
@@ -664,6 +658,8 @@ fn remove_old_block(targets: &Targets) -> Result<Option<String>> {
 pub struct Report {
     /// `(layer, outcome)` pairs in the order they ran.
     pub lines: Vec<(String, String)>,
+    /// What was left as it is, and what the user can do about it.
+    pub notes: Vec<String>,
 }
 
 impl Report {
@@ -700,7 +696,6 @@ pub fn install(
     layers: Layers,
     registrar: McpRegistrar,
 ) -> Result<Report> {
-    check_routing(targets)?;
     let mut report = Report::default();
 
     // 1. MCP server.
@@ -750,12 +745,13 @@ pub fn install(
 
     // 3. Routing block.
     if layers.routing {
-        report.add("Routing", install_routing(targets, layers.agent)?);
+        let Routed { line, note } = install_routing(targets, layers.agent)?;
+        report.add("Routing", line);
+        report.notes.extend(note);
     } else {
-        report.add(
-            "Routing",
-            format!("skipped (--no-routing); {}", remove_routing(targets)?),
-        );
+        let Routed { line, note } = remove_routing(targets)?;
+        report.add("Routing", format!("skipped (--no-routing); {line}"));
+        report.notes.extend(note);
     }
 
     // 4. Subagent.
@@ -784,7 +780,6 @@ pub fn install(
 
 /// Removes everything `install` may have written at `targets`.
 pub fn uninstall(targets: &Targets, registrar: McpRegistrar) -> Result<Report> {
-    check_routing(targets)?;
     let mut report = Report::default();
     let delete_empty = targets.delete_empty();
 
@@ -811,7 +806,9 @@ pub fn uninstall(targets: &Targets, registrar: McpRegistrar) -> Result<Report> {
         ),
     );
 
-    report.add("Routing", remove_routing(targets)?);
+    let Routed { line, note } = remove_routing(targets)?;
+    report.add("Routing", line);
+    report.notes.extend(note);
 
     let change = remove_agent(&targets.agent)?;
     report.add("Subagent", describe(change, &targets.agent));
@@ -819,6 +816,11 @@ pub fn uninstall(targets: &Targets, registrar: McpRegistrar) -> Result<Report> {
     if let Some(dir) = &targets.claude_dir {
         // Only removes `.claude` when nothing else is in it.
         let _ = std::fs::remove_dir(dir);
+    }
+    if let Some(project) = &targets.project {
+        for block in instructions::block_list(project) {
+            report.notes.push(format!("Routing block left: {block}"));
+        }
     }
     Ok(report)
 }
@@ -1002,6 +1004,9 @@ pub fn cmd_setup_claude(
 fn print_report(report: &Report) {
     for (layer, outcome) in &report.lines {
         println!("  \u{2713} {layer:<11} {outcome}");
+    }
+    for note in &report.notes {
+        println!("  ! {note}");
     }
 }
 
@@ -1248,11 +1253,26 @@ mod tests {
         assert!(!root.join(".claude").join("agents").exists());
     }
 
+    /// An empty project in git, which repairing an old installation needs.
+    fn git_project() -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let status = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .arg(&root)
+            .status();
+        assert!(status.unwrap().success());
+        (dir, root)
+    }
+
     /// Every file below `root` with its text; links with their target.
     fn tree(root: &Path) -> std::collections::BTreeMap<PathBuf, String> {
         fn walk(dir: &Path, out: &mut std::collections::BTreeMap<PathBuf, String>) {
             for entry in std::fs::read_dir(dir).unwrap() {
                 let path = entry.unwrap().path();
+                if path.ends_with(".git") {
+                    continue;
+                }
                 if is_symlink(&path) {
                     let target = std::fs::read_link(&path).unwrap();
                     out.insert(path, format!("-> {}", target.display()));
@@ -1345,8 +1365,8 @@ mod tests {
                 if old_install && is_shared(layout) {
                     continue;
                 }
-                let dir = tempfile::tempdir().unwrap();
-                let root = dir.path();
+                let (_dir, root) = git_project();
+                let root = root.as_path();
                 write_layout(root, layout);
                 let before = tree(root);
                 let t = Targets::project(root);
@@ -1355,6 +1375,7 @@ mod tests {
                 }
 
                 let report = install(&t, "myc", Layers::ALL, McpRegistrar::File).unwrap();
+                assert!(report.notes.is_empty(), "{layout:?}: {:?}", report.notes);
                 let after = tree(root);
                 for (path, text) in &before {
                     if path != &t.memory {
@@ -1386,7 +1407,7 @@ mod tests {
                     .any(|(_, o)| o.contains("moved out of CLAUDE.md"));
                 assert_eq!(moved, old_install, "{layout:?}: {:?}", report.lines);
                 assert_eq!(
-                    super::super::instructions::findings(root, None),
+                    instructions::findings(t.project.as_ref().unwrap()),
                     [],
                     "{layout:?}"
                 );
@@ -1409,8 +1430,8 @@ mod tests {
     #[test]
     fn an_old_block_is_removed_by_uninstall_and_by_no_routing() {
         for layout in LAYOUTS.iter().filter(|layout| !is_shared(layout)) {
-            let dir = tempfile::tempdir().unwrap();
-            let root = dir.path();
+            let (_dir, root) = git_project();
+            let root = root.as_path();
             write_layout(root, layout);
             let before = tree(root);
             let t = Targets::project(root);
@@ -1429,64 +1450,67 @@ mod tests {
         }
     }
 
-    /// A block in a CLAUDE.md that is also AGENTS.md belongs to whoever reads
-    /// it there: neither setup, `--no-routing` nor uninstall removes it, and
-    /// setup adds no second one. The report names both files.
+    /// A block that setup and uninstall leave alone is named in their notes,
+    /// with file and lines; the other layers are installed and removed.
     #[cfg(unix)]
     #[test]
-    fn a_block_in_a_file_shared_with_agents_md_stays() {
-        for flavor in [Flavor::Agents, Flavor::Claude { subagent: true }] {
-            let dir = tempfile::tempdir().unwrap();
-            let root = dir.path();
-            write_layout(
-                root,
-                &[("AGENTS.md", "rules\n"), ("CLAUDE.md", "-> AGENTS.md")],
-            );
-            let agents = root.join("AGENTS.md");
-            let t = Targets::project(root);
-            // Installed before the shared block: the copy goes.
-            install(&t, "myc", Layers::ALL, McpRegistrar::File).unwrap();
-            assert!(t.memory.exists());
-            routing::install_block(&agents, &routing::routing_block(flavor)).unwrap();
-            let before = tree(root);
-            let text = std::fs::read_to_string(&agents).unwrap();
-
+    fn a_block_left_alone_is_named_and_the_other_layers_go_on() {
+        let block = routing::routing_block(Flavor::Claude { subagent: true });
+        let edited = block.replace("grep/rg stay", "Always lint.\ngrep/rg stay");
+        let shared = [("AGENTS.md", block.as_str()), ("CLAUDE.md", "-> AGENTS.md")];
+        let edited_old = [("CLAUDE.md", edited.as_str())];
+        let edited_rules = [(".claude/rules/myceliums.md", edited.as_str())];
+        for (layout, file) in [
+            (&shared[..], "CLAUDE.md"),
+            (&edited_old[..], "CLAUDE.md"),
+            (&edited_rules[..], ".claude/rules/myceliums.md"),
+        ] {
+            let (_dir, root) = git_project();
+            write_layout(&root, layout);
+            let before = tree(&root);
+            let t = Targets::project(&root);
+            let named = |report: &Report| {
+                let notes = report.notes.join("\n");
+                assert!(notes.contains(&format!("{file}:1-")), "{notes}");
+                assert!(notes.contains("delete lines 1-"), "{notes}");
+            };
             let report = install(&t, "myc", Layers::ALL, McpRegistrar::File).unwrap();
-            let routing = &report.lines.iter().find(|(l, _)| l == "Routing").unwrap().1;
-            assert!(
-                routing.contains("CLAUDE.md") && routing.contains("AGENTS.md"),
-                "{routing}"
-            );
-            assert!(!t.memory.exists(), "Claude Code reads the shared block");
-            assert!(before.contains_key(&t.memory));
+            named(&report);
+            assert!(t.mcp_config.exists() && t.agent.exists());
             let no_routing = Layers {
                 routing: false,
                 ..Layers::ALL
             };
-            install(&t, "myc", no_routing, McpRegistrar::File).unwrap();
-            uninstall(&t, McpRegistrar::File).unwrap();
-            assert_eq!(std::fs::read_to_string(&agents).unwrap(), text);
-            assert!(is_symlink(&root.join("CLAUDE.md")));
+            named(&install(&t, "myc", no_routing, McpRegistrar::File).unwrap());
+            let report = uninstall(&t, McpRegistrar::File).unwrap();
+            named(&report);
+            let left = report
+                .notes
+                .iter()
+                .any(|n| n.starts_with("Routing block left: "));
+            assert!(left, "{:?}", report.notes);
+            assert_eq!(tree(&root), before);
         }
     }
 
-    /// A block someone edited stops setup and uninstall before they change
-    /// anything.
+    /// The block of `setup-codex` is not setup-claude's to remove, but the
+    /// uninstall says that it is there.
     #[test]
-    fn an_edited_block_stops_setup_before_it_changes_anything() {
-        let block = routing::routing_block(Flavor::Claude { subagent: true });
-        let edited = block.replace("grep/rg stay", "Always lint.\ngrep/rg stay");
-        for file in ["CLAUDE.md", ".claude/rules/myceliums.md"] {
-            let dir = tempfile::tempdir().unwrap();
-            let root = dir.path();
-            write_layout(root, &[("AGENTS.md", "rules\n"), (file, edited.as_str())]);
-            let before = tree(root);
-            let t = Targets::project(root);
-            let error = install(&t, "myc", Layers::ALL, McpRegistrar::File).unwrap_err();
-            assert!(format!("{error:#}").contains("was edited"), "{error:#}");
-            assert!(uninstall(&t, McpRegistrar::File).is_err());
-            assert_eq!(tree(root), before);
-        }
+    fn uninstall_names_the_block_of_setup_codex() {
+        let (_dir, root) = git_project();
+        write_layout(&root, &[("AGENTS.md", "rules\n")]);
+        let agents = root.join("AGENTS.md");
+        routing::install_block(&agents, &routing::routing_block(Flavor::Agents)).unwrap();
+        let t = Targets::project(&root);
+        let before = tree(&root);
+        install(&t, "myc", Layers::ALL, McpRegistrar::File).unwrap();
+        let report = uninstall(&t, McpRegistrar::File).unwrap();
+        assert_eq!(tree(&root), before);
+        assert!(
+            report.notes[0].contains("AGENTS.md:3-") && report.notes[0].contains("setup-codex"),
+            "{:?}",
+            report.notes
+        );
     }
 
     #[test]

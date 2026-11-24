@@ -451,13 +451,13 @@ myc configure --reset
 
 ### `myc doctor`
 
-Check the health of the Myceliums installation. Verifies registry integrity, data directory state, orphaned data, stale locks, and, for the current project and every indexed one, instruction files an older `myc` wrote that hide the project's own (`CLAUDE.md` over `AGENTS.md`, or the reverse), each with the command that repairs it.
+Check the health of the Myceliums installation. Verifies registry integrity, data directory state, orphaned data, stale locks, and, for the current project and every indexed one, instruction files an older `myc` wrote that hide the project's own (`CLAUDE.md` over `AGENTS.md`, or the reverse), each with the command that repairs it, and lists the routing blocks of the current project with file and lines.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--download` | bool | `false` | Pre-download the configured embedding model |
-| `--fix` | bool | `false` | Repair such files in the current project (the git top level of the working directory, and the directory itself): move the routing block of a `CLAUDE.md` that holds nothing else into `.claude/rules/myceliums.md` and delete that `CLAUDE.md`; delete an `AGENTS.md` that holds only the block of `myc setup-codex`. Nothing else is changed: a `CLAUDE.md` with text of its own, a block someone edited, a read-only file, and a file that another instruction file links to or imports are reported only |
-| `--all-projects` | bool | `false` | With `--fix`: the same in every indexed project |
+| `--fix` | bool | `false` | Repair such files in the current project (the git top level of the working directory, and the directory itself), in the [plain case](../guides/agent-integration.md#your-own-instruction-files-200) only: move the routing block of a `CLAUDE.md` that holds nothing else into `.claude/rules/myceliums.md` and delete that `CLAUDE.md`; delete an `AGENTS.md` that holds only the block of `myc setup-codex`. Everything else is reported with what to do by hand |
+| `--all-projects` | bool | `false` | With `--fix`: the same in every project it reports (indexed ones and other worktrees of the repository) |
 
 ```bash
 myc doctor

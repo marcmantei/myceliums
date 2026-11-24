@@ -148,22 +148,28 @@ fn setup_codex_creates_no_agents_md_beside_a_claude_md() {
     assert_eq!(p.read("CLAUDE.md").as_deref(), Some("rules\n"));
 }
 
-/// The first choice that `setup-codex` offers: one file for every agent.
+/// Where AGENTS.md is a link, `setup-codex` writes nothing through it, and the
+/// uninstalls say what they leave behind.
 #[cfg(unix)]
 #[test]
-fn setup_codex_then_setup_claude_share_one_file() {
-    let p = Project::new(&[("CLAUDE.md", "rules\n")]);
+fn a_shared_file_is_left_alone_and_named() {
+    let p = Project::new(&[("CLAUDE.md", OLD_BLOCK)]);
     std::os::unix::fs::symlink("CLAUDE.md", p.root.join("AGENTS.md")).unwrap();
     let out = p.ok(&["setup-codex"]);
-    assert!(out.contains("are the same file"), "{out}");
-    let shared = p.read("CLAUDE.md").unwrap();
-    assert!(shared.contains("BEGIN myceliums"), "{shared}");
-
+    assert!(out.contains("it is a symbolic link to CLAUDE.md"), "{out}");
     let out = p.ok(&["setup-claude"]);
-    assert!(out.contains("which is the same file as AGENTS.md"), "{out}");
-    p.ok(&["setup-claude", "--uninstall"]);
-    assert_eq!(p.read("AGENTS.md"), Some(shared));
-    p.ok(&["setup-codex", "--uninstall"]);
-    assert_eq!(p.read("CLAUDE.md").as_deref(), Some("rules\n"));
-    assert!(p.root.join("AGENTS.md").is_symlink());
+    assert!(out.contains("it is the same file as AGENTS.md"), "{out}");
+    for command in ["setup-claude", "setup-codex"] {
+        let out = p.ok(&[command, "--uninstall"]);
+        assert!(out.contains("Routing block left: CLAUDE.md:1-"), "{out}");
+    }
+    assert_eq!(p.read("CLAUDE.md").as_deref(), Some(OLD_BLOCK));
+    let out = String::from_utf8(p.myc(&["doctor"]).stdout).unwrap();
+    assert!(out.contains("- Routing block: CLAUDE.md:1-"), "{out}");
+
+    let p = Project::new(&[]);
+    std::os::unix::fs::symlink("missing.md", p.root.join("AGENTS.md")).unwrap();
+    let out = p.ok(&["setup-codex"]);
+    assert!(out.contains("it is a symbolic link to missing.md"), "{out}");
+    assert!(!p.root.join("missing.md").exists());
 }

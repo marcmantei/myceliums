@@ -4627,7 +4627,6 @@ dependencies = [
  "notify",
  "notify-debouncer-mini",
  "rpassword",
- "same-file",
  "serde",
  "serde_json",
  "tempfile",

@@ -1,7 +1,8 @@
 //! `myc doctor`.
 
+use crate::commands::instructions::{self, Fix, Project};
 use crate::commands::repos::find_orphans;
-use crate::commands::{instructions, setup_claude};
+use crate::commands::setup_claude;
 use crate::repo::{data_dir, registry_path};
 use crate::ui::format_bytes;
 use anyhow::Result;
@@ -14,82 +15,108 @@ use myceliums_storage::RepoRegistry;
 use std::path::{Path, PathBuf};
 
 /// A project whose instruction files are checked.
-struct Project {
-    root: PathBuf,
+struct Checked {
+    project: Project,
     /// Around the working directory, as opposed to merely indexed.
     current: bool,
 }
 
 /// The projects whose instruction files are checked: the one around the
-/// working directory (its git top level, and the directory itself) and every
-/// indexed one that still exists. Never the home directory.
+/// working directory (its git top level, and the directory itself), the other
+/// worktrees of its repository, and every indexed one that still exists. Never
+/// the home directory.
 fn projects(
     cwd: Option<PathBuf>,
     registry: Option<&RepoRegistry>,
     home: Option<&Path>,
-) -> Vec<Project> {
-    let top = cwd.as_deref().and_then(setup_claude::git_toplevel);
-    let current = top.into_iter().chain(cwd).map(|root| (root, true));
-    let indexed = registry
+) -> Vec<Checked> {
+    let indexed: Vec<PathBuf> = registry
         .map(|r| r.list())
         .unwrap_or_default()
         .into_iter()
-        .map(|repo| (PathBuf::from(&repo.path), false));
-    let mut out: Vec<Project> = Vec::new();
-    for (root, current) in current.chain(indexed) {
+        .map(|repo| PathBuf::from(&repo.path))
+        .collect();
+    let top = cwd.as_deref().and_then(setup_claude::git_toplevel);
+    let mut roots: Vec<(PathBuf, bool)> = Vec::new();
+    let mut add = |root: PathBuf, current: bool| {
         // An indexed project that no longer exists is skipped here.
-        let Ok(root) = std::fs::canonicalize(root) else {
-            continue;
-        };
-        if root.is_dir() && Some(root.as_path()) != home && !out.iter().any(|p| p.root == root) {
-            out.push(Project { root, current });
+        if let Ok(root) = std::fs::canonicalize(root) {
+            let known = roots.iter().any(|(known, _)| *known == root);
+            if root.is_dir() && Some(root.as_path()) != home && !known {
+                roots.push((root, current));
+            }
         }
+    };
+    let project = |root: &Path| Project {
+        root: root.to_path_buf(),
+        home: home.map(Path::to_path_buf),
+        others: indexed.clone(),
+    };
+    let worktrees = top.as_deref().map(|top| project(top).worktrees());
+    for root in top.into_iter().chain(cwd) {
+        add(root, true);
     }
-    out
+    for root in worktrees
+        .unwrap_or_default()
+        .into_iter()
+        .chain(indexed.clone())
+    {
+        add(root, false);
+    }
+    roots
+        .into_iter()
+        .map(|(root, current)| Checked {
+            project: project(&root),
+            current,
+        })
+        .collect()
 }
 
 /// The lines about instruction files that an older `myc` wrote (#200), and
 /// the number of issues left. With `fix`, files that hide a project's own
-/// are repaired in the current project, with `all` in every one; remarks are
-/// never acted on.
-fn check_instructions(
-    projects: &[Project],
-    home: Option<&Path>,
-    fix: bool,
-    all: bool,
-) -> (Vec<String>, u32) {
+/// are repaired in the current project, with `all` in every one, where that
+/// is plain; everything else is only said.
+fn check_instructions(projects: &[Checked], fix: bool, all: bool) -> (Vec<String>, u32) {
     let mut lines = Vec::new();
     let mut issues = 0;
-    for Project { root, current } in projects {
-        for finding in instructions::findings(root, home) {
-            let what = finding.describe(root);
-            if !finding.hides() {
-                lines.push(format!("- Instruction files: {what}"));
-            } else if fix && (*current || all) {
-                match instructions::repair(root, &finding, home) {
+    for Checked { project, current } in projects {
+        for finding in instructions::findings(project) {
+            let hides = !finding.hidden.is_empty();
+            if hides && fix && (*current || all) && finding.fix == Fix::Doctor {
+                match instructions::repair(project, &finding) {
                     Ok(done) => {
                         lines.push(format!("\u{2713} Instruction files repaired: {done}"));
+                        continue;
                     }
-                    Err(e) => {
-                        lines.push(format!("\u{2717} Instruction files not repaired: {e:#}"));
-                        issues += 1;
-                    }
+                    Err(e) => lines.push(format!("\u{2717} Not repaired: {e:#}")),
                 }
-            } else {
-                let dir = setup_claude::shell_quote(&root.to_string_lossy());
-                let mut line = format!("\u{2717} Instruction files: {what}");
-                if finding.is_repairable() && *current {
-                    line.push_str("\n    to fix: myc doctor --fix");
-                } else if finding.is_repairable() {
-                    line.push_str(&format!("\n    to fix: cd {dir} && myc doctor --fix"));
-                }
-                lines.push(line);
-                issues += 1;
+            }
+            let mark = if hides { "\u{2717}" } else { "-" };
+            issues += u32::from(hides);
+            lines.push(format!("{mark} Instruction files: {}", finding.describe()));
+            let command = |dir: &Path| {
+                let dir = setup_claude::shell_quote(&dir.to_string_lossy());
+                format!("    to fix: cd {dir} && myc doctor --fix")
+            };
+            match &finding.fix {
+                Fix::ByHand(text) => lines.push(format!("    {text}")),
+                Fix::Above(dir) => lines.push(command(dir)),
+                Fix::Doctor if !hides => {}
+                Fix::Doctor if *current => lines.push("    to fix: myc doctor --fix".to_string()),
+                Fix::Doctor => lines.push(command(&project.root)),
             }
         }
     }
     if lines.is_empty() {
         lines.push("\u{2713} Instruction files: none hidden by myceliums".to_string());
+    }
+    for Checked { project, .. } in projects.iter().filter(|p| p.current) {
+        for block in instructions::block_list(project) {
+            let line = format!("- Routing block: {block}");
+            if !lines.contains(&line) {
+                lines.push(line);
+            }
+        }
     }
     (lines, issues)
 }
@@ -443,7 +470,7 @@ pub(crate) async fn cmd_doctor(download: bool, fix: bool, all_projects: bool) ->
         let home = dirs::home_dir().map(|h| std::fs::canonicalize(&h).unwrap_or(h));
         let cwd = std::env::current_dir().ok();
         let projects = projects(cwd, registry.as_ref(), home.as_deref());
-        let (lines, left) = check_instructions(&projects, home.as_deref(), fix, all_projects);
+        let (lines, left) = check_instructions(&projects, fix, all_projects);
         for line in lines {
             println!("{line}");
         }
@@ -492,14 +519,17 @@ mod tests {
             }
         }
 
-        /// A project whose CLAUDE.md of the routing block hides AGENTS.md.
+        /// A git project whose CLAUDE.md of the routing block hides AGENTS.md.
         fn hidden(&self, name: &str) -> PathBuf {
-            let root = self.tmp.path().canonicalize().unwrap().join(name);
+            let root = self.top().join(name);
             std::fs::create_dir_all(&root).unwrap();
-            let block = routing_block(Flavor::Claude { subagent: true });
-            std::fs::write(root.join("CLAUDE.md"), block).unwrap();
-            std::fs::write(root.join("AGENTS.md"), "rules\n").unwrap();
+            git(&root, &["init", "-q"]);
+            hide(&root);
             root
+        }
+
+        fn top(&self) -> PathBuf {
+            self.tmp.path().canonicalize().unwrap()
         }
 
         fn register(&mut self, root: &Path) {
@@ -514,9 +544,27 @@ mod tests {
 
         fn check(&self, cwd: &Path, fix: bool, all: bool) -> (String, u32) {
             let projects = projects(Some(cwd.to_path_buf()), Some(&self.registry), None);
-            let (lines, issues) = check_instructions(&projects, None, fix, all);
+            let (lines, issues) = check_instructions(&projects, fix, all);
             (lines.join("\n"), issues)
         }
+    }
+
+    fn git(dir: &Path, args: &[&str]) {
+        let out = std::process::Command::new("git")
+            .args(["-c", "user.name=t", "-c", "user.email=t@t"])
+            .args(["-c", "commit.gpgsign=false", "-C"])
+            .arg(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    }
+
+    fn hide(root: &Path) {
+        std::fs::create_dir_all(root).unwrap();
+        let block = routing_block(Flavor::Claude { subagent: true });
+        std::fs::write(root.join("CLAUDE.md"), block).unwrap();
+        std::fs::write(root.join("AGENTS.md"), "rules\n").unwrap();
     }
 
     fn is_hidden(root: &Path) -> bool {
@@ -557,14 +605,11 @@ mod tests {
     #[test]
     fn a_project_below_a_git_top_level_is_current_in_its_directory() {
         let mut s = Setup::new();
-        let sub = s.hidden("repo/sub");
-        let repo = sub.parent().unwrap();
-        let init = std::process::Command::new("git")
-            .args(["init", "-q"])
-            .arg(repo)
-            .status();
-        assert!(init.unwrap().success());
+        let (repo, sub) = (s.top().join("repo"), s.top().join("repo/sub"));
+        hide(&sub);
+        git(&repo, &["init", "-q"]);
         s.register(&sub);
+        let repo = repo.as_path();
         assert_eq!(s.check(repo, true, false).1, 1, "indexed only");
         assert_eq!(s.check(&sub, true, false).1, 0);
         assert!(!is_hidden(&sub));
@@ -587,6 +632,31 @@ mod tests {
         }
     }
 
+    /// A worktree inside the project is checked too, and the project's own
+    /// CLAUDE.md is reported from within it.
+    #[test]
+    fn worktrees_and_the_project_above_are_reported() {
+        let s = Setup::new();
+        let root = s.hidden("project");
+        git(&root, &["add", "."]);
+        git(&root, &["commit", "-q", "-m", "init"]);
+        git(&root, &["worktree", "add", "-q", ".claude/worktrees/w"]);
+        let worktree = root.join(".claude/worktrees/w");
+        let fix_in = |dir: &Path| format!("to fix: cd {} && myc doctor --fix", dir.display());
+
+        let (lines, _) = s.check(&root, false, false);
+        assert!(lines.contains("to fix: myc doctor --fix"), "{lines}");
+        assert!(lines.contains(&fix_in(&worktree)), "{lines}");
+        let (lines, _) = s.check(&worktree, true, false);
+        assert!(lines.contains("repaired"), "{lines}");
+        assert!(lines.contains("above this project"), "{lines}");
+        assert!(lines.contains(&fix_in(&root)), "{lines}");
+        assert!(!is_hidden(&worktree) && is_hidden(&root));
+        let (lines, issues) = s.check(&root, true, false);
+        assert_eq!(issues, 0, "{lines}");
+        assert!(!is_hidden(&root));
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_read_only_project_is_reported_and_does_not_stop_the_others() {
@@ -600,19 +670,25 @@ mod tests {
             std::fs::set_permissions(&locked, permissions).unwrap();
         };
         set_mode(0o555);
-        let root_user = std::fs::write(locked.join("probe"), "").is_ok();
         let (lines, issues) = s.check(&other, true, true);
-        let (left, text) = (
-            is_hidden(&locked),
-            std::fs::read_to_string(locked.join("AGENTS.md")),
-        );
         set_mode(0o755);
+        assert_eq!(issues, 1, "{lines}");
+        assert!(lines.contains("it is read-only"), "{lines}");
+        assert!(is_hidden(&locked), "nothing was changed there");
         assert!(!is_hidden(&other), "{lines}");
-        assert_eq!(text.unwrap(), "rules\n");
-        if !root_user {
-            assert_eq!(issues, 1, "{lines}");
-            assert!(lines.contains("not repaired"), "{lines}");
-            assert!(left, "nothing was changed in the read-only project");
-        }
+    }
+
+    /// Every block of the current project is listed, hidden files or not.
+    #[test]
+    fn blocks_are_listed_with_file_and_lines() {
+        let s = Setup::new();
+        let root = s.hidden("project");
+        std::fs::remove_file(root.join("CLAUDE.md")).unwrap();
+        let block = routing_block(Flavor::Claude { subagent: true });
+        std::fs::write(root.join("GEMINI.md"), format!("rules\n\n{block}")).unwrap();
+        let (lines, issues) = s.check(&root, false, false);
+        assert_eq!(issues, 0, "{lines}");
+        assert!(lines.contains("none hidden"), "{lines}");
+        assert!(lines.contains("- Routing block: GEMINI.md:3-"), "{lines}");
     }
 }

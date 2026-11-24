@@ -252,28 +252,46 @@ those in subdirectories or above the project. A `CLAUDE.md` that the project
 wrote itself still replaces its `AGENTS.md`; that is Claude Code's default and
 the project's choice.
 
-**What setup changes in your files.** `myc setup-claude` removes the routing
-block that an older version wrote into `CLAUDE.md`, with the line break before
-it, and deletes a `CLAUDE.md` that held nothing else (commit the deletion if the
-file was committed). `--uninstall` and `--no-routing` do the same. Text outside
-the block stays; an older version that met a file without a final line break
-added one, which cannot be told from yours and stays. Four cases are left as
-they are, with a message:
+**What setup changes in your files.** One case is automatic, the plain one:
+`CLAUDE.md` is a regular file of the project with one name, not ignored by git,
+holds one routing block byte for byte as some version of `myc` wrote it, and no
+other instruction file links to it or imports it. Then `myc setup-claude`
+removes the block with the line break before it, writes
+`.claude/rules/myceliums.md`, and deletes a `CLAUDE.md` that held nothing else
+(commit the deletion if the file was committed). `--uninstall` and
+`--no-routing` remove the block too. Text outside the block stays; an older
+version that met a file without a final line break added one, which cannot be
+told from yours and stays.
 
-- `CLAUDE.md` is the same file as `AGENTS.md` or another instruction file
-  (symbolic or hard link): the block stays there, because other agents read it
-  under that name, and `.claude/rules/myceliums.md` is not written.
-  `myc setup-codex` refreshes it and `myc setup-codex --uninstall` removes it.
-- Another instruction file imports a `CLAUDE.md` that holds only the block.
-- The text inside the block was edited: setup and uninstall stop before they
-  change anything. Move your text outside the markers and delete the block.
-- A read-only file that holds a block: likewise.
+In every other case no instruction file is changed, the block stays where it is
+(Claude Code reads it there), and the message gives file, lines, reason and what
+to do by hand. These are: a symbolic link in either direction, also to or from
+`GEMINI.md`, `.claude/CLAUDE.md`, files in subdirectories, in the home
+directory, in other worktrees or in other indexed projects; several hard links;
+another instruction file that imports it; a block that was edited or
+reformatted, several blocks, or markers that do not match; a read-only or
+git-ignored file; a git query that failed or took more than 5 s; a project
+outside git that has another instruction file.
+
+Uninstalling (`myc setup-claude --uninstall`, `myc setup-codex --uninstall`)
+lists the routing blocks that are still in the project, each with file, lines and
+what removes it. `myc doctor` lists them for the current project.
 
 **Existing installations.** `myc doctor` reports files that hide others in the
-current project and in every indexed one, with the command that repairs each.
-`myc doctor --fix` repairs the current project only, and only files that hide
-something; `--fix --all-projects` does so in every indexed project. Running
-`myc setup-claude` again moves the block in any case.
+current project, above it, in the repository's other worktrees and in every
+indexed project, with the command or the steps by hand for each. `myc doctor
+--fix` repairs the plain case in the current project only, and only files that
+hide something; `--fix --all-projects` does so in every project it reports.
+Running `myc setup-claude` again moves a block that hides nothing too.
+
+**Limits.** A symbolic link to `CLAUDE.md` is not seen when it lies in a
+directory that git ignores as a whole, in a nested repository that is no
+worktree of this one, or in a project that is not indexed. Hard links are not
+seen on Windows. Links and imports are looked for under the names listed in
+`myc/src/commands/instructions.rs`; a file that Claude Code reaches through some
+other file's import is not. Codex's fallback names are read from
+`~/.codex/config.toml` only (not `CODEX_HOME`, not a project's
+`.codex/config.toml`).
 
 **Other agents.** Codex reads one file per directory, `AGENTS.md` before the
 names in its `project_doc_fallback_filenames`
@@ -285,14 +303,16 @@ first file of a list with `AGENTS.md` before `CLAUDE.md` and `GEMINI.md`
 its block into an `AGENTS.md` that has text of its own, or creates one where it
 hides nothing. In a project that has only a `CLAUDE.md` (or `GEMINI.md`) it
 writes none, and deletes one that an older version created and that holds only
-the block. **Codex then reads no instructions in that project**, as before
+the block (plain case, as above). An `AGENTS.md` that is a link, or that another
+instruction file links to, is left alone; the message has the block's text to
+add by hand. **Codex then reads no instructions in that project**, as before
 setup; its myceliums MCP tools work. The choice is yours:
 
 | You want | Do |
 |---|---|
-| every agent to read `CLAUDE.md`, with the routing block in it | `ln -s CLAUDE.md AGENTS.md && myc setup-codex` |
-| separate instructions for Codex, which Zed and OpenCode then read instead of `CLAUDE.md` | create `AGENTS.md` with your text, then `myc setup-codex` |
-| Codex to read `CLAUDE.md`, without the routing block, only on your machine | `project_doc_fallback_filenames = ["CLAUDE.md"]` in `~/.codex/config.toml` |
+| every agent to read `CLAUDE.md`, without a routing block for Codex | `ln -s CLAUDE.md AGENTS.md` |
+| separate instructions for Codex, with the block, which Zed and OpenCode then read instead of `CLAUDE.md` | create `AGENTS.md` with your text, then `myc setup-codex` |
+| Codex to read `CLAUDE.md`, only on your machine | `project_doc_fallback_filenames = ["CLAUDE.md"]` in `~/.codex/config.toml` |
 | no instructions for Codex | nothing |
 
 The setup of every other editor writes MCP configuration only.
@@ -367,9 +387,10 @@ server instructions and the `code-explorer` subagent say the same). In the
 #171 re-run the same 10-turn Django call-chain question was again answered
 from `trace_flow` alone, without the "read the source" step its `Incomplete`
 block named, with the #163 answer (F1 0.48). The
-block is versioned (`v3` in its first comment line); everything between the markers is replaced on re-run,
-and text outside them is never touched. Put your own rules outside the
-markers.
+block is versioned (`v4` in its first comment line; v4 only changes that line).
+On re-run an unedited block is replaced; a block whose text was edited is left
+alone with a message. Text outside the markers is never touched. Put your own
+rules outside the markers.
 
 `myc setup-codex` writes the same block, without the subagent line, into the
 project's `AGENTS.md` (when run inside a git repository; `--no-routing` skips

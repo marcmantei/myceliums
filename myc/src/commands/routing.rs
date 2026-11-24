@@ -8,7 +8,8 @@
 //! The block tells the agent which questions go to the code graph and which
 //! stay with grep. It is loaded on every turn, so it is kept under 15 lines.
 //! Everything between the markers belongs to myceliums: installing replaces
-//! it, uninstalling removes it, and text outside the markers is never touched.
+//! it and uninstalling removes it, as long as it reads exactly as some version
+//! wrote it ([`obstacle`]). Text outside the markers is never touched.
 
 use std::path::Path;
 
@@ -20,7 +21,7 @@ pub const BEGIN: &str = myceliums_core::index_scope::MANAGED_BLOCK_BEGIN;
 /// Last line of the managed block.
 pub const END: &str = myceliums_core::index_scope::MANAGED_BLOCK_END;
 /// Version of the block's wording; bump it when the text changes.
-pub const ROUTING_VERSION: u32 = 3;
+pub const ROUTING_VERSION: u32 = 4;
 
 /// Which agent the block is written for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,9 +61,14 @@ fn render(version: u32, flavor: Flavor) -> String {
     } else {
         "Graph answers are heuristic: when completeness matters, or a result says `Incomplete` or lists calls without an edge, read the source before answering.\n"
     };
+    let edits = if version < 4 {
+        format!("edits inside these markers are overwritten; `{setup} --uninstall` removes them")
+    } else {
+        format!("it updates this block and `{setup} --uninstall` removes it, unless the block was edited; put your own text outside the markers")
+    };
     format!(
         "{BEGIN}\n\
-         <!-- v{version}, written by `{setup}`: edits inside these markers are overwritten; `{setup} --uninstall` removes them -->\n\
+         <!-- v{version}, written by `{setup}`: {edits} -->\n\
          ## Code navigation: myceliums\n\
          Structural questions go to the myceliums code graph first, not grep/rg:\n\
          - callers / callees of X: `myc callers X`, `myc callees X` (`--depth 3` for chains)\n\
@@ -75,10 +81,9 @@ fn render(version: u32, flavor: Flavor) -> String {
     )
 }
 
-/// Whether `block` (markers included) is a text some version of `myc` wrote.
-fn is_unedited(block: &str) -> bool {
-    let block = block.replace("\r\n", "\n");
-    let block = block.trim_end();
+/// Whether `block` (markers included) is, byte for byte, a text that some
+/// version of `myc` wrote, in a file with the line breaks of `block`.
+fn is_shipped(block: &str) -> bool {
     (1..=ROUTING_VERSION).any(|version| {
         [
             Flavor::Claude { subagent: true },
@@ -86,7 +91,10 @@ fn is_unedited(block: &str) -> bool {
             Flavor::Agents,
         ]
         .into_iter()
-        .any(|flavor| render(version, flavor).trim_end() == block)
+        .any(|flavor| {
+            let text = render(version, flavor);
+            text == block || text.replace('\n', "\r\n") == block
+        })
     })
 }
 
@@ -99,32 +107,32 @@ fn block_ranges(text: &str) -> Result<Vec<(usize, usize)>> {
     let mut ranges = Vec::new();
     let mut open: Option<usize> = None;
     let mut offset = 0;
-    for line in text.split_inclusive('\n') {
+    for (i, line) in text.split_inclusive('\n').enumerate() {
         let start = offset;
         offset += line.len();
+        let n = i + 1;
         match line.trim() {
             BEGIN if open.is_some() => {
-                bail!("found a second `{BEGIN}` before `{END}`; fix the file by hand, then re-run")
+                bail!("line {n} has a second `{BEGIN}` before `{END}`; fix the file by hand")
             }
             BEGIN => open = Some(start),
             END => match open.take() {
                 Some(begin) => ranges.push((begin, offset)),
-                None => {
-                    bail!("found `{END}` without a `{BEGIN}`; fix the file by hand, then re-run")
-                }
+                None => bail!("line {n} has `{END}` without a `{BEGIN}`; fix the file by hand"),
             },
             _ => {}
         }
     }
-    if open.is_some() {
-        bail!("found `{BEGIN}` without a matching `{END}`; fix the file by hand, then re-run");
+    if let Some(start) = open {
+        let n = text[..start].matches('\n').count() + 1;
+        bail!("line {n} has `{BEGIN}` without a matching `{END}`; fix the file by hand");
     }
     Ok(ranges)
 }
 
 /// `text` with the managed block set to `block`.
 ///
-/// An existing block is replaced in place (extra copies are dropped);
+/// An existing block is replaced in place;
 /// otherwise the block is appended, after a blank line when the text ends
 /// with a line break. CRLF files get CRLF.
 pub fn upsert_block(text: &str, block: &str) -> Result<String> {
@@ -145,17 +153,13 @@ pub fn upsert_block(text: &str, block: &str) -> Result<String> {
         out.push_str(&block);
         return Ok(out);
     }
-    let mut out = String::with_capacity(text.len() + block.len());
-    let mut last = 0;
-    for (i, (start, end)) in ranges.iter().enumerate() {
-        out.push_str(&text[last..*start]);
-        if i == 0 {
-            out.push_str(&block);
-        }
-        last = *end;
-    }
-    out.push_str(&text[last..]);
-    Ok(out)
+    let [(start, end)] = ranges[..] else {
+        bail!(
+            "found {} myceliums blocks; leave one, then re-run",
+            ranges.len()
+        );
+    };
+    Ok(format!("{}{block}{}", &text[..start], &text[end..]))
 }
 
 /// Which managed blocks to remove.
@@ -163,9 +167,39 @@ pub fn upsert_block(text: &str, block: &str) -> Result<String> {
 pub enum Owner {
     /// Every block.
     Any,
-    /// Every block but one `myc setup-codex` wrote. A CLAUDE.md that links to
-    /// AGENTS.md shows Codex's block too, and that one stays.
+    /// Every block but one `myc setup-codex` wrote.
     Claude,
+}
+
+/// A managed block in a file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Block {
+    /// First and last line, from 1.
+    pub lines: (usize, usize),
+    /// [`Owner::Any`]: written by `myc setup-codex`.
+    pub owner: Owner,
+}
+
+/// The managed blocks in `text`; an error when the markers do not match.
+pub fn blocks(text: &str) -> Result<Vec<Block>> {
+    let line = |offset: usize| text[..offset].matches('\n').count() + 1;
+    Ok(block_ranges(text)?
+        .into_iter()
+        .map(|(start, end)| {
+            let block = &text[start..end];
+            Block {
+                lines: (
+                    line(start),
+                    line(start) + block.trim_end().matches('\n').count(),
+                ),
+                owner: if Owner::Claude.owns(block) {
+                    Owner::Claude
+                } else {
+                    Owner::Any
+                },
+            }
+        })
+        .collect())
 }
 
 impl Owner {
@@ -231,39 +265,58 @@ pub enum FileChange {
     Absent,
 }
 
-/// Fails, when the managed blocks of `owner` in the file at `path` cannot be
-/// replaced or removed: unbalanced markers, a block someone edited, or a
-/// read-only file. Setup checks every file before it changes the first.
-pub fn check(path: &Path, owner: Owner) -> Result<()> {
-    let found = check_unedited(path, owner)?;
-    let read_only = std::fs::metadata(path).is_ok_and(|m| m.permissions().readonly());
-    if found && read_only {
-        bail!(
-            "{} is read-only and holds a myceliums block. Nothing was changed; make it writable, then re-run",
-            path.display()
-        );
+/// Why the file at `path` (or what it links to) is not one to write to: it has
+/// several hard links, which a write would separate, is read-only, or holds
+/// markers that do not match, several blocks, or a block that is not as we
+/// wrote it. `None` for a file that does not exist.
+pub fn obstacle(path: &Path) -> Option<String> {
+    let meta = std::fs::metadata(path).ok()?;
+    if hard_links(&meta) > 1 {
+        return Some(format!("it has {} hard links", hard_links(&meta)));
     }
-    Ok(())
-}
-
-/// Whether the file at `path` holds a managed block of `owner`; fails on
-/// unbalanced markers and on a block that no version of `myc` wrote.
-pub fn check_unedited(path: &Path, owner: Owner) -> Result<bool> {
+    // On Windows the read-only attribute of a directory says nothing.
+    let dir = path.parent().filter(|_| cfg!(unix));
+    let dir = dir.and_then(|dir| std::fs::metadata(dir).ok());
+    if meta.permissions().readonly() || dir.is_some_and(|dir| dir.permissions().readonly()) {
+        return Some("it is read-only".to_string());
+    }
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => return Err(e).with_context(|| format!("Failed to read {}", path.display())),
+        Err(e) => return Some(format!("it cannot be read ({e})")),
     };
-    let mut ranges = block_ranges(&text).with_context(|| path.display().to_string())?;
-    ranges.retain(|(start, end)| owner.owns(&text[*start..*end]));
-    let edited = |(start, end): &(usize, usize)| !is_unedited(&text[*start..*end]);
-    if ranges.iter().any(edited) {
-        bail!(
-            "{}: the text between `{BEGIN}` and `{END}` was edited (or written by a newer myc). Nothing was changed. Move your own text outside the markers, delete the block, then re-run",
-            path.display()
-        );
+    let ranges = match block_ranges(&text) {
+        Ok(ranges) => ranges,
+        Err(e) => return Some(format!("{e:#}")),
+    };
+    if ranges.len() > 1 {
+        return Some(format!("it holds {} myceliums blocks", ranges.len()));
     }
-    Ok(!ranges.is_empty())
+    let [(start, end)] = ranges[..] else {
+        return None;
+    };
+    (!is_shipped(&text[start..end])).then(|| {
+        "the text between the markers was edited or reformatted, or is of a newer myc".to_string()
+    })
+}
+
+#[cfg(unix)]
+fn hard_links(meta: &std::fs::Metadata) -> u64 {
+    use std::os::unix::fs::MetadataExt as _;
+    meta.nlink()
+}
+
+/// Not known on this platform.
+#[cfg(not(unix))]
+fn hard_links(_meta: &std::fs::Metadata) -> u64 {
+    1
+}
+
+/// [`obstacle`] as an error, so that nothing is ever written past one.
+fn refuse(path: &Path) -> Result<()> {
+    match obstacle(path) {
+        Some(reason) => bail!("{} was not changed: {reason}", path.display()),
+        None => Ok(()),
+    }
 }
 
 /// Writes or refreshes the managed block in the file at `path`.
@@ -278,10 +331,7 @@ pub fn install_block(path: &Path, block: &str) -> Result<FileChange> {
     if existing.is_some() && updated == current {
         return Ok(FileChange::Unchanged);
     }
-    check(path, Owner::Any)?;
-    if std::fs::metadata(path).is_ok_and(|m| m.permissions().readonly()) {
-        bail!("{} is read-only; nothing was changed", path.display());
-    }
+    refuse(path)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("Failed to create {}", parent.display()))?;
@@ -306,7 +356,7 @@ pub fn uninstall_block(path: &Path, owner: Owner, delete_if_empty: bool) -> Resu
     let Some(rest) = remove_block(&text, owner).with_context(|| path.display().to_string())? else {
         return Ok(FileChange::Absent);
     };
-    check(path, owner)?;
+    refuse(path)?;
     if delete_if_empty && rest.trim().is_empty() && !crate::commands::setup_claude::is_symlink(path)
     {
         std::fs::remove_file(path)
@@ -367,11 +417,9 @@ mod tests {
         assert!(out.starts_with("top\n\n<!-- BEGIN myceliums -->\n"));
         assert!(out.ends_with(&format!("{END}\n\nbottom\n")));
         assert!(!out.contains("old v0 text"));
-        // Duplicate blocks collapse into one.
+        // Two blocks are the user's to sort out.
         let dup = format!("{BEGIN}\na\n{END}\nmid\n{BEGIN}\nb\n{END}\n");
-        let out = upsert_block(&dup, &block()).unwrap();
-        assert_eq!(out.matches(BEGIN).count(), 1);
-        assert!(out.contains("mid\n"));
+        assert!(upsert_block(&dup, &block()).is_err());
     }
 
     #[test]
@@ -438,12 +486,11 @@ mod tests {
                 Flavor::Agents,
             ] {
                 let text = render(version, flavor);
-                assert!(is_unedited(&text) && is_unedited(&text.replace('\n', "\r\n")));
-                assert!(is_unedited(text.trim_end()));
-                assert!(!is_unedited(&text.replace("grep/rg stay", "grep stays")));
-                assert!(!is_unedited(
-                    &text.replace(END, "- my own rule\n<!-- END myceliums -->")
-                ));
+                assert!(is_shipped(&text) && is_shipped(&text.replace('\n', "\r\n")));
+                assert!(!is_shipped(text.trim_end()));
+                assert!(!is_shipped(&text.replacen('\n', "\r\n", 1)));
+                assert!(!is_shipped(&text.replace("grep/rg stay", "grep stays")));
+                assert!(!is_shipped(&text.replace("- what", "* what")));
             }
         }
         // What was written in fact, word for word.
@@ -451,47 +498,65 @@ mod tests {
         assert!(v1.contains("`context_search`") && !v1.contains("heuristic"));
         let v2 = render(2, Flavor::Agents);
         assert!(v2.contains("`search_code`") && !v2.contains("heuristic"));
-        assert_eq!(v2.lines().count() + 1, block().lines().count());
-        assert!(is_unedited(&old_block_v3()));
-    }
-
-    /// The block as `myc setup-claude` at f472dae wrote it, copied.
-    fn old_block_v3() -> String {
-        include_str!("../../tests/data/routing_block_v3.md").to_string()
+        // As `myc setup-claude` at f472dae wrote it, copied.
+        let v3 = include_str!("../../tests/data/routing_block_v3.md");
+        assert_eq!(render(3, Flavor::Claude { subagent: true }), v3);
     }
 
     #[test]
-    fn an_edited_or_read_only_block_is_refused_and_left_as_it_is() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("AGENTS.md");
-        let edited = format!(
-            "rules\n\n{}",
-            block().replace(END, "- mine\n<!-- END myceliums -->")
-        );
-        std::fs::write(&path, &edited).unwrap();
-        for result in [
-            install_block(&path, &block()).map(|_| ()),
-            uninstall_block(&path, Owner::Any, true).map(|_| ()),
-            check(&path, Owner::Claude),
-        ] {
-            let error = format!("{:#}", result.unwrap_err());
-            assert!(error.contains("was edited"), "{error}");
-        }
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
+    fn blocks_are_listed_with_their_lines() {
+        let claude = routing_block(Flavor::Claude { subagent: true });
+        let codex = routing_block(Flavor::Agents);
+        let text = format!("a\n\n{claude}b\n{codex}");
+        let n = claude.lines().count();
+        let found = blocks(&text).unwrap();
+        assert_eq!(found[0].lines, (3, 2 + n));
+        assert_eq!(found[0].owner, Owner::Claude);
+        assert_eq!(found[1].lines, (n + 4, 2 * n + 3));
+        assert_eq!(found[1].owner, Owner::Any);
+        assert!(blocks(&format!("{BEGIN}\n")).is_err());
+    }
 
-        let old = format!("rules\n\n{}", render(1, Flavor::Agents));
-        std::fs::write(&path, &old).unwrap();
-        let mut permissions = std::fs::metadata(&path).unwrap().permissions();
-        permissions.set_readonly(true);
-        std::fs::set_permissions(&path, permissions).unwrap();
-        for result in [
-            install_block(&path, &block()).map(|_| ()),
-            uninstall_block(&path, Owner::Any, true).map(|_| ()),
-        ] {
-            let error = format!("{:#}", result.unwrap_err());
-            assert!(error.contains("read-only"), "{error}");
+    /// Setup says no and leaves the file as it is.
+    #[test]
+    fn a_file_with_an_obstacle_is_refused() {
+        let edited = block().replace(END, "- mine\n<!-- END myceliums -->");
+        let cases = [
+            (format!("rules\n\n{edited}"), "edited"),
+            (format!("{}{}", block(), block()), "2 myceliums blocks"),
+            (format!("{BEGIN}\nno end\n"), "without a matching"),
+            (render(1, Flavor::Agents), "read-only"),
+        ];
+        for (text, reason) in cases {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("AGENTS.md");
+            std::fs::write(&path, &text).unwrap();
+            let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+            permissions.set_readonly(reason == "read-only");
+            std::fs::set_permissions(&path, permissions).unwrap();
+            assert!(obstacle(&path).unwrap().contains(reason), "{reason}");
+            assert!(install_block(&path, &block()).is_err(), "{reason}");
+            assert!(
+                uninstall_block(&path, Owner::Any, true).is_err(),
+                "{reason}"
+            );
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
         }
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), old);
+        assert_eq!(obstacle(Path::new("/no/such/file.md")), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_hard_linked_file_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (dir.path().join("AGENTS.md"), dir.path().join("CLAUDE.md"));
+        std::fs::write(&a, "rules\n").unwrap();
+        std::fs::hard_link(&a, &b).unwrap();
+        for path in [&a, &b] {
+            assert_eq!(obstacle(path).unwrap(), "it has 2 hard links");
+            assert!(install_block(path, &block()).is_err());
+        }
+        assert_eq!(std::fs::read_to_string(&a).unwrap(), "rules\n");
     }
 
     #[test]
