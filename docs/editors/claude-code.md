@@ -1,7 +1,7 @@
 # Claude Code Integration
 
 Claude Code gets the deepest integration with myceliums: besides the MCP
-server, `myc setup-claude` installs hooks, a CLAUDE.md routing block and a
+server, `myc setup-claude` installs hooks, a routing block and a
 `code-explorer` subagent. Why each piece exists, and what is and is not
 measured about it, is in the
 [agent integration guide](../guides/agent-integration.md).
@@ -25,12 +25,17 @@ myc setup-claude --scope user     # user scope: every project, only for you
 | SessionStart hook | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PostToolUse hook | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PreToolUse grep-redirect hook | `.claude/settings.json` | `~/.claude/settings.json` | `--no-redirect-hook` |
-| Routing block | `CLAUDE.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
+| Routing block | `.claude/rules/myceliums.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
 | `code-explorer` subagent | `.claude/agents/code-explorer.md` | `~/.claude/agents/code-explorer.md` | `--no-agent` |
 
 Re-running `myc setup-claude` is idempotent, and an opt-out flag removes a
 layer that an earlier run installed. Your own entries in these files are kept.
 A settings or MCP file that is not valid JSON is reported and left untouched.
+
+Setup creates no `CLAUDE.md`, because a new one would make Claude Code skip the
+project's `AGENTS.md` files. It changes an existing one only to remove the
+routing block that an older version wrote there, and deletes it when it held
+nothing else, both only in the plain case; see [Your own instruction files](../guides/agent-integration.md#your-own-instruction-files-200).
 
 ### MCP server
 

@@ -71,11 +71,36 @@ pub(crate) async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result
         return Ok(());
     }
     let agents_md = root.join("AGENTS.md");
-    use commands::routing::{self, FileChange, Flavor};
-    let change = if uninstall || no_routing {
-        routing::uninstall_block(&agents_md, true)?
+    use commands::instructions::{self, CodexRouting, Project};
+    use commands::routing::FileChange;
+    let project = Project::new(&root);
+    let remove = uninstall || no_routing;
+    let outcome = if remove {
+        instructions::uninstall_codex_routing(&project)?
     } else {
-        routing::install_block(&agents_md, &routing::routing_block(Flavor::Agents))?
+        instructions::install_codex_routing(&project)?
+    };
+    let change = match outcome {
+        CodexRouting::Done(change) => change,
+        CodexRouting::Left(text) => {
+            println!("  ! {text}");
+            print_blocks_left(&project, uninstall, std::slice::from_ref(&agents_md));
+            return Ok(());
+        }
+        CodexRouting::WouldHide { hidden, removed } => {
+            let files = project.names(&hidden);
+            let first = project.names(&hidden[..1]);
+            if removed {
+                println!(
+                    "  \u{2713} Routing block removed: {} held nothing else and hid {files}",
+                    agents_md.display()
+                );
+            }
+            println!(
+                "  No AGENTS.md routing block written. A new AGENTS.md would hide {files} from agents that\n  read one instruction file per directory (Zed, OpenCode, Codex with fallback names).\n  Codex therefore reads no instructions in this project; its myceliums MCP tools still work.\n  Your choice:\n    - let every agent read {first} (without a routing block for Codex):\n        ln -s {first} AGENTS.md\n    - separate instructions for Codex, with the block, which Zed and OpenCode then read\n      instead of {first}:\n        create AGENTS.md with your text, then myc setup-codex\n    - Codex reads {first}, only for you:\n        project_doc_fallback_filenames = [\"{first}\"] in ~/.codex/config.toml\n    - leave it as it is"
+            );
+            return Ok(());
+        }
     };
     let what = match change {
         FileChange::Created => "written to new file",
@@ -86,7 +111,21 @@ pub(crate) async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result
         FileChange::Absent => "not present in",
     };
     println!("  \u{2713} Routing block {what} {}", agents_md.display());
+    print_blocks_left(&project, uninstall, &[]);
     Ok(())
+}
+
+/// After an uninstall: the routing blocks still in the project.
+fn print_blocks_left(
+    project: &commands::instructions::Project,
+    uninstall: bool,
+    explained: &[std::path::PathBuf],
+) {
+    if uninstall {
+        for block in commands::instructions::block_list(&[project], explained) {
+            println!("  ! Routing block left: {block}");
+        }
+    }
 }
 
 /// Generic MCP config setup for platforms that use a simple JSON config file.

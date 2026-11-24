@@ -18,6 +18,7 @@ pub mod git_hook;
 pub mod hook_grep;
 pub mod impact;
 pub mod init;
+pub mod instructions;
 pub mod knowledge;
 pub mod nav;
 pub mod path;

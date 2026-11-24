@@ -49,6 +49,9 @@ impl EditorSetup for ClaudeEditor {
         for (layer, outcome) in &report.lines {
             println!("  ✓ {layer:<11} {outcome}");
         }
+        for note in &report.notes {
+            println!("  ! {note}");
+        }
         println!();
         println!("  Setup complete! Start Claude Code in any git project:");
         println!("    claude");
@@ -64,6 +67,9 @@ impl EditorSetup for ClaudeEditor {
         let report = setup_claude::uninstall(&Targets::user(&self.home), McpRegistrar::ClaudeCli)?;
         for (layer, outcome) in &report.lines {
             println!("  ✓ {layer:<11} {outcome}");
+        }
+        for note in &report.notes {
+            println!("  ! {note}");
         }
         println!();
         println!("  Done. Myceliums integration removed from Claude Code.");

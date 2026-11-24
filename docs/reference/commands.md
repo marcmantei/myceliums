@@ -400,15 +400,15 @@ Each editor also has a dedicated setup command. These are equivalent to `myc set
 
 | `myc setup-claude` flag | Default | Description |
 |------|---------|-------------|
-| `--scope project\|user` | `project` | `project`: `.mcp.json`, `.claude/settings.json`, `CLAUDE.md`, `.claude/agents/` in the repository; `user`: `~/.claude.json`, `~/.claude/` (what `myc setup --editor claude` does) |
+| `--scope project\|user` | `project` | `project`: `.mcp.json`, `.claude/settings.json`, `.claude/rules/myceliums.md`, `.claude/agents/` in the repository; `user`: `~/.claude.json`, `~/.claude/` (what `myc setup --editor claude` does) |
 | `--project <dir>` | git top level of the cwd | Project root for `--scope project` |
-| `--no-routing` | | Skip (and remove) the CLAUDE.md routing block |
+| `--no-routing` | | Skip (and remove) the routing block |
 | `--no-redirect-hook` | | Skip (and remove) the PreToolUse grep-redirect hook |
 | `--no-agent` | | Skip (and remove) the `code-explorer` subagent |
 | `--no-always-load` | | User scope: write `"alwaysLoad": false`, so every myceliums tool stays behind Claude Code's tool search. Without it the user entry gets `"alwaysLoad": true` when `mcp.toolsets` is the default (core only), and no `alwaysLoad` when it adds groups (the core tools still load up front through their `_meta`). Project scope never writes the key into the shared `.mcp.json`; see [Claude Code](../editors/claude-code.md#mcp-server) for a personal local-scope override |
 | `--uninstall` | | Remove everything myceliums installed at that scope |
 
-`myc setup-codex` also writes the routing block into the project's `AGENTS.md` when run inside a git repository (`--no-routing` skips it).
+`myc setup-codex` also writes the routing block into the project's `AGENTS.md` when run inside a git repository (`--no-routing` skips it). It creates no `AGENTS.md` beside a `CLAUDE.md`, a `GEMINI.md` or a file named in Codex's `project_doc_fallback_filenames`: agents that read one instruction file per directory would stop reading that file ([details](../guides/agent-integration.md#your-own-instruction-files-200)).
 
 | Command | Editor |
 |---------|--------|
@@ -451,14 +451,17 @@ myc configure --reset
 
 ### `myc doctor`
 
-Check the health of the Myceliums installation. Verifies registry integrity, data directory state, orphaned data, and stale locks.
+Check the health of the Myceliums installation. Verifies registry integrity, data directory state, orphaned data, stale locks, and, for the current project and every indexed one, instruction files an older `myc` wrote that hide the project's own (`CLAUDE.md` over `AGENTS.md`, or the reverse), each with the command that repairs it, and lists the routing blocks of the current project.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--download` | bool | `false` | Pre-download the configured embedding model |
+| `--fix` | bool | `false` | Repair such files in the current project (the git top level of the working directory, and the directory itself), in the [plain case](../guides/agent-integration.md#your-own-instruction-files-200) only: move the routing block of a `CLAUDE.md` that holds nothing else into `.claude/rules/myceliums.md` and delete that `CLAUDE.md`; delete an `AGENTS.md` that holds only the block of `myc setup-codex`. Everything else is reported with what to do by hand |
+| `--all-projects` | bool | `false` | With `--fix`: the same in every project it reports (indexed ones and other worktrees of the repository) |
 
 ```bash
 myc doctor
+myc doctor --fix
 myc doctor --download
 ```
 

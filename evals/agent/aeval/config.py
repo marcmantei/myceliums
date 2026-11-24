@@ -194,8 +194,9 @@ def session_env(extra: dict[str, str] | None = None, legacy: bool = True,
 
     ``legacy`` (the pilot's arms) disables every CLAUDE.md. The variants keep
     CLAUDE.md files on: with ``--setting-sources project`` Claude Code then
-    reads the working copy's CLAUDE.md (where ``myc setup-claude`` writes the
-    routing block) but not ``~/.claude/CLAUDE.md`` (checked with ``probe``).
+    reads the working copy's CLAUDE.md and ``.claude/rules`` (where ``myc
+    setup-claude`` writes the routing block; before #200 in CLAUDE.md) but not
+    ``~/.claude/CLAUDE.md`` (checked with ``probe``).
     ``bin_dir`` goes first on PATH: it holds the ``myc`` wrapper the hooks
     call.
     """

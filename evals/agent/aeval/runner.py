@@ -43,6 +43,9 @@ from .tokens import attribute
 
 NOSEARCH_HOOK = Path(__file__).resolve().parent / "bashcmd.py"
 
+# Where `myc setup-claude` puts the routing block: since #200, and before.
+ROUTING_FILES = (".claude/rules/myceliums.md", "CLAUDE.md")
+
 TRANSIENT_API_STATUS = {408, 409, 429, 500, 502, 503, 504, 529}
 TRANSIENT_TEXT = re.compile(
     r"overloaded|internal server error|connection error|ECONNRESET|socket hang up|"
@@ -430,13 +433,16 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             raise StopRun(f"{item.run_id}: myc setup-claude failed: {res.stderr.strip()[:300]}")
         # Keep what the agent will load, for the record.
         snap = out_dir / "setup-files"
-        for rel in ("CLAUDE.md", ".mcp.json", ".claude/settings.json", f".claude/agents/{config.EXPLORER_AGENT}.md"):
+        for rel in (*ROUTING_FILES, ".mcp.json", ".claude/settings.json", f".claude/agents/{config.EXPLORER_AGENT}.md"):
             src = workdir / rel
             if src.exists():
                 (snap / rel).parent.mkdir(parents=True, exist_ok=True)
                 (snap / rel).write_text(src.read_text())
-        if not (workdir / "CLAUDE.md").exists() or not (workdir / ".claude" / "settings.json").exists():
-            raise StopRun(f"{item.run_id}: setup-claude did not write CLAUDE.md and .claude/settings.json")
+        # The eval repositories' own CLAUDE.md, if any, is no routing block.
+        routed = any("BEGIN myceliums" in (workdir / rel).read_text() for rel in ROUTING_FILES
+                     if (workdir / rel).exists())
+        if not routed or not (workdir / ".claude" / "settings.json").exists():
+            raise StopRun(f"{item.run_id}: setup-claude did not write the routing block and .claude/settings.json")
         if variant.agent != (workdir / ".claude" / "agents" / f"{config.EXPLORER_AGENT}.md").exists():
             raise StopRun(f"{item.run_id}: code-explorer subagent file does not match variant {item.condition}")
 

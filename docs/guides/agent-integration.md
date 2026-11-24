@@ -119,7 +119,8 @@ in success. C was not measurably dearer or cheaper than A per solved task (token
 1.02× [0.83×, 1.23×]); the agent called a myceliums tool in 13 of 90 sessions, all
 on deep caller questions. Replacing grep (D) used 2.7× [1.7×, 4.2×] the tokens.
 **C lacked the project's own instructions:** Spring has an `AGENTS.md`, and the
-`CLAUDE.md` that `setup-claude` writes shadows it (#200). With its 1,804 tokens added
+`CLAUDE.md` that `setup-claude` then wrote shadowed it (#200, fixed since: see
+[Your own instruction files](#your-own-instruction-files-200)). With its 1,804 tokens added
 to C's calls, C would be about 1.16× A in tokens (a point estimate).
 
 This guide describes five ways to route an agent to myceliums, from soft to
@@ -129,7 +130,7 @@ hard, and what `myc setup-claude` installs for each.
 
 | Layer | What | Measured (#125, Claude Code 2.1.329) | Cost | Status |
 |---|---|---|---|---|
-| 1. Instructions | Routing rules in CLAUDE.md / AGENTS.md: structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | together with layer 3 (variant C): myceliums used in 100 % of sessions instead of 80 %, first call a graph query; not measured alone | +348 tokens per request | `myc setup-claude`, `myc setup-codex` |
+| 1. Instructions | Routing rules in `.claude/rules/myceliums.md` / AGENTS.md (CLAUDE.md when measured): structural questions (callers, impact, flows) go to myceliums, grep stays for literals, config and logs | together with layer 3 (variant C): myceliums used in 100 % of sessions instead of 80 %, first call a graph query; not measured alone | +348 tokens per request | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | 9 task-named core tools, loaded up front instead of deferred; the other 51 opt-in by group | variant A: myceliums used in 80 % of sessions (pilot with 54 deferred tools: 0 %; not a controlled comparison) | the schemas are in every request (A's first prompt: 10,162 tokens) | `myc mcp` default; `myc setup-claude` (`alwaysLoad`) |
 | 3. Hooks | A PreToolUse hook spots a grep for a known symbol and adds the matching `myc` call to the agent's context | ran on 175 Grep calls in C, hint added to 120 (69 %); the SessionStart status line was then a `systemMessage` the model did not see. Since #152 it adds a context line: in #153 it reached the model in 11 of 11 C sessions, and the grep hook added a hint to 14 of 17 Grep calls; in #163 (with Bash) the context line reached 90 of 90 C sessions and the hook added a hint to 205 of 341 Grep or Bash `grep` calls, but the agent never ran the suggested `myc` command; in the #171 re-run: 60 of 60 sessions, hints on 172 of 266 calls, again no `myc` run from Bash | a few ms per Grep (400 ms cap) | `myc setup-claude` |
 | 4. Subagent | A `code-explorer` agent with only the myceliums tools, Read and ToolSearch; the main agent delegates structural questions | never called (0 of 38 sessions): with the tools in the main context the agent queries them itself | about 1,860 tokens per request more than C (Agent tool and its agent list) | `myc setup-claude` |
@@ -164,11 +165,10 @@ myc setup-claude                  # project scope: files to commit for the team
 myc setup-claude --scope user     # or: every project, for you only
 ```
 
-The files `setup-claude` writes after the analysis (`.mcp.json`, `.claude/`,
-the routing block in `CLAUDE.md`) do not make the index stale: freshness
-counts only files the analysis indexes, and the routing block is left out of
-the index. An edit to `CLAUDE.md` outside the block is a change, as for any
-indexed Markdown file.
+The files `setup-claude` writes after the analysis (`.mcp.json`, `.claude/`) do
+not make the index stale: freshness counts only files the analysis indexes, and
+a routing block in an indexed Markdown file is left out of the index. An edit
+outside the block is a change, as for any indexed Markdown file.
 Before #151 the MCP `analyze` tool counted them as edits and re-indexed (in
 the #125 matrix once into the 300 s tool timeout, and once, called with
 `skip_embeddings`, into an index without embeddings); a re-index now also
@@ -181,7 +181,7 @@ What each layer writes:
 | MCP server (2. core tools loaded up front) | `.mcp.json` (core tools through their `_meta`) | `claude mcp add-json -s user` (fallback: `~/.claude.json`), with `alwaysLoad` | `--no-always-load` (user scope) |
 | SessionStart hook: refresh the index, one context line for the model, a status line for you | `.claude/settings.json` | `~/.claude/settings.json` | – |
 | PostToolUse hook: format myceliums tool results | `.claude/settings.json` | `~/.claude/settings.json` | – |
-| 1. Routing block | `CLAUDE.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
+| 1. Routing block | `.claude/rules/myceliums.md` | `~/.claude/CLAUDE.md` | `--no-routing` |
 | 3. Grep redirect hook (PreToolUse) | `.claude/settings.json` | `~/.claude/settings.json` | `--no-redirect-hook` |
 | 4. `code-explorer` subagent | `.claude/agents/code-explorer.md` | `~/.claude/agents/code-explorer.md` | `--no-agent` |
 
@@ -200,6 +200,132 @@ What each layer writes:
   installed, the hooks run twice; remove one with
   `myc setup-claude --scope user --uninstall`.
 - `myc setup` (the wizard) installs at user scope.
+
+### Your own instruction files (#200)
+
+Some instruction files make an agent skip others, so a file that a tool creates
+can hide the project's own. Claude Code reads `AGENTS.md` files only while no
+`CLAUDE.md`, `.claude/CLAUDE.md` or `CLAUDE.local.md` is in the working
+directory or above it; `.claude/rules/` and `~/.claude/CLAUDE.md` do not count
+([Claude Code docs](https://code.claude.com/docs/en/memory#agents-md)). So the
+routing block goes into `.claude/rules/myceliums.md`, which Claude Code loads at
+session start besides whatever else the project has. Setup creates no
+`CLAUDE.md`.
+
+What this relies on:
+
+- Reading `AGENTS.md` at all needs Claude Code 2.1.277 or later and the default
+  *Project instructions* setting (`claude-md-or-agents-md`), or
+  `claude-md-and-agents-md`. With `claude-md` it reads no `AGENTS.md`, with
+  `managed-only` neither that nor project rules.
+- Project rules need Claude Code 2.0.64 or later.
+- The built-in Explore, Plan and web-fetch subagents start without `CLAUDE.md`,
+  `AGENTS.md` and project rules
+  ([docs](https://code.claude.com/docs/en/sub-agents#what-loads-at-startup)), so
+  they do not get the routing block; they did not get it from `CLAUDE.md` either.
+
+Earlier versions wrote the block into `CLAUDE.md`. Where that file did not exist
+before, it hid every `AGENTS.md`, those in subdirectories included. What reaches
+the model, from the requests Claude Code 2.1.331 sent to a mock API
+(`evals/agent/probe_instructions.py`, with the debug build of `myc`; the routing
+block arrived once in every run of the last two columns):
+
+| The project has | Without myceliums | Block in `CLAUDE.md` (before) | Block in `.claude/rules/` (now) |
+|---|---|---|---|
+| no instruction file | – | – | – |
+| `AGENTS.md` | `AGENTS.md` | **nothing** | `AGENTS.md` |
+| `CLAUDE.md` | `CLAUDE.md` | `CLAUDE.md` | `CLAUDE.md` |
+| both | `CLAUDE.md` | `CLAUDE.md` | `CLAUDE.md` |
+| both, `CLAUDE.md` imports `@AGENTS.md` | both | both | both |
+| one as a link to the other | the one file | the one file | the one file |
+| `.claude/CLAUDE.md`, with or without `AGENTS.md` | `.claude/CLAUDE.md` | `.claude/CLAUDE.md` | `.claude/CLAUDE.md` |
+| `AGENTS.md` and `CLAUDE.local.md` | `CLAUDE.local.md` | `CLAUDE.local.md` | `CLAUDE.local.md` |
+| `.claude/AGENTS.md` | `.claude/AGENTS.md` | **nothing** | `.claude/AGENTS.md` |
+| `AGENTS.md` in a subdirectory | it, once a file there is read | **nothing** | it, once a file there is read |
+| `AGENTS.md` in the root and a subdirectory | both | **nothing** | both |
+| `AGENTS.md` above the project | it | **nothing** | it |
+
+A `CLAUDE.md` that imports `@AGENTS.md` would not have been enough: in the same
+probe it brought back the one file it names, but not `.claude/AGENTS.md` nor
+those in subdirectories or above the project. A `CLAUDE.md` that the project
+wrote itself still replaces its `AGENTS.md`; that is Claude Code's default and
+the project's choice.
+
+**What setup changes in your files.** One case is automatic, the plain one:
+`CLAUDE.md` is a regular file of the project with one name, not ignored by git,
+holds one routing block byte for byte as some version of `myc` wrote it, and no
+other instruction file links to it or imports it. Then `myc setup-claude`
+removes the block with the line break before it, writes
+`.claude/rules/myceliums.md`, and deletes a `CLAUDE.md` that held nothing else
+(commit the deletion if the file was committed). `--uninstall` and
+`--no-routing` remove the block too. Text outside the block stays; an older
+version that met a file without a final line break added one, which cannot be
+told from yours and stays.
+
+In every other case no instruction file is changed, the block stays where it is
+(Claude Code reads it there), and the message gives file, reason and what to do
+by hand: delete from the start marker to the end marker, both included, or, where
+the text is not as `myc` wrote it, compare it and remove what is not yours. Line
+numbers in the messages only say where to look. These are: a symbolic link in either direction, also to or from
+`GEMINI.md`, `.claude/CLAUDE.md`, files in subdirectories, in the home
+directory, in other worktrees or in other indexed projects; several hard links;
+another instruction file that imports it; a block that was edited or
+reformatted, several blocks, or markers that do not match; a read-only or
+git-ignored file; a git query that failed or took more than 5 s; a project
+outside git that has another instruction file.
+
+Uninstalling (`myc setup-claude --uninstall`, `myc setup-codex --uninstall`)
+lists the routing blocks that are still in the project, each with file and
+what removes it; a file with several names is listed once. `myc doctor` lists them for the current project.
+
+**Existing installations.** `myc doctor` reports files that hide others in the
+current project, above it, in the repository's other worktrees and in every
+indexed project, with the command or the steps by hand for each. `myc doctor
+--fix` repairs the plain case in the current project only, and only files that
+hide something; `--fix --all-projects` does so in every project it reports.
+Running `myc setup-claude` again moves a block that hides nothing too.
+
+At user scope the uninstall removes the block from `~/.claude/CLAUDE.md` and
+leaves the file, which is then empty if it held nothing else: setup cannot tell
+whether it created it. An empty file there hides nothing; delete it if you like.
+
+**Limits.** A symbolic link to `CLAUDE.md` is not seen when it lies in a
+directory that git ignores as a whole, in a nested repository that is no
+worktree of this one, or in a project that is not indexed. Hard links are not
+seen on Windows. Links and imports are looked for under the names listed in
+`myc/src/commands/instructions.rs`; a file that Claude Code reaches through some
+other file's import is not. Codex's fallback names are read from
+`~/.codex/config.toml` only (not `CODEX_HOME`, not a project's
+`.codex/config.toml`).
+
+**Other agents.** Codex reads one file per directory, `AGENTS.md` before the
+names in its `project_doc_fallback_filenames`
+([docs](https://developers.openai.com/codex/guides/agents-md)); Zed reads the
+first file of a list with `AGENTS.md` before `CLAUDE.md` and `GEMINI.md`
+([docs](https://zed.dev/docs/ai/instructions)); OpenCode reads a directory's
+`CLAUDE.md` only without an `AGENTS.md`
+([docs](https://opencode.ai/docs/rules/)). `myc setup-codex` therefore writes
+its block into an `AGENTS.md` that has text of its own, or creates one where it
+hides nothing. In a project that has only a `CLAUDE.md` (or `GEMINI.md`) it
+writes none, and deletes one that an older version created and that holds only
+the block (plain case, as above). An `AGENTS.md` that is a link, or that another
+instruction file links to, is left alone; the message has the block's text to
+add by hand. **Codex then reads no instructions in that project**, as before
+setup; its myceliums MCP tools work. The choice is yours:
+
+| You want | Do |
+|---|---|
+| every agent to read `CLAUDE.md`, without a routing block for Codex | `ln -s CLAUDE.md AGENTS.md` |
+| separate instructions for Codex, with the block, which Zed and OpenCode then read instead of `CLAUDE.md` | create `AGENTS.md` with your text, then `myc setup-codex` |
+| Codex to read `CLAUDE.md`, only on your machine | `project_doc_fallback_filenames = ["CLAUDE.md"]` in `~/.codex/config.toml` |
+| no instructions for Codex | nothing |
+
+The setup of every other editor writes MCP configuration only.
+
+With both `myc setup-claude` and `myc setup-codex` in a project that has an
+`AGENTS.md` and no `CLAUDE.md`, Claude Code reads the routing block twice: from
+`.claude/rules/myceliums.md` and in `AGENTS.md`. `myc setup-claude --no-routing`
+avoids that.
 
 ### SessionStart hook
 
@@ -266,13 +392,15 @@ server instructions and the `code-explorer` subagent say the same). In the
 #171 re-run the same 10-turn Django call-chain question was again answered
 from `trace_flow` alone, without the "read the source" step its `Incomplete`
 block named, with the #163 answer (F1 0.48). The
-block is versioned (`v3` in its first comment line); everything between the markers is replaced on re-run,
-and text outside them is never touched. Put your own rules outside the
-markers.
+block is versioned (`v4` in its first comment line; v4 only changes that line).
+On re-run an unedited block is replaced; a block whose text was edited is left
+alone with a message. Text outside the markers is never touched. Put your own
+rules outside the markers.
 
 `myc setup-codex` writes the same block, without the subagent line, into the
 project's `AGENTS.md` (when run inside a git repository; `--no-routing` skips
-it).
+it; see [Your own instruction files](#your-own-instruction-files-200) for when
+it creates none).
 
 ### 3. Grep redirect hook
 

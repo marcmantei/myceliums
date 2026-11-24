@@ -284,7 +284,11 @@ async fn run(cli: Cli) -> Result<()> {
                 myceliums_mcp::run_mcp_server(opts).await
             }
         }
-        Commands::Doctor { download } => cmd_doctor(download).await,
+        Commands::Doctor {
+            download,
+            fix,
+            all_projects,
+        } => cmd_doctor(download, fix, all_projects).await,
         Commands::Configure { set, reset } => cmd_configure(set.as_deref(), reset).await,
         Commands::FormatHook => cmd_format_hook().await,
         Commands::HookGrep => commands::hook_grep::cmd_hook_grep().await,

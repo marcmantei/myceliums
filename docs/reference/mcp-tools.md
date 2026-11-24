@@ -149,7 +149,8 @@ hidden files or directories (`.mcp.json`, `.claude/`), no `node_modules`,
 `.myceliums.toml`'s `include`/`exclude`/`skip_patterns` and size limit applied
 (an indexed file that grew past the limit counts: the next analysis drops it) —
 plus `.myceliums.toml` itself. The routing block `myc setup-claude` / `myc
-setup-codex` keep in a Markdown file (CLAUDE.md / AGENTS.md) is not indexed, so
+setup-codex` keep in a Markdown file (AGENTS.md; CLAUDE.md in installs from
+before #200) is not indexed, so
 a Markdown file whose text outside the block is what the analysis indexed is no
 change either: `myc analyze` followed by `myc setup-claude` leaves an index
 that is up to date. The comparison uses a fingerprint of the indexed text that

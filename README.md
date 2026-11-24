@@ -63,7 +63,7 @@ cargo install myc
 cd my-project && myc analyze .
 
 # Set up Claude Code integration for this project (MCP server, hooks,
-# CLAUDE.md routing block, code-explorer subagent; --scope user for all projects)
+# routing block, code-explorer subagent; --scope user for all projects)
 myc setup-claude
 
 # Start Claude Code — myceliums is ready
@@ -271,7 +271,7 @@ The MCP `analyze` tool does not wait for the model: it builds the graph, answers
 | `myc clean --all` | Remove ALL myceliums data (with confirmation) |
 | `myc clean --cache` | Remove the model cache |
 | `myc clean <repo>` | Remove a specific repository's data (with confirmation) |
-| `myc doctor` | Verify the installation, check all components, detect orphans and stale locks |
+| `myc doctor` | Verify the installation, check all components, detect orphans, stale locks and hidden instruction files (`--fix` repairs the current project's) |
 | `myc configure` | View or update global configuration |
 | `myc delete <repo>` | Remove a repository's analysis data |
 
@@ -292,7 +292,7 @@ myc setup-claude                # in the project: files to commit for the team
 myc setup-claude --scope user   # or for all your projects
 ```
 
-This registers the MCP server, a SessionStart hook that keeps the index fresh, a result formatter, a CLAUDE.md routing block, a PreToolUse hook that answers a grep for a known symbol with the matching `myc` call, and a `code-explorer` subagent; the nine core MCP tools load up front through their own `_meta["anthropic/alwaysLoad"]` (a user-scope install also sets `alwaysLoad` on the entry). Opt out per layer with `--no-routing`, `--no-redirect-hook`, `--no-agent`, `--no-always-load`. On every Claude Code session you'll see:
+This registers the MCP server, a SessionStart hook that keeps the index fresh, a result formatter, a routing block (`.claude/rules/myceliums.md`), a PreToolUse hook that answers a grep for a known symbol with the matching `myc` call, and a `code-explorer` subagent; the nine core MCP tools load up front through their own `_meta["anthropic/alwaysLoad"]` (a user-scope install also sets `alwaysLoad` on the entry). Opt out per layer with `--no-routing`, `--no-redirect-hook`, `--no-agent`, `--no-always-load`. On every Claude Code session you'll see:
 
 ```
 SessionStart:startup says: [myceliums] my-project ready | 312 files · 1,247 symbols
@@ -370,7 +370,7 @@ hard; all five ship with this release:
 
 | Layer | What | Installed by |
 |---|---|---|
-| 1. Instructions | Routing block in CLAUDE.md / AGENTS.md: structural questions to myceliums, grep for literals and config | `myc setup-claude`, `myc setup-codex` |
+| 1. Instructions | Routing block in `.claude/rules/myceliums.md` / AGENTS.md: structural questions to myceliums, grep for literals and config | `myc setup-claude`, `myc setup-codex` |
 | 2. Tool surface | 9 task-named core tools (`search_code`, `find_callers`, `impact_of_change`, ...) by default, loaded up front (`alwaysLoad`); 51 more opt-in by group | `myc mcp` default; `myc setup-claude` sets `alwaysLoad` |
 | 3. Hooks | PreToolUse hook: a grep for a known symbol gets the matching `myc callers …` call as context (never blocks) | `myc setup-claude` |
 | 4. Subagent | `code-explorer` with only the myceliums tools, Read and ToolSearch | `myc setup-claude` |
@@ -833,7 +833,7 @@ If an analysis is interrupted (e.g., timeout, crash, `Ctrl+C`), the data directo
 1. **MCP server** — Registered in `.mcp.json`. Claude Code spawns `myc mcp` as a background process for each session. Lightweight and idle when not queried.
 2. **SessionStart hook** — Added to `.claude/settings.json`. Runs `myc session . --yes --timeout 300` when a Claude Code session starts, ensuring the knowledge graph is fresh, and adds one line to the model's context: repository id, index freshness and the core tools. It returns at once; a missing or stale index is rebuilt in the background.
 3. **PreToolUse grep hook** — `myc hook-grep` runs before Grep and grep/rg calls; it reads the index, never blocks, and stays silent unless the pattern names a known symbol.
-4. **Routing block and subagent** — Text files only: `CLAUDE.md` and `.claude/agents/code-explorer.md`.
+4. **Routing block and subagent** — Text files only: `.claude/rules/myceliums.md` and `.claude/agents/code-explorer.md`. No `CLAUDE.md` is created, so Claude Code keeps reading your `AGENTS.md`; a routing block that an older version wrote into `CLAUDE.md` is moved out of it where that is safe (no links, no edits), and otherwise named with what to do by hand.
 
 To remove the integration: `myc setup-claude --uninstall`
 
