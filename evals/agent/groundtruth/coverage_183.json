@@ -1,5 +1,5 @@
 {
- "description": "#183: when a docs or forced-test unit counts as covered, not only touched. Written on 24 November 2026 before any session of the control run, from the parent's file, the task text and the commit's file, by an agent that had seen the recorded 20 sessions of arm none (their tool calls and summaries; of the files judged here it had read no diff). All criteria of a unit must hold for the file as the session left it; wording is free. `absent`/`present` are regular expressions checked mechanically on that file (the commit's file meets them, the parent's breaks at least one where a unit has any); the text is judged blind to the arm.",
+ "description": "#183: when a docs or forced-test unit counts as covered, not only touched. Written on 24 November 2026 before any session of the control run, from the parent's file, the task text and the commit's file, by an agent that had seen the recorded 20 sessions of arm none (their tool calls and summaries; of the files judged here it had read no diff). All criteria of a unit must hold for the file as the session left it; wording is free. `absent`/`present` are regular expressions checked on that file (the commit's file meets them, the parent's breaks at least one where a unit has any): a pass decides the criterion, a failure never does but goes to the blind judge, like every criterion without one. `decoy`: the faulty edit shown to the judge beside the commit's own (`breaks`: the criteria it does not meet).",
  "units": {
   "spel-simple-context-restricted-conversion": {
    "framework-docs/modules/ROOT/pages/appendix.adoc": {
@@ -14,7 +14,18 @@
       "id": "c2",
       "text": "The entry says what it does: SimpleEvaluationContext uses the standard (reflective, unrestricted) conversion by default again."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "replace": [
+      [
+       "| `spring.getenv.ignore`",
+       "| `spring.expression.reflectiveConversion`\n| Instructs Spring to turn off all type conversion in xref:core/expressions/evaluation.adoc[Spring Expression Language]\nexpressions.\n\n| `spring.getenv.ignore`"
+      ]
+     ]
+    }
    },
    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc": {
     "wrong": "describes SimpleEvaluationContext without the restriction",
@@ -22,13 +33,19 @@
      {
       "id": "c1",
       "text": "The page says that by default SimpleEvaluationContext does not convert by reflectively invoking constructors or methods (or: uses a restricted conversion service)."
-     },
-     {
-      "id": "c2",
-      "text": "The page names `withConverter(...)` as the way to add a conversion.",
-      "present": "withConverter"
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c1"
+     ],
+     "replace": [
+      [
+       "syntax. For example, it excludes Java type references, constructors, and bean references.",
+       "syntax. For example, it excludes Java type references, constructors, and bean references.\nType conversion uses the same conversion service as for a `StandardEvaluationContext`."
+      ]
+     ]
+    }
    }
   },
   "observation-record-handled-exception": {
@@ -45,10 +62,21 @@
      },
      {
       "id": "c3",
-      "text": "The old instruction is gone.",
+      "text": "The old instruction is gone (a sentence that says that setting the field is not enough or no longer the way is fine).",
       "absent": "set the error field on the"
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "replace": [
+      [
+       "set the error field on the `ObservationContext` yourself",
+       "record the exception with the observation yourself"
+      ]
+     ]
+    }
    },
    "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java": {
     "wrong": "uses findCurrent(..).setError",
@@ -63,7 +91,18 @@
       "id": "c2",
       "text": "It passes the exchange's attributes and the exception."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c1"
+     ],
+     "replace": [
+      [
+       "ServerRequestObservationContext.findCurrent(",
+       "// record the exception with the observation\n\t\tServerRequestObservationContext.findCurrent("
+      ]
+     ]
+    }
    },
    "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java": {
     "wrong": "uses findObservationContext(..).setError",
@@ -78,7 +117,18 @@
       "id": "c2",
       "text": "It passes the request and the exception."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c1"
+     ],
+     "replace": [
+      [
+       "ServerHttpObservationFilter.findObservationContext(",
+       "// record the exception with the observation\n\t\tServerHttpObservationFilter.findObservationContext("
+      ]
+     ]
+    }
    }
   },
   "beans-max-nested-path-depth": {
@@ -92,10 +142,20 @@
      },
      {
       "id": "c2",
-      "text": "The page says that the nesting depth is limited, with the default 100, and that the limit can be set (`setMaxNestedPathDepth` or `maxNestedPathDepth`).",
-      "present": "[mM]axNestedPathDepth"
+      "text": "The page says that the nesting depth is limited, with the default 100, and that the limit can be set (`setMaxNestedPathDepth` or `maxNestedPathDepth`)."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "replace": [
+      [
+       "to an unlimited depth",
+       "to any depth, including through constructor arguments"
+      ]
+     ]
+    }
    }
   },
   "form-converter-map-payloads": {
@@ -108,18 +168,28 @@
      },
      {
       "id": "c2",
-      "text": "A plain Map type is named.",
-      "present": "(?<![A-Za-z])Map(?:<|`| )"
+      "text": "A plain Map type is named (`Map`, `Map<String, String>`).",
+      "present": "(?<![A-Za-z])Map(?:<|`| |,|\\.)"
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c1"
+     ],
+     "replace": [
+      [
+       "Form data is read from and written into a `MultiValueMap<String, String>`.",
+       "Form data is read from and written into a `MultiValueMap<String, String>`.\nA wildcard media type such as `*/*` is not accepted for writing."
+      ]
+     ]
+    }
    },
    "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java": {
     "wrong": "assigns the result of read(..) to a MultiValueMap (does not compile) and expects canWrite(*/*)",
     "criteria": [
      {
       "id": "c1",
-      "text": "The result of `read(...)` is handled as Object (cast or checked).",
-      "absent": "MultiValueMap<String, String> result = this\\.converter\\.read\\(null"
+      "text": "The result of `read(...)` is handled as Object (cast or checked)."
      },
      {
       "id": "c2",
@@ -130,7 +200,13 @@
       "id": "c3",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c3"
+     ],
+     "gold_with_a_test": "disabled"
+    }
    }
   },
   "jsonl-media-type-support": {
@@ -146,7 +222,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "emptied"
+    }
    }
   },
   "test-context-cache-pause-mode": {
@@ -162,7 +244,18 @@
       "id": "c2",
       "text": "The entry says that it sets the pause mode of the context cache (whether inactive contexts are paused)."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "replace": [
+      [
+       "| `spring.test.context.failure.threshold`",
+       "| `spring.test.context.cache.pause`\n| The maximum number of paused contexts in the _Spring TestContext Framework_. See\nxref:testing/testcontext-framework/ctx-management/caching.adoc[Context Caching].\n\n| `spring.test.context.failure.threshold`"
+      ]
+     ]
+    }
    },
    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc": {
     "wrong": "describes the pausing of inactive contexts as if it could not be turned off",
@@ -174,10 +267,20 @@
      },
      {
       "id": "c2",
-      "text": "The page says that pausing can be disabled with it and gives the value (`never`).",
-      "present": "(?i)\\bnever\\b"
+      "text": "The page says that pausing can be disabled with it and gives the value (`never`)."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "replace": [
+      [
+       "Since having a large number of application contexts loaded within a given test suite can",
+       "The property `spring.test.context.cache.pause` sets how long an inactive application context\nis kept running before it is paused.\n\nSince having a large number of application contexts loaded within a given test suite can"
+      ]
+     ]
+    }
    }
   },
   "retry-max-attempts-to-max-retries": {
@@ -186,15 +289,29 @@
     "criteria": [
      {
       "id": "c1",
-      "text": "No text or sample uses the old names.",
+      "text": "No text or sample uses the old names for the retry API (the own `maxAttempts` of FixedBackOff and ExponentialBackOff, and a sentence that names the old names as old, are not meant).",
       "absent": "maxAttempts|withMaxAttempts"
      },
      {
       "id": "c2",
-      "text": "The samples use the new names (`maxRetries`, `withMaxRetries`) and the text around them still says the same as the samples (numbers, meaning).",
-      "present": "maxRetries"
+      "text": "The samples use the new names (`maxRetries`, `withMaxRetries`) and the text around them still says the same as the samples (numbers, meaning)."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c1"
+     ],
+     "replace": [
+      [
+       "  maxAttempts = 5,",
+       "  maxRetries = 5,"
+      ],
+      [
+       "@Retryable(maxAttempts = 5, delay = 100)",
+       "@Retryable(maxRetries = 5, delay = 100)"
+      ]
+     ]
+    }
    },
    "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java": {
     "wrong": "annotations use maxAttempts (does not compile)",
@@ -208,7 +325,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "disabled"
+    }
    },
    "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java": {
     "wrong": "annotations use maxAttempts and maxAttemptsString (does not compile)",
@@ -222,7 +345,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "emptied"
+    }
    },
    "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java": {
     "wrong": "uses the renamed factory and builder methods (does not compile); renaming the file is not required",
@@ -236,7 +365,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "disabled"
+    }
    },
    "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java": {
     "wrong": "uses the renamed methods (does not compile) and the old messages",
@@ -250,7 +385,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "emptied"
+    }
    },
    "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java": {
     "wrong": "uses the renamed methods (does not compile)",
@@ -264,7 +405,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "disabled"
+    }
    }
   },
   "jdbcclient-batch-entry-dsl": {
@@ -273,15 +420,30 @@
     "criteria": [
      {
       "id": "c1",
-      "text": "Neither text nor sample uses `add()` to separate entries.",
+      "text": "Neither text nor sample uses `add()` to separate entries (a sentence that says that it is gone is fine).",
       "absent": "\\.add\\(\\)|`add\\(\\)`"
      },
      {
       "id": "c2",
-      "text": "Text and sample define entries with `entry(...)`.",
-      "present": "\\.entry\\(|`entry\\("
+      "text": "The page shows entries defined with `entry(...)` or `entries(...)`.",
+      "present": "\\.entr(?:y|ies)\\(|`entr(?:y|ies)\\("
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c1"
+     ],
+     "replace": [
+      [
+       ".param(\"firstName\", \"Leonor\").param(\"lastName\", \"Watling\").add()",
+       ".entry(entry -> entry.param(\"firstName\", \"Leonor\").param(\"lastName\", \"Watling\"))"
+      ],
+      [
+       ".param(\"firstName\", \"Christian\").param(\"lastName\", \"Bale\")",
+       ".entry(entry -> entry.param(\"firstName\", \"Christian\").param(\"lastName\", \"Bale\"))"
+      ]
+     ]
+    }
    },
    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java": {
     "wrong": "uses the removed batch methods (does not compile)",
@@ -295,7 +457,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "emptied"
+    }
    },
    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java": {
     "wrong": "uses the removed batch methods (does not compile)",
@@ -309,7 +477,13 @@
       "id": "c2",
       "text": "The file's existing batch tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled (a test of the removed trailing-add() behaviour may go)."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "disabled"
+    }
    },
    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java": {
     "wrong": "uses the removed batch methods (does not compile)",
@@ -323,7 +497,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "emptied"
+    }
    }
   },
   "type-mismatch-required-type-arg": {
@@ -338,7 +518,18 @@
       "id": "c2",
       "text": "It says what it is: the (simple) name of the required type."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "replace": [
+      [
+       "| `TypeMismatchException`\n| (default)\n| `+{0}+` property name, `+{1}+` property value",
+       "| `TypeMismatchException`\n| (default)\n| `+{0}+` property name, `+{1}+` property value, `+{2}+` name of the method parameter"
+      ]
+     ]
+    }
    }
   },
   "servlet-response-ignore-body-flush": {
@@ -354,7 +545,18 @@
       "id": "c2",
       "text": "The entry says what it does: flush calls on the body stream reach the Servlet response again (ignored by default)."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "replace": [
+      [
+       "| `spring.jdbc.getParameterType.ignore`",
+       "| `spring.http.response.flush.enabled`\n| Configures Spring MVC to flush the response after each controller method has returned.\n\n| `spring.jdbc.getParameterType.ignore`"
+      ]
+     ]
+    }
    }
   },
   "api-version-deprecation-handler-handler-arg": {
@@ -370,7 +572,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "disabled"
+    }
    },
    "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java": {
     "wrong": "calls handleVersion without the handler (does not compile)",
@@ -384,7 +592,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "emptied"
+    }
    }
   },
   "message-source-default-charset": {
@@ -399,7 +613,13 @@
       "id": "c2",
       "text": "The file's other tests are kept, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "disabled"
+    }
    }
   },
   "retryable-method-retry-event": {
@@ -415,7 +635,13 @@
       "id": "c2",
       "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
      }
-    ]
+    ],
+    "decoy": {
+     "breaks": [
+      "c2"
+     ],
+     "gold_with_a_test": "emptied"
+    }
    }
   }
  }

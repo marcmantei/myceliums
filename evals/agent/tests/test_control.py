@@ -184,6 +184,8 @@ class Coverage(unittest.TestCase):
         for v in rec.values():
             for x in v.values():
                 self.assertTrue(x["wrong"])
+                self.assertTrue(set(x["decoy"]["breaks"]) <= {c["id"] for c in x["criteria"]} and x["decoy"]["breaks"])
+                self.assertEqual(("replace" in x["decoy"]) + ("gold_with_a_test" in x["decoy"]), 1)
                 self.assertEqual([c["id"] for c in x["criteria"]], [f"c{i}" for i in range(1, len(x["criteria"]) + 1)])
                 self.assertTrue(all(set(c) <= {"id", "text", "absent", "present"} and c["text"] for c in x["criteria"]))
 
@@ -204,44 +206,140 @@ class Coverage(unittest.TestCase):
         if not seen:
             self.skipTest("no checkouts here")
 
-    def test_the_sheet_is_blind_and_complete(self):
+    def test_the_decoys_fit_and_break_what_they_say(self):
+        tasks = {t["id"]: t for t in json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]}
+        rec, seen = json.loads((EVAL / "groundtruth/coverage_183.json").read_text())["units"], 0
+        for i, v in rec.items():
+            t = tasks[i]
+            for p, x in v.items():
+                group = next((g for g in t.get("equivalents") or [] if p in g), [p])
+                parent = config.cache_dir() / "repos" / t["repo"] / p
+                gold = [f for f in (config.gold_dir(t["repo"]) / "files" / q for q in group) if f.is_file()]
+                if not parent.is_file() or not gold:
+                    continue
+                seen += 1
+                made = control.decoy_of(x["decoy"], parent.read_text(), gold[-1].read_text())
+                self.assertNotIn(made, (parent.read_text(), gold[-1].read_text()), p)
+                for c in x["criteria"]:  # what it breaks must not be decided by a pattern that passes
+                    if c["id"] in x["decoy"]["breaks"] and {"absent", "present"} & set(c):
+                        self.assertFalse(control.mechanical(c, made), (p, c["id"]))
+        if not seen:
+            self.skipTest("no checkouts here")
+
+    def test_a_decoy_of_a_test_file(self):
+        gold = "class T {\n\n\t@Test\n\tvoid added() {\n\t\tx();\n\t}\n\n\t@Test\n\t@SuppressWarnings(\"x\")\n\tvoid kept() throws Exception {\n\t\ty();\n\t\tif (a) {\n\t\t}\n\t}\n}\n"
+        parent = "class T {\n\t@Test\n\tvoid kept() {\n\t\ty();\n\t}\n}\n"
+        off = control.decoy_of({"gold_with_a_test": "disabled"}, parent, gold)
+        self.assertEqual(off.replace('\t@org.junit.jupiter.api.Disabled("to be adapted")\n', ""), gold)
+        self.assertLess(off.index("added"), off.index("Disabled"))  # a test the parent has, not the new one
+        empty = control.decoy_of({"gold_with_a_test": "emptied"}, parent, gold)
+        self.assertIn("void kept() throws Exception {\n\t}\n}\n", empty)
+        self.assertIn("x();", empty)
+        self.assertIn("Disabled", control.decoy_of({"gold_with_a_test": "disabled"}, "class T { }", gold))  # renamed: any test
+        with self.assertRaises(ValueError):
+            control.decoy_of({"gold_with_a_test": "disabled"}, parent, "class T {}")
+        with self.assertRaises(ValueError):
+            control.decoy_of({"replace": [["nowhere", "x"]]}, "a", "b")
+        self.assertEqual(control.decoy_of({"replace": [["a", "b"]]}, "a a", "g"), "b a")
+
+    def test_the_excerpt_shows_changes_the_commits_places_and_matches(self):
+        before = "".join(f"line {i}\n" for i in range(400))
+        left = before.replace("line 50\n", "line fifty\n")
+        gold = before.replace("line 200\n", "line two hundred\n")
+        text = control.excerpt(before, left, gold, [r"line 350$"])
+        for want in ("line fifty", "line 200", "line 350", "line 347"):
+            self.assertIn(want, text)
+        for no in ("line 100", "line 300\n", "line 399"):
+            self.assertNotIn(no, text)
+        self.assertRegex(text, r"(?m)^   51  line fifty$")
+        self.assertEqual(text.count("..."), 4)
+
+    def _sheet(self, seed=5, **kw):
         tasks = [syn.task(i) for i in range(1, 21)]
-        crit = {t["id"]: {u["path"]: {"wrong": "w", "criteria": [{"id": "c1", "text": "has new", "present": "new"}, {"id": "c2", "text": "reads well"}]} for u in control.units(t)} for t in tasks}
-        row = lambda t, c, k: syn.row(t, c, touch=k)  # noqa: E731
-        sets = {control.RECORDED: {t["id"]: row(t, "none", 1) for t in tasks}, control.CONCURRENT: {t["id"]: row(t, "none", 0) for t in tasks[:9]},
-                control.NEW: {t["id"]: row(t, "none-docs", 4) for t in tasks}}
+        crit = {t["id"]: {u["path"]: {"wrong": "w", "criteria": [{"id": "c1", "text": "says it anew", "present": "new"}, {"id": "c2", "text": "reads well"}],
+                                      "decoy": {"breaks": ["c2"], "replace": [["old", "newish but bad"]]}} for u in control.units(t)} for t in tasks}
+        sets = {control.RECORDED: {t["id"]: syn.row(t, "none", touch=1) for t in tasks}, control.CONCURRENT: {t["id"]: syn.row(t, "none", touch=0) for t in tasks[:9]},
+                control.NEW: {t["id"]: syn.row(t, "none-docs", touch=4) for t in tasks}}
         diff_of = lambda s, i: "".join(_diff(u["path"], "old\n", ("new" if s == control.NEW else "other") + "\n") for t in tasks if t["id"] == i for u in control.units(t))  # noqa: E731
-        items, key = control.sheet(sets, tasks, crit, diff_of, lambda i, p: "old\n", seed=5)
-        self.assertEqual(len(items), 20 * 1 + 20 * 3)  # touched docs and forced tests only: no remote code, nothing untouched
+        return control.sheet(sets, tasks, crit, diff_of, lambda i, p: "old\n", lambda i, p: "the new way\n", seed)
+
+    def test_the_sheet_is_blind_and_complete(self):
+        items, key = self._sheet()
+        # Touched docs and forced tests only (no remote code, nothing untouched), and for each of the 60 units the commit's edit and a decoy.
+        self.assertEqual({s: sum(k["set"] == s for k in key.values()) for s in ("recorded", "concurrent", "none-docs", "gold", "decoy")},
+                         {"recorded": 20, "concurrent": 0, "none-docs": 60, "gold": 60, "decoy": 60})
         self.assertEqual([x["item"] for x in items], sorted(key))
-        self.assertEqual(control.sheet(sets, tasks, crit, diff_of, lambda i, p: "old\n", seed=5), (items, key))
+        self.assertEqual(self._sheet(), (items, key))
+        self.assertEqual(sorted(json.dumps({k: v for k, v in x.items() if k != "item"}) for x in self._sheet(seed=6)[0]),
+                         sorted(json.dumps({k: v for k, v in x.items() if k != "item"}) for x in items))  # the second judge's: the same, in another order
+        self.assertNotEqual([key[n]["set"] for n in sorted(key)], [k["set"] for _, k in sorted(self._sheet(seed=6)[1].items())])
         blob = json.dumps(items)
-        for word in ("none-docs", "recorded", "concurrent", "mechanical", "absent", "present\"", "__r1", "run_id"):
+        for word in ("none-docs", "recorded", "concurrent", "mechanical", "absent", "decoy", "gold", "breaks", "__r1", "run_id", "index 1..2"):
             self.assertNotIn(word, blob)
-        self.assertEqual({k for x in items for k in x}, {"item", "task", "unit", "change", "wrong_before", "criteria", "diff", "file_after"})
+        self.assertEqual({k for x in items for k in x}, {"item", "task", "unit", "change", "wrong_before", "criteria", "diff", "file_after_excerpt"})
+        heads = {tuple(y[:4] for y in x["diff"].splitlines()[:3]) for x in items}
+        self.assertEqual(heads, {("--- ", "+++ ", "@@ -")})  # one form, whoever made the edit
         order = [key[x["item"]]["set"] for x in items]
-        self.assertNotEqual(order, sorted(order))  # shuffled
-        self.assertTrue(all(k["mechanical"] == {"c1": k["set"] == control.NEW, "c2": True} for k in key.values()))
-        judged = {n: {"c1": True, "c2": True} for n in key}
-        v = control.verdicts(key, judged)
-        self.assertEqual({s for (s, _, _), ok in v.items() if ok}, {control.NEW})  # the mechanical part counts too
-        one = next(n for n in key if key[n]["set"] == control.NEW)
-        judged[one]["c2"] = False
-        self.assertEqual(sum(control.verdicts(key, judged).values()), 59)
-        for bad in ({n: x for n, x in judged.items() if n != one}, {**judged, "999": {}}, {**judged, one: {"c1": True}}, {**judged, one: {"c1": 1, "c2": "yes"}}):
+        self.assertNotEqual(order, sorted(order))
+
+    def test_who_decides_what(self):
+        items, key = self._sheet()
+        good = lambda n: key[n]["set"] in (control.NEW, control.GOLD)  # noqa: E731
+        judge = {n: {"c1": good(n), "c2": good(n)} for n in key}
+        first = control.judged_units(key, judge, "first")
+        self.assertEqual(control.judge_errors(first), [])
+        self.assertEqual({k[0] for k, ok in first.items() if ok}, {control.NEW, control.GOLD})
+        # A mechanical pass decides: the judge's no on c1 does not count where the pattern is there.
+        self.assertTrue(all(control.judged_units(key, {n: {"c1": False, "c2": good(n)} for n in key}, "first")[k] for k in first if k[0] == control.GOLD))
+        # A mechanical failure never decides: the judge's yes on c1 counts without the pattern.
+        yes = {n: dict(x) for n, x in judge.items()}
+        one = next(n for n in key if key[n]["set"] == control.RECORDED)
+        self.assertIs(key[one]["mechanical"]["c1"], False)
+        self.assertIsNone(key[one]["mechanical"]["c2"])
+        yes[one] = {"c1": True, "c2": True}
+        unit = (control.RECORDED, key[one]["task"], key[one]["unit"])
+        self.assertTrue(control.judged_units(key, yes, "first")[unit])
+        # A not covered goes to the second judge: agreed no, or undecided; a covered stands.
+        self.assertIs(control.verdicts(first, first)[unit], False)
+        self.assertIsNone(control.verdicts(first, {**first, unit: True})[unit])
+        new = next(k for k in first if k[0] == control.NEW)
+        self.assertIs(control.verdicts(first, {**first, new: False})[new], True)
+        with self.assertRaises(SystemExit):
+            control.verdicts(first, {k: v for k, v in first.items() if k != unit})
+        for bad in ({n: x for n, x in judge.items() if n != one}, {**judge, "999": {}}, {**judge, one: {"c1": True}}, {**judge, one: {"c1": 1, "c2": "yes"}}):
             with self.assertRaises(SystemExit):
-                control.verdicts(key, bad)
+                control.judged_units(key, bad, "first")
+
+    def test_a_judge_is_checked_on_the_commits_edits_and_the_decoys(self):
+        items, key = self._sheet()
+        good = lambda n: key[n]["set"] in (control.NEW, control.GOLD)  # noqa: E731
+        judge = {n: {"c1": good(n), "c2": good(n)} for n in key}
+        wrong = [n for n in key if key[n]["set"] == control.DECOY][:3] + [n for n in key if key[n]["set"] == control.GOLD][:2]
+        for n in wrong:
+            judge[n] = {"c1": not good(n), "c2": not good(n)}
+        self.assertEqual(len(control.judge_errors(control.judged_units(key, judge, "first"))), control.JUDGE_ERRORS)  # five are let pass, and said
+        six = next(n for n in key if key[n]["set"] == control.DECOY and n not in wrong)
+        judge[six] = {"c1": True, "c2": True}
+        with self.assertRaisesRegex(SystemExit, "second judge: 6 wrong answers"):
+            control.judged_units(key, judge, "second")
 
     def test_a_renamed_test_is_one_item_with_the_file_that_is_left(self):
         t = {**syn.task(1), "equivalents": [["m1/src/test/java/a/PTests.java", "m1/src/test/java/a/QTests.java"]]}
-        crit = {"t01": {u["path"]: {"wrong": "w", "criteria": [{"id": "c1", "text": "x", "absent": "old"}]} for u in control.units(t)}}
+        crit = {"t01": {u["path"]: {"wrong": "w", "criteria": [{"id": "c1", "text": "x", "absent": "old"}], "decoy": {"breaks": ["c1"], "replace": [["old", "still old"]]}}
+                        for u in control.units(t)}}
         old, new = t["equivalents"][0]
         r = syn.row(t, "none-docs", touch=0)
         r["edit"]["files_changed"] += [old, new]
         both = _diff(old, "old\n", "") + _diff(new, "", "fresh\n")
-        items, key = control.sheet({control.NEW: {"t01": r}}, [t], crit, lambda s, i: both, lambda i, p: "old\n" if p == old else None)
-        self.assertEqual([(x["unit"], x["file_after"]) for x in items], [(old, "fresh\n")])
-        self.assertTrue(key["001"]["mechanical"]["c1"])
+        items, key = control.sheet({control.NEW: {"t01": r}}, [t], crit, lambda s, i: both, lambda i, p: None if p == new else "old\n",
+                                   lambda i, p: None if p == old else "commit\n")
+        mine = [(x, key[x["item"]]) for x in items if x["unit"] == old]
+        left = {k["set"]: (x["file_after_excerpt"].split("  ", 1)[-1], k["mechanical"]["c1"]) for x, k in mine}
+        self.assertEqual({s: v[1] for s, v in left.items()}, {control.NEW: True, control.GOLD: True, control.DECOY: False})
+        self.assertIn("fresh", left[control.NEW][0])
+        session = next(x for x, k in mine if k["set"] == control.NEW)
+        self.assertIn("+++ /dev/null", session["diff"])
+        self.assertIn(f"+++ b/{new}", session["diff"])
 
 
 class Comparison(unittest.TestCase):
@@ -267,18 +365,20 @@ class Comparison(unittest.TestCase):
         return control.compare(recorded, concurrent + new, self.tasks, v, n)
 
     def test_the_registered_rule(self):
-        S = lambda a, b, c, d, iv=((0.6, 1.0), (0.6, 1.0)), judged=True: control.outcome({  # noqa: E731
-            "touched": {"recorded": a, "concurrent": b, "interval": iv[0], "judged": True}, "covered": {"recorded": c, "concurrent": d, "interval": iv[1], "judged": judged}})
-        low = ((0.0, 0.4), (0.0, 0.4))
-        self.assertEqual(S(0.9, 0.8, 0.7, 0.6), "i")
-        self.assertEqual(S(0.2, 0.1, 0.0, -0.3, low), "ii")
-        self.assertEqual(S(0.9, 0.8, 0.3, 0.2, ((0.6, 1.0), (0.0, 0.4))), "undecided")  # touched yes, covered no
-        self.assertEqual(S(0.9, 0.4, 0.9, 0.4), "undecided")  # the two bases disagree
-        self.assertEqual(S(0.9, 0.9, 0.9, 0.9, ((0.5, 1.0), (0.6, 1.0))), "undecided")  # an interval contains 50 %, at its end too
-        self.assertEqual(S(0.4, 0.4, 0.4, 0.4, ((0.0, 0.4), (0.1, 0.5))), "undecided")
-        self.assertEqual(S(0.5, 0.5, 0.5, 0.5, low), "ii")  # exactly half is not most
-        self.assertEqual(S(0.9, None, 0.9, 0.9), "undecided")  # a base without a docs gap
-        self.assertEqual(S(0.9, 0.9, None, None, ((0.6, 1.0), None), judged=False), "unjudged")
+        def S(points, iv=(0.6, 1.0), judged=True):  # touched, covered strict, covered lenient: (recorded, concurrent)
+            ivs = iv if isinstance(iv, list) else [iv] * 3
+            return control.outcome({k: {"recorded": a, "concurrent": b, "interval": x, "judged": judged or k == "touched"} for k, (a, b), x in zip(control.WAYS, points, ivs)})
+        low = (0.0, 0.4)
+        self.assertEqual(S([(0.9, 0.8), (0.7, 0.6), (0.8, 0.7)]), "i")
+        self.assertEqual(S([(0.2, 0.1), (0.0, -0.3), (0.1, 0.0)], low), "ii")
+        self.assertEqual(S([(0.9, 0.8), (0.3, 0.2), (0.3, 0.2)], [(0.6, 1.0), low, low]), "undecided")  # touched yes, covered no
+        self.assertEqual(S([(0.9, 0.9), (0.4, 0.4), (0.9, 0.9)], [(0.6, 1.0), low, (0.6, 1.0)]), "undecided")  # it hangs on the undecided units
+        self.assertEqual(S([(0.9, 0.4)] * 3), "undecided")  # the two bases disagree
+        self.assertEqual(S([(0.9, 0.9)] * 3, [(0.5, 1.0), (0.6, 1.0), (0.6, 1.0)]), "undecided")  # an interval contains 50 %, at its end too
+        self.assertEqual(S([(0.4, 0.4)] * 3, [(0.0, 0.4), (0.0, 0.4), (0.1, 0.5)]), "undecided")
+        self.assertEqual(S([(0.5, 0.5)] * 3, low), "ii")  # exactly half is not most
+        self.assertEqual(S([(0.9, None), (0.9, 0.9), (0.9, 0.9)]), "undecided")  # a base without a docs gap
+        self.assertEqual(S([(0.9, 0.9), (None, None), (None, None)], judged=False), "unjudged")
         for k in ("i", "ii", "undecided", "unjudged"):
             self.assertIn(k, control.MEANING)
         self.assertIn("says nothing about tokens", control.MEANING["i"])
@@ -290,7 +390,7 @@ class Comparison(unittest.TestCase):
         new = self.without_docs(self.rows("none-docs", 4), self.ids[:4])  # 16 of 20 tasks find their docs
         c = self.compare(rec, con, new)
         self.assertEqual((c["summary"]["recorded"]["gap"]["docs"], c["summary"]["none-docs"]["gap"]["docs"]), (0.5, 0.1))
-        for w in ("touched", "covered"):
+        for w in control.WAYS:
             x = c["docs_gap_closed"][w]
             self.assertAlmostEqual(x["recorded"], 0.8)
             self.assertAlmostEqual(x["concurrent"], 0.8)
@@ -301,13 +401,20 @@ class Comparison(unittest.TestCase):
         self.assertEqual([k for k, _ in c["tasks"]["t20"]["found_now"]], ["docs", "docs"])
         self.assertEqual(len(c["tasks"]["t01"]["missed_by_both"]), 2)
         text = "\n".join(control.lines(c))
-        for want in ("Outcome (i)", "nothing is tested", SENTENCE, "drift", "| touched units | 0.80 |", "| covered units | 0.80 |", "docs: units covered | 0/40 | 0/40 | 32/40"):
+        for want in ("Outcome (i)", "nothing is tested", SENTENCE, "drift", "| touched | 0.80 |", "| covered, undecided ones not | 0.80 |", "docs: units covered (undecided: not - too) | 0/40 | 0/40 | 32/40"):
             self.assertIn(want, text)
         self.assertNotIn("nan", text)
         # Found, but not covered: half of the new units.
         bad = {(control.NEW, i, f"framework-docs/{f}.adoc") for i in self.ids[4:] for f in "xy"}
         c = self.compare(rec, con, new, covered=bad)
-        self.assertEqual((c["docs_gap_closed"]["covered"]["recorded"], c["outcome"]), (0.0, "undecided"))
+        self.assertEqual((c["docs_gap_closed"]["covered_strict"]["recorded"], c["outcome"]), (0.0, "undecided"))
+        # The same units undecided between the judges: counted both ways, so the outcome hangs on them.
+        v = {(s, i, u["path"]): None if (s, i, u["path"]) in bad else True for s in (control.RECORDED, control.CONCURRENT, control.NEW)
+             for i, t in zip(self.ids, self.tasks) for u in control.units(t)}
+        c = control.compare(rec, con + new, self.tasks, v, 100)
+        self.assertEqual([round(c["docs_gap_closed"][w]["recorded"], 6) for w in control.WAYS], [0.8, 0.0, 0.8])
+        self.assertEqual((c["outcome"], len(c["tasks"]["t20"]["undecided_units"]["none-docs"])), ("undecided", 2))
+        self.assertIn("docs: units covered (undecided: not - too) | 0/40 | 0/40 | 0-32/40", "\n".join(control.lines(c)))
         self.assertEqual(self.compare(rec, con, new, covered=None)["outcome"], "unjudged")
         self.assertIn("No outcome yet", "\n".join(control.lines(self.compare(rec, con, new, covered=None))))
         c = self.compare(rec, con, self.without_docs(self.rows("none-docs", 4)))

@@ -371,10 +371,12 @@ def cmd_control(args) -> int:
     from aeval import control, report_commit
     recorded, run = _control_rows(args.label)
     covered = None
-    if args.key or args.verdicts:
-        if not (args.key and args.verdicts):
-            sys.exit("--key and --verdicts go together")
-        covered = control.verdicts(config.load_json(Path(args.key)), config.load_json(Path(args.verdicts)))
+    if args.judged:
+        d = Path(args.judged)
+        one = [control.judged_units(config.load_json(d / f"key{k}.json"), config.load_json(d / f"verdicts{k}.json"), name) for k, name in ((1, "first"), (2, "second"))]
+        covered = control.verdicts(*one)
+        for name, u in zip(("first", "second"), one):
+            print(f"{name} judge: {len(control.judge_errors(u))} wrong on the commit's edits and the decoys: {control.judge_errors(u)}", file=sys.stderr)
     c, d = control.compare(recorded, run, config.load_tasks(), covered), report_commit.decision()
     if (c["claude_version"], c["model"]) != (d["claude_version"], d["model"]):
         sys.exit("not the CLI and model of the recorded decision")
@@ -393,7 +395,7 @@ def cmd_control_plan(args) -> int:
 
 
 def cmd_coverage_sheet(args) -> int:
-    """#183: what the blind judge gets (sheet.json) and the key that stays apart (key.json)."""
+    """#183: what the two blind judges get (sheet1.json, sheet2.json: the same items in another order) and the keys that stay apart."""
     from aeval import control
     recorded, run = _control_rows(args.label)
     tasks = config.load_tasks()
@@ -409,13 +411,18 @@ def cmd_coverage_sheet(args) -> int:
         f = config.cache_dir() / "repos" / repo[task] / path
         return f.read_text() if f.is_file() else None
 
+    def gold_of(task: str, path: str) -> str | None:
+        f = config.gold_dir(repo[task]) / "files" / path
+        return f.read_text() if f.is_file() else None
+
     criteria = config.load_json(config.EVAL_DIR / "groundtruth" / "coverage_183.json")["units"]
-    items, key = control.sheet(control.load(recorded, run, tasks), tasks, criteria, diff_of, parent_of)
-    out = Path(args.out)
+    sets, out = control.load(recorded, run, tasks), Path(args.out)
     out.mkdir(parents=True)
-    (out / "sheet.json").write_text(json.dumps(items, indent=1, ensure_ascii=False) + "\n")
-    (out / "key.json").write_text(json.dumps(key, indent=1) + "\n")
-    print(f"{len(items)} items; the judge gets sheet.json only")
+    for k in (1, 2):
+        items, key = control.sheet(sets, tasks, criteria, diff_of, parent_of, gold_of, control.PLAN_SEED + k)
+        (out / f"sheet{k}.json").write_text(json.dumps(items, indent=1, ensure_ascii=False) + "\n")
+        (out / f"key{k}.json").write_text(json.dumps(key, indent=1) + "\n")
+    print(f"{len(items)} items; judge k gets sheet<k>.json only and writes verdicts<k>.json")
     return 0
 
 
@@ -884,8 +891,7 @@ def main(argv: list[str] | None = None) -> int:
 
     s = sub.add_parser("control", help="#183: the control arm none-docs against arm none, recorded and concurrent (descriptive)")
     s.add_argument("label", help="the run's label, or the directory in results/ that holds its sessions.jsonl")
-    s.add_argument("--key", help="key.json of the coverage sheet")
-    s.add_argument("--verdicts", help="the judge's {item: {criterion: true|false}}")
+    s.add_argument("--judged", metavar="DIR", help="the coverage sheet's directory with both keys and both judges' verdicts<k>.json ({item: {criterion: true|false}})")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_control)
 
@@ -893,7 +899,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("out")
     s.set_defaults(fn=cmd_control_plan)
 
-    s = sub.add_parser("coverage-sheet", help="#183: the shuffled sheet for the judge of the coverage, and its key")
+    s = sub.add_parser("coverage-sheet", help="#183: the shuffled sheets for the two judges of the coverage, and their keys")
     s.add_argument("label")
     s.add_argument("--recorded-runs", default="2026-11-24-none20", help="label of the recorded sessions in runs/")
     s.add_argument("--out", required=True, help="a new directory")

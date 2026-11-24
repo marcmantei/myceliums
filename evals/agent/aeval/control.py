@@ -8,11 +8,14 @@ registered before the first session (README, *Control arm*): the comparison and
 the rule that reads it (:func:`outcome`). The rule counts a docs unit twice: when
 the session **touched** the file, and when the file it left meets the criteria
 fixed beforehand (``groundtruth/coverage_183.json``): **covered**. Coverage is
-judged blind to the arm, from a shuffled sheet (:func:`sheet`).
+judged blind to the arm, from a shuffled sheet (:func:`sheet`) that also holds,
+for every unit, the commit's own edit and a faulty decoy; a "not covered" goes to
+a second blind judge, and where the two disagree the unit counts both ways.
 """
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import random
 import re
@@ -24,6 +27,9 @@ from .stats import mean, paired_bootstrap, percentile
 
 BASE, ARM = "none", "none-docs"
 RECORDED, CONCURRENT, NEW = "recorded", "concurrent", "none-docs"
+GOLD, DECOY = "gold", "decoy"  # on the judges' sheet only
+JUDGE_ERRORS = 5  # a judge with more wrong answers than this on the commit's edits and the decoys is replaced
+WAYS = ("touched", "covered_strict", "covered_lenient")  # an undecided unit is not covered, or covered
 MOST = 0.5  # more than this share of the docs gap closed is "most of it"
 PLAN_SEED = 183
 KINDS = ("docs", "tests", "code")
@@ -133,44 +139,129 @@ def mechanical(criterion: dict, text: str) -> bool:
         "present" in criterion and not re.search(criterion["present"], text))
 
 
-def sheet(sets: dict[str, dict[str, dict]], tasks: list[dict], criteria: dict, diff_of, parent_of, seed: int = PLAN_SEED) -> tuple[list[dict], dict]:
-    """What the judge gets and the key that stays apart. One item per docs or
-    forced-test unit that a session touched, in an order by seed, numbered by it,
-    without arm, set or session: the task, the change it asked for, the criteria,
-    the file's diff and the file as the session left it. ``diff_of(set, task)``
-    and ``parent_of(task, path)`` return text (None: no such file)."""
+def unified(before: dict[str, str | None], left: dict[str, str | None]) -> str:
+    """One format for every diff on the sheet, whoever made the edit."""
+    out = []
+    for f in sorted(set(before) | set(left)):
+        a, b = before.get(f), left.get(f)
+        if a != b:
+            out += difflib.unified_diff((a or "").splitlines(True), (b or "").splitlines(True), f"a/{f}" if a is not None else "/dev/null",
+                                        f"b/{f}" if b is not None else "/dev/null")
+    return "".join(x if x.endswith("\n") else x + "\n" for x in out)
+
+
+def excerpt(before: str, left: str, gold: str, patterns: list[str], around: int = 12) -> str:
+    """The parts of the file as it is left that a judge needs, with line numbers:
+    around every change, around the places the commit changes, and around every
+    match of a criterion's pattern; ``...`` for what is left out."""
+    lines, keep = left.splitlines(), set()
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, before.splitlines(), lines, autojunk=False).get_opcodes():
+        if tag != "equal":
+            keep |= set(range(j1 - around, j2 + around))
+    places = {i for tag, i1, i2, _, _ in difflib.SequenceMatcher(None, before.splitlines(), gold.splitlines(), autojunk=False).get_opcodes()
+              if tag != "equal" for i in (i1, max(i1, i2 - 1))}
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, before.splitlines(), lines, autojunk=False).get_opcodes():
+        for i in places & set(range(i1, i2 + 1)):
+            at = j1 + min(i - i1, max(0, j2 - j1 - 1))
+            keep |= set(range(at - around, at + around))
+    for k, line in enumerate(lines):
+        if any(re.search(x, line) for x in patterns):
+            keep |= set(range(k - 3, k + 4))
+    out, last = [], -1
+    for k in sorted(x for x in keep if 0 <= x < len(lines)):
+        if k != last + 1:
+            out.append("...")
+        out.append(f"{k + 1:5d}  {lines[k]}")
+        last = k
+    return "\n".join(out + (["..."] if last + 1 < len(lines) else []))
+
+
+def decoy_of(spec: dict, parent: str, gold: str) -> str:
+    """The faulty edit of a unit: replacements in the parent's file, or the
+    commit's file with one of the parent's tests disabled or emptied."""
+    if "replace" in spec:
+        text = parent
+        for a, b in spec["replace"]:
+            if a not in text:
+                raise ValueError(f"the decoy does not fit: {a[:60]}")
+            text = text.replace(a, b, 1)
+        return text
+    tests = list(re.finditer(r"(?m)^(\t+)@Test[^\n]*\n(?:\1@[^\n]*\n)*\1[^\n]*?\bvoid (\w+)\([^\n]*\{\n", gold))
+    kept = [m for m in tests if re.search(rf"\b{m.group(2)}\(", parent)] or tests  # in a renamed file every test may have another name
+    for m in kept:
+        indent = m.group(1)
+        if spec["gold_with_a_test"] == "disabled":
+            return gold[:m.start()] + f'{indent}@org.junit.jupiter.api.Disabled("to be adapted")\n' + gold[m.start():]
+        if end := re.compile(rf"(?m)^{indent}\}}$").search(gold, m.end()):
+            return gold[:m.end()] + gold[end.start():]
+    raise ValueError("no test to disable or empty")
+
+
+def sheet(sets: dict[str, dict[str, dict]], tasks: list[dict], criteria: dict, diff_of, parent_of, gold_of, seed: int = PLAN_SEED) -> tuple[list[dict], dict]:
+    """What a judge gets and the key that stays apart. One item per docs or
+    forced-test unit that a session touched, and for every unit the commit's own
+    edit and a faulty decoy; all in one form, in an order by seed, numbered by it,
+    without arm, set or session. ``diff_of(set, task)``, ``parent_of(task, path)``
+    and ``gold_of(task, path)`` return text (None: no such file)."""
     by_id = {t["id"]: t for t in tasks}
     found = [(s, i, u) for s in (RECORDED, CONCURRENT, NEW) for i in sorted(sets.get(s, {})) for u in units(by_id[i])
              if touched(by_id[i], u, sets[s][i]["edit"]["files_changed"])]
+    found += [(s, i, u) for s in (GOLD, DECOY) for i in sorted(by_id) for u in units(by_id[i])]
     random.Random(seed).shuffle(found)
     items, key = [], {}
     for n, (s, i, u) in enumerate(found, 1):
-        task = by_id[i]
-        group = [f for g in task.get("equivalents") or [] if u["path"] in g for f in g] or list(u["files"])
-        diffs = {f: d for f in group if (d := file_diff(diff_of(s, i), f))}
-        left = {f: after(parent_of(i, f), d) for f, d in diffs.items()}
-        kept = {f: t for f, t in left.items() if t is not None} or {f: p for f in group if f not in diffs and (p := parent_of(i, f)) is not None}
-        text = "\n".join(kept[f] for f in sorted(kept))
-        crit = criteria[i][u["path"]]["criteria"]
+        task, spec = by_id[i], criteria[i][u["path"]]
+        group = sorted({f for g in task.get("equivalents") or [] if u["path"] in g for f in g} | set(u["files"]))
+        before = {f: parent_of(i, f) for f in group}
+        commit = {f: gold_of(i, f) for f in group}
+        if s == GOLD:
+            left = commit
+        elif s == DECOY:
+            old, new = next(f for f in group if before[f] is not None), next(f for f in group if commit[f] is not None)
+            made = decoy_of(spec["decoy"], before[old], commit[new])
+            left = {**before, old: made} if "replace" in spec["decoy"] else {**commit, new: made}
+        else:
+            left = {f: after(before[f], d) if (d := file_diff(diff_of(s, i), f)) else before[f] for f in group}
+        join = lambda fs: "\n".join(fs[f] for f in sorted(fs) if fs[f] is not None)  # noqa: E731
+        text, crit = join(left), spec["criteria"]
+        patterns = [x[k] for x in crit for k in ("absent", "present") if k in x]
         name = f"{n:03d}"
-        items.append({"item": name, "task": i, "unit": u["path"], "change": task["question"], "wrong_before": criteria[i][u["path"]]["wrong"],
-                      "criteria": [{"id": x["id"], "text": x["text"]} for x in crit], "diff": "".join(diffs.values()), "file_after": text})
-        key[name] = {"set": s, "task": i, "unit": u["path"], "mechanical": {x["id"]: mechanical(x, text) for x in crit},
-                     "diff_sha256": hashlib.sha256("".join(diffs.values()).encode()).hexdigest()}
+        items.append({"item": name, "task": i, "unit": u["path"], "change": task["question"], "wrong_before": spec["wrong"],
+                      "criteria": [{"id": x["id"], "text": x["text"]} for x in crit], "diff": unified(before, left),
+                      "file_after_excerpt": excerpt(join(before), text, join(commit), patterns)})
+        key[name] = {"set": s, "task": i, "unit": u["path"], "mechanical": {x["id"]: mechanical(x, text) if {"absent", "present"} & set(x) else None for x in crit},
+                     "file_sha256": hashlib.sha256(text.encode()).hexdigest()}
     return items, key
 
 
-def verdicts(key: dict, judged: dict) -> dict[tuple[str, str, str], bool]:
-    """``(set, task, unit) -> covered``: every criterion holds, mechanically and
-    by the judge (``{item: {criterion: true or false}}``). All items must be judged."""
-    out = {}
+def judged_units(key: dict, judged: dict, which: str) -> dict[tuple[str, str, str], bool]:
+    """``(set, task, unit) -> covered`` of one judge. A criterion's mechanical pass
+    decides it; a mechanical failure, or none, leaves it to the judge (``{item:
+    {criterion: true or false}}``, every item and criterion). A judge who takes more
+    than :data:`JUDGE_ERRORS` of the commit's edits for not covered or of the decoys
+    for covered is refused."""
     if bad := sorted(set(key) ^ set(judged)):
-        raise SystemExit(f"not judged, or unknown: items {', '.join(bad[:10])}")
+        raise SystemExit(f"{which} judge: not judged, or unknown: items {', '.join(bad[:10])}")
+    out = {}
     for name, k in key.items():
         if set(judged[name]) != set(k["mechanical"]) or not all(isinstance(x, bool) for x in judged[name].values()):
-            raise SystemExit(f"item {name}: a true or false for each of {', '.join(sorted(k['mechanical']))}")
-        out[k["set"], k["task"], k["unit"]] = all(judged[name].values()) and all(k["mechanical"].values())
+            raise SystemExit(f"{which} judge, item {name}: a true or false for each of {', '.join(sorted(k['mechanical']))}")
+        out[k["set"], k["task"], k["unit"]] = all(k["mechanical"][c] is True or ok for c, ok in judged[name].items())
+    if len(wrong := judge_errors(out)) > JUDGE_ERRORS:
+        raise SystemExit(f"{which} judge: {len(wrong)} wrong answers on the commit's edits and the decoys (more than {JUDGE_ERRORS}); another judge is needed")
     return out
+
+
+def judge_errors(units_: dict[tuple[str, str, str], bool]) -> list[tuple[str, str, str]]:
+    return sorted(k for k, covered in units_.items() if k[0] == GOLD and not covered or k[0] == DECOY and covered)
+
+
+def verdicts(first: dict[tuple[str, str, str], bool], second: dict[tuple[str, str, str], bool]) -> dict[tuple[str, str, str], bool | None]:
+    """The first judge's *covered* stands; a *not covered* stands when the second,
+    independent judge agrees; otherwise the unit is undecided (None)."""
+    if set(first) != set(second):
+        raise SystemExit("the two judges have not judged the same units")
+    return {k: True if ok else None if second[k] else False for k, ok in first.items()}
 
 
 # ---- the comparison --------------------------------------------------------------------
@@ -201,17 +292,17 @@ def _interval(ps: list[tuple[float, float]], n_resamples: int, seed: int = 0) ->
 
 
 def outcome(shares: dict) -> str:
-    """The registered rule. ``shares``: the share of the docs gap closed for
-    ``touched`` and ``covered``, against the recorded sessions (with ``interval``)
-    and the concurrent ones. ``i``: all four above :data:`MOST`, ``ii``: none is;
+    """The registered rule. ``shares``: the share of the docs gap closed for each
+    of :data:`WAYS`, against the recorded sessions (with ``interval``) and the
+    concurrent ones. ``i``: all six above :data:`MOST`, ``ii``: none is;
     ``undecided`` when they disagree, a base has no docs gap, or an interval
     against the recorded sessions contains :data:`MOST`; ``unjudged`` before coverage is."""
-    points = [shares[k][b] for k in ("touched", "covered") for b in (RECORDED, CONCURRENT)]
-    if shares["covered"][RECORDED] is None and not shares["covered"].get("judged"):
+    if not all(shares[k]["judged"] for k in WAYS):
         return "unjudged"
+    points = [shares[k][b] for k in WAYS for b in (RECORDED, CONCURRENT)]
     if any(p is None for p in points):
         return "undecided"
-    if any(iv is None or iv[0] <= MOST <= iv[1] for iv in (shares["touched"]["interval"], shares["covered"]["interval"])):
+    if any(iv is None or iv[0] <= MOST <= iv[1] for iv in (shares[k]["interval"] for k in WAYS)):
         return "undecided"
     above = {p > MOST + 1e-9 for p in points}
     return "undecided" if len(above) > 1 else "i" if above.pop() else "ii"
@@ -222,8 +313,8 @@ MEANING = {
          "which stays open; whether a main run is made for it is Marc's decision.",
     "ii": "**Outcome (ii): the sentence does not close most of the docs gap.** The registered next step is a main run with the arms `none`, `none-docs` and C (no D), "
           "20 tasks x 3 repetitions, Holm over four tests (C vs `none`, C vs `none-docs`; recall and tokens), `none-docs` vs `none` described. Only a gain over `none-docs` counts as more than a reminder.",
-    "undecided": "**Undecided:** the touched and the covered units, or the two bases, disagree, a base has no docs gap, or an interval contains 50 %. Marc decides.",
-    "unjudged": "**No outcome yet:** the coverage has not been judged (`coverage-sheet`, then `control --key --verdicts`).",
+    "undecided": "**Undecided:** the touched and the covered units (undecided ones counted both ways), or the two bases, disagree, a base has no docs gap, or an interval contains 50 %. Marc decides.",
+    "unjudged": "**No outcome yet:** the coverage has not been judged (`coverage-sheet`, then `control --judged`).",
 }
 
 
@@ -243,7 +334,8 @@ def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: d
             return True
         if (s, i, u["path"]) not in covered:
             raise SystemExit(f"no verdict on {u['path']} of {i} ({s})")
-        return covered[s, i, u["path"]]
+        ok = covered[s, i, u["path"]]
+        return how == "covered_lenient" if ok is None else ok
 
     def gap(s: str, i: str, kind: str, how: str = "touched") -> float:
         us = counted(by_id[i])
@@ -255,13 +347,15 @@ def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: d
         return {"units": sum(n for n, _ in have), "touched": sum(h for _, h in have), "tasks": len(have),
                 "tasks_all_touched": sum(h == n for n, h in have), "tasks_any_touched": sum(h > 0 for _, h in have)}
 
-    ways = ("touched", "covered") if covered is not None else ("touched",)
+    ways = WAYS if covered is not None else ("touched",)
     per = {}
     for i in ids:
         us, here = counted(by_id[i]), [s for s in sets if i in sets[s]]
         per[i] = {"recall": {s: recall(by_id[i], files[s][i]) for s in here},
                   **{k: {s: f"{sum(hit(s, i, u) for u in us if u['kind'] == k)}/{sum(u['kind'] == k for u in us)}" for s in here} for k in PRIMARY},
-                  **({"covered": {s: [u["path"] for u in us if u["kind"] != "remote" and hit(s, i, u, "covered")] for s in here}} if covered is not None else {}),
+                  **({"covered": {s: [u["path"] for u in us if u["kind"] != "remote" and hit(s, i, u, "covered_strict")] for s in here},
+                      "undecided_units": {s: [u["path"] for u in us if u["kind"] != "remote" and hit(s, i, u, "covered_lenient") and not hit(s, i, u, "covered_strict")] for s in here}}
+                     if covered is not None else {}),
                   "found_now": [[u["kind"], u["path"]] for u in us if hit(NEW, i, u) and not hit(RECORDED, i, u)],
                   "missed_by_both": [[u["kind"], u["path"]] for u in us if not hit(NEW, i, u) and not hit(RECORDED, i, u)],
                   "missed_now_only": [[u["kind"], u["path"]] for u in us if not hit(NEW, i, u) and hit(RECORDED, i, u)],
@@ -274,7 +368,7 @@ def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: d
         audit = [r.get("isolation_audit") or {} for r in rows.values()]
         summary[s] = {"sessions": len(rows), "mean_recall": mean([per[i]["recall"][s] for i in rows]),
                       "gap": {k: mean([gap(s, i, k) for i in rows]) for k in PRIMARY}, "by_type": {k: tally(s, k) for k in PRIMARY},
-                      **({"covered_by_type": {k: tally(s, k, "covered") for k in ("docs", "forced_tests")}} if covered is not None else {}),
+                      **({"covered_by_type": {w: {k: tally(s, k, w) for k in ("docs", "forced_tests")} for w in WAYS[1:]}} if covered is not None else {}),
                       "docs_on_the_nine": {w: tally(s, "docs", w, nine)["touched"] for w in ways},
                       "recall_all_tests": mean([recall(by_id[i], files[s][i], ALL_TESTS) for i in rows]),
                       "new_tests_touched": sum(touched(by_id[i], u, files[s][i]) for i in rows for u in counted(by_id[i], ("new_tests",))),
@@ -289,7 +383,7 @@ def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: d
                       "refused_by_claude_cd": sum(x.get("claude_refusals_cd", 0) for x in audit), "disagreements": sum(x.get("disagreements", 0) for x in audit),
                       "span": [min(r["finished_at"] for r in rows.values()), max(r["finished_at"] for r in rows.values())]}
     shares: dict = {}
-    for w in ("touched", "covered"):
+    for w in WAYS:
         if w not in ways:
             shares[w] = {RECORDED: None, CONCURRENT: None, "interval": None, "judged": False}
             continue
@@ -319,17 +413,19 @@ def lines(c: dict) -> list[str]:
          f"interleaved with `none-docs` ({span(k)}; `none-docs` {span(n)}). Recorded against concurrent shows drift and session noise; what is left between them and the sentence cannot be told apart.", "",
          MEANING[c["outcome"]], "",
          "| Share of the docs gap closed | Recorded `none` as base | Interval | Concurrent `none` as base |", "|---|---:|---|---:|"]
-    for w in ("touched", "covered"):
+    say = {"touched": "touched", "covered_strict": "covered, undecided ones not", "covered_lenient": "covered, undecided ones too"}
+    for w in WAYS:
         x = c["docs_gap_closed"][w]
-        L.append(f"| {w} units | {num(x[RECORDED])} | {'–' if x['interval'] is None else '[' + ', '.join(f'{v:.2f}' for v in x['interval']) + ']'} | {num(x[CONCURRENT])} |")
+        L.append(f"| {say[w]} | {num(x[RECORDED])} | {'–' if x['interval'] is None else '[' + ', '.join(f'{v:.2f}' for v in x['interval']) + ']'} | {num(x[CONCURRENT])} |")
     L += ["", f"More than {MOST:.2f} is \"most\". Forced tests' gap closed (decides nothing): " + ", ".join(f"{w} {num(v)}" for w, v in c["forced_tests_gap_closed"].items()) + ".", "",
           "| | `none` recorded (20) | `none` concurrent (9) | `none-docs` (20) | `none-docs` minus `none` |", "|---|---:|---:|---:|---|",
           f"| Mean recall (a) | {f3(r['mean_recall'])} | {f3(k['mean_recall'])} | {f3(n['mean_recall'])} | recorded {sign(c['difference']['recall'])}; concurrent, 9 tasks {sign(c['difference']['recall_on_the_nine_concurrent'])} |"]
     for t in PRIMARY:
         L.append(f"| {t.replace('_', ' ')}: units touched | " + " | ".join(f"{x['by_type'][t]['touched']}/{x['by_type'][t]['units']}" for x in (r, k, n)) + " | |")
     if "covered_by_type" in n:
+        both = lambda x, t: "-".join(dict.fromkeys(str(x["covered_by_type"][w][t]["touched"]) for w in WAYS[1:]))  # noqa: E731
         for t in ("docs", "forced_tests"):
-            L.append(f"| {t.replace('_', ' ')}: units covered | " + " | ".join(f"{x['covered_by_type'][t]['touched']}/{x['covered_by_type'][t]['units']}" for x in (r, k, n)) + " | |")
+            L.append(f"| {t.replace('_', ' ')}: units covered (undecided: not - too) | " + " | ".join(f"{both(x, t)}/{x['covered_by_type']['covered_strict'][t]['units']}" for x in (r, k, n)) + " | |")
     L += ["| tasks with docs: all / any touched | " + " | ".join(f"{x['by_type']['docs']['tasks_all_touched']} / {x['by_type']['docs']['tasks_any_touched']} of {x['by_type']['docs']['tasks']}" for x in (r, k, n)) + " | |",
           "| Recall with new tests | " + " | ".join(f3(x["recall_all_tests"]) for x in (r, k, n)) + " | |",
           "| Solved | " + " | ".join(str(x["solved"]) for x in (r, k, n)) + " | |",
