@@ -261,14 +261,16 @@ def dependents(task: dict) -> list[dict]:
       only in tasks that mark them (``strata``), ``comments`` (**code** files in
       which nothing but comments changes; docs and tests never are), ``build``
       (Gradle scripts) and ``either`` (its part can go into a primary file).
-      These three and ``new_tests`` are reported apart: not in ``n``, not
-      forgotten, not in ``remote``."""
+      ``optional``: code or docs the stated change does not affect
+      (``groundtruth/affected_183.json``). These four and ``new_tests`` are
+      reported apart: not in ``n``, not forgotten, not in ``remote``."""
     primary = set(task.get("primary_files") or [])
     dirs = {p.rpartition("/")[0] for p in primary}
     entries = [g for g in task.get("gold_files") or [] if isinstance(g, dict)]
     apart = "strata" in task and any("status" in g for g in entries)
     only = {g["path"] for g in entries if g.get("comment_only")}
     either = set(task.get("either") or [])
+    optional = set(task.get("optional") or [])
     forced = set(task["forced_tests"]) if "forced_tests" in task else None
     groups: dict[str, list[str]] = {}
     for f in sorted(set(gold_paths(task)) - primary):
@@ -281,16 +283,18 @@ def dependents(task: dict) -> list[dict]:
         if kind == "code":
             kind = ("local" if near else "remote") if not apart else (
                 "comments" if set(files) <= only else "build" if f.endswith((".gradle", ".gradle.kts"))
-                else "either" if set(files) <= either else "local" if near else "remote")
+                else "either" if set(files) <= either else "optional" if set(files) <= optional else "local" if near else "remote")
         elif apart and set(files) <= either:
             kind = "either"
+        elif apart and kind == "docs" and set(files) <= optional:
+            kind = "optional"
         elif kind == "tests" and forced is not None:
             kind = "forced_tests" if forced & set(files) else "new_tests"
         out.append({"path": f, "kind": kind, "near": near, "files": files})
     return out
 
 
-APART = ("comments", "build", "either", "new_tests")
+APART = ("comments", "build", "either", "optional", "new_tests")
 
 
 def touched(task: dict, unit: dict, changed) -> bool:
@@ -311,7 +315,7 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
     # Reported apart only where a task marks them (#183).
     marked = "strata" in task and any(isinstance(g, dict) and "status" in g for g in task.get("gold_files") or [])
     tests = ("forced_tests",) if "forced_tests" in task else ("tests",)
-    kinds = ("docs", *tests, "remote", "local") + (tuple(k for k in APART if k != "new_tests" or "forced_tests" in task) if marked else ())
+    kinds = ("docs", *tests, "remote", "local") + (tuple(k for k in APART if k not in ("new_tests", "optional") or "forced_tests" in task) if marked else ())
     out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in kinds},
            "other_module": {"n": 0, "forgotten": []}}
     for u in units:

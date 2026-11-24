@@ -20,8 +20,9 @@ import random
 from pathlib import Path
 from statistics import NormalDist
 
+from . import config
 from .editgrade import dependents, gold_paths, representative, touched
-from .stats import mean, paired_bootstrap, per_success_bootstrap
+from .stats import mean, paired_bootstrap, per_success_bootstrap, percentile
 
 ARMS = ("none", "C", "D")
 PAIRS = (("C", "none"), ("D", "none"), ("C", "D"))
@@ -30,8 +31,8 @@ SESSIONS = N_TASKS * N_REPS * len(ARMS)
 # Outcome (a): what the change needs outside the primary files' directories. ALL_TESTS adds the commit's other test
 # changes: the outcome registered first (README), now a secondary one.
 PRIMARY = ("docs", "remote", "forced_tests")
-ALL_TESTS = (*PRIMARY, "new_tests", "tests")
-KINDS = ("docs", "remote", "forced_tests", "new_tests", "local", "comments", "build", "either")
+ALL_TESTS = (*PRIMARY, "new_tests", "tests", "optional")
+KINDS = ("docs", "remote", "forced_tests", "new_tests", "optional", "local", "comments", "build", "either")
 DECISION = Path(__file__).resolve().parent.parent / "groundtruth" / "decision_183.json"  # written by `agent_eval.py ceiling`
 # The pilot stops the main run when it projects more than this; a mean recall of CEILING or more in `none` is a ceiling.
 MAX_USD, MAX_HOURS, CEILING = 288.0, 24.0, 0.90
@@ -179,6 +180,55 @@ def _co_primary(rows, by_id, ids, comments=False, n=10_000) -> dict:
     return out
 
 
+def harm_check(ps: list[tuple[float, float]], s: dict) -> dict:
+    """The recall as a harm check of the first arm: *detected* when the 95 %
+    interval of the difference lies entirely below zero; and, whatever it is,
+    the largest mean loss it does not exclude. Where no task is worse the
+    bootstrap has no loss to resample and its lower bound says nothing: then the
+    exact one-sided 95 % bound on the share of worse tasks (1 - 0.05^(1/n), what
+    the rule of three 3/n approximates) bounds the mean loss, a task losing at
+    most 1."""
+    d = [a - b for a, b in ps]
+    worse, better = sum(x < -1e-9 for x in d), sum(x > 1e-9 for x in d)
+    if not d:
+        return {"detected": False, "worse": 0, "better": 0, "n": 0, "loss": float("nan"), "exact": False}
+    exact = worse == 0
+    return {"detected": s["diff_hi"] < 0, "worse": worse, "better": better, "n": len(d), "exact": exact,
+            "loss": 1 - 0.05 ** (1 / len(d)) if exact else max(0.0, -s["diff_lo"])}
+
+
+def harm_text(h: dict) -> str:
+    if not h["n"]:
+        return "no task has both arms"
+    bound = (f"exact one-sided 95 % bound: no task is worse, so at most {h['loss']:.1%} of tasks, each losing at most everything; rule of three {3 / h['n']:.3f}"
+             if h["exact"] else "lower bound of the 95 % interval")
+    return (f"harm {'detected' if h['detected'] else 'not detected'}; largest loss not excluded: {h['loss']:.3f} ({bound}); "
+            f"tasks worse/better: {h['worse']}/{h['better']} of {h['n']}")
+
+
+def pooled(values: dict, by_id: dict, ids: list[str], n_resamples: int = 10_000, seed: int = 0) -> dict:
+    """Sensitivity: the recall over all units pooled, so that a task counts with
+    its number of counted dependents (a task with one counts as much as one
+    with many in the registered mean). Bootstrap over tasks as everywhere."""
+    weight = {t: len(counted(by_id[t])) for t in ids}
+    out: dict = {"units": sum(weight.values()), "arms": {}, "pairs": {}}
+    for c in ARMS:
+        have = [t for t in ids if c in values.get(t, {})]
+        out["arms"][c] = sum(weight[t] * values[t][c] for t in have) / sum(weight[t] for t in have) if have else float("nan")
+    for a, b in PAIRS:
+        have = [(weight[t], values[t][a] - values[t][b]) for t in ids if a in values.get(t, {}) and b in values.get(t, {})]
+        if not have:
+            continue
+        rng, draws = random.Random(seed), []
+        for _ in range(n_resamples):
+            pick = [have[rng.randrange(len(have))] for _ in have]
+            draws.append(sum(w * d for w, d in pick) / sum(w for w, _ in pick))
+        draws.sort()
+        out["pairs"][f"{a} vs {b}"] = {"n_tasks": len(have), "diff_mean": sum(w * d for w, d in have) / sum(w for w, _ in have),
+                                       "diff_lo": percentile(draws, 0.025), "diff_hi": percentile(draws, 0.975)}
+    return out
+
+
 def measured(tasks: list[dict]) -> None:
     """Every task says which of its tests the change forces; without that the recall (a) is not defined."""
     if bad := [t["id"] for t in tasks if "forced_tests" not in t]:
@@ -199,8 +249,9 @@ def analyse(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000, sole
     tests = [(p, k) for p in co for k in (("tokens",) if sole else ("recall", "tokens"))]  # cost is not a test
     for (p, k), adj in zip(tests, holm([co[p][k]["p"] for p, k in tests])):
         co[p][k]["p_holm"] = adj
-    for s in co.values():  # an interval entirely below zero: the first arm changes less of what the change needs
-        s["recall"]["harm"] = s["recall"]["diff_hi"] < 0
+    mine = per_task(rows, lambda r: recall(by_id[r["task_id"]], r["edit"]["files_changed"]))
+    for p, s in co.items():
+        s["recall"]["harm"] = harm_check(pairs(mine, ids, *p.split(" vs ")), s["recall"])
     secondary: dict = {}
     for key, _label, _fmt, fn in SECONDARY:
         v = per_task(rows, lambda r: fn(by_id[r["task_id"]], r))
@@ -231,7 +282,7 @@ def analyse(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000, sole
                  "sessions": sum(r["condition"] == c for r in rows),
                  "solved": sum(solved(r) for r in rows if r["condition"] == c),
                  "incomplete_usage": sum(not spend(r)[2] for r in rows if r["condition"] == c)} for c in ARMS}
-    return {"sole_primary": "tokens" if sole else None, "co_primary": co, "secondary": secondary, "sensitivity": sens, "missing": missing, "arms": means,
+    return {"sole_primary": "tokens" if sole else None, "co_primary": co, "secondary": secondary, "pooled": pooled(mine, by_id, ids, n_resamples), "sensitivity": sens, "missing": missing, "arms": means,
             "undefined_recall": [t for t in ids if not counted(by_id[t])]}
 
 
@@ -255,7 +306,14 @@ def _p(x: float) -> str:
 
 def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tuple[list[str], dict]:
     d = decision()
-    sole = bool(d and d["ceiling"])
+    if d is None:
+        raise SystemExit(f"no recorded decision ({DECISION.name}): one session of arm none per task, then `agent_eval.py ceiling LABEL --write`, "
+                         "before the main run (README, decision rule)")
+    if d["tasks_sha256"] != config.sha256_file(config.tasks_file()):
+        raise SystemExit(f"the task file is not the one of the recorded decision (sha256 {d['tasks_sha256'][:12]})")
+    sole = bool(d["ceiling"])
+    other = [f"{k} {', '.join(seen)} instead of {d[k]}" for k, seen in (
+        (k, sorted({str(r.get(k)) for r in rows} - {str(d[k])})) for k in ("claude_version", "model")) if seen]
     a = analyse(rows, tasks, n_resamples, sole)
     L = ["## Registered comparisons (#183)", "",
          f"Pre-registered in the README; the recall was redefined after the pilot in arm `none` and before any result of C or D. Unit: the task ({len(tasks)}), its repetitions averaged first; paired percentile "
@@ -263,11 +321,13 @@ def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tup
          "a positive recall difference favours the first arm, a negative token difference favours it (it spends less). *Recall*: share "
          "of the dependents (docs, code outside the primary files' directories, tests the change forces; not new tests and not files in which only comments or documentation text change) "
          "the session touched. *Tokens*: input including cache plus output per session, unsolved sessions included. p: two-sided, the bootstrap's. Cost is shown beside the tokens and not tested.", "",
-         ("**Primary outcome: tokens alone.** " + f"The {d['sessions']} sessions of arm `none` before the main run had a mean recall of {d['mean_recall']:.2f} (ceiling {CEILING:.2f}); by the registered rule "
-          "Holm goes over the three token tests and the recall is a harm check: *harm* when its 95 % interval lies entirely below zero; anything else is not evidence of no harm." if sole else
-          "**Co-primary outcomes: recall and tokens.** Holm over the six tests (three pairs × two outcomes). "
-          + (f"The {d['sessions']} sessions of arm `none` before the main run had a mean recall of {d['mean_recall']:.2f}, below the ceiling of {CEILING:.2f}." if d else
-             "No decision of the ceiling check is recorded (`decision_183.json`), so the rule below the ceiling is used."))]
+         f"The decision recorded before the main run: {d['sessions']} sessions of arm `none` (Claude Code {d['claude_version']}, {d['model']}), mean recall {d['mean_recall']:.3f}, "
+         f"ceiling {CEILING:.3f}; task file sha256 {d['tasks_sha256'][:12]}. "
+         + ("**Primary outcome: tokens alone.** Holm over the three token tests; the recall is a harm check: *detected* when its 95 % interval lies entirely below zero; not detected is no evidence "
+            "that there is none, so the largest loss not excluded stands beside it." if sole else
+            "**Co-primary outcomes: recall and tokens.** Holm over the six tests (three pairs × two outcomes).")]
+    if other:
+        L += ["", f"**Not the decision's setup:** {'; '.join(other)}."]
     if a["missing"]:
         L += ["", f"**Incomplete run:** missing sessions (task/arm: number) {', '.join(a['missing'])}. A pair uses the tasks both arms have."]
     if a["undefined_recall"]:
@@ -283,9 +343,12 @@ def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tup
           "|---|---:|---|---:|---:|---|---|---:|---:|---|"]
     for p, s in a["co_primary"].items():
         x, y = p.split(" vs ")
-        tested = f"{_p(s['recall']['p'])} | {_p(s['recall']['p_holm'])}" if not sole else f"– | {'harm' if s['recall']['harm'] else 'no harm shown'}"
+        tested = f"{_p(s['recall']['p'])} | {_p(s['recall']['p_holm'])}" if not sole else "– | –"
         L.append(f"| `{x}` vs `{y}` | {s['recall']['n_tasks']} | {_ci(s['recall'], 'f3')} | {tested} | "
                  f"{_ratio(s['tokens'])} | {_ci(s['tokens'], 'int')} | {_p(s['tokens']['p'])} | {_p(s['tokens']['p_holm'])} | {_ci(s['cost'], 'usd')} |")
+    if sole:
+        L += ["", "Harm check of the first arm (recall, not a test):", ""] + [
+            f"* `{p}`: {harm_text(s['recall']['harm'])}." for p, s in a["co_primary"].items()]
     L += ["", "### Secondary outcomes", "", "Not tested and not corrected. Per solved task: the sum over all sessions ÷ the solved sessions, ratio first ÷ second; "
           "– where an arm solved nothing.", "",
           "| Outcome | " + " | ".join(f"`{c}`" for c in ARMS) + " | " + " | ".join(a["co_primary"]) + " |",
@@ -304,6 +367,10 @@ def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tup
         s = a["sensitivity"][key]
         L.append(f"| {label} | {s['n_tasks']} | " + " | ".join(_ci(s["pairs"][p]["recall"], "f3") for p in a["co_primary"]) + " | "
                  + " | ".join(_ratio(s["pairs"][p]["tokens"]) for p in a["co_primary"]) + " |")
+    pool = a["pooled"]
+    L.append(f"| units pooled ({pool['units']} dependents, a task weighs as many as it has) | {len(tasks)} | "
+             + " | ".join(_ci(pool["pairs"][p], "f3") if p in pool["pairs"] else "–" for p in a["co_primary"]) + " | " + " | ".join("–" for _ in PAIRS) + " |")
+    L += ["", "Pooled recall: " + "; ".join(f"`{c}` {_num(pool['arms'][c], 'f3')}" for c in ARMS) + "."]
     return L + [""], a
 
 
@@ -334,22 +401,35 @@ def pilot(rows: list[dict], tasks: list[dict], drawn: list[str]) -> dict:
             "ceiling": mean(recalls) >= CEILING, "stop": stop}
 
 
-def decide(rows: list[dict], tasks: list[dict]) -> dict:
-    """The registered decision before the main run: one session of arm ``none``
-    per task, every final session counted, not pooled with anything. A mean
-    recall (a), over the tasks that have one, of CEILING or more makes tokens the
-    sole primary outcome; otherwise both stay co-primary."""
+def decide(rows: list[dict], tasks: list[dict], tasks_sha256: str) -> dict:
+    """The registered decision before the main run: one final session of arm
+    ``none`` per task (a timeout is final and counts), not pooled with anything.
+    An unrounded mean recall (a) of CEILING - 1e-9 or more makes tokens the sole
+    primary outcome; otherwise both stay co-primary. All sessions are of one
+    Claude Code and one model, which the record names, with the task file's hash."""
     if bad := sorted({r["condition"] for r in rows} - {"none"}):
         raise SystemExit(f"the ceiling check covers arm none only, the run has {bad}")
     ids = sorted(t["id"] for t in tasks)
     if len(ids) != N_TASKS or sorted(r["task_id"] for r in rows) != ids:
         raise SystemExit(f"the ceiling check is exactly one session of each of the {N_TASKS} tasks")
+    if bad := sorted(r["task_id"] for r in rows if not r.get("final") or r.get("rep") != 1):
+        raise SystemExit(f"not a final session of repetition 1: {', '.join(bad)}")
+    one = {}
+    for k in ("claude_version", "model"):
+        seen = sorted({str(r.get(k)) for r in rows})
+        if len(seen) != 1 or seen == ["None"]:
+            raise SystemExit(f"the sessions are not of one known {k}: {', '.join(seen)}")
+        one[k] = seen[0]
     measured(tasks)
     by_id = {t["id"]: t for t in tasks}
+    if bad := [t["id"] for t in tasks if not counted(t)]:
+        raise SystemExit(f"no counted dependent: {', '.join(bad)}")
     per = {r["task_id"]: recall(by_id[r["task_id"]], r["edit"]["files_changed"]) for r in sorted(rows, key=lambda r: r["task_id"])}
-    values = [x for x in per.values() if x is not None]
+    values = list(per.values())
+    weight = {t["id"]: len(counted(t)) for t in tasks}
     every = [x for r in rows if (x := recall(by_id[r["task_id"]], r["edit"]["files_changed"], ALL_TESTS)) is not None]
     ceiling = mean(values) >= CEILING - 1e-9
-    return {"sessions": len(rows), "arm": "none", "solved": sum(solved(r) for r in rows), "mean_recall": mean(values), "tasks_with_recall": len(values),
-            "per_task": per, "mean_recall_all_tests": mean(every), "threshold": CEILING, "ceiling": ceiling,
+    return {"sessions": len(rows), "arm": "none", "solved": sum(solved(r) for r in rows), "mean_recall": mean(values), "shown": f"{mean(values):.3f}",
+            "statuses": {s: sum(r.get("status") == s for r in rows) for s in sorted({str(r.get("status")) for r in rows})}, **one, "tasks_sha256": tasks_sha256,
+            "per_task": per, "pooled_recall": sum(weight[t] * per[t] for t in per) / sum(weight.values()), "mean_recall_all_tests": mean(every), "threshold": CEILING, "ceiling": ceiling,
             "primary": ["tokens"] if ceiling else ["recall", "tokens"]}

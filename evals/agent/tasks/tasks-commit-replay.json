@@ -679,14 +679,7 @@
      "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "forced_tests": [
-    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityExceptionHandlerTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/annotation/ResponseStatusExceptionResolverTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverErrorViewTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverProblemDetailTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java",
-    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolverTests.java"
-   ],
+   "forced_tests": [],
    "weak_test": "A passing solution may skip all MVC and WebFlux call sites (webmvc tests are not run; the WebFlux test asserts only the context error). Even the core requirement is unchecked: recordHandledException implemented as context.setError(error) passes every listed test, because hasError and the 'exception' key value come from the context and no handler's onError / Observation.error call is asserted. Not enforced: UserController.java, UserController.java, ResponseEntityExceptionHandler.java, ResponseStatusExceptionResolver.java, ExceptionHandlerExceptionResolver.java, ResponseEntityExceptionHandler.java, DefaultHandlerExceptionResolver.java.",
    "test_timeout_s": 1800,
    "strata": {
@@ -1080,6 +1073,10 @@
    ],
    "forced_tests": [
     "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java"
+   ],
+   "optional": [
+    "framework-docs/modules/ROOT/pages/testing/webtestclient.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-async.adoc"
    ],
    "weak_test": "A passing solution needs only MediaType, the default MIME types of JacksonJsonEncoder and ReactiveTypeHandler. All other codecs (Gson, Jackson 2, Jackson decoder, Kotlin, Protobuf) may be skipped, and 'treat it as a streaming media type' is not checked for any codec, including JacksonJsonEncoder. Not enforced: GsonEncoder.java, Jackson2CodecSupport.java, Jackson2JsonEncoder.java, JacksonJsonDecoder.java, KotlinSerializationJsonDecoder.java, KotlinSerializationJsonEncoder.java, ProtobufJsonEncoder.java, spring-mvc.xsd.",
    "test_timeout_s": 1800,
@@ -1643,7 +1640,10 @@
     }
    ],
    "forced_tests": [],
-   "weak_test": "Only ServletServerHttpResponseTests runs: a solution that makes body flushes a no-op and leaves StreamingResponseBodyReturnValueHandler flushing the (now non-flushing) stream, and HttpHeadersReturnValueHandler unchanged, passes although the question requires streaming cases to keep flushing the response. Not enforced: HttpHeadersReturnValueHandler.java, StreamingResponseBodyReturnValueHandler.java.",
+   "optional": [
+    "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/HttpHeadersReturnValueHandler.java"
+   ],
+   "weak_test": "Only ServletServerHttpResponseTests runs: a solution that makes body flushes a no-op and leaves StreamingResponseBodyReturnValueHandler flushing the (now non-flushing) stream passes although the question requires streaming cases to keep flushing the response. Not enforced: StreamingResponseBodyReturnValueHandler.java. (HttpHeadersReturnValueHandler.java is not affected by the change: its getBody() never flushed.)",
    "test_timeout_s": 1800,
    "strata": {
     "files": 5,

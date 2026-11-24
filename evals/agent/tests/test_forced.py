@@ -11,7 +11,7 @@ from pathlib import Path
 EVAL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(EVAL))
 
-from aeval import forced  # noqa: E402
+from aeval import forced, report_commit as rc  # noqa: E402
 
 # Test code "compiles" when its API= equals the main code's, and a test passes when its V= does.
 GRADLE = r'''
@@ -150,6 +150,7 @@ class Record(unittest.TestCase):
     def setUp(self):
         self.record = json.loads((EVAL / "groundtruth/forced_tests.json").read_text())["tasks"]
         self.data = json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())
+        self.verdicts = json.loads((EVAL / "groundtruth/affected_183.json").read_text())["tasks"]
 
     def test_every_task_has_a_decided_record_of_its_commit(self):
         repos = {r["name"]: r for r in self.data["repos"]}
@@ -159,7 +160,8 @@ class Record(unittest.TestCase):
             self.assertEqual(forced.problems(rec, t), [])
             self.assertEqual((rec["commit"], rec["gold_commit"]), (repos[t["repo"]]["commit"], repos[t["repo"]]["gold_commit"]))
             self.assertTrue(rec["sandboxed"])
-            self.assertEqual(t["forced_tests"], sorted(p for p, f in rec["files"].items() if f["forced"]))
+            stated = {p for p, v in self.verdicts[t["id"]].items() if v["counts"]}
+            self.assertEqual(t["forced_tests"], sorted(p for p, f in rec["files"].items() if f["forced"] and (f["outcome"] != "fails" or p in stated)))
             for s in rec["steps"]:
                 self.assertIn(" --offline --no-scan --no-build-cache ", s["command"])
             for p, f in rec["files"].items():
@@ -168,6 +170,29 @@ class Record(unittest.TestCase):
                     self.assertEqual(sorted(f["controls"]), ["P"] if f["status"] == "D" else ["G", "P"], p)
                     for c in f["controls"].values():
                         self.assertTrue(c["run"] and not c["failed"], p)
+
+    def test_every_measured_unit_has_a_verdict(self):
+        """Is the file affected by the stated change at all? A failing test counts only with a quote from the task text."""
+        n = counts = 0
+        for t in self.data["tasks"]:
+            whole = {k: v for k, v in t.items() if k != "optional"} | {"forced_tests": [p for p, f in self.record[t["id"]]["files"].items() if f["forced"]]}
+            mine = self.verdicts[t["id"]]
+            self.assertEqual({u["path"]: u["kind"] for u in rc.counted(whole)}, {p: v["kind"] for p, v in mine.items()}, t["id"])
+            for p, v in mine.items():
+                self.assertTrue(v["why"], p)
+                if v["kind"] == "forced_tests":
+                    measured = {self.record[t["id"]]["files"][f]["outcome"] for u in rc.counted(whole) if u["path"] == p
+                                for f in u["files"] if self.record[t["id"]]["files"][f]["forced"]}
+                    self.assertEqual({v["measured"]}, measured, p)
+                    if v["measured"] == "fails":
+                        self.assertEqual("quote" in v, v["counts"], p)
+                        self.assertIn(v.get("quote", ""), t["question"], p)
+                    else:
+                        self.assertTrue(v["counts"], p)  # forced by compilation stays
+            self.assertEqual(t.get("optional", []), sorted(p for p, v in mine.items() if not v["counts"] and v["kind"] != "forced_tests"))
+            self.assertEqual({u["path"] for u in rc.counted(t)}, {p for p, v in mine.items() if v["counts"]})
+            n, counts = n + len(mine), counts + sum(v["counts"] for v in mine.values())
+        self.assertEqual((n, counts), (82, 73))
 
     def test_the_sources_are_still_those_of_the_record(self):
         from aeval import config

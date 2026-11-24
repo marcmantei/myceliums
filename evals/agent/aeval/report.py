@@ -20,7 +20,7 @@ from .stats import mean, median, paired_bootstrap
 from .stream import parse_transcript
 
 # What a report on edit tasks needs of a task (#183).
-EDIT_TASK_FIELDS = ("gold_files", "primary_files", "either", "equivalents", "forced_tests", "weak_test", "strata")
+EDIT_TASK_FIELDS = ("gold_files", "primary_files", "either", "equivalents", "forced_tests", "optional", "weak_test", "strata")
 
 COMPACT_FIELDS = [
     "run_id", "task_id", "repo", "type", "condition", "rep", "attempt", "status",

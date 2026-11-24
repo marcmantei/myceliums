@@ -320,7 +320,7 @@ def cmd_ceiling(args) -> int:
     for line in (config.RUNS_DIR / args.label / "results.jsonl").read_text().splitlines():
         if line.strip() and (r := json.loads(line)).get("final"):
             rows[r["run_id"]] = r
-    out = {"label": args.label, **report_commit.decide(list(rows.values()), config.load_tasks())}
+    out = {"label": args.label, **report_commit.decide(list(rows.values()), config.load_tasks(), config.sha256_file(config.tasks_file()))}
     print(json.dumps(out, indent=1))
     if args.write:
         if report_commit.DECISION.exists():

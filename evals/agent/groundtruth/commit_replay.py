@@ -30,6 +30,10 @@ hand (the spec); ``build`` derives everything else from the commit:
   text change (:func:`comment_only`);
 * ``forced_tests``: the commit's test files that had to change, from the
   measured record ``forced_tests.json`` (aeval/forced.py; the 20 tasks only);
+  one that fails (and compiles) only with a verdict in ``affected_183.json``
+  that the task text states what it contradicts;
+* ``optional``: code and docs dependents that the stated change does not
+  affect at all, from the same verdicts;
 * ``test_overlay``: the commit's test files (fixtures included), written
   over the working copy (or deleted) before the test command runs;
 * ``test_command``: ``./gradlew``, main and test compilation of every module
@@ -81,6 +85,7 @@ BUILD_NOTE = ("The build has no network access. Run Gradle as `./gradlew " + OFF
               "fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` "
               "or `head`. In shell commands, name files by paths relative to the working copy and do not use `cd`.")
 FORCED = Path(__file__).resolve().with_name("forced_tests.json")
+AFFECTED = Path(__file__).resolve().with_name("affected_183.json")
 # A port nobody listens on: a build started without the flags cannot leave
 # the machine either (not verified yet with a real build).
 NOWHERE = "127.0.0.1"
@@ -242,6 +247,7 @@ def cmd_build(args) -> int:
     out_path = Path(args.out)
     old = {t["id"]: t for t in json.loads(out_path.read_text())["tasks"]} if out_path.exists() else {}
     measured = json.loads(FORCED.read_text())["tasks"] if FORCED.exists() else {}
+    verdicts = json.loads(AFFECTED.read_text())["tasks"] if AFFECTED.exists() else {}
     repos, tasks = [], []
     for s in spec["tasks"]:
         if s.get("drop") or bool(s.get("reserve")) != args.reserve:
@@ -274,6 +280,8 @@ def cmd_build(args) -> int:
         overlay = [p for _, p in files if file_kind(p) == "tests"] + build_overlay
         equivalents = [*s.get("equivalents", []), *renames(hist, sha)]
         forced = measured.get(s["id"])
+        judged = verdicts.get(s["id"], {})
+        optional = sorted(p for p, v in judged.items() if not v["counts"] and v["kind"] != "forced_tests")
         if forced and (forced["commit"], forced["gold_commit"]) != (parent, sha):
             raise SystemExit(f"{s['id']}: the forced-tests record is of another commit")
         sp = spread(files, comments)
@@ -288,7 +296,9 @@ def cmd_build(args) -> int:
             **({"build_overlay": build_overlay} if build_overlay else {}),
             "allowed_commands": [{"prefix": "./gradlew", "args": GRADLE_ARGS}],
             **({"equivalents": equivalents} if equivalents else {}),
-            **({"forced_tests": sorted(p for p, f in forced["files"].items() if f["forced"])} if forced else {}),
+            **({"forced_tests": sorted(p for p, f in forced["files"].items() if f["forced"] and (
+                f["outcome"] != "fails" or judged[p]["counts"]))} if forced else {}),
+            **({"optional": optional} if optional else {}),
             **({"either": s["either"]} if s.get("either") else {}),
             **({"untested": s["untested"]} if s.get("untested") else {}),
             **({"weak_test": s["weak_test"]} if s.get("weak_test") else {}),

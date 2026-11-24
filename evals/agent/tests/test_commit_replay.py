@@ -298,12 +298,18 @@ class GradleCommands(unittest.TestCase):
         for one in ("OldTests", "RenamedTests"):  # edited in place or renamed
             dep = editgrade.grade_edit(task, [f"m/src/test/java/a/{one}.java"], {"passed": True})["dependents"]
             self.assertEqual(dep["forgotten"], [])
+        docs = "framework-docs/modules/a.adoc"
+        opt = {**task, "gold_files": [*task["gold_files"], {"path": docs, "status": "M"}, {"path": "n/src/main/java/b/B.java", "status": "M"}]}
+        dep = editgrade.grade_edit(opt | {"optional": [docs, "n/src/main/java/b/B.java"]}, [], {"passed": True})["dependents"]
+        self.assertEqual((dep["n"], dep["by_kind"]["optional"]["n"], dep["by_kind"]["docs"]["n"], dep["by_kind"]["remote"]["n"]), (1, 2, 0, 0))
+        self.assertEqual(editgrade.grade_edit(opt, [], {"passed": True})["dependents"]["n"], 3)
         plain = editgrade.grade_edit({k: v for k, v in task.items() if k != "forced_tests"}, [], {"passed": True})["dependents"]
         self.assertEqual((plain["n"], plain["by_kind"]["tests"]["n"]), (2, 2))  # without a measured record: as before
         self.assertNotIn("new_tests", plain["by_kind"])
         repos = {"r": {"name": "r", "commit": "c"}}
         base = {"id": "t", "repo": "r", "type": "edit", "answer_kind": "diff", "question": "q", "rationale": "r", **task}
         self.assertEqual(check_tasks([base], repos, check_evidence=False), [])
+        self.assertTrue(any("optional must name" in p for p in check_tasks([base | {"optional": ["m/src/main/java/a/A.java"]}], repos, check_evidence=False)))
         for bad in ("m/src/test/java/a/RenamedTests.java", "m/src/main/java/a/A.java"):  # new, not a test
             self.assertTrue(any("forced_tests must name" in p for p in check_tasks([base | {"forced_tests": [bad]}], repos, check_evidence=False)))
 
@@ -476,6 +482,11 @@ class Isolation(unittest.TestCase):
         def run(event):
             return subprocess.run([sys.executable, "-I", str(script), "isolated-hook", "--root", str(self.root),
                                    "--search", "no", "--allow-json", "[]"], input=event, capture_output=True, text=True)
+        no = json.loads(run(json.dumps({"tool_name": "Bash", "tool_input": {"command": "curl x"}, "cwd": str(self.root)})).stdout)
+        offered = no["hookSpecificOutput"]["permissionDecisionReason"].split("Bash allows ")[1].split(", and Gradle")[0].split(", ")
+        self.assertNotIn("cd", offered)  # the prompt says not to use it; the hook still lets it through
+        self.assertIn("cp", offered)
+        self.assertTrue(bashcmd.isolated_bash("cd spring-core", [], str(self.root), str(self.root), False)[0])
         ok = run(json.dumps({"tool_name": "Read", "tool_input": {"file_path": "a.java"}, "cwd": str(self.root)}))
         self.assertEqual((ok.returncode, ok.stdout), (0, ""))
         for event in (json.dumps({"tool_name": "Read", "tool_input": {"file_path": str(self.secret / "f")},

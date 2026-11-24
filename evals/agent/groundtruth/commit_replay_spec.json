@@ -312,7 +312,7 @@
     "verdict": "ok",
     "comment": "It states the constant BODY_FLUSH_ENABLED = \"spring.http.response.flush.enabled\", the default no-op body flush, and that true restores pass-through. Both tests are mock-based. 'The property is read when a ServletServerHttpResponse is created' is a small over-specification (reading it lazily would also pass) but harmless. No docs or modules are named. The primary is correct; HttpHeadersReturnValueHandler, StreamingResponseBodyReturnValueHandler and appendix.adoc remain dependents."
    },
-   "weak_test": "Only ServletServerHttpResponseTests runs: a solution that makes body flushes a no-op and leaves StreamingResponseBodyReturnValueHandler flushing the (now non-flushing) stream, and HttpHeadersReturnValueHandler unchanged, passes although the question requires streaming cases to keep flushing the response. Not enforced: HttpHeadersReturnValueHandler.java, StreamingResponseBodyReturnValueHandler.java."
+   "weak_test": "Only ServletServerHttpResponseTests runs: a solution that makes body flushes a no-op and leaves StreamingResponseBodyReturnValueHandler flushing the (now non-flushing) stream passes although the question requires streaming cases to keep flushing the response. Not enforced: StreamingResponseBodyReturnValueHandler.java. (HttpHeadersReturnValueHandler.java is not affected by the change: its getBody() never flushed.)"
   },
   {
    "id": "content-negotiation-no-fallback-mapping",
