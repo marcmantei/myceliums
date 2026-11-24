@@ -21,12 +21,12 @@ TYPES = {"Class", "Interface", "Enum"}
 # relation -> weight, per profile. `touched` and `owner` are the changed declarations and their types.
 PROFILES = {
     "direct": {"touched": 3, "owner": 2},
-    "members": {"touched": 3, "owner": 2, "member": 0.5},
     "hop": {"touched": 3, "owner": 2, "member": 0.5, "dispatch": 1, "docref": 1, "nameref": 1, "sample": 3},
+    "hop-light": {"touched": 3, "owner": 2, "member": 0.25, "dispatch": 0.5, "docref": 0.5, "nameref": 0.5, "sample": 3},
     "all": {"touched": 3, "owner": 3, "member": 0.5, "dispatch": 1, "docref": 1, "nameref": 1, "sample": 3, "calls": 0.5},
 }
-GRID = [{"profile": p, "idf": i, "tf": t, "declared": d} for p, i, t, d in
-        itertools.product(PROFILES, (1, 2), ("binary", "log", "norm"), (1, 2))]
+GRID = [{"profile": p, "idf": i, "tf": t, "norm": n} for p, i, t, n in
+        itertools.product(PROFILES, (1, 2), ("binary", "log"), (0.0, 0.5, 1.0))]
 
 
 def load(export: Path) -> tuple[dict, dict]:
@@ -195,10 +195,9 @@ def mentions(c: Corpus, g: dict, cfg: dict) -> dict[str, float]:
     """Docs units by the mentions of the changed symbols; a symbol in several relations has the largest weight."""
     w = PROFILES[cfg["profile"]]
     weight: dict[str, float] = {}
-    declared = set(g["declared"])
     for r, x in w.items():
         for k in g["relations"].get(r, ()):
-            weight[k] = max(weight.get(k, 0.0), x * (cfg["declared"] if r == "touched" and k in declared else 1))
+            weight[k] = max(weight.get(k, 0.0), x)
     scores: dict[str, float] = {}
     for k, x in weight.items():
         units = {p: n for p, n in g["units"].get(k, {}).items() if p in c.units}
@@ -212,6 +211,4 @@ def mentions(c: Corpus, g: dict, cfg: dict) -> dict[str, float]:
         for p, n in g["sample"].items():
             if p in c.units:
                 scores[p] = scores.get(p, 0.0) + w["sample"] * (1 + math.log(n)) * math.log(c.n)
-    if cfg["tf"] == "norm":
-        scores = {p: s / (0.5 + 0.5 * c.units[p].length / c.avg_ident) ** 0.5 for p, s in scores.items()}
-    return scores
+    return {p: s / (0.5 + 0.5 * c.units[p].length / c.avg_ident) ** cfg["norm"] for p, s in scores.items()}

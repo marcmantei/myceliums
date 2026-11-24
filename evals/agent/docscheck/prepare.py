@@ -150,10 +150,16 @@ def main() -> int:
     if args.split == "held-out" and not args.i_have_the_review:
         raise SystemExit("held-out is scored once, after an independent review (README)")
     commits = [c for c in json.loads((HERE / "data" / "commits.json").read_text())["commits"] if c["split"] == args.split]
+    commits = commits[:args.limit]
+    fetched = gitdata.prefetch(args.hist, {o for c in commits for rev in (c["parent"], c["sha"])
+                                           for o in gitdata.tree(args.hist, rev, links=True).values()})
+    if fetched:
+        # A fetch per batch leaves thousands of packs; with too many, git reports present objects as missing.
+        gitdata.git(args.hist, "repack", "-a", "-d", "-q")
     for what in args.only or ("graph", "search"):
         cache = args.work / "cache" / what
         cache.mkdir(parents=True, exist_ok=True)
-        for c in commits[:args.limit]:
+        for c in commits:
             path = cache / f"{c['sha']}.json"
             if path.exists():
                 continue

@@ -64,7 +64,7 @@ commit message and the docs side of the commit are never read. Gold pages are in
 | `bm25` | words of the same sources and of the diff's comments: camel-case parts, whole identifiers, stems, weighted; scored per section (the best section of a page), page path as a field | 48 |
 | `text-fusion` | `grep` and `bm25` fused (RRF or normalised sum) | 24 |
 | `mentions` | the graph: MENTIONS edges from docs sections to the changed symbols and their types; profiles add members, one hop (overridden and overriding methods, doc-comment references in both directions, name references), documentation samples that call or use the symbol, callees and callers | 48 |
-| `keyword`, `hybrid` | `myc search`, keyword and with embeddings, over the docs: six query formulations (types; declarations and keys; rarest identifiers; weighted words; one query per type; per member), four aggregations of sections to pages | 24 + 24 |
+| `keyword`, `hybrid` | `myc search`, keyword and with embeddings, over the docs: six query formulations (types; declarations and keys; rarest identifiers; weighted words; one query per type; per member) and six pairs of them fused, each with two aggregations of sections to pages | 24 + 24 |
 | `myc-fusion` | `mentions` and the better search | 24 |
 | `text+mentions`, `text+myc-best` | the best text method with `mentions`, with the best myceliums method | 24 + 24 |
 
@@ -100,6 +100,14 @@ So "no clear win" is the likely outcome when the text stays at 0.86, and it deci
 
 A win for text is a result. Cost decides nothing in the table; it stands beside it (index time, embeddings, dependency).
 
+### Changes during dev (all before any held-out result)
+
+* Text: the grep and BM25 grids were replaced once after the first averages (BM25 sat at the edge of its grid; grep's code-span variant was worse everywhere).
+* myceliums: the mentions and search grids were replaced once, after an interim run on the first 44-45 of the 65 dev commits (search: single formulations and two-formulation sets instead of `rrf`/`first`, which ranked like `max`; mentions: hop weights and a page-length exponent instead of the `declared` factor, which had no effect).
+* Owners and members come from line containment: `MEMBER_OF` links the members of a class with a constructor to the constructor method (27,395 of 106,850 edges on one Spring parent), so an owner walk over it finds nothing.
+* `search_code` (MCP) shortens paths, so the search uses `myc search`; both rank with the same library.
+* Mentions: the graph of the parent and the graph of the parent with the non-docs diff are both built; before the first run the owner walk was wrong (fixed after two commits).
+
 ### Resources (measured on dev)
 
 Graph-only index of Spring: 22 s unloaded, 50-100 s at a load of 60-130; two per commit, deleted after use (556 MB at once, one at a time); export and neighbourhood 5 s. Embedding the docs once (1,473 sections and documents): 801 s at a load of 60-130 (5 cores at
@@ -111,4 +119,46 @@ Network: git only, 17,678 blobs in 91 s for the 65 parents; about the same again
 1. The margin 0.10 near the ceiling (above); 0.05 would be easier to reach but not clearly a reason for an index.
 2. Only commits with gold are scored; what the method shows on the 93 % of code commits without docs is the adoption question of a CI step that always runs. A cheap text-only check of a threshold, or a second sample of such commits (60 and 60, text and graph, about 4 h), would answer it.
 3. Comment-only commits are out (rule 6: 80 of 254): a Javadoc diff is a docs edit; a check on it is a different step.
-4. Samples are units of their own; 3 of 65 dev commits have one in the gold.
+4. Samples are units of their own; 1 of 65 dev and 6 of 84 held-out commits have one in the gold.
+5. The contender `text` is the fusion by dev recall@5 (0.863 against 0.859 for BM25), but under cross-validation BM25 alone is better (0.841 against 0.815): selecting by cross-validated recall@5 would make the text baseline stronger. Not applied, because the rule was registered first.
+
+## Result on dev (65 commits, not a held-out result)
+
+Tuned on dev and scored on the same commits; the cross-validated column (5 folds, position-interleaved, every method re-tuned without the fold) is the less optimistic one. Configurations: [`data/dev.json`](data/dev.json).
+
+| Method | recall@1 | recall@3 | **recall@5** | recall@10 | precision@5 | MRR | pages shown | recall@5, cross-validated |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| plain-grep (untuned) | 0.400 | 0.583 | **0.617** | 0.673 | 0.157 | 0.550 | 3.1 | |
+| grep | 0.435 | 0.686 | **0.753** | 0.842 | 0.203 | 0.658 | 5.0 | 0.697 |
+| bm25 | 0.509 | 0.715 | **0.859** | 0.867 | 0.231 | 0.738 | 5.0 | 0.841 |
+| text-fusion (= text) | 0.458 | 0.783 | **0.863** | 0.890 | 0.234 | 0.705 | 5.0 | 0.815 |
+| mentions (graph) | 0.450 | 0.635 | **0.733** | 0.756 | 0.200 | 0.645 | 4.3 | 0.683 |
+| keyword search | 0.532 | 0.739 | **0.818** | 0.878 | 0.215 | 0.751 | 5.0 | 0.782 |
+| hybrid search | 0.450 | 0.727 | **0.811** | 0.858 | 0.215 | 0.691 | 5.0 | 0.783 |
+| myc-fusion (= myc) | 0.555 | 0.813 | **0.849** | 0.878 | 0.222 | 0.783 | 5.0 | 0.795 |
+| text + mentions | 0.496 | 0.779 | **0.847** | 0.882 | 0.228 | 0.740 | 5.0 | 0.803 |
+| text + myc-best (= text+myc) | 0.496 | 0.810 | **0.886** | 0.897 | 0.240 | 0.752 | 5.0 | 0.849 |
+
+Seconds per commit (medians, machine load 30-130): text 0.3 (reading the diff and the docs) + 0.02; graph 64 (two indexes) + 6 (export, neighbourhood); search 16 (docs index derived, changed sections embedded) + 0.3 keyword or 0.8 hybrid. First embedding of the docs: 801 s.
+
+**What myceliums adds over the best text method on dev:** +0.023 recall@5 (0.886 against 0.863; 2 commits better, none worse, 63 equal; +0.033 cross-validated, interval -0.005 to 0.085); `myc` alone is 0.014 below (4 worse, 1 better). Both far from the margin of 0.10; by the decision table dev says **text search**. It is a dev number: the tuned configurations are chosen on the same 65 commits.
+
+Power, from dev's paired differences of `text+myc` - `text` (SD 0.14): 84 held-out commits give a 95 % half-width of about 0.03. A true difference of 0.02 cannot reach the margin; held-out would have to show a difference five times as large as dev.
+
+### What the methods miss (examples, dev)
+
+* **Nothing names the change:** `InputStreamResource` constructor (`e509385eae`): both gold pages (`responsebody.adoc`, `responseentity.adoc`) outside the top 100 of every method. Neither names the class or `Resource` at the parent (checked with grep): the connection is only in the reader's head.
+* **Vocabulary gap:** `Handle STOMP messages to user destination in order` (`3277b0d6ac`): `ordered-messages.adoc` at rank 26 for the text, 21 for `myc`; the page is about the order of messages, the diff about a class named `OrderedMessageChannelDecorator`; no shared identifier.
+* **Search finds what words do not:** `@Generated` on generated classes (`2eba3510f7`): `core/aot.adoc` at 20 for the text, 1 for `myc` and 2 for `text+myc`.
+* **Graph signal lost in the fusion:** `@HttpExchange` on the server side (`d1d5b54f12`): the mentions rank the two pages 4 and 5, the text 23 and 32, the fusion 29 and 32.
+* **Mentions reach one page, the text the others:** `LazyConnectionDataSourceProxy` (`3b4c7a8906`): no data-access page names the class at the parent; `connections.adoc` is found by mentions of other changed symbols, `hibernate.adoc` and `jpa.adoc` only by the text's words.
+* **Gold noise in the misses:** `language-ref.adoc` (`906c54faff`, rank 93) is a title-only edit in the noise sample (`other`).
+* **The graph skips listing blocks** (#180): a page that names a class only in code listings has no mention edge.
+
+### Omitted pages (dev, weak estimate)
+
+For the 20 commits of the noise sample, the pages outside gold that `text` or `text+myc` show first (90 pairs): the lines naming a changed type or member were read, not the whole page. None was clearly wrong after the change; three were undecided (`factory-extension.adoc` for e3aa5b6b11, `annotation-dynamicpropertysource.adoc` for 6cdb34410b, `ann-validation.adoc` for b068742ec8). Committers' omissions are therefore not shown to be large, but this is one reader and a skim; precision stays a lower bound.
+
+### What dev cannot say
+
+How the methods do on the other 93 % of code commits; anything about held-out; a private multi-repository code base (its docs, names and modules differ, and no such base was tested); the cost of keeping a graph index fresh in CI beyond the measured seconds.

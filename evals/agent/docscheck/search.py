@@ -9,7 +9,6 @@ The vectors of unchanged sections are reused because the path stays the same.
 from __future__ import annotations
 
 import itertools
-import math
 import re
 
 from .corpus import Corpus, words_of
@@ -19,7 +18,10 @@ from .text import bm25_query, grep_terms
 LIMIT = 50
 MAX_SINGLE = 8
 QUERIES = ("types", "declared", "idents", "words", "per_type", "per_member")
-GRID = [{"query": q, "agg": a} for q, a in itertools.product(QUERIES, ("max", "sum", "rrf", "first"))]
+# One formulation, or two whose ranked lists are fused; "sum" adds the first three sections of a unit.
+SETS = [[q] for q in QUERIES] + [["types", "words"], ["declared", "words"], ["idents", "words"], ["idents", "per_member"],
+                                 ["declared", "per_member"], ["words", "per_type"]]
+GRID = [{"queries": s, "agg": a} for s, a in itertools.product(SETS, ("max", "sum"))]
 HIT = re.compile(r"^\s+\d+\. .* \(\w+\) — (?P<path>\S+?):\d+-\d+", re.M)
 
 
@@ -52,13 +54,12 @@ def parse(answer: str) -> list[str]:
 
 
 def aggregate(lists: list[list[str]], agg: str) -> dict[str, float]:
-    """Sections of one or more ranked lists to a score per unit, by rank only (the tool's scores are not in its answer)."""
+    """Sections of one or more ranked lists to a score per unit, by rank only (the same for both search modes)."""
     out: dict[str, float] = {}
     for hits in lists:
         best: dict[str, list[float]] = {}
         for i, p in enumerate(hits):
             best.setdefault(p, []).append(1 / (10 + i + 1))
-        for j, (p, xs) in enumerate(best.items()):
-            s = {"max": xs[0], "sum": sum(xs[:3]), "rrf": 1 / (60 + j + 1), "first": 1 / (j + 1)}[agg]
-            out[p] = out.get(p, 0.0) + s
+        for p, xs in best.items():
+            out[p] = out.get(p, 0.0) + (xs[0] if agg == "max" else sum(xs[:3]))
     return out

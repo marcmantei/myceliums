@@ -20,7 +20,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from aeval.stats import percentile  # noqa: E402
+from aeval.stats import median, percentile  # noqa: E402
 from docscheck import change, fuse, graph, measure, search, text  # noqa: E402
 from docscheck.corpus import Corpus  # noqa: E402
 
@@ -49,7 +49,8 @@ class Commit:
 
 def _search(mode: str):
     def run(c: Commit, cfg: dict) -> dict[str, float]:
-        out = search.aggregate(c.search["answers"][f"{mode}:{cfg['query']}"], cfg["agg"])
+        lists = [hits for q in cfg["queries"] for hits in c.search["answers"][f"{mode}:{q}"]]
+        out = search.aggregate(lists, cfg["agg"])
         return {p: s for p, s in out.items() if p in c.corpus.units}
     return run
 
@@ -168,6 +169,39 @@ def decide(cmp: dict, means: dict[str, dict[str, float]]) -> str:
     return {"text": "grep", "myc": "myceliums", "text+myc": "text with myceliums"}[best_m]
 
 
+def short(path: str) -> str:
+    return path.replace("framework-docs/modules/ROOT/pages/", "")
+
+
+def per_commit(c: Commit, t: dict, r: dict[str, float]) -> dict:
+    """The first five units and the rank of each gold unit (none: not shown within TOP)."""
+    top = fuse.ranked(scores(c, t["method"], t["cfg"]))
+    return {"top": [short(p) for p in top[:5]], "recall@5": r["recall@5"],
+            "gold_rank": {short(g): top.index(g) + 1 if g in top else None for g in c.gold}}
+
+
+def costs(commits: list[Commit], tuned: dict[str, dict]) -> dict[str, float]:
+    """Medians per commit in seconds: reading the diff and the docs, then each text method; the two graph indexes
+    with their export and neighbourhood; the search index derived at the same path and the tuned searches."""
+    def med(xs) -> float:
+        return round(median(list(xs)), 2)
+    out = {"text_read": med(c.load_s for c in commits)}
+    for m in ("grep", "bm25"):
+        ts = []
+        for c in commits:
+            t = time.time()
+            BASE[m][0](c, tuned[m]["cfg"])
+            ts.append(time.time() - t)
+        out[f"text_{m}"] = med(ts)
+    for part in ("index_s", "query_s"):
+        out[f"graph_{part[:-2]}"] = med(c.graph_raw["old"][part] + c.graph_raw["new"][part] for c in commits)
+    out["search_index"] = med(c.search["index_s"] for c in commits)
+    for m in ("keyword", "hybrid"):
+        qs = tuned[m]["cfg"]["queries"]
+        out[f"search_{m}"] = med(sum(c.search["seconds"][f"{m}:{q}"] for q in qs) for c in commits)
+    return out
+
+
 def load(split: str, hist: Path, work: Path) -> list[Commit]:
     doc = json.loads((HERE / "data" / "commits.json").read_text())
     return [Commit(c, hist, work) for c in doc["commits"] if c["split"] == split]
@@ -216,9 +250,8 @@ def main() -> int:
     means = {m: measure.mean(r) for m, r in rows.items()}
     comparisons = compare(cv or rows)
     out = {"split": args.split, "commits": len(commits), "configurations": tuned, "means": means,
-           "comparisons": comparisons,
-           "per_commit": {c.sha: {m: {"top": fuse.ranked(scores(c, t["method"], t["cfg"]))[:10],
-                                      "recall@5": rows[m][i]["recall@5"]} for m, t in tuned.items()}
+           "comparisons": comparisons, "seconds": costs(commits, tuned),
+           "per_commit": {c.sha: {m: per_commit(c, t, rows[m][i]) for m, t in tuned.items()}
                           for i, c in enumerate(commits)}}
     if cv:
         out["cross_validated"] = {m: measure.mean(r) for m, r in cv.items()}

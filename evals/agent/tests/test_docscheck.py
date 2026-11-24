@@ -289,7 +289,7 @@ class Graph(unittest.TestCase):
         for cfg in graph.GRID:
             r = fuse.ranked(graph.mentions(c, g, cfg))
             self.assertEqual(r[0], P + "core/sending.adoc", cfg)
-            self.assertEqual(P + "core/base.adoc" in r, cfg["profile"] in ("hop", "all"))
+            self.assertEqual(P + "core/base.adoc" in r, cfg["profile"] != "direct")
 
     def test_merge_keeps_both_sides(self):
         a = {"relations": {"touched": ["x"]}, "units": {"x": {"p": 1}}, "sample": {"s": 1}, "declared": ["x"]}
@@ -314,7 +314,7 @@ class SearchAnswers(unittest.TestCase):
         self.assertEqual(search.parse(self.ANSWER), [P + "core/sending.adoc", P + "core/common.adoc", P + "core/sending.adoc"])
 
     def test_aggregate(self):
-        for agg in ("max", "sum", "rrf", "first"):
+        for agg in ("max", "sum"):
             s = search.aggregate([search.parse(self.ANSWER)], agg)
             self.assertEqual(fuse.ranked(s)[0], P + "core/sending.adoc")
         self.assertEqual(search.aggregate([], "max"), {})

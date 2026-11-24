@@ -23,21 +23,24 @@ def git(hist: Path, *args: str, stdin: bytes | None = None, lazy: bool = False) 
     return res.stdout
 
 
-def tree(hist: Path, rev: str, *paths: str) -> dict[str, str]:
-    """``{path: blob id}`` of the files of ``rev`` (below ``paths``)."""
+def tree(hist: Path, rev: str, *paths: str, links: bool = False) -> dict[str, str]:
+    """``{path: blob id}`` of the files of ``rev`` (below ``paths``), without symbolic links unless ``links``."""
     out = {}
     for rec in git(hist, "ls-tree", "-r", "-z", rev, "--", *paths).split(b"\0"):
         if rec:
             meta, path = rec.split(b"\t", 1)
             mode, kind, oid = meta.split()
-            if kind == b"blob" and mode != b"120000":
+            if kind == b"blob" and (links or mode != b"120000"):
                 out[path.decode()] = oid.decode()
     return out
 
 
 def missing(hist: Path, oids) -> list[str]:
     """The objects of ``oids`` that the clone does not have."""
-    req = "\n".join(sorted(set(oids))) + "\n"
+    want = sorted(set(oids))
+    if not want:
+        return []
+    req = "\n".join(want) + "\n"
     out = git(hist, "cat-file", "--batch-check=%(objectname)", stdin=req.encode())
     return [ln.split()[0].decode() for ln in out.splitlines() if ln.endswith(b" missing")]
 
