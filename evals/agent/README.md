@@ -1714,7 +1714,9 @@ python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 
 python3 evals/agent/agent_eval.py gradle-cache               # after the warm-up: freeze ~/.gradle's dependencies
 python3 evals/agent/agent_eval.py --tasks $T precheck-edit --gold-runs 2 --sandbox   # needs a warm Gradle cache: the commands are offline
 python3 evals/agent/agent_eval.py --tasks $T check-tasks
-python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models --base $BASE_HOME
+MYC=$HOME/.cache/myceliums-agent-eval/bin/myc-787920c
+# Once. The 20 derived indexes exist; `index` refuses to delete a derived index, `--replace` rebuilds them (4,942 s for the 20 last time).
+# python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models --base $BASE_HOME
 python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-replay --conditions none,C,D \
     --profile realistic --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
 ```
@@ -1762,12 +1764,12 @@ final session counts, also one that ran into the time or turn limit; only infras
 * Afterwards cost and time of the main run are estimated again: the mean of the five × 180 sessions. **Stop and report** when that is above **$288 or 24 h**. (The estimate below has 36 h in its middle row, so the time limit is expected to bite unless sessions are shorter than 8 minutes.)
 * **Ceiling:** a mean dependent recall of 0.90 or more in `none`. Then say so; the tasks are not changed.
 
+The commands are [`groundtruth/run_pilot_183.sh`](groundtruth/run_pilot_183.sh) (bash; the same commands that stood here, where zsh passed the unquoted options as one word and `$MYC` was not set). It sets the environment of the run block, checks the `myc` binary's hash and the CLI's version (2.1.331) before each run,
+and stops at the first failure; a report above the limits stops the main run, not the two pipeline checks.
+
 ```bash
-P="--profile realistic --rep 1 --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir $HOME/.cache/myceliums-eval-models"
-python3 evals/agent/agent_eval.py --tasks $T run --label pilot-183 --conditions none --task retry-max-attempts-to-max-retries --task api-version-deprecation-handler-handler-arg --task beans-max-nested-path-depth --task mime-type-parameter-names-case-insensitive --task type-mismatch-required-type-arg $P
-python3 evals/agent/agent_eval.py --tasks $T pilot pilot-183
-python3 evals/agent/agent_eval.py --tasks $T run --label pilot-183-check-C --conditions C --task api-version-deprecation-handler-handler-arg $P
-python3 evals/agent/agent_eval.py --tasks $T run --label pilot-183-check-D --conditions D --task retry-max-attempts-to-max-retries $P
+bash evals/agent/groundtruth/run_pilot_183.sh --dry-run   # prints every command, starts nothing
+bash evals/agent/groundtruth/run_pilot_183.sh             # real sessions
 ```
 
 #### Warm-up
@@ -1938,7 +1940,7 @@ cache conventions are identical in both, the plugin class differs, and both chec
   (`publishIfAuthenticated`); with `--no-scan` the scan conventions are not applied. No access
   key is set on this machine (no `DEVELOCITY_*`/`GRADLE_ENTERPRISE_*` variable, no key file
   in `~/.gradle`), and no log mentions a published scan. `~/.gradle/build-scan-data`
-  holds three scan payloads written locally (1.9 MB): they contain the user name and local
+  holds two scan payloads (1.6 MB), both written locally by the online warm-up; such payloads contain the user name and local
   paths. The evidence says they were not sent; it is absence of evidence of an
   upload, not a packet capture.
 * **Remote build cache:** on by default whenever Gradle's build cache is
@@ -1954,7 +1956,7 @@ searches, runs `myc callers`, reads and edits the primary file and runs one comm
 |---|---|---|---|---|---|
 | none | no problem; AGENTS.md in the first request | Bash, Edit, Glob, Grep, Read, Write | Grep ran | `command not found`, as it must | yes |
 | C | no problem; AGENTS.md and the routing block | the same + 9 myceliums tools | Grep ran | answered from the index | yes; setup-claude's files not counted |
-| D | no problem; AGENTS.md | without Grep and Glob | refused; the refusal names neither the checkout nor the hook | answered from the index | yes |
+| D | no problem; AGENTS.md | without Grep and Glob | refused; the refusal names the working copy, not this repository's checkout or the hook | answered from the index | yes |
 
 The table is the probe of 24 November (arms `none`, C, D, Claude Code's own sandbox, the derived index, shared path, the `myc` below): `myc` answers from the index in C and D and is not
 found in `none`, AGENTS.md reaches every arm, C also gets the routing block (`.claude/rules/myceliums.md`; setup writes no CLAUDE.md), no isolation problem. Gradle in the session and the grading: below. The probe was repeated in the three arms after the warm-up, on the new frozen dependencies (same binary, CLI and derived index): the same findings, `BUILD SUCCESSFUL` in 76-91 s in the sessions, no remote connection in 455 socket samples. The mock gives every answer one message id, so `api_calls` is 1 there. No real session has run.
@@ -1972,7 +1974,7 @@ and no other JDK. With it:
 | | Task | Result |
 |---|---|---|
 | Grading profile | the 20 tasks above | valid; buildSrc's checkstyle and validatePlugins run, the former `-x` excludes are gone from the commands, the hook's rule and the build note |
-| Claude Code's Bash sandbox (2.1.331, mock API), arms `none`, C, D | `spel-simple-...` (Gradle 9.9.0) | `BUILD SUCCESSFUL` in 67-68 s, tests run (39-45 s with a warm shared home); grading 28 s |
+| Claude Code's Bash sandbox (2.1.331, mock API), arms `none`, C, D | `spel-simple-...` (Gradle 9.9.0) | `BUILD SUCCESSFUL` in 67-68 s, tests run (39-45 s with a warm shared home), 76-91 s in the repeat after the warm-up; grading 28 s (36-55 s in the repeat) |
 | Claude Code's Bash sandbox, arm `none` | `type-mismatch-...` (Gradle 9.2.1) | `BUILD SUCCESSFUL` in 112 s with `:spring-oxm:xjc` |
 
 The scripted edit is a comment, so the repository's own tests pass in the session and the commit's tests fail in the grading, as they must. Harmless noise: "Could not start the FSEvents stream".
@@ -1981,11 +1983,15 @@ The scripted edit is a comment, so the repository's own tests pass in the sessio
 later session. Dependencies come read-only from a frozen copy of `modules-2` (`agent_eval.py gradle-cache`, `GRADLE_RO_DEP_CACHE`, default `~/.cache/gradle-ro`; 6,951 files, 1.8 GB, listing sha256 `cc17a8254506`, downloaded artifacts and metadata only); `~/.gradle` itself is closed but for the distributions. Price: Gradle's own caches (about 560 MB, deleted with the session) and their time
 are made anew, in the session and in the grading, the same in every arm. An earlier version closed old logs and scans one by one (450 bytes of the sandbox's 1 MB command line each). Those of 23-24 November (340 files) were moved to the evaluation's cache, none deleted.
 
-**Login.** The CLI itself runs unsandboxed with the caller's normal login (macOS keychain); only what the agent executes is sandboxed. Claude Code's sandbox cannot close the keychain *services* (above), so a dedicated login remains Marc's decision. An alternative not built: a fixed helper outside the sandbox that runs one allowed Gradle command for the agent;
+**Login.** The CLI itself runs unsandboxed with the caller's normal login (macOS keychain); only what the agent executes is sandboxed. The harness passes a few login variables on, so a real run over isolated repositories **refuses to start** when the shell has `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, a base URL, or a Bedrock, Vertex or Foundry variable (names only, also when empty; no value is read), and stops at the first session whose init event reports another `apiKeySource` than `none`, the value of the #182 sessions' normal login. `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CONFIG_DIR` and `CLAUDE_SECURESTORAGE_CONFIG_DIR` choose among normal logins: their names, when present, are recorded per start (`login.jsonl`, `meta.json`). Claude Code's sandbox cannot close the keychain *services* (above), so a dedicated login remains Marc's decision. An alternative not built: a fixed helper outside the sandbox that runs one allowed Gradle command for the agent;
 it would give the agent's code (tests, build scripts) the caller's files and network, so it would need a sandbox of its own, and is not needed now.
 
 ```bash
-python3 evals/agent/agent_eval.py --tasks $T index --repo spring-spel-simple-context-restricted-conversion --skip-embeddings --myc $MYC
+# The probe uses the derived index as it is (a copy per session). On a machine without one, a graph-only index in a cache of its own:
+# export AEVAL_CACHE=$HOME/.cache/myceliums-agent-eval-probe   # for these two and the probe; `fetch` needs the network
+# python3 evals/agent/agent_eval.py --tasks $T fetch --repo spring-spel-simple-context-restricted-conversion
+# python3 evals/agent/agent_eval.py --tasks $T index --repo spring-spel-simple-context-restricted-conversion --skip-embeddings --myc $MYC
+# (Without AEVAL_CACHE this `index` would replace the derived index; it now refuses.)
 python3 evals/agent/agent_eval.py --tasks $T probe --label v183 --task spel-simple-context-restricted-conversion \
     --conditions none,C,D --bash --profile realistic --timeout 400 --myc $MYC --grep SimpleEvaluationContext --callers withMethodResolvers \
     --edit-file spring-expression/src/main/java/org/springframework/expression/spel/support/SimpleEvaluationContext.java \

@@ -747,18 +747,29 @@ class SharedPathAndDerivedIndex(unittest.TestCase):
                 self.assertEqual(metas["old"]["derived"]["base"], str(root / "cache/index/new/home"))
                 self.assertEqual(metas["old"]["derived"]["vectors_reused"], 4)
                 self.assertTrue(metas["old"]["derived"]["graph_equal"])
+                for kw in ({"base": base}, {"skip_embeddings": True}, {"only": {"old"}}):  # deleting a derived index needs --replace
+                    with self.assertRaises(SystemExit) as e:
+                        prep.index(repos, str(fake), "m", **kw)
+                    self.assertIn("pass --replace", str(e.exception))
+                    self.assertTrue(all((root / f"cache/index/{n}/home/.myceliums/repos.json").exists() for n in repos))
+                meta = root / "cache/index/old/meta.json"  # an unreadable record protects the index too
+                kept = meta.read_text()
+                meta.write_text("{")
+                with self.assertRaises(SystemExit):
+                    prep.index(repos, str(fake), "m", only={"old"}, skip_embeddings=True)
+                meta.write_text(kept)
                 (root / "RELS").write_text("9")  # a graph that differs from a fresh build stops the run
                 with self.assertRaises(SystemExit) as e:
-                    prep.index(repos, str(fake), "m", only={"new"}, base=base)
+                    prep.index(repos, str(fake), "m", only={"new"}, base=base, replace=True)
                 self.assertIn("differs from a fresh one", str(e.exception))
                 (root / "RELS").write_text("10")
                 (root / "REUSED").write_text("0")
                 with self.assertRaises(SystemExit):  # nothing reused: not a derived index
-                    prep.index(repos, str(fake), "m", only={"new"}, base=base)
+                    prep.index(repos, str(fake), "m", only={"new"}, base=base, replace=True)
                 reg["repos"]["i"]["path"] = "/elsewhere/shared"
                 (base / ".myceliums/repos.json").write_text(json.dumps(reg))
                 with self.assertRaises(SystemExit):  # another path: myc would silently re-embed everything
-                    prep.index(repos, str(fake), "m", only={"new"}, base=base)
+                    prep.index(repos, str(fake), "m", only={"new"}, base=base, replace=True)
 
 
 class WrapperGuard(unittest.TestCase):
@@ -827,6 +838,126 @@ class WrapperGuard(unittest.TestCase):
                 with self.assertRaises(SystemExit) as e:
                     r.run()
             self.assertIn("the wrapper would download it", str(e.exception))
+
+
+class Login(unittest.TestCase):
+    """Real sessions over an isolated repository use the normal login, or the run does not start (#183)."""
+
+    def test_names_decide_and_no_value_is_read(self):
+        class Names(dict):  # values must not be touched
+            def __getitem__(self, k):
+                raise AssertionError(f"value of {k} read")
+            get = items = values = __getitem__
+        bad = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_BEDROCK_BASE_URL",
+               "ANTHROPIC_VERTEX_PROJECT_ID", "AWS_BEARER_TOKEN_BEDROCK", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_FOUNDRY",
+               "CLAUDE_CODE_USE_VERTEX"]
+        good = ["CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR"]
+        refused, present = config.login_variables(Names.fromkeys([*bad, *good, "PATH", "ANTHROPIC_MODEL", "CLAUDECODE"], "s3cret"))
+        self.assertEqual((refused, present), (sorted(bad), good))
+
+    def _runner(self, **kw):
+        from aeval.runner import Runner, RunConfig
+        r = Runner(RunConfig(label="x", conditions=("none",), reps=1, **kw), [{"id": "t", "repo": "r"}],
+                   {"r": {"name": "r", "commit": "c", "isolated": True}})
+        r._pin_claude = lambda: None
+        r._run_item = lambda *a: None
+        return r
+
+    def test_a_run_refuses_an_api_key_before_it_creates_anything_and_records_the_login(self):
+        clean = {k: v for k, v in os.environ.items() if not config.LOGIN_ENV.fullmatch(k)}
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            clean["AEVAL_CACHE"] = str(root / "cache")
+            with mock.patch.object(config, "RUNS_DIR", root / "runs"):
+                for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK"):
+                    for value in ("s3cret", ""):
+                        with mock.patch.dict(os.environ, {**clean, name: value}, clear=True), self.assertRaises(SystemExit) as e:
+                            self._runner().run()
+                        self.assertIn(name, str(e.exception))
+                        self.assertNotIn("s3cret", str(e.exception))
+                        self.assertFalse((root / "runs").exists())
+                with mock.patch.dict(os.environ, {**clean, "CLAUDE_CODE_OAUTH_TOKEN": "s3cret"}, clear=True):
+                    self._runner().run()
+                text = (root / "runs/x/login.jsonl").read_text()
+                self.assertEqual(json.loads(text)["variables"], ["CLAUDE_CODE_OAUTH_TOKEN"])
+                self.assertNotIn("s3cret", text)
+                from agent_eval import login_meta
+                self.assertEqual(login_meta(root / "runs/x", [{"api_key_source": "none"}]),
+                                 {"login": {"variables_present": [["CLAUDE_CODE_OAUTH_TOKEN"]], "api_key_source": ["none"]}})
+                # The mock API's own dummy key is no login.
+                with mock.patch.dict(os.environ, {**clean, "ANTHROPIC_API_KEY": "x"}, clear=True):
+                    self._runner(extra_env={"ANTHROPIC_BASE_URL": "http://localhost"})._real_isolated()
+                    self._runner(extra_env={"ANTHROPIC_BASE_URL": "http://localhost"}).run()
+
+    def test_a_session_that_used_an_api_key_stops_the_run(self):
+        from aeval.runner import WorkItem
+        task = {"id": "t", "repo": "r", "type": "callers", "answer_kind": "symbols", "gold": []}
+        for source, status in (("none", "no_answer"), ("ANTHROPIC_API_KEY", "isolation_error"), (None, "isolation_error")):
+            with tempfile.TemporaryDirectory() as tmp:
+                t = Path(tmp) / "t.jsonl"
+                init = {"type": "system", "subtype": "init", "tools": ["Read", "Grep", "Glob"], "mcp_servers": [],
+                        "slash_commands": [], "skills": [], **({"apiKeySource": source} if source else {})}
+                t.write_text(json.dumps(init) + "\n" + json.dumps({"type": "result", "subtype": "success", "result": ""}) + "\n")
+                row = self._runner()._summarise(WorkItem(task, "none", 1), 1, t, 1.0, False, 0)
+            self.assertEqual((row["status"], row["api_key_source"]), (status, source), row["isolation_problems"])
+
+
+class PilotScript(unittest.TestCase):
+    SCRIPT = Path(__file__).resolve().parents[1] / "groundtruth/run_pilot_183.sh"
+
+    def _run(self, root, *args, pilot=("{}", 0), myc="ok", claude="2.1.331"):
+        """The script in a copy of its directory, every program a stand-in that logs its arguments."""
+        (root / "groundtruth").mkdir(exist_ok=True)
+        (root / "runs/pilot-183").mkdir(parents=True, exist_ok=True)
+        script = root / "groundtruth" / self.SCRIPT.name
+        script.write_bytes(self.SCRIPT.read_bytes())
+        sha = [x for x in self.SCRIPT.read_text().splitlines() if x.startswith("MYC_SHA=")][0].split("=")[1]
+        b, log = root / "bin", root / "log"
+        b.mkdir(exist_ok=True)
+        log.write_text("")
+        for name, body in (("python3", f'[ "$1" = -I ] && exec {sys.executable} "$@"\necho "$@" >> {log}\n'
+                                       f'case " $* " in *" pilot pilot-183 "*) cat {root}/report; exit {pilot[1]};; esac'),
+                           ("claude", f'echo "{claude} (Claude Code)"'),
+                           ("shasum", f'echo "{sha if myc == "ok" else "0"}  x"')):
+            (b / name).write_text("#!/bin/sh\n" + body + "\n")
+            (b / name).chmod(0o755)
+        (root / "report").write_text(pilot[0])
+        res = subprocess.run(["/bin/bash", str(script), *args], capture_output=True, text=True,
+                             env={"PATH": f"{b}:/usr/bin:/bin", "HOME": str(root), "AEVAL_CACHE": str(root / "cache")})
+        return res, log.read_text().splitlines()
+
+    def test_the_commands_are_the_registered_ones(self):
+        drawn = json.loads((self.SCRIPT.parent / "pilot_183.json").read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            dry, started = self._run(root, "--dry-run")
+            self.assertEqual((dry.returncode, started), (0, []), dry.stderr)
+            real, started = self._run(root, pilot=('{"stop": []}', 0))
+            self.assertEqual(real.returncode, 0, real.stderr)
+            e = str(root)
+            common = (f"--profile realistic --rep 1 --bash --timeout 2400 --concurrency 1 --myc {e}/cache/bin/myc-787920c "
+                      f"--models-dir {e}/.cache/myceliums-eval-models")
+            head = f"{e}/agent_eval.py --tasks {e}/tasks/tasks-commit-replay.json"
+            tasks = lambda arm: " ".join(f"--task {t}" for t in drawn[arm])  # noqa: E731
+            want = [f"{head} run --label pilot-183 --conditions none {tasks('none')} {common}", f"{head} pilot pilot-183",
+                    f"{head} run --label pilot-183-check-C --conditions C {tasks('C')} {common}",
+                    f"{head} run --label pilot-183-check-D --conditions D {tasks('D')} {common}"]
+            self.assertEqual(started, want)
+            self.assertEqual([x.removeprefix("+ python3 ") for x in dry.stdout.splitlines() if x.startswith("+")], want)
+            self.assertEqual(self._run(root, "--x")[0].returncode, 64)
+
+    def test_where_it_stops(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            res, started = self._run(root, pilot=('{"stop": ["projected time 30 h > 24 h"]}', 1))  # stops the main run only
+            self.assertEqual((res.returncode, len(started)), (0, 4), res.stderr)
+            for report in (("", 1), ("Traceback", 1), ('{"stop": []}', 2)):  # no report
+                res, started = self._run(root, pilot=report)
+                self.assertNotEqual(res.returncode, 0)
+                self.assertEqual(len(started), 2)
+            for kw in ({"myc": "other"}, {"claude": "2.1.332"}):
+                res, started = self._run(root, **kw)
+                self.assertEqual((res.returncode, started), (1, []))
 
 
 # Dependents a question names all the same; each has to be justified here.
