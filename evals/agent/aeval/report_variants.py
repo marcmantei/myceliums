@@ -29,7 +29,7 @@ PREFIX = "mcp__myceliums__"
 DESCRIPTIONS = {
     "none": "no MCP server (calibration baseline); project settings and CLAUDE.md files load, none exist",
     "A": "the myceliums MCP server only (default core toolset, 9 tools loaded up front)",
-    "C": "A + what `myc setup-claude --scope project --no-agent` writes: the routing block (in CLAUDE.md; since #200 in .claude/rules), "
+    "C": "A + what `myc setup-claude --scope project --no-agent` writes: the routing block in CLAUDE.md, "
          "the SessionStart, PostToolUse and PreToolUse grep-redirect hooks in .claude/settings.json",
     "D": "myceliums only (#178): the MCP server and `Read`; `Grep` and `Glob` denied; Bash, if offered, limited "
          "by a PreToolUse hook to an allowlist (`myc`, plain file operations, git without search, the task's own "
@@ -41,10 +41,10 @@ DESCRIPTIONS = {
 # A `none` vs myceliums run (#153): `none` is the comparison arm, not a
 # calibration run, and the report has no condition A to refer to.
 OUTCOME = {
-    "none": "no myceliums at all: no MCP server, no routing block, no hooks; the built-in read and "
+    "none": "no myceliums at all: no MCP server, no CLAUDE.md routing block, no hooks; the built-in read and "
             "search tools only",
     "C": "the myceliums MCP server (default core toolset, 9 tools loaded up front) + what `myc setup-claude "
-         "--scope project --no-agent` writes: the routing block (in CLAUDE.md; since #200 in .claude/rules), the SessionStart (context line), "
+         "--scope project --no-agent` writes: the routing block in CLAUDE.md, the SessionStart (context line), "
          "PostToolUse and PreToolUse grep-redirect hooks in .claude/settings.json",
 }
 
@@ -267,7 +267,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     L.append("- **Same in every condition:** prompt, model, effort, turn limit, timeout; built-in tools `Read`, "
              + ("`Grep`, `Glob`, `Bash` (+ `ToolSearch`)" if meta.get("bash") else "`Grep`, `Glob` (+ `ToolSearch`)")
              + "; `--setting-sources project` (the working copy's "
-             "`.claude/settings.json`, `CLAUDE.md` and `.claude/rules` load, the user's do not); fresh working copy and index "
+             "`.claude/settings.json` and `CLAUDE.md` load, the user's do not); fresh working copy and index "
              "copy per session; transcripts checked for the expected tools, MCP server and subagents.")
     L.append(f"- **Grading:** set-based precision / recall / F1 against gold sets derived with compiler tooling; "
              f"success = F1 ≥ {thr}.")

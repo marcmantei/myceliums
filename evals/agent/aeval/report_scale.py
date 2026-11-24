@@ -47,10 +47,10 @@ METRICS = [
 HEADLINE = ("success", "f1", "myc_used", "total_input_tokens", "output_tokens", "cost_usd", "wall_s")
 
 DESCRIPTIONS = {
-    "none": "no myceliums at all: no MCP server, no routing block, no hooks, no `myc` on PATH; the "
+    "none": "no myceliums at all: no MCP server, no CLAUDE.md routing block, no hooks, no `myc` on PATH; the "
             "built-in `Read`, `Grep`, `Glob` and `Bash`",
     "C": "the same plus the myceliums MCP server (default core toolset, 9 tools loaded up front) and what "
-         "`myc setup-claude --scope project --no-agent` writes: the routing block (in CLAUDE.md; since #200 in .claude/rules), the SessionStart "
+         "`myc setup-claude --scope project --no-agent` writes: the routing block in CLAUDE.md, the SessionStart "
          "(context line), PostToolUse and PreToolUse grep-redirect hooks in .claude/settings.json; `myc` (bound "
          "to the session's index copy) is first on PATH, so Bash can run the CLI too",
 }
