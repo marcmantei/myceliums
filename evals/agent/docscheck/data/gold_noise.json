@@ -1,0 +1,31 @@
+{
+ "what": "Is a gold page's edit caused by the code diff? 20 dev commits, random.Random(210).sample of the 65, read before any method was scored per commit.",
+ "labelled_by": "agent (one reader, not reviewed)",
+ "classes": {
+  "wrong": "the page says something the change makes wrong, or lists what the change adds to (incomplete without the edit)",
+  "extends": "the page documents the changed feature and nothing in it becomes wrong; the edit adds useful text",
+  "other": "the edit is not caused by the code change (wording, links, anchors, a documentation issue closed in the same commit)"
+ },
+ "verdicts": {
+  "e3aa5b6b11": {"core/beans/annotation-config/value-annotations.adoc": "wrong"},
+  "033548a760": {"integration/rest-clients.adoc": "extends", "rsocket.adoc": "extends"},
+  "a155a6b3e2": {"data-access/transaction/declarative/tx-decl-explained.adoc": "other"},
+  "a86612a254": {"testing/annotations/integration-spring/annotation-mockitobean.adoc": "wrong", "testing/annotations/integration-spring/annotation-testbean.adoc": "wrong", "testing/testcontext-framework/bean-overriding.adoc": "wrong"},
+  "699da7c383": {"web/webflux/controller/ann-requestmapping.adoc": "extends", "web/webmvc/mvc-controller/ann-requestmapping.adoc": "extends"},
+  "29d307e211": {"testing/testcontext-framework/tel-config.adoc": "wrong"},
+  "35fc2df948": {"integration/observability.adoc": "wrong"},
+  "09cb844421": {"integration/observability.adoc": "wrong"},
+  "ec5f566ba5": {"integration/observability.adoc": "wrong"},
+  "906c54faff": {"core/expressions.adoc": "wrong", "core/expressions/language-ref.adoc": "other", "core/expressions/language-ref/functions.adoc": "wrong"},
+  "3b4c7a8906": {"data-access/jdbc/connections.adoc": "extends", "data-access/orm/hibernate.adoc": "extends", "data-access/orm/jpa.adoc": "extends"},
+  "450cc212a2": {"data-access/transaction/event.adoc": "wrong"},
+  "8b77ed164d": {"integration/rest-clients.adoc": "wrong"},
+  "993a69d3a9": {"appendix.adoc": "wrong", "core/beans/classpath-scanning.adoc": "wrong"},
+  "c18784678d": {"integration/observability.adoc": "wrong"},
+  "aa2028127f": {"testing/testcontext-framework/tel-config.adoc": "wrong"},
+  "9c7b5cb3f5": {"web/webflux/ann-rest-exceptions.adoc": "wrong", "web/webmvc/mvc-ann-rest-exceptions.adoc": "wrong"},
+  "8f6c56fe9a": {"integration/scheduling.adoc": "wrong"},
+  "6cdb34410b": {"testing/testcontext-framework/ctx-management/dynamic-property-sources.adoc": "wrong", "testing/testcontext-framework/ctx-management/property-sources.adoc": "other"},
+  "b068742ec8": {"core/validation/beanvalidation.adoc": "other"}
+ }
+}
