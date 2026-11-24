@@ -269,8 +269,12 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
              + "; `--setting-sources project` (the working copy's "
              "`.claude/settings.json` and `CLAUDE.md` load, the user's do not); fresh working copy and index "
              "copy per session; transcripts checked for the expected tools, MCP server and subagents.")
-    L.append(f"- **Grading:** set-based precision / recall / F1 against gold sets derived with compiler tooling; "
-             f"success = F1 ≥ {thr}.")
+    if rows and all(r.get("edit") for r in rows):  # #183
+        L.append("- **Grading:** edit tasks; success = the task's test command passes after the session; precision / recall / F1 "
+                 "compare the files the session changed with the files of the replayed commit (per kind: TOKENS.md).")
+    else:
+        L.append(f"- **Grading:** set-based precision / recall / F1 against gold sets derived with compiler tooling; "
+                 f"success = F1 ≥ {thr}.")
     L.append(f"- **Statistics:** repetitions averaged within each task; 95 % percentile bootstrap intervals over "
              f"tasks ({n_resamples:,} resamples), "
              + ("every pair of conditions compared, none of them a baseline (see *Pairwise comparisons*)."

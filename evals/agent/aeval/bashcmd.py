@@ -389,6 +389,7 @@ NETWORK_PROGRAMS = frozenset({"curl", "wget", "nc", "ncat", "netcat", "telnet", 
                               "openssl", "dig", "nslookup", "host", "ping", "gh", "git fetch", "git pull", "git clone",
                               "git push", "git remote", "git ls-remote", "git submodule", "git archive", "npm", "npx",
                               "pip", "pip3", "brew", "mvn", "gradle", "docker", "open", "java", "javac", "jshell"})
+_SETTINGS = re.compile(r"/(\.claude|\.mcp\.json|\.vscode|\.idea|\.envrc|\.bashrc|\.zshrc|\.zshenv|\.profile|\.gitconfig|\.gitattributes)(/|$)", re.I)
 _FILTER = re.compile(r"^(-n)?-?\d+$|^-n$|^-c$|^--lines=\d+$")  # `tail -50`, `head -n 20`: reads its stdin only
 # Options that run a program, write a file, or read one named indirectly.
 _UNSAFE_OPT = {"find": re.compile(r"^-(exec|execdir|ok|okdir|delete|fprint|fprint0|fprintf|fls|files0-from)$"),
@@ -489,7 +490,8 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
         return False, ["unparsable command"]
     rules, denied = task_rules(extra), []
     for k, words in enumerate(cmds):
-        bad = [why for idx, t in targets if idx == k for why in [path_problem(t, here, root)] if why]
+        bad = [why for idx, t in targets if idx == k for why in [path_problem(t, here, root)
+                                                                  or ("Claude Code's settings" if _SETTINGS.search("/" + t) else None)] if why]
         if bad:
             denied.extend("redirection to " + b for b in bad)
             continue
@@ -533,6 +535,9 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
             continue
         if any(i not in patterns and touches_dot_git(a) for i, a in enumerate(args)):
             denied.append("a path inside .git")
+            continue
+        if prog in PATH_PROGRAMS and prog != "cd" and any(_SETTINGS.search("/" + a) for a in args):
+            denied.append("Claude Code's settings")
             continue
         if prog in PATH_PROGRAMS and any("gradlew" in a or "gradle/wrapper" in a for a in args):
             denied.append("the Gradle wrapper's files")
@@ -598,6 +603,8 @@ def isolated_tool(tool: str, inp: dict, root: str, here: str | None = None, extr
         rel = os.path.relpath(os.path.realpath(os.path.join(here, path)), os.path.realpath(root))
         if rel in ("gradlew", "gradlew.bat") or rel.startswith("gradle/wrapper/"):
             return "gradle", "writing the Gradle wrapper's files"
+        if _SETTINGS.search("/" + rel):
+            return "other", "writing Claude Code's settings"
         return None
     if tool == "Read":
         path = str(inp.get("file_path") or "")

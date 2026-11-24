@@ -409,6 +409,11 @@ def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list
     for group in t.get("equivalents") or []:
         if len(group) < 2 or not set(group) <= set(paths):
             problems.append(f"{tid}: equivalents must be groups of gold files: {group}")
+        elif set(group) & set(t.get("primary_files") or []):
+            problems.append(f"{tid}: a primary file in equivalents would make its group never forgotten; use `either`")
+    for f in t.get("either") or []:
+        if f not in paths or f in (t.get("primary_files") or []):
+            problems.append(f"{tid}: either must name dependents: {f}")
     for a in t.get("allowed_commands") or []:
         if isinstance(a, str) and a.split():
             continue

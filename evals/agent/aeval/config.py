@@ -124,6 +124,16 @@ def load_repos() -> dict[str, dict]:
     return repos
 
 
+def session_root(repo: dict) -> Path:
+    """Parent of a session's temporary directory. An isolated session's (#183)
+    paths are shown to the model, so it is neutral there, not in the cache
+    that also holds the gold files, and short: with a long one Claude Code
+    gives sandboxed commands the shared ``/tmp/claude-<uid>`` as ``TMPDIR``."""
+    root = work_root().parent / "ag" if repo.get("isolated") else cache_dir() / "tmp"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def work_name(repo: dict) -> str:
     """The directory under ``work_root()`` a repository's sessions and index
     use: its ``work_name`` (#183: every replayed parent shares one, because an

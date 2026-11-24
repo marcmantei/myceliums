@@ -323,23 +323,6 @@ class Runner:
         path.write_text(pinned + "\n")
         self.claude_version = pinned
 
-    def _check_login(self, item: WorkItem) -> None:
-        """Is the CLI logged in *inside* the sandbox profile with a fresh
-        configuration directory? `auth status` only, no model call: a profile
-        that hides the login would fail every session."""
-        tmp = Path(tempfile.mkdtemp(prefix="aeval-run-", dir=self.cache / "tmp"))
-        work = tmp / "work"
-        work.mkdir()
-        try:
-            prof = self._sandbox_profile(item, tmp, work, tmp)
-            env = config.session_env(isolation.session_environment(tmp), legacy=False)
-            res = subprocess.run(isolation.sandboxed([self.cfg.claude, "auth", "status"], prof), cwd=work, env=env,
-                                 capture_output=True, text=True, timeout=120)
-            if not re.search(r'"loggedIn":\s*true', res.stdout):
-                raise SystemExit(f"Claude Code is not logged in inside the sandbox: {(res.stderr or res.stdout).strip()[:200]}")
-        finally:
-            config.remove_tree(tmp, self.cache / "tmp")
-
     def completed(self) -> set[str]:
         done = set()
         if self.results_path.exists():
@@ -527,33 +510,32 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         return tools
 
     def _isolated_settings(self, item: WorkItem, tmp: Path, workdir: Path) -> Path:
-        """Settings of an isolated session (#183): one PreToolUse hook on every
-        tool, the same in every arm except ``--search`` (aeval/bashcmd.py
-        ``isolated-hook``). The hook's script is copied next to them, because
-        the session may not read this repository."""
-        search = "no" if config.VARIANTS[item.condition].no_search else "yes"
+        """Settings of an isolated session (aeval/isolation.py): Claude Code's
+        Bash sandbox, the read and write blocks of its file tools, and one
+        PreToolUse hook on every tool. The arms differ in the hook's
+        ``--search`` and in the myceliums paths. The hook's script is copied
+        next to the settings, because the session may not read this
+        repository."""
+        variant = config.VARIANTS[item.condition]
+        if not isolation.available():
+            raise StopRun("an isolated repository (#183) needs macOS's sandbox; not found")
         script = tmp / "policy" / "bashcmd.py"
         script.parent.mkdir()
         script.write_bytes(NOSEARCH_HOOK.read_bytes())
         hook = " ".join(shlex.quote(x) for x in [
-            sys.executable, "-I", str(script), "isolated-hook", "--root", os.path.realpath(workdir), "--search", search,
-            "--allow-json", json.dumps(allowed_commands(item.task))])
+            sys.executable, "-I", str(script), "isolated-hook", "--root", os.path.realpath(workdir),
+            "--search", "no" if variant.no_search else "yes", "--allow-json", json.dumps(allowed_commands(item.task))])
+        if self.cfg.extra_env.get("AEVAL_PROBE_NO_HOOK"):  # mock API only: show the layer below the hook
+            hook = None
+        myc = [Path(self.cfg.myc), Path(self.cfg.models_dir)] if variant.mcp else []
         path = tmp / "isolated-settings.json"
-        path.write_text(json.dumps({"hooks": {"PreToolUse": [
-            {"matcher": "*", "hooks": [{"type": "command", "command": hook}]}]}}, indent=1))
+        path.write_text(json.dumps(isolation.session_settings(
+            tmp, workdir, config.repo_env(self.repos[item.repo]), myc, hook), indent=1))
         return path
 
-    def _sandbox_profile(self, item: WorkItem, tmp: Path, workdir: Path, out_dir: Path) -> Path:
-        """The kernel layer (aeval/isolation.py): only this session's own files
-        of the protected places are readable."""
-        if not isolation.available():
-            raise StopRun("an isolated repository (#183) needs macOS's sandbox-exec; not found")
-        path = tmp / "session.sb"
-        hooks = out_dir / "hooks"
-        hooks.mkdir(parents=True, exist_ok=True)
-        myc = [Path(self.cfg.myc), Path(self.cfg.models_dir)] if config.VARIANTS[item.condition].mcp else []
-        path.write_text(isolation.session_profile(tmp, workdir, hooks, self.cfg.claude,
-                                                  config.repo_env(self.repos[item.repo]), myc))
+    def _grading_profile(self, item: WorkItem, tmp: Path, workdir: Path) -> Path:
+        path = tmp / "grading.sb"
+        path.write_text(isolation.grading_profile(tmp, workdir, config.repo_env(self.repos[item.repo])))
         return path
 
     def _nosearch_settings(self, tmp: Path, task: dict | None = None, hook_dir: Path | None = None) -> Path:
@@ -639,7 +621,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             **({"probe": True} if self.cfg.extra_env else {}),
         })
 
-        tmp = Path(tempfile.mkdtemp(prefix="aeval-run-", dir=self.cache / "tmp"))
+        tmp_root = config.session_root(repo)
+        tmp = Path(tempfile.mkdtemp(prefix="" if repo.get("isolated") else "aeval-run-", dir=tmp_root))
         variant = config.VARIANTS[item.condition]
         hook_dir = Path(tempfile.mkdtemp(prefix="hook-")) if variant.no_search and not repo.get("isolated") else None
         try:
@@ -666,6 +649,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             extra.update(config.repo_env(repo))
             if isolated:
                 extra.update(isolation.session_environment(tmp))
+                extra["PATH"] = f"{tmp / 'g'}:{extra.get('PATH', config.SYSTEM_PATH)}"
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
             # Files the harness changed before the agent starts (setup-claude's
             # CLAUDE.md, .mcp.json) are not the agent's edits.
@@ -675,10 +659,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             if settings is not None:
                 (out_dir / "settings.json").write_text(settings.read_text())
             cmd = self._command(item, mcp_path, settings)
-            sandbox = self._sandbox_profile(item, tmp, workdir, out_dir) if isolated else None
+            sandbox = self._grading_profile(item, tmp, workdir) if isolated else None
             if sandbox is not None:
-                (out_dir / "session.sb").write_text(sandbox.read_text())
-                cmd = isolation.sandboxed(cmd, sandbox)
+                (out_dir / "grading.sb").write_text(sandbox.read_text())
             (out_dir / "command.json").write_text(json.dumps(cmd, indent=1))
             started = time.time()
             timed_out = False
@@ -695,7 +678,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             wall = time.time() - started
             edit = self._grade_edit(item, workdir, out_dir, baseline, sandbox) if is_edit_task(task) else None
         finally:
-            config.remove_tree(tmp, self.cache / "tmp")
+            config.remove_tree(tmp, tmp_root)
             if hook_dir is not None:
                 shutil.rmtree(hook_dir, ignore_errors=True)
             # The working copy stays until the next session of this repo
@@ -724,6 +707,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             if overlay:
                 apply_gold(workdir, config.gold_dir(item.repo), item.task, overlay)
             env = config.repo_env(self.repos[item.repo])
+            if sandbox:
+                env.update(isolation.session_environment(sandbox.parent))
             if problem := wrapper_problem(workdir, env):  # the agent changed the wrapper: never let it connect
                 tests = {"command": item.task["test_command"], "passed": False, "returncode": None,
                          "timed_out": False, "seconds": 0.0, "output_tail": problem, "output": problem}
@@ -931,8 +916,6 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             order.write_text("".join(f"{it.run_id}\n" for it in self.plan()))
         if any(self.repos[it.repo].get("isolated") for it in items):
             self._pin_claude()
-            if not self.cfg.extra_env:  # a real run, not the mock API
-                self._check_login(next(it for it in items if self.repos[it.repo].get("isolated")))
         # Before the first session: every wrapper distribution of the run is on disk (#183).
         missing = {p for it in items if (self.cache / "repos" / it.repo).is_dir()
                    and (p := wrapper_problem(self.cache / "repos" / it.repo, self.repos[it.repo].get("session_env")))}

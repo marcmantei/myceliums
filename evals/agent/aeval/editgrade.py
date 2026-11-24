@@ -35,8 +35,9 @@ Grading, after the session, from ``git status`` of the working copy:
   to a primary file). Without ``primary_files`` every gold file would be a
   dependent and the metric would equal 1 − recall, so it is not reported
   (``None``). Commit-replay tasks (#183) report two kinds of dependent apart:
-  ``comments`` (gold files that change in comments or imports only) and
-  ``build`` (Gradle scripts). ``other_module`` (#183) counts the code dependents in another
+  ``comments`` (gold files that change in comments or imports only),
+  ``build`` (Gradle scripts) and ``either`` (files whose part of the change can
+  as well go into a primary file: not counted). ``other_module`` (#183) counts the code dependents in another
   Gradle/Maven module than every primary file (the path before ``/src/``).
 
 A session succeeds when the test command passes; without one, when the
@@ -211,7 +212,8 @@ def grade_edit(task: dict, changed: list[str], tests: dict | None, threshold: fl
     if "strata" in task:
         skip = {x["path"] for x in task["gold_files"] if x.get("comment_only")}
         keep = lambda fs: {f for f in fs if file_kind(f) == "code" and f not in skip and ".gradle" not in f.rsplit("/", 1)[-1]}  # noqa: E731
-        by_kind["code_changed"] = _prf(keep(gold), keep(with_equivalents(task, got)))
+        one = lambda fs: {representative(task, f) for f in fs}  # noqa: E731
+        by_kind["code_changed"] = _prf(one(keep(gold)), one(keep(got)))
     forgotten = forgotten_dependents(task, got)
     overall = _prf(gold, got)
     passed = None if tests is None else bool(tests.get("passed"))
@@ -244,11 +246,12 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
     primary_modules = {module_of(p) for p in primary}
     comments = {g["path"] for g in task.get("gold_files") or [] if isinstance(g, dict) and g.get("comment_only")}
     # Reported apart only where a task marks them (#183).
-    kinds = ("docs", "tests", "remote", "local") + (("comments", "build") if any(
+    kinds = ("docs", "tests", "remote", "local") + (("comments", "build", "either") if any(
         isinstance(g, dict) and "status" in g for g in task.get("gold_files") or []) and "strata" in task else ())
     out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in kinds},
            "other_module": {"n": 0, "forgotten": []}}
-    changed = with_equivalents(task, changed)
+    touched = {representative(task, f) for f in changed}
+    either = set(task.get("either") or [])
     for f in sorted(set(gold_paths(task)) - primary):
         kind = file_kind(f)
         if kind == "code":
@@ -257,11 +260,18 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
                 kind = "comments"
             elif "build" in kinds and f.endswith((".gradle", ".gradle.kts")):
                 kind = "build"
+            elif "either" in kinds and f in either:
+                # Its part of the change can as well go into a primary file, which every solution edits: the file list
+                # cannot tell, so it is reported apart and neither counted nor forgotten.
+                out["by_kind"]["either"]["n"] += 1
+                if f not in changed:
+                    out["by_kind"]["either"]["forgotten"].append(f)
+                continue
         out["n"] += 1
         out["by_kind"][kind]["n"] += 1
         far = kind in ("remote", "local") and module_of(f) is not None and module_of(f) not in primary_modules
         out["other_module"]["n"] += far
-        if f not in changed:
+        if representative(task, f) not in touched:
             out["forgotten"].append(f)
             out["by_kind"][kind]["forgotten"].append(f)
             if far:
@@ -269,15 +279,14 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
     return out
 
 
-def with_equivalents(task: dict, changed: set[str]) -> set[str]:
-    """``changed`` plus the gold files of every group of ``equivalents`` one
-    member of which was changed: places where the same part of the change can
-    go, so choosing one never counts as forgetting the other (#183)."""
-    out = set(changed)
+def representative(task: dict, path: str) -> str:
+    """The first file of the ``equivalents`` group ``path`` belongs to, else
+    ``path``: places where the same part of the change can go count as one
+    (#183)."""
     for group in task.get("equivalents") or []:
-        if out & set(group):
-            out |= set(group)
-    return out
+        if path in group:
+            return group[0]
+    return path
 
 
 def module_of(path: str) -> str | None:

@@ -191,6 +191,8 @@ def cmd_probe(args) -> int:
                     "new": args.edit_new, "command": args.edit_command}
         api = mockapi.MockAPI(log_dir, args.grep, args.callers, edit=edit).start()
         cfg.extra_env = mockapi.session_env(api.url)
+        if args.no_hook:
+            cfg.extra_env["AEVAL_PROBE_NO_HOOK"] = "1"
         try:
             Runner(cfg, [task], repos).run(only_tasks={task["id"]}, reps=[1], conditions=[cond])
         finally:
@@ -629,10 +631,13 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--models-dir", default=_default_models())
     s.add_argument("--bash", action="store_true")
     s.add_argument("--prompt-budget", action="store_true")
+    s.add_argument("--no-hook", action="store_true", help="isolated repositories (#183): leave the hook out, to show "
+                   "what Claude Code's own sandbox refuses (mock API only)")
     s.add_argument("--edit-file", help="edit tasks (#183): file (relative to the checkout) the script reads and edits")
     s.add_argument("--edit-old", help="text the scripted Edit replaces")
     s.add_argument("--edit-new", help="replacement text")
-    s.add_argument("--edit-command", help="command the scripted session then runs in Bash (the task's test command)")
+    s.add_argument("--edit-command", help="command the scripted session then runs in Bash (the task's test command); "
+                   "several separated by a line of three dashes")
     s.add_argument("--profile", choices=sorted(config.PROFILES))
     s.set_defaults(reps=1, concurrency=1, max_retries=0, threshold=0.8, max_utilization=0.97,
                    max_sessions=None, tool_search=None, claude=None, fn=cmd_probe)

@@ -210,8 +210,12 @@ class MockAPI:
             elif "toolu_probe_edit" not in seen:
                 step = ("toolu_probe_edit", "Edit", {"file_path": self.edit["file"], "old_string": self.edit["old"],
                                                      "new_string": self.edit["new"]})
-            elif self.edit.get("command") and "Bash" in tools and "toolu_probe_test" not in seen:
-                step = ("toolu_probe_test", "Bash", {"command": self.edit["command"], "description": "probe test"})
+            elif "Bash" in tools:
+                for n, command in enumerate((self.edit.get("command") or "").split("\n---\n")):
+                    tid = f"toolu_probe_test{n or ''}"
+                    if command and tid not in seen:
+                        step = (tid, "Bash", {"command": command, "description": "probe test"})
+                        break
             if step:
                 return _message([{"type": "tool_use", "id": step[0], "name": step[1], "input": step[2]}],
                                 "tool_use", model)

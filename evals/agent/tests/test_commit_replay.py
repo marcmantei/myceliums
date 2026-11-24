@@ -333,23 +333,40 @@ class Isolation(unittest.TestCase):
         for c in only_search:
             self.assertIsNone(self.why("Bash", True, command=c), c)
             self.assertIsNotNone(self.why("Bash", False, command=c), c)
-        # The settings the runner writes differ in that one argument; tools differ in Grep and Glob.
+        # The settings the runner writes differ in that one argument and in the myceliums paths; tools in Grep and Glob.
+        from aeval import isolation
         from aeval.runner import Runner, RunConfig, WorkItem
         task = {"id": "t", "repo": "r", "answer_kind": "diff", "allowed_commands": [{"prefix": "./gradlew", "args": "x"}]}
-        r = Runner(RunConfig(label="x", conditions=("none", "C", "D"), bash=True, claude="claude"), [task],
-                   {"r": {"name": "r", "commit": "c", "isolated": True}})
-        hooks, tools = {}, {}
+        top = self.root.parent.parent
+        r = Runner(RunConfig(label="x", conditions=("none", "C", "D"), bash=True, claude="claude", myc=str(top / "bin/myc"),
+                             models_dir=str(top / "models")), [task],
+                   {"r": {"name": "r", "commit": "c", "isolated": True, "session_env": {"JAVA_HOME": str(top / "jdk")}}})
+        hooks, tools, sets = {}, {}, {}
         for cond in ("none", "C", "D"):
-            t = self.root.parent.parent / cond
+            t = top / cond
             t.mkdir()
             it = WorkItem(task, cond, 1)
-            st = r._isolated_settings(it, t, self.root)
-            hooks[cond] = json.loads(st.read_text())["hooks"]["PreToolUse"][0]["hooks"][0]["command"].replace(str(t), "T")
+            with mock.patch.object(isolation, "available", lambda: True):
+                st = r._isolated_settings(it, t, self.root)
+            data = json.loads(st.read_text().replace(str(t), "T"))
+            hooks[cond] = data["hooks"].pop("PreToolUse")[0]["hooks"][0]["command"]
+            sets[cond] = data
             cmd = r._command(it, Path("/x/mcp.json"), st)
             tools[cond] = set(cmd[cmd.index("--tools") + 1].split(","))
             self.assertIn("WebFetch", cmd[cmd.index("--disallowedTools") + 1])
+            self.assertEqual(cmd[0], "claude")  # the CLI itself runs as in daily use
+        self.assertEqual(sets["C"], sets["D"])
         self.assertEqual(hooks["none"], hooks["C"])
         self.assertEqual(hooks["none"].replace("--search yes", "--search no"), hooks["D"])
+        myc_paths = {"T/bin", "T/data", "T/home", str(top / "bin/myc"), str(top / "models")}
+        fs = lambda c, k: set(sets[c]["sandbox"]["filesystem"][k])  # noqa: E731
+        self.assertEqual(fs("C", "allowRead") - fs("none", "allowRead"), myc_paths)
+        self.assertEqual(fs("C", "allowWrite") - fs("none", "allowWrite"), {"T/data", "T/home"})
+        self.assertEqual(fs("none", "allowRead") - fs("C", "allowRead"), set())
+        for c in sets:
+            for k in ("allowRead", "allowWrite"):
+                sets[c]["sandbox"]["filesystem"].pop(k)
+        self.assertEqual(sets["none"], sets["C"])
         self.assertEqual(tools["none"], tools["C"])
         self.assertEqual(tools["none"] - tools["D"], {"Grep", "Glob"})
         self.assertEqual(tools["D"] - tools["none"], set())
@@ -368,63 +385,59 @@ class Isolation(unittest.TestCase):
             for hidden in (str(config.EVAL_DIR), str(config.cache_dir()), "--allow-json", "isolated-hook"):
                 self.assertNotIn(hidden, out["permissionDecisionReason"])
 
-    def test_profiles_differ_only_in_myc(self):
+    def test_session_settings_close_everything_else(self):
         from aeval import isolation
-        from aeval.runner import Runner, RunConfig, WorkItem
-        myc, models = self.root.parent / "bin" / "myc", self.root.parent / "models"
-        repo = {"name": "r", "commit": "c", "isolated": True, "session_env": {}}
-        r = Runner(RunConfig(label="x", conditions=("none", "C", "D"), claude="/opt/claude-1", myc=str(myc), models_dir=str(models)),
-                   [], {"r": repo})
-        got = {}
-        with mock.patch.object(isolation, "available", lambda: True):
-            for c in ("none", "C", "D"):
-                got[c] = r._sandbox_profile(WorkItem({"id": "t", "repo": "r"}, c, 1), self.root.parent, self.root, self.root.parent / "out").read_text()
-        self.assertEqual(got["C"], got["D"])
-        line = f"(subpath {isolation._q(myc)}) (subpath {isolation._q(models)})"
-        self.assertIn(line, got["C"])
-        self.assertEqual(got["C"].replace(" " + line, ""), got["none"])
-        self.assertNotIn(str(myc), got["none"])
-        for closed in ("build-cache-1", "build-scan-data", "daemon/"):
-            self.assertIn(closed, got["none"])
-        roots = [str(x) for x in isolation.protected_roots()]
-        self.assertIn(os.path.realpath(Path.home()), roots)
-        self.assertIn("/private/tmp", roots)
-        self.assertEqual(isolation.MARKER, bashcmd.ISOLATED_MARKER)
-        # A fresh configuration directory per session; the login stays the caller's.
-        with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": "", "CLAUDE_SECURESTORAGE_CONFIG_DIR": ""}):
-            env = isolation.session_environment(self.root.parent)
-        for k in ("CLAUDE_CONFIG_DIR", "CLAUDE_CODE_TMPDIR", "TMPDIR", "ZDOTDIR"):
-            self.assertTrue(env[k].startswith(str(self.root.parent)) and os.path.isdir(env[k]), k)
-        self.assertEqual(env["CLAUDE_SECURESTORAGE_CONFIG_DIR"], str(Path.home() / ".claude"))
-
-    def test_login_is_checked_inside_the_profile(self):
-        from aeval import isolation
-        from aeval.runner import Runner, RunConfig, WorkItem
         top = self.root.parent.parent
-        fake = top / "claude"
-        (top / "cache/tmp").mkdir(parents=True)
-        with mock.patch.dict(os.environ, {"AEVAL_CACHE": str(top / "cache")}), \
-                mock.patch.object(isolation, "available", lambda: True), \
-                mock.patch.object(isolation, "sandboxed", lambda cmd, prof: cmd):
-            r = Runner(RunConfig(label="x", conditions=("none",), claude=str(fake)), [], {"r": {"name": "r", "commit": "c", "isolated": True}})
-            for answer, ok in (("true", True), ("false", False)):
-                fake.write_text("#!/bin/sh\ncase \"$CLAUDE_CONFIG_DIR\" in *claude-config) echo '{\"loggedIn\": " + answer + "}';; esac\n")
-                fake.chmod(0o755)
-                item = WorkItem({"id": "t", "repo": "r"}, "none", 1)
-                if ok:
-                    r._check_login(item)
-                else:
-                    with self.assertRaises(SystemExit):
-                        r._check_login(item)
-                self.assertEqual(list((top / "cache/tmp").iterdir()), [])
-        with mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "", "CLAUDE_CODE_OAUTH_TOKEN": ""}):
-            self.assertIn(Path.home() / "Library/Keychains", isolation.readable(top, top, "c", {}, [])[1])
-        with mock.patch.dict(os.environ, {"CLAUDE_CODE_OAUTH_TOKEN": "x"}):
-            self.assertNotIn(Path.home() / "Library/Keychains", isolation.readable(top, top, "c", {}, [])[1])
+        env = {"JAVA_HOME": str(top / "jdk")}
+        st = isolation.session_settings(top, self.root, env, [], "hook")
+        sb = st["sandbox"]
+        # Fails closed, no way out, nothing a repository's files could have opened.
+        self.assertEqual((sb["enabled"], sb["failIfUnavailable"], sb["allowUnsandboxedCommands"], sb["excludedCommands"]),
+                         (True, True, False, []))
+        self.assertFalse(sb["enableWeakerNestedSandbox"] or sb["enableWeakerNetworkIsolation"] or sb["allowAppleEvents"])
+        net = sb["network"]
+        self.assertEqual((net["allowedDomains"], net["deniedDomains"], net["strictAllowlist"]), ([], ["*"], True))
+        self.assertEqual((net["allowUnixSockets"], net["allowAllUnixSockets"], net["allowMachLookup"]), ([], False, []))
+        fs = sb["filesystem"]
+        home = os.path.realpath(Path.home())
+        for closed in (home, "/private/tmp", "/private/var/folders", "/Users/Shared", "/Volumes", f"{home}/Library/Keychains",
+                       f"{home}/.claude/projects", f"{home}/.claude/history.jsonl", f"{home}/.claude/.credentials.json",
+                       f"/private/tmp/claude-{os.getuid()}", f"{home}/.gradle/caches/build-cache-1", f"{home}/.gradle/build-scan-data",
+                       f"{home}/.gradle/daemon/**/*.out.log"):
+            self.assertIn(closed, fs["denyRead"])
+        self.assertFalse([p for p in fs["denyRead"] if "gold" in p or "spring-history" in p or "myceliums" in p],
+                         "the model is shown this list")
+        for p in (".claude", ".mcp.json", "gradle/wrapper", "gradlew", ".git/hooks", ".git/config"):
+            self.assertIn(os.path.realpath(self.root) + "/" + p, fs["denyWrite"])
+        for p in ("init.d", "gradle.properties", "wrapper"):
+            self.assertIn(f"{home}/.gradle/{p}", fs["denyWrite"])
+        for wide in (home, "/", "/private/tmp", f"{home}/.cache", f"{home}/.claude", f"{home}/Library"):
+            self.assertNotIn(wide, fs["allowRead"] + fs["allowWrite"])
+        self.assertTrue(st["permissions"]["blockReadsOutsideWorkingDirectories"] and st["permissions"]["blockWritesOutsideWorkingDirectories"])
+        self.assertFalse([d for d in st["permissions"]["deny"] if "/.gradle" in d or "/.cache" in d])  # would close them to builds
+        self.assertIn(f"Edit(/{os.path.realpath(self.root)}/.claude/**)", st["permissions"]["deny"])
+        # No credential reaches a command's environment, and nothing touches the login.
+        denied = {e["name"] for e in sb["credentials"]["envVars"] if e["mode"] == "deny"}
+        self.assertLessEqual({"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}, denied)
+        senv = isolation.session_environment(top)
+        self.assertFalse([k for k in senv if "CONFIG_DIR" in k or "SECURESTORAGE" in k or "KEY" in k or "TOKEN" in k])
+        self.assertIn(f"-Djava.io.tmpdir={top}/t", senv["JAVA_TOOL_OPTIONS"])
+        self.assertEqual(isolation.MARKER, bashcmd.ISOLATED_MARKER)
+        for repo in ({"isolated": True}, {}):
+            with mock.patch.dict(os.environ, {"AEVAL_WORK_ROOT": str(top / "wr/x"), "AEVAL_CACHE": str(top / "cache")}):
+                self.assertEqual(config.session_root(repo), top / "wr/ag" if repo else top / "cache/tmp")
+
+    def test_the_agent_cannot_write_settings(self):
+        for search in (True, False):
+            for tool, f in (("Write", ".claude/settings.json"), ("Edit", ".claude/settings.local.json"), ("Write", ".mcp.json"),
+                            ("Write", "spring-core/.claude/x"), ("Write", ".CLAUDE/settings.json"), ("Write", ".gitattributes")):
+                self.assertIsNotNone(self.why(tool, search, file_path=str(self.root / f)), f)
+            for c in ("mkdir .claude", "cp a.java .mcp.json", "git diff > .claude/settings.json", "mv a.java spring-core/.claude/x", "touch .zshenv"):
+                self.assertIsNotNone(self.why("Bash", search, command=c), c)
 
     @unittest.skipUnless(sys.platform == "darwin", "sandbox-exec is macOS")
-    def test_the_kernel_allows_only_what_a_session_needs(self):
-        """An allowlist: what is not named is closed, whatever the command looks like."""
+    def test_the_grading_profile(self):
+        """The test command runs the agent's code: an allowlist of files, no network, no keychain services."""
         from aeval import isolation
         top = self.root.parent.parent  # stands in for the home directory
         for d in ("tmp", "jdk", "gradle/caches/build-cache-1", "gradle/caches/modules-2", "gradle/daemon/9", "gradle/build-scan-data",
@@ -432,34 +445,46 @@ class Isolation(unittest.TestCase):
             (top / d).mkdir(parents=True)
             (top / d / "f.txt").write_text("secret")
         (top / "gradle/daemon/9/d.out.log").write_text("secret")
+        (top / "gradle/gradle.properties").write_text("a=b")
         (top / "history.jsonl").write_text("secret")
         (top / "tmp/ok").write_text("fine")
         prof = top / "p.sb"
         prof.write_text(isolation.profile([self.root, top / "tmp", top / "gradle"], [top / "jdk"], [top],
-                                          [top / "gradle/caches/build-cache-1", top / "gradle/build-scan-data"],
-                                          ["^" + str(top) + "/gradle/daemon/.*[.]out[.]log$"]))
+                                          [str(top / "gradle/caches/build-cache-1"), str(top / "gradle/build-scan-data"),
+                                           str(top / "gradle/daemon/**/*.out.log")], [str(top / "gradle/gradle.properties")]))
         def run(*cmd):
             return subprocess.run(isolation.sandboxed(list(cmd), prof), capture_output=True, text=True, cwd=self.root)
         for f, text in ((self.root / "a.java", "x"), (top / "tmp/ok", "fine"), (top / "jdk/f.txt", "secret"),
                         (top / "gradle/caches/modules-2/f.txt", "secret"), (top / "gradle/daemon/9/f.txt", "secret")):
             self.assertEqual(run("/bin/cat", str(f)).stdout, text, f)
-        closed = ["gold/f", "projects/f.txt", "other/f.txt", "history.jsonl", "gradle/caches/build-cache-1/f.txt",
-                  "gradle/build-scan-data/f.txt", "gradle/daemon/9/d.out.log"]
-        for c in closed:
+        for c in ("gold/f", "projects/f.txt", "other/f.txt", "history.jsonl", "gradle/caches/build-cache-1/f.txt",
+                  "gradle/build-scan-data/f.txt", "gradle/daemon/9/d.out.log"):
             f = str(top / c)
             for cmd in (("/bin/cat", f), ("/bin/sh", "-c", f"cd {self.root}/spring-core; cat ../../../{c}"),
                         ("/bin/bash", "-c", "cat $'" + "".join(f"\\x{ord(ch):02x}" for ch in f) + "'"),
                         ("/bin/sh", "-c", f"cp {f} {self.root}/stolen; cat {self.root}/stolen"),
                         ("/usr/bin/grep", "-r", "secret", f), (sys.executable, "-I", "-c", f"print(open({f!r}).read())")):
-                res = run(*cmd)
-                self.assertNotIn("secret", res.stdout.replace(f, ""), cmd)
+                self.assertNotIn("secret", run(*cmd).stdout.replace(f, ""), cmd)
         self.assertNotIn("secret", run("/bin/cat", str(self.root / "link/f")).stdout)
         run("/bin/ln", str(self.secret / "f"), str(self.root / "hard"))
         self.assertNotIn("secret", run("/bin/cat", str(self.root / "hard")).stdout)
         self.assertNotEqual(run("/bin/sh", "-c", f"echo y > {top}/other/new").returncode, 0)
+        self.assertNotEqual(run("/bin/sh", "-c", f"echo y > {top}/gradle/gradle.properties").returncode, 0)
         self.assertEqual(run("/bin/sh", "-c", f"echo y > {top}/gradle/new && echo y > {top}/gradle/daemon/9/e.out.log").returncode, 0)
-        t = editgrade.run_test(f"cat {self.secret}/f", self.root, prefix=isolation.sandboxed([], prof))
-        self.assertFalse(t["passed"])  # the test command that grades a session, too
+        self.assertFalse(editgrade.run_test(f"cat {self.secret}/f", self.root, prefix=isolation.sandboxed([], prof))["passed"])
+        # Keychain services cannot be looked up (a lookup asks nothing of them); loopback works.
+        code = ("import ctypes,socket;L=ctypes.CDLL(None);p=ctypes.c_uint.in_dll(L,'bootstrap_port');r=ctypes.c_uint(0);"
+                "print([L.bootstrap_look_up(p,n.encode(),ctypes.byref(r)) for n in %r]);s=socket.socket();s.bind(('127.0.0.1',0));"
+                "s.listen();socket.create_connection(s.getsockname(),3);print('loop')" % (isolation.SECURITY_SERVICES,))
+        out = run(sys.executable, "-I", "-c", code).stdout
+        self.assertIn("loop", out)
+        self.assertTrue(out.startswith("[") and all(int(x) for x in out[1:out.index("]")].split(",")), out)
+        # The real one: whole regions, no keychain, no myceliums.
+        with mock.patch.dict(os.environ, {"AEVAL_CACHE": str(top / "cache")}):
+            text = isolation.grading_profile(top, self.root, {"JAVA_HOME": str(top / "jdk")})
+        for needed in ("Library/Keychains", "(deny network-outbound)", 'remote ip "localhost:*"', "com.apple.SecurityServer", "build-cache-1"):
+            self.assertIn(needed, text)
+        self.assertNotIn("models", text.split("(deny network-outbound)")[0].split("(allow file-read-data file-read-xattr (")[-1])
 
     def test_c_imports_the_projects_agents_md(self):
         from aeval.runner import Runner, RunConfig, WorkItem
@@ -517,24 +542,26 @@ class Isolation(unittest.TestCase):
                  ("6", "Read", {"file_path": str(self.root / "a.java")}, f"see {Path.home()}/SYNC/git/x"),
                  ("7", "Bash", {"command": "./gradlew --offline --no-scan --no-build-cache test 2>&1 | tail -5"}, "ok"),
                  ("8", "Bash", {"command": "cat spring-core/../../gold/f"}, bashcmd.ISOLATED_MARKER),
-                 ("9", "Read", {"file_path": "/x/aeval-run-1/claude-config/projects/p/s/tool-results/a.txt"}, "saved"),
-                 ("10", "Bash", {"command": "grep -rn 'python3 ' spring-core"}, "none")]
+                 ("9", "Read", {"file_path": f"{Path.home()}/.claude/projects/p/s/tool-results/a.txt"}, "saved"),
+                 ("10", "Bash", {"command": "grep -rn 'python3 ' spring-core"}, "none"),
+                 ("11", "Glob", {"pattern": "{/etc,a}/*.conf"}, bashcmd.ISOLATED_MARKER),
+                 ("12", "Glob", {"pattern": "**/*.{java,kt}"}, "a.java")]
         path = self.root.parent / "t.jsonl"
         with open(path, "w") as fh:
             for i, name, inp, res in calls:
                 fh.write(json.dumps({"type": "assistant", "message": {"content": [{"type": "tool_use", "id": i, "name": name, "input": inp}]}}) + "\n")
                 fh.write(json.dumps({"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": i, "content": res}]}}) + "\n")
         a = isolation.audit(str(path), str(self.root))
-        self.assertEqual((a["outside_attempts"], a["outside_blocked"], a["outside_ran"]), (3, 2, 1))
+        self.assertEqual((a["outside_attempts"], a["outside_blocked"], a["outside_ran"]), (4, 3, 1))
         self.assertEqual((a["network_attempts"], a["network_ran"]), (2, 2))  # with a search pattern, for review
         self.assertEqual((a["gradle_attempts"], a["gradle_ran"]), (1, 1))
         self.assertEqual((a["disagreements"], len(a["to_review"])), (4, 4))
         self.assertTrue(any("git log '#x' ; curl" in x for x in a["to_review"]))
         self.assertEqual((a["kernel_refusals"], a["protected_in_results"], a["refused_calls"], a["tool_calls"], a["flagged"]),
-                         (1, 1, 2, 10, True))
+                         (1, 1, 3, 12, True))
         s = isolation.summarise([{"condition": "none", "isolation_audit": a}, {"condition": "D", "isolation_audit": a}, {"condition": "D"}])
         self.assertEqual((s["none"]["sessions"], s["D"]["outside_ran"], s["D"]["flagged"]), (1, 1, 1))
-        self.assertIn("| `D` | 1 | 2 | 2 / 1 | 0 / 2 | 0 / 1 | 4 | 1 | 1 | 0 | 1 |", "\n".join(isolation.report_lines(s)))
+        self.assertIn("| `D` | 1 | 3 | 3 / 1 | 0 / 2 | 0 / 1 | 4 | 1 | 1 | 0 | 1 |", "\n".join(isolation.report_lines(s)))
         self.assertEqual(isolation.report_lines({}), [])
         import ast  # the audit must not share the hook's parser
         names = {n.module for n in ast.walk(ast.parse(Path(isolation.__file__).read_text())) if isinstance(n, ast.ImportFrom)}
@@ -580,13 +607,29 @@ class Grading(unittest.TestCase):
     def test_equivalent_places_and_weak_tests_in_the_report(self):
         task = {"strata": {}, "primary_files": ["m/src/main/java/a/A.java"], "equivalents": [["n/src/main/java/b/B.java", "n/src/main/java/b/C.java"]],
                 "gold_files": [{"path": f, "status": "M"} for f in ("m/src/main/java/a/A.java", "n/src/main/java/b/B.java", "n/src/main/java/b/C.java")]}
-        one = editgrade.grade_edit(task, ["m/src/main/java/a/A.java", "n/src/main/java/b/C.java"], {"passed": True})
+        A, B, C, X = (f"{m}/src/main/java/{p}" for m, p in (("m", "a/A.java"), ("n", "b/B.java"), ("n", "b/C.java"), ("n", "b/X.java")))
+        one = editgrade.grade_edit(task, [A, C], {"passed": True})
         self.assertEqual((one["dependents_forgotten"], one["files_by_kind"]["code_changed"]["recall"]), ([], 1.0))
-        none = editgrade.grade_edit(task, ["m/src/main/java/a/A.java"], {"passed": True})
+        none = editgrade.grade_edit(task, [A], {"passed": True})
         self.assertEqual(len(none["dependents_forgotten"]), 2)
+        self.assertEqual(none["files_by_kind"]["code_changed"]["recall"], 0.5)
+        # One of a group is one hit: precision is not inflated by the place that was not used.
+        noisy = editgrade.grade_edit(task, [A, C, X, X.replace("X", "Y")], {"passed": True})["files_by_kind"]["code_changed"]
+        self.assertEqual((noisy["precision"], noisy["recall"], noisy["tp"], noisy["n_changed"]), (0.5, 1.0, 2, 4))
+        self.assertEqual(editgrade.grade_edit(task, [A, B, C], {"passed": True})["files_by_kind"]["code_changed"]["precision"], 1.0)
+        # A dependent whose part can go into a primary file is reported apart, and only there.
+        t2 = {k: v for k, v in task.items() if k != "equivalents"} | {"either": [B]}
+        g = editgrade.grade_edit(t2, [A], {"passed": True})["dependents"]
+        self.assertEqual((g["n"], g["forgotten"], g["by_kind"]["either"]), (1, [C], {"n": 1, "forgotten": [B]}))
+        repos = {"r": {"name": "r", "commit": "c"}}
+        base = {"id": "t", "repo": "r", "type": "edit", "answer_kind": "diff", "question": "q", "rationale": "r", "primary_files": [A],
+                "gold_files": task["gold_files"]}
+        self.assertTrue(any("never forgotten" in p for p in check_tasks([base | {"equivalents": [[A, B]]}], repos, check_evidence=False)))
+        self.assertTrue(any("either must name" in p for p in check_tasks([base | {"either": [A]}], repos, check_evidence=False)))
+        self.assertEqual(check_tasks([base | {"equivalents": [[B, C]]}], repos, check_evidence=False), [])
         rows = [{"condition": "none", "edit": one}, {"condition": "none", "edit": none, "weak_test": True}, {"condition": "D", "edit": one}]
         text = "\n".join(editgrade.report_lines(rows))
-        self.assertIn("| `none` | all | 2 | 1.00 | 0.67 | 1.00 | 0.50 | – | – |", text)
+        self.assertIn("| `none` | all | 2 | 1.00 | 0.75 | 1.00 | 0.50 | – | – |", text)
         self.assertIn("| `none` | without weakly tested | 1 | 1.00 | 1.00 |", text)
         self.assertEqual(editgrade.report_lines([{"condition": "none", "edit": one}]), [])
 

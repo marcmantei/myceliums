@@ -257,6 +257,7 @@ def cmd_build(args) -> int:
             **({"build_overlay": build_overlay} if build_overlay else {}),
             "allowed_commands": [{"prefix": "./gradlew", "args": GRADLE_ARGS}],
             **({"equivalents": s["equivalents"]} if s.get("equivalents") else {}),
+            **({"either": s["either"]} if s.get("either") else {}),
             **({"untested": s["untested"]} if s.get("untested") else {}),
             **({"weak_test": s["weak_test"]} if s.get("weak_test") else {}),
             "test_timeout_s": s.get("test_timeout_s", 1800),

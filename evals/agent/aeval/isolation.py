@@ -2,31 +2,39 @@
 
 A commit-replay session must not find the replayed commit: the gold files,
 later parents, the history clone, the task file and other sessions'
-transcripts lie on the same disk, and the commit is public. Three layers, the
-same in every arm:
+transcripts lie on the same disk, and the commit is public. The ``claude``
+process itself runs as in daily use (its login, token refresh and API calls
+are not touched); **what the agent executes** is confined, the same in every
+arm (:func:`session_settings`, passed with ``--settings``, which a repository's
+files cannot loosen):
 
-1. on macOS the whole session (and the test command that grades it) runs under
-   ``sandbox-exec`` with :func:`profile`: under the home directory and
-   ``/private/tmp`` the kernel lets it read only what it needs
-   (:func:`readable`), whatever the shell command looks like, also from a test
-   the agent wrote and Gradle runs;
-2. the PreToolUse hook of :mod:`aeval.bashcmd` (``isolated-hook``): tool calls
-   stay in the working copy, no network program, no interpreter, one Gradle
-   rule; a command its parser cannot fully account for is refused;
-3. :func:`audit` scans the transcript afterwards with raw-text tests that share
+1. **Bash**: Claude Code's own sandbox (Seatbelt). Under the home directory,
+   ``/private/tmp``, the temporary directories, ``/Volumes`` and
+   ``/Users/Shared`` only what a session needs is readable (:func:`readable`),
+   the network is closed except loopback, nothing runs unsandboxed
+   (``allowUnsandboxedCommands: false``, no excluded commands), and the
+   session does not start without it (``failIfUnavailable``). It holds for
+   every child process, also for a test the agent wrote and Gradle runs.
+2. **Read, Grep, Glob, Edit, Write** run inside ``claude``: they are confined by
+   ``blockReads/WritesOutsideWorkingDirectories``, deny rules and
+3. the **hook** of :mod:`aeval.bashcmd` (``isolated-hook``) on every tool call
+   (myceliums calls included), on canonical paths; a command its parser cannot
+   account for is refused.
+4. The **test command that grades** a session runs under :func:`grading_profile`
+   (``sandbox-exec``): the same files, no network but loopback, no keychain and
+   no security services.
+5. :func:`audit` scans the transcript afterwards with raw-text tests that share
    no code with the hook, and reports where the two disagree.
 
 Threat model: a cooperative agent that has been told to work in its checkout,
-audited per session. Not covered: the network is refused by the hook only (the
-session needs the model's API, so the kernel cannot deny it), so code the
-agent writes and runs through Gradle could open a connection (the build's
-HTTP(S) proxy points at a closed port); ``/private/var/folders`` (the user's
-temporary directory, which Java uses) and system directories stay readable,
-and names and times of every file. The CLI's login is in the keychain, whose files
-stay readable (encrypted; the hook refuses the `security` program), unless the
-caller passes `CLAUDE_CODE_OAUTH_TOKEN`, which every process of the session
-then inherits. Spring's commits are public and may be in
-the model's training data.
+audited per session. Not covered: Claude Code's sandbox cannot close macOS's
+security services (lookups of ``com.apple.SecurityServer`` and
+``com.apple.securityd.xpc`` succeed in 2.1.331; its settings only add services),
+the keychain files are closed;  ``claude``, the myceliums server and the
+hooks run with the user's access; the names of files outside may stay visible;
+Gradle's home is shared and writable, so a session could leave something for a
+later one (not init scripts, settings or the wrapper: those are closed); Spring's
+commits are public and may be in the model's training data.
 """
 
 from __future__ import annotations
@@ -34,6 +42,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -45,43 +54,102 @@ KINDS = ("outside", "network", "gradle")
 MARKER = "Not allowed in this session:"
 
 
+# Closed to sandboxed commands and to grading unless readable() names it.
+CLOSED = ("/private/tmp", "/tmp", "/private/var/folders", "/var/folders", "/Users/Shared", "/Volumes", "/.vol",
+          "/System/Volumes/Data/Users", "/System/Volumes/Data/private/tmp", "/private/var/db/mds")
+# Closed even inside what is readable or re-opened by Claude Code.
+NEVER = ("Library/Keychains", ".claude/projects", ".claude/history.jsonl", ".claude/file-history",
+         ".claude/.credentials.json", ".claude/sessions", ".claude/paste-cache", ".claude/plans", ".claude.json",
+         ".gitconfig", ".config", ".ssh", ".zsh_history")
+SECRET_ENV = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_SECURESTORAGE_CONFIG_DIR", "CLAUDE_CONFIG_DIR",
+              "GH_TOKEN", "GITHUB_TOKEN")
+SECURITY_SERVICES = ("com.apple.SecurityServer", "com.apple.securityd", "com.apple.securityd.xpc", "com.apple.secd",
+                     "com.apple.security.agent", "com.apple.security.authhost", "com.apple.securityd.general",
+                     "com.apple.ctkd.token-client")
+
+
 def protected_roots() -> list[Path]:
     """Where nothing may be read unless :func:`readable` names it; ``AEVAL_PROTECT``
     (paths separated by ``:``) adds some."""
-    roots = [Path.home(), Path("/private/tmp"), config.cache_dir(), config.EVAL_DIR.parent.parent]
+    roots = [Path.home(), *map(Path, CLOSED), config.cache_dir(), config.EVAL_DIR.parent.parent]
     roots += [Path(p) for p in os.environ.get("AEVAL_PROTECT", "").split(":") if p]
-    return list(dict.fromkeys(Path(os.path.realpath(r)) for r in roots))
+    real = list(dict.fromkeys(Path(os.path.realpath(r)) for r in roots))
+    # Claude Code shows the model this list: whole regions, not the names of what lies in them.
+    return [r for r in real if not any(o != r and o in r.parents for o in real)]
 
 
 def gradle_home(env: dict) -> Path:
-    return Path(env.get("GRADLE_USER_HOME") or Path.home() / ".gradle")
+    return Path(os.path.realpath(env.get("GRADLE_USER_HOME") or Path.home() / ".gradle"))
 
 
-def readable(tmp: Path, workdir: Path, claude: str, env: dict, myc: list[Path]) -> tuple[list[Path], list[Path]]:
-    """``(read and write, read only)`` of one session: its working copy and its
-    own temporary directory (index copy, hook, configuration and temporary
-    files of this session's Claude Code), Gradle's home; the CLI's binary, the
-    JDK, and in the arms with myceliums its binary and embedding models."""
-    rw = [workdir, tmp, gradle_home(env)]
-    ro = [Path(claude)]
-    if not (os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")):
-        ro.append(Path.home() / "Library" / "Keychains")  # the CLI's login; its credentials file is not needed
-    ro += [Path(env[k]) for k in ("JAVA_HOME",) if env.get(k)] + list(myc)
-    return rw, ro
+def never(env: dict) -> list[str]:
+    """Paths and patterns that stay closed inside readable places: secrets of
+    the user's configuration, Gradle's build cache, stored scans and daemon
+    logs (other builds' output)."""
+    g = gradle_home(env)
+    return ([str(Path.home() / n) for n in NEVER]
+            + [f"/private/tmp/claude-{os.getuid()}", f"/tmp/claude-{os.getuid()}"]  # every session's command output
+            + [str(g / "caches" / "build-cache-1"), str(g / "build-scan-data"), str(g / "daemon" / "**" / "*.out.log")])
+
+
+def unwritable(workdir: Path, env: dict) -> list[str]:
+    """What a command may not change although it lies in a writable place:
+    Claude Code's settings in the working copy, the Gradle wrapper, and what
+    would carry code into a later session through Gradle's home."""
+    w, g = Path(os.path.realpath(workdir)), gradle_home(env)
+    return ([str(w / n) for n in (".claude", ".mcp.json", "gradle/wrapper", "gradlew", "gradlew.bat", ".git/hooks", ".git/config")]
+            + [str(g / n) for n in ("init.d", "init.gradle", "init.gradle.kts", "gradle.properties", "wrapper")])
+
+
+def readable(tmp: Path, workdir: Path, env: dict, myc: list[Path]) -> tuple[list[Path], list[Path]]:
+    """``(read and write, read only)`` for what a session executes: its working
+    copy, its temporary files, Gradle's home; the JDK; in the arms with
+    myceliums also the binary, the models and this session's index copy."""
+    rw = [workdir, tmp / "t", gradle_home(env)] + ([tmp / "data", tmp / "home"] if myc else [])
+    ro = [tmp / "g"] + [Path(env[k]) for k in ("JAVA_HOME",) if env.get(k)] + ([tmp / "bin"] if myc else []) + list(myc)
+    real = lambda ps: [Path(os.path.realpath(p)) for p in ps]  # noqa: E731
+    return real(rw), real(ro)
+
+
+def session_settings(tmp: Path, workdir: Path, env: dict, myc: list[Path], hook: str | None) -> dict:
+    """Settings of one isolated session; the arms differ in ``--search`` of the
+    hook's command and in the myceliums paths."""
+    rw, ro = readable(tmp, workdir, env, myc)
+    closed = [str(r) for r in protected_roots()] + never(env)
+    work = os.path.realpath(workdir)
+    # Deny rules also close their paths to sandboxed commands, so not Gradle's home or the JDK's parent; the two
+    # blocks below keep the file tools inside the working copy anyway.
+    deny = [f"{t}(/{p}/**)" for t in ("Read", "Edit") for p in
+            ("/Volumes", "/Users/Shared", str(Path.home() / "Library"), str(Path.home() / "SYNC"), str(Path.home() / ".ssh"))]
+    deny += [f"Edit(/{work}/{n})" for n in (".claude/**", ".mcp.json", "gradle/wrapper/**", "gradlew", "gradlew.bat", ".git/**")]
+    return {
+        "sandbox": {
+            "enabled": True, "failIfUnavailable": True, "allowUnsandboxedCommands": False, "autoAllowBashIfSandboxed": False,
+            "excludedCommands": [], "enableWeakerNestedSandbox": False, "enableWeakerNetworkIsolation": False,
+            "allowAppleEvents": False,
+            "filesystem": {"denyRead": closed, "allowRead": [str(p) for p in rw + ro],
+                           "allowWrite": [str(p) for p in rw if p != Path(work)], "denyWrite": unwritable(workdir, env)},
+            # (CLAUDE_CODE_SUBPROCESS_ENV_SCRUB would also drop the pinned git configuration.)
+            "credentials": {"envVars": [{"name": n, "mode": "deny"} for n in SECRET_ENV]},
+            "network": {"allowedDomains": [], "deniedDomains": ["*"], "strictAllowlist": True, "allowLocalBinding": True,
+                        "allowUnixSockets": [], "allowAllUnixSockets": False, "allowMachLookup": []},
+        },
+        "permissions": {"deny": deny, "blockReadsOutsideWorkingDirectories": True,
+                        "blockWritesOutsideWorkingDirectories": True},
+        **({"hooks": {"PreToolUse": [{"matcher": "*", "hooks": [{"type": "command", "command": hook}]}]}} if hook else {}),
+    }
 
 
 def _q(path) -> str:
     return '"' + os.path.realpath(path).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def profile(rw: list[Path], ro: list[Path] = (), roots: list[Path] | None = None,
-            never: list[Path] = (), never_read: list[str] = ()) -> str:
+def profile(rw: list[Path], ro: list[Path] = (), roots: list[Path] | None = None, closed: list[str] = (),
+            unwritable: list[str] = ()) -> str:
     """Seatbelt profile, last matching rule wins: nothing of the protected
-    roots can be read or written (names and times stay visible), except
-    ``rw`` and ``ro``; ``never`` stays closed inside them (Gradle's build
-    cache and stored scans), ``never_read`` are regexes of files that may be
-    written but not read (Gradle daemon logs, which hold other builds'
-    output)."""
+    roots can be read or written except ``rw`` and ``ro``; ``closed`` (paths, or
+    patterns with ``*``) stays closed inside them and ``unwritable`` read-only;
+    no network but loopback, no security services."""
     sub = lambda paths: " ".join(f"(subpath {_q(p)})" for p in paths)  # noqa: E731
     out = ["(version 1)", "(allow default)",
            f"(deny file-read-data file-read-xattr file-write* {sub(protected_roots() if roots is None else roots)})"]
@@ -89,28 +157,24 @@ def profile(rw: list[Path], ro: list[Path] = (), roots: list[Path] | None = None
         out.append(f"(allow file-read-data file-read-xattr {sub(ro)})")
     if rw:
         out.append(f"(allow file-read-data file-read-xattr file-write* {sub(rw)})")
-    if never:
-        out.append(f"(deny file-read-data file-read-xattr file-write* {sub(never)})")
-    out += [f'(deny file-read-data (regex #"{rx}"))' for rx in never_read]
+    for c in closed:
+        if "*" in c:
+            rx = re.escape(c).replace(r"\*\*", ".*").replace(r"\*", "[^/]*").replace('"', "")
+            out.append(f'(deny file-read-data (regex #"^{rx}$"))')
+        else:
+            out.append(f"(deny file-read-data file-read-xattr file-write* (subpath {_q(c)}))")
+    if unwritable:
+        out.append(f"(deny file-write* {sub(unwritable)})")
+    out += ["(deny network-outbound)", '(allow network-outbound (remote ip "localhost:*"))',
+            "(deny mach-lookup " + " ".join(f'(global-name "{n}")' for n in SECURITY_SERVICES) + ")"]
     return "\n".join(out) + "\n"
 
 
-def session_profile(tmp: Path, workdir: Path, hooks: Path, claude: str, env: dict, myc: list[Path]) -> str:
-    rw, ro = readable(tmp, workdir, claude, env, myc)
-    g = Path(os.path.realpath(gradle_home(env)))
-    return profile(rw + [hooks], ro, never=[g / "caches" / "build-cache-1", g / "build-scan-data"],
-                   never_read=["^" + re.escape(str(g)) + r"/daemon/.*[.]out[.]log$"])
-
-
-def session_environment(tmp: Path) -> dict[str, str]:
-    """A Claude Code configuration and temporary directory of this session
-    alone; the login stays the user's (read from its secure storage)."""
-    for d in ("claude-config", "claude-tmp", "zdotdir", "t"):
-        (tmp / d).mkdir(exist_ok=True)
-    return {"CLAUDE_CONFIG_DIR": str(tmp / "claude-config"), "CLAUDE_CODE_TMPDIR": str(tmp / "claude-tmp"),
-            "TMPDIR": str(tmp / "t"), "ZDOTDIR": str(tmp / "zdotdir"),
-            "CLAUDE_SECURESTORAGE_CONFIG_DIR": os.environ.get("CLAUDE_SECURESTORAGE_CONFIG_DIR")
-            or os.environ.get("CLAUDE_CONFIG_DIR") or str(Path.home() / ".claude")}
+def grading_profile(tmp: Path, workdir: Path, env: dict) -> str:
+    """For the test command that grades a session (it runs code the agent
+    wrote); no myceliums paths, the same in every arm."""
+    rw, ro = readable(tmp, workdir, env, [])
+    return profile(rw, ro, closed=never(env), unwritable=unwritable(workdir, env)[-5:])
 
 
 def sandboxed(cmd: list[str], profile_path: Path) -> list[str]:
@@ -119,6 +183,21 @@ def sandboxed(cmd: list[str], profile_path: Path) -> list[str]:
 
 def available() -> bool:
     return sys.platform == "darwin" and os.access(SANDBOX, os.X_OK)
+
+
+def session_environment(tmp: Path) -> dict[str, str]:
+    """Temporary files of this session alone, also the JVM's (macOS's Java takes
+    the user's directory whatever ``TMPDIR`` says), and no shell start files.
+    Nothing about the login: ``claude`` finds it as always."""
+    for d in ("t", "zdotdir", "g"):
+        (tmp / d).mkdir(exist_ok=True)
+    git = subprocess.run(["/usr/bin/xcrun", "-f", "git"], capture_output=True, text=True).stdout.strip() \
+        if Path("/usr/bin/xcrun").exists() else ""
+    if git and not (tmp / "g" / "git").exists():  # macOS's /usr/bin/git is a shim that looks around outside first
+        (tmp / "g" / "git").symlink_to(git)
+    return {"TMPDIR": str(tmp / "t"), "CLAUDE_CODE_TMPDIR": str(tmp / "t"),
+            "ZDOTDIR": str(tmp / "zdotdir"),
+            "JAVA_TOOL_OPTIONS": f"-Djava.io.tmpdir={tmp / 't'} -XX:-UsePerfData"}
 
 
 # Raw text, on purpose without the hook's parser: program names, addresses, paths.
@@ -222,9 +301,11 @@ def _kinds(name: str, inp: dict, root: str) -> set[str]:
     else:
         return set()
     kinds = set()
+    if name in ("Grep", "Glob"):  # `{/etc,a}/x`: every alternative is a path
+        texts += [part for t in texts for part in re.split(r"[{},]", t) if part.startswith(("/", "~", "..")) and "{" in t]
     for t in texts:
-        if "/claude-config/projects/" in t and t.rstrip("/").split("/")[-2:-1] == ["tool-results"] and "/../" not in t:
-            continue  # a saved result of this session
+        if "/.claude/projects/" in t and t.rstrip("/").split("/")[-2:-1] == ["tool-results"] and "/../" not in t:
+            continue  # a saved result; the hook admits this session's own only
         full = os.path.realpath(os.path.join(root, os.path.expanduser(t)))
         if t and not (full == root or full.startswith(root + "/")) or _UP.search(t):
             kinds.add("outside")

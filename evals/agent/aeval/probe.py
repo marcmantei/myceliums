@@ -15,7 +15,8 @@ from . import config
 from .bashcmd import ISOLATED_MARKER
 from .stream import parse_transcript
 
-USER_MEMORY = str(Path(os.path.expanduser("~")) / ".claude" / "CLAUDE.md")
+# The heading Claude Code puts in front of a memory file (the bare path also stands in the sandbox's description).
+USER_MEMORY = "Contents of " + str(Path(os.path.expanduser("~")) / ".claude" / "CLAUDE.md")
 
 
 def _texts(value) -> list[str]:
@@ -110,6 +111,7 @@ def summarise(run_dir: Path, condition: str) -> dict:
         "search_result": _tool_result_text(main, "toolu_probe_search")[:3000] or None,
         # #183: the task's test command, which D's allowlist must let run.
         "test_result": _tool_result_text(main, "toolu_probe_test")[:300] or None,
+        "test_results": [x for x in (_tool_result_text(main, f"toolu_probe_test{n or ''}")[:260] for n in range(12)) if x],
     }
     problems = []
     # Every arm must see the project's own instructions (AGENTS.md), C through setup-claude's CLAUDE.md too.

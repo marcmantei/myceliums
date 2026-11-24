@@ -116,20 +116,11 @@
     "verdict": "ok",
     "comment": "Every new name the tests use is stated: DEFAULT_MAX_NESTED_PATH_DEPTH=100, set/getMaxNestedPathDepth on ConfigurablePropertyAccessor (tests call them on AbstractPropertyAccessor; adding them there is a dependent) and on DataBinder, the message suffix, the negative-value IAE message, and the DataBinder 'already initialized' ISE text. The depth semantics (limit inclusive, 0 still allows simple/indexed/mapped access) are also stated. The last sentence (keep recursing through the protected getPropertyAccessorForPropertyPath) borders on over-specification. It is justified: BeanWrapperTests counts 3 invocations of an override, and a depth-threading private recursion would fail that test. The parent already recurses this way, so the sentence only forbids a regression. The test_command adds DirectFieldAccessorTests, which is not in the overlay; that is correct because it inherits from the changed abstract AbstractPropertyAccessorTests. The deep-path tests (100_000 segments) are deterministic once the depth check runs before the recursion."
    },
-   "untested": "In DataBinder only nested record arguments are tested for constructor binding; a passing solution may omit the limit for indexed and mapped parameters (createList/createMap/createArray/createIndexedValue), which the question explicitly requires. DataBinder's own rejection of negative values is not tested either.",
-   "equivalents": [
-    [
-     "spring-beans/src/main/java/org/springframework/beans/AbstractPropertyAccessor.java",
-     "spring-beans/src/main/java/org/springframework/beans/AbstractNestablePropertyAccessor.java"
-    ],
-    [
-     "spring-context/src/main/java/org/springframework/validation/BeanPropertyBindingResult.java",
-     "spring-context/src/main/java/org/springframework/validation/DataBinder.java"
-    ],
-    [
-     "spring-context/src/main/java/org/springframework/validation/DirectFieldBindingResult.java",
-     "spring-context/src/main/java/org/springframework/validation/DataBinder.java"
-    ]
+   "untested": "In DataBinder only nested record arguments are tested for constructor binding; a passing solution may omit the limit for indexed and mapped parameters (createList/createMap/createArray/createIndexedValue), which the question explicitly requires. DataBinder's own rejection of negative values is not tested either. Three dependents can be left out by putting their part into a primary file; reported apart (`either`).",
+   "either": [
+    "spring-beans/src/main/java/org/springframework/beans/AbstractPropertyAccessor.java",
+    "spring-context/src/main/java/org/springframework/validation/BeanPropertyBindingResult.java",
+    "spring-context/src/main/java/org/springframework/validation/DirectFieldBindingResult.java"
    ]
   },
   {
@@ -530,7 +521,7 @@
     "verdict": "ok",
     "comment": "Both new signatures are stated exactly; the tests only call StandardApiVersionDeprecationHandler.handleVersion with the new signatures. Tests cannot check that the handler is actually passed through by the handler mappings, so they mostly verify compilation; the dependents (ApiVersionStrategy.handleDeprecations in both modules, DefaultApiVersionStrategy, StandardApiVersionDeprecationHandler, both AbstractHandlerMapping) are well hidden."
    },
-   "untested": "No test checks which handler object is passed. Because ApiVersionStrategy.handleDeprecations is not fixed by the question, a solution that passes any object from DefaultApiVersionStrategy (or adds an overload) and leaves both ApiVersionStrategy and both AbstractHandlerMapping files untouched compiles and passes without supplying the selected handler."
+   "weak_test": "No test checks which handler object is passed. Because ApiVersionStrategy.handleDeprecations is not fixed by the question, a solution that passes any object from DefaultApiVersionStrategy (or adds an overload) and leaves both ApiVersionStrategy and both AbstractHandlerMapping files untouched compiles and passes without supplying the selected handler."
   },
   {
    "id": "bean-provider-parameterized-type-reference",

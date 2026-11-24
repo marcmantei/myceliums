@@ -779,21 +779,12 @@
      "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "equivalents": [
-    [
-     "spring-beans/src/main/java/org/springframework/beans/AbstractPropertyAccessor.java",
-     "spring-beans/src/main/java/org/springframework/beans/AbstractNestablePropertyAccessor.java"
-    ],
-    [
-     "spring-context/src/main/java/org/springframework/validation/BeanPropertyBindingResult.java",
-     "spring-context/src/main/java/org/springframework/validation/DataBinder.java"
-    ],
-    [
-     "spring-context/src/main/java/org/springframework/validation/DirectFieldBindingResult.java",
-     "spring-context/src/main/java/org/springframework/validation/DataBinder.java"
-    ]
+   "either": [
+    "spring-beans/src/main/java/org/springframework/beans/AbstractPropertyAccessor.java",
+    "spring-context/src/main/java/org/springframework/validation/BeanPropertyBindingResult.java",
+    "spring-context/src/main/java/org/springframework/validation/DirectFieldBindingResult.java"
    ],
-   "untested": "In DataBinder only nested record arguments are tested for constructor binding; a passing solution may omit the limit for indexed and mapped parameters (createList/createMap/createArray/createIndexedValue), which the question explicitly requires. DataBinder's own rejection of negative values is not tested either.",
+   "untested": "In DataBinder only nested record arguments are tested for constructor binding; a passing solution may omit the limit for indexed and mapped parameters (createList/createMap/createArray/createIndexedValue), which the question explicitly requires. DataBinder's own rejection of negative values is not tested either. Three dependents can be left out by putting their part into a primary file; reported apart (`either`).",
    "test_timeout_s": 1800,
    "strata": {
     "files": 12,
@@ -2168,7 +2159,7 @@
      "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
-   "untested": "No test checks which handler object is passed. Because ApiVersionStrategy.handleDeprecations is not fixed by the question, a solution that passes any object from DefaultApiVersionStrategy (or adds an overload) and leaves both ApiVersionStrategy and both AbstractHandlerMapping files untouched compiles and passes without supplying the selected handler.",
+   "weak_test": "No test checks which handler object is passed. Because ApiVersionStrategy.handleDeprecations is not fixed by the question, a solution that passes any object from DefaultApiVersionStrategy (or adds an overload) and leaves both ApiVersionStrategy and both AbstractHandlerMapping files untouched compiles and passes without supplying the selected handler.",
    "test_timeout_s": 1800,
    "strata": {
     "files": 12,
