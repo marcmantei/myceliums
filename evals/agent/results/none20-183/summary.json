@@ -1,0 +1,772 @@
+{
+ "sessions": 20,
+ "solved": 20,
+ "mean_recall": 0.66125,
+ "sd_recall_between_tasks": 0.42461088998603985,
+ "tasks_at_one": 10,
+ "pooled_recall": 0.7916666666666666,
+ "by_type": {
+  "docs": {
+   "units": 13,
+   "touched": 2,
+   "tasks": 9,
+   "mean_over_tasks": 0.2222222222222222
+  },
+  "remote": {
+   "units": 45,
+   "touched": 44,
+   "tasks": 14,
+   "mean_over_tasks": 0.9920634920634921
+  },
+  "forced_tests": {
+   "units": 14,
+   "touched": 11,
+   "tasks": 7,
+   "mean_over_tasks": 0.5714285714285714
+  }
+ },
+ "recall_all_tests": 0.4541106442577031,
+ "tokens_total": 5743243.0,
+ "tokens_mean": 287162.15,
+ "tokens_sd_between_tasks": 245151.53129941897,
+ "usd_total": 4.4739042,
+ "usd_mean": 0.22369520999999998,
+ "wall_s_mean": 172.323,
+ "wall_net_s_mean": 172.323,
+ "main_run": {
+  "sessions": 180,
+  "usd": 40.2651378,
+  "usd_95": [
+   31.433905282500003,
+   50.81828514749999
+  ],
+  "hours": 13.73475,
+  "hours_95": [
+   12.120770625000002,
+   15.629620625
+  ],
+  "hours_without_stalls": 13.73475
+ },
+ "recall_noise_only": {
+  "paired_sd": 0.3466933398982804,
+  "one test": 0.21718725594453187,
+  "first Holm step, three tests": 0.2508334585827469,
+  "first Holm step, six tests": 0.2697705781284558
+ },
+ "closing_docs_misses": {
+  "gain": 0.25375000000000003,
+  "sd_over_tasks": 0.40670976008373394,
+  "power": {
+   "one test": 0.7968003715144186,
+   "first Holm step, three tests": 0.6540314666165061,
+   "first Holm step, six tests": 0.560386811287969
+  }
+ },
+ "tasks": {
+  "api-version-deprecation-handler-handler-arg": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 1.0,
+   "docs": "0/0",
+   "remote": "2/2",
+   "forced_tests": "2/2",
+   "new_tests": "0/0",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 188991.0,
+   "usd": 0.18613780000000002,
+   "complete_usage": true,
+   "api_calls": 8,
+   "wall_s": 168.24,
+   "wall_net_s": 168.24,
+   "grading_s": 45.13,
+   "refused_calls": 3,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 43.6,
+   "load_grading_mean": 27.3,
+   "load_session_max": 73.8
+  },
+  "bean-provider-parameterized-type-reference": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 0.8333333333333334,
+   "docs": "0/0",
+   "remote": "5/5",
+   "forced_tests": "0/0",
+   "new_tests": "0/1",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 157647.0,
+   "usd": 0.15795789999999998,
+   "complete_usage": true,
+   "api_calls": 8,
+   "wall_s": 339.13,
+   "wall_net_s": 339.13,
+   "grading_s": 97.84,
+   "refused_calls": 1,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 69.9,
+   "load_grading_mean": 113.5,
+   "load_session_max": 98.8
+  },
+  "beans-max-nested-path-depth": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.0,
+   "recall_all_tests": 0.0,
+   "docs": "0/1",
+   "remote": "0/0",
+   "forced_tests": "0/0",
+   "new_tests": "0/5",
+   "optional": "0/0",
+   "missed": [
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc"
+     ]
+    }
+   ],
+   "tokens": 400085.0,
+   "usd": 0.28898890000000005,
+   "complete_usage": true,
+   "api_calls": 13,
+   "wall_s": 213.71,
+   "wall_net_s": 213.71,
+   "grading_s": 81.24,
+   "refused_calls": 0,
+   "claude_refusals": 1,
+   "claude_refusals_cd": 1,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 102.3,
+   "load_grading_mean": 129.4,
+   "load_session_max": 134.1
+  },
+  "client-builders-deep-copy-default-headers-cookies": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 0.4,
+   "docs": "0/0",
+   "remote": "2/2",
+   "forced_tests": "0/0",
+   "new_tests": "0/3",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 278983.0,
+   "usd": 0.21594410000000003,
+   "complete_usage": true,
+   "api_calls": 11,
+   "wall_s": 248.39,
+   "wall_net_s": 248.39,
+   "grading_s": 76.96,
+   "refused_calls": 2,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 21.0,
+   "load_grading_mean": 19.6,
+   "load_session_max": 32.3
+  },
+  "content-negotiation-no-fallback-mapping": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 0.6666666666666666,
+   "docs": "0/0",
+   "remote": "1/1",
+   "forced_tests": "0/0",
+   "new_tests": "1/2",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 211427.0,
+   "usd": 0.1534894,
+   "complete_usage": true,
+   "api_calls": 10,
+   "wall_s": 165.86,
+   "wall_net_s": 165.86,
+   "grading_s": 45.02,
+   "refused_calls": 0,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 24.4,
+   "load_grading_mean": 30.9,
+   "load_session_max": 39.5
+  },
+  "deferred-bean-registrar-contains-bean": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 0.3,
+   "docs": "0/0",
+   "remote": "3/3",
+   "forced_tests": "0/0",
+   "new_tests": "0/7",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 335208.0,
+   "usd": 0.3275441,
+   "complete_usage": true,
+   "api_calls": 10,
+   "wall_s": 220.21,
+   "wall_net_s": 220.21,
+   "grading_s": 88.02,
+   "refused_calls": 2,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 48.3,
+   "load_grading_mean": 39.4,
+   "load_session_max": 64.7
+  },
+  "error-response-interceptor-with-request": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 0.6,
+   "docs": "0/0",
+   "remote": "6/6",
+   "forced_tests": "0/0",
+   "new_tests": "0/4",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 271660.0,
+   "usd": 0.2155355,
+   "complete_usage": true,
+   "api_calls": 11,
+   "wall_s": 167.45,
+   "wall_net_s": 167.45,
+   "grading_s": 101.04,
+   "refused_calls": 1,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 36.2,
+   "load_grading_mean": 69.3,
+   "load_session_max": 57.2
+  },
+  "form-converter-map-payloads": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.8,
+   "recall_all_tests": 0.8,
+   "docs": "0/1",
+   "remote": "3/3",
+   "forced_tests": "1/1",
+   "new_tests": "0/0",
+   "optional": "0/0",
+   "missed": [
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc"
+     ]
+    }
+   ],
+   "tokens": 397621.0,
+   "usd": 0.27260680000000004,
+   "complete_usage": true,
+   "api_calls": 15,
+   "wall_s": 388.58,
+   "wall_net_s": 388.58,
+   "grading_s": 75.21,
+   "refused_calls": 2,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 103.9,
+   "load_grading_mean": 97.7,
+   "load_session_max": 120.4
+  },
+  "http-range-honor-if-range": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 0.5,
+   "docs": "0/0",
+   "remote": "4/4",
+   "forced_tests": "0/0",
+   "new_tests": "1/6",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 254098.0,
+   "usd": 0.2181609,
+   "complete_usage": true,
+   "api_calls": 10,
+   "wall_s": 203.26,
+   "wall_net_s": 203.26,
+   "grading_s": 64.74,
+   "refused_calls": 1,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 68.8,
+   "load_grading_mean": 40.1,
+   "load_session_max": 96.0
+  },
+  "jdbcclient-batch-entry-dsl": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 1.0,
+   "docs": "1/1",
+   "remote": "0/0",
+   "forced_tests": "3/3",
+   "new_tests": "0/0",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 1177556.0,
+   "usd": 0.6220724,
+   "complete_usage": true,
+   "api_calls": 30,
+   "wall_s": 250.08,
+   "wall_net_s": 250.08,
+   "grading_s": 39.78,
+   "refused_calls": 5,
+   "claude_refusals": 1,
+   "claude_refusals_cd": 1,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 53.8,
+   "load_grading_mean": 94.3,
+   "load_session_max": 95.1
+  },
+  "jsonl-media-type-support": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.8,
+   "recall_all_tests": 0.5714285714285714,
+   "docs": "0/0",
+   "remote": "8/9",
+   "forced_tests": "0/1",
+   "new_tests": "0/1",
+   "optional": "0/3",
+   "missed": [
+    {
+     "kind": "remote",
+     "files": [
+      "spring-web/src/main/java/org/springframework/http/codec/protobuf/ProtobufJsonEncoder.java"
+     ]
+    },
+    {
+     "kind": "forced_tests",
+     "files": [
+      "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java"
+     ]
+    }
+   ],
+   "tokens": 195616.0,
+   "usd": 0.17788379999999998,
+   "complete_usage": true,
+   "api_calls": 10,
+   "wall_s": 49.77,
+   "wall_net_s": 49.77,
+   "grading_s": 167.22,
+   "refused_calls": 4,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 73.5,
+   "load_grading_mean": 75.2,
+   "load_session_max": 81.7
+  },
+  "message-source-default-charset": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.0,
+   "recall_all_tests": 0.0,
+   "docs": "0/0",
+   "remote": "0/0",
+   "forced_tests": "0/1",
+   "new_tests": "0/0",
+   "optional": "0/0",
+   "missed": [
+    {
+     "kind": "forced_tests",
+     "files": [
+      "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java"
+     ]
+    }
+   ],
+   "tokens": 137074.0,
+   "usd": 0.1240616,
+   "complete_usage": true,
+   "api_calls": 8,
+   "wall_s": 146.04,
+   "wall_net_s": 146.04,
+   "grading_s": 60.43,
+   "refused_calls": 1,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 73.0,
+   "load_grading_mean": 54.7,
+   "load_session_max": 99.2
+  },
+  "mime-type-parameter-names-case-insensitive": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 0.3333333333333333,
+   "docs": "0/0",
+   "remote": "1/1",
+   "forced_tests": "0/0",
+   "new_tests": "0/2",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 170231.0,
+   "usd": 0.1024792,
+   "complete_usage": true,
+   "api_calls": 10,
+   "wall_s": 29.25,
+   "wall_net_s": 29.25,
+   "grading_s": 129.49,
+   "refused_calls": 1,
+   "claude_refusals": 1,
+   "claude_refusals_cd": 1,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 32.2,
+   "load_grading_mean": 51.3,
+   "load_session_max": 35.0
+  },
+  "observation-record-handled-exception": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.625,
+   "recall_all_tests": 0.29411764705882354,
+   "docs": "0/3",
+   "remote": "5/5",
+   "forced_tests": "0/0",
+   "new_tests": "0/9",
+   "optional": "0/0",
+   "missed": [
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+     ]
+    },
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java"
+     ]
+    },
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java"
+     ]
+    }
+   ],
+   "tokens": 222257.0,
+   "usd": 0.22285459999999999,
+   "complete_usage": true,
+   "api_calls": 9,
+   "wall_s": 169.21,
+   "wall_net_s": 169.21,
+   "grading_s": 78.52,
+   "refused_calls": 1,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 55.7,
+   "load_grading_mean": 66.2,
+   "load_session_max": 62.9
+  },
+  "retry-max-attempts-to-max-retries": {
+   "status": "ok",
+   "solved": true,
+   "recall": 1.0,
+   "recall_all_tests": 1.0,
+   "docs": "1/1",
+   "remote": "2/2",
+   "forced_tests": "5/5",
+   "new_tests": "0/0",
+   "optional": "0/0",
+   "missed": [],
+   "tokens": 581447.0,
+   "usd": 0.40513430000000006,
+   "complete_usage": true,
+   "api_calls": 18,
+   "wall_s": 203.83,
+   "wall_net_s": 203.83,
+   "grading_s": 45.05,
+   "refused_calls": 6,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 36.1,
+   "load_grading_mean": 50.2,
+   "load_session_max": 56.6
+  },
+  "retryable-method-retry-event": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.5,
+   "recall_all_tests": 0.2,
+   "docs": "0/0",
+   "remote": "1/1",
+   "forced_tests": "0/1",
+   "new_tests": "0/3",
+   "optional": "0/0",
+   "missed": [
+    {
+     "kind": "forced_tests",
+     "files": [
+      "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java"
+     ]
+    }
+   ],
+   "tokens": 165054.0,
+   "usd": 0.21039890000000003,
+   "complete_usage": true,
+   "api_calls": 7,
+   "wall_s": 131.17,
+   "wall_net_s": 131.17,
+   "grading_s": 59.5,
+   "refused_calls": 1,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 40.8,
+   "load_grading_mean": 66.9,
+   "load_session_max": 49.1
+  },
+  "servlet-response-ignore-body-flush": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.5,
+   "recall_all_tests": 0.25,
+   "docs": "0/1",
+   "remote": "1/1",
+   "forced_tests": "0/0",
+   "new_tests": "0/1",
+   "optional": "0/1",
+   "missed": [
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/appendix.adoc"
+     ]
+    }
+   ],
+   "tokens": 133798.0,
+   "usd": 0.1363034,
+   "complete_usage": true,
+   "api_calls": 8,
+   "wall_s": 161.88,
+   "wall_net_s": 161.88,
+   "grading_s": 70.97,
+   "refused_calls": 1,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 72.0,
+   "load_grading_mean": 56.3,
+   "load_session_max": 78.1
+  },
+  "spel-simple-context-restricted-conversion": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.0,
+   "recall_all_tests": 0.3333333333333333,
+   "docs": "0/2",
+   "remote": "0/0",
+   "forced_tests": "0/0",
+   "new_tests": "1/1",
+   "optional": "0/0",
+   "missed": [
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/appendix.adoc"
+     ]
+    },
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+     ]
+    }
+   ],
+   "tokens": 357077.0,
+   "usd": 0.29192520000000005,
+   "complete_usage": true,
+   "api_calls": 11,
+   "wall_s": 159.16,
+   "wall_net_s": 159.16,
+   "grading_s": 54.32,
+   "refused_calls": 4,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 37.3,
+   "load_grading_mean": 50.3,
+   "load_session_max": 49.9
+  },
+  "test-context-cache-pause-mode": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.0,
+   "recall_all_tests": 0.0,
+   "docs": "0/2",
+   "remote": "0/0",
+   "forced_tests": "0/0",
+   "new_tests": "0/3",
+   "optional": "0/0",
+   "missed": [
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/appendix.adoc"
+     ]
+    },
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc"
+     ]
+    }
+   ],
+   "tokens": 70401.0,
+   "usd": 0.1063511,
+   "complete_usage": true,
+   "api_calls": 4,
+   "wall_s": 23.06,
+   "wall_net_s": 23.06,
+   "grading_s": 327.32,
+   "refused_calls": 0,
+   "claude_refusals": 1,
+   "claude_refusals_cd": 1,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": 106.9,
+   "load_grading_mean": 71.3,
+   "load_session_max": 107.3
+  },
+  "type-mismatch-required-type-arg": {
+   "status": "ok",
+   "solved": true,
+   "recall": 0.0,
+   "recall_all_tests": 0.0,
+   "docs": "0/1",
+   "remote": "0/0",
+   "forced_tests": "0/0",
+   "new_tests": "0/1",
+   "optional": "0/0",
+   "missed": [
+    {
+     "kind": "docs",
+     "files": [
+      "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+     ]
+    }
+   ],
+   "tokens": 37012.0,
+   "usd": 0.038074300000000005,
+   "complete_usage": true,
+   "api_calls": 3,
+   "wall_s": 8.18,
+   "wall_net_s": 8.18,
+   "grading_s": 139.64,
+   "refused_calls": 0,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "disagreements": 0,
+   "kernel_refusals": 0,
+   "load_session_mean": null,
+   "load_grading_mean": 25.2,
+   "load_session_max": null
+  }
+ },
+ "detectable_tokens_share_of_mean": {
+  "C vs none": {
+   "paired_rel_sd": 0.5253184094074431,
+   "one test": 0.32908755579159205,
+   "first Holm step, three tests": 0.3800691225493886,
+   "first Holm step, six tests": 0.40876311915581065
+  },
+  "D vs none": {
+   "paired_rel_sd": 2.6939816098631275,
+   "one test": 1.6876542064029054,
+   "first Holm step, three tests": 1.9491021222344407,
+   "first Holm step, six tests": 2.0962530649519655
+  },
+  "C vs D": {
+   "paired_rel_sd": 0.9828697505080021,
+   "one test": 0.6157221945086994,
+   "first Holm step, three tests": 0.7111086094951158,
+   "first Holm step, six tests": 0.7647950228790361
+  }
+ },
+ "load_run": {
+  "min": 13.2,
+  "median": 56.5,
+  "max": 134.1
+ }
+}

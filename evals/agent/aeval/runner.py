@@ -57,6 +57,12 @@ TRANSIENT_TEXT = re.compile(
 USAGE_LIMIT_TEXT = re.compile(
     r"usage limit|limit reached|out of (extra )?usage|you'?ve (hit|reached) your\b.*\blimit", re.IGNORECASE)
 
+# The login ended or was refused (#183): the run stops, and the session is never its arm's failure.
+LOGIN_API_STATUS = {401, 403}
+LOGIN_TEXT = re.compile(
+    r"please run /login|not logged in|failed to authenticate|authentication_(?:error|failed)|invalid (?:api key|bearer token|authentication)|"
+    r"oauth token|credit balance is too low", re.IGNORECASE)
+
 PROMPT_TEMPLATE = """\
 You are working in a checkout of the {repo} repository ({language}); it is your current working directory. Answer the question below about this codebase. Investigate the code with the tools you have; do not guess.
 
@@ -783,7 +789,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             status = "max_turns"
         elif res.get("is_error") or res.get("subtype") != "success":
             api = res.get("api_error_status")
-            if (isinstance(api, int) and api in TRANSIENT_API_STATUS) or TRANSIENT_TEXT.search(text or ""):
+            if res.get("is_error") and (api in LOGIN_API_STATUS or LOGIN_TEXT.search(text or "")):
+                status = "login_error"
+            elif (isinstance(api, int) and api in TRANSIENT_API_STATUS) or TRANSIENT_TEXT.search(text or ""):
                 status = "api_error"
             elif returncode is not None and (returncode < 0 or returncode in (130, 137, 143)):
                 status = "crash"  # killed from outside (SIGINT/SIGKILL/SIGTERM): infrastructure, retried (#182)
@@ -912,6 +920,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 raise StopRun(f"account utilisation {util:.2f} >= guard {self.cfg.max_utilization}")
             if row["status"] == "isolation_error":
                 raise StopRun(f"{item.run_id}: isolation check failed: {row['isolation_problems']}")
+            if row["status"] == "login_error":
+                raise StopRun(f"{item.run_id}: the login failed")
             if row["status"] == "usage_limit":
                 raise StopRun(f"{item.run_id}: usage limit reached")
             if row["final"]:

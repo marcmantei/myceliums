@@ -474,11 +474,17 @@ def _pattern_operands(prog: str, args: list[str]) -> set[int]:
     return out
 
 
+NO_CD = ("`cd` (the shell already stands at the top of the working copy: name files by paths relative to it, for example "
+         "`grep -n x spring-core/src/main/java/A.java`; Bash itself works)")
+
+
 def isolated_bash(command: str, extra=(), here: str | None = None, root: str | None = None,
                   search: bool = False) -> tuple[bool, list[str]]:
     """The Bash policy of an isolated session: ``(ok, what is denied)``.
     ``here`` is the shell's directory, ``root`` the working copy; ``search``
-    adds :data:`SEARCH_SHELL` (every arm but D)."""
+    adds :data:`SEARCH_SHELL` (every arm but D). ``cd`` is refused in every arm,
+    with the reason: Claude Code's permission layer refuses most commands with
+    it, without one, and an agent then gave up Bash altogether (#183)."""
     here, root = here or root or "/", root or here or "/"
     if not _inside(here, root, root):
         return False, ["a shell outside the working copy"]
@@ -504,6 +510,11 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
             if not words or (words[0] not in HEADERS and not all(w in KEYWORDS for w in words)):
                 denied.append(f"`{words[0] if words else ''}`")  # `env`, a bare assignment
             elif any(outside(w, here, root) for w in words[1:]):
+                denied.append("a path outside the working copy")
+            continue
+        if prog in ("cd", "pushd", "popd"):
+            denied.append(NO_CD)
+            if any(outside(a, here, root) for a in args if not a.startswith("-")):
                 denied.append("a path outside the working copy")
             continue
         if prog in ("gradlew", "gradle") or (prog in SHELLS and any("gradlew" in a for a in args)):
@@ -536,7 +547,7 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
         if any(i not in patterns and touches_dot_git(a) for i, a in enumerate(args)):
             denied.append("a path inside .git")
             continue
-        if prog in PATH_PROGRAMS and prog != "cd" and any(_SETTINGS.search("/" + a) for a in args):
+        if prog in PATH_PROGRAMS and any(_SETTINGS.search("/" + a) for a in args):
             denied.append("Claude Code's settings")
             continue
         if prog in PATH_PROGRAMS and any("gradlew" in a or "gradle/wrapper" in a for a in args):
@@ -569,11 +580,6 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
             ok = not why
         if not ok:
             denied.extend(why)
-        elif prog == "cd":
-            target = os.path.realpath(os.path.join(here, ([a for a in args if not a.startswith("-")] or ["."])[0]))
-            if not os.path.isdir(target):
-                denied.append("`cd` to a directory that does not exist")
-            here = target
     return not denied, denied
 
 
@@ -654,7 +660,6 @@ def isolated_hook(argv: list[str], stdin=sys.stdin, stdout=sys.stdout) -> int:
         return _deny(stdout, f"{ISOLATED_MARKER} the check failed ({type(exc).__name__})")
     if why is None:
         return 0
-    # `cd` is let through, but not offered: Claude Code's own layer refuses many calls with it, and the prompt says not to.
     progs = sorted(set(D_ALLOWED) - {"cd"}) + ["head/tail as pipes"] + (sorted(SEARCH_SHELL) if search else [])
     return _deny(stdout, ISOLATED_MESSAGE.format(why=why[1], root=root, progs=", ".join(progs)))
 

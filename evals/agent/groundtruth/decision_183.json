@@ -1,0 +1,44 @@
+{
+ "label": "2026-11-24-none20",
+ "sessions": 20,
+ "arm": "none",
+ "solved": 20,
+ "mean_recall": 0.66125,
+ "shown": "0.661",
+ "statuses": {
+  "ok": 20
+ },
+ "claude_version": "2.1.331",
+ "model": "claude-sonnet-5-5",
+ "tasks_sha256": "a8d649a1ef5129b59d0e5ed8c966114cab0350207f447f1b61d281578316d3f5",
+ "per_task": {
+  "api-version-deprecation-handler-handler-arg": 1.0,
+  "bean-provider-parameterized-type-reference": 1.0,
+  "beans-max-nested-path-depth": 0.0,
+  "client-builders-deep-copy-default-headers-cookies": 1.0,
+  "content-negotiation-no-fallback-mapping": 1.0,
+  "deferred-bean-registrar-contains-bean": 1.0,
+  "error-response-interceptor-with-request": 1.0,
+  "form-converter-map-payloads": 0.8,
+  "http-range-honor-if-range": 1.0,
+  "jdbcclient-batch-entry-dsl": 1.0,
+  "jsonl-media-type-support": 0.8,
+  "message-source-default-charset": 0.0,
+  "mime-type-parameter-names-case-insensitive": 1.0,
+  "observation-record-handled-exception": 0.625,
+  "retry-max-attempts-to-max-retries": 1.0,
+  "retryable-method-retry-event": 0.5,
+  "servlet-response-ignore-body-flush": 0.5,
+  "spel-simple-context-restricted-conversion": 0.0,
+  "test-context-cache-pause-mode": 0.0,
+  "type-mismatch-required-type-arg": 0.0
+ },
+ "pooled_recall": 0.7916666666666666,
+ "mean_recall_all_tests": 0.4541106442577031,
+ "threshold": 0.9,
+ "ceiling": false,
+ "primary": [
+  "recall",
+  "tokens"
+ ]
+}

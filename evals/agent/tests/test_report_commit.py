@@ -466,6 +466,116 @@ class Decision(unittest.TestCase):
             rc.decide([row(t, "none") for t in empty], empty, "h")
 
 
+class Describe(unittest.TestCase):
+    def test_types_missed_units_and_projection(self):
+        tasks = [task(i) for i in range(1, 21)]
+        rows = [row(t, "none", touch=4 if i else 3, tokens=1000 * (i + 1), isolation_audit={"api_stall_s": 12.0 if i == 1 else 0.0, "claude_refusals": 1})
+                for i, t in enumerate(tasks)]
+        d = rc.describe(rows, tasks, {"C vs none": 0.5})
+        self.assertEqual(d["by_type"]["remote"], {"units": 20, "touched": 20, "tasks": 20, "mean_over_tasks": 1.0})
+        self.assertEqual((d["by_type"]["docs"]["units"], d["by_type"]["docs"]["touched"]), (40, 40))
+        self.assertEqual((d["by_type"]["forced_tests"]["touched"], d["tasks_at_one"]), (19, 19))
+        self.assertEqual(d["tasks"]["t01"]["missed"], [{"kind": "forced_tests", "files": ["m1/src/test/java/a/PTests.java"]}])
+        self.assertAlmostEqual(d["mean_recall"], 79 / 80)
+        self.assertAlmostEqual(d["pooled_recall"], 79 / 80)
+        self.assertAlmostEqual(d["main_run"]["usd"], 1.05 * 180)  # mean of 0.1 .. 2.0
+        lo, hi = d["main_run"]["usd_95"]
+        self.assertTrue(lo < 1.05 * 180 < hi)
+        self.assertAlmostEqual(d["main_run"]["hours"] - d["main_run"]["hours_without_stalls"], 12 / 20 * 180 / 3600)
+        self.assertAlmostEqual(d["recall_noise_only"]["paired_sd"], math.sqrt(2 / 3) * d["sd_recall_between_tasks"])
+        self.assertEqual(d["closing_docs_misses"]["gain"], 0)  # no docs unit is missed here
+        self.assertAlmostEqual(d["detectable_tokens_share_of_mean"]["C vs none"]["one test"], rc.detectable(0.5))
+        self.assertEqual(d["tasks"]["t02"]["claude_refusals"], 1)
+        self.assertEqual(json.loads(json.dumps(d)), d)
+
+    def test_the_arm_that_closes_every_docs_miss(self):
+        tasks = [task(i) for i in range(1, 21)]
+        rows = [row(t, "none", touch=0 if i < 10 else 4) for i, t in enumerate(tasks)]  # ten tasks miss both docs units of four
+        c = rc.describe(rows, tasks)["closing_docs_misses"]
+        self.assertAlmostEqual(c["gain"], 0.25)
+        self.assertAlmostEqual(c["sd_over_tasks"], rc.sd([0.5] * 10 + [0.0] * 10))
+        self.assertAlmostEqual(c["power"]["one test"], rc.power(c["gain"], c["sd_over_tasks"]))
+        # The power of the detectable difference is the one it was computed for.
+        for alpha in (0.05, 0.05 / 6):
+            self.assertAlmostEqual(rc.power(rc.detectable(0.3, alpha=alpha), 0.3, alpha=alpha), 0.8, 3)
+        self.assertAlmostEqual(rc.power(0.0, 0.3), 0.05)
+        self.assertEqual(rc.power(0.1, 0.0), 1.0)
+        self.assertAlmostEqual(rc.power(0.0, 0.0), 0.05)
+
+    def test_paired_token_sds(self):
+        tasks = [task(i) for i in range(1, 5)]
+        rows = run(tasks, lambda t, c, r: row(t, c, r, tokens=1000 + (500 if c == "C" and t["id"] in ("t01", "t02") else 0)))
+        out = rc.paired_token_sds(rows)
+        self.assertAlmostEqual(out["D vs none"], 0.0)
+        self.assertAlmostEqual(out["C vs none"], rc.sd([500, 500, 0, 0]) / 1000)
+
+
+class Watch(unittest.TestCase):
+    def test_listeners_and_remote_connections_name_process_and_port(self):
+        spec = importlib.util.spec_from_file_location("watch_run", EVAL / "groundtruth" / "watch_run.py")
+        w = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(w)
+        line = lambda proto, name, state="": f"java.real 4711 me  42u  IPv4 0x1234567890abcdef 0t0 {proto} {name} {state}".rstrip()  # noqa: E731
+        for proto, name, state, want in (
+                ("TCP", "127.0.0.1:5000->127.0.0.1:5001", "(ESTABLISHED)", ("LOOP", "TCP", "", "")), ("TCP", "127.0.0.1:5000", "(LISTEN)", ("LISTEN", "TCP", "", "")),
+                ("TCP", "[::1]:5000", "(LISTEN)", ("LISTEN", "TCP", "", "")), ("TCP", "*:8080", "(LISTEN)", ("LISTEN-ALL", "TCP", "4711", "*:8080")),
+                ("TCP", "192.168.1.2:8080", "(LISTEN)", ("LISTEN-ALL", "TCP", "4711", "192.168.1.2:8080")), ("UDP", "*:*", "", ("LISTEN", "UDP", "", "")),
+                ("UDP", "*:51234", "", ("LISTEN-ALL", "UDP", "4711", "*:51234")),
+                ("TCP", "10.0.0.2:5000->93.184.216.34:443", "(ESTABLISHED)", ("REMOTE", "TCP", "4711", "93.184.216.34:443"))):
+            self.assertEqual(w.classify(line(proto, name, state)), want)
+        self.assertIsNone(w.classify("COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME"))
+
+    def test_it_ends_with_the_process_and_stops_nothing_by_itself(self):
+        with tempfile.TemporaryDirectory() as d:
+            child = subprocess.Popen([sys.executable, "-I", "-c", "import time; time.sleep(1.5)"])
+            watch = subprocess.Popen([sys.executable, "-I", str(EVAL / "groundtruth" / "watch_run.py"), str(child.pid), f"{d}/log", d, "--jdk", f"{d}/no-jdk"])
+            child.wait()
+            self.assertEqual(watch.wait(timeout=20), 0)
+            text = (Path(d) / "log").read_text()
+            self.assertIn(" load ", text)
+            self.assertRegex(text, r"ended after \d+ samples")
+
+
+class RecordedDecision(unittest.TestCase):
+    """The 20 sessions of arm none (24 November 2026), from the committed rows."""
+
+    def setUp(self):
+        self.rows = [json.loads(x) for x in (EVAL / "results/none20-183/sessions.jsonl").read_text().splitlines()]
+        self.tasks_file = EVAL / "tasks/tasks-commit-replay.json"
+        self.tasks = json.loads(self.tasks_file.read_text())["tasks"]
+        self.decision = json.loads((EVAL / "groundtruth/decision_183.json").read_text())
+
+    def test_it_follows_from_the_rows(self):
+        sha = hashlib.sha256(self.tasks_file.read_bytes()).hexdigest()
+        out = rc.decide([{**r, "final": True} for r in self.rows], self.tasks, sha)  # only final rows are exported
+        self.assertEqual({"label": "2026-11-24-none20", **out}, self.decision)
+        self.assertEqual((out["shown"], out["ceiling"], out["primary"]), ("0.661", False, ["recall", "tokens"]))
+
+    def test_the_summary_is_of_the_same_rows(self):
+        kept = json.loads((EVAL / "results/none20-183/summary.json").read_text())
+        base = [json.loads(x) for x in (EVAL / "results/182-spring/results.jsonl").read_text().splitlines()]
+        out = json.loads(json.dumps(rc.describe(self.rows, self.tasks, rc.paired_token_sds(base))))
+        kept.pop("load_run")
+        for e in kept["tasks"].values():
+            for k in [k for k in e if k.startswith("load_")]:
+                e.pop(k)
+        self.assertEqual(json.dumps(_rounded(out)), json.dumps(_rounded(kept)))
+        self.assertEqual(sum(len(e["missed"]) for e in kept["tasks"].values()), 15)
+
+    def test_the_rows_are_of_arm_none_and_name_no_home(self):
+        self.assertEqual({(r["condition"], r["rep"], r["status"]) for r in self.rows}, {("none", 1, "ok")})
+        for f in (EVAL / "results/none20-183").iterdir():
+            self.assertNotIn("/Users/", f.read_text(), f.name)
+
+
+def _rounded(x):
+    if isinstance(x, dict):
+        return {k: _rounded(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_rounded(v) for v in x]
+    return round(x, 8) if isinstance(x, float) else x
+
+
 class WarmUp(unittest.TestCase):
     def setUp(self):
         spec = importlib.util.spec_from_file_location("warm_gradle", EVAL / "groundtruth" / "warm_gradle.py")

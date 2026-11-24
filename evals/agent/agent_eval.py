@@ -329,6 +329,21 @@ def cmd_ceiling(args) -> int:
     return 0
 
 
+def cmd_describe(args) -> int:
+    """#183: what the sessions of one arm show beside the decision (recall by type, missed units, cost, projection)."""
+    from aeval import report_commit
+    rows = {}
+    for line in (config.RUNS_DIR / args.label / "results.jsonl").read_text().splitlines():
+        if line.strip() and (r := json.loads(line)).get("final"):
+            rows[r["run_id"]] = r
+    sds = None
+    if args.paired_tokens_from:
+        path = config.RESULTS_DIR / args.paired_tokens_from / "results.jsonl"
+        sds = report_commit.paired_token_sds([json.loads(x) for x in path.read_text().splitlines() if x.strip()])
+    print(json.dumps(report_commit.describe(list(rows.values()), config.load_tasks(), sds), indent=1))
+    return 0
+
+
 def cmd_regrade(args) -> int:
     """Re-grade a committed run from its stored answers against the current gold (e.g. after #164)."""
     label = args.label
@@ -780,6 +795,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("label")
     s.add_argument("--write", action="store_true", help="record it in groundtruth/decision_183.json, which the report reads (once)")
     s.set_defaults(fn=cmd_ceiling)
+
+    s = sub.add_parser("describe", help="#183: recall by type, missed units, tokens, cost, time and projection of one arm's sessions")
+    s.add_argument("label")
+    s.add_argument("--paired-tokens-from", help="results label whose paired token SDs give a detectable difference (e.g. 182-spring)")
+    s.set_defaults(fn=cmd_describe)
 
     s = sub.add_parser("gradle-cache", help="freeze the resolved dependencies of ~/.gradle for the offline builds (#183)")
     s.set_defaults(fn=cmd_gradle_cache)

@@ -1579,7 +1579,7 @@ name is stored in the run's config, so a resumed run cannot change it.
 
 Do agents change everything a real change needs, in other modules, tests and
 docs, and does myceliums save tokens per solved task? 20 edit tasks replay
-recent spring-framework commits. **Pilot run, main run not**: the pilot and the
+recent spring-framework commits. **Pilot run, decision recorded, main run not**: the pilot and the
 first pre-registration were fixed before the first session; the recall was redefined after the pilot in arm `none`, without using any outcome of C or D (*Pre-registration*). The warm-up has run and all 20 prechecks are valid.
 
 **Mining** ([`groundtruth/commit_replay.py`](groundtruth/commit_replay.py)
@@ -1592,10 +1592,10 @@ picked for a public API or behaviour change a description can state
 (no pure refactoring or deprecation), and stratified by files, code modules
 and docs; 20 are the task set, 9 are reserves
 (`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
-fails. **No task's tests listen on all interfaces:** a static closure over the test sources that each task's `--tests` classes reach (imports,
+fails. **Tests that listen on all interfaces:** a static closure over the test sources that each task's `--tests` classes reach (imports,
 same package) finds server sockets in two, both on `0.0.0.0` (`AbstractHttpServer`): `fn-request-bind-pathvars-headers`, replaced by
 `form-converter-map-payloads` (same size, modules and docs strata; chosen before its precheck ran), and the reserve `problemdetail-no-instance-from-path`, dropped.
-It does not see sockets opened by main code or libraries alone; the socket samples of the eight tasks run saw loopback TCP listeners only.
+It does not see sockets opened by main code or libraries alone, so it is no proof that the 20 open none, and it was not confirmed: the socket samples of the prechecks saw loopback TCP listeners only, but during the grading of `client-builders-...` on 24 November one listener on all interfaces appeared (below; process and port were not logged, [`groundtruth/watch_run.py`](groundtruth/watch_run.py) logs them from now on). The sandboxes do not stop inbound connections.
 
 | Task | Commit | Files (code/tests/docs) | Modules whose code changes | Comment-only files | Docs | Weakly tested | Primary files |
 |---|---|---:|---:|---:|---|---|---:|
@@ -1768,7 +1768,7 @@ It was chosen knowing that arm `none` missed most of those tests, and it moves `
 * **Decision rule, before the main run:** one session of arm `none` per task (20 sessions, a label of their own, not pooled with the pilot or the main run; all 20 final sessions count, timeouts and turn limits included). The **unrounded** mean over the 20 tasks of their (a) decides, with the threshold 0.90 − 1e-9; it is shown with three decimals:
   **at or above it, tokens become the sole primary outcome** (Holm over the three pairs) and (a) is a **harm check**, reported for each pair as "harm detected" (the 95 % interval of the difference lies entirely below zero) or "harm not detected", always with the number of tasks worse/better and **two bounds on the loss not excluded**: the interval's lower bound, and the exact one-sided 95 % bound (Clopper-Pearson) on the share of worse tasks, each of which loses at most everything (none of 20 worse: 13.9 %; one: 21.6 %).
   The interval alone cannot contain a loss where no task is worse, and choosing between the two by the data would let the bound shrink when a task gets worse; both together never do (a test). "Not detected" is never evidence of none.
-  **Below it, (a) and (b) stay co-primary** (Holm over six tests: three pairs × two outcomes). `agent_eval.py ceiling LABEL --write` computes it and records it once (`groundtruth/decision_183.json`: the mean, each task's recall, the sessions' statuses, the task file's sha256, the Claude Code version and the model, of which there must be one each). **`report` refuses without that record**, or when the task file is another one, and says when the run's CLI or model differ from it. These 20 sessions change nothing else. **Whether a main run happens at all is Marc's decision.**
+  **Below it, (a) and (b) stay co-primary** (Holm over six tests: three pairs × two outcomes). `agent_eval.py ceiling LABEL --write` computes it and records it once ([`groundtruth/decision_183.json`](groundtruth/decision_183.json): the mean, each task's recall, the sessions' statuses, the task file's sha256, the Claude Code version and the model, of which there must be one each). **`report` refuses without that record**, or when the task file is another one, and says when the run's CLI or model differ from it. These 20 sessions change nothing else. **Whether a main run happens at all is Marc's decision.**
 * **Secondary outcomes**, not tested: the **recall with new tests (the outcome registered first)**: docs + remote code (the optional ones included) + all test files; the share of the new tests alone; docs, remote and forced-test recall alone; tests pass, which is also success (an edit session succeeds when the task's test command passes, nothing else); tokens and cost per solved task; precision (share of the changed files that the commit changed); API calls; wall time, as measured and without API stalls (*Refused reads and API stalls*).
 * **Comparisons:** C vs `none`, D vs `none`, C vs D. Every difference is **first minus second**: a positive recall difference favours the first arm, a negative token difference favours it.
   Paired percentile bootstrap over the tasks (10,000 resamples, seed 0), two-sided p by inverting it; Holm as above at 5 %. With 20 tasks the percentile bootstrap is slightly liberal. Intervals are 95 % and not corrected.
@@ -1866,7 +1866,7 @@ Test files by outcome (compile: does not compile; fails; passes: not forced; new
 | `retryable-method-retry-event` | `RetryTemplateTests.java` | forced tests (fails) | yes | asserts the old interruption message; the text gives the new one (“should carry the message "Interrupted during back-off for retryable operation '<name>'; aborting execution"”) |
 
 **Refused reads and API stalls.** In the pilot's `none` sessions Claude Code's own permission layer ("don't ask" mode), not the hook, refused two Bash calls that only read working-copy files. Both combine `cd` with relative paths, one with `sed -n` and a second `cd`, the other with a redirection to `/dev/null`; a third call with two `cd` and relative `grep`s ran, and no read without `cd` used either, so **the cause is likely but not proven**.
-Chosen: one sentence more in the build note, so in the prompt of **all** arms: "In shell commands, name files by paths relative to the working copy and do not use `cd`." It asks for no docs and no tests (a test checks the prompt around the description for those words). The hook still lets `cd` through, but its refusal text no longer lists it as allowed. The settings were **not** changed: `autoAllowBashIfSandboxed` might let such calls through, but it removes the check that stands behind the hook and would need a new probe of the sandbox with the CLI.
+Chosen: one sentence more in the build note, so in the prompt of **all** arms: "In shell commands, name files by paths relative to the working copy and do not use `cd`." It asks for no docs and no tests (a test checks the prompt around the description for those words). The hook let `cd` through until the 20 sessions of arm `none`; since then it refuses it in every arm, with the reason ("the shell already stands at the top of the working copy: name files by paths relative to it ...; Bash itself works"), so that Claude Code's layer, which gives none, does not decide. That is a change after those 20 sessions and for later runs only; it was not probed with the CLI. The settings were **not** changed: `autoAllowBashIfSandboxed` might let such calls through, but it removes the check that stands behind the hook and would need a new probe of the sandbox with the CLI.
 The audit counts per session `claude_refusals` (the CLI's `permission_denied` events or the refusal's text), those with a `cd` (`claude_refusals_cd`) and the calls themselves, so that the sessions to come show whether the sentence helps and whether `cd` is the cause; and `api_errors`, of them `api_stalls` (`stream_idle_timeout`) with `api_stall_s`, the seconds since the last event before the stall. Wall times are reported with and without them (the figure is an upper bound: it includes the time a good answer would have taken to begin).
 On the five `none` transcripts it finds the two refusals, the one stall (180.6 s, `beans-max-...`), and leaves every other number of the audit as it was.
 
@@ -1923,6 +1923,81 @@ Artifacts: [`results/pilot-183/`](results/pilot-183/) (`sessions.jsonl` with the
 | `type-mismatch-required-type-arg` | 1.00 | – | 1/1 | – | 0/1 | 0.50 | 14 | 14 | 0 (0) |
 
 Mean (a) 0.80, SD between the five tasks 0.45; recall with new tests 0.57 (0.54 before the corrected classifications). `beans-max-...` has one counted dependent, a docs page, and the session did not touch it. Projection of the main run without the stall 9.2 h. Five tasks say nothing about the decision rule, which needs the 20 sessions.
+
+##### Sessions of arm `none` and the recorded decision (24 November 2026, 11:47-13:18)
+
+20 sessions, one per task, as pre-registered: label `2026-11-24-none20`, not pooled with anything, all 20 final at the first attempt, status ok, no API error or stall, no limit. Claude Code 2.1.331, `claude-sonnet-5-5`, normal login (`apiKeySource` `none`), `myc` not used in this arm, task file sha256 `a8d649a1ef51`. Checked before: the task file (0 problems), the frozen dependencies (6,951 files, `cc17a8254506`), the JDK copy, the login names, the mock probe of `none` with the new prompt sentence. One change to the harness before the first session: a failed login (401/403, "Please run /login", ...) stops a run and is never a final session; until then it would have counted as a failed session.
+Artifacts: [`results/none20-183/`](results/none20-183/) (`sessions.jsonl`, `summary.json`, `meta.json`), [`groundtruth/decision_183.json`](groundtruth/decision_183.json); transcripts are archived outside the repository.
+
+**The decision by the registered rule: mean (a) = 0.661** (unrounded 0.66125; 0.792 over the 72 pooled units), below 0.90 − 1e-9. **(a) and (b) stay co-primary.** 10 of the 20 tasks have (a) = 1, 5 have 0; SD between tasks 0.42. Tests pass 20 of 20. Recall with new tests (the outcome registered first): 0.45.
+
+| By type | Units | Touched | Tasks with any | Mean over those tasks |
+|---|---:|---:|---:|---:|
+| remote code | 45 | 44 | 14 | 0.99 |
+| docs | 13 | 2 | 9 | 0.22 |
+| forced tests | 14 | 11 | 7 | 0.57 |
+
+So (a) has almost no room in remote code (44 of 45). Of the 0.339 that the mean lacks to 1, docs are 0.254 (75 %), forced tests 0.080 and remote code 0.005; nine tasks have docs, four of them nothing else. The main run's (a) would mostly measure whether an arm follows a change into `framework-docs`.
+**What the docs figure says and does not.** By task 2 of the 9 with docs were touched (exact 95 % interval 3-60 %): the direction is robust, the rate is not. Of the 13 docs units nine would be wrong or clearly incomplete after the change, two incomplete and two borderline (the `UserController` samples) (the reviewer's reading). The prompt's "change every file the change needs **and nothing else**" may discourage docs; that was not tested and is the same in every arm.
+
+| Task | (a) | Remote | Docs | Forced tests | New tests | Tokens | Cost | Session s | Grading s | Mean load | Hook refusals | Claude Code refusals |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `api-version-deprecation-handler-handler-arg` | 1.00 | 2/2 | – | 2/2 | – | 188,991 | $0.19 | 168 | 45 | 43.6 | 3 | 0 |
+| `bean-provider-parameterized-type-reference` | 1.00 | 5/5 | – | – | 0/1 | 157,647 | $0.16 | 339 | 98 | 69.9 | 1 | 0 |
+| `beans-max-nested-path-depth` | 0.00 | – | 0/1 | – | 0/5 | 400,085 | $0.29 | 214 | 81 | 102.3 | 0 | 1 |
+| `client-builders-deep-copy-default-headers-cookies` | 1.00 | 2/2 | – | – | 0/3 | 278,983 | $0.22 | 248 | 77 | 21.0 | 2 | 0 |
+| `content-negotiation-no-fallback-mapping` | 1.00 | 1/1 | – | – | 1/2 | 211,427 | $0.15 | 166 | 45 | 24.4 | 0 | 0 |
+| `deferred-bean-registrar-contains-bean` | 1.00 | 3/3 | – | – | 0/7 | 335,208 | $0.33 | 220 | 88 | 48.3 | 2 | 0 |
+| `error-response-interceptor-with-request` | 1.00 | 6/6 | – | – | 0/4 | 271,660 | $0.22 | 167 | 101 | 36.2 | 1 | 0 |
+| `form-converter-map-payloads` | 0.80 | 3/3 | 0/1 | 1/1 | – | 397,621 | $0.27 | 389 | 75 | 103.9 | 2 | 0 |
+| `http-range-honor-if-range` | 1.00 | 4/4 | – | – | 1/6 | 254,098 | $0.22 | 203 | 65 | 68.8 | 1 | 0 |
+| `jdbcclient-batch-entry-dsl` | 1.00 | – | 1/1 | 3/3 | – | 1,177,556 | $0.62 | 250 | 40 | 53.8 | 5 | 1 |
+| `jsonl-media-type-support` | 0.80 | 8/9 | – | 0/1 | 0/1 | 195,616 | $0.18 | 50 | 167 | 73.5 | 4 | 0 |
+| `message-source-default-charset` | 0.00 | – | – | 0/1 | – | 137,074 | $0.12 | 146 | 60 | 73.0 | 1 | 0 |
+| `mime-type-parameter-names-case-insensitive` | 1.00 | 1/1 | – | – | 0/2 | 170,231 | $0.10 | 29 | 129 | 32.2 | 1 | 1 |
+| `observation-record-handled-exception` | 0.62 | 5/5 | 0/3 | – | 0/9 | 222,257 | $0.22 | 169 | 79 | 55.7 | 1 | 0 |
+| `retry-max-attempts-to-max-retries` | 1.00 | 2/2 | 1/1 | 5/5 | – | 581,447 | $0.41 | 204 | 45 | 36.1 | 6 | 0 |
+| `retryable-method-retry-event` | 0.50 | 1/1 | – | 0/1 | 0/3 | 165,054 | $0.21 | 131 | 60 | 40.8 | 1 | 0 |
+| `servlet-response-ignore-body-flush` | 0.50 | 1/1 | 0/1 | – | 0/1 | 133,798 | $0.14 | 162 | 71 | 72.0 | 1 | 0 |
+| `spel-simple-context-restricted-conversion` | 0.00 | – | 0/2 | – | 1/1 | 357,077 | $0.29 | 159 | 54 | 37.3 | 4 | 0 |
+| `test-context-cache-pause-mode` | 0.00 | – | 0/2 | – | 0/3 | 70,401 | $0.11 | 23 | 327 | 106.9 | 0 | 1 |
+| `type-mismatch-required-type-arg` | 0.00 | – | 0/1 | – | 0/1 | 37,012 | $0.04 | 8 | 140 | 25 (grading) | 0 | 0 |
+
+Mean: 287,162 tokens (SD between tasks 245,152), $0.224, 172 s per session, 4.47 USD in all (about 4 were approved). No stall, so wall times without stalls are the same. Machine load 13-134 (median 56), so wall times are upper estimates of a quiet machine's; `type-mismatch-...` was too short for a load sample.
+
+**Every missed unit** (15 of 72; from the sessions' tool calls, diffs and last messages):
+
+| Task | File | Kind | Why |
+|---|---|---|---|
+| `beans-max-nested-path-depth` | `data-binding.adoc` | docs | searched `src/main` of two modules only; `framework-docs` in no call or result |
+| `form-converter-map-payloads` | `message-converters.adoc` | docs | its searches were limited to `*.java`; no docs searched |
+| `jsonl-media-type-support` | `ProtobufJsonEncoder.java` | remote | its grep listed the file; left alone on purpose ("isn't one of the JSON codecs you listed") |
+| `jsonl-media-type-support` | `HttpMessageWriterViewTests.java` | forced tests | compiled and ran nothing; no test searched |
+| `message-source-default-charset` | `ResourceBundleMessageSourceTests.java` | forced tests | compiled main and tests (both pass, the test fails only when run) and ran no test |
+| `observation-record-handled-exception` | `observability.adoc` | docs | searched and edited main code only; no docs searched |
+| `observation-record-handled-exception` | `reactive/UserController.java` | docs | its search for `setError` covered `src/main` of three modules, not `framework-docs` |
+| `observation-record-handled-exception` | `servlet/UserController.java` | docs | as above |
+| `retryable-method-retry-event` | `RetryTemplateTests.java` | forced tests | ran no test; its summary says that tests asserting the old message "will need updating" |
+| `servlet-response-ignore-body-flush` | `appendix.adoc` | docs | added the property's constant; searched no docs (the appendix lists such properties) |
+| `spel-simple-context-restricted-conversion` | `appendix.adoc` | docs | searched no docs |
+| `spel-simple-context-restricted-conversion` | `evaluation.adoc` | docs | searched no docs; added tests instead |
+| `test-context-cache-pause-mode` | `appendix.adoc` | docs | its summary says the docs were not updated; read three main files, searched nothing |
+| `test-context-cache-pause-mode` | `caching.adoc` | docs | as above |
+| `type-mismatch-required-type-arg` | `mvc-ann-rest-exceptions.adoc` | docs | three calls in all; no docs searched |
+
+One pattern: the eleven missed docs units were not searched for: `framework-docs` occurs in no call, result or message of those seven sessions. It was not for want of a hint in two of them: the AGENTS.md of `spel-...` and `observation-...`, which reaches the agent (mock probe), says that the reference docs are in `framework-docs/modules/ROOT` and the samples in `framework-docs/src/main`. Nor did they leave documentation alone: six of the seven (all but `type-mismatch-...`) wrote or changed Javadoc.
+Another session, `api-version-...` (no docs unit in the gold), searched `*.adoc`, found pages and left them on purpose ("They only mention the handler concept, not its signature"). The two found (`core.adoc` in `jdbcclient-...`, `resilience.adoc` in `retry-...`) came from a search over the whole checkout without a file-type filter. The sessions of the three missed forced tests ran no test. `observation-...` set the context error at once and reports it at completion, exactly the reading the review gave for leaving its six tests out of (a).
+
+**Audit.** Every refused call and every flag of the 20 sessions was read, and all shell and search calls of the ten with missed units (not the models' other messages): 36 hook refusals (expansions, `sed -i`, `python3` heredocs, braces, two reads of wrong paths, two Gradle `check` tasks, one write outside the working copy and one command naming that file), no disagreement, no kernel refusal, no edit naming a protected place. Two flags, both benign: the CLI's own "output too large, saved to ..." line names this session's result file under `~/.claude/projects/` (`error-response-...`, `jdbcclient-...`); neither session opened it.
+**Refused by Claude Code itself:** 4 calls in 4 sessions (`mime-...`, `beans-...`, `test-context-...`, `jdbcclient-...`), all with a relative `cd` and relative reads, the plainest a `cd DIR; grep -n ... MediaType.java`. None of the 80 Bash calls without `cd` that reached that layer was refused; of the 7 calls with `cd` 4 were refused here and 3 by the hook, so none ran. A refusal has a price: after its one refused call `test-context-...` concluded that "the Bash tool was denied in this session", used no Bash again and never built (it was solved all the same, with (a) = 0). The sentence did not stop the agents from using `cd` (7 calls in 20 sessions, 8 in the five of the pilot) but made it rarer, and `cd` is now a stronger suspect; one `cd` call ran in the pilot, so it is still not proven.
+Sockets: no remote connection in 4,610 samples. One TCP listener on all interfaces (first seen at 12:02:37, in the last seconds of the grading of `client-builders-...`; the sampler logs a kind of socket once, so later ones are not excluded; its three test classes name no server, cause not found, process and port not logged). The static reading above (*Tests that listen on all interfaces*) is corrected accordingly; the grading sandbox does not stop inbound connections. The next run uses `groundtruth/watch_run.py`, which logs process, port and every new listener.
+
+**Main run, projected from these** (mean × 180): **$40** (95 % bootstrap over the tasks $31-51), **13.7 h** (12.1-15.6 h), below the limits of $288 and 24 h; the same without stalls. It carries over what `none` measured: C and D are not measured and may cost more or less.
+
+**What the main run could detect in (a) is not known.** There is no paired data; the between-task SD of these sessions (0.42) is **not** the SD of a paired difference, because a task's own level cancels in the pair, while an arm that helps in some tasks and not in others adds to it. Two scenarios, neither a bound nor a power statement for the real effect (two-sided, 20 tasks, normal approximation):
+*Noise only*: the whole between-task SD is session noise and no task favours an arm. Then the difference of two arms' 3-repetition means has SD √(2/3) of it, 0.35, and 0.22 would be detectable with 80 % for one test, 0.27 at the first Holm step over six. With any task × arm effect the SD can be larger, and with one session per task the noise cannot be told from the task.
+*Closing every docs miss*, without noise: an arm that touches all docs units missed here gains **0.254** and nothing more. Its gains differ between tasks (SD 0.41 of the 20, zero in 13), which alone leaves a power of 80 % for one test and **56 % at the first Holm step over six**; noise would lower it. So even that arm would often not be told from `none`. For scale, paired SDs of 0.1, 0.2 and 0.3 give 0.08, 0.16 and 0.23 for the first Holm step over six.
+**(b):** paired differences of a finished run exist only for #182's question tasks (same repository, model and CLI generation, 3 repetitions): their SD is 0.53 of the baseline's mean for C vs `none`, 2.69 for D vs `none` and 0.98 for C vs D, so differences of 41%, 210% and 76% of the mean for the first Holm step over six; edit sessions may differ.
 
 #### Warm-up
 
@@ -2073,7 +2148,7 @@ expansion, an incomplete list of closed places, and a keychain opened to every c
   results or edits; also calls Claude Code itself refused and API stalls (*Refused reads and API stalls*). `TOKENS.md` counts them per arm, with the hook's refusals.
 * **Threat model.** A cooperative agent told to work in its checkout, audited per session. Not covered: **macOS's security services**: inside Claude Code's sandbox, lookups of `com.apple.SecurityServer` and
   `com.apple.securityd.xpc` succeed (2.1.331; `secd`, `securityd`, `trustd.agent` and the token service do not), and its settings can only add services, not remove them. The keychain *files* are closed; whether these services would hand anything
-  to a process that cannot read them was not tried. `claude`, the myceliums server and the hooks run with the user's access. A listener a test opens on all interfaces could be reached from the local network while it runs (no task's own tests do; the agent may run others). Names of files outside may stay
+  to a process that cannot read them was not tried. `claude`, the myceliums server and the hooks run with the user's access. A listener a test opens on all interfaces could be reached from the local network while it runs (seen once, during a grading; the agent may also run other tests). Names of files outside may stay
   visible; Spring's commits may be in the model's training data.
 * Checked with the mock API, hook on and, to see the layer below it, hook off (`probe --no-hook`): 31 places by name from a Python program inside the sandbox (keychains, Claude's history, other projects and credentials file, `.ssh`, checkouts, gold, parents, the other cache, history clone,
   build cache, stored scans, `/private/tmp/claude-501`, `/Volumes`, `/Users/Shared`, the `/System/Volumes/Data` alias of the home directory, ...): all refused; loopback works; settings and wrapper files cannot be written. No connection to another machine was attempted.
