@@ -34,6 +34,7 @@ WAYS = ("touched", "covered_strict", "covered_lenient")  # an undecided unit is 
 MOST = 0.5  # more than this share of the docs gap closed is "most of it"
 PLAN_SEED = 183
 KINDS = ("docs", "tests", "code")
+SPLIT_PAIR = ("retry-max-attempts-to-max-retries",)  # the disk watcher stopped the run between its two sessions (about 10 minutes)
 
 
 # ---- the sessions ------------------------------------------------------------------
@@ -324,8 +325,11 @@ MEANING = {
 }
 
 
-def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: dict | None = None, n_resamples: int = 10_000) -> dict:
-    """``covered``: :func:`verdicts`; None before the judging."""
+def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: dict | None = None, n_resamples: int = 10_000,
+            split: tuple[str, ...] = SPLIT_PAIR) -> dict:
+    """``covered``: :func:`verdicts`; None before the judging. ``split``: tasks
+    whose pair a pause took apart; the shares are also computed without them (a
+    sensitivity: the sessions count all the same)."""
     measured(tasks)
     sets = load(recorded, run, tasks)
     by_id = {t["id"]: t for t in tasks}
@@ -388,13 +392,17 @@ def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: d
                       "refused_by_hook": sum(x.get("refused_calls", 0) for x in audit), "refused_by_claude": sum(x.get("claude_refusals", 0) for x in audit),
                       "refused_by_claude_cd": sum(x.get("claude_refusals_cd", 0) for x in audit), "disagreements": sum(x.get("disagreements", 0) for x in audit),
                       "span": [min(r["finished_at"] for r in rows.values()), max(r["finished_at"] for r in rows.values())]}
-    shares: dict = {}
-    for w in WAYS:
-        if w not in ways:
-            shares[w] = {RECORDED: None, CONCURRENT: None, "interval": None, "judged": False}
-            continue
-        of = {b: [(gap(b, i, "docs", w), gap(NEW, i, "docs", w)) for i in sets[b]] for b in (RECORDED, CONCURRENT)}
-        shares[w] = {RECORDED: share_closed(of[RECORDED]), CONCURRENT: share_closed(of[CONCURRENT]), "interval": _interval(of[RECORDED], n_resamples), "judged": True}
+    def closed(left_out: tuple[str, ...] = ()) -> dict:
+        shares: dict = {}
+        for w in WAYS:
+            if w not in ways:
+                shares[w] = {RECORDED: None, CONCURRENT: None, "interval": None, "judged": False}
+                continue
+            of = {b: [(gap(b, i, "docs", w), gap(NEW, i, "docs", w)) for i in sets[b] if i not in left_out] for b in (RECORDED, CONCURRENT)}
+            shares[w] = {RECORDED: share_closed(of[RECORDED]), CONCURRENT: share_closed(of[CONCURRENT]), "interval": _interval(of[RECORDED], n_resamples), "judged": True}
+        return shares
+
+    shares, apart = closed(), closed(split)
     diff = lambda fn, base, over: paired_bootstrap([(float(fn(NEW, i)), float(fn(base, i))) for i in over], n_resamples).as_dict()  # noqa: E731
     row = sets[NEW][ids[0]]
     out = {"claude_version": row["claude_version"], "model": row["model"], "sentence": config.DOCS_SENTENCE, "docs_tasks": nine, "summary": summary,
@@ -404,6 +412,7 @@ def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: d
                           "usd": diff(lambda s, i: per[i]["usd"][s], RECORDED, ids), "extra_files": diff(lambda s, i: sum(per[i]["extra"][s].values()), RECORDED, ids)},
            "tasks": per}
     out["outcome"] = outcome(shares)
+    out["without_split_pair"] = {"tasks": [i for i in split if i in by_id], "docs_gap_closed": apart, "outcome": outcome(apart)}
     return out
 
 
@@ -423,6 +432,10 @@ def lines(c: dict) -> list[str]:
     for w in WAYS:
         x = c["docs_gap_closed"][w]
         L.append(f"| {say[w]} | {num(x[RECORDED])} | {'–' if x['interval'] is None else '[' + ', '.join(f'{v:.2f}' for v in x['interval']) + ']'} | {num(x[CONCURRENT])} |")
+    if (x := c["without_split_pair"])["tasks"]:
+        L += ["", "Sensitivity without " + ", ".join(f"`{i}`" for i in x["tasks"]) + " (a pause of the run lies between its two sessions, which count above): "
+              + "; ".join(f"{say[w]} {num(x['docs_gap_closed'][w][RECORDED])} (recorded), {num(x['docs_gap_closed'][w][CONCURRENT])} (concurrent)" for w in WAYS)
+              + f"; by the same rule: {x['outcome']}."]
     L += ["", f"More than {MOST:.2f} is \"most\". Forced tests' gap closed (decides nothing): " + ", ".join(f"{w} {num(v)}" for w, v in c["forced_tests_gap_closed"].items()) + ".", "",
           "| | `none` recorded (20) | `none` concurrent (9) | `none-docs` (20) | `none-docs` minus `none` |", "|---|---:|---:|---:|---|",
           f"| Mean recall (a) | {f3(r['mean_recall'])} | {f3(k['mean_recall'])} | {f3(n['mean_recall'])} | recorded {sign(c['difference']['recall'])}; concurrent, 9 tasks {sign(c['difference']['recall_on_the_nine_concurrent'])} |"]

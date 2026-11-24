@@ -440,6 +440,20 @@ class Comparison(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "no verdict"):
             control.compare(rec, con + new, self.tasks, {}, 10)
 
+    def test_the_split_pair_counts_and_is_left_out_of_the_sensitivity_only(self):
+        rec, con = self.without_docs(self.rows("none", 4)), self.without_docs(self.rows("none", 4))
+        new = self.without_docs(self.rows("none-docs", 4), self.ids[:1])  # only t01 misses its docs
+        v = {(s, i, u["path"]): True for s in (control.RECORDED, control.CONCURRENT, control.NEW) for i, t in zip(self.ids, self.tasks) for u in control.units(t)}
+        c = control.compare(rec, con + new, self.tasks, v, 100, ("t01",))
+        for w in control.WAYS:
+            self.assertAlmostEqual(c["docs_gap_closed"][w]["recorded"], 0.95)
+            self.assertAlmostEqual(c["without_split_pair"]["docs_gap_closed"][w]["recorded"], 1.0)
+            self.assertAlmostEqual(c["without_split_pair"]["docs_gap_closed"][w]["concurrent"], 1.0)
+        self.assertEqual((c["outcome"], c["without_split_pair"]["outcome"], c["without_split_pair"]["tasks"]), ("i", "i", ["t01"]))
+        self.assertIn("Sensitivity without `t01`", "\n".join(control.lines(c)))
+        self.assertEqual(self.compare(rec, con, new)["without_split_pair"]["tasks"], [])  # no such task here
+        self.assertEqual(control.SPLIT_PAIR, ("retry-max-attempts-to-max-retries",))
+
     def test_over_editing_by_type(self):
         rec, con, new = self.rows("none", 4), self.rows("none", 4), self.rows("none-docs", 4)
         new[0]["edit"]["files_changed"] += ["framework-docs/z.adoc", "README.md", "m1/src/test/java/a/XTests.java", "m1/src/main/java/z/Z.java"]
