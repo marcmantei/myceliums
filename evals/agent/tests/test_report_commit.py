@@ -520,6 +520,7 @@ class Watch(unittest.TestCase):
                 ("TCP", "127.0.0.1:5000->127.0.0.1:5001", "(ESTABLISHED)", ("LOOP", "TCP", "", "")), ("TCP", "127.0.0.1:5000", "(LISTEN)", ("LISTEN", "TCP", "", "")),
                 ("TCP", "[::1]:5000", "(LISTEN)", ("LISTEN", "TCP", "", "")), ("TCP", "*:8080", "(LISTEN)", ("LISTEN-ALL", "TCP", "4711", "*:8080")),
                 ("TCP", "192.168.1.2:8080", "(LISTEN)", ("LISTEN-ALL", "TCP", "4711", "192.168.1.2:8080")), ("UDP", "*:*", "", ("LISTEN", "UDP", "", "")),
+                ("TCP", "*:*", "(CLOSED)", ("UNBOUND", "TCP", "4711", "*:*")), ("TCP", "*:*", "", ("UNBOUND", "TCP", "4711", "*:*")),
                 ("UDP", "*:51234", "", ("LISTEN-ALL", "UDP", "4711", "*:51234")),
                 ("TCP", "10.0.0.2:5000->93.184.216.34:443", "(ESTABLISHED)", ("REMOTE", "TCP", "4711", "93.184.216.34:443"))):
             self.assertEqual(w.classify(line(proto, name, state)), want)

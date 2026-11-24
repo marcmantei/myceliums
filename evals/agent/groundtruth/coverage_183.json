@@ -164,7 +164,7 @@
     "criteria": [
      {
       "id": "c1",
-      "text": "The FormHttpMessageConverter entry says that a plain Map is supported as well (for reading and writing)."
+      "text": "The FormHttpMessageConverter entry says that a plain Map is supported as well."
      },
      {
       "id": "c2",
@@ -482,7 +482,8 @@
      "breaks": [
       "c2"
      ],
-     "gold_with_a_test": "disabled"
+     "gold_with_a_test": "disabled",
+     "test": "batchUpdateWithJdbcIndexParameters"
     }
    },
    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java": {

@@ -1,0 +1,1106 @@
+{
+ "001": {
+  "set": "gold",
+  "task": "jsonl-media-type-support",
+  "unit": "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "c59f5406934dae5b5642ab954043fc5f7727fa3eaf6b513f4a26ae38352482b0"
+ },
+ "002": {
+  "set": "concurrent",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": true
+  },
+  "file_sha256": "f2fbfa4847bc119e571b1da57e2cd5be437d7116114644864197339a6d9b69c6"
+ },
+ "003": {
+  "set": "gold",
+  "task": "test-context-cache-pause-mode",
+  "unit": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "d6b69f44c34d645068ebcd8f674e903ad7d0f387a79055c304fa8df20f17208f"
+ },
+ "004": {
+  "set": "recorded",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "a2b05dfc6c117f68a67c23ec7d56b4f095a9b3d0e9e7fe576979c8f09c318b08"
+ },
+ "005": {
+  "set": "none-docs",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": true
+  },
+  "file_sha256": "1d79edc9c88c0ba15805c41f3a750c792ecbb1c65974d05ea6a45fa490a26df2"
+ },
+ "006": {
+  "set": "gold",
+  "task": "message-source-default-charset",
+  "unit": "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": null,
+   "c2": null
+  },
+  "file_sha256": "6f46e1f149225585011ba00e566f9889dc0b0c24eab678ba1b7f4ba8a66e3ff4"
+ },
+ "007": {
+  "set": "decoy",
+  "task": "form-converter-map-payloads",
+  "unit": "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": null,
+   "c2": true,
+   "c3": null
+  },
+  "file_sha256": "e4dc4740d9e6b771b26844417c045852a4a715343f669963795958f78afc8e93"
+ },
+ "008": {
+  "set": "decoy",
+  "task": "test-context-cache-pause-mode",
+  "unit": "framework-docs/modules/ROOT/pages/appendix.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "d97c6577ba19ff4a284f2156ef0682fa961628f67147f1da94e5aa3dfdcd3f9a"
+ },
+ "009": {
+  "set": "none-docs",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "a2b05dfc6c117f68a67c23ec7d56b4f095a9b3d0e9e7fe576979c8f09c318b08"
+ },
+ "010": {
+  "set": "recorded",
+  "task": "form-converter-map-payloads",
+  "unit": "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": null,
+   "c2": true,
+   "c3": null
+  },
+  "file_sha256": "8ba4277f61f4451103f8e4f7f190454fe8ffbfb14cfdd20fbdaaefaab30b7ae6"
+ },
+ "011": {
+  "set": "gold",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "d4a15e53af3b642a8c7e61564bf3621d3263baaaaef593e4d73b341529192bdb"
+ },
+ "012": {
+  "set": "none-docs",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "9c81f091ffa1e90acd3219c965c9c92252c860d1cfc3ada6b2141f38264e23f1"
+ },
+ "013": {
+  "set": "decoy",
+  "task": "api-version-deprecation-handler-handler-arg",
+  "unit": "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "5369620b97cba12e68d1f085478b7209c1118e28521c6b5553474826e1368056"
+ },
+ "014": {
+  "set": "decoy",
+  "task": "test-context-cache-pause-mode",
+  "unit": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "34608272a123e14f954d218e9f86c8223ed49159e87904af4194430beb48c85b"
+ },
+ "015": {
+  "set": "gold",
+  "task": "observation-record-handled-exception",
+  "unit": "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "29978f1dc473c8080e9150880ed62c11253d0a1152fe3fcdc096754e0d24843c"
+ },
+ "016": {
+  "set": "decoy",
+  "task": "observation-record-handled-exception",
+  "unit": "framework-docs/modules/ROOT/pages/integration/observability.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null,
+   "c2": null,
+   "c3": false
+  },
+  "file_sha256": "c77442d8e3433893f5eb3767c1292903616fb67464184e1282ef68ea0a6e7175"
+ },
+ "017": {
+  "set": "recorded",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "c42756c07984f696da38882da643f5154670f795d2925c94df6cb3fbec2c7228"
+ },
+ "018": {
+  "set": "gold",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "3171f87369e6441baf123962def6c5dfe4743516866f603dcc01266a76b7fbfb"
+ },
+ "019": {
+  "set": "decoy",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "347c80fa531e0efcaff3998361a1d19c8e6715c0665c48f44e537dd73aa5c587"
+ },
+ "020": {
+  "set": "decoy",
+  "task": "jsonl-media-type-support",
+  "unit": "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": false,
+   "c2": null
+  },
+  "file_sha256": "2d0854d822a0ef7fbf26dfc000beefb11cc8b227443512a6b04a3ea85033d103"
+ },
+ "021": {
+  "set": "none-docs",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "dda0c9d65cd5745c6a8bf8110f57246d92cb7e3fc2348ded382cfc975c0c1e10"
+ },
+ "022": {
+  "set": "decoy",
+  "task": "message-source-default-charset",
+  "unit": "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": null,
+   "c2": null
+  },
+  "file_sha256": "a22daea3d90489c78a4e50bb16a2548686a5c18fd3082b7f7fd357d1bb69b5f8"
+ },
+ "023": {
+  "set": "concurrent",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "ee018da72eea9c1bda7dc08c724ac27f82a88928656cd6c5d5363534dcd054f0"
+ },
+ "024": {
+  "set": "none-docs",
+  "task": "form-converter-map-payloads",
+  "unit": "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": null,
+   "c2": true,
+   "c3": null
+  },
+  "file_sha256": "19dfb021d55f782bcd732adfdbc8ac03307836155536f6c2e8848fe7276876b9"
+ },
+ "025": {
+  "set": "gold",
+  "task": "beans-max-nested-path-depth",
+  "unit": "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "9ff7b2331e38854e1740c6158f862e5f164fe642984dfb58737d1410b442d3d9"
+ },
+ "026": {
+  "set": "gold",
+  "task": "servlet-response-ignore-body-flush",
+  "unit": "framework-docs/modules/ROOT/pages/appendix.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "b0d97bc7495918325d2cbb1018adc026ec1c9d329412dba91aaca29b0e7dcb13"
+ },
+ "027": {
+  "set": "recorded",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "a78a755876c99a75addc7ec57267e4cf095b120d022e76f67c5e37d1b047d679"
+ },
+ "028": {
+  "set": "none-docs",
+  "task": "message-source-default-charset",
+  "unit": "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": null,
+   "c2": null
+  },
+  "file_sha256": "6086ee4b6b37e660230a3b5d8d3bb0cc3e56b795b2d16ef6dc12a964ea2c0cc7"
+ },
+ "029": {
+  "set": "concurrent",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "1b4d16678994e174e3a9c148f0a3c12676fed5801e3d9bcd7d304f1796fd2b31"
+ },
+ "030": {
+  "set": "concurrent",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "8bdd44395ace36708b4d751687f89df9d7091376ea50831152f45b718f49409d"
+ },
+ "031": {
+  "set": "concurrent",
+  "task": "type-mismatch-required-type-arg",
+  "unit": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null,
+   "c2": null
+  },
+  "file_sha256": "0867aea899c140b487cb580d5c9190e7e37c61819d5c9a032f2f476a0017b43d"
+ },
+ "032": {
+  "set": "decoy",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "90152a753e0ed255729890b957b59feff6c4de81252ac7231e8eed5e65c74457"
+ },
+ "033": {
+  "set": "gold",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "1b4d16678994e174e3a9c148f0a3c12676fed5801e3d9bcd7d304f1796fd2b31"
+ },
+ "034": {
+  "set": "concurrent",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "477eafbabd177eeb29211ddd92b9aaeb664af951fb080843c39bc29d6a732b0b"
+ },
+ "035": {
+  "set": "decoy",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": false,
+   "c2": true
+  },
+  "file_sha256": "42818085424e544b77c5493758185cb420340016c583f35bbdcacab57a7d0211"
+ },
+ "036": {
+  "set": "decoy",
+  "task": "beans-max-nested-path-depth",
+  "unit": "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "36ffcd8fc4ddbe2254048e9a42c45fa3d1625bb363a7e5b5787620fdff8783fa"
+ },
+ "037": {
+  "set": "none-docs",
+  "task": "api-version-deprecation-handler-handler-arg",
+  "unit": "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "eb3bf1aaf7b5346b06194b9d1a4bf95e57c90bfc8dd0b6a85f3bbe6f37c034eb"
+ },
+ "038": {
+  "set": "concurrent",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "f9bbdb9d3f51f11935c1a3c94122391982340f5e050d8751ad8d6fc826501b6a"
+ },
+ "039": {
+  "set": "decoy",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": false,
+   "c2": null
+  },
+  "file_sha256": "5b80cefbe1f34e264384e56893fabe97ac85e30183dc18be72a2dd1bb79b0815"
+ },
+ "040": {
+  "set": "recorded",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "deac90b65133fc89f2c5bf544b894f80af1099bbacbdfd4c94fd46a2196c26c7"
+ },
+ "041": {
+  "set": "gold",
+  "task": "retryable-method-retry-event",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "db9f5f33fe8e1848233dfe9f0e1d1e10f0d521316344c8b69b58009c2d102959"
+ },
+ "042": {
+  "set": "gold",
+  "task": "test-context-cache-pause-mode",
+  "unit": "framework-docs/modules/ROOT/pages/appendix.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "b0a2fc80d06729f949d44be6a1ac6a2f3de5bfac24078ff4a1bc743ba91b0fdc"
+ },
+ "043": {
+  "set": "recorded",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "477eafbabd177eeb29211ddd92b9aaeb664af951fb080843c39bc29d6a732b0b"
+ },
+ "044": {
+  "set": "concurrent",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "6f4afc4558a8e3a9585ab359a6f5cfc4ed527c4061dd73c3a2f3a9404a8fa687"
+ },
+ "045": {
+  "set": "decoy",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "3aa05b921bcd2e1ccefd61a333dd8d65e8d7a620be24e6705844ba7e24ecd286"
+ },
+ "046": {
+  "set": "gold",
+  "task": "form-converter-map-payloads",
+  "unit": "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": null,
+   "c2": true,
+   "c3": null
+  },
+  "file_sha256": "fbccc2351de05dfa66d907c6fe7b95fb8afd2136c40ed3141ac10627c5283ef3"
+ },
+ "047": {
+  "set": "recorded",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "8bdd44395ace36708b4d751687f89df9d7091376ea50831152f45b718f49409d"
+ },
+ "048": {
+  "set": "gold",
+  "task": "api-version-deprecation-handler-handler-arg",
+  "unit": "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "e83b9722e68e4994bf22234cd7790d2f8955ec83a00cdbb8463629cc4ca15b58"
+ },
+ "049": {
+  "set": "gold",
+  "task": "observation-record-handled-exception",
+  "unit": "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "76a36e0188137231fafccfef1ca4f6cc7d4f5196cc48e7d9cb18c24e953a4598"
+ },
+ "050": {
+  "set": "none-docs",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "3171f87369e6441baf123962def6c5dfe4743516866f603dcc01266a76b7fbfb"
+ },
+ "051": {
+  "set": "decoy",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "aae0dda256d24440e4a48b941affb6fd728b821f8551cc4662499751d2545cb9"
+ },
+ "052": {
+  "set": "gold",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "9df6742cb892443a224663e8241e53fbfb705f7c881553714e6526fc2b6cd8eb"
+ },
+ "053": {
+  "set": "recorded",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "c0b6f929ba84fe2d8384756f78d5c28d7db73d0dc80011b60ee66d839aa225aa"
+ },
+ "054": {
+  "set": "none-docs",
+  "task": "observation-record-handled-exception",
+  "unit": "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "29978f1dc473c8080e9150880ed62c11253d0a1152fe3fcdc096754e0d24843c"
+ },
+ "055": {
+  "set": "decoy",
+  "task": "spel-simple-context-restricted-conversion",
+  "unit": "framework-docs/modules/ROOT/pages/appendix.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "6449b07a06616f8369cde4495c98b8d4756ee5d60c3b1ff67717ec9a64ffdce8"
+ },
+ "056": {
+  "set": "none-docs",
+  "task": "observation-record-handled-exception",
+  "unit": "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "76a36e0188137231fafccfef1ca4f6cc7d4f5196cc48e7d9cb18c24e953a4598"
+ },
+ "057": {
+  "set": "gold",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "62aa4a35b1cf7c6243652cf6a65284a1d40f19591f0f6ae8be5a85b59aa5c95d"
+ },
+ "058": {
+  "set": "decoy",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "3cf34f00722aba2d456878f19ae4202d98c44afac14638e1d71a3c6e02e99e57"
+ },
+ "059": {
+  "set": "decoy",
+  "task": "spel-simple-context-restricted-conversion",
+  "unit": "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null
+  },
+  "file_sha256": "cdc9b468dc01f297102a5f2db4d66dd3442aa007958cac16fcd0179b0b9e5761"
+ },
+ "060": {
+  "set": "gold",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "b5963997a11f4c0843aa40c77537b2387e87418922db32f7045fdc428a446987"
+ },
+ "061": {
+  "set": "gold",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": true
+  },
+  "file_sha256": "e0bb8a3c5dbd743b4125a16af53fdde36f5a261841724cd5291edc67c75cee73"
+ },
+ "062": {
+  "set": "none-docs",
+  "task": "test-context-cache-pause-mode",
+  "unit": "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "891753f1d7c00acf6478cb821a4fe81e31a7ac46a25c77d2db0d55ff8c4d6a3f"
+ },
+ "063": {
+  "set": "gold",
+  "task": "form-converter-map-payloads",
+  "unit": "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null,
+   "c2": true
+  },
+  "file_sha256": "b31be73cc48ccb5441d54ab5cf02b7ca8671417910fe43de88e55f98e35d6d4b"
+ },
+ "064": {
+  "set": "gold",
+  "task": "api-version-deprecation-handler-handler-arg",
+  "unit": "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "eb3bf1aaf7b5346b06194b9d1a4bf95e57c90bfc8dd0b6a85f3bbe6f37c034eb"
+ },
+ "065": {
+  "set": "recorded",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": false,
+   "c2": true
+  },
+  "file_sha256": "dcc57d4976657b75bbe9c5e097584b53e8f3962632ad6715404fa7146991dd32"
+ },
+ "066": {
+  "set": "none-docs",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "9df6742cb892443a224663e8241e53fbfb705f7c881553714e6526fc2b6cd8eb"
+ },
+ "067": {
+  "set": "gold",
+  "task": "type-mismatch-required-type-arg",
+  "unit": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null,
+   "c2": null
+  },
+  "file_sha256": "cc80afffb351794bdf7ba236aba42f30130a64d513a00c65e066ea196bb4c88b"
+ },
+ "068": {
+  "set": "gold",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "47b72e18d4ad684ed44e9fd77bb278be9e3f6b9ceb038658dca11789c5d734d1"
+ },
+ "069": {
+  "set": "decoy",
+  "task": "form-converter-map-payloads",
+  "unit": "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null,
+   "c2": false
+  },
+  "file_sha256": "94a0871bdac5b78a2e046d10cdd7a6bc56713b740ad30bb2590c2e5bd078e37b"
+ },
+ "070": {
+  "set": "decoy",
+  "task": "observation-record-handled-exception",
+  "unit": "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java",
+  "kind": "docs",
+  "mechanical": {
+   "c1": false,
+   "c2": null
+  },
+  "file_sha256": "8f9780b66646bba2dc7322fcd1a1ac3f18a7d89799b8c70e89ea05ea0af88758"
+ },
+ "071": {
+  "set": "none-docs",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "8bdd44395ace36708b4d751687f89df9d7091376ea50831152f45b718f49409d"
+ },
+ "072": {
+  "set": "gold",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "a2b05dfc6c117f68a67c23ec7d56b4f095a9b3d0e9e7fe576979c8f09c318b08"
+ },
+ "073": {
+  "set": "recorded",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "a86cfa8fec04062f6fd42d1d343ad3426cc360b08001dbc3b776b937a26e1b7c"
+ },
+ "074": {
+  "set": "gold",
+  "task": "spel-simple-context-restricted-conversion",
+  "unit": "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null
+  },
+  "file_sha256": "96109c6802adf79ab06bb8a8b98434032d29d6a6321a560536be0ab9d4c1a4a2"
+ },
+ "075": {
+  "set": "concurrent",
+  "task": "form-converter-map-payloads",
+  "unit": "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": null,
+   "c2": true,
+   "c3": null
+  },
+  "file_sha256": "0b372b98c4e3a8a2aefef793bfc8f587f22ce268fdf8c7b2bca71eae38e9a210"
+ },
+ "076": {
+  "set": "concurrent",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "9df6742cb892443a224663e8241e53fbfb705f7c881553714e6526fc2b6cd8eb"
+ },
+ "077": {
+  "set": "decoy",
+  "task": "servlet-response-ignore-body-flush",
+  "unit": "framework-docs/modules/ROOT/pages/appendix.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "3f65f6ca307b13479cbccf4902126d5024d57a38d97e59bf5cc87fc55b41f262"
+ },
+ "078": {
+  "set": "recorded",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "5c6959b2de619ffec949b10da29b6b6ca9ccbc58cbcf9dd0e104f117d7bdc458"
+ },
+ "079": {
+  "set": "none-docs",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "c789150046e1e630b2e428f06db133964273f9fe44e09269daba9011db468ff9"
+ },
+ "080": {
+  "set": "none-docs",
+  "task": "type-mismatch-required-type-arg",
+  "unit": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null,
+   "c2": null
+  },
+  "file_sha256": "84391e9cfb5d849ef6b6874ffce99710ee2ca905d2814267ad79a1208addda93"
+ },
+ "081": {
+  "set": "concurrent",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "a2b05dfc6c117f68a67c23ec7d56b4f095a9b3d0e9e7fe576979c8f09c318b08"
+ },
+ "082": {
+  "set": "decoy",
+  "task": "retryable-method-retry-event",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "4ea6c8da7d76d6a46cd3bde8b6946aaf04862fff3c6c0bd1f7b9a6ddd472348d"
+ },
+ "083": {
+  "set": "decoy",
+  "task": "type-mismatch-required-type-arg",
+  "unit": "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null,
+   "c2": null
+  },
+  "file_sha256": "8ac663d0b81dfcbae6c9d0d7d16c8f1f20546ec9acc5e8a2575ca74595f9c45b"
+ },
+ "084": {
+  "set": "gold",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "8bdd44395ace36708b4d751687f89df9d7091376ea50831152f45b718f49409d"
+ },
+ "085": {
+  "set": "concurrent",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "ba1839a4bf3aae7da35aca37513ee82fca9ad80eee9ce4ee06e59c7dc5561710"
+ },
+ "086": {
+  "set": "recorded",
+  "task": "api-version-deprecation-handler-handler-arg",
+  "unit": "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "71ad1f6fba5301d481784c3ae44d7b2bc6d7b99ddd8440161e051b82578a42bc"
+ },
+ "087": {
+  "set": "decoy",
+  "task": "observation-record-handled-exception",
+  "unit": "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java",
+  "kind": "docs",
+  "mechanical": {
+   "c1": false,
+   "c2": null
+  },
+  "file_sha256": "80d1ce7f7d7b0ee1a5e147e3437b9e592f245fbca960503c31b6ae577ef025d0"
+ },
+ "088": {
+  "set": "decoy",
+  "task": "api-version-deprecation-handler-handler-arg",
+  "unit": "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "2882246744c2b8d344759e55b1f6ee1e3db8279ebcc9df42312acd9ae90e6608"
+ },
+ "089": {
+  "set": "gold",
+  "task": "observation-record-handled-exception",
+  "unit": "framework-docs/modules/ROOT/pages/integration/observability.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null,
+   "c2": null,
+   "c3": true
+  },
+  "file_sha256": "75dac91152d86a93ccd7d4aaf9cf27ed88466724264f42a0807c32299baa715a"
+ },
+ "090": {
+  "set": "none-docs",
+  "task": "api-version-deprecation-handler-handler-arg",
+  "unit": "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "71ad1f6fba5301d481784c3ae44d7b2bc6d7b99ddd8440161e051b82578a42bc"
+ },
+ "091": {
+  "set": "gold",
+  "task": "spel-simple-context-restricted-conversion",
+  "unit": "framework-docs/modules/ROOT/pages/appendix.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "ee786529ffc7740ce688e9c05aaa8a19acc3b5316f06f7adbeb8b60aee295149"
+ },
+ "092": {
+  "set": "decoy",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "6ea9bc2284a4568acde95a7c8274719acb02d100c541da0594b44d414d35c580"
+ },
+ "093": {
+  "set": "none-docs",
+  "task": "test-context-cache-pause-mode",
+  "unit": "framework-docs/modules/ROOT/pages/appendix.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "53051ee1ad8fd2631829a2b407992810a3fa4369b1e4df623a234bec0e02df0e"
+ },
+ "094": {
+  "set": "none-docs",
+  "task": "spel-simple-context-restricted-conversion",
+  "unit": "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": null
+  },
+  "file_sha256": "b8c7a44f15f587057abd34018a647c83d003dbc0f397f6db5bb6dc6ac159acde"
+ },
+ "095": {
+  "set": "none-docs",
+  "task": "retryable-method-retry-event",
+  "unit": "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "db9f5f33fe8e1848233dfe9f0e1d1e10f0d521316344c8b69b58009c2d102959"
+ },
+ "096": {
+  "set": "decoy",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "f4da06916899e94f01a8538a56df2203369d1e500b04e48bcb5e88e9a3b9a2a6"
+ },
+ "097": {
+  "set": "decoy",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "bd304bf0a0374aa5584b2ac6d746b70ef1213b42702f4867d2de1dd4f3fd65ce"
+ },
+ "098": {
+  "set": "none-docs",
+  "task": "jdbcclient-batch-entry-dsl",
+  "unit": "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "1c57647f2061f87ccad843349b04e0c2a4a11aad671bf8d9b43f2b36c4e36fb2"
+ },
+ "099": {
+  "set": "recorded",
+  "task": "api-version-deprecation-handler-handler-arg",
+  "unit": "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+  "kind": "forced_tests",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "eb3bf1aaf7b5346b06194b9d1a4bf95e57c90bfc8dd0b6a85f3bbe6f37c034eb"
+ },
+ "100": {
+  "set": "none-docs",
+  "task": "retry-max-attempts-to-max-retries",
+  "unit": "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+  "kind": "docs",
+  "mechanical": {
+   "c1": true,
+   "c2": null
+  },
+  "file_sha256": "477eafbabd177eeb29211ddd92b9aaeb664af951fb080843c39bc29d6a732b0b"
+ }
+}

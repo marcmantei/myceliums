@@ -28,11 +28,13 @@ from .stats import mean, paired_bootstrap, percentile
 BASE, ARM = "none", "none-docs"
 RECORDED, CONCURRENT, NEW = "recorded", "concurrent", "none-docs"
 GOLD, DECOY = "gold", "decoy"  # on the judges' sheet only
-JUDGE_ERRORS = 5  # a judge with more wrong answers than this on the commit's edits and the decoys is replaced
+JUDGE_ERRORS = 5  # a judge with more wrong answers than this on the commit's edits and the decoys is replaced,
+JUDGE_ERRORS_DOCS = 2  # and with more than this on those of docs units
 WAYS = ("touched", "covered_strict", "covered_lenient")  # an undecided unit is not covered, or covered
 MOST = 0.5  # more than this share of the docs gap closed is "most of it"
 PLAN_SEED = 183
 KINDS = ("docs", "tests", "code")
+SPLIT_PAIR = ("retry-max-attempts-to-max-retries",)  # the disk watcher stopped the run between its two sessions (about 10 minutes)
 
 
 # ---- the sessions ------------------------------------------------------------------
@@ -178,7 +180,7 @@ def excerpt(before: str, left: str, gold: str, patterns: list[str], around: int 
 
 def decoy_of(spec: dict, parent: str, gold: str) -> str:
     """The faulty edit of a unit: replacements in the parent's file, or the
-    commit's file with one of the parent's tests disabled or emptied."""
+    commit's file with one of the parent's tests (``test``: this one) disabled or emptied."""
     if "replace" in spec:
         text = parent
         for a, b in spec["replace"]:
@@ -188,6 +190,8 @@ def decoy_of(spec: dict, parent: str, gold: str) -> str:
         return text
     tests = list(re.finditer(r"(?m)^(\t+)@Test[^\n]*\n(?:\1@[^\n]*\n)*\1[^\n]*?\bvoid (\w+)\([^\n]*\{\n", gold))
     kept = [m for m in tests if re.search(rf"\b{m.group(2)}\(", parent)] or tests  # in a renamed file every test may have another name
+    if spec.get("test"):
+        kept = [m for m in kept if m.group(2) == spec["test"]]
     for m in kept:
         indent = m.group(1)
         if spec["gold_with_a_test"] == "disabled":
@@ -229,7 +233,7 @@ def sheet(sets: dict[str, dict[str, dict]], tasks: list[dict], criteria: dict, d
         items.append({"item": name, "task": i, "unit": u["path"], "change": task["question"], "wrong_before": spec["wrong"],
                       "criteria": [{"id": x["id"], "text": x["text"]} for x in crit], "diff": unified(before, left),
                       "file_after_excerpt": excerpt(join(before), text, join(commit), patterns)})
-        key[name] = {"set": s, "task": i, "unit": u["path"], "mechanical": {x["id"]: mechanical(x, text) if {"absent", "present"} & set(x) else None for x in crit},
+        key[name] = {"set": s, "task": i, "unit": u["path"], "kind": u["kind"], "mechanical": {x["id"]: mechanical(x, text) if {"absent", "present"} & set(x) else None for x in crit},
                      "file_sha256": hashlib.sha256(text.encode()).hexdigest()}
     return items, key
 
@@ -239,7 +243,7 @@ def judged_units(key: dict, judged: dict, which: str) -> dict[tuple[str, str, st
     decides it; a mechanical failure, or none, leaves it to the judge (``{item:
     {criterion: true or false}}``, every item and criterion). A judge who takes more
     than :data:`JUDGE_ERRORS` of the commit's edits for not covered or of the decoys
-    for covered is refused."""
+    for covered, or more than :data:`JUDGE_ERRORS_DOCS` of those of docs units, is refused."""
     if bad := sorted(set(key) ^ set(judged)):
         raise SystemExit(f"{which} judge: not judged, or unknown: items {', '.join(bad[:10])}")
     out = {}
@@ -247,8 +251,11 @@ def judged_units(key: dict, judged: dict, which: str) -> dict[tuple[str, str, st
         if set(judged[name]) != set(k["mechanical"]) or not all(isinstance(x, bool) for x in judged[name].values()):
             raise SystemExit(f"{which} judge, item {name}: a true or false for each of {', '.join(sorted(k['mechanical']))}")
         out[k["set"], k["task"], k["unit"]] = all(k["mechanical"][c] is True or ok for c, ok in judged[name].items())
-    if len(wrong := judge_errors(out)) > JUDGE_ERRORS:
-        raise SystemExit(f"{which} judge: {len(wrong)} wrong answers on the commit's edits and the decoys (more than {JUDGE_ERRORS}); another judge is needed")
+    wrong, kind = judge_errors(out), {(k["set"], k["task"], k["unit"]): k["kind"] for k in key.values()}
+    docs = [w for w in wrong if kind[w] == "docs"]
+    if len(wrong) > JUDGE_ERRORS or len(docs) > JUDGE_ERRORS_DOCS:
+        raise SystemExit(f"{which} judge: {len(wrong)} wrong answers on the commit's edits and the decoys, {len(docs)} of them on docs units "
+                         f"(more than {JUDGE_ERRORS}, or {JUDGE_ERRORS_DOCS}); another judge is needed")
     return out
 
 
@@ -318,8 +325,11 @@ MEANING = {
 }
 
 
-def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: dict | None = None, n_resamples: int = 10_000) -> dict:
-    """``covered``: :func:`verdicts`; None before the judging."""
+def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: dict | None = None, n_resamples: int = 10_000,
+            split: tuple[str, ...] = SPLIT_PAIR) -> dict:
+    """``covered``: :func:`verdicts`; None before the judging. ``split``: tasks
+    whose pair a pause took apart; the shares are also computed without them (a
+    sensitivity: the sessions count all the same)."""
     measured(tasks)
     sets = load(recorded, run, tasks)
     by_id = {t["id"]: t for t in tasks}
@@ -382,13 +392,17 @@ def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: d
                       "refused_by_hook": sum(x.get("refused_calls", 0) for x in audit), "refused_by_claude": sum(x.get("claude_refusals", 0) for x in audit),
                       "refused_by_claude_cd": sum(x.get("claude_refusals_cd", 0) for x in audit), "disagreements": sum(x.get("disagreements", 0) for x in audit),
                       "span": [min(r["finished_at"] for r in rows.values()), max(r["finished_at"] for r in rows.values())]}
-    shares: dict = {}
-    for w in WAYS:
-        if w not in ways:
-            shares[w] = {RECORDED: None, CONCURRENT: None, "interval": None, "judged": False}
-            continue
-        of = {b: [(gap(b, i, "docs", w), gap(NEW, i, "docs", w)) for i in sets[b]] for b in (RECORDED, CONCURRENT)}
-        shares[w] = {RECORDED: share_closed(of[RECORDED]), CONCURRENT: share_closed(of[CONCURRENT]), "interval": _interval(of[RECORDED], n_resamples), "judged": True}
+    def closed(left_out: tuple[str, ...] = ()) -> dict:
+        shares: dict = {}
+        for w in WAYS:
+            if w not in ways:
+                shares[w] = {RECORDED: None, CONCURRENT: None, "interval": None, "judged": False}
+                continue
+            of = {b: [(gap(b, i, "docs", w), gap(NEW, i, "docs", w)) for i in sets[b] if i not in left_out] for b in (RECORDED, CONCURRENT)}
+            shares[w] = {RECORDED: share_closed(of[RECORDED]), CONCURRENT: share_closed(of[CONCURRENT]), "interval": _interval(of[RECORDED], n_resamples), "judged": True}
+        return shares
+
+    shares, apart = closed(), closed(split)
     diff = lambda fn, base, over: paired_bootstrap([(float(fn(NEW, i)), float(fn(base, i))) for i in over], n_resamples).as_dict()  # noqa: E731
     row = sets[NEW][ids[0]]
     out = {"claude_version": row["claude_version"], "model": row["model"], "sentence": config.DOCS_SENTENCE, "docs_tasks": nine, "summary": summary,
@@ -398,6 +412,7 @@ def compare(recorded: list[dict], run: list[dict], tasks: list[dict], covered: d
                           "usd": diff(lambda s, i: per[i]["usd"][s], RECORDED, ids), "extra_files": diff(lambda s, i: sum(per[i]["extra"][s].values()), RECORDED, ids)},
            "tasks": per}
     out["outcome"] = outcome(shares)
+    out["without_split_pair"] = {"tasks": [i for i in split if i in by_id], "docs_gap_closed": apart, "outcome": outcome(apart)}
     return out
 
 
@@ -417,6 +432,10 @@ def lines(c: dict) -> list[str]:
     for w in WAYS:
         x = c["docs_gap_closed"][w]
         L.append(f"| {say[w]} | {num(x[RECORDED])} | {'–' if x['interval'] is None else '[' + ', '.join(f'{v:.2f}' for v in x['interval']) + ']'} | {num(x[CONCURRENT])} |")
+    if (x := c["without_split_pair"])["tasks"]:
+        L += ["", "Sensitivity without " + ", ".join(f"`{i}`" for i in x["tasks"]) + " (a pause of the run lies between its two sessions, which count above): "
+              + "; ".join(f"{say[w]} {num(x['docs_gap_closed'][w][RECORDED])} (recorded), {num(x['docs_gap_closed'][w][CONCURRENT])} (concurrent)" for w in WAYS)
+              + f"; by the same rule: {x['outcome']}."]
     L += ["", f"More than {MOST:.2f} is \"most\". Forced tests' gap closed (decides nothing): " + ", ".join(f"{w} {num(v)}" for w, v in c["forced_tests_gap_closed"].items()) + ".", "",
           "| | `none` recorded (20) | `none` concurrent (9) | `none-docs` (20) | `none-docs` minus `none` |", "|---|---:|---:|---:|---|",
           f"| Mean recall (a) | {f3(r['mean_recall'])} | {f3(k['mean_recall'])} | {f3(n['mean_recall'])} | recorded {sign(c['difference']['recall'])}; concurrent, 9 tasks {sign(c['difference']['recall_on_the_nine_concurrent'])} |"]
