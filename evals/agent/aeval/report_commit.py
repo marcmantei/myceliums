@@ -445,3 +445,68 @@ def decide(rows: list[dict], tasks: list[dict], tasks_sha256: str) -> dict:
             "statuses": {s: sum(r.get("status") == s for r in rows) for s in sorted({str(r.get("status")) for r in rows})}, **one, "tasks_sha256": tasks_sha256,
             "per_task": per, "pooled_recall": sum(weight[t] * per[t] for t in per) / sum(weight.values()), "mean_recall_all_tests": mean(every), "threshold": CEILING, "ceiling": ceiling,
             "primary": ["tokens"] if ceiling else ["recall", "tokens"]}
+
+
+def describe(rows: list[dict], tasks: list[dict], paired_tokens_rel_sd: dict[str, float] | None = None) -> dict:
+    """What the sessions of one arm show beside the decision: recall by type
+    with every missed unit, tokens, cost, wall time with and without API stalls,
+    and the main run projected from them. The detectable recall difference has
+    no paired data behind it: ``paired_sd_upper`` is the paired SD of two arms'
+    3-repetition means if every bit of the between-task SD were session noise
+    (sqrt(2/3) of it) and no task favoured an arm. The between-task SD itself is
+    not the paired SD: the part of it that is the task cancels in a pair.
+    ``paired_tokens_rel_sd``: paired SDs of another run, as a share of its mean."""
+    by_id = {t["id"]: t for t in tasks}
+    rows = sorted(rows, key=lambda r: r["task_id"])
+    n, per = len(rows), {}
+    for r in rows:
+        t, changed = by_id[r["task_id"]], r["edit"]["files_changed"]
+        missed = [{"kind": u["kind"], "files": u["files"]} for u in counted(t) if not touched(t, u, changed)]
+        a = r.get("isolation_audit") or {}
+        per[r["task_id"]] = {
+            "status": r["status"], "solved": solved(r), "recall": recall(t, changed), "recall_all_tests": recall(t, changed, ALL_TESTS),
+            **{k: f"{sum(touched(t, u, changed) for u in counted(t, (k,)))}/{len(counted(t, (k,)))}" for k in (*PRIMARY, "new_tests", "optional")},
+            "missed": missed, "tokens": spend(r)[0], "usd": spend(r)[1], "complete_usage": spend(r)[2], "api_calls": r.get("api_calls"),
+            "wall_s": r["wall_s"], "wall_net_s": round(wall_net(r), 2), "grading_s": (r["edit"].get("test") or {}).get("seconds"),
+            **{k: a.get(k, 0) for k in ("refused_calls", "claude_refusals", "claude_refusals_cd", "api_stalls", "api_stall_s", "disagreements", "kernel_refusals")}}
+    values = [p["recall"] for p in per.values()]
+    kinds = {}
+    for k in PRIMARY:
+        have = [(len(u), sum(touched(by_id[r["task_id"]], x, r["edit"]["files_changed"]) for x in u)) for r in rows if (u := counted(by_id[r["task_id"]], (k,)))]
+        kinds[k] = {"units": sum(x for x, _ in have), "touched": sum(y for _, y in have), "tasks": len(have), "mean_over_tasks": mean([y / x for x, y in have])}
+    spread, upper = sd(values), math.sqrt(2 / 3) * sd(values)
+    levels = {"one test": 0.05, "first Holm step, three tests": 0.05 / 3, "first Holm step, six tests": 0.05 / 6}
+    usd = [p["usd"] for p in per.values()]
+    secs = {k: [p[k] + (p["grading_s"] or 0) + OVERHEAD_S for p in per.values()] for k in ("wall_s", "wall_net_s")}
+    out = {"sessions": n, "solved": sum(p["solved"] for p in per.values()), "mean_recall": mean(values), "sd_recall_between_tasks": spread,
+           "tasks_at_one": sum(v == 1 for v in values), "pooled_recall": sum(k["touched"] for k in kinds.values()) / sum(k["units"] for k in kinds.values()),
+           "by_type": kinds, "recall_all_tests": mean([p["recall_all_tests"] for p in per.values()]),
+           "tokens_total": sum(p["tokens"] for p in per.values()), "tokens_mean": mean([p["tokens"] for p in per.values()]),
+           "tokens_sd_between_tasks": sd([p["tokens"] for p in per.values()]), "usd_total": sum(usd), "usd_mean": mean(usd),
+           "wall_s_mean": mean([p["wall_s"] for p in per.values()]), "wall_net_s_mean": mean([p["wall_net_s"] for p in per.values()]),
+           "main_run": {"sessions": SESSIONS, "usd": mean(usd) * SESSIONS, "usd_95": _boot(usd, SESSIONS),
+                        "hours": mean(secs["wall_s"]) * SESSIONS / 3600, "hours_95": _boot(secs["wall_s"], SESSIONS / 3600),
+                        "hours_without_stalls": mean(secs["wall_net_s"]) * SESSIONS / 3600},
+           "detectable_recall": {"paired_sd_upper": upper, **{k: detectable(upper, alpha=a) for k, a in levels.items()}},
+           "tasks": per}
+    if paired_tokens_rel_sd:
+        out["detectable_tokens_share_of_mean"] = {pair: {"paired_rel_sd": s, **{k: detectable(s, alpha=a) for k, a in levels.items()}}
+                                                  for pair, s in paired_tokens_rel_sd.items()}
+    return out
+
+
+def _boot(xs: list[float], scale: float, n_resamples: int = 10_000, seed: int = 0) -> list[float]:
+    rng = random.Random(seed)
+    draws = sorted(math.fsum(xs[rng.randrange(len(xs))] for _ in xs) / len(xs) * scale for _ in range(n_resamples))
+    return [percentile(draws, 0.025), percentile(draws, 0.975)]
+
+
+def paired_token_sds(rows: list[dict]) -> dict[str, float]:
+    """The SD over tasks of the paired differences of mean tokens, as a share of
+    the second arm's mean, in a finished run with these arms (#182)."""
+    values, ids = per_task(rows, lambda r: spend(r)[0]), sorted({r["task_id"] for r in rows})
+    out = {}
+    for a, b in PAIRS:
+        if ps := pairs(values, ids, a, b):
+            out[f"{a} vs {b}"] = sd([x - y for x, y in ps]) / mean([y for _, y in ps])
+    return out

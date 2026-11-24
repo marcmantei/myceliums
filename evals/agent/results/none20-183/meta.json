@@ -1,0 +1,43 @@
+{
+  "attempts_total": 20,
+  "bash": true,
+  "claude_version": "2.1.331",
+  "comparisons": "pairwise",
+  "conditions": [
+    "none"
+  ],
+  "date": "2026-11-24",
+  "effort": "medium",
+  "label": "2026-11-24-none20",
+  "login": {
+    "api_key_source": [
+      "none"
+    ],
+    "variables_present": [
+      [
+        "CLAUDE_SECURESTORAGE_CONFIG_DIR"
+      ]
+    ]
+  },
+  "max_turns": 100,
+  "mcp_tools_offered": null,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "787920c",
+  "myc_sha256": "bf84b0e854f68b7ae39401723e30e70c7ab714c86891b33bf066bf100dccf857",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Pins are in tasks/tasks-commit-replay.json (tasks_sha256); index metadata is left out: arm none uses no index."
+  ],
+  "profile": "realistic",
+  "reps": 3,
+  "retried_runs": [],
+  "runs_final": 20,
+  "schedule": "interleaved",
+  "sessions_launched_ledger": 20,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-commit-replay.json",
+  "tasks_sha256": "a8d649a1ef5129b59d0e5ed8c966114cab0350207f447f1b61d281578316d3f5",
+  "timeout_s": 2400,
+  "tool_search": null
+}

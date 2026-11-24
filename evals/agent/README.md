@@ -1579,7 +1579,7 @@ name is stored in the run's config, so a resumed run cannot change it.
 
 Do agents change everything a real change needs, in other modules, tests and
 docs, and does myceliums save tokens per solved task? 20 edit tasks replay
-recent spring-framework commits. **Pilot run, main run not**: the pilot and the
+recent spring-framework commits. **Pilot run, decision recorded, main run not**: the pilot and the
 first pre-registration were fixed before the first session; the recall was redefined after the pilot in arm `none`, without using any outcome of C or D (*Pre-registration*). The warm-up has run and all 20 prechecks are valid.
 
 **Mining** ([`groundtruth/commit_replay.py`](groundtruth/commit_replay.py)
@@ -1768,7 +1768,7 @@ It was chosen knowing that arm `none` missed most of those tests, and it moves `
 * **Decision rule, before the main run:** one session of arm `none` per task (20 sessions, a label of their own, not pooled with the pilot or the main run; all 20 final sessions count, timeouts and turn limits included). The **unrounded** mean over the 20 tasks of their (a) decides, with the threshold 0.90 − 1e-9; it is shown with three decimals:
   **at or above it, tokens become the sole primary outcome** (Holm over the three pairs) and (a) is a **harm check**, reported for each pair as "harm detected" (the 95 % interval of the difference lies entirely below zero) or "harm not detected", always with the number of tasks worse/better and **two bounds on the loss not excluded**: the interval's lower bound, and the exact one-sided 95 % bound (Clopper-Pearson) on the share of worse tasks, each of which loses at most everything (none of 20 worse: 13.9 %; one: 21.6 %).
   The interval alone cannot contain a loss where no task is worse, and choosing between the two by the data would let the bound shrink when a task gets worse; both together never do (a test). "Not detected" is never evidence of none.
-  **Below it, (a) and (b) stay co-primary** (Holm over six tests: three pairs × two outcomes). `agent_eval.py ceiling LABEL --write` computes it and records it once (`groundtruth/decision_183.json`: the mean, each task's recall, the sessions' statuses, the task file's sha256, the Claude Code version and the model, of which there must be one each). **`report` refuses without that record**, or when the task file is another one, and says when the run's CLI or model differ from it. These 20 sessions change nothing else. **Whether a main run happens at all is Marc's decision.**
+  **Below it, (a) and (b) stay co-primary** (Holm over six tests: three pairs × two outcomes). `agent_eval.py ceiling LABEL --write` computes it and records it once ([`groundtruth/decision_183.json`](groundtruth/decision_183.json): the mean, each task's recall, the sessions' statuses, the task file's sha256, the Claude Code version and the model, of which there must be one each). **`report` refuses without that record**, or when the task file is another one, and says when the run's CLI or model differ from it. These 20 sessions change nothing else. **Whether a main run happens at all is Marc's decision.**
 * **Secondary outcomes**, not tested: the **recall with new tests (the outcome registered first)**: docs + remote code (the optional ones included) + all test files; the share of the new tests alone; docs, remote and forced-test recall alone; tests pass, which is also success (an edit session succeeds when the task's test command passes, nothing else); tokens and cost per solved task; precision (share of the changed files that the commit changed); API calls; wall time, as measured and without API stalls (*Refused reads and API stalls*).
 * **Comparisons:** C vs `none`, D vs `none`, C vs D. Every difference is **first minus second**: a positive recall difference favours the first arm, a negative token difference favours it.
   Paired percentile bootstrap over the tasks (10,000 resamples, seed 0), two-sided p by inverting it; Holm as above at 5 %. With 20 tasks the percentile bootstrap is slightly liberal. Intervals are 95 % and not corrected.
@@ -1923,6 +1923,76 @@ Artifacts: [`results/pilot-183/`](results/pilot-183/) (`sessions.jsonl` with the
 | `type-mismatch-required-type-arg` | 1.00 | – | 1/1 | – | 0/1 | 0.50 | 14 | 14 | 0 (0) |
 
 Mean (a) 0.80, SD between the five tasks 0.45; recall with new tests 0.57 (0.54 before the corrected classifications). `beans-max-...` has one counted dependent, a docs page, and the session did not touch it. Projection of the main run without the stall 9.2 h. Five tasks say nothing about the decision rule, which needs the 20 sessions.
+
+##### Sessions of arm `none` and the recorded decision (24 November 2026, 11:47-13:18)
+
+20 sessions, one per task, as pre-registered: label `2026-11-24-none20`, not pooled with anything, all 20 final at the first attempt, status ok, no API error or stall, no limit. Claude Code 2.1.331, `claude-sonnet-5-5`, normal login (`apiKeySource` `none`), `myc` not used in this arm, task file sha256 `a8d649a1ef51`. Checked before: the task file (0 problems), the frozen dependencies (6,951 files, `cc17a8254506`), the JDK copy, the login names, the mock probe of `none` with the new prompt sentence. One change to the harness before the first session: a failed login (401/403, "Please run /login", ...) stops a run and is never a final session; until then it would have counted as a failed session.
+Artifacts: [`results/none20-183/`](results/none20-183/) (`sessions.jsonl`, `summary.json`, `meta.json`), [`groundtruth/decision_183.json`](groundtruth/decision_183.json); transcripts are archived outside the repository.
+
+**The decision by the registered rule: mean (a) = 0.661** (unrounded 0.66125; 0.792 over the 72 pooled units), below 0.90 − 1e-9. **(a) and (b) stay co-primary.** 10 of the 20 tasks have (a) = 1, 5 have 0; SD between tasks 0.42. Tests pass 20 of 20. Recall with new tests (the outcome registered first): 0.45.
+
+| By type | Units | Touched | Tasks with any | Mean over those tasks |
+|---|---:|---:|---:|---:|
+| remote code | 45 | 44 | 14 | 0.99 |
+| docs | 13 | 2 | 9 | 0.22 |
+| forced tests | 14 | 11 | 7 | 0.57 |
+
+So (a) has no room in remote code (44 of 45) and almost all of it in docs (2 of 13): nine tasks have docs, four of them nothing else. The main run's (a) would mostly measure whether an arm looks at `framework-docs`, and the agents here mostly do not look at all.
+
+| Task | (a) | Remote | Docs | Forced tests | New tests | Tokens | Cost | Session s | Grading s | Mean load | Hook refusals | Claude Code refusals |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `api-version-deprecation-handler-handler-arg` | 1.00 | 2/2 | – | 2/2 | – | 188,991 | $0.19 | 168 | 45 | 43.6 | 3 | 0 |
+| `bean-provider-parameterized-type-reference` | 1.00 | 5/5 | – | – | 0/1 | 157,647 | $0.16 | 339 | 98 | 69.9 | 1 | 0 |
+| `beans-max-nested-path-depth` | 0.00 | – | 0/1 | – | 0/5 | 400,085 | $0.29 | 214 | 81 | 102.3 | 0 | 1 |
+| `client-builders-deep-copy-default-headers-cookies` | 1.00 | 2/2 | – | – | 0/3 | 278,983 | $0.22 | 248 | 77 | 21.0 | 2 | 0 |
+| `content-negotiation-no-fallback-mapping` | 1.00 | 1/1 | – | – | 1/2 | 211,427 | $0.15 | 166 | 45 | 24.4 | 0 | 0 |
+| `deferred-bean-registrar-contains-bean` | 1.00 | 3/3 | – | – | 0/7 | 335,208 | $0.33 | 220 | 88 | 48.3 | 2 | 0 |
+| `error-response-interceptor-with-request` | 1.00 | 6/6 | – | – | 0/4 | 271,660 | $0.22 | 167 | 101 | 36.2 | 1 | 0 |
+| `form-converter-map-payloads` | 0.80 | 3/3 | 0/1 | 1/1 | – | 397,621 | $0.27 | 389 | 75 | 103.9 | 2 | 0 |
+| `http-range-honor-if-range` | 1.00 | 4/4 | – | – | 1/6 | 254,098 | $0.22 | 203 | 65 | 68.8 | 1 | 0 |
+| `jdbcclient-batch-entry-dsl` | 1.00 | – | 1/1 | 3/3 | – | 1,177,556 | $0.62 | 250 | 40 | 53.8 | 5 | 1 |
+| `jsonl-media-type-support` | 0.80 | 8/9 | – | 0/1 | 0/1 | 195,616 | $0.18 | 50 | 167 | 73.5 | 4 | 0 |
+| `message-source-default-charset` | 0.00 | – | – | 0/1 | – | 137,074 | $0.12 | 146 | 60 | 73.0 | 1 | 0 |
+| `mime-type-parameter-names-case-insensitive` | 1.00 | 1/1 | – | – | 0/2 | 170,231 | $0.10 | 29 | 129 | 32.2 | 1 | 1 |
+| `observation-record-handled-exception` | 0.62 | 5/5 | 0/3 | – | 0/9 | 222,257 | $0.22 | 169 | 79 | 55.7 | 1 | 0 |
+| `retry-max-attempts-to-max-retries` | 1.00 | 2/2 | 1/1 | 5/5 | – | 581,447 | $0.41 | 204 | 45 | 36.1 | 6 | 0 |
+| `retryable-method-retry-event` | 0.50 | 1/1 | – | 0/1 | 0/3 | 165,054 | $0.21 | 131 | 60 | 40.8 | 1 | 0 |
+| `servlet-response-ignore-body-flush` | 0.50 | 1/1 | 0/1 | – | 0/1 | 133,798 | $0.14 | 162 | 71 | 72.0 | 1 | 0 |
+| `spel-simple-context-restricted-conversion` | 0.00 | – | 0/2 | – | 1/1 | 357,077 | $0.29 | 159 | 54 | 37.3 | 4 | 0 |
+| `test-context-cache-pause-mode` | 0.00 | – | 0/2 | – | 0/3 | 70,401 | $0.11 | 23 | 327 | 106.9 | 0 | 1 |
+| `type-mismatch-required-type-arg` | 0.00 | – | 0/1 | – | 0/1 | 37,012 | $0.04 | 8 | 140 | 25 (grading) | 0 | 0 |
+
+Mean: 287,162 tokens (SD between tasks 245,152), $0.224, 172 s per session, 4.47 USD in all (about 4 were approved). No stall, so wall times without stalls are the same. Machine load 13-134 (median 56), so wall times are upper estimates of a quiet machine's; `type-mismatch-...` was too short for a load sample.
+
+**Every missed unit** (15 of 72; from the sessions' tool calls, diffs and last messages):
+
+| Task | File | Kind | Why |
+|---|---|---|---|
+| `beans-max-nested-path-depth` | `data-binding.adoc` | docs | searched `src/main` of two modules only; `framework-docs` in no call or result |
+| `form-converter-map-payloads` | `message-converters.adoc` | docs | its searches were limited to `*.java`; no docs searched |
+| `jsonl-media-type-support` | `ProtobufJsonEncoder.java` | remote | its grep listed the file; left alone on purpose ("isn't one of the JSON codecs you listed") |
+| `jsonl-media-type-support` | `HttpMessageWriterViewTests.java` | forced tests | compiled and ran nothing; no test searched |
+| `message-source-default-charset` | `ResourceBundleMessageSourceTests.java` | forced tests | compiled main and tests (both pass, the test fails only when run) and ran no test |
+| `observation-record-handled-exception` | `observability.adoc` | docs | searched and edited main code only; no docs searched |
+| `observation-record-handled-exception` | `reactive/UserController.java` | docs | its search for `setError` covered `src/main` of three modules, not `framework-docs` |
+| `observation-record-handled-exception` | `servlet/UserController.java` | docs | as above |
+| `retryable-method-retry-event` | `RetryTemplateTests.java` | forced tests | ran no test; its summary says that tests asserting the old message "will need updating" |
+| `servlet-response-ignore-body-flush` | `appendix.adoc` | docs | added the property's constant; searched no docs (the appendix lists such properties) |
+| `spel-simple-context-restricted-conversion` | `appendix.adoc` | docs | searched no docs |
+| `spel-simple-context-restricted-conversion` | `evaluation.adoc` | docs | searched no docs; added tests instead |
+| `test-context-cache-pause-mode` | `appendix.adoc` | docs | its summary says the docs were not updated; read three main files, searched nothing |
+| `test-context-cache-pause-mode` | `caching.adoc` | docs | as above |
+| `type-mismatch-required-type-arg` | `mvc-ann-rest-exceptions.adoc` | docs | three calls in all; no docs searched |
+
+One pattern: the eleven missed docs units were not searched for: `framework-docs` occurs in none of those seven transcripts. The two found (`core.adoc` in `jdbcclient-...`, `resilience.adoc` in `retry-...`) came from a search over the whole checkout without a file-type filter. The sessions of the three missed forced tests ran no test. `observation-...` set the context error at once and reports it at completion, exactly the reading the review gave for leaving its six tests out of (a).
+
+**Audit.** Every refused call and every flag of the 20 sessions was read, and all shell and search calls of the ten with missed units (not the models' other messages): 36 hook refusals (expansions, `sed -i`, `python3` heredocs, braces, two reads of wrong paths, two Gradle `check` tasks, one write outside the working copy and one command naming that file), no disagreement, no kernel refusal, no edit naming a protected place. Two flags, both benign: the CLI's own "output too large, saved to ..." line names this session's result file under `~/.claude/projects/` (`error-response-...`, `jdbcclient-...`); neither session opened it.
+**Refused by Claude Code itself:** 4 calls in 4 sessions (`mime-...`, `beans-...`, `test-context-...`, `jdbcclient-...`), all with a relative `cd` and relative reads, the plainest a `cd DIR; grep -n ... MediaType.java`. None of the 80 Bash calls without `cd` that reached that layer was refused; of the 7 calls with `cd` 4 were refused here and 3 by the hook, so none ran. The sentence did not stop the agents from using `cd` (7 calls in 20 sessions, 8 in the five of the pilot) but made it rarer, and `cd` is now a stronger suspect; one `cd` call ran in the pilot, so it is still not proven.
+Sockets: no remote connection in 4,610 samples. One TCP listener on all interfaces (first seen at 12:02:37, in the last seconds of the grading of `client-builders-...`; the sampler logs a kind of socket once, so later ones are not excluded; its three test classes name no server, cause not found). So *No task's tests listen on all interfaces* (above, a static reading) is not confirmed for that task, and the grading sandbox does not stop inbound connections.
+
+**Main run, projected from these** (mean × 180): **$40** (95 % bootstrap over the tasks $31-51), **13.7 h** (12.1-15.6 h), below the limits of $288 and 24 h; the same without stalls. It carries over what `none` measured: C and D are not measured and may cost more or less.
+
+**Detectable difference** (two-sided 5 %, power 80 %, 20 tasks). The between-task SD of these sessions (0.42) is **not** the SD of a paired difference: a task's own level cancels in the pair. It is used here only as what the session noise could be at most, with no task favouring an arm: if all of it were noise, the difference of two arms' 3-repetition means would have SD √(2/3) of it, 0.35, and the detectable difference of (a) would be 0.22 for one test and 0.27 for the first Holm step over six. With one session per task the noise cannot be separated from the task, most of it looks like the task (docs or not), and an arm that finds docs in some tasks and not in others would add variance this does not contain, so the true paired SD is unknown. For scale, paired SDs of 0.1, 0.2 and 0.3 give 0.08, 0.16 and 0.23 for the first Holm step over six. (b): paired differences of a finished run exist only for #182's question tasks (same repository, model and CLI generation, 3 repetitions): their SD is 0.53 of the baseline's mean for C vs `none`, 2.69 for D vs `none` and 0.98 for C vs D, so differences of 41%, 210% and 76% of the mean for the first Holm step over six; edit sessions may differ.
 
 #### Warm-up
 
