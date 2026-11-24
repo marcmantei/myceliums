@@ -1759,8 +1759,7 @@ the path test's seconds are slow; working on a copy of the #182 index. A reviewe
   under the new path's id, and so did a copied data directory. So a worktree at another path cannot use a base index today (#198/#184).
 * **Disk:** 0.87 GB per embedded index. `myc diff` keeps ten graph snapshots of about 190 MB beside it (3.1 GB in all after ten updates). They hold **earlier analyses' graphs**: an
   index derived newest-first would show a session symbols of later commits. The harness removes them from derived indexes and from every session's copy, and `myc diff` is off the Bash allowlist.
-* The task parents lie before v7.1.0, so their derivation runs **backwards** in history; the figures above are the forward case. Their own table (time, re-embedded symbols, graph equality per parent) follows when that job has ended;
-  the first nine, 12 to 582 symbols re-embedded in 52-189 s, all equal a fresh graph.
+* The task parents lie before v7.1.0, so their derivation runs **backwards** in history; the figures above are the forward case. All 31 parents (20 kept, 11 reserves) were derived from the base: the kept 20 in 4292 s in all (median 157 s, at most 869 s, of which a fresh graph-only comparison build ~30 s), re-embedding a median 396 (at most 4773) of 139k-146k symbols. Each equals a fresh graph-only build in symbols, files, relationships and mentions, has exactly the parent's commit, one generation and, after stripping, no snapshots; 0.88 GB each without snapshots (27 GB for 31). For 8 of 9 tasks with a checkable name the parent's index has no symbol the commit introduces (the positive control finds it in the v7.1.0 index; the ninth, the deferred registrar's interface, was removed again before v7.1.0). `groundtruth/derived_indexes.json` has the numbers per parent.
 
 **Budget estimate** (not measured; from #163/#171 scaled to edit tasks).
 #163/#171 question sessions with Bash at 40 turns: 8 turns, 100-136k input
@@ -1881,7 +1880,7 @@ expansion, and an incomplete list of closed places). This is the last round; the
   visible; Spring's commits may be in the model's training data.
 * Checked with the mock API, hook on and, to see the layer below it, hook off (`probe --no-hook`): 31 places by name from a Python program inside the sandbox (keychains, Claude's history, other projects and credentials file, `.ssh`, checkouts, gold, parents, the other cache, history clone,
   build cache, stored scans, `/private/tmp/claude-501`, `/Volumes`, `/Users/Shared`, the `/System/Volumes/Data` alias of the home directory, ...): all refused; loopback works; settings and wrapper files cannot be written; Gradle's home can. No connection to another machine was attempted.
-  **Not yet: Gradle inside this sandbox** (it waits for the index job).
+  **Gradle in the sandbox: not working yet** (see *Gradle in the sandbox* below).
 * **Same instructions, one CLI.** Claude Code reads AGENTS.md only where there is no CLAUDE.md, and `setup-claude`
   writes one, so C alone missed Spring's AGENTS.md (found in the #182 review): the harness makes C's CLAUDE.md import it. Six of
   the 20 parents have an AGENTS.md (`spel-simple-...`, `observation-...`, `content-negotiation-...`, `client-builders-...`,
@@ -1914,9 +1913,12 @@ searches, runs `myc callers`, reads and edits the primary file and runs one comm
 | C | no problem; AGENTS.md and the routing block | the same + 9 myceliums tools | Grep ran | answered from the index | yes; setup-claude's files not counted |
 | D | no problem; AGENTS.md | without Grep and Glob | refused; the refusal names neither the checkout nor the hook | answered from the index | yes |
 
-The table is the probe of 24 November with `claude` inside an allowlist profile (the previous design), without Gradle. With the present design (Claude Code's own sandbox) the same probe ran for `none`, C and D: no isolation problem except that
-C's and D's `myc` had no index for the path, because the index job was rebuilding it for another one (to be repeated). The probe of 23 November (arms `A,C,D`, a denylist profile around `claude`) also ran the real test command in
-the session (43-45 s) and in the grading (9 s), offline; the tests failed as they must, the scripted edit being a comment. The mock gives every answer one message id, so `api_calls` is 1 there. No real session has run.
+The table is the probe of 24 November (arms `none`, C, D, Claude Code's own sandbox, the repository's graph and embeddings index of v7.1.0-derived parent, shared path): `myc` answers from the index in C and D and is not
+found in `none`, AGENTS.md reaches every arm, no isolation problem. Earlier probes with other designs ran Gradle in the session and grading (23 November); the current design does not run it yet. The mock gives every answer one message id, so `api_calls` is 1 there. No real session has run.
+
+**Gradle in the sandbox.** With the offline task commands, Gradle starts, its wrapper opens its lock file, the Develocity plugin stores its data and Gradle runs `buildSrc:compileJava`, all inside Claude Code's sandbox (and in the grading profile). It then fails: Gradle's worker JVMs (checkstyle and the test executors)
+cannot connect to their own daemon over loopback. The sandboxes' loopback rule does not cover IPv4-mapped IPv6 addresses: a small Java program under the grading profile connects to `127.0.0.1` with `-Djava.net.preferIPv4Stack=true` and is refused (`Operation not permitted`) without it (Java 25). Claude Code sets that flag through
+`JAVA_TOOL_OPTIONS` for its commands; the harness adds it also through `JDK_JAVA_OPTIONS`, and the Gradle daemon picks it up, but its workers fail all the same (seen at the same step in the session and in grading); whether Gradle drops it for workers or applies another reason is not known. Until this is solved, agents cannot compile or test in the isolated sessions and no real session can start.
 
 ```bash
 python3 evals/agent/agent_eval.py --tasks $T index --repo spring-spel-simple-context-restricted-conversion --skip-embeddings --myc $MYC

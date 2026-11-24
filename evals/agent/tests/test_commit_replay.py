@@ -402,15 +402,29 @@ class Isolation(unittest.TestCase):
         home = os.path.realpath(Path.home())
         for closed in (home, "/private/tmp", "/private/var/folders", "/Users/Shared", "/Volumes", f"{home}/Library/Keychains",
                        f"{home}/.claude/projects", f"{home}/.claude/history.jsonl", f"{home}/.claude/.credentials.json",
-                       f"/private/tmp/claude-{os.getuid()}", f"{home}/.gradle/caches/build-cache-1", f"{home}/.gradle/build-scan-data",
+                       f"/private/tmp/claude-{os.getuid()}", f"{home}/.gradle/caches/build-cache-1",
                        f"{home}/.gradle/daemon/**/*.out.log"):
             self.assertIn(closed, fs["denyRead"])
         self.assertFalse([p for p in fs["denyRead"] if "gold" in p or "spring-history" in p or "myceliums" in p],
                          "the model is shown this list")
         for p in (".claude", ".mcp.json", "gradle/wrapper", "gradlew", ".git/hooks", ".git/config"):
             self.assertIn(os.path.realpath(self.root) + "/" + p, fs["denyWrite"])
-        for p in ("init.d", "gradle.properties", "wrapper"):
+        for p in ("init.d", "gradle.properties"):
             self.assertIn(f"{home}/.gradle/{p}", fs["denyWrite"])
+        self.assertNotIn(f"{home}/.gradle/wrapper", fs["denyWrite"])  # the wrapper's lock file must stay writable
+        g = top / "gh"
+        (g / "build-scan-data/spool").mkdir(parents=True)
+        (g / "build-scan-data/spool/old.scan").write_text("x")
+        self.assertEqual(isolation.earlier_scans({"GRADLE_USER_HOME": str(g)}), [str(g / "build-scan-data/spool/old.scan")])
+        self.assertIn(str(g / "build-scan-data/spool/old.scan"), isolation.never({"GRADLE_USER_HOME": str(g)}))
+        dist = g / "wrapper/dists/gradle-9/abc/gradle-9.9.0"
+        (dist / "bin").mkdir(parents=True)
+        for f in ("x.zip", "x.zip.ok", "x.zip.lck"):
+            (dist.parent / f).write_text("")
+        denied_w = isolation.gradle_unwritable({"GRADLE_USER_HOME": str(g)})
+        self.assertIn(os.path.realpath(dist), [os.path.realpath(x) for x in denied_w])
+        self.assertIn("x.zip.ok", [Path(x).name for x in denied_w])
+        self.assertNotIn("x.zip.lck", [Path(x).name for x in denied_w])
         for wide in (home, "/", "/private/tmp", f"{home}/.cache", f"{home}/.claude", f"{home}/Library"):
             self.assertNotIn(wide, fs["allowRead"] + fs["allowWrite"])
         self.assertTrue(st["permissions"]["blockReadsOutsideWorkingDirectories"] and st["permissions"]["blockWritesOutsideWorkingDirectories"])
@@ -421,7 +435,9 @@ class Isolation(unittest.TestCase):
         self.assertLessEqual({"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"}, denied)
         senv = isolation.session_environment(top)
         self.assertFalse([k for k in senv if "CONFIG_DIR" in k or "SECURESTORAGE" in k or "KEY" in k or "TOKEN" in k])
-        self.assertIn(f"-Djava.io.tmpdir={top}/t", senv["JAVA_TOOL_OPTIONS"])
+        for k in ("JAVA_TOOL_OPTIONS", "JDK_JAVA_OPTIONS"):  # every JVM of a build, worker JVMs included
+            self.assertIn(f"-Djava.io.tmpdir={top}/t", senv[k])
+            self.assertIn("-Djava.net.preferIPv4Stack=true", senv[k])  # loopback, with the sandbox's rule
         self.assertEqual(isolation.MARKER, bashcmd.ISOLATED_MARKER)
         for repo in ({"isolated": True}, {}):
             with mock.patch.dict(os.environ, {"AEVAL_WORK_ROOT": str(top / "wr/x"), "AEVAL_CACHE": str(top / "cache")}):

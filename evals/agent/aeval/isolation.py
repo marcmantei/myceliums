@@ -84,21 +84,40 @@ def gradle_home(env: dict) -> Path:
 
 def never(env: dict) -> list[str]:
     """Paths and patterns that stay closed inside readable places: secrets of
-    the user's configuration, Gradle's build cache, stored scans and daemon
-    logs (other builds' output)."""
+    the user's configuration, Gradle's build cache, scans stored by earlier
+    builds and daemon logs (other builds' output)."""
     g = gradle_home(env)
     return ([str(Path.home() / n) for n in NEVER]
             + [f"/private/tmp/claude-{os.getuid()}", f"/tmp/claude-{os.getuid()}"]  # every session's command output
-            + [str(g / "caches" / "build-cache-1"), str(g / "build-scan-data"), str(g / "daemon" / "**" / "*.out.log")])
+            + [str(g / "caches" / "build-cache-1"), str(g / "daemon" / "**" / "*.out.log")] + earlier_scans(env))
 
 
 def unwritable(workdir: Path, env: dict) -> list[str]:
     """What a command may not change although it lies in a writable place:
     Claude Code's settings in the working copy, the Gradle wrapper, and what
     would carry code into a later session through Gradle's home."""
-    w, g = Path(os.path.realpath(workdir)), gradle_home(env)
+    w = Path(os.path.realpath(workdir))
     return ([str(w / n) for n in (".claude", ".mcp.json", "gradle/wrapper", "gradlew", "gradlew.bat", ".git/hooks", ".git/config")]
-            + [str(g / n) for n in ("init.d", "init.gradle", "init.gradle.kts", "gradle.properties", "wrapper")])
+            + gradle_unwritable(env))
+
+
+def earlier_scans(env: dict) -> list[str]:
+    """Files of build scans stored by earlier builds (the plugin fails when it
+    cannot create files in their directories, so only the payloads are closed)."""
+    d = gradle_home(env) / "build-scan-data"
+    return sorted(str(p) for p in d.rglob("*") if p.is_file()) if d.is_dir() else []
+
+
+def gradle_unwritable(env: dict) -> list[str]:
+    """What would carry code into a later session through Gradle's home: its
+    init scripts and properties, and the unpacked distributions. The
+    distribution's lock file (``.zip.lck``) must stay writable: the wrapper
+    opens it even when the distribution is complete."""
+    g = gradle_home(env)
+    dists = g / "wrapper" / "dists"
+    installed = sorted(p for d in dists.glob("*/*") for p in d.iterdir() if p.is_dir() or p.name.endswith((".zip", ".ok"))) \
+        if dists.is_dir() else []
+    return [str(g / n) for n in ("init.d", "init.gradle", "init.gradle.kts", "gradle.properties")] + [str(p) for p in installed]
 
 
 def readable(tmp: Path, workdir: Path, env: dict, myc: list[Path]) -> tuple[list[Path], list[Path]]:
@@ -174,7 +193,7 @@ def grading_profile(tmp: Path, workdir: Path, env: dict) -> str:
     """For the test command that grades a session (it runs code the agent
     wrote); no myceliums paths, the same in every arm."""
     rw, ro = readable(tmp, workdir, env, [])
-    return profile(rw, ro, closed=never(env), unwritable=unwritable(workdir, env)[-5:])
+    return profile(rw, ro, closed=never(env), unwritable=gradle_unwritable(env))
 
 
 def sandboxed(cmd: list[str], profile_path: Path) -> list[str]:
@@ -197,7 +216,10 @@ def session_environment(tmp: Path) -> dict[str, str]:
         (tmp / "g" / "git").symlink_to(git)
     return {"TMPDIR": str(tmp / "t"), "CLAUDE_CODE_TMPDIR": str(tmp / "t"),
             "ZDOTDIR": str(tmp / "zdotdir"),
-            "JAVA_TOOL_OPTIONS": f"-Djava.io.tmpdir={tmp / 't'} -XX:-UsePerfData"}
+            # IPv4 loopback: a JVM that opens IPv6-mapped sockets (its default) is refused by the sandboxes' loopback
+            # rule. JAVA_TOOL_OPTIONS reaches a JVM that Gradle starts; the launcher variable also its worker JVMs.
+            "JAVA_TOOL_OPTIONS": f"-Djava.io.tmpdir={tmp / 't'} -XX:-UsePerfData -Djava.net.preferIPv4Stack=true",
+            "JDK_JAVA_OPTIONS": f"-Djava.io.tmpdir={tmp / 't'} -XX:-UsePerfData -Djava.net.preferIPv4Stack=true"}
 
 
 # Raw text, on purpose without the hook's parser: program names, addresses, paths.
