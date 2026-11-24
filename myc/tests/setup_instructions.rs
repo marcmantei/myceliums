@@ -161,15 +161,104 @@ fn a_shared_file_is_left_alone_and_named() {
     assert!(out.contains("it is the same file as AGENTS.md"), "{out}");
     for command in ["setup-claude", "setup-codex"] {
         let out = p.ok(&[command, "--uninstall"]);
-        assert!(out.contains("Routing block left: CLAUDE.md:1-"), "{out}");
+        assert!(out.contains("Routing block left: CLAUDE.md:1 "), "{out}");
     }
     assert_eq!(p.read("CLAUDE.md").as_deref(), Some(OLD_BLOCK));
     let out = String::from_utf8(p.myc(&["doctor"]).stdout).unwrap();
-    assert!(out.contains("- Routing block: CLAUDE.md:1-"), "{out}");
+    assert!(out.contains("- Routing block: CLAUDE.md:1 "), "{out}");
 
     let p = Project::new(&[]);
     std::os::unix::fs::symlink("missing.md", p.root.join("AGENTS.md")).unwrap();
     let out = p.ok(&["setup-codex"]);
     assert!(out.contains("it is a symbolic link to missing.md"), "{out}");
     assert!(!p.root.join("missing.md").exists());
+}
+
+/// Does what every line of `out` says to do by hand, as someone would who
+/// follows each one literally: in the file the line names, delete from start
+/// to end marker. Lines without a range tell them to compare. Returns the
+/// number of ranges.
+#[cfg(unix)]
+fn follow_every_step(p: &Project, out: &str) -> usize {
+    let (begin, end) = ("<!-- BEGIN myceliums -->", "<!-- END myceliums -->");
+    let range = format!("delete everything from the line `{begin}` to the next line `{end}`");
+    let mut followed = 0;
+    for line in out.lines().filter(|line| line.contains(&range)) {
+        let line = line.trim_start_matches(|c: char| " !-".contains(c));
+        let line = line.strip_prefix("Routing block: ").unwrap_or(line);
+        let line = line.strip_prefix("Routing block left: ").unwrap_or(line);
+        let path = p.root.join(line.split(':').next().unwrap());
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path:?}: {e}"));
+        let mut inside = false;
+        let mut kept = String::new();
+        for text_line in text.split_inclusive('\n') {
+            inside |= text_line.trim() == begin;
+            if !inside {
+                kept.push_str(text_line);
+            }
+            inside &= text_line.trim() != end;
+        }
+        std::fs::write(&path, kept).unwrap();
+        followed += 1;
+    }
+    followed
+}
+
+/// From a subdirectory, with files that are linked, edited or hold two blocks:
+/// following every printed step, twice, takes none of the user's lines, and
+/// each file is named once.
+#[cfg(unix)]
+#[test]
+fn every_printed_step_is_safe_to_follow_twice() {
+    let edited = OLD_BLOCK.replace("grep/rg stay", "Always lint.\ngrep/rg stay");
+    let two = format!("one\n{OLD_BLOCK}two\n{OLD_BLOCK}three\nfour\n");
+    let cases = [
+        // (AGENTS.md of the subdirectory, whether CLAUDE.md links to it,
+        // what the user keeps, ranges per run)
+        (
+            format!("one\n\n{OLD_BLOCK}two\nthree\n"),
+            true,
+            "one\n\ntwo\nthree\n",
+            1,
+        ),
+        (two.clone(), true, "one\ntwo\nthree\nfour\n", 1),
+        (two, false, "one\ntwo\nthree\nfour\n", 1),
+        (format!("one\n{edited}two\n"), true, "", 0),
+        (format!("one\n{edited}two\n"), false, "", 0),
+    ];
+    for (text, linked, kept, ranges) in cases {
+        for command in [
+            &["doctor"][..],
+            &["doctor", "--fix"],
+            &["setup-claude", "--uninstall"],
+        ] {
+            let mut p = Project::new(&[("AGENTS.md", "root rules\n"), ("sub/AGENTS.md", &text)]);
+            if linked {
+                std::os::unix::fs::symlink("AGENTS.md", p.root.join("sub/CLAUDE.md")).unwrap();
+            }
+            let expected = if ranges == 0 { text.as_str() } else { kept };
+            let top = p.root.clone();
+            p.root = top.join("sub");
+            let out = String::from_utf8(p.myc(command).stdout).unwrap();
+            assert!(
+                out.contains("AGENTS.md") && !out.contains("lines "),
+                "{out}"
+            );
+            // Paths are relative to the git top level.
+            p.root = top;
+            for _ in 0..2 {
+                assert_eq!(follow_every_step(&p, &out), ranges, "{command:?}: {out}");
+                let now = p.read("sub/AGENTS.md");
+                assert_eq!(now.as_deref(), Some(expected), "{command:?}: {out}");
+            }
+            if ranges == 0 {
+                assert!(
+                    out.contains("compare it with a block"),
+                    "{command:?}: {out}"
+                );
+            }
+            assert_eq!(p.read("AGENTS.md").as_deref(), Some("root rules\n"));
+            assert_eq!(p.root.join("sub/CLAUDE.md").is_symlink(), linked);
+        }
+    }
 }

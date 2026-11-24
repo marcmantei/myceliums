@@ -30,7 +30,7 @@
 //! ([`repair_obstacle`]): a regular file of the project with one name, which
 //! no other instruction file links to or imports, holding one block exactly
 //! as `myc` wrote it. In every other case nothing is changed and the message
-//! gives file, lines and what to do ([`by_hand`]).
+//! gives file and what to do ([`by_hand`]).
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -346,18 +346,22 @@ pub fn by_hand(path: &Path, reason: &str) -> String {
         Ok(blocks) if blocks.is_empty() => {
             format!("{p} was not changed, because {reason}.")
         }
-        Ok(blocks) => {
-            let lines: Vec<String> = blocks
-                .iter()
-                .map(|b| format!("{}-{}", b.lines.0, b.lines.1))
-                .collect();
-            let lines = lines.join(" and ");
-            format!(
-                "{p}:{lines} holds a myceliums routing block. It was not changed, because {reason}. By hand: delete lines {lines}, and the file if nothing is left in it and no link or import names it."
-            )
-        }
-        Err(e) => format!("{p} was not changed, because {e:#}."),
+        Ok(blocks) => format!(
+            "{p}:{} holds a myceliums routing block. It was not changed, because {reason}. By hand: {}. Delete the file only if nothing is left in it and no link or import names it.",
+            look_at(&blocks),
+            routing::manual_step(&blocks)
+        ),
+        Err(e) => format!(
+            "{p} holds an incomplete myceliums routing block ({e:#}). It was not changed. By hand: {}.",
+            routing::COMPARE_STEP
+        ),
     }
+}
+
+/// The lines at which `blocks` start, as a hint where to look.
+fn look_at(blocks: &[routing::Block]) -> String {
+    let lines: Vec<String> = blocks.iter().map(|b| b.line.to_string()).collect();
+    lines.join(",")
 }
 
 // ── What older versions left ─────────────────────────────────────────
@@ -429,7 +433,7 @@ pub fn findings(project: &Project) -> Vec<Finding> {
                 continue;
             }
             what = format!(
-                "{}: the myceliums routing block belongs in .claude/rules/myceliums.md now; 'myc setup-claude' moves it (nothing is hidden)",
+                "{}: the myceliums routing block belongs in .claude/rules/myceliums.md now (nothing is hidden)",
                 file.display()
             );
         }
@@ -449,6 +453,9 @@ pub fn findings(project: &Project) -> Vec<Finding> {
         } else {
             Fix::Above(dir.to_path_buf())
         };
+        if fix == Fix::Doctor && hidden.is_empty() && unknown.is_none() {
+            what.push_str("; 'myc setup-claude' moves it");
+        }
         out.push(Finding {
             file,
             hidden,
@@ -622,86 +629,101 @@ fn codex_fallback_names(home: Option<&Path>) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Every routing block in the project's instruction files and in the user's
-/// `~/.claude/CLAUDE.md`, with file, lines and what removes it: for `myc
-/// doctor`, and after an uninstall for what is left. A file with several names
-/// is listed once, with all of them: following the advice twice would delete
-/// the user's lines. For the same reason a file in `explained`, whose remedy
-/// was already printed, refers to that.
-pub fn block_list(project: &Project, explained: &[PathBuf]) -> Vec<String> {
-    let root = &project.root;
-    let rules = root.join(RULE_DIRS[0]).join(setup_claude::RULES_FILE);
-    let user = project.home.as_ref().map(|h| h.join(".claude/CLAUDE.md"));
-    let mut paths: Vec<PathBuf> = ALL_FILES.iter().map(|name| root.join(name)).collect();
-    paths.push(rules.clone());
-    paths.extend(project.nested(true).unwrap_or_default());
-    paths.extend(user.clone());
-    // Each file with its names, the first one found first.
-    let mut files: Vec<(FileId, Vec<PathBuf>)> = Vec::new();
-    for path in paths {
-        let Some(id) = file_id(&path) else {
-            continue;
-        };
-        match files.iter_mut().find(|(known, _)| *known == id) {
-            Some((_, names)) if names.iter().any(|name| same_entry(name, &path)) => {}
-            Some((_, names)) => names.push(path),
-            None => files.push((id, vec![path])),
+/// Every file with routing blocks among the instruction files of `projects`
+/// and the user's `~/.claude/CLAUDE.md`, and what removes them: for `myc
+/// doctor`, and after an uninstall for what is left. A file is listed once,
+/// with all its names. One in `explained`, whose remedy was already printed,
+/// refers to that.
+pub fn block_list(projects: &[&Project], explained: &[PathBuf]) -> Vec<String> {
+    // Each file with the project it was first found in and its names.
+    let mut files: Vec<(FileId, &Project, Vec<PathBuf>)> = Vec::new();
+    for project in projects {
+        let root = &project.root;
+        let mut paths: Vec<PathBuf> = ALL_FILES.iter().map(|name| root.join(name)).collect();
+        paths.push(rules_file(root));
+        paths.extend(project.nested(true).unwrap_or_default());
+        paths.extend(user_memory(project));
+        for path in paths {
+            let Some(id) = file_id(&path) else {
+                continue;
+            };
+            match files.iter_mut().find(|(known, ..)| *known == id) {
+                Some((.., names)) if names.iter().any(|name| same_entry(name, &path)) => {}
+                Some((.., names)) => names.push(path),
+                None => files.push((id, project, vec![path])),
+            }
         }
     }
     let explained: Vec<FileId> = explained.iter().filter_map(|p| file_id(p)).collect();
     let mut out = Vec::new();
-    for (id, names) in files {
-        let file = &names[0];
-        let Ok(text) = std::fs::read_to_string(file) else {
+    for (id, project, names) in files {
+        let Ok(text) = std::fs::read_to_string(&names[0]) else {
             continue;
         };
-        let name = project.show(file);
-        let blocks = match routing::blocks(&text) {
-            Ok(blocks) => blocks,
-            Err(_) if explained.contains(&id) => continue,
-            Err(e) => {
-                out.push(format!("{name}: {e:#}"));
-                continue;
-            }
-        };
+        let name = project.show(&names[0]);
         let shared = match &names[1..] {
             [] => String::new(),
             others => format!("the same file as {}; ", project.names(others)),
         };
-        for block in blocks {
-            let how = if explained.contains(&id) {
-                "see above"
-            } else if names.len() > 1 {
-                "to remove it, delete these lines by hand, once"
-            } else if Some(file) == user.as_ref() {
-                "`myc setup-claude --scope user --uninstall` removes it"
-            } else if *file == rules && file_obstacle(root, file).is_none() {
-                "`myc setup-claude --uninstall` removes it"
-            } else if *file == root.join("CLAUDE.md")
-                && block.owner == Owner::Claude
-                && repair_obstacle(project, file).is_none()
-            {
-                "`myc setup-claude` moves it to .claude/rules/myceliums.md"
-            } else if *file == root.join("AGENTS.md") && codex_obstacle(project, file).is_none() {
-                "`myc setup-codex --uninstall` removes it"
-            } else {
-                "to remove it, delete these lines by hand"
-            };
-            let (start, end) = block.lines;
-            out.push(format!("{name}:{start}-{end} ({shared}{how})"));
-        }
+        let (line, remedy) = match routing::blocks(&text) {
+            Ok(blocks) if blocks.is_empty() => continue,
+            Ok(blocks) => {
+                let remedy = remedy(project, &names, &blocks);
+                (format!(":{}", look_at(&blocks)), remedy)
+            }
+            Err(e) => {
+                let step = routing::COMPARE_STEP;
+                (String::new(), format!("incomplete, {e:#}; by hand: {step}"))
+            }
+        };
+        let remedy = if explained.contains(&id) {
+            "see above".to_string()
+        } else {
+            remedy
+        };
+        out.push(format!("{name}{line} ({shared}{remedy})"));
     }
     out
 }
 
+/// What removes `blocks` from the file with `names`.
+fn remedy(project: &Project, names: &[PathBuf], blocks: &[routing::Block]) -> String {
+    let root = &project.root;
+    let file = &names[0];
+    let alone = names.len() == 1 && blocks.len() == 1 && blocks[0].shipped;
+    if alone && Some(file) == user_memory(project).as_ref() {
+        "`myc setup-claude --scope user --uninstall` removes it".to_string()
+    } else if alone && *file == rules_file(root) && file_obstacle(root, file).is_none() {
+        "`myc setup-claude --uninstall` removes it".to_string()
+    } else if alone
+        && *file == root.join("CLAUDE.md")
+        && blocks[0].owner == Owner::Claude
+        && repair_obstacle(project, file).is_none()
+    {
+        "`myc setup-claude` moves it to .claude/rules/myceliums.md".to_string()
+    } else if alone && *file == root.join("AGENTS.md") && codex_obstacle(project, file).is_none() {
+        "`myc setup-codex --uninstall` removes it".to_string()
+    } else {
+        format!("by hand: {}", routing::manual_step(blocks))
+    }
+}
+
+fn rules_file(root: &Path) -> PathBuf {
+    root.join(RULE_DIRS[0]).join(setup_claude::RULES_FILE)
+}
+
+fn user_memory(project: &Project) -> Option<PathBuf> {
+    Some(project.home.as_ref()?.join(".claude/CLAUDE.md"))
+}
+
 /// What tells a file under all its names, links followed.
 #[cfg(unix)]
-type FileId = (u64, u64);
+pub type FileId = (u64, u64);
 #[cfg(not(unix))]
-type FileId = PathBuf;
+pub type FileId = PathBuf;
 
 #[cfg(unix)]
-fn file_id(path: &Path) -> Option<FileId> {
+pub fn file_id(path: &Path) -> Option<FileId> {
     use std::os::unix::fs::MetadataExt as _;
     let meta = std::fs::metadata(path).ok()?;
     Some((meta.dev(), meta.ino()))
@@ -709,7 +731,7 @@ fn file_id(path: &Path) -> Option<FileId> {
 
 /// Hard links are not known on this platform.
 #[cfg(not(unix))]
-fn file_id(path: &Path) -> Option<FileId> {
+pub fn file_id(path: &Path) -> Option<FileId> {
     path.canonicalize().ok()
 }
 
@@ -892,7 +914,7 @@ mod tests {
         case.write("AGENTS.md", "rules\n");
         case.write("CLAUDE.md", "mine\n");
         assert_eq!(findings(&case.p), []);
-        assert!(block_list(&case.p, &[]).is_empty());
+        assert!(block_list(&[&case.p], &[]).is_empty());
     }
 
     #[test]
@@ -1094,9 +1116,14 @@ mod tests {
             };
             assert!(text.contains(reason), "{reason}: {text}");
             assert!(text.contains("CLAUDE.md"), "{text}");
-            if !reason.contains("matching") {
-                assert!(text.contains("By hand: delete lines "), "{text}");
-            }
+            let step = text.split("By hand: ").nth(1).expect("a step");
+            // By the markers where the text is ours, else without a range;
+            // never by line numbers.
+            let ours = !["was edited", "reformatted", "without a matching"].contains(reason);
+            let range = step.contains(&format!("from the line `{BEGIN}` to the next line `{END}`"));
+            assert_eq!(range, ours, "{reason}: {step}");
+            assert_eq!(step.contains("compare it"), !ours, "{reason}: {step}");
+            assert!(!step.contains("lines "), "{reason}: {step}");
             assert!(repair(&case.p, finding).is_err());
             unchanged();
             let routed = case.setup_claude();
@@ -1107,34 +1134,56 @@ mod tests {
             assert!(note.contains(reason), "{reason}: {note}");
             unchanged();
             // `myc doctor` and the uninstalls list the block.
-            let listed = block_list(&case.p, &[]).join("\n");
-            assert!(listed.contains("CLAUDE.md:"), "{reason}: {listed}");
+            let listed = block_list(&[&case.p], &[]).join("\n");
+            assert!(listed.contains("CLAUDE.md"), "{reason}: {listed}");
         }
     }
 
-    /// The advice works: without the lines it names, setup goes on.
+    /// `text` after doing what `step` says, or as it is for a step without a
+    /// range.
+    fn follow(step: &str, text: &str) -> String {
+        if !step.contains(&format!("from the line `{BEGIN}` to the next line `{END}`")) {
+            return text.to_string();
+        }
+        let mut inside = false;
+        let mut out = String::new();
+        for line in text.split_inclusive('\n') {
+            inside |= line.trim() == BEGIN;
+            if !inside {
+                out.push_str(line);
+            }
+            inside &= line.trim() != END;
+        }
+        out
+    }
+
+    /// The advice works: after it, setup goes on. Following it twice, under
+    /// either name, or for several blocks, takes none of the user's lines.
     #[cfg(unix)]
     #[test]
-    fn following_the_advice_for_a_shared_file_works() {
-        let case = Case::new();
-        case.write("AGENTS.md", &format!("rules\n\n{}", claude_block()));
-        case.link("AGENTS.md", "CLAUDE.md");
-        let note = case.setup_claude().note.unwrap().text;
-        let lines = note.split("delete lines ").nth(1).unwrap();
-        let (start, end) = lines.split(',').next().unwrap().split_once('-').unwrap();
-        let (start, end): (usize, usize) = (start.parse().unwrap(), end.parse().unwrap());
-        let text = case.read("AGENTS.md").unwrap();
-        let kept: String = text
-            .split_inclusive('\n')
-            .enumerate()
-            .filter(|(i, _)| !(start..=end).contains(&(i + 1)))
-            .map(|(_, line)| line)
-            .collect();
-        assert_eq!(kept, "rules\n\n");
-        case.write("AGENTS.md", &kept);
-        assert!(case.setup_claude().note.is_none());
-        assert!(case.read(".claude/rules/myceliums.md").is_some());
-        assert_eq!(findings(&case.p), []);
+    fn following_the_advice_twice_is_safe_and_lets_setup_go_on() {
+        let block = claude_block();
+        let codex = routing_block(Flavor::Agents);
+        for (text, user) in [
+            (format!("a\n\n{block}b\nc\n"), "a\n\nb\nc\n"),
+            (format!("a\n{block}b\n{codex}c\n{block}d\n"), "a\nb\nc\nd\n"),
+        ] {
+            let case = Case::new();
+            case.write("AGENTS.md", &text);
+            case.link("AGENTS.md", "CLAUDE.md");
+            let note = case.setup_claude().note.unwrap().text;
+            let listed = block_list(&[&case.p], &[]);
+            assert_eq!(listed.len(), 1, "one entry per file: {listed:?}");
+            let steps = [&note, &listed[0], &note, &listed[0]];
+            for (step, name) in steps.iter().zip(["CLAUDE.md", "AGENTS.md"].iter().cycle()) {
+                let now = follow(step, &case.read(name).unwrap());
+                case.write(name, &now);
+                assert_eq!(now, user, "{step}");
+            }
+            assert!(case.setup_claude().note.is_none());
+            assert!(case.read(".claude/rules/myceliums.md").is_some());
+            assert_eq!(findings(&case.p), []);
+        }
     }
 
     #[cfg(unix)]
@@ -1157,17 +1206,12 @@ mod tests {
         );
         case.write("packages/app/CLAUDE.md", &claude_block());
         case.setup_claude();
-        let listed = block_list(&case.p, &[]);
-        let end = routing_block(Flavor::Agents).lines().count();
+        let listed = block_list(&[&case.p], &[]);
+        let step = routing::manual_step(&[]);
         let expected = [
-            format!(
-                "AGENTS.md:3-{} (`myc setup-codex --uninstall` removes it)",
-                end + 2
-            ),
-            format!(
-                ".claude/rules/myceliums.md:1-{end} (`myc setup-claude --uninstall` removes it)"
-            ),
-            format!("packages/app/CLAUDE.md:1-{end} (to remove it, delete these lines by hand)"),
+            "AGENTS.md:3 (`myc setup-codex --uninstall` removes it)".to_string(),
+            ".claude/rules/myceliums.md:1 (`myc setup-claude --uninstall` removes it)".to_string(),
+            format!("packages/app/CLAUDE.md:1 (by hand: {step})"),
         ];
         assert_eq!(listed, expected);
     }
@@ -1177,7 +1221,6 @@ mod tests {
     #[test]
     fn a_linked_file_is_listed_once() {
         let block = claude_block();
-        let n = block.lines().count();
         for kind in [
             "CLAUDE.md -> AGENTS.md",
             "AGENTS.md -> CLAUDE.md",
@@ -1197,16 +1240,19 @@ mod tests {
             } else {
                 case.link(file, link);
             }
-            let listed = block_list(&case.p, &[]);
+            let listed = block_list(&[&case.p], &[]);
             assert_eq!(listed.len(), 1, "{kind}: {listed:?}");
-            let start = format!("CLAUDE.md:3-{} (the same file as ", n + 2);
-            assert!(listed[0].starts_with(&start), "{kind}: {listed:?}");
-            assert!(listed[0].ends_with("by hand, once)"), "{kind}: {listed:?}");
+            let start = "CLAUDE.md:3 (the same file as ";
+            assert!(listed[0].starts_with(start), "{kind}: {listed:?}");
+            assert!(
+                listed[0].contains("; by hand: delete everything from"),
+                "{listed:?}"
+            );
             // Once its remedy was printed, the list only refers to it.
             for explained in [file, link] {
-                let listed = block_list(&case.p, &[case.p.root.join(explained)]);
+                let listed = block_list(&[&case.p], &[case.p.root.join(explained)]);
                 assert!(listed[0].ends_with("see above)"), "{kind}: {listed:?}");
-                assert!(!listed[0].contains("delete"), "{kind}: {listed:?}");
+                assert!(!listed[0].contains("by hand"), "{kind}: {listed:?}");
             }
         }
     }

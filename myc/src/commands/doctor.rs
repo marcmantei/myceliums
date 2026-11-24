@@ -78,22 +78,29 @@ fn projects(
 /// is plain; everything else is only said.
 fn check_instructions(projects: &[Checked], fix: bool, all: bool) -> (Vec<String>, u32) {
     let mut lines = Vec::new();
+    for Checked { project, .. } in projects.iter().filter(|p| fix && (p.current || all)) {
+        for finding in instructions::findings(project) {
+            if finding.fix != Fix::Doctor || finding.hidden.is_empty() {
+                continue;
+            }
+            lines.push(match instructions::repair(project, &finding) {
+                Ok(done) => format!("\u{2713} Instruction files repaired: {done}"),
+                Err(e) => format!("\u{2717} Not repaired: {e:#}"),
+            });
+        }
+    }
     let mut issues = 0;
-    let mut explained = Vec::new();
+    // A file is reported once, also when several projects see it (a git top
+    // level and a directory below it, a worktree and the project above).
+    let mut reported: Vec<PathBuf> = Vec::new();
     for Checked { project, current } in projects {
         for finding in instructions::findings(project) {
-            let hides = !finding.hidden.is_empty();
-            let issue = finding.is_issue();
-            if hides && fix && (*current || all) && finding.fix == Fix::Doctor {
-                match instructions::repair(project, &finding) {
-                    Ok(done) => {
-                        lines.push(format!("\u{2713} Instruction files repaired: {done}"));
-                        continue;
-                    }
-                    Err(e) => lines.push(format!("\u{2717} Not repaired: {e:#}")),
-                }
+            let id = instructions::file_id(&finding.file);
+            if reported.iter().any(|p| instructions::file_id(p) == id) {
+                continue;
             }
-            explained.push(finding.file.clone());
+            reported.push(finding.file.clone());
+            let issue = finding.is_issue();
             let mark = if issue { "\u{2717}" } else { "-" };
             issues += u32::from(issue);
             lines.push(format!("{mark} Instruction files: {}", finding.describe()));
@@ -104,7 +111,7 @@ fn check_instructions(projects: &[Checked], fix: bool, all: bool) -> (Vec<String
             match &finding.fix {
                 Fix::ByHand(text) => lines.push(format!("    {text}")),
                 Fix::Above(dir) => lines.push(command(dir)),
-                Fix::Doctor if !hides => {}
+                Fix::Doctor if finding.hidden.is_empty() => {}
                 Fix::Doctor if *current => lines.push("    to fix: myc doctor --fix".to_string()),
                 Fix::Doctor => lines.push(command(&project.root)),
             }
@@ -113,13 +120,13 @@ fn check_instructions(projects: &[Checked], fix: bool, all: bool) -> (Vec<String
     if lines.is_empty() {
         lines.push("\u{2713} Instruction files: none hidden by myceliums".to_string());
     }
-    for Checked { project, .. } in projects.iter().filter(|p| p.current) {
-        for block in instructions::block_list(project, &explained) {
-            let line = format!("- Routing block: {block}");
-            if !lines.contains(&line) {
-                lines.push(line);
-            }
-        }
+    let current: Vec<&Project> = projects
+        .iter()
+        .filter(|p| p.current)
+        .map(|p| &p.project)
+        .collect();
+    for block in instructions::block_list(&current, &reported) {
+        lines.push(format!("- Routing block: {block}"));
     }
     (lines, issues)
 }
@@ -683,7 +690,7 @@ mod tests {
 
     /// Every block of the current project is listed, hidden files or not.
     #[test]
-    fn blocks_are_listed_with_file_and_lines() {
+    fn blocks_are_listed_with_file_and_line() {
         let s = Setup::new();
         let root = s.hidden("project");
         std::fs::remove_file(root.join("CLAUDE.md")).unwrap();
@@ -692,6 +699,6 @@ mod tests {
         let (lines, issues) = s.check(&root, false, false);
         assert_eq!(issues, 0, "{lines}");
         assert!(lines.contains("none hidden"), "{lines}");
-        assert!(lines.contains("- Routing block: GEMINI.md:3-"), "{lines}");
+        assert!(lines.contains("- Routing block: GEMINI.md:3 "), "{lines}");
     }
 }

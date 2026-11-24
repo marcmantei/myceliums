@@ -122,7 +122,7 @@ fn print_blocks_left(
     explained: &[std::path::PathBuf],
 ) {
     if uninstall {
-        for block in commands::instructions::block_list(project, explained) {
+        for block in commands::instructions::block_list(&[project], explained) {
             println!("  ! Routing block left: {block}");
         }
     }

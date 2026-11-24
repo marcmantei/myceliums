@@ -113,19 +113,19 @@ fn block_ranges(text: &str) -> Result<Vec<(usize, usize)>> {
         let n = i + 1;
         match line.trim() {
             BEGIN if open.is_some() => {
-                bail!("line {n} has a second `{BEGIN}` before `{END}`; fix the file by hand")
+                bail!("line {n} has a second `{BEGIN}` before `{END}`")
             }
             BEGIN => open = Some(start),
             END => match open.take() {
                 Some(begin) => ranges.push((begin, offset)),
-                None => bail!("line {n} has `{END}` without a `{BEGIN}`; fix the file by hand"),
+                None => bail!("line {n} has `{END}` without a `{BEGIN}`"),
             },
             _ => {}
         }
     }
     if let Some(start) = open {
         let n = text[..start].matches('\n').count() + 1;
-        bail!("line {n} has `{BEGIN}` without a matching `{END}`; fix the file by hand");
+        bail!("line {n} has `{BEGIN}` without a matching `{END}`");
     }
     Ok(ranges)
 }
@@ -174,11 +174,32 @@ pub enum Owner {
 /// A managed block in a file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Block {
-    /// First and last line, from 1.
-    pub lines: (usize, usize),
+    /// Its first line, from 1: where to look, never what to delete.
+    pub line: usize,
+    /// Whether it reads, byte for byte, as some version of `myc` wrote it.
+    pub shipped: bool,
     /// [`Owner::Any`]: written by `myc setup-codex`.
     pub owner: Owner,
 }
+
+/// What to do by hand about `blocks`. The step names the markers, not line
+/// numbers, so that it is safe to follow twice, in any order and under every
+/// name of the file. Text that is not as `myc` wrote it may hold the user's
+/// own, so that step names no range at all.
+pub fn manual_step(blocks: &[Block]) -> String {
+    if blocks.iter().all(|block| block.shipped) {
+        format!(
+            "delete everything from the line `{BEGIN}` to the next line `{END}`, both included; if there are several such blocks, each"
+        )
+    } else {
+        format!(
+            "the text between `{BEGIN}` and `{END}` is not as myc wrote it and may hold your own: {COMPARE_STEP}"
+        )
+    }
+}
+
+/// The step for a block that cannot be told from the user's text.
+pub const COMPARE_STEP: &str = "compare it with a block that myc writes (`myc setup-claude` in an empty git project) and remove by hand what is not yours";
 
 /// The managed blocks in `text`; an error when the markers do not match.
 pub fn blocks(text: &str) -> Result<Vec<Block>> {
@@ -188,10 +209,8 @@ pub fn blocks(text: &str) -> Result<Vec<Block>> {
         .map(|(start, end)| {
             let block = &text[start..end];
             Block {
-                lines: (
-                    line(start),
-                    line(start) + block.trim_end().matches('\n').count(),
-                ),
+                line: line(start),
+                shipped: is_shipped(block),
                 owner: if Owner::Claude.owns(block) {
                     Owner::Claude
                 } else {
@@ -504,15 +523,15 @@ mod tests {
     }
 
     #[test]
-    fn blocks_are_listed_with_their_lines() {
+    fn blocks_are_found_with_the_line_to_look_at() {
         let claude = routing_block(Flavor::Claude { subagent: true });
         let codex = routing_block(Flavor::Agents);
         let text = format!("a\n\n{claude}b\n{codex}");
         let n = claude.lines().count();
         let found = blocks(&text).unwrap();
-        assert_eq!(found[0].lines, (3, 2 + n));
+        assert_eq!((found[0].line, found[0].shipped), (3, true));
         assert_eq!(found[0].owner, Owner::Claude);
-        assert_eq!(found[1].lines, (n + 4, 2 * n + 3));
+        assert_eq!((found[1].line, found[1].shipped), (n + 4, true));
         assert_eq!(found[1].owner, Owner::Any);
         assert!(blocks(&format!("{BEGIN}\n")).is_err());
     }

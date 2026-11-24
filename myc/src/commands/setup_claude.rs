@@ -827,7 +827,7 @@ pub fn uninstall(targets: &Targets, registrar: McpRegistrar) -> Result<Report> {
         let _ = std::fs::remove_dir(dir);
     }
     if let Some(project) = &targets.project {
-        for block in instructions::block_list(project, &explained) {
+        for block in instructions::block_list(&[project], &explained) {
             report.notes.push(format!("Routing block left: {block}"));
         }
     }
@@ -1460,7 +1460,7 @@ mod tests {
     }
 
     /// A block that setup and uninstall leave alone is named in their notes,
-    /// with file and lines; the other layers are installed and removed.
+    /// with file and line; the other layers are installed and removed.
     #[cfg(unix)]
     #[test]
     fn a_block_left_alone_is_named_and_the_other_layers_go_on() {
@@ -1480,8 +1480,8 @@ mod tests {
             let t = Targets::project(&root);
             let named = |report: &Report| {
                 let notes = report.notes.join("\n");
-                assert!(notes.contains(&format!("{file}:1-")), "{notes}");
-                assert!(notes.contains("delete lines 1-"), "{notes}");
+                assert!(notes.contains(&format!("{file}:1 ")), "{notes}");
+                assert!(notes.contains("By hand: "), "{notes}");
             };
             let report = install(&t, "myc", Layers::ALL, McpRegistrar::File).unwrap();
             named(&report);
@@ -1516,7 +1516,7 @@ mod tests {
         let report = uninstall(&t, McpRegistrar::File).unwrap();
         assert_eq!(tree(&root), before);
         assert!(
-            report.notes[0].contains("AGENTS.md:3-") && report.notes[0].contains("setup-codex"),
+            report.notes[0].contains("AGENTS.md:3 ") && report.notes[0].contains("setup-codex"),
             "{:?}",
             report.notes
         );

@@ -451,7 +451,7 @@ myc configure --reset
 
 ### `myc doctor`
 
-Check the health of the Myceliums installation. Verifies registry integrity, data directory state, orphaned data, stale locks, and, for the current project and every indexed one, instruction files an older `myc` wrote that hide the project's own (`CLAUDE.md` over `AGENTS.md`, or the reverse), each with the command that repairs it, and lists the routing blocks of the current project with file and lines.
+Check the health of the Myceliums installation. Verifies registry integrity, data directory state, orphaned data, stale locks, and, for the current project and every indexed one, instruction files an older `myc` wrote that hide the project's own (`CLAUDE.md` over `AGENTS.md`, or the reverse), each with the command that repairs it, and lists the routing blocks of the current project.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|

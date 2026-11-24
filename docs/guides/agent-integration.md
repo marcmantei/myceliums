@@ -263,8 +263,10 @@ version that met a file without a final line break added one, which cannot be
 told from yours and stays.
 
 In every other case no instruction file is changed, the block stays where it is
-(Claude Code reads it there), and the message gives file, lines, reason and what
-to do by hand. These are: a symbolic link in either direction, also to or from
+(Claude Code reads it there), and the message gives file, reason and what to do
+by hand: delete from the start marker to the end marker, both included, or, where
+the text is not as `myc` wrote it, compare it and remove what is not yours. Line
+numbers in the messages only say where to look. These are: a symbolic link in either direction, also to or from
 `GEMINI.md`, `.claude/CLAUDE.md`, files in subdirectories, in the home
 directory, in other worktrees or in other indexed projects; several hard links;
 another instruction file that imports it; a block that was edited or
@@ -273,7 +275,7 @@ git-ignored file; a git query that failed or took more than 5 s; a project
 outside git that has another instruction file.
 
 Uninstalling (`myc setup-claude --uninstall`, `myc setup-codex --uninstall`)
-lists the routing blocks that are still in the project, each with file, lines and
+lists the routing blocks that are still in the project, each with file and
 what removes it; a file with several names is listed once. `myc doctor` lists them for the current project.
 
 **Existing installations.** `myc doctor` reports files that hide others in the
