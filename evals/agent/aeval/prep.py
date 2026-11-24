@@ -431,6 +431,12 @@ def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list
             problems.append(f"{tid}: equivalents must be groups of gold files: {group}")
         elif set(group) & set(t.get("primary_files") or []):
             problems.append(f"{tid}: a primary file in equivalents would make its group never forgotten; use `either`")
+    if "forced_tests" in t:
+        from .editgrade import file_kind
+        status = {g["path"]: g.get("status") for g in t.get("gold_files") or [] if isinstance(g, dict)}
+        for f in t["forced_tests"]:
+            if status.get(f) not in ("M", "D") or file_kind(f) != "tests":
+                problems.append(f"{tid}: forced_tests must name test files the commit changes or deletes, never a new one: {f}")
     for f in t.get("either") or []:
         if f not in paths or f in (t.get("primary_files") or []):
             problems.append(f"{tid}: either must name dependents: {f}")

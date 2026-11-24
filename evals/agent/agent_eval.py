@@ -313,6 +313,22 @@ def cmd_pilot(args) -> int:
     return 1 if out["stop"] else 0
 
 
+def cmd_ceiling(args) -> int:
+    """#183: one session of arm none per task decides whether the recall is a co-primary outcome (README)."""
+    from aeval import report_commit
+    rows = {}
+    for line in (config.RUNS_DIR / args.label / "results.jsonl").read_text().splitlines():
+        if line.strip() and (r := json.loads(line)).get("final"):
+            rows[r["run_id"]] = r
+    out = {"label": args.label, **report_commit.decide(list(rows.values()), config.load_tasks())}
+    print(json.dumps(out, indent=1))
+    if args.write:
+        if report_commit.DECISION.exists():
+            sys.exit(f"{report_commit.DECISION} exists: the decision is made once")
+        report_commit.DECISION.write_text(json.dumps(out, indent=1) + "\n")
+    return 0
+
+
 def cmd_regrade(args) -> int:
     """Re-grade a committed run from its stored answers against the current gold (e.g. after #164)."""
     label = args.label
@@ -505,6 +521,35 @@ def cmd_precheck_edit(args) -> int:
         # Written after every task, so a long precheck run keeps what it has.
         path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
+    return 1 if bad else 0
+
+
+def cmd_forced_tests(args) -> int:
+    """Measure which of the commits' test changes the change itself forces (#183, aeval/forced.py)."""
+    from aeval import forced
+    repos = config.load_repos()
+    scratch = config.cache_dir() / "tmp"
+    scratch.mkdir(parents=True, exist_ok=True)
+    out = Path(args.out)
+    bad = 0
+    for t in config.load_tasks():
+        if args.task and t["id"] not in args.task:
+            continue
+        repo = repos[t["repo"]]
+        tmp = Path(tempfile.mkdtemp(dir=config.session_root(repo)))
+        try:
+            rec = forced.measure(t, config.cache_dir() / "repos" / t["repo"], scratch, config.gold_dir(t["repo"]), (repo["commit"], repo["gold_commit"]),
+                                 int(t.get("test_timeout_s", 1800)), config.repo_env(repo), _precheck_sandbox(repo, tmp),
+                                 Path(args.logs) if args.logs else None)
+        finally:
+            config.remove_tree(tmp, config.session_root(repo))
+        # Written after every task; a task measured again replaces its record.
+        data = config.load_json(out) if out.exists() else {"tasks": {}}
+        data["tasks"][t["id"]] = rec
+        out.write_text(json.dumps(data, indent=1, ensure_ascii=False, sort_keys=True) + "\n")
+        kinds = {k: [p.rsplit("/", 1)[-1] for p, f in rec["files"].items() if f["outcome"] == k] for k in sorted({f["outcome"] for f in rec["files"].values()})}
+        print(f"{t['id']}: {kinds} {rec['notes'] or ''} ({sum(x['seconds'] for x in rec['steps']):.0f} s)", flush=True)
+        bad += any(f["forced"] is None for f in rec["files"].values())
     return 1 if bad else 0
 
 
@@ -731,6 +776,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("label")
     s.set_defaults(fn=cmd_pilot)
 
+    s = sub.add_parser("ceiling", help="#183: the decision before the main run, from one session of arm none per task")
+    s.add_argument("label")
+    s.add_argument("--write", action="store_true", help="record it in groundtruth/decision_183.json, which the report reads (once)")
+    s.set_defaults(fn=cmd_ceiling)
+
     s = sub.add_parser("gradle-cache", help="freeze the resolved dependencies of ~/.gradle for the offline builds (#183)")
     s.set_defaults(fn=cmd_gradle_cache)
 
@@ -743,6 +793,13 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--sandbox", action="store_true", help="#183: run under the grading sandbox and environment a session's "
                    "test command gets")
     s.set_defaults(fn=cmd_precheck_edit)
+
+    s = sub.add_parser("forced-tests", help="#183: which of the commits' test changes the change itself forces, measured by running them "
+                       "(parent + the commit without its tests), in the grading sandbox")
+    s.add_argument("--task", action="append", help="only these task ids")
+    s.add_argument("--out", default=str(config.EVAL_DIR / "groundtruth" / "forced_tests.json"))
+    s.add_argument("--logs", help="directory for the full output of every command")
+    s.set_defaults(fn=cmd_forced_tests)
 
     s = sub.add_parser("tokens", help="per-tool token attribution and cost of a committed run (#178)")
     s.add_argument("label")
