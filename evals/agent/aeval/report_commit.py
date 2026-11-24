@@ -183,27 +183,39 @@ def _co_primary(rows, by_id, ids, comments=False, n=10_000) -> dict:
 def harm_check(ps: list[tuple[float, float]], s: dict) -> dict:
     """The recall as a harm check of the first arm: *detected* when the 95 %
     interval of the difference lies entirely below zero; and, whatever it is,
-    the largest mean loss it does not exclude. Where no task is worse the
-    bootstrap has no loss to resample and its lower bound says nothing: then the
-    exact one-sided 95 % bound on the share of worse tasks (1 - 0.05^(1/n), what
-    the rule of three 3/n approximates) bounds the mean loss, a task losing at
-    most 1."""
+    always two bounds on what is not excluded: the interval's lower bound on
+    the mean loss (``loss``), which says little where few tasks are worse (none:
+    the bootstrap has no loss to resample), and the exact one-sided 95 % bound
+    on the share of tasks that are worse (``share``, :func:`share_bound`), each of
+    which loses at most everything. Neither shrinks when a task gets worse; one of
+    them alone, chosen by the data, would."""
     d = [a - b for a, b in ps]
     worse, better = sum(x < -1e-9 for x in d), sum(x > 1e-9 for x in d)
     if not d:
-        return {"detected": False, "worse": 0, "better": 0, "n": 0, "loss": float("nan"), "exact": False}
-    exact = worse == 0
-    return {"detected": s["diff_hi"] < 0, "worse": worse, "better": better, "n": len(d), "exact": exact,
-            "loss": 1 - 0.05 ** (1 / len(d)) if exact else max(0.0, -s["diff_lo"])}
+        return {"detected": False, "worse": 0, "better": 0, "n": 0, "loss": float("nan"), "share": float("nan")}
+    return {"detected": s["diff_hi"] < 0, "worse": worse, "better": better, "n": len(d), "loss": max(0.0, -s["diff_lo"]),
+            "share": share_bound(worse, len(d))}
+
+
+def share_bound(k: int, n: int, alpha: float = 0.05) -> float:
+    """Exact (Clopper-Pearson) one-sided upper bound of a share, ``k`` of ``n``
+    seen: the p at which k or fewer have probability alpha. For k = 0 that is
+    1 - alpha^(1/n), about 3/n."""
+    if k >= n:
+        return 1.0
+    lo, hi = k / n, 1.0
+    for _ in range(100):
+        p = (lo + hi) / 2
+        at_most = math.fsum(math.comb(n, i) * p ** i * (1 - p) ** (n - i) for i in range(k + 1))
+        lo, hi = (p, hi) if at_most > alpha else (lo, p)
+    return (lo + hi) / 2
 
 
 def harm_text(h: dict) -> str:
     if not h["n"]:
         return "no task has both arms"
-    bound = (f"exact one-sided 95 % bound: no task is worse, so at most {h['loss']:.1%} of tasks, each losing at most everything; rule of three {3 / h['n']:.3f}"
-             if h["exact"] else "lower bound of the 95 % interval")
-    return (f"harm {'detected' if h['detected'] else 'not detected'}; largest loss not excluded: {h['loss']:.3f} ({bound}); "
-            f"tasks worse/better: {h['worse']}/{h['better']} of {h['n']}")
+    return (f"harm {'detected' if h['detected'] else 'not detected'}; largest loss not excluded: {h['loss']:.3f} (lower bound of the 95 % interval) "
+            f"and up to {h['share']:.1%} of tasks worse, each by at most everything (exact one-sided 95 % bound); tasks worse/better: {h['worse']}/{h['better']} of {h['n']}")
 
 
 def pooled(values: dict, by_id: dict, ids: list[str], n_resamples: int = 10_000, seed: int = 0) -> dict:

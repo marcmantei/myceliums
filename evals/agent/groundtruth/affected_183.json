@@ -134,8 +134,8 @@
    },
    "framework-docs/modules/ROOT/pages/web/webflux/reactive-spring.adoc": {
     "kind": "docs",
-    "counts": true,
-    "why": "describes the encoder's streaming types and goes on \"other streaming media types may be registered\", so jsonl would read as not built in; borderline, the list itself is also introduced by \"such as\""
+    "counts": false,
+    "why": "names ndjson only as an example (\"such as\", \"for example\") of a streaming media type, in both places; both stay true"
    },
    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-async.adoc": {
     "kind": "docs",

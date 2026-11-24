@@ -1076,6 +1076,7 @@
    ],
    "optional": [
     "framework-docs/modules/ROOT/pages/testing/webtestclient.adoc",
+    "framework-docs/modules/ROOT/pages/web/webflux/reactive-spring.adoc",
     "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-async.adoc"
    ],
    "weak_test": "A passing solution needs only MediaType, the default MIME types of JacksonJsonEncoder and ReactiveTypeHandler. All other codecs (Gson, Jackson 2, Jackson decoder, Kotlin, Protobuf) may be skipped, and 'treat it as a streaming media type' is not checked for any codec, including JacksonJsonEncoder. Not enforced: GsonEncoder.java, Jackson2CodecSupport.java, Jackson2JsonEncoder.java, JacksonJsonDecoder.java, KotlinSerializationJsonDecoder.java, KotlinSerializationJsonEncoder.java, ProtobufJsonEncoder.java, spring-mvc.xsd.",

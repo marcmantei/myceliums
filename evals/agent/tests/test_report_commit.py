@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import random
 import subprocess
 import sys
 import tempfile
@@ -130,7 +131,7 @@ class Recall(unittest.TestCase):
         registered = json.loads((EVAL / "groundtruth/dependents_183.json").read_text())
         self.assertEqual({t["id"]: rc.by_type(t) for t in tasks}, registered)
         self.assertEqual({k: sum(v[k] for v in registered.values()) for k in rc.KINDS},
-                         {"docs": 14, "remote": 45, "forced_tests": 14, "new_tests": 49, "optional": 3, "local": 10, "comments": 8, "build": 1, "either": 3})
+                         {"docs": 13, "remote": 45, "forced_tests": 14, "new_tests": 49, "optional": 4, "local": 10, "comments": 8, "build": 1, "either": 3})
 
     def test_the_pilot_in_arm_none_scored_again(self):
         d = EVAL / "results/pilot-183"
@@ -202,8 +203,9 @@ class Analysis(unittest.TestCase):
                 self.assertEqual("Primary outcome: tokens alone" in text, ceiling)
                 self.assertEqual("Co-primary outcomes: recall and tokens" in text, not ceiling)
                 self.assertIn(f"mean recall {value:.3f}, ceiling 0.900", text)
-                self.assertEqual("* `C vs none`: harm detected; largest loss not excluded: 0.500 (lower bound of the 95 % interval); tasks worse/better: 20/0 of 20." in text, ceiling)
-                self.assertEqual("* `D vs none`: harm not detected; largest loss not excluded: 0.139 (exact one-sided 95 % bound: no task is worse" in text, ceiling)
+                self.assertEqual("* `C vs none`: harm detected; largest loss not excluded: 0.500 (lower bound of the 95 % interval) and up to 100.0% of tasks worse, each by "
+                                 "at most everything (exact one-sided 95 % bound); tasks worse/better: 20/0 of 20." in text, ceiling)
+                self.assertEqual("* `D vs none`: harm not detected; largest loss not excluded: 0.000 (lower bound of the 95 % interval) and up to 13.9% of tasks worse" in text, ceiling)
                 self.assertNotIn("no harm", text)
                 self.assertNotIn("Not the decision's setup", text)
             with self.subTest("another CLI"):
@@ -217,18 +219,44 @@ class Analysis(unittest.TestCase):
         def h(ps):
             return rc.harm_check(ps, rc.paired_bootstrap(ps, N).as_dict())
         tie = h([(1.0, 1.0)] * 20)
-        self.assertEqual((tie["detected"], tie["worse"], tie["better"], tie["exact"]), (False, 0, 0, True))
-        self.assertAlmostEqual(tie["loss"], 1 - 0.05 ** (1 / 20))
-        self.assertIn("rule of three 0.150", rc.harm_text(tie))
-        self.assertIn("at most 13.9% of tasks", rc.harm_text(tie))
-        self.assertTrue(h([(1.0, 0.5)] * 3 + [(1.0, 1.0)] * 17)["exact"])  # better ones do not exclude a loss either
+        self.assertEqual((tie["detected"], tie["worse"], tie["better"], tie["loss"]), (False, 0, 0, 0.0))
+        self.assertAlmostEqual(tie["share"], 1 - 0.05 ** (1 / 20))
+        one = h([(1.0 - 1 / 11, 1.0)] + [(1.0, 1.0)] * 19)
+        self.assertAlmostEqual(one["share"], 0.2161, 4)  # 1 of 20
+        for x, share in ((tie, "13.9%"), (one, "21.6%")):  # both bounds, always
+            self.assertIn("(lower bound of the 95 % interval)", rc.harm_text(x))
+            self.assertIn(f"up to {share} of tasks worse", rc.harm_text(x))
+        self.assertGreater(one["loss"], 0)
         some = h([(0.0, 1.0)] * 2 + [(1.0, 0.0)] + [(1.0, 1.0)] * 17)
-        self.assertEqual((some["detected"], some["worse"], some["better"], some["exact"]), (False, 2, 1, False))
+        self.assertEqual((some["detected"], some["worse"], some["better"]), (False, 2, 1))
         self.assertGreater(some["loss"], 0.1)
         self.assertIn("harm not detected; largest loss not excluded: ", rc.harm_text(some))
         self.assertIn("tasks worse/better: 2/1 of 20", rc.harm_text(some))
         self.assertTrue(h([(0.5, 1.0)] * 20)["detected"])
         self.assertEqual(rc.harm_text(h([])), "no task has both arms")
+
+    def test_the_exact_share_bound(self):
+        self.assertAlmostEqual(rc.share_bound(0, 20), 1 - 0.05 ** (1 / 20))
+        self.assertAlmostEqual(rc.share_bound(1, 2), math.sqrt(0.95))  # P(at most 1 of 2) = 1 - p^2 = 0.05
+        self.assertEqual(rc.share_bound(20, 20), 1.0)
+        bounds = [rc.share_bound(k, 20) for k in range(21)]
+        self.assertEqual(bounds, sorted(bounds))
+        self.assertTrue(all(b > k / 20 for k, b in enumerate(bounds[:-1])))
+
+    def test_no_stated_bound_shrinks_when_a_task_gets_worse(self):
+        rng = random.Random(7)
+        def h(ps):
+            return rc.harm_check(ps, rc.paired_bootstrap(ps, N).as_dict())
+        starts = [[(1.0, 1.0)] * 20] + [[(rng.choice((0, 0.5, 1.0)), rng.choice((0, 0.5, 1.0))) for _ in range(20)] for _ in range(5)]
+        for ps in starts:
+            before = h(ps)
+            for i in rng.sample(range(20), 20):
+                for step in (1 / 11, 1.0):
+                    ps = [(max(0.0, a - step), b) if k == i else (a, b) for k, (a, b) in enumerate(ps)]
+                    after = h(ps)
+                    self.assertGreaterEqual(after["loss"], before["loss"] - 1e-12)
+                    self.assertGreaterEqual(after["share"], before["share"] - 1e-12)
+                    before = after
 
     def test_pooled_units(self):
         """A one-unit task that fails costs the mean 1/20, the pooled recall one unit."""

@@ -192,7 +192,7 @@ class Record(unittest.TestCase):
             self.assertEqual(t.get("optional", []), sorted(p for p, v in mine.items() if not v["counts"] and v["kind"] != "forced_tests"))
             self.assertEqual({u["path"] for u in rc.counted(t)}, {p for p, v in mine.items() if v["counts"]})
             n, counts = n + len(mine), counts + sum(v["counts"] for v in mine.values())
-        self.assertEqual((n, counts), (82, 73))
+        self.assertEqual((n, counts), (82, 72))
 
     def test_the_sources_are_still_those_of_the_record(self):
         from aeval import config

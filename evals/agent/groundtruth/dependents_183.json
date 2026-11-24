@@ -44,11 +44,11 @@
   "either": 0
  },
  "jsonl-media-type-support": {
-  "docs": 1,
+  "docs": 0,
   "remote": 9,
   "forced_tests": 1,
   "new_tests": 1,
-  "optional": 2,
+  "optional": 3,
   "local": 0,
   "comments": 1,
   "build": 0,
