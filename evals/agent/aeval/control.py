@@ -28,7 +28,8 @@ from .stats import mean, paired_bootstrap, percentile
 BASE, ARM = "none", "none-docs"
 RECORDED, CONCURRENT, NEW = "recorded", "concurrent", "none-docs"
 GOLD, DECOY = "gold", "decoy"  # on the judges' sheet only
-JUDGE_ERRORS = 5  # a judge with more wrong answers than this on the commit's edits and the decoys is replaced
+JUDGE_ERRORS = 5  # a judge with more wrong answers than this on the commit's edits and the decoys is replaced,
+JUDGE_ERRORS_DOCS = 2  # and with more than this on those of docs units
 WAYS = ("touched", "covered_strict", "covered_lenient")  # an undecided unit is not covered, or covered
 MOST = 0.5  # more than this share of the docs gap closed is "most of it"
 PLAN_SEED = 183
@@ -178,7 +179,7 @@ def excerpt(before: str, left: str, gold: str, patterns: list[str], around: int 
 
 def decoy_of(spec: dict, parent: str, gold: str) -> str:
     """The faulty edit of a unit: replacements in the parent's file, or the
-    commit's file with one of the parent's tests disabled or emptied."""
+    commit's file with one of the parent's tests (``test``: this one) disabled or emptied."""
     if "replace" in spec:
         text = parent
         for a, b in spec["replace"]:
@@ -188,6 +189,8 @@ def decoy_of(spec: dict, parent: str, gold: str) -> str:
         return text
     tests = list(re.finditer(r"(?m)^(\t+)@Test[^\n]*\n(?:\1@[^\n]*\n)*\1[^\n]*?\bvoid (\w+)\([^\n]*\{\n", gold))
     kept = [m for m in tests if re.search(rf"\b{m.group(2)}\(", parent)] or tests  # in a renamed file every test may have another name
+    if spec.get("test"):
+        kept = [m for m in kept if m.group(2) == spec["test"]]
     for m in kept:
         indent = m.group(1)
         if spec["gold_with_a_test"] == "disabled":
@@ -229,7 +232,7 @@ def sheet(sets: dict[str, dict[str, dict]], tasks: list[dict], criteria: dict, d
         items.append({"item": name, "task": i, "unit": u["path"], "change": task["question"], "wrong_before": spec["wrong"],
                       "criteria": [{"id": x["id"], "text": x["text"]} for x in crit], "diff": unified(before, left),
                       "file_after_excerpt": excerpt(join(before), text, join(commit), patterns)})
-        key[name] = {"set": s, "task": i, "unit": u["path"], "mechanical": {x["id"]: mechanical(x, text) if {"absent", "present"} & set(x) else None for x in crit},
+        key[name] = {"set": s, "task": i, "unit": u["path"], "kind": u["kind"], "mechanical": {x["id"]: mechanical(x, text) if {"absent", "present"} & set(x) else None for x in crit},
                      "file_sha256": hashlib.sha256(text.encode()).hexdigest()}
     return items, key
 
@@ -239,7 +242,7 @@ def judged_units(key: dict, judged: dict, which: str) -> dict[tuple[str, str, st
     decides it; a mechanical failure, or none, leaves it to the judge (``{item:
     {criterion: true or false}}``, every item and criterion). A judge who takes more
     than :data:`JUDGE_ERRORS` of the commit's edits for not covered or of the decoys
-    for covered is refused."""
+    for covered, or more than :data:`JUDGE_ERRORS_DOCS` of those of docs units, is refused."""
     if bad := sorted(set(key) ^ set(judged)):
         raise SystemExit(f"{which} judge: not judged, or unknown: items {', '.join(bad[:10])}")
     out = {}
@@ -247,8 +250,11 @@ def judged_units(key: dict, judged: dict, which: str) -> dict[tuple[str, str, st
         if set(judged[name]) != set(k["mechanical"]) or not all(isinstance(x, bool) for x in judged[name].values()):
             raise SystemExit(f"{which} judge, item {name}: a true or false for each of {', '.join(sorted(k['mechanical']))}")
         out[k["set"], k["task"], k["unit"]] = all(k["mechanical"][c] is True or ok for c, ok in judged[name].items())
-    if len(wrong := judge_errors(out)) > JUDGE_ERRORS:
-        raise SystemExit(f"{which} judge: {len(wrong)} wrong answers on the commit's edits and the decoys (more than {JUDGE_ERRORS}); another judge is needed")
+    wrong, kind = judge_errors(out), {(k["set"], k["task"], k["unit"]): k["kind"] for k in key.values()}
+    docs = [w for w in wrong if kind[w] == "docs"]
+    if len(wrong) > JUDGE_ERRORS or len(docs) > JUDGE_ERRORS_DOCS:
+        raise SystemExit(f"{which} judge: {len(wrong)} wrong answers on the commit's edits and the decoys, {len(docs)} of them on docs units "
+                         f"(more than {JUDGE_ERRORS}, or {JUDGE_ERRORS_DOCS}); another judge is needed")
     return out
 
 

@@ -226,6 +226,13 @@ class Coverage(unittest.TestCase):
         if not seen:
             self.skipTest("no checkouts here")
 
+    def test_the_decoy_of_the_batch_tests_breaks_a_batch_test(self):
+        """Its criterion is about the batch tests only."""
+        x = json.loads((EVAL / "groundtruth/coverage_183.json").read_text())["units"]["jdbcclient-batch-entry-dsl"]
+        x = next(v for p, v in x.items() if p.endswith("JdbcClientIntegrationTests.java"))
+        self.assertIn("existing batch tests", x["criteria"][1]["text"])
+        self.assertEqual(x["decoy"], {"breaks": ["c2"], "gold_with_a_test": "disabled", "test": "batchUpdateWithJdbcIndexParameters"})
+
     def test_a_decoy_of_a_test_file(self):
         gold = "class T {\n\n\t@Test\n\tvoid added() {\n\t\tx();\n\t}\n\n\t@Test\n\t@SuppressWarnings(\"x\")\n\tvoid kept() throws Exception {\n\t\ty();\n\t\tif (a) {\n\t\t}\n\t}\n}\n"
         parent = "class T {\n\t@Test\n\tvoid kept() {\n\t\ty();\n\t}\n}\n"
@@ -238,6 +245,9 @@ class Coverage(unittest.TestCase):
         self.assertIn("Disabled", control.decoy_of({"gold_with_a_test": "disabled"}, "class T { }", gold))  # renamed: any test
         with self.assertRaises(ValueError):
             control.decoy_of({"gold_with_a_test": "disabled"}, parent, "class T {}")
+        with self.assertRaises(ValueError):
+            control.decoy_of({"gold_with_a_test": "disabled", "test": "added"}, parent, gold)  # named, but not one of the parent's
+        self.assertEqual(control.decoy_of({"gold_with_a_test": "disabled", "test": "kept"}, parent, gold), off)
         with self.assertRaises(ValueError):
             control.decoy_of({"replace": [["nowhere", "x"]]}, "a", "b")
         self.assertEqual(control.decoy_of({"replace": [["a", "b"]]}, "a a", "g"), "b a")
@@ -313,15 +323,20 @@ class Coverage(unittest.TestCase):
     def test_a_judge_is_checked_on_the_commits_edits_and_the_decoys(self):
         items, key = self._sheet()
         good = lambda n: key[n]["set"] in (control.NEW, control.GOLD)  # noqa: E731
-        judge = {n: {"c1": good(n), "c2": good(n)} for n in key}
-        wrong = [n for n in key if key[n]["set"] == control.DECOY][:3] + [n for n in key if key[n]["set"] == control.GOLD][:2]
-        for n in wrong:
-            judge[n] = {"c1": not good(n), "c2": not good(n)}
-        self.assertEqual(len(control.judge_errors(control.judged_units(key, judge, "first"))), control.JUDGE_ERRORS)  # five are let pass, and said
-        six = next(n for n in key if key[n]["set"] == control.DECOY and n not in wrong)
-        judge[six] = {"c1": True, "c2": True}
-        with self.assertRaisesRegex(SystemExit, "second judge: 6 wrong answers"):
-            control.judged_units(key, judge, "second")
+        of = lambda s, kind: [n for n in sorted(key) if key[n]["set"] == s and key[n]["kind"] == kind]  # noqa: E731
+
+        def judge(wrong):
+            return control.judged_units(key, {n: {"c1": good(n) != (n in wrong), "c2": good(n) != (n in wrong)} for n in key}, "second")
+        tests = of(control.DECOY, "forced_tests")[:2] + of(control.GOLD, "forced_tests")[:2]
+        docs = of(control.DECOY, "docs")[:2] + of(control.GOLD, "docs")[:2]
+        self.assertEqual((control.JUDGE_ERRORS, control.JUDGE_ERRORS_DOCS), (5, 2))
+        for wrong in (tests[:3] + docs[:2], tests + docs[:1], docs[1:3]):  # five, of them two on docs, are let pass, and said
+            self.assertEqual(len(control.judge_errors(judge(wrong))), len(wrong))
+        for wrong in (tests + docs[:2], docs[:3], tests[:1] + docs[1:]):  # six; three on docs, whether decoys or the commit's
+            with self.assertRaisesRegex(SystemExit, f"second judge: {len(wrong)} wrong answers"):
+                judge(wrong)
+        sessions = [n for n in key if key[n]["set"] == control.RECORDED]
+        self.assertEqual(control.judge_errors(judge(sessions)), [])  # the sessions' own items are no check
 
     def test_a_renamed_test_is_one_item_with_the_file_that_is_left(self):
         t = {**syn.task(1), "equivalents": [["m1/src/test/java/a/PTests.java", "m1/src/test/java/a/QTests.java"]]}
