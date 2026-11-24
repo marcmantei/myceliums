@@ -34,6 +34,7 @@ DESCRIPTIONS = {
     "D": "myceliums only (#178): the MCP server and `Read`; `Grep` and `Glob` denied; Bash, if offered, limited "
          "by a PreToolUse hook to an allowlist (`myc`, plain file operations, git without search, the task's own "
          "build/test commands); edit tools on edit tasks",
+    "none-docs": "`none` with one more sentence in the prompt (#183): \"" + config.DOCS_SENTENCE + "\"",
     "E": "C + the `code-explorer` subagent (`myc setup-claude --scope project`) and the Agent tool, "
          "with Claude Code's built-in subagents denied",
 }
@@ -41,6 +42,7 @@ DESCRIPTIONS = {
 # A `none` vs myceliums run (#153): `none` is the comparison arm, not a
 # calibration run, and the report has no condition A to refer to.
 OUTCOME = {
+    "none-docs": DESCRIPTIONS["none-docs"],
     "none": "no myceliums at all: no MCP server, no CLAUDE.md routing block, no hooks; the built-in read and "
             "search tools only",
     "C": "the myceliums MCP server (default core toolset, 9 tools loaded up front) + what `myc setup-claude "
@@ -235,7 +237,7 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     is_pairwise = meta.get("comparisons") == "pairwise" and len(conditions) > 1
     is_edit = bool(rows) and all(r.get("edit") for r in rows)
     label_of = lambda key, lab: EDIT_LABELS.get(key, lab) if is_edit else lab.format(thr=thr)  # noqa: E731
-    registered = report_commit.applies(rows, tasks) and set(conditions) == set(report_commit.ARMS)  # #183
+    registered = report_commit.applies(rows, tasks) and frozenset(conditions) in report_commit.DESIGNS  # #183
     a = analyse(rows, tasks, conditions, baseline, n_resamples)
     by_cond = {c: [r for r in rows if r["condition"] == c] for c in conditions}
 
@@ -271,7 +273,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
         if isinstance(idx.get("symbols"), int):
             L.append(f"  - `{name}` {r.get('ref')} (`{r.get('commit', '')[:12]}`, {r.get('language_name')}): "
                      f"index {idx['symbols']:,} symbols in {idx.get('files', 0):,} files")
-    L.append("- **Same in every condition:** prompt, model, effort, turn limit, timeout; built-in tools `Read`, "
+    said = [c for c in conditions if config.VARIANTS[c].prompt_extra]
+    L.append(f"- **Same in every condition:** prompt{''.join(f' (but for the one sentence of `{c}`)' for c in said)}, model, effort, turn limit, timeout; built-in tools `Read`, "
              + ("`Grep`, `Glob` (not in D), `Bash`, `Edit`, `Write` (+ `ToolSearch`)" if registered else
                 "`Grep`, `Glob`, `Bash` (+ `ToolSearch`)" if meta.get("bash") else "`Grep`, `Glob` (+ `ToolSearch`)")
              + "; `--setting-sources project` (the working copy's "
