@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 
-from . import config
+from . import config, report_commit
 from .report import _fmt, _fmt_diff, _fmt_ratio
 from .stats import exact_sign_test, mean, median, paired_bootstrap, per_success_bootstrap
 
@@ -74,6 +74,10 @@ METRICS = [
     ("wall_s", "Wall time per session (s)", "f1", lambda r: r["wall_s"]),
 ]
 RATIO_KINDS = ("int", "usd", "f1")
+
+# Edit tasks have no answer list: what the same columns hold there (#183).
+EDIT_LABELS = {"success": "Success rate (the task's tests pass)", "f1": "File F1 (changed files vs. the commit's)",
+               "precision": "File precision", "recall": "File recall (all of the commit's files)"}
 
 
 def _per_task(rows, fn):
@@ -229,6 +233,9 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     baseline = "A" if "A" in conditions else conditions[0]
     # #182: an interleaved A/C/D run compares every pair; no condition is the baseline.
     is_pairwise = meta.get("comparisons") == "pairwise" and len(conditions) > 1
+    is_edit = bool(rows) and all(r.get("edit") for r in rows)
+    label_of = lambda key, lab: EDIT_LABELS.get(key, lab) if is_edit else lab.format(thr=thr)  # noqa: E731
+    registered = report_commit.applies(rows, tasks) and set(conditions) == set(report_commit.ARMS)  # #183
     a = analyse(rows, tasks, conditions, baseline, n_resamples)
     by_cond = {c: [r for r in rows if r["condition"] == c] for c in conditions}
 
@@ -265,7 +272,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
             L.append(f"  - `{name}` {r.get('ref')} (`{r.get('commit', '')[:12]}`, {r.get('language_name')}): "
                      f"index {idx['symbols']:,} symbols in {idx.get('files', 0):,} files")
     L.append("- **Same in every condition:** prompt, model, effort, turn limit, timeout; built-in tools `Read`, "
-             + ("`Grep`, `Glob`, `Bash` (+ `ToolSearch`)" if meta.get("bash") else "`Grep`, `Glob` (+ `ToolSearch`)")
+             + ("`Grep`, `Glob` (not in D), `Bash`, `Edit`, `Write` (+ `ToolSearch`)" if registered else
+                "`Grep`, `Glob`, `Bash` (+ `ToolSearch`)" if meta.get("bash") else "`Grep`, `Glob` (+ `ToolSearch`)")
              + "; `--setting-sources project` (the working copy's "
              "`.claude/settings.json` and `CLAUDE.md` load, the user's do not); fresh working copy and index "
              "copy per session; transcripts checked for the expected tools, MCP server and subagents.")
@@ -277,13 +285,15 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
                  f"success = F1 ≥ {thr}.")
     L.append(f"- **Statistics:** repetitions averaged within each task; 95 % percentile bootstrap intervals over "
              f"tasks ({n_resamples:,} resamples), "
-             + ("every pair of conditions compared, none of them a baseline (see *Pairwise comparisons*)."
+             + ("the registered comparisons only (see there)." if registered else "every pair of conditions compared, none of them a baseline (see *Pairwise comparisons*)."
                 if is_pairwise else f"paired with condition `{baseline}` for the differences."))
     L.append("")
     L.append("| Condition | What the session has |")
     L.append("|---|---|")
     for c in conditions:
         desc = OUTCOME.get(c, DESCRIPTIONS.get(c, c)) if outcome else DESCRIPTIONS.get(c, c)
+        if registered:  # since #200
+            desc = desc.replace("the routing block in CLAUDE.md", "the routing block in .claude/rules/myceliums.md")
         L.append(f"| **{c}** | {desc} |")
     L.append("")
 
@@ -298,11 +308,15 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
         for c in conditions:
             m = a["means"][c][key]
             cells.append(f"{_fmt(m['mean'], kind)} [{_fmt(m['lo'], kind)}, {_fmt(m['hi'], kind)}]")
-        L.append(f"| {lab.format(thr=thr)} | " + " | ".join(cells) + " |")
+        L.append(f"| {label_of(key, lab)} | " + " | ".join(cells) + " |")
     L.append("")
 
     others = [] if is_pairwise else [c for c in conditions if c != baseline]
-    pw = cats = None
+    pw = cats = commit = None
+    if registered:  # #183: the registered comparisons and no others
+        is_pairwise, others = False, []
+        commit_lines, commit = report_commit.lines(rows, tasks, n_resamples)
+        L.extend(commit_lines)
     if is_pairwise:
         pw = pairwise(rows, tasks, conditions, n_resamples)
         cats = by_category(rows, tasks, conditions)
@@ -325,33 +339,34 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
                 no_ratio = kind not in RATIO_KINDS or key.startswith("myc") or s["ratio_mean"] != s["ratio_mean"]
                 ratios.append("–" if no_ratio else
                               f"{_fmt_ratio(s['ratio_mean'])} [{_fmt_ratio(s['ratio_lo'])}, {_fmt_ratio(s['ratio_hi'])}]")
-            L.append(f"| {lab.format(thr=thr)} | " + " | ".join(diffs) + " | " + " | ".join(ratios) + " |")
+            L.append(f"| {label_of(key, lab)} | " + " | ".join(diffs) + " | " + " | ".join(ratios) + " |")
         L.append("")
 
-    L.append("## By task type")
-    L.append("")
-    L.append("Four tasks per type at most: read these as direction, not size.")
-    L.append("")
-    head = "| Type | Tasks | " + " | ".join(f"F1 {c}" for c in conditions) + " | " + \
-        " | ".join(f"Success {c}" for c in conditions) + " | " + " | ".join(f"myc used {c}" for c in conditions)
-    if others:
-        head += " | " + " | ".join(f"Δ F1 {c} − {baseline} [95 % CI]" for c in others)
-    L.append(head + " |")
-    L.append("|---|---:|" + "---:|" * (3 * len(conditions) + len(others)))
-    type_n = Counter(t["type"] for t in tasks)
-    for typ, m in sorted(a["by_type"].items()):
-        cells = [f"{m[c]['f1']:.3f}" for c in conditions] + [_fmt(m[c]["success"], "pct") for c in conditions] \
-            + [_fmt(m[c]["myc_used"], "pct") for c in conditions]
-        for c in others:
-            d = m[f"{c}-{baseline}"]["f1"]
-            cells.append(f"{_fmt_diff(d['diff_mean'], 'f3')} [{_fmt_diff(d['diff_lo'], 'f3')}, "
-                         f"{_fmt_diff(d['diff_hi'], 'f3')}]")
-        L.append(f"| {typ} | {type_n[typ]} | " + " | ".join(cells) + " |")
-    L.append("")
+    if not is_edit:  # one type only there
+        L.append("## By task type")
+        L.append("")
+        L.append("Four tasks per type at most: read these as direction, not size.")
+        L.append("")
+        head = "| Type | Tasks | " + " | ".join(f"F1 {c}" for c in conditions) + " | " + \
+            " | ".join(f"Success {c}" for c in conditions) + " | " + " | ".join(f"myc used {c}" for c in conditions)
+        if others:
+            head += " | " + " | ".join(f"Δ F1 {c} − {baseline} [95 % CI]" for c in others)
+        L.append(head + " |")
+        L.append("|---|---:|" + "---:|" * (3 * len(conditions) + len(others)))
+        type_n = Counter(t["type"] for t in tasks)
+        for typ, m in sorted(a["by_type"].items()):
+            cells = [f"{m[c]['f1']:.3f}" for c in conditions] + [_fmt(m[c]["success"], "pct") for c in conditions] \
+                + [_fmt(m[c]["myc_used"], "pct") for c in conditions]
+            for c in others:
+                d = m[f"{c}-{baseline}"]["f1"]
+                cells.append(f"{_fmt_diff(d['diff_mean'], 'f3')} [{_fmt_diff(d['diff_lo'], 'f3')}, "
+                             f"{_fmt_diff(d['diff_hi'], 'f3')}]")
+            L.append(f"| {typ} | {type_n[typ]} | " + " | ".join(cells) + " |")
+        L.append("")
 
     L.append("## Per task")
     L.append("")
-    L.append("F1 per repetition, in repetition order; myceliums calls summed over the repetitions.")
+    L.append(("File F1" if is_edit else "F1") + " per repetition, in repetition order; myceliums calls summed over the repetitions.")
     L.append("")
     L.append("| Task | Type | Gold | " + " | ".join(f"F1 {c}" for c in conditions) + " | "
              + " | ".join(f"myc calls {c}" for c in conditions) + " |")
@@ -464,6 +479,8 @@ def render(label: str, n_resamples: int = 10_000) -> tuple[str, dict]:
     summary = {"label": label, "threshold": thr, "baseline": baseline, "conditions": conditions,
                "analysis": a, "n_rows": len(rows),
                "statuses": {f"{c}/{s}": n for (c, s), n in sorted(st.items())}}
+    if commit is not None:
+        summary.update(baseline=None, commit_replay=commit)
     if is_pairwise:
         summary.update(baseline=None, pairwise=pw, by_category=cats)
     return "\n".join(L) + "\n", summary

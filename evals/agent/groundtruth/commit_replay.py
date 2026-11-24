@@ -42,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import subprocess
 import sys
@@ -263,6 +264,7 @@ def cmd_build(args) -> int:
             "test_timeout_s": s.get("test_timeout_s", 1800),
             "strata": {"files": sp["files"], "files_by_kind": sp["kinds"], "code_modules": len(sp["code_modules"]), "comment_only": len(comments),
                        "modules": sp["modules"], "docs": sp["kinds"]["docs"] > 0,
+                       "agents_md": bool(git(hist, "ls-tree", "--name-only", parent, "AGENTS.md").strip()),
                        "size": "S" if sp["files"] <= 5 else "M" if sp["files"] <= 12 else "L"},
         }
         prev = old.get(s["id"], {}).get("precheck")
@@ -275,6 +277,36 @@ def cmd_build(args) -> int:
     data = {"description": spec["description"], "repos": repos, "tasks": tasks}
     out_path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
     print(f"{len(tasks)} tasks -> {out_path}", file=sys.stderr)
+    return 0
+
+
+PILOT_SEED = 183
+
+
+def draw_pilot(candidates: list[dict], seed: int = PILOT_SEED) -> dict:
+    """The pilot's tasks: one per stratum (size x docs) among the candidates,
+    then one of them each for the pipeline checks in C and D. Candidates and
+    strata are sorted, so the seed alone decides."""
+    rng = random.Random(seed)
+    strata: dict = {}
+    for c in sorted(candidates, key=lambda c: c["id"]):
+        strata.setdefault((c["size"], c["docs"]), []).append(c["id"])
+    tasks = [rng.choice(strata[k]) for k in sorted(strata)]
+    c, d = rng.sample(tasks, 2)
+    return {"none": tasks, "C": [c], "D": [d]}
+
+
+def cmd_pilot(args) -> int:
+    """Draw the pilot once, from the tasks whose precheck is valid today, and record it."""
+    out = Path(args.out)
+    if out.exists():
+        raise SystemExit(f"{out} exists: the pilot is drawn once")
+    data = json.loads(Path(args.tasks).read_text())
+    cands = [{"id": t["id"], "size": t["strata"]["size"], "docs": t["strata"]["docs"]} for t in data["tasks"]
+             if (t.get("precheck") or {}).get("fails_on_parent") and t["precheck"].get("passes_on_gold")]
+    draw = draw_pilot(cands)
+    out.write_text(json.dumps({"seed": PILOT_SEED, "candidates": sorted(cands, key=lambda c: c["id"]), **draw}, indent=1) + "\n")
+    print(json.dumps(draw))
     return 0
 
 
@@ -292,6 +324,10 @@ def main() -> int:
     s.add_argument("--reserve", action="store_true",
                    help="build the spec's reserve tasks (prechecked as replacements) instead of the selected ones")
     s.set_defaults(fn=cmd_build)
+    s = sub.add_parser("pilot", help="draw the pilot's tasks (once)")
+    s.add_argument("tasks")
+    s.add_argument("out")
+    s.set_defaults(fn=cmd_pilot)
     args = p.parse_args()
     return args.fn(args)
 

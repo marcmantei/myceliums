@@ -144,7 +144,8 @@
      "applied": "question replaced by this reviewer's text (its own text is not reviewed again)"
     }
    },
-   "reserve": true
+   "reserve": true,
+   "weak_test": "The switch of the framework's own call sites to the builder changes no behaviour and no test checks it. Not enforced: SpelExpressionParser.java, ExpressionState.java, StandardBeanExpressionResolver.java."
   },
   {
    "id": "spel-big-power-result-limit",
@@ -451,7 +452,7 @@
    "id": "resource-loader-classpath-all-get-resource",
    "commit": "1345760087bf6e68a64923e13d4c0ebcc82b7f34",
    "issue": "gh-36415",
-   "question": "ResourceLoader#getResource does not support the \"classpath*:\" prefix: getResource(\"classpath*:META-INF/MANIFEST.MF\") does not give access to all same-named resources on the classpath, which today requires ResourcePatternResolver#getResources. Declare the CLASSPATH_ALL_URL_PREFIX constant (\"classpath*:\") on ResourceLoader itself, and make DefaultResourceLoader#getResource return a multi-content resource handle for such a fully specified (non-pattern) location. That resource exists and is readable if at least one match exists, is not a file, reports the combined content length of all matches, and its getInputStream() returns the merged content of all matching resources in classpath order. Merged content is fine for simple concatenation but not for formats that must be parsed one document at a time, so add a general-purpose method Resource#consumeContent(callback) that invokes a callback once per content: once with the regular input stream by default, but once per matching resource for a multi-content resource. The callback receives an InputStream and may throw IOException. EncodedResource needs a matching consumeContent(callback) variant whose callback receives a Reader that applies the configured encoding/charset, while its getReader() and getContentAsString() expose the merged content.",
+   "question": "ResourceLoader#getResource does not support the \"classpath*:\" prefix: getResource(\"classpath*:META-INF/MANIFEST.MF\") does not give access to all same-named resources on the classpath, which today requires ResourcePatternResolver#getResources. Declare the CLASSPATH_ALL_URL_PREFIX constant (\"classpath*:\") on ResourceLoader itself, and make DefaultResourceLoader#getResource return a multi-content resource handle for such a fully specified (non-pattern) location. That resource exists and is readable if at least one match exists, is not a file, reports the combined content length of all matches, and its getInputStream() returns the merged content of all matching resources in classpath order. Merged content is fine for simple concatenation but not for formats that must be parsed one document at a time, so add a general-purpose method Resource#consumeContent(callback) that invokes a callback once per content: once with the regular input stream by default, but once per matching resource for a multi-content resource. The callback receives an InputStream and may throw IOException. Framework code that parses a resource as a document (YAML, properties or XML bean definitions) must work with such a resource: it parses each matching file on its own instead of the merged content. EncodedResource needs a matching consumeContent(callback) variant whose callback receives a Reader that applies the configured encoding/charset, while its getReader() and getContentAsString() expose the merged content.",
    "primary_files": [
     "spring-core/src/main/java/org/springframework/core/io/Resource.java",
     "spring-core/src/main/java/org/springframework/core/io/ResourceLoader.java",
@@ -459,12 +460,16 @@
     "spring-core/src/main/java/org/springframework/core/io/support/EncodedResource.java"
    ],
    "rationale": "The commit moves CLASSPATH_ALL_URL_PREFIX from ResourcePatternResolver to ResourceLoader, adds a ClassPathAllResource to DefaultResourceLoader, a default Resource#consumeContent(IOConsumer<InputStream>), EncodedResource#consumeContent(IOConsumer<Reader>) and the new functional interface org.springframework.util.function.IOConsumer, and switches YamlProcessor, PropertiesBeanDefinitionReader and XmlBeanDefinitionReader to consumeContent so they parse each matching file separately. Primaries are the four named types; dependents are IOConsumer, ResourcePatternResolver (constant removal) and the three spring-beans readers.",
-   "notes": "The IOConsumer type name is deliberately not given: the test passes only lambdas that throw IOException, so any IOException-capable functional interface compiles. The spring-beans readers (YAML, properties, XML bean definitions) are the dependents; the description only motivates per-document parsing without naming them, and no test covers them. Test relies on several META-INF/MANIFEST.MF files being on the test classpath (true for the Gradle test runtime).",
+   "notes": "The IOConsumer type name is deliberately not given: the test passes only lambdas that throw IOException, so any IOException-capable functional interface compiles. The spring-beans readers (YAML, properties, XML bean definitions) are the dependents; the description only motivates per-document parsing without naming them, and no test covers them. Test relies on several META-INF/MANIFEST.MF files being on the test classpath (true for the Gradle test runtime). 24 November 2026: the description demanded nothing of the three readers although they are gold (final review); the sentence on parsing code was added, without class names, and is not re-reviewed. The callback's type has no prescribed place, so IOConsumer.java is `either`.",
    "review": {
     "verdict": "ok",
     "comment": "Test needs Resource#consumeContent(callback throwing IOException, InputStream arg), EncodedResource#consumeContent(Reader callback), getResource('classpath*:...') via PathMatchingResourcePatternResolver delegating to DefaultResourceLoader, exists/isReadable true, isFile false, contentLength = sum, merged getInputStream, EncodedResource.getContentAsString merged (exists at parent). All stated. The callback interface name (IOConsumer) is not needed: the test only uses lambdas. Four primary files are all named core types; six dependents remain (IOConsumer, ResourcePatternResolver, YamlProcessor, PropertiesBeanDefinitionReader, XmlBeanDefinitionReader). The test reads all MANIFEST.MF files on the test classpath; deterministic."
    },
-   "reserve": true
+   "reserve": true,
+   "either": [
+    "spring-core/src/main/java/org/springframework/util/function/IOConsumer.java"
+   ],
+   "weak_test": "Only PathMatchingResourcePatternResolverTests runs: the YAML, properties and XML readers can keep reading the merged stream, and the old constant can stay where it was (it then hides the new one). Not enforced: YamlProcessor.java, PropertiesBeanDefinitionReader.java, XmlBeanDefinitionReader.java, ResourcePatternResolver.java."
   },
   {
    "id": "webflux-default-html-escape",
@@ -478,7 +483,7 @@
     "spring-webflux/src/main/java/org/springframework/web/reactive/result/view/RequestContext.java",
     "spring-web/src/main/java/org/springframework/web/server/adapter/DefaultServerWebExchange.java"
    ],
-   "rationale": "Adds an application-wide defaultHtmlEscape setting for WebFlux, flowing from WebHttpHandlerBuilder through HttpWebHandlerAdapter into the exchange and finally RequestContext. Primary files are the builder, adapter, exchange contract, RequestContext and the test-fixture mock exchange the tests build on. Dependents: DefaultServerWebExchange (new constructor/field), ServerWebExchangeDecorator and the delegating exchange in DefaultServerRequestBuilder (new interface method), the spring-test MockServerWebExchange builder, and the two test classes.",
+   "rationale": "Adds an application-wide defaultHtmlEscape setting for WebFlux, flowing from WebHttpHandlerBuilder through HttpWebHandlerAdapter into the exchange and finally RequestContext. Primary files are the builder, adapter, exchange contract, DefaultServerWebExchange (new constructor) and RequestContext. Dependents: ServerWebExchangeDecorator and the delegating exchange in DefaultServerRequestBuilder (new interface method), the spring-test MockServerWebExchange builder, and the two test classes.",
    "notes": "Tests rely on the spring-web testFixtures MockServerWebExchange.Builder.defaultHtmlEscape(boolean); testFixtures are not under src/test, so the agent must add it (hence named in the question and listed as primary). RequestContext must return false (not null) when unconfigured. The spring-test MockServerWebExchange counterpart is a dependent and deliberately not distinguished. Tests span spring-web and spring-webflux.",
    "review": {
     "verdict": "fix",
@@ -489,7 +494,8 @@
      "comment": "Solvability: WebHttpHandlerBuilder.defaultHtmlEscape(Boolean) and clone retention, HttpWebHandlerAdapter.getDefaultHtmlEscape() with null default, the 7-arg protected DefaultServerWebExchange constructor (called by the testFixtures MockServerWebExchange via super(..., null, defaultHtmlEscape)) and the RequestContext false fallback/override are all stated. MockServerWebExchange.Builder.defaultHtmlEscape(boolean) used by RequestContextTests comes from the testFixtures file itself, so the harness MUST copy src/testFixtures with the test files; otherwise the task is not solvable. Facts verified (hard-coded null with TODO; 5-arg public and 6-arg protected constructors exist). Not stated but not needed by tests: hasDefaultHtmlEscape() on the builder, the 6-arg constructor becoming public. Named types are the five primaries only. Scoring caveats: (1) ServerWebExchangeDecorator and DefaultServerRequestBuilder's delegating exchange are derivable: compile-forced if the method is abstract, functionally required if it is a default method. (2) The two MockServerWebExchange files are not derivable from the stated requirements; consider leaving the testFixtures one out of the dependents (it is overwritten anyway) and treat the spring-test one as a soft dependent. Optional hardening: say the new ServerWebExchange method is abstract (like getApplicationContext())."
     }
    },
-   "reserve": true
+   "reserve": true,
+   "weak_test": "If getDefaultHtmlEscape is a default method on ServerWebExchange, the delegating exchanges compile unchanged, and no test checks that they delegate; the spring-test mock exchange is not tested either. Not enforced: ServerWebExchangeDecorator.java, DefaultServerRequestBuilder.java, spring-test's MockServerWebExchange.java."
   },
   {
    "id": "cache-manager-reset-caches",

@@ -274,6 +274,7 @@
      "spring-webflux"
     ],
     "docs": true,
+    "agents_md": true,
     "size": "S"
    }
   },
@@ -332,6 +333,7 @@
      "spring-expression"
     ],
     "docs": true,
+    "agents_md": true,
     "size": "S"
    }
   },
@@ -412,6 +414,7 @@
      "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
+   "weak_test": "The switch of the framework's own call sites to the builder changes no behaviour and no test checks it. Not enforced: SpelExpressionParser.java, ExpressionState.java, StandardBeanExpressionResolver.java.",
    "test_timeout_s": 1800,
    "strata": {
     "files": 11,
@@ -428,6 +431,7 @@
      "spring-expression"
     ],
     "docs": true,
+    "agents_md": false,
     "size": "M"
    }
   },
@@ -517,6 +521,7 @@
      "spring-core"
     ],
     "docs": true,
+    "agents_md": false,
     "size": "M"
    }
   },
@@ -525,7 +530,7 @@
    "repo": "spring-resource-loader-classpath-all-get-resource",
    "type": "edit",
    "answer_kind": "diff",
-   "question": "ResourceLoader#getResource does not support the \"classpath*:\" prefix: getResource(\"classpath*:META-INF/MANIFEST.MF\") does not give access to all same-named resources on the classpath, which today requires ResourcePatternResolver#getResources. Declare the CLASSPATH_ALL_URL_PREFIX constant (\"classpath*:\") on ResourceLoader itself, and make DefaultResourceLoader#getResource return a multi-content resource handle for such a fully specified (non-pattern) location. That resource exists and is readable if at least one match exists, is not a file, reports the combined content length of all matches, and its getInputStream() returns the merged content of all matching resources in classpath order. Merged content is fine for simple concatenation but not for formats that must be parsed one document at a time, so add a general-purpose method Resource#consumeContent(callback) that invokes a callback once per content: once with the regular input stream by default, but once per matching resource for a multi-content resource. The callback receives an InputStream and may throw IOException. EncodedResource needs a matching consumeContent(callback) variant whose callback receives a Reader that applies the configured encoding/charset, while its getReader() and getContentAsString() expose the merged content.",
+   "question": "ResourceLoader#getResource does not support the \"classpath*:\" prefix: getResource(\"classpath*:META-INF/MANIFEST.MF\") does not give access to all same-named resources on the classpath, which today requires ResourcePatternResolver#getResources. Declare the CLASSPATH_ALL_URL_PREFIX constant (\"classpath*:\") on ResourceLoader itself, and make DefaultResourceLoader#getResource return a multi-content resource handle for such a fully specified (non-pattern) location. That resource exists and is readable if at least one match exists, is not a file, reports the combined content length of all matches, and its getInputStream() returns the merged content of all matching resources in classpath order. Merged content is fine for simple concatenation but not for formats that must be parsed one document at a time, so add a general-purpose method Resource#consumeContent(callback) that invokes a callback once per content: once with the regular input stream by default, but once per matching resource for a multi-content resource. The callback receives an InputStream and may throw IOException. Framework code that parses a resource as a document (YAML, properties or XML bean definitions) must work with such a resource: it parses each matching file on its own instead of the merged content. EncodedResource needs a matching consumeContent(callback) variant whose callback receives a Reader that applies the configured encoding/charset, while its getReader() and getContentAsString() expose the merged content.",
    "rationale": "The commit moves CLASSPATH_ALL_URL_PREFIX from ResourcePatternResolver to ResourceLoader, adds a ClassPathAllResource to DefaultResourceLoader, a default Resource#consumeContent(IOConsumer<InputStream>), EncodedResource#consumeContent(IOConsumer<Reader>) and the new functional interface org.springframework.util.function.IOConsumer, and switches YamlProcessor, PropertiesBeanDefinitionReader and XmlBeanDefinitionReader to consumeContent so they parse each matching file separately. Primaries are the four named types; dependents are IOConsumer, ResourcePatternResolver (constant removal) and the three spring-beans readers.",
    "source": {
     "commit": "1345760087bf6e68a64923e13d4c0ebcc82b7f34",
@@ -591,6 +596,10 @@
      "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
+   "either": [
+    "spring-core/src/main/java/org/springframework/util/function/IOConsumer.java"
+   ],
+   "weak_test": "Only PathMatchingResourcePatternResolverTests runs: the YAML, properties and XML readers can keep reading the merged stream, and the old constant can stay where it was (it then hides the new one). Not enforced: YamlProcessor.java, PropertiesBeanDefinitionReader.java, XmlBeanDefinitionReader.java, ResourcePatternResolver.java.",
    "test_timeout_s": 1800,
    "strata": {
     "files": 10,
@@ -606,6 +615,7 @@
      "spring-core"
     ],
     "docs": false,
+    "agents_md": false,
     "size": "M"
    }
   },
@@ -615,7 +625,7 @@
    "type": "edit",
    "answer_kind": "diff",
    "question": "WebFlux's RequestContext has no application-wide defaultHtmlEscape setting: the value is hard-coded to null with a TODO, unlike the Servlet stack where it can be configured centrally. Add a programmatic way to configure it. WebHttpHandlerBuilder gets a defaultHtmlEscape(Boolean) method, and the setting is kept when the builder is cloned. HttpWebHandlerAdapter gets setDefaultHtmlEscape(Boolean) and getDefaultHtmlEscape(), the latter returning null when nothing was configured. The adapter makes the setting available on every exchange it creates, via a new `@Nullable Boolean getDefaultHtmlEscape()` method on ServerWebExchange. DefaultServerWebExchange receives the value through a new protected constructor taking (ServerHttpRequest, ServerHttpResponse, WebSessionManager, ServerCodecConfigurer, LocaleContextResolver, @Nullable ApplicationContext, @Nullable Boolean defaultHtmlEscape); the existing constructors keep working and pass null. RequestContext initializes its default HTML escape flag from the exchange and falls back to false when nothing is configured; calling setDefaultHtmlEscape on a RequestContext still overrides the exchange-level value.",
-   "rationale": "Adds an application-wide defaultHtmlEscape setting for WebFlux, flowing from WebHttpHandlerBuilder through HttpWebHandlerAdapter into the exchange and finally RequestContext. Primary files are the builder, adapter, exchange contract, RequestContext and the test-fixture mock exchange the tests build on. Dependents: DefaultServerWebExchange (new constructor/field), ServerWebExchangeDecorator and the delegating exchange in DefaultServerRequestBuilder (new interface method), the spring-test MockServerWebExchange builder, and the two test classes.",
+   "rationale": "Adds an application-wide defaultHtmlEscape setting for WebFlux, flowing from WebHttpHandlerBuilder through HttpWebHandlerAdapter into the exchange and finally RequestContext. Primary files are the builder, adapter, exchange contract, DefaultServerWebExchange (new constructor) and RequestContext. Dependents: ServerWebExchangeDecorator and the delegating exchange in DefaultServerRequestBuilder (new interface method), the spring-test MockServerWebExchange builder, and the two test classes.",
    "source": {
     "commit": "d4893fb32fc2d9b1c66ce90e49dbd09ca7c54240",
     "subject": "Support defaultHtmlEscape in WebFlux",
@@ -687,6 +697,7 @@
      "args": "(?=(?:.* )?--offline(?: |$))(?=(?:.* )?--no-scan(?: |$))(?=(?:.* )?--no-build-cache(?: |$))(?:(?:\\-\\-no\\-daemon|\\-\\-console=plain|\\-\\-offline|\\-\\-no\\-scan|\\-\\-no\\-build\\-cache|\\-q|\\-\\-quiet|\\-i|\\-\\-info|\\-\\-stacktrace|\\-\\-continue|\\-\\-rerun\\-tasks|\\-\\-rerun|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:compileJava|compileTestJava|compileKotlin|compileTestKotlin|compileTestFixturesJava|classes|testClasses|testFixturesClasses|test|checkstyleMain|checkstyleTest)|--tests [A-Za-z0-9_.*$#]+)(?: |$))+"
     }
    ],
+   "weak_test": "If getDefaultHtmlEscape is a default method on ServerWebExchange, the delegating exchanges compile unchanged, and no test checks that they delegate; the spring-test mock exchange is not tested either. Not enforced: ServerWebExchangeDecorator.java, DefaultServerRequestBuilder.java, spring-test's MockServerWebExchange.java.",
    "test_timeout_s": 1800,
    "strata": {
     "files": 11,
@@ -703,6 +714,7 @@
      "spring-webflux"
     ],
     "docs": false,
+    "agents_md": false,
     "size": "M"
    }
   },
@@ -772,6 +784,7 @@
      "spring-core"
     ],
     "docs": false,
+    "agents_md": false,
     "size": "S"
    }
   },
@@ -834,6 +847,7 @@
      "spring-webmvc"
     ],
     "docs": false,
+    "agents_md": true,
     "size": "S"
    }
   },
@@ -897,6 +911,7 @@
      "spring-webmvc"
     ],
     "docs": false,
+    "agents_md": false,
     "size": "S"
    }
   }

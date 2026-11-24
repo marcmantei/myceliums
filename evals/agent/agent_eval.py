@@ -287,6 +287,19 @@ def cmd_export(args) -> int:
     return 0
 
 
+def cmd_pilot(args) -> int:
+    """The pilot of #183: cost and time projected from arm none, and the ceiling check."""
+    from aeval import report_commit
+    drawn = config.load_json(config.EVAL_DIR / "groundtruth" / "pilot_183.json")
+    rows = {}
+    for line in (config.RUNS_DIR / args.label / "results.jsonl").read_text().splitlines():
+        if line.strip() and (r := json.loads(line)).get("final"):
+            rows[r["run_id"]] = r
+    out = report_commit.pilot(list(rows.values()), config.load_tasks(), drawn["none"])
+    print(json.dumps(out, indent=1))
+    return 1 if out["stop"] else 0
+
+
 def cmd_regrade(args) -> int:
     """Re-grade a committed run from its stored answers against the current gold (e.g. after #164)."""
     label = args.label
@@ -601,7 +614,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--condition", action="append", choices=config.CONDITIONS, help="only this condition")
     s.add_argument("--concurrency", type=int, default=3)
     s.add_argument("--max-retries", type=int, default=2, help="retries for transient API errors")
-    s.add_argument("--threshold", type=float, default=0.8, help="success = F1 >= threshold")
+    s.add_argument("--threshold", type=float, default=0.8, help="success = F1 >= threshold (answer lists; on edit tasks the tests decide)")
     s.add_argument("--max-utilization", type=float, default=0.97,
                    help="stop scheduling when the account's reported utilisation reaches this")
     s.add_argument("--max-sessions", type=int, help="hard cap on sessions launched by this invocation")
@@ -698,6 +711,10 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("label")
     s.add_argument("--check", action="store_true")
     s.set_defaults(fn=cmd_report)
+
+    s = sub.add_parser("pilot", help="#183: project the main run's cost and time from the pilot's sessions of arm none")
+    s.add_argument("label")
+    s.set_defaults(fn=cmd_pilot)
 
     s = sub.add_parser("gradle-cache", help="freeze the resolved dependencies of ~/.gradle for the offline builds (#183)")
     s.set_defaults(fn=cmd_gradle_cache)

@@ -94,6 +94,10 @@ def freeze_dependencies(src: Path, dst: Path) -> dict:
     build produced) without its lock files, as Gradle asks for a read-only cache."""
     if dst.exists():
         raise SystemExit(f"{dst} exists; move it away to make a new one")
+    # A published Spring Framework artifact could hold the replayed change (an old BOM's metadata, which log4j's imports, cannot).
+    if found := sorted(str(p.relative_to(src)) for p in (src / "modules-2/files-2.1/org.springframework").rglob("*")
+                       if p.is_file() and p.suffix not in (".pom", ".module")):
+        raise SystemExit(f"Spring Framework artifacts in {src}: {', '.join(found)}; not frozen")
     dst.mkdir(parents=True)
     subprocess.run(["cp", *(["-c"] if sys.platform == "darwin" else []), "-R", str(src / "modules-2"), str(dst / "modules-2")], check=True)
     for p in [*(dst / "modules-2").rglob("*.lock"), dst / "modules-2" / "gc.properties"]:

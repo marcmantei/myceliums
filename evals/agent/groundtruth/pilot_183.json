@@ -1,0 +1,58 @@
+{
+ "seed": 183,
+ "candidates": [
+  {
+   "id": "api-version-deprecation-handler-handler-arg",
+   "size": "M",
+   "docs": false
+  },
+  {
+   "id": "beans-max-nested-path-depth",
+   "size": "M",
+   "docs": true
+  },
+  {
+   "id": "content-negotiation-no-fallback-mapping",
+   "size": "S",
+   "docs": false
+  },
+  {
+   "id": "jdbcclient-batch-entry-dsl",
+   "size": "M",
+   "docs": true
+  },
+  {
+   "id": "mime-type-parameter-names-case-insensitive",
+   "size": "S",
+   "docs": false
+  },
+  {
+   "id": "retry-max-attempts-to-max-retries",
+   "size": "L",
+   "docs": true
+  },
+  {
+   "id": "spel-simple-context-restricted-conversion",
+   "size": "S",
+   "docs": true
+  },
+  {
+   "id": "type-mismatch-required-type-arg",
+   "size": "S",
+   "docs": true
+  }
+ ],
+ "none": [
+  "retry-max-attempts-to-max-retries",
+  "api-version-deprecation-handler-handler-arg",
+  "beans-max-nested-path-depth",
+  "mime-type-parameter-names-case-insensitive",
+  "type-mismatch-required-type-arg"
+ ],
+ "C": [
+  "api-version-deprecation-handler-handler-arg"
+ ],
+ "D": [
+  "retry-max-attempts-to-max-retries"
+ ]
+}
