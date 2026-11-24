@@ -111,7 +111,63 @@ def load_json(path: Path):
 
 
 def load_repos() -> dict[str, dict]:
-    return {r["name"]: r for r in load_json(REPOS_FILE)["repos"]}
+    """The pinned repositories: ``repos.json``, plus the ``repos`` a task file
+    declares itself (#183: one pin per commit-replay task, at the parent of
+    the replayed commit)."""
+    repos = {r["name"]: r for r in load_json(REPOS_FILE)["repos"]}
+    path = tasks_file()
+    own = load_json(path).get("repos", []) if path.exists() else []
+    for r in own:
+        if r["name"] in repos:
+            raise SystemExit(f"{path}: repo {r['name']!r} is already pinned in {REPOS_FILE.name}")
+        repos[r["name"]] = r
+    return repos
+
+
+def session_root(repo: dict) -> Path:
+    """Parent of a session's temporary directory. An isolated session's (#183)
+    paths are shown to the model, so it is neutral there, not in the cache
+    that also holds the gold files, and short: with a long one Claude Code
+    gives sandboxed commands the shared ``/tmp/claude-<uid>`` as ``TMPDIR``."""
+    root = work_root().parent / "ag" if repo.get("isolated") else cache_dir() / "tmp"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def work_name(repo: dict) -> str:
+    """The directory under ``work_root()`` a repository's sessions and index
+    use: its ``work_name`` (#183: every replayed parent shares one, because an
+    index is keyed by its path and only an index of the same path can hand its
+    vectors on), else its name."""
+    return repo.get("work_name") or repo["name"]
+
+
+def task_file_repos() -> list[str]:
+    """Names of the repositories the current task file pins itself (#183)."""
+    path = tasks_file()
+    return [r["name"] for r in load_json(path).get("repos", [])] if path.exists() else []
+
+
+def gold_dir(repo: str) -> Path:
+    """Where ``fetch`` keeps the files of a repository's ``gold_commit`` (#183),
+    outside every working copy: ``files/`` holds each added or modified file,
+    ``gold.json`` the commit's name-status against the pin."""
+    return cache_dir() / "gold" / repo
+
+
+def repo_env(repo: dict) -> dict[str, str]:
+    """Environment a repository's build needs in sessions, test commands and
+    prechecks (#183): its ``session_env``, plus the caller's value of every
+    variable in ``env_from_caller`` (e.g. ``JAVA_HOME``, which is machine
+    specific); with ``JAVA_HOME``, ``$JAVA_HOME/bin`` goes first on ``PATH``."""
+    env = dict(repo.get("session_env") or {})
+    for name in repo.get("env_from_caller") or ():
+        if not os.environ.get(name):
+            raise SystemExit(f"{repo['name']} needs {name} in the environment (see evals/agent/README.md)")
+        env[name] = os.environ[name]
+    if env.get("JAVA_HOME"):
+        env["PATH"] = f"{env['JAVA_HOME']}/bin:{env.get('PATH', SYSTEM_PATH)}"
+    return env
 
 
 def tasks_file() -> Path:
@@ -201,12 +257,14 @@ def session_env(extra: dict[str, str] | None = None, legacy: bool = True,
     call.
     """
     env = {k: os.environ[k] for k in PASSTHROUGH_ENV if k in os.environ}
-    env["PATH"] = f"{bin_dir}:{SYSTEM_PATH}" if bin_dir else SYSTEM_PATH
+    env["PATH"] = SYSTEM_PATH
     env.update(ISOLATION_ENV)
     if not legacy:
         env.pop("CLAUDE_CODE_DISABLE_CLAUDE_MDS")
     if extra:
         env.update(extra)
+    if bin_dir:
+        env["PATH"] = f"{bin_dir}:{env['PATH']}"
     return env
 
 

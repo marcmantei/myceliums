@@ -1,0 +1,1025 @@
+[
+ {
+  "repo": "spring-spel-simple-context-restricted-conversion",
+  "commit": "5e1e150f2bb3475a5a8e1147507b86716e61e3a5",
+  "parent_date": "2026-11-13T14:45:14+01:00",
+  "symbols": 145596,
+  "vectors_new": 12,
+  "vectors_reused": 145584,
+  "seconds": 51.9,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.5,
+   "resolve": 25.8,
+   "communities": 3.2,
+   "processes": 0.9,
+   "embed": 12.0
+  },
+  "peak_rss_bytes": 6597607424,
+  "disk_bytes_stripped": 902178468,
+  "counts": {
+   "symbols": 145596,
+   "files": 10158,
+   "relationships": 491970,
+   "mentions": 40217
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-observation-record-handled-exception",
+  "commit": "49678a69abe284fbce7c83de90e4be01925c7474",
+  "parent_date": "2026-11-10T12:30:54+01:00",
+  "symbols": 145518,
+  "vectors_new": 101,
+  "vectors_reused": 145417,
+  "seconds": 61.7,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.9,
+   "resolve": 21.8,
+   "communities": 3.1,
+   "processes": 1.0,
+   "embed": 25.6
+  },
+  "peak_rss_bytes": 6568067072,
+  "disk_bytes_stripped": 901621047,
+  "counts": {
+   "symbols": 145518,
+   "files": 10156,
+   "relationships": 491687,
+   "mentions": 40210
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-beans-max-nested-path-depth",
+  "commit": "33988a4621349b8522e94b2eadde4f28a2844065",
+  "parent_date": "2026-09-15T16:26:37+01:00",
+  "symbols": 143791,
+  "vectors_new": 314,
+  "vectors_reused": 143477,
+  "seconds": 138.7,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.2,
+   "resolve": 25.7,
+   "communities": 2.5,
+   "processes": 0.9,
+   "embed": 97.4
+  },
+  "peak_rss_bytes": 7668547584,
+  "disk_bytes_stripped": 889736054,
+  "counts": {
+   "symbols": 143791,
+   "files": 10118,
+   "relationships": 485998,
+   "mentions": 39887
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-jsonl-media-type-support",
+  "commit": "e2b9b19970bb88913cfb6530857f964d2b01187a",
+  "parent_date": "2026-03-17T11:59:45+01:00",
+  "symbols": 141928,
+  "vectors_new": 4773,
+  "vectors_reused": 137155,
+  "seconds": 863.2,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 5.0,
+   "resolve": 21.7,
+   "communities": 2.7,
+   "processes": 0.9,
+   "embed": 825.7
+  },
+  "peak_rss_bytes": 7774633984,
+  "disk_bytes_stripped": 877196516,
+  "counts": {
+   "symbols": 141928,
+   "files": 10045,
+   "relationships": 479715,
+   "mentions": 39409
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-test-context-cache-pause-mode",
+  "commit": "d3a385d2225f622fe164953e1ac76e0e4bc5967c",
+  "parent_date": "2026-01-09T19:52:22+01:00",
+  "symbols": 141044,
+  "vectors_new": 1070,
+  "vectors_reused": 139974,
+  "seconds": 312.4,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.0,
+   "resolve": 21.5,
+   "communities": 4.0,
+   "processes": 1.2,
+   "embed": 273.3
+  },
+  "peak_rss_bytes": 7632257024,
+  "disk_bytes_stripped": 871283645,
+  "counts": {
+   "symbols": 141044,
+   "files": 9997,
+   "relationships": 476706,
+   "mentions": 39137
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-retry-max-attempts-to-max-retries",
+  "commit": "771517dc36735842a129ea3a51738f0b6fcce7bd",
+  "parent_date": "2025-11-10T09:57:06+01:00",
+  "symbols": 140050,
+  "vectors_new": 1017,
+  "vectors_reused": 139033,
+  "seconds": 217.8,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 4.4,
+   "resolve": 19.8,
+   "communities": 3.8,
+   "processes": 0.9,
+   "embed": 181.7
+  },
+  "peak_rss_bytes": 7671332864,
+  "disk_bytes_stripped": 864918797,
+  "counts": {
+   "symbols": 140050,
+   "files": 9901,
+   "relationships": 473606,
+   "mentions": 38974
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-fn-request-bind-pathvars-headers",
+  "commit": "b29f4ed37edf0da0f41dc19c4ac56ba0d445fca6",
+  "parent_date": "2025-11-26T12:30:48Z",
+  "symbols": 140245,
+  "vectors_new": 11,
+  "vectors_reused": 140234,
+  "seconds": 41.1,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.4,
+   "resolve": 20.2,
+   "communities": 2.5,
+   "processes": 0.9,
+   "embed": 6.2
+  },
+  "peak_rss_bytes": 5827133440,
+  "disk_bytes_stripped": 866204966,
+  "counts": {
+   "symbols": 140245,
+   "files": 9902,
+   "relationships": 474219,
+   "mentions": 39009
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-jdbcclient-batch-entry-dsl",
+  "commit": "223a5562bebba968a4b948cc6cd97a372d3fc6bb",
+  "parent_date": "2026-09-28T12:07:25+02:00",
+  "symbols": 144154,
+  "vectors_new": 582,
+  "vectors_reused": 143572,
+  "seconds": 188.9,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.6,
+   "resolve": 21.1,
+   "communities": 2.9,
+   "processes": 1.0,
+   "embed": 152.8
+  },
+  "peak_rss_bytes": 7518846976,
+  "disk_bytes_stripped": 892668072,
+  "counts": {
+   "symbols": 144154,
+   "files": 10126,
+   "relationships": 487272,
+   "mentions": 40061
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-type-mismatch-required-type-arg",
+  "commit": "f4ee120a423c069ddfc94076cc49e02ec9d797d5",
+  "parent_date": "2025-11-26T13:22:26+01:00",
+  "symbols": 140244,
+  "vectors_new": 639,
+  "vectors_reused": 139605,
+  "seconds": 240.0,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.3,
+   "resolve": 24.8,
+   "communities": 3.9,
+   "processes": 0.9,
+   "embed": 197.9
+  },
+  "peak_rss_bytes": 7456620544,
+  "disk_bytes_stripped": 866204807,
+  "counts": {
+   "symbols": 140244,
+   "files": 9902,
+   "relationships": 474225,
+   "mentions": 39009
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-servlet-response-ignore-body-flush",
+  "commit": "f2b64ad09c50f69c2ffb0c13715254300a7ed915",
+  "parent_date": "2026-02-24T17:17:31+01:00",
+  "symbols": 141739,
+  "vectors_new": 185,
+  "vectors_reused": 141554,
+  "seconds": 86.2,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.0,
+   "resolve": 21.9,
+   "communities": 3.3,
+   "processes": 1.0,
+   "embed": 47.8
+  },
+  "peak_rss_bytes": 7511982080,
+  "disk_bytes_stripped": 875699259,
+  "counts": {
+   "symbols": 141739,
+   "files": 10032,
+   "relationships": 479031,
+   "mentions": 39313
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-content-negotiation-no-fallback-mapping",
+  "commit": "b6fdd4317e8086b02ecb8a5c7d62e5397d0ddda0",
+  "parent_date": "2026-11-13T14:45:13+01:00",
+  "symbols": 145551,
+  "vectors_new": 63,
+  "vectors_reused": 145488,
+  "seconds": 62.4,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.0,
+   "resolve": 25.3,
+   "communities": 2.3,
+   "processes": 1.0,
+   "embed": 23.9
+  },
+  "peak_rss_bytes": 7554547712,
+  "disk_bytes_stripped": 901908398,
+  "counts": {
+   "symbols": 145551,
+   "files": 10157,
+   "relationships": 491812,
+   "mentions": 40212
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-client-builders-deep-copy-default-headers-cookies",
+  "commit": "0c575d443dbdff69349a2369f40491c002dc2c96",
+  "parent_date": "2026-10-22T11:40:36+02:00",
+  "symbols": 145355,
+  "vectors_new": 232,
+  "vectors_reused": 145123,
+  "seconds": 103.0,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 4.6,
+   "resolve": 22.5,
+   "communities": 3.1,
+   "processes": 1.0,
+   "embed": 65.7
+  },
+  "peak_rss_bytes": 7843872768,
+  "disk_bytes_stripped": 900316631,
+  "counts": {
+   "symbols": 145355,
+   "files": 10156,
+   "relationships": 491068,
+   "mentions": 40173
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-http-range-honor-if-range",
+  "commit": "749aa1f6a9bd70b637f01b0e2dceb1103cd1c5f1",
+  "parent_date": "2026-10-21T18:38:57+02:00",
+  "symbols": 145319,
+  "vectors_new": 53,
+  "vectors_reused": 145266,
+  "seconds": 57.0,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.6,
+   "resolve": 22.0,
+   "communities": 3.9,
+   "processes": 1.0,
+   "embed": 19.4
+  },
+  "peak_rss_bytes": 6725435392,
+  "disk_bytes_stripped": 899954356,
+  "counts": {
+   "symbols": 145319,
+   "files": 10156,
+   "relationships": 490895,
+   "mentions": 40167
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-error-response-interceptor-with-request",
+  "commit": "7ae82b88d608ddb83cc891a140598714c9c34f9d",
+  "parent_date": "2026-10-06T18:15:52+02:00",
+  "symbols": 144938,
+  "vectors_new": 529,
+  "vectors_reused": 144409,
+  "seconds": 171.2,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.2,
+   "resolve": 25.2,
+   "communities": 2.5,
+   "processes": 0.9,
+   "embed": 131.1
+  },
+  "peak_rss_bytes": 7718207488,
+  "disk_bytes_stripped": 897315951,
+  "counts": {
+   "symbols": 144938,
+   "files": 10145,
+   "relationships": 489686,
+   "mentions": 40123
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-mime-type-parameter-names-case-insensitive",
+  "commit": "ee19b96ee9a6ba9264194268e28ebaf9705ff59d",
+  "parent_date": "2026-08-31T17:17:01+02:00",
+  "symbols": 143541,
+  "vectors_new": 378,
+  "vectors_reused": 143163,
+  "seconds": 145.6,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.3,
+   "resolve": 24.7,
+   "communities": 2.8,
+   "processes": 0.9,
+   "embed": 104.8
+  },
+  "peak_rss_bytes": 8192212992,
+  "disk_bytes_stripped": 888054361,
+  "counts": {
+   "symbols": 143541,
+   "files": 10109,
+   "relationships": 485247,
+   "mentions": 39899
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-deferred-bean-registrar-contains-bean",
+  "commit": "99e7543a7faefb0b22a5cfb3e308e2b7e9075e61",
+  "parent_date": "2026-03-28T11:13:56+01:00",
+  "symbols": 142296,
+  "vectors_new": 3265,
+  "vectors_reused": 139031,
+  "seconds": 868.6,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.9,
+   "resolve": 22.5,
+   "communities": 2.8,
+   "processes": 1.0,
+   "embed": 830.1
+  },
+  "peak_rss_bytes": 7672610816,
+  "disk_bytes_stripped": 879508701,
+  "counts": {
+   "symbols": 142296,
+   "files": 10063,
+   "relationships": 481091,
+   "mentions": 39563
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-api-version-deprecation-handler-handler-arg",
+  "commit": "cd67010518675a67c15d8e3cd5245e43e3f16835",
+  "parent_date": "2025-11-05T12:23:59Z",
+  "symbols": 140024,
+  "vectors_new": 152,
+  "vectors_reused": 139872,
+  "seconds": 82.4,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 4.8,
+   "resolve": 21.0,
+   "communities": 2.7,
+   "processes": 1.0,
+   "embed": 45.8
+  },
+  "peak_rss_bytes": 7638663168,
+  "disk_bytes_stripped": 864794711,
+  "counts": {
+   "symbols": 140024,
+   "files": 9900,
+   "relationships": 473525,
+   "mentions": 38976
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-bean-provider-parameterized-type-reference",
+  "commit": "6503f354047d9252b85b41e35cb09935e126ca4e",
+  "parent_date": "2025-10-15T15:55:48+02:00",
+  "symbols": 139219,
+  "vectors_new": 1221,
+  "vectors_reused": 137998,
+  "seconds": 260.5,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 4.5,
+   "resolve": 21.6,
+   "communities": 3.7,
+   "processes": 0.9,
+   "embed": 222.8
+  },
+  "peak_rss_bytes": 7487946752,
+  "disk_bytes_stripped": 860250051,
+  "counts": {
+   "symbols": 139219,
+   "files": 9845,
+   "relationships": 471250,
+   "mentions": 38743
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-message-source-default-charset",
+  "commit": "3c6f1b35ba72c87309e32f591c6afef4294c99c5",
+  "parent_date": "2026-03-03T12:14:33+01:00",
+  "symbols": 141817,
+  "vectors_new": 529,
+  "vectors_reused": 141288,
+  "seconds": 169.7,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.1,
+   "resolve": 21.7,
+   "communities": 3.2,
+   "processes": 1.0,
+   "embed": 131.4
+  },
+  "peak_rss_bytes": 7497170944,
+  "disk_bytes_stripped": 876220001,
+  "counts": {
+   "symbols": 141817,
+   "files": 10034,
+   "relationships": 479264,
+   "mentions": 39330
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-retryable-method-retry-event",
+  "commit": "fc1ff88ede379eab3796b5645695c846d3c36180",
+  "parent_date": "2025-12-22T15:34:41+01:00",
+  "symbols": 140569,
+  "vectors_new": 414,
+  "vectors_reused": 140155,
+  "seconds": 169.2,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.1,
+   "resolve": 20.9,
+   "communities": 2.7,
+   "processes": 1.0,
+   "embed": 132.0
+  },
+  "peak_rss_bytes": 7573536768,
+  "disk_bytes_stripped": 868178496,
+  "counts": {
+   "symbols": 140569,
+   "files": 9928,
+   "relationships": 475221,
+   "mentions": 39089
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-client-observation-nonstandard-method-none",
+  "commit": "0d60a7194cec11ade74de90517a915c8b5b57000",
+  "parent_date": "2026-11-13T14:45:13+01:00",
+  "symbols": 145569,
+  "vectors_new": 40,
+  "vectors_reused": 145529,
+  "seconds": 56.8,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.8,
+   "resolve": 22.7,
+   "communities": 2.2,
+   "processes": 0.9,
+   "embed": 21.3
+  },
+  "peak_rss_bytes": 6757023744,
+  "disk_bytes_stripped": 902022587,
+  "counts": {
+   "symbols": 145569,
+   "files": 10157,
+   "relationships": 491883,
+   "mentions": 40212
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-spel-default-nesting-depth-200",
+  "commit": "43bbaa9e9679eac410185cc1f0fef802922e2173",
+  "parent_date": "2026-11-06T14:58:30+01:00",
+  "symbols": 145494,
+  "vectors_new": 196,
+  "vectors_reused": 145298,
+  "seconds": 89.4,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 5.0,
+   "resolve": 22.6,
+   "communities": 3.6,
+   "processes": 1.0,
+   "embed": 52.0
+  },
+  "peak_rss_bytes": 7746011136,
+  "disk_bytes_stripped": 901451927,
+  "counts": {
+   "symbols": 145494,
+   "files": 10156,
+   "relationships": 491561,
+   "mentions": 40207
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-problemdetail-no-instance-from-path",
+  "commit": "84f085f9c8730448b8f00b3e3ad68c873568ec82",
+  "parent_date": "2026-10-06T09:28:43+01:00",
+  "symbols": 144880,
+  "vectors_new": 4058,
+  "vectors_reused": 140822,
+  "seconds": 580.1,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.6,
+   "resolve": 21.6,
+   "communities": 2.2,
+   "processes": 0.9,
+   "embed": 545.4
+  },
+  "peak_rss_bytes": 7844462592,
+  "disk_bytes_stripped": 897027903,
+  "counts": {
+   "symbols": 144880,
+   "files": 10142,
+   "relationships": 489511,
+   "mentions": 40117
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-spel-parser-configuration-builder",
+  "commit": "0e9a1d72f5f834cbd40dea023d5dace49704b25a",
+  "parent_date": "2026-08-20T18:17:01+02:00",
+  "symbols": 142492,
+  "vectors_new": 155,
+  "vectors_reused": 142337,
+  "seconds": 72.9,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.5,
+   "resolve": 20.2,
+   "communities": 2.4,
+   "processes": 0.9,
+   "embed": 39.2
+  },
+  "peak_rss_bytes": 7457144832,
+  "disk_bytes_stripped": 881190646,
+  "counts": {
+   "symbols": 142492,
+   "files": 10064,
+   "relationships": 481777,
+   "mentions": 39673
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-form-converter-map-payloads",
+  "commit": "abc3cfc7be0ef6dc051e26876b635c1a72ae1ae2",
+  "parent_date": "2026-03-26T15:08:58+01:00",
+  "symbols": 142270,
+  "vectors_new": 2733,
+  "vectors_reused": 139537,
+  "seconds": 691.7,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 4.2,
+   "resolve": 19.9,
+   "communities": 3.4,
+   "processes": 0.9,
+   "embed": 656.8
+  },
+  "peak_rss_bytes": 7459880960,
+  "disk_bytes_stripped": 879317047,
+  "counts": {
+   "symbols": 142270,
+   "files": 10062,
+   "relationships": 481012,
+   "mentions": 39553
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-retry-match-exception-causes",
+  "commit": "58940794cf18e89e54763d1b630aa985030e3eda",
+  "parent_date": "2025-10-09T17:45:17+02:00",
+  "symbols": 139197,
+  "vectors_new": 122,
+  "vectors_reused": 139075,
+  "seconds": 55.7,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 4.1,
+   "resolve": 18.3,
+   "communities": 2.2,
+   "processes": 0.8,
+   "embed": 23.7
+  },
+  "peak_rss_bytes": 6358302720,
+  "disk_bytes_stripped": 860138437,
+  "counts": {
+   "symbols": 139197,
+   "files": 9840,
+   "relationships": 471376,
+   "mentions": 38691
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-resource-loader-classpath-all-get-resource",
+  "commit": "51fccf226fb56bc36fa4bdea53f00263c0c83181",
+  "parent_date": "2026-03-16T11:16:48+01:00",
+  "symbols": 141911,
+  "vectors_new": 4740,
+  "vectors_reused": 137171,
+  "seconds": 718.1,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.5,
+   "resolve": 20.3,
+   "communities": 4.5,
+   "processes": 1.0,
+   "embed": 681.0
+  },
+  "peak_rss_bytes": 7487782912,
+  "disk_bytes_stripped": 876945880,
+  "counts": {
+   "symbols": 141911,
+   "files": 10044,
+   "relationships": 479619,
+   "mentions": 39392
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-webflux-default-html-escape",
+  "commit": "104a2033c5bd30325f4c3155dc012bbce800c7af",
+  "parent_date": "2026-03-10T20:09:20+01:00",
+  "symbols": 141864,
+  "vectors_new": 337,
+  "vectors_reused": 141527,
+  "seconds": 112.3,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.5,
+   "resolve": 20.4,
+   "communities": 3.5,
+   "processes": 1.0,
+   "embed": 76.0
+  },
+  "peak_rss_bytes": 7597391872,
+  "disk_bytes_stripped": 876484539,
+  "counts": {
+   "symbols": 141864,
+   "files": 10042,
+   "relationships": 479430,
+   "mentions": 39355
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-sync-task-executor-concurrency-throttle",
+  "commit": "26c57cecd2cf0816fd023c00249d9215c02d63af",
+  "parent_date": "2025-10-10T18:45:32+02:00",
+  "symbols": 139212,
+  "vectors_new": 4740,
+  "vectors_reused": 134472,
+  "seconds": 797.0,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 4.3,
+   "resolve": 19.4,
+   "communities": 2.6,
+   "processes": 0.8,
+   "embed": 763.0
+  },
+  "peak_rss_bytes": 7924973568,
+  "disk_bytes_stripped": 860171388,
+  "counts": {
+   "symbols": 139212,
+   "files": 9842,
+   "relationships": 471434,
+   "mentions": 38692
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-httpexchange-version-mapping",
+  "commit": "16ed0962237dc8245591490b2d4c2f65898b014f",
+  "parent_date": "2026-10-13T10:18:09+02:00",
+  "symbols": 143064,
+  "vectors_new": 2774,
+  "vectors_reused": 140290,
+  "seconds": 563.6,
+  "phases_s": {
+   "discover": 0.2,
+   "parse": 4.9,
+   "resolve": 22.0,
+   "communities": 2.4,
+   "processes": 0.9,
+   "embed": 528.2
+  },
+  "peak_rss_bytes": 7638827008,
+  "disk_bytes_stripped": 884569489,
+  "counts": {
+   "symbols": 143064,
+   "files": 10072,
+   "relationships": 483257,
+   "mentions": 39709
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ },
+ {
+  "repo": "spring-expiration-seconds-int-overflow",
+  "commit": "b823aed17c7bde1b0634ce3cccce3263eff85525",
+  "parent_date": "2026-08-31T12:57:32+02:00",
+  "symbols": 142554,
+  "vectors_new": 2582,
+  "vectors_reused": 139972,
+  "seconds": 543.1,
+  "phases_s": {
+   "discover": 0.1,
+   "parse": 4.8,
+   "resolve": 21.6,
+   "communities": 2.6,
+   "processes": 0.9,
+   "embed": 507.5
+  },
+  "peak_rss_bytes": 7488765952,
+  "disk_bytes_stripped": 881600171,
+  "counts": {
+   "symbols": 142554,
+   "files": 10066,
+   "relationships": 481935,
+   "mentions": 39645
+  },
+  "checks": {
+   "commit": true,
+   "one_generation": true,
+   "no_snapshots": true,
+   "staging_empty": true,
+   "graph_equal": true,
+   "all_embedded": true
+  }
+ }
+]

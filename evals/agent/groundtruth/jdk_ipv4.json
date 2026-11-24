@@ -1,0 +1,18 @@
+{
+ "original": "~/.cache/myc-java/jdk/jdk-25.0.5.1+2",
+ "copy": "~/.cache/myc-java/jdk-ipv4",
+ "flag": "-Djava.net.preferIPv4Stack=true",
+ "files": 403,
+ "original_tree_sha256": "89b256ac2f2b8f470db119ff1f159c8ec0ab62de3093f2414a7a71e226f09854",
+ "changed": {
+  "Contents/Home/bin/java": {
+   "original": "2aa0eebf17e59ae9494595aa166e4ffe695128c895e757e6ced7312af68063bb",
+   "copy": "ab1626ffb58d015508227a194ef652bddd751ad1c1514cee224ea213da50d2fe"
+  },
+  "Contents/Home/bin/java.real": {
+   "original": null,
+   "copy": "2aa0eebf17e59ae9494595aa166e4ffe695128c895e757e6ced7312af68063bb"
+  }
+ },
+ "wrapper": "#!/bin/sh\nexec \"~/.cache/myc-java/jdk-ipv4/Contents/Home/bin/java.real\" -Djava.net.preferIPv4Stack=true \"$@\"\n"
+}

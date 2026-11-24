@@ -1,0 +1,383 @@
+{
+ "note": "Prechecks of 23 November 2026, 19:10-20:55, run ONLINE (dependency downloads, ge.spring.io remote build cache reads allowed) beside the #182 index build. The test commands have since changed to --offline --no-scan; these records are history and must be re-run. spel-big-power-result-limit: parent not buildable (unpublished micrometer snapshot), dropped.",
+ "prechecks": [
+  {
+   "id": "spel-simple-context-restricted-conversion",
+   "gradle": "9.9.0",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "5e1e150f2bb3475a5a8e1147507b86716e61e3a5",
+   "command": "./gradlew --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests",
+   "seconds_parent": 212.13,
+   "checked_at": "2026-11-23T18:14:10Z",
+   "test_overlay": [
+    "spring-expression/src/test/java/org/springframework/expression/spel/support/SimpleEvaluationContextTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "d41495720cbabe30844e65c12765eacf806d2653",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 42.2,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    42.2,
+    33.39
+   ]
+  },
+  {
+   "id": "observation-record-handled-exception",
+   "gradle": "9.9.0",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "49678a69abe284fbce7c83de90e4be01925c7474",
+   "command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests",
+   "seconds_parent": 105.98,
+   "checked_at": "2026-11-23T18:24:44Z",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/web/filter/ServerHttpObservationFilterTests.java",
+    "spring-web/src/test/java/org/springframework/web/server/adapter/HttpWebHandlerAdapterObservabilityTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityExceptionHandlerTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/ObservedExchange.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/annotation/ResponseStatusExceptionResolverTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverErrorViewTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverProblemDetailTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolverTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "297c74d29c0704e0879ce121ba3789b677abb9ff",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 88.42,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    88.42,
+    46.98
+   ]
+  },
+  {
+   "id": "beans-max-nested-path-depth",
+   "gradle": "9.7.1",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "33988a4621349b8522e94b2eadde4f28a2844065",
+   "command": "./gradlew --no-daemon --console=plain :spring-beans:test --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+   "seconds_parent": 159.52,
+   "checked_at": "2026-11-23T18:29:44Z",
+   "test_overlay": [
+    "spring-beans/src/test/java/org/springframework/beans/AbstractPropertyAccessorTests.java",
+    "spring-beans/src/test/java/org/springframework/beans/BeanWrapperTests.java",
+    "spring-context/src/test/java/org/springframework/validation/DataBinderConstructTests.java",
+    "spring-context/src/test/java/org/springframework/validation/DataBinderFieldAccessTests.java",
+    "spring-context/src/test/java/org/springframework/validation/DataBinderTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 94.08,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    94.08,
+    37.95
+   ]
+  },
+  {
+   "id": "jsonl-media-type-support",
+   "gradle": "9.4.0",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "e2b9b19970bb88913cfb6530857f964d2b01187a",
+   "command": "./gradlew --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.result.view.HttpMessageWriterViewTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandlerTests",
+   "seconds_parent": 409.9,
+   "checked_at": "2026-11-23T18:41:17Z",
+   "test_overlay": [
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ReactiveTypeHandlerTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "22e4d84993105c1975d6afe16d34467772c7c676",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 110.53,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    110.53,
+    32.38
+   ]
+  },
+  {
+   "id": "retry-max-attempts-to-max-retries",
+   "gradle": "9.2.0",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "771517dc36735842a129ea3a51738f0b6fcce7bd",
+   "command": "./gradlew --no-daemon --console=plain :spring-context:test --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --tests org.springframework.core.retry.MaxRetriesRetryPolicyTests --tests org.springframework.core.retry.RetryPolicyTests --tests org.springframework.core.retry.RetryTemplateTests",
+   "seconds_parent": 304.0,
+   "checked_at": "2026-11-23T18:49:23Z",
+   "test_overlay": [
+    "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+    "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+    "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+    "spring-core/src/test/java/org/springframework/core/retry/MaxRetriesRetryPolicyTests.java",
+    "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+    "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 134.84,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    134.84,
+    39.63
+   ]
+  },
+  {
+   "id": "fn-request-bind-pathvars-headers",
+   "gradle": "9.2.1",
+   "fails_on_parent": true,
+   "parent_failure": "tests",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "b29f4ed37edf0da0f41dc19c4ac56ba0d445fca6",
+   "command": "./gradlew --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.function.server.BindingFunctionIntegrationTests :spring-webmvc:test --tests org.springframework.web.servlet.function.DefaultServerRequestTests",
+   "seconds_parent": 550.05,
+   "checked_at": "2026-11-23T19:01:39Z",
+   "test_overlay": [
+    "spring-webflux/src/test/java/org/springframework/web/reactive/function/server/BindingFunctionIntegrationTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/function/DefaultServerRequestTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "a9a404266c25a82b0f3a4286053f69ce0c8fb008",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 138.4,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    138.4,
+    41.02
+   ]
+  },
+  {
+   "id": "jdbcclient-batch-entry-dsl",
+   "gradle": "9.8.0",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "223a5562bebba968a4b948cc6cd97a372d3fc6bb",
+   "command": "./gradlew --no-daemon --console=plain :spring-jdbc:test --tests org.springframework.jdbc.core.simple.JdbcClientIndexedParameterTests --tests org.springframework.jdbc.core.simple.JdbcClientIntegrationTests --tests org.springframework.jdbc.core.simple.JdbcClientNamedParameterTests",
+   "seconds_parent": 274.91,
+   "checked_at": "2026-11-23T19:09:15Z",
+   "test_overlay": [
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "833ab4d48fdaf64f7b234f6dac76d4cced14390c",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 100.23,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    100.23,
+    69.37
+   ]
+  },
+  {
+   "id": "type-mismatch-required-type-arg",
+   "gradle": "9.2.1",
+   "fails_on_parent": true,
+   "parent_failure": "tests",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "f4ee120a423c069ddfc94076cc49e02ec9d797d5",
+   "command": "./gradlew --no-daemon --console=plain :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests",
+   "seconds_parent": 216.07,
+   "checked_at": "2026-11-23T19:15:32Z",
+   "test_overlay": [
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 92.26,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    92.26,
+    49.26
+   ]
+  },
+  {
+   "id": "content-negotiation-no-fallback-mapping",
+   "gradle": "9.9.0",
+   "fails_on_parent": true,
+   "parent_failure": "tests",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "b6fdd4317e8086b02ecb8a5c7d62e5397d0ddda0",
+   "command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.web.accept.MappingContentNegotiationStrategyTests :spring-webflux:test --tests org.springframework.web.reactive.accept.ParameterContentTypeResolverTests",
+   "seconds_parent": 306.23,
+   "checked_at": "2026-11-23T19:23:59Z",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/web/accept/MappingContentNegotiationStrategyTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/accept/ParameterContentTypeResolverTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "7fbdbd6eb7665be6a66562d26b26ffcfb600ee32",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 85.5,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    85.5,
+    62.77
+   ]
+  },
+  {
+   "id": "error-response-interceptor-with-request",
+   "gradle": "9.8.0",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "7ae82b88d608ddb83cc891a140598714c9c34f9d",
+   "command": "./gradlew --no-daemon --console=plain :spring-webflux:test --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+   "seconds_parent": 220.86,
+   "checked_at": "2026-11-23T19:55:20Z",
+   "test_overlay": [
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandlerTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandlerTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorTests.java",
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessorTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "d70220eb5de0e10211e1a843b292cc54bed0c365",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 112.48,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    112.48,
+    38.57
+   ]
+  },
+  {
+   "id": "mime-type-parameter-names-case-insensitive",
+   "gradle": "9.7.1",
+   "fails_on_parent": true,
+   "parent_failure": "tests",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "ee19b96ee9a6ba9264194268e28ebaf9705ff59d",
+   "command": "./gradlew --no-daemon --console=plain :spring-core:test --tests org.springframework.util.MimeTypeTests :spring-web:test --tests org.springframework.http.MediaTypeTests",
+   "seconds_parent": 134.65,
+   "checked_at": "2026-11-23T19:48:56Z",
+   "test_overlay": [
+    "spring-core/src/test/java/org/springframework/util/MimeTypeTests.java",
+    "spring-web/src/test/java/org/springframework/http/MediaTypeTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "2028eb3694babca20cbcb95a966b50b3e6fe71ca",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 93.45,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    93.45,
+    45.32
+   ]
+  },
+  {
+   "id": "cache-manager-reset-caches",
+   "gradle": "9.2.1",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "2c6ccaea052cb59ef20c267a073b015a03aa6f2b",
+   "command": "./gradlew --no-daemon --console=plain :spring-context-support:test --tests org.springframework.cache.jcache.JCacheEhCacheApiTests",
+   "seconds_parent": 203.4,
+   "checked_at": "2026-11-23T19:44:11Z",
+   "test_overlay": [
+    "spring-context-support/src/test/java/org/springframework/cache/jcache/JCacheEhCacheApiTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "96aadc2b12bce37237e053b7f7e1c28b98be328b",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 153.42,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    153.42,
+    58.92
+   ]
+  },
+  {
+   "id": "api-version-deprecation-handler-handler-arg",
+   "gradle": "9.2.0",
+   "fails_on_parent": true,
+   "parent_failure": "compile",
+   "returncode": 1,
+   "timed_out": false,
+   "commit": "cd67010518675a67c15d8e3cd5245e43e3f16835",
+   "command": "./gradlew --no-daemon --console=plain :spring-web:test --tests org.springframework.web.accept.StandardApiVersionDeprecationHandlerTests :spring-webflux:test --tests org.springframework.web.reactive.accept.StandardApiVersionDeprecationHandlerTests",
+   "seconds_parent": 453.26,
+   "checked_at": "2026-11-23T19:37:03Z",
+   "test_overlay": [
+    "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+    "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java"
+   ],
+   "passes_on_gold": true,
+   "gold_commit": "b128f59714b071e9b4d8a1ae9cdc63f3ff62251f",
+   "gold_returncode": 0,
+   "gold_timed_out": false,
+   "seconds_gold": 196.88,
+   "gold_runs": 2,
+   "gold_passes": 2,
+   "gold_failure": null,
+   "seconds_gold_runs": [
+    196.88,
+    41.31
+   ]
+  }
+ ]
+}

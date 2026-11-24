@@ -35,7 +35,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import config
-from .editgrade import changed_files, gold_paths, grade_edit, run_test
+from .editgrade import apply_gold, changed_files, gold_paths, grade_edit, representative, run_test, snapshot, wrapper_problem
+from . import isolation
+from .prep import strip_history
 from .grading import Grade, extract_answer, grade, is_success
 from .stream import MCP_PREFIX, check_isolation, parse_transcript
 from .searchaudit import audit as search_audit
@@ -153,6 +155,8 @@ def build_prompt(task: dict, repo: dict, budget_turns: int | None = None) -> str
     if is_edit_task(task):
         budget = ("\n" + BUDGET_RULES.format(max_turns=budget_turns, tool_turns=budget_turns - 1) + "\n"
                   if budget_turns else "")
+        if repo.get("build_note"):  # the same text in every arm (#183)
+            budget = "\n" + repo["build_note"] + "\n" + budget
         return EDIT_PROMPT_TEMPLATE.format(repo=repo["display_name"], language=repo["language_name"],
                                            question=task["question"], budget=budget)
     rules = FORMAT_RULES[task["answer_kind"]]
@@ -244,8 +248,12 @@ class StopRun(Exception):
 class Scheduler:
     items: list[WorkItem]
     busy: set = field(default_factory=set)
+    work_names: dict = field(default_factory=dict)  # repo -> shared work path (#183); sessions there never overlap
     stop_reason: str | None = None
     cond: threading.Condition = field(default_factory=threading.Condition)
+
+    def key(self, it: WorkItem) -> str:
+        return self.work_names.get(it.repo, it.repo)
 
     def next(self) -> WorkItem | None:
         with self.cond:
@@ -253,14 +261,14 @@ class Scheduler:
                 if self.stop_reason or not self.items:
                     return None
                 for i, it in enumerate(self.items):
-                    if it.repo not in self.busy:
-                        self.busy.add(it.repo)
+                    if self.key(it) not in self.busy:
+                        self.busy.add(self.key(it))
                         return self.items.pop(i)
                 self.cond.wait()
 
     def done(self, it: WorkItem) -> None:
         with self.cond:
-            self.busy.discard(it.repo)
+            self.busy.discard(self.key(it))
             self.cond.notify_all()
 
     def stop(self, reason: str) -> None:
@@ -282,6 +290,7 @@ class Runner:
         self.sessions_started = 0
         self.cache = config.cache_dir()
         self.work_root = config.work_root()
+        self.claude_version = ""  # set by run(): one version for a whole run
 
     # ---- bookkeeping -----------------------------------------------------
     def _check_config(self) -> None:
@@ -296,6 +305,23 @@ class Runner:
                 raise SystemExit(f"run '{self.cfg.label}' was started with a different config: {diff}")
         else:
             path.write_text(json.dumps(current, indent=2) + "\n")
+
+    def _pin_claude(self) -> None:
+        """One Claude Code for a whole run (#183; it updated itself during the
+        #182 run): the binary behind the ``claude`` link, its version kept in the
+        run's directory. A resume with another version is refused, and every
+        session's init event is checked."""
+        self.cfg.claude = os.path.realpath(self.cfg.claude)
+        m = re.search(r"\d+\.\d+\.\d+", config.tool_version([self.cfg.claude, "--version"]))
+        if not m:
+            raise SystemExit(f"cannot read the version of {self.cfg.claude}")
+        path = self.run_dir / "claude_version.txt"
+        pinned = path.read_text().strip() if path.exists() else m.group(0)
+        if pinned != m.group(0):
+            raise SystemExit(f"run '{self.cfg.label}' is pinned to Claude Code {pinned}, {self.cfg.claude} is "
+                             f"{m.group(0)}; pass --claude PATH of the pinned version")
+        path.write_text(pinned + "\n")
+        self.claude_version = pinned
 
     def completed(self) -> set[str]:
         done = set()
@@ -348,7 +374,7 @@ class Runner:
 
     # ---- one session -----------------------------------------------------
     def _prepare_workspace(self, repo: str) -> Path:
-        dst = self.work_root / repo
+        dst = self.work_root / config.work_name(self.repos[repo])
         if dst.exists():
             config.remove_tree(dst, self.work_root)
         config.copy_tree(self.cache / "repos" / repo, dst)
@@ -372,6 +398,8 @@ class Runner:
         home = tmp / "home"
         config.copy_tree(template, data)
         home.mkdir()
+        if self.repos[repo].get("isolated"):
+            strip_history(data)
         registry = json.loads((data / "repos.json").read_text())
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         for info in registry["repos"].values():
@@ -426,11 +454,16 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         cmd = [str(bin_dir / "myc"), "setup-claude", "--scope", "project", "--project", str(workdir)]
         if not variant.agent:
             cmd.append("--no-agent")
+        claude_md = (workdir / "CLAUDE.md").exists()
         res = subprocess.run(cmd, env={**env, "PATH": f"{bin_dir}:{config.SYSTEM_PATH}"},
                              capture_output=True, text=True, timeout=120)
         (out_dir / "setup-claude.txt").write_text(res.stdout + res.stderr)
         if res.returncode != 0:
             raise StopRun(f"{item.run_id}: myc setup-claude failed: {res.stderr.strip()[:300]}")
+        # Claude Code reads a project's AGENTS.md only when there is no CLAUDE.md. Before #200 setup-claude wrote one, and C
+        # alone missed the project's own instructions (found in the #182 review).
+        if (workdir / "AGENTS.md").exists() and (workdir / "CLAUDE.md").exists() and not claude_md:
+            raise StopRun(f"{item.run_id}: setup-claude hides the project's AGENTS.md (myc before #200)")
         # Keep what the agent will load, for the record.
         snap = out_dir / "setup-files"
         for rel in (*ROUTING_FILES, ".mcp.json", ".claude/settings.json", f".claude/agents/{config.EXPLORER_AGENT}.md"):
@@ -476,6 +509,39 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         tools += config.EDIT_TOOLS if is_edit_task(item.task) else ()
         return tools
 
+    def _isolated_settings(self, item: WorkItem, tmp: Path, workdir: Path) -> Path:
+        """Settings of an isolated session (aeval/isolation.py): Claude Code's
+        Bash sandbox, the read and write blocks of its file tools, and one
+        PreToolUse hook on every tool. The arms differ in the hook's
+        ``--search`` and in the myceliums paths. The hook's script is copied
+        next to the settings, because the session may not read this
+        repository."""
+        variant = config.VARIANTS[item.condition]
+        if not isolation.available():
+            raise StopRun("an isolated repository (#183) needs macOS's sandbox; not found")
+        env = {**config.repo_env(self.repos[item.repo]), **isolation.session_environment(tmp)}
+        if problem := isolation.problem(env):
+            raise StopRun(f"{item.run_id}: {problem}")
+        script = tmp / "policy" / "bashcmd.py"
+        script.parent.mkdir()
+        script.write_bytes(NOSEARCH_HOOK.read_bytes())
+        hook = " ".join(shlex.quote(x) for x in [
+            sys.executable, "-I", str(script), "isolated-hook", "--root", os.path.realpath(workdir),
+            "--search", "no" if variant.no_search else "yes", "--allow-json", json.dumps(allowed_commands(item.task))])
+        if self.cfg.extra_env.get("AEVAL_PROBE_NO_HOOK"):  # mock API only: show the layer below the hook
+            hook = None
+        myc = [Path(self.cfg.myc), Path(self.cfg.models_dir)] if variant.mcp else []
+        path = tmp / "isolated-settings.json"
+        path.write_text(json.dumps(isolation.session_settings(
+            tmp, workdir, env, myc, hook), indent=1))
+        return path
+
+    def _grading_profile(self, item: WorkItem, tmp: Path, workdir: Path) -> Path:
+        path = tmp / "grading.sb"
+        path.write_text(isolation.grading_profile(
+            tmp, workdir, {**config.repo_env(self.repos[item.repo]), **isolation.session_environment(tmp, "gg")}))
+        return path
+
     def _nosearch_settings(self, tmp: Path, task: dict | None = None, hook_dir: Path | None = None) -> Path:
         """Settings for D (#178): a PreToolUse hook on Bash that lets a command
         through only if every program it runs is on the allowlist
@@ -518,6 +584,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "--allowedTools", ",".join(allowed),
         ]
         disallowed = [f"Agent({a})" for a in config.BUILTIN_AGENTS] if variant.agent else []
+        if self.repos[item.repo].get("isolated"):
+            disallowed += ["WebFetch", "WebSearch"]
         if variant.no_search:
             disallowed += list(config.SEARCH_TOOLS) + (list(config.BASH_SEARCH_RULES) if self.cfg.bash else [])
         if disallowed:
@@ -557,11 +625,14 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             **({"probe": True} if self.cfg.extra_env else {}),
         })
 
-        tmp = Path(tempfile.mkdtemp(prefix="aeval-run-", dir=self.cache / "tmp"))
+        tmp_root = config.session_root(repo)
+        tmp = Path(tempfile.mkdtemp(prefix="" if repo.get("isolated") else "aeval-run-", dir=tmp_root))
         variant = config.VARIANTS[item.condition]
-        hook_dir = Path(tempfile.mkdtemp(prefix="hook-")) if variant.no_search else None
+        hook_dir = Path(tempfile.mkdtemp(prefix="hook-")) if variant.no_search and not repo.get("isolated") else None
         try:
             workdir = self._prepare_workspace(item.repo)
+            if problem := wrapper_problem(workdir, config.repo_env(repo)):
+                raise StopRun(f"{item.run_id}: {problem}")
             mcp_path, bin_dir = self._prepare_mcp(item, tmp, workdir, out_dir)
             (out_dir / "mcp.json").write_text(mcp_path.read_text())
             extra = dict(self.cfg.extra_env)
@@ -575,13 +646,26 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                 extra["MYCELIUMS_DATA_DIR"] = str(stray)
             if self.cfg.tool_search is not None:
                 extra["ENABLE_TOOL_SEARCH"] = self.cfg.tool_search
-            if variant.no_search:
+            isolated = bool(repo.get("isolated"))
+            if variant.no_search or isolated:
                 extra.update(nosearch_git_env(tmp))
+            # #183: what the repository's build needs (JAVA_HOME, Gradle options).
+            extra.update(config.repo_env(repo))
+            if isolated:
+                extra.update(isolation.session_environment(tmp))
+                extra["PATH"] = f"{tmp / 'g'}:{extra.get('PATH', config.SYSTEM_PATH)}"
             env = config.session_env(extra, legacy=variant.legacy, bin_dir=bin_dir)
-            settings = self._nosearch_settings(tmp, task, hook_dir) if variant.no_search else None
+            # Files the harness changed before the agent starts (setup-claude's
+            # CLAUDE.md, .mcp.json) are not the agent's edits.
+            baseline = snapshot(workdir) if is_edit_task(task) else None
+            settings = (self._isolated_settings(item, tmp, workdir) if isolated
+                        else self._nosearch_settings(tmp, task, hook_dir) if variant.no_search else None)
             if settings is not None:
                 (out_dir / "settings.json").write_text(settings.read_text())
             cmd = self._command(item, mcp_path, settings)
+            sandbox = self._grading_profile(item, tmp, workdir) if isolated else None
+            if sandbox is not None:
+                (out_dir / "grading.sb").write_text(sandbox.read_text())
             (out_dir / "command.json").write_text(json.dumps(cmd, indent=1))
             started = time.time()
             timed_out = False
@@ -596,9 +680,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                     timed_out = True
                     _kill_group(proc)
             wall = time.time() - started
-            edit = self._grade_edit(item, workdir, out_dir) if is_edit_task(task) else None
+            edit = self._grade_edit(item, workdir, out_dir, baseline, sandbox) if is_edit_task(task) else None
         finally:
-            config.remove_tree(tmp, self.cache / "tmp")
+            config.remove_tree(tmp, tmp_root)
             if hook_dir is not None:
                 shutil.rmtree(hook_dir, ignore_errors=True)
             # The working copy stays until the next session of this repo
@@ -607,15 +691,40 @@ exec {shlex.quote(self.cfg.myc)} "$@"
 
         return self._summarise(item, attempt, transcript, wall, timed_out, proc.returncode, edit)
 
-    def _grade_edit(self, item: WorkItem, workdir: Path, out_dir: Path) -> dict:
-        """Grade an edit task's working copy: changed files, test command."""
-        changed = changed_files(workdir)
-        diff = subprocess.run(["git", "-C", str(workdir), "diff", "HEAD"], capture_output=True, text=True)
+    def _grade_edit(self, item: WorkItem, workdir: Path, out_dir: Path, baseline: dict | None = None,
+                    sandbox: Path | None = None) -> dict:
+        """Grade an edit task's working copy: changed files, then the test
+        command, after the commit's own tests (``test_overlay``, #183) are
+        written over the agent's working copy."""
+        base = self.repos[item.repo]["commit"]  # the parent, not HEAD: the agent may have committed
+        changed = changed_files(workdir, baseline, base)
+        diff = subprocess.run(["git", "-C", str(workdir), "diff", base], capture_output=True, text=True)
         (out_dir / "changes.diff").write_text(diff.stdout)
+        untracked = [f for f in changed if (workdir / f).is_file()
+                     and subprocess.run(["git", "-C", str(workdir), "ls-files", "--error-unmatch", f],
+                                        capture_output=True).returncode != 0]
+        if untracked:
+            (out_dir / "untracked.txt").write_text("\n".join(untracked) + "\n")
         tests = None
+        overlay = item.task.get("test_overlay") or []
         if item.task.get("test_command"):
-            tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)))
-        return grade_edit(item.task, changed, tests, self.cfg.success_threshold)
+            if overlay:
+                apply_gold(workdir, config.gold_dir(item.repo), item.task, overlay)
+            env = config.repo_env(self.repos[item.repo])
+            if sandbox:
+                env.update(isolation.session_environment(sandbox.parent, "gg"))
+            if problem := wrapper_problem(workdir, env):  # the agent changed the wrapper: never let it connect
+                tests = {"command": item.task["test_command"], "passed": False, "returncode": None,
+                         "timed_out": False, "seconds": 0.0, "output_tail": problem, "output": problem}
+            else:
+                tests = run_test(item.task["test_command"], workdir, int(item.task.get("test_timeout_s", 900)), env,
+                                 isolation.sandboxed([], sandbox) if sandbox else ())
+        if tests is not None:  # the row keeps the tail, the session directory the whole log
+            (out_dir / "test.log").write_text(tests.pop("output", ""))
+        g = grade_edit(item.task, changed, tests, self.cfg.success_threshold)
+        if overlay:
+            g["test_overlay"] = list(overlay)
+        return g
 
     def _summarise(self, item: WorkItem, attempt: int, transcript: Path, wall: float,
                    timed_out: bool, returncode: int | None, edit: dict | None = None) -> dict:
@@ -628,6 +737,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         if init:  # the init event names the Agent tool by its old name, Task
             init["tools"] = ["Agent" if x == "Task" else x for x in init.get("tools") or []]
         problems = check_isolation(init, required, variant.mcp, optional)
+        if init and self.claude_version and init.get("claude_code_version") not in (None, self.claude_version):
+            problems.append(f"Claude Code {init.get('claude_code_version')} ran, the run is pinned to {self.claude_version}")
         if variant.agent and t.init and config.EXPLORER_AGENT not in (t.init.get("agents") or []):
             problems.append(f"{config.EXPLORER_AGENT} subagent not loaded: {t.init.get('agents')}")
         hooks = hook_stats(transcript.parent / "hooks")
@@ -667,7 +778,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         cli = myc_cli_calls(t.tool_calls)
         usage = t.usage()
         if g is None:
-            missed = sorted(set(gold_paths(item.task)) - set(edit["files_changed"]))
+            hit = {representative(item.task, f) for f in edit["files_changed"]}
+            missed = sorted(f for f in gold_paths(item.task) if representative(item.task, f) not in hit)
             g = Grade(edit["file_precision"], edit["file_recall"], edit["file_f1"],
                       len(edit["files_changed"]) - len(edit["files_extra"]), len(edit["files_extra"]), 0,
                       len(item.task.get("gold_files") or []), len(edit["files_changed"]), True,
@@ -728,11 +840,18 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "finished_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         }
         # #178: where the tokens went, the cost by cache class, and whether the agent searched.
-        row.update(attribute(str(transcript)).as_row())
+        att = attribute(str(transcript))
+        row.update(att.as_row())
+        row["api_calls"] = att.calls  # model calls; the CLI's num_turns is tool calls + 1
         prompt_path = transcript.parent / "prompt.txt"
         row["search_audit"] = search_audit(str(transcript), prompt_path.read_text() if prompt_path.exists() else "")
         if edit is not None:
             row["edit"] = edit
+            if item.task.get("weak_test"):
+                row["weak_test"] = True
+        if self.repos[item.repo].get("isolated"):
+            row["isolation_audit"] = isolation.audit(
+                str(transcript), str(self.work_root / config.work_name(self.repos[item.repo])))
         return row
 
     # ---- loop ------------------------------------------------------------
@@ -800,9 +919,16 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         order = self.run_dir / "plan.txt"
         if not order.exists():  # the planned order, for the record (#182)
             order.write_text("".join(f"{it.run_id}\n" for it in self.plan()))
+        if any(self.repos[it.repo].get("isolated") for it in items):
+            self._pin_claude()
+        # Before the first session: every wrapper distribution of the run is on disk (#183).
+        missing = {p for it in items if (self.cache / "repos" / it.repo).is_dir()
+                   and (p := wrapper_problem(self.cache / "repos" / it.repo, self.repos[it.repo].get("session_env")))}
+        if missing:
+            raise SystemExit("\n".join(sorted(missing)))
         print(f"{len(done)} runs already final, {len(items)} to go "
               f"(concurrency {self.cfg.concurrency})", flush=True)
-        sched = Scheduler(items)
+        sched = Scheduler(items, work_names={n: config.work_name(r) for n, r in self.repos.items()})
         threads = [threading.Thread(target=self._worker, args=(sched,), daemon=True)
                    for _ in range(max(1, self.cfg.concurrency))]
         for th in threads:

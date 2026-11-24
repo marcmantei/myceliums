@@ -6,6 +6,7 @@ import datetime as dt
 import json
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -36,6 +37,45 @@ def fetch(repos: dict[str, dict]) -> None:
         if status:
             raise SystemExit(f"{dst} has local changes; delete it and fetch again")
         print(f"{name:<8} {r['commit'][:12]} ({r.get('ref', '')}) -> {dst}")
+        if r.get("gold_commit"):
+            fetch_gold(r)
+
+
+def fetch_gold(r: dict) -> Path:
+    """Keep the files of a repository's ``gold_commit`` (#183: the replayed
+    commit, whose parent is the pin) in ``config.gold_dir``, never in the
+    checkout: the working copies hold the parent only, so the agent cannot
+    find the commit in the history. ``gold.json`` records the commit's
+    name-status against the pin (renames as delete + add); ``files/`` holds
+    every added or modified file."""
+    out = config.gold_dir(r["name"])
+    meta = out / "gold.json"
+    if meta.exists() and config.load_json(meta).get("gold_commit") == r["gold_commit"]:
+        return out
+    tmp = out.with_name(out.name + ".git")
+    for d in (out, tmp):
+        if d.exists():
+            config.remove_tree(d, config.cache_dir() / "gold")
+    _git("init", "-q", "--bare", str(tmp))
+    _git("-C", str(tmp), "fetch", "-q", "--depth", "2", r["url"], r["gold_commit"])
+    parent = _git("-C", str(tmp), "rev-parse", f"{r['gold_commit']}^")
+    if parent != r["commit"]:
+        raise SystemExit(f"{r['name']}: parent of {r['gold_commit'][:12]} is {parent[:12]}, not the pin {r['commit'][:12]}")
+    files = {}
+    for line in _git("-C", str(tmp), "diff", "--name-status", "--no-renames", r["commit"], r["gold_commit"]).splitlines():
+        status, path = line.split("\t", 1)
+        files[path] = status[0]
+        if status[0] != "D":
+            blob = subprocess.run(["git", "-C", str(tmp), "show", f"{r['gold_commit']}:{path}"], capture_output=True)
+            if blob.returncode != 0:
+                raise SystemExit(f"{r['name']}: cannot read {path} at {r['gold_commit'][:12]}")
+            (out / "files" / path).parent.mkdir(parents=True, exist_ok=True)
+            (out / "files" / path).write_bytes(blob.stdout)
+    config.remove_tree(tmp, config.cache_dir() / "gold")
+    meta.write_text(json.dumps({"gold_commit": r["gold_commit"], "parent": r["commit"], "files": files},
+                               indent=1, sort_keys=True) + "\n")
+    print(f"{r['name']:<8} gold {r['gold_commit'][:12]}: {len(files)} files -> {out}")
+    return out
 
 
 # myceliums' default `[analysis] exclude`; a project config replaces it, so it is repeated.
@@ -45,7 +85,7 @@ DEFAULT_EXCLUDE = ["node_modules/**", ".git/**", "target/**", "dist/**", "build/
 
 def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | None = None,
           record_only: bool = False, default_config: set[str] | None = None,
-          skip_embeddings: bool = False) -> None:
+          skip_embeddings: bool = False, base: Path | None = None, record_difference: bool = False) -> None:
     """Build one myceliums index per repository with ``myc analyze``.
 
     ``myc analyze`` stores its data under ``$HOME/.myceliums``; ``HOME`` is set
@@ -65,18 +105,32 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
     refuses such an index unless the run uses the mock API.
     """
     cache = config.cache_dir()
-    for name, r in repos.items():
+    order = list(repos.items())
+    if base is not None:
+        if skip_embeddings or record_only:
+            raise SystemExit("--base needs an embedded build")
+        # Newest parent first: each index is derived from its neighbour's.
+        order.sort(key=lambda kv: kv[1].get("parent_date", ""), reverse=True)
+    for name, r in order:
         if only and name not in only:
             continue
+        derived = None
         home = cache / "index" / name / "home"
-        work = config.work_root() / name
+        work = config.work_root() / config.work_name(r)
         log_path = cache / "index" / name / "analyze.log"
         took = None
         extra = [] if name in (default_config or set()) else r.get("index_exclude_extra", [])
         if not record_only:
+            if base is not None:
+                check_base(base, config.work_root() / config.work_name(r))
+                if home.resolve() == base.resolve():
+                    raise SystemExit(f"{name}: --base is this repository's own index")
             if home.exists():
                 config.remove_tree(home, cache / "index")
-            home.mkdir(parents=True)
+            if base is not None:
+                config.copy_tree(base, home)
+            else:
+                home.mkdir(parents=True)
             if work.exists():
                 config.remove_tree(work, config.work_root())
             config.copy_tree(cache / "repos" / name, work)
@@ -89,13 +143,19 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
                    "FASTEMBED_CACHE_DIR": models_dir, "PATH": "/usr/bin:/bin:/usr/sbin:/sbin"}
             started = time.time()
             flag = "--skip-embeddings" if skip_embeddings else "--strict-embeddings"
-            res = subprocess.run([myc, "analyze", str(work), flag],
+            res = subprocess.run([*TIME, myc, "analyze", str(work), flag] + (["--force"] if base is not None else []),
                                  env=env, capture_output=True, text=True)
             took = round(time.time() - started, 1)
             log_path.write_text(res.stdout + res.stderr)
             if res.returncode != 0:
                 raise SystemExit(f"myc analyze failed for {name}; see {log_path}")
         log = log_path.read_text()
+        if base is not None:
+            derived = verify_derived(log, name, work, myc, env, cache, record_difference)
+            derived["base"] = str(base)
+            base = home
+        if base is not None:
+            strip_history(home / ".myceliums")
         registry = config.load_json(home / ".myceliums" / "repos.json")
         (info,) = registry["repos"].values()
         if info.get("analyzed_commit") != r["commit"]:
@@ -114,13 +174,85 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
             "index_exclude_extra": extra,
             **({"index_config": "default"} if name in (default_config or set()) else {}),
             **({"embeddings": "skipped"} if skip_embeddings else {}),
+            **({"derived": derived} if derived else {}),
             "myc_version": config.tool_version([myc, "--version"]),
             "myc_sha256": config.sha256_file(Path(myc)),
             "indexed_at": info.get("analyzed_at"),
+            **measured(log, home),
             "index_seconds": took if took is not None else _grab_ms(log),
         }
         (cache / "index" / name / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
         print(json.dumps(meta))
+
+
+def check_base(base: Path, work: Path) -> None:
+    """An index hands its vectors on only to an index of the same path (the
+    store filters by repository id, which hashes the path); at another path
+    ``myc`` would re-embed everything without saying so."""
+    (info,) = config.load_json(base / ".myceliums" / "repos.json")["repos"].values()
+    if Path(info["path"]) != Path(str(work.parent.resolve() / work.name)):
+        raise SystemExit(f"base index is of {info['path']}, not {work}; its vectors would not be reused "
+                         f"(set AEVAL_WORK_ROOT to the base's work root)")
+
+
+GRAPH_COUNTS = {"symbols": r"Symbols:\s+([\d,]+)", "files": r"Files:\s+([\d,]+)",
+                "relationships": r"Relationships:\s+([\d,]+)", "mentions": r"Mentions:\s+([\d,]+)"}
+
+
+def graph_counts(log: str) -> dict:
+    return {k: _grab(log, p) for k, p in GRAPH_COUNTS.items()}
+
+
+# Peak memory of `myc analyze` (macOS; its report goes to stderr, so into analyze.log).
+TIME = ["/usr/bin/time", "-l"] if Path("/usr/bin/time").exists() and sys.platform == "darwin" else []
+
+
+def measured(log: str, home: Path) -> dict:
+    """What the log and the disk say about one build: seconds per phase, peak
+    memory, size (all files of the index's home)."""
+    out: dict = {"disk_bytes": sum(f.stat().st_size for f in home.rglob("*") if f.is_file() and not f.is_symlink())}
+    if m := re.search(r"Phases:\s+(.+)", log):
+        out["phases_s"] = {k: float(v) for k, v in re.findall(r"(\w+) ([\d.]+) s", m.group(1))}
+    if m := re.search(r"(\d+)\s+maximum resident set size", log):
+        out["peak_rss_bytes"] = int(m.group(1))
+    return out
+
+
+def strip_history(data: Path) -> None:
+    """Remove from an index's data directory what it keeps of *earlier*
+    analyses: the graph snapshots of ``myc diff`` (ten, about 190 MB each for
+    Spring). An index derived from a newer commit's would otherwise hold that
+    commit's symbols, which a session on an older parent must not see."""
+    for d in (data / "snapshots",):
+        if d.exists():
+            config.remove_tree(d, data)
+
+
+def verify_derived(log: str, name: str, work: Path, myc: str, env: dict, cache: Path,
+                   record_difference: bool = False) -> dict:
+    """What a derived index reused, and its graph counts against a fresh
+    graph-only build of the same working copy (stops on no reuse)."""
+    reused = _grab(log, r"([\d,]+) kept from the previous index")
+    if not reused:
+        raise SystemExit(f"{name}: no vector of the base index was reused")
+    tmp = cache / "tmp" / f"graph-{name}"
+    if tmp.exists():
+        config.remove_tree(tmp, cache / "tmp")
+    tmp.mkdir(parents=True)
+    try:
+        res = subprocess.run([myc, "analyze", str(work), "--skip-embeddings"], capture_output=True, text=True,
+                             env={**env, "HOME": str(tmp), "MYCELIUMS_DATA_DIR": str(tmp / ".myceliums")})
+        if res.returncode != 0:
+            raise SystemExit(f"{name}: fresh graph-only build failed: {res.stderr[-300:]}")
+        fresh = graph_counts(res.stdout + res.stderr)
+    finally:
+        config.remove_tree(tmp, cache / "tmp")
+    got = graph_counts(log)
+    if got != fresh and not record_difference:
+        raise SystemExit(f"{name}: the derived graph differs from a fresh one: {got} against {fresh}")
+    embedded = _grab(log, r"Embeddings:\s+([\d,]+)") or 0
+    return {"vectors_reused": reused, "vectors_embedded_new": embedded - reused, "graph_only_phases_s":
+            measured(res.stdout + res.stderr, tmp).get("phases_s"), "counts": got, "fresh_graph_counts": fresh, "graph_equal": got == fresh}
 
 
 def _grab(text: str, pattern: str) -> int | None:
@@ -237,16 +369,51 @@ def _check_edit_task(t: dict, repos: dict[str, dict], root: Path | None) -> list
         problems.append(f"{tid}: primary_files cover every gold file; leave out the dependents")
     if "dependents" in t:
         problems.append(f"{tid}: `dependents` is replaced by `primary_files` (every other gold file is a dependent)")
+    repo = repos[t["repo"]]
+    overlay = t.get("test_overlay")
+    if overlay is not None:
+        from .editgrade import file_kind
+        if not repo.get("gold_commit"):
+            problems.append(f"{tid}: test_overlay needs a gold_commit on repo {t['repo']}")
+        for p in overlay if isinstance(overlay, list) else [overlay]:
+            if p not in paths:
+                problems.append(f"{tid}: overlay file {p} is not a gold file")
+            elif file_kind(p) != "tests" and p not in (t.get("build_overlay") or []):
+                problems.append(f"{tid}: overlay file {p} is not a test file")
+    if root is not None and repo.get("gold_commit"):
+        meta = config.gold_dir(t["repo"]) / "gold.json"
+        if not meta.exists() or config.load_json(meta).get("gold_commit") != repo["gold_commit"]:
+            problems.append(f"{tid}: gold files of {repo['gold_commit'][:12]} not fetched; run `agent_eval.py fetch`")
+        else:
+            got = config.load_json(meta)["files"]
+            want = {(g if isinstance(g, str) else g["path"]): ("M" if isinstance(g, str) else g.get("status", "M"))
+                    for g in t.get("gold_files") or []}
+            if got != want:
+                problems.append(f"{tid}: gold_files differ from the commit's own changes: "
+                                f"{sorted(set(got.items()) ^ set(want.items()))[:6]}")
     if "test_command" in t:
         if not isinstance(t["test_command"], str) or not t["test_command"].strip():
             problems.append(f"{tid}: test_command must be a non-empty string")
         pre = t.get("precheck") or {}
-        if pre.get("command") != t.get("test_command") or pre.get("commit") != repos[t["repo"]]["commit"]:
+        if pre.get("command") != t.get("test_command") or pre.get("commit") != repo["commit"]:
             problems.append(f"{tid}: no precheck of this test command on the pinned commit; run "
                             f"`agent_eval.py precheck-edit`")
         elif not pre.get("fails_on_parent"):
             problems.append(f"{tid}: the test command does not fail on the pinned (parent) commit, so passing it "
                             f"proves nothing")
+        elif repo.get("gold_commit") and (pre.get("gold_commit") != repo["gold_commit"] or not pre.get("passes_on_gold")):
+            problems.append(f"{tid}: the test command was not shown to pass on the gold commit "
+                            f"{repo['gold_commit'][:12]}; run `agent_eval.py precheck-edit`")
+        elif (pre.get("test_overlay") or None) != (t.get("test_overlay") or None):
+            problems.append(f"{tid}: the precheck ran with another test_overlay; run `agent_eval.py precheck-edit`")
+    for group in t.get("equivalents") or []:
+        if len(group) < 2 or not set(group) <= set(paths):
+            problems.append(f"{tid}: equivalents must be groups of gold files: {group}")
+        elif set(group) & set(t.get("primary_files") or []):
+            problems.append(f"{tid}: a primary file in equivalents would make its group never forgotten; use `either`")
+    for f in t.get("either") or []:
+        if f not in paths or f in (t.get("primary_files") or []):
+            problems.append(f"{tid}: either must name dependents: {f}")
     for a in t.get("allowed_commands") or []:
         if isinstance(a, str) and a.split():
             continue

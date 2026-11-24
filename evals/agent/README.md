@@ -1575,6 +1575,423 @@ repetitions and (since #182) the interleaved schedule, see
 [#182](#java-tasks-on-spring-framework-182). The profile
 name is stored in the run's config, so a resumed run cannot change it.
 
+## Commit replay on Java (#183)
+
+Do agents change everything a real change needs, in other modules, tests and
+docs, and does myceliums save tokens per solved task? 20 edit tasks replay
+recent spring-framework commits. **Prepared, not run**: before the first session the pilot and the
+pre-registration below are fixed, and Marc decides on the login, the online warm-up and the pilot's time.
+
+**Mining** ([`groundtruth/commit_replay.py`](groundtruth/commit_replay.py)
+`mine`, over a blobless clone with history): non-merge commits on `main` since
+2025-10-01 with at most 25 files (at most two renamed), no dependency bump,
+polish, copyright, revert or release subject, changes to main code and to
+tests, at least two build modules touched (`framework-docs` counts), and a
+parent that builds with the Java 25 toolchain: **151 candidates**. 34 were
+picked for a public API or behaviour change a description can state
+(no pure refactoring or deprecation), and stratified by files, code modules
+and docs; 20 are the task set, 9 are reserves
+(`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
+fails. **No task's tests listen on all interfaces:** a static closure over the test sources that each task's `--tests` classes reach (imports,
+same package) finds server sockets in two, both on `0.0.0.0` (`AbstractHttpServer`): `fn-request-bind-pathvars-headers`, replaced by
+`form-converter-map-payloads` (same size, modules and docs strata; chosen before its precheck ran), and the reserve `problemdetail-no-instance-from-path`, dropped.
+It does not see sockets opened by main code or libraries alone; the socket samples of the eight tasks run saw loopback TCP listeners only.
+
+| Task | Commit | Files (code/tests/docs) | Modules whose code changes | Comment-only files | Docs | Weakly tested | Primary files |
+|---|---|---:|---:|---:|---|---|---:|
+| `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 1 | 1 | yes |  | 1 |
+| `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 |  | yes | yes | 2 |
+| `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 |  | yes |  | 3 |
+| `form-converter-map-payloads` | ab8de8ec4b | 6 (4/1/1) | 2 |  | yes |  | 1 |
+| `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 |  | yes | yes | 1 |
+| `test-context-cache-pause-mode` | 9711db787e | 9 (4/3/2) | 1 | 1 | yes |  | 3 |
+| `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | 1 | yes | yes | 2 |
+| `jdbcclient-batch-entry-dsl` | 833ab4d48f | 6 (2/3/1) | 1 |  | yes |  | 1 |
+| `type-mismatch-required-type-arg` | 4847ee80b0 | 3 (1/1/1) | 1 |  | yes |  | 1 |
+| `servlet-response-ignore-body-flush` | e0b54e244e | 5 (3/1/1) | 2 |  | yes | yes | 1 |
+| `content-negotiation-no-fallback-mapping` | 7fbdbd6eb7 | 4 (2/2/0) | 2 |  | no |  | 1 |
+| `client-builders-deep-copy-default-headers-cookies` | 4cf6335372 | 6 (3/3/0) | 3 |  | no |  | 1 |
+| `http-range-honor-if-range` | 8ab5332639 | 11 (5/6/0) | 2 |  | no |  | 1 |
+| `error-response-interceptor-with-request` | d70220eb5d | 11 (7/4/0) | 3 |  | no |  | 1 |
+| `mime-type-parameter-names-case-insensitive` | 2028eb3694 | 4 (2/2/0) | 2 |  | no |  | 1 |
+| `deferred-bean-registrar-contains-bean` | 7502b92392 | 14 (7/7/0) | 2 | 1 | no | yes | 2 |
+| `api-version-deprecation-handler-handler-arg` | b128f59714 | 12 (10/2/0) | 3 |  | no | yes | 2 |
+| `bean-provider-parameterized-type-reference` | 2e4ca41382 | 7 (6/1/0) | 3 |  | no | yes | 1 |
+| `message-source-default-charset` | 02af3e7a17 | 5 (4/1/0) | 1 | 1 | no | yes | 1 |
+| `retryable-method-retry-event` | 92a43c007a | 10 (6/4/0) | 2 | 2 | no |  | 3 |
+Spread: 6 small (≤ 5 files), 10 medium (6-12), 4 large (13-20); main code changes
+in one module 5, two 10, three or more 5; 10 with docs. The split is computed from
+the diffs: a file in which only comments, Javadoc or imports change does not count for a
+module (six tasks have such gold files; the mining filter and the first versions of this
+table counted them). Grading reports these files and Gradle scripts as their own
+kinds of dependent (`comments`, `build`), in no other kind and not among the forgotten, and the code recall also without them (`code_changed`).
+
+**What the test commands enforce** (an agent's reading of the diffs and tests, nothing was run): in 8 tasks at least one gold dependent
+can stay as at the parent and the command still passes (`weak_test` in the task file says which; `bean-provider-...` is one of them because only the
+demanded abstract method enforces its five, and `api-version-...` because no test checks which handler is passed); `untested` notes other unchecked behaviour. The report gives success and file recall with
+and without those 8. `spel-simple-...`, `test-context-...` and `type-mismatch-...` have no code dependent to find at all, so they measure docs and
+tests only. Where a part of the change has several valid places (`equivalents`: the reader or the post-processor in `deferred-bean-registrar-...`), they count as one, everywhere: found when either is edited, one in the denominator. In `beans-max-nested-path-depth`
+three dependents can go into a primary file, which every solution edits: the file list cannot tell, so they are reported apart (`either`) and neither counted nor forgotten.
+
+**Descriptions** were drafted by agents from the commit message, the linked
+issue and the diff ([`groundtruth/commit_replay_spec.json`](groundtruth/commit_replay_spec.json),
+rules: an issue-style change request that names every new public name the
+commit's tests need, may name the type of the core change, and must not name
+files, test classes, dependent classes, modules, docs or tests; a unit test checks the
+20 for gold class names other than the primary ones, with `@Retryable`, the feature's own
+name, as the one exception). A second
+agent reviewed all 34 for leakage and solvability against the test diff (it
+split them over four sub-agents and itself re-checked nine): 27 ok, 7 to fix.
+Six were replaced by the reviewer's rewrite (two of them among the 20); the
+rewrites went to a third check. A third agent re-reviewed those six: two ok, four
+changed again (a class name that also names its counterpart, a wrong fact about the server
+conventions, two wrong facts about the overflow, a call-site scope that was
+not stated, and for `bean-provider-parameterized-type-reference`, one of the 20,
+that the method is abstract as in the commit; without it a one-line default
+method would have passed). With it the implementations are compile errors, so this task says little
+about forgotten dependents, and only because the test command compiles every changed module
+(before the PR review it did not). The PR review checked these four texts. It also found two that named a gold class
+(`DefaultConversionService`, `@Import`; removed, see the spec) and a weak test:
+`cache-manager-reset-caches` passed with an interface default method alone while its description made the
+gold overrides optional; it was replaced by `retryable-method-retry-event` (same strata). A fourth agent checked the two reworded texts and the new one: no leak, nothing missing for the tests,
+but wrong facts in all three (for `deferred-bean-registrar-contains-bean` one that would have led to a file the commit does not
+change); all three now have its text, which the second PR review checked, and `weak_test` in the task file lists the gold
+dependents their test commands do not enforce. The seventh, a reserve, had to name a
+dependent (a Kotlin extension its module's tests compile against) and was
+dropped. The PR reviews checked the texts of the 20 that were in the set then; the final review checked `form-converter-...`, which came in last. The reserve
+`resource-loader-...` was rewritten after it (its description had demanded nothing of three gold files) and is not re-reviewed. No human has reviewed the descriptions.
+Scope words an issue would use ("for both Spring MVC and WebFlux") are allowed
+and noted in the spec.
+
+**What the build derives** (`commit_replay.py build`): one pin per task in the
+task file's own `repos` (the parent; `gold_commit` the replayed commit),
+`gold_files` (the commit's name-status, renames as delete + add),
+`test_overlay` (the commit's test files, fixtures included; for
+`observation-record-handled-exception` also the Gradle script that gives its overlaid tests
+their test dependency), the test command (`./gradlew --offline --no-scan --no-build-cache`, main and
+test compilation of **every module the commit changes sources in**, then `:module:test --tests ...`
+over the changed test classes; three tasks narrow the tests, see the spec), the Gradle rule of the hook
+(`allowed_commands`: the three flags, options and tasks by exact name, because Gradle expands abbreviations
+such as `bSPP`, and `--tests` with a class or method pattern) and the strata.
+
+**Harness additions.**
+
+* `load_repos` merges the pins a task file declares (`repos`); `fetch` and
+  `index` default to them. `fetch` shallow-fetches each parent and keeps the
+  gold commit's files in `$AEVAL_CACHE/gold/<repo>/`, outside every working
+  copy, so the agent cannot find the commit in the history (`check-tasks`
+  verifies `gold_files` against the commit).
+* Grading writes the commit's own tests (`test_overlay`) over the agent's
+  working copy after its changed files are recorded, then runs the test
+  command. An agent's edit of one of those test files is therefore replaced
+  (its file still counts for recall); new public names the tests use are
+  stated in the description.
+* `precheck-edit` applies the overlay to the parent (the test must fail),
+  then the whole commit (it must pass), and records both exit codes and run
+  times; `check-tasks` refuses a task without both.
+* The repository's `session_env` (`GRADLE_OPTS`: no Gradle daemon, Kotlin
+  compiler in process, so no daemon outlives a session) and the caller's
+  `JAVA_HOME` (`env_from_caller`; `$JAVA_HOME/bin` first on `PATH`) reach
+  the session, the test command and the precheck.
+* Files the harness wrote before the session (setup-claude's `.claude/` files and
+  `.mcp.json` in C) no longer count as the agent's changes (a snapshot before
+  the session); before, every C session got them as extra files.
+* Forgotten dependents also report `other_module`: code dependents in another
+  Gradle module than every primary file (`remote` counts another directory,
+  which in Java is any other package).
+* `probe --edit-file/--edit-old/--edit-new/--edit-command`: the mock session
+  reads and edits a file and runs the test command in Bash, so the probe
+  shows the grading and D's allowlist on an edit task.
+
+**Run configuration.**
+
+```bash
+export AEVAL_PROTECT=/private/tmp/aeval183   # scratch of the preparation (contexts, logs)
+export JAVA_HOME=$HOME/.cache/myc-java/jdk-ipv4/Contents/Home   # JDK 25, the copy of make_jdk_ipv4.py: offline only; the warm-up uses the original
+T=evals/agent/tasks/tasks-commit-replay.json
+python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 MB each) + gold files
+python3 evals/agent/agent_eval.py gradle-cache               # after the warm-up: freeze ~/.gradle's dependencies
+python3 evals/agent/agent_eval.py --tasks $T precheck-edit --gold-runs 2 --sandbox   # needs a warm Gradle cache: the commands are offline
+python3 evals/agent/agent_eval.py --tasks $T check-tasks
+python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models --base $BASE_HOME
+python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-replay --conditions none,C,D \
+    --profile realistic --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
+```
+
+Arms: `none` (no myceliums: the issue's arm A, the baseline), C (what `myc setup-claude --no-agent` installs) and D
+(myceliums only; search taken away). The first versions of this plan said `A,C,D`: in the harness `A` is the MCP server alone, so that
+run would have had no baseline. Every arm's Bash is the hook's allowlist (below; file operations, git, `./gradlew`
+test runs); every arm has `Bash`, `Edit` and `Write`. Realistic profile:
+100-turn cap not stated in the prompt, 3 repetitions and the interleaved schedule of #182
+(repetition-major, tasks shuffled, the three arms adjacent per task with
+their order counterbalanced). Each session gets a fresh copy of its task's
+parent at one shared path (`work_name`: `spring-framework` under `AEVAL_WORK_ROOT`) and a
+fresh copy of that parent's index. The path is shared because of the index
+(below); its price is that **sessions run one at a time**.
+
+#### Pre-registration (24 November 2026, before the pilot and any other session)
+
+Arms `none`, C, D; 20 tasks × 3 repetitions × 3 arms = 180 sessions; the task is the unit of analysis (its repetitions averaged first). Every
+final session counts, also one that ran into the time or turn limit; only infrastructure failures (API errors, a killed CLI, a usage limit) are run again.
+
+* **Co-primary outcomes.** (a) **Recall over the dependents**: the share of the replayed commit's docs, tests and remote code files (outside the
+  directories of the primary files) that the session changed. **Not counted:** code files in which only comments or imports change (`comments`; docs files never are), Gradle scripts, and files whose part can go into a primary file (`either`). Equivalent places are one dependent, found when any of them is edited.
+  Grading and report use one function (`editgrade.dependents`). The comment rule and the counting of equivalents were fixed on 24 November 2026, before any session; they change the denominators of five tasks (`spel-simple-...`, `test-context-...`, `deferred-...`, `message-source-...`, `retryable-...`) and of the `deferred-...` pair.
+  (b) **Tokens per session**, unsolved sessions included: input with cache plus output; the CLI's cost estimate is shown beside it and not tested.
+  A session without a result event (timeout) counts with the calls its transcript shows, its output as a lower bound; the report says how many.
+* **Secondary outcomes**, not tested: docs recall alone; tests pass, which is also success (an edit session succeeds when the task's test command passes, nothing else); tokens and cost per solved task; precision (share of the changed files that the commit changed); API calls; wall time.
+* **Comparisons:** C vs `none`, D vs `none`, C vs D. Every difference is **first minus second**: a positive recall difference favours the first arm, a negative token difference favours it.
+  Paired percentile bootstrap over the tasks (10,000 resamples, seed 0), two-sided p by inverting it; **Holm over the six tests** (three pairs × two co-primary outcomes) at 5 %. With 20 tasks the percentile bootstrap is slightly liberal. Intervals are 95 % and not corrected.
+* **Detectable difference** (two-sided 5 %, power 80 %, 20 tasks, normal approximation): at an SD of 0.3 of the tasks' paired recall differences 0.19 for one test, 0.22 with Bonferroni over three pairs, 0.23 for the first Holm step over six tests. The SD is a guess; the pilot replaces the number only (it
+  has one arm, so its SD between tasks is a stand-in), nothing else. A difference that is not significant is not evidence of none.
+* **Sensitivity**, not tested: without the 8 weakly tested tasks; **with** the comment-only code files that lie outside the primary files' directories (`deferred-...`: 11 instead of 10 dependents); only the 6 tasks whose parent has an AGENTS.md (`strata.agents_md`).
+* **Validity limits:** Spring Framework is public and its commits are likely in the model's training data, in every arm alike; agents have no scripting (Bash is an allowlist without interpreters) and work in a sandbox, so they are not
+  agents as in daily use; D has its search tools blocked, so C vs D and D vs `none` measure myceliums *instead of* search, C vs `none` beside it; one project, one language, one model.
+
+`agent_eval.py report` computes exactly these (tests on synthetic sessions: known differences, ties, an arm that solves nothing, missing sessions).
+
+#### Pilot
+
+**Arm `none` only**, one session of each of 5 tasks with a valid precheck, one per stratum (size × docs) among the 8 valid ones, drawn with seed 183 and recorded in [`groundtruth/pilot_183.json`](groundtruth/pilot_183.json):
+`retry-max-attempts-to-max-retries` (L, docs), `api-version-deprecation-handler-handler-arg` (M, no docs), `beans-max-nested-path-depth` (M, docs), `mime-type-parameter-names-case-insensitive` (S, no docs), `type-mismatch-required-type-arg` (S, docs). Plus one session in C (`api-version-deprecation-handler-handler-arg`) and one in D (`retry-max-attempts-to-max-retries`), **only as a check of the pipeline**: did the session start, reach `myc`, build and get graded. Their outcomes
+(files, tests, tokens) are not reported, and `agent_eval.py pilot` refuses sessions of other arms.
+
+* It may change only **harness errors, wrong gold, or unclear wording**, each with a written rationale and a re-check (precheck, leakage review). It **never drops or changes a task because of how an arm did**.
+* Its sessions are **never pooled** with the main run, which runs all 20 tasks afresh.
+* Afterwards cost and time of the main run are estimated again: the mean of the five × 180 sessions. **Stop and report** when that is above **$288 or 24 h**. (The estimate below has 36 h in its middle row, so the time limit is expected to bite unless sessions are shorter than 8 minutes.)
+* **Ceiling:** a mean dependent recall of 0.90 or more in `none`. Then say so; the tasks are not changed.
+
+```bash
+P="--profile realistic --rep 1 --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir $HOME/.cache/myceliums-eval-models"
+python3 evals/agent/agent_eval.py --tasks $T run --label pilot-183 --conditions none --task retry-max-attempts-to-max-retries --task api-version-deprecation-handler-handler-arg --task beans-max-nested-path-depth --task mime-type-parameter-names-case-insensitive --task type-mismatch-required-type-arg $P
+python3 evals/agent/agent_eval.py --tasks $T pilot pilot-183
+python3 evals/agent/agent_eval.py --tasks $T run --label pilot-183-check-C --conditions C --task api-version-deprecation-handler-handler-arg $P
+python3 evals/agent/agent_eval.py --tasks $T run --label pilot-183-check-D --conditions D --task retry-max-attempts-to-max-retries $P
+```
+
+#### Warm-up
+
+`groundtruth/warm_gradle.py` (not run; `--dry-run` prints every command and host, `--go` starts). With the network it only **resolves and compiles**: an init script takes the actions of every test task away, in `buildSrc` too, so its class path is resolved and no test runs; a test report found afterwards stops it. It stops at the first error; a connection or read without an answer fails after 45 s, one attempt;
+a build over 20 minutes is killed with everything it started; no `--continue`, no JDK download. **The commit's build logic (buildSrc, plugins, code generators, annotation processors) does run, unsandboxed and with the network**, as in any online build. Java connects itself, not through another program, so that the machine's firewall sees it as what it is; the list of hosts is informative and **the firewall is the enforcement**. The init script was tested offline in the grading profile on two tasks (Gradle 9.2.1 and 9.9.0; record: [`groundtruth/warm_init_check.json`](groundtruth/warm_init_check.json)): compiled, class paths resolved for the module's and buildSrc's test tasks, no test report. The timeouts were not exercised. Afterwards `gradle-cache` (it refuses Spring Framework artifacts other than
+BOM metadata), then the prechecks, offline and sandboxed.
+
+**Index plan: derive, do not rebuild.** `myc` has no command that updates an
+index from a git diff: file-level re-indexing (`analyze_files`) is reachable
+only through `analyze --watch` (and email sync), and the post-commit hook
+runs `analyze --skip-embeddings`. What it does have is a full graph rebuild
+that takes over the vector of every symbol whose embedding text is unchanged
+(`analyze --force`, #151), so only changed symbols are embedded. That reads the
+previous index by repository id, which hashes the path: at another path
+nothing is reused, silently (measured below). Hence one shared work path, and `index --base HOME`:
+
+* it refuses a base of another path, and an index that reused no vector;
+* newest parent first, each index is derived from its neighbour's, so each
+  step embeds one interval of history only;
+* each must equal a fresh graph-only build of the same working copy in symbols, files, relationships and mentions
+  (`meta.json` `derived`); a difference stops the run.
+
+The base is the #182 run's embedded index of v7.1.0 (same models; its path is
+`/private/tmp/aeval182/spring-framework`, so `AEVAL_WORK_ROOT=/private/tmp/aeval182`),
+used only after that run has finished with the path. v7.1.0 is the better
+base than the oldest parent: 8 of the 20 parents differ from it by at most
+606 files (7 to 606), against 3,039 to 3,296 from the oldest.
+
+**Measured** (24 November; [`groundtruth/index_updates.json`](groundtruth/index_updates.json); `myc` `a42bffce`, the binary that built the base; graph and
+embedding code unchanged on `main` since; M1 Max, `nice 15`, beside other work: load 16-43 during the chain, 49-61 during the no-op, 77-102 during the path test, so
+the path test's seconds are slow; working on a copy of the #182 index. A reviewer's read-only search of the finished indexes ran about two minutes at `nice 19`; by its time it can only have touched the `deferred-bean-registrar-...` step):
+
+* **Base:** 17,699 s (4.9 h) for 145,670 vectors, under load. My earlier "about 3 hours" was an extrapolation and too low.
+* **Update on every merge** (the real case, forward in history): the 21 consecutive first-parent commits of Spring's `main` after v7.1.0 (13-23 November; 4 are merge
+  commits, 43, 42, 4 and 2 files): median 42 s, maximum 88.5 s; about 30 s of it is the full graph rebuild, the rest vectors. Re-embedded symbols:
+  0 to 210 of about 145,500 (median 3); all others reused, proved by the counts in the log. The commit that replaced every file header (9,053 files)
+  re-embedded 38. Peak memory 4.5-7.7 GB. Graph counts equal a fresh graph-only build in the 3 steps compared (first, last, header change).
+* **No change at all** (same commit again): 36 s, 145,670 of 145,670 vectors reused.
+* **Another path** (503 symbols): updating at the same path reused 486 vectors (9.7 s against 55 s); an index moved to another path reused **0**, also after its repository entry and files were put
+  under the new path's id, and so did a copied data directory. So a worktree at another path cannot use a base index today (#198/#184).
+* **Disk:** 0.86-0.90 GB per embedded index. `myc diff` keeps ten graph snapshots of about 190 MB beside it (3.1 GB in all after ten updates). They hold **earlier analyses' graphs**: an
+  index derived newest-first would show a session symbols of later commits. The harness removes them from derived indexes and from every session's copy, and `myc diff` is off the Bash allowlist.
+* The task parents lie before v7.1.0, so their derivation runs **backwards** in history; the figures above are the forward case. All 31 parents (20 kept, 9 reserves, 2 dropped later) were derived from the base: the kept 20 in 4942 s in all (median 169 s, at most 869 s, of which a fresh graph-only comparison build ~30 s), re-embedding a median 472 (at most 4773) of 139k-146k symbols. Each equals a fresh graph-only build in symbols, files, relationships and mentions, has exactly the parent's commit, one generation and, after stripping, no snapshots; 0.86-0.90 GB each without snapshots (27 GB for 31). For 8 of 9 tasks with a checkable name the parent's index has no symbol the commit introduces (the positive control finds it in the v7.1.0 index; the ninth, the deferred registrar's interface, was removed again before v7.1.0). `groundtruth/derived_indexes.json` has the numbers per parent.
+
+**Budget estimate** (not measured; from #163/#171 scaled to edit tasks).
+#163/#171 question sessions with Bash at 40 turns: 8 turns, 100-136k input
+tokens, 3.5-4k output, $0.10, 29-36 s per session (`claude-sonnet-5-5`,
+medium effort: input $2, 1-hour cache write $4, cache read $0.10, output $10
+per million). An edit session on Spring reads more and larger files, edits,
+and runs Gradle: assumed 20-80 calls (central 40) with the context growing
+from ~25k to 60-150k (central 100k) tokens. Input ≈ calls × mean context:
+0.8M-7M (central 2.5M) tokens, almost all cache reads; plus one cache write
+of the final context and 8-30k output.
+
+| | Low | Central | High |
+|---|---:|---:|---:|
+| Input tokens per session | 0.8M | 2.5M | 7M |
+| Cost per session | $0.40 | $0.80 | $1.60 |
+| Sessions (20 tasks × 3 arms × 3 reps) | 180 | 180 | 180 |
+| Tokens, whole run | 145M | 450M | 1.26B |
+| Cost, whole run | $72 | $144 | $288 |
+| Wall time per session (model + agent's Gradle runs + grading) | 6 min | 12 min | 25 min |
+| Wall time, one session at a time (shared path) | 18 h | 36 h | 75 h |
+
+Plus, once: the derived indexes and the prechecks. The call counts and context sizes above are assumptions; a pilot of one
+repetition would replace them. Disk: 20 parents 2.0 GB, 0.86-0.90 GB per embedded index without snapshots, `~/.gradle` 8.5 GB, frozen dependencies 1.3 GB.
+
+**Prechecks: 8 of 20 valid, in the grading sandbox; 12 wait for artifacts that are not in the Gradle cache** (24 November; JDK copy, a Gradle home of its own per task, below). `precheck-edit --gold-runs 2 --sandbox` runs the tests as a session's grading does:
+on the parent with the commit's tests (must fail, and for a compile or test failure, not a resolution failure), then twice on the whole commit with Gradle's `--rerun`. All 8 that could be built fail on the parent and pass both runs on the commit, buildSrc's checks and `:spring-oxm:xjc` included;
+loopback TCP and one UDP socket per Gradle process in 1,393 socket samples, no remote connection. The times include what an empty Gradle home costs (25-50 s on the first build, beside a compiler at low priority). What the others lack: `groundtruth/commit_replay_pending.json` (first failing resolutions only).
+Earlier records used other commands: the online ones are in [`groundtruth/`](groundtruth/) (`commit_replay_prechecks_online.json`), the offline ones without a sandbox only in this branch's history.
+
+| Task | Parent + commit's tests | Commit | Time on the commit |
+|---|---|---:|---:|
+| `spel-simple-context-restricted-conversion` | compile, 74 s | 2 of 2 | 25, 12 s |
+| `observation-record-handled-exception` | not run: artifacts missing offline | | |
+| `beans-max-nested-path-depth` | compile, 74 s | 2 of 2 | 29, 10 s |
+| `form-converter-map-payloads` | not run: artifacts missing offline | | |
+| `jsonl-media-type-support` | not run: artifacts missing offline | | |
+| `test-context-cache-pause-mode` | not run: artifacts missing offline | | |
+| `retry-max-attempts-to-max-retries` | compile, 76 s | 2 of 2 | 45, 12 s |
+| `jdbcclient-batch-entry-dsl` | compile, 78 s | 2 of 2 | 17, 10 s |
+| `type-mismatch-required-type-arg` | tests, 116 s | 2 of 2 | 17, 10 s |
+| `servlet-response-ignore-body-flush` | not run: artifacts missing offline | | |
+| `content-negotiation-no-fallback-mapping` | tests, 99 s | 2 of 2 | 15, 10 s |
+| `client-builders-deep-copy-default-headers-cookies` | not run: artifacts missing offline | | |
+| `http-range-honor-if-range` | not run: artifacts missing offline | | |
+| `error-response-interceptor-with-request` | not run: artifacts missing offline | | |
+| `mime-type-parameter-names-case-insensitive` | tests, 86 s | 2 of 2 | 38, 9 s |
+| `deferred-bean-registrar-contains-bean` | not run: artifacts missing offline | | |
+| `api-version-deprecation-handler-handler-arg` | compile, 115 s | 2 of 2 | 45, 10 s |
+| `bean-provider-parameterized-type-reference` | not run: artifacts missing offline | | |
+| `message-source-default-charset` | not run: artifacts missing offline | | |
+| `retryable-method-retry-event` | not run: artifacts missing offline | | |
+
+**Connections, sampled with `lsof` every 0.7 s or so** over the 24 offline runs and the probe's three sessions (2,616 samples in all, all
+processes of the JDK): no remote connection; loopback TCP, a UDP socket per Gradle process (file-lock messages), and wildcard TCP listeners
+only while `fn-request-bind-pathvars-headers` ran its HTTP server tests. A sample can miss a short connection. The wrapper unpacked
+9.8.2 from its zip without a connection.
+
+* **Reproducibility risk:** six of the 20 parents depend on unpinned `-SNAPSHOT` BOMs
+  (micrometer 1.18.0, reactor 2026.0.0, not counting `spel-big-power-result-limit`; `beans-max-nested-path-depth` reactor
+  only). Offline, Gradle takes the cached snapshot; a lost cache may not be recoverable.
+* `~/.gradle` is 8.5 GB with all eleven distributions unpacked; the pending dependencies come on top (not measured).
+
+**The wrapper must never connect.** `gradlew --offline` does not cover the wrapper's
+own download of its distribution, and the firewall on this machine attributes
+that connection to `gradle-wrapper.jar` at the path of the working copy. Each
+precheck used a new path (`.../precheck-<task>/`), deleted afterwards, so a firewall
+rule never matched twice and asked again every time; that explains the
+timeouts of 23 November while nobody answered. Since then every precheck uses one path, the
+sessions one path (`work_name`), and `wrapper_problem` refuses to start Gradle when the
+distribution is not complete on disk (unpacked with its `.ok` marker, or a whole
+zip): before a run's first session, before each session, before each precheck and before the
+grading test (an agent may have edited the wrapper properties).
+
+**Network-free builds.** Test commands start with `./gradlew --offline --no-scan
+--no-build-cache`, and the hook (below) holds every arm to the same rule; every arm's prompt says so. No build
+cache means no task output of another arm's session or of a precheck of the gold commit, and no remote cache. The
+sessions' `GRADLE_OPTS` send HTTP(S) to a closed loopback port, with the Spring build's remote cache
+(`DEVELOCITY_CACHE_SERVER`) there too.
+
+**Isolation** (repositories marked `isolated`, the same in every arm; [`aeval/isolation.py`](aeval/isolation.py)). Several independent
+reviews found holes in the earlier versions (gold files, history and the network reachable; then a quoted `#` that ended the parser, brace
+expansion, an incomplete list of closed places, and a keychain opened to every child process). The threat model below states what remains.
+
+* **What runs where.** `claude` itself runs as in daily use and in #182 (login, token refresh, API), not in a sandbox of ours: an earlier version wrapped it and had to open the login
+  keychain to every child process. Confined is what the agent executes, through settings passed with `--settings`, which a repository's files cannot loosen:
+* **Bash:** Claude Code's own sandbox (Seatbelt; `failIfUnavailable`, `allowUnsandboxedCommands: false`, no excluded commands). Under the home directory, `/private/tmp`, the temporary directories,
+  `/Volumes` and `/Users/Shared` commands and their children (a test the agent wrote, run by Gradle) read only the working copy, the session's own temporary directory and Gradle home, the JDK, the installed Gradle
+  distributions and the frozen dependencies, and in C and D the `myc` binary, models and this session's index copy; they write only the working copy, that directory and that Gradle home, not `.claude`, `.mcp.json`,
+  the wrapper, git hooks and configuration. No network but loopback. The model is shown these lists, so they name whole regions, and session directories are neutral (`/private/tmp/ag/...`).
+* **Read, Grep, Glob, Edit, Write** run inside `claude`: `blockReads/WritesOutsideWorkingDirectories`, deny rules, and the hook, on canonical paths.
+* **Hook** (PreToolUse on every tool, one script): tool calls stay in the working copy; no settings, `.git` or wrapper files; Bash is an allowlist without interpreters, wrappers or network
+  programs, and a command the parser cannot fully account for (any expansion, an open quote, a continuation line) is refused, as is `..`;
+  WebFetch, WebSearch and unknown tools are refused; a check that fails refuses.
+* **Grading:** the test command runs under our own `sandbox-exec` profile: the same files, no network but loopback, no keychain files, no security services.
+* **Same conditions.** All arms share D's allowlist, the Gradle rule and `| tail`, `| head`. `none` and C have only search in addition: `Grep`, `Glob` and the
+  shell's read-only search and text programs (`grep`, `rg`, `find`, `ls`, `cat`, `awk` without `system`/`getline`/pipes/redirections, `sed -n` printing, `sort`, ...).
+  I allowed `awk` and `sed -n` there because the sandbox covers reads and they are how an agent slices grep output; interpreters stay out
+  to keep the arms' commands comparable and the audit readable.
+* **Direction of the bias.** Without scripting, bulk edits (a rename across files) cost one `Edit` per place in every arm, so absolute tokens and wall time are
+  above what a user would see. It should hurt `none` most: its usual `grep | xargs sed` and `python` scripts are gone, while D never had them; a result in favour of
+  myceliums is therefore partly a result against a restricted baseline, above all for `retry-max-attempts-to-max-retries`.
+* **Audit** per session, with raw-text tests that share no code with the hook (program names, addresses, absolute and parent paths, Gradle flags): what was refused, what
+  ran although the scan suspects it (*disagreements*, kept in `to_review` and to be read, because the scan also meets search patterns), kernel refusals, protected places in
+  results or edits. `TOKENS.md` counts them per arm, with the hook's refusals.
+* **Threat model.** A cooperative agent told to work in its checkout, audited per session. Not covered: **macOS's security services**: inside Claude Code's sandbox, lookups of `com.apple.SecurityServer` and
+  `com.apple.securityd.xpc` succeed (2.1.331; `secd`, `securityd`, `trustd.agent` and the token service do not), and its settings can only add services, not remove them. The keychain *files* are closed; whether these services would hand anything
+  to a process that cannot read them was not tried. `claude`, the myceliums server and the hooks run with the user's access. A listener a test opens on all interfaces could be reached from the local network while it runs (no task's own tests do; the agent may run others). Names of files outside may stay
+  visible; Spring's commits may be in the model's training data.
+* Checked with the mock API, hook on and, to see the layer below it, hook off (`probe --no-hook`): 31 places by name from a Python program inside the sandbox (keychains, Claude's history, other projects and credentials file, `.ssh`, checkouts, gold, parents, the other cache, history clone,
+  build cache, stored scans, `/private/tmp/claude-501`, `/Volumes`, `/Users/Shared`, the `/System/Volumes/Data` alias of the home directory, ...): all refused; loopback works; settings and wrapper files cannot be written. No connection to another machine was attempted.
+  Gradle in the sandbox: see below.
+* **Same instructions, one CLI.** Claude Code reads AGENTS.md only where there is no CLAUDE.md. Until #200 `setup-claude`
+  wrote one, so C alone missed Spring's AGENTS.md (found in the #182 review); now its block is in `.claude/rules/myceliums.md`. The harness adds nothing and refuses a `myc` whose setup hides AGENTS.md. Six of
+  the 20 parents have an AGENTS.md (`spel-simple-...`, `observation-...`, `content-negotiation-...`, `client-builders-...`,
+  `http-range-...`, `error-response-...`). A run uses one Claude Code binary (the file behind the link), refuses a resume or a
+  session with another version, and keeps auto-update off. Rows carry `api_calls` (model calls; the CLI's `num_turns` is tool calls + 1). The hook
+  answers with JSON, so a refusal shows its reason without the hook's command line.
+
+`io.spring.develocity.conventions` (0.0.22 and 0.0.25, read from its source; the scan and
+cache conventions are identical in both, the plugin class differs, and both check `--no-scan`):
+
+* **Build scans** are published to `https://ge.spring.io` only if authenticated
+  (`publishIfAuthenticated`); with `--no-scan` the scan conventions are not applied. No access
+  key is set on this machine (no `DEVELOCITY_*`/`GRADLE_ENTERPRISE_*` variable, no key file
+  in `~/.gradle`), and no log mentions a published scan. `~/.gradle/build-scan-data`
+  holds three scan payloads written locally (1.9 MB): they contain the user name and local
+  paths. The evidence says they were not sent; it is absence of evidence of an
+  upload, not a packet capture.
+* **Remote build cache:** on by default whenever Gradle's build cache is
+  (`org.gradle.caching=true` in Spring), read-only, at `https://ge.spring.io`
+  (pushing needs a key and a CI). The first build into an empty `~/.gradle` took 13
+  tasks from a cache, which points to it having been read. Gradle turns the
+  remote cache off with `--offline` (its documentation; not yet observed here).
+
+**Mock validation** (no model call, Claude Code 2.1.331, graph-only index, shared path), on `spel-simple-context-restricted-conversion`; the scripted session
+searches, runs `myc callers`, reads and edits the primary file and runs one command.
+
+| Arm | Isolation | Tools offered | Search | `myc callers` | Edit graded |
+|---|---|---|---|---|---|
+| none | no problem; AGENTS.md in the first request | Bash, Edit, Glob, Grep, Read, Write | Grep ran | `command not found`, as it must | yes |
+| C | no problem; AGENTS.md and the routing block | the same + 9 myceliums tools | Grep ran | answered from the index | yes; setup-claude's files not counted |
+| D | no problem; AGENTS.md | without Grep and Glob | refused; the refusal names neither the checkout nor the hook | answered from the index | yes |
+
+The table is the probe of 24 November (arms `none`, C, D, Claude Code's own sandbox, the derived index, shared path, the `myc` below): `myc` answers from the index in C and D and is not
+found in `none`, AGENTS.md reaches every arm, C also gets the routing block (`.claude/rules/myceliums.md`; setup writes no CLAUDE.md), no isolation problem. Gradle in the session and the grading: below. The mock gives every answer one message id, so `api_calls` is 1 there. No real session has run.
+
+**Binary.** C and D use `myc` built from main at `787920c` (sha256 `bf84b0e854f6`), so arm C measures the setup as it is now (#200), without a workaround. The indexes stay valid: between `388c6e1`, which built the base index and the derived ones, and `787920c` nothing under `crates/` changed
+but `crates/myceliums-mcp/src/embedding_jobs.rs` (#201: the job releases the repository's lock before it reports its end; no effect on the graph or the vectors of a complete index). Outside it: `myc/src/commands/{setup_claude,setup_editors,instructions,routing,doctor,mod}.rs`, `cli.rs`, `main.rs` and `setup/editors/claude.rs`.
+`Cargo.lock` is the same.
+
+**Gradle in the sandbox.** The sandboxes' loopback rule does not cover IPv4-mapped IPv6 addresses, which a JVM uses by default: a 10-line Java program reaches `127.0.0.1` with `-Djava.net.preferIPv4Stack=true` and is refused without it. Environment variables and system properties reach the
+daemon and the test executors, but not Gradle's process-isolated workers (checkstyle, validatePlugins, `:spring-oxm:xjc`); that they start with an empty environment is inferred from this, not read in Gradle's source. So builds in prechecks, sessions and grading, in every arm, run on a **copy of the JDK** made by
+[`groundtruth/make_jdk_ipv4.py`](groundtruth/make_jdk_ipv4.py): its `bin/java` is a two-line script that runs the renamed launcher with the flag. Nothing else differs; the original is untouched ([`groundtruth/jdk_ipv4.json`](groundtruth/jdk_ipv4.json): hashes of the two changed files and of the original tree). A session or a sandboxed
+precheck with another JDK is refused. **The copy is for offline builds only**; the warm-up uses the original JDK (it refuses the copy) and `~/.gradle`. Checked offline by command line only: clients, daemons, workers and test executors all ran from the copy with the flag (none from the original), and `javaToolchains` lists the copy ("Current JVM")
+and no other JDK. With it:
+
+| | Task | Result |
+|---|---|---|
+| Grading profile | the 8 tasks above | valid; buildSrc's checkstyle and validatePlugins run, the former `-x` excludes are gone from the commands, the hook's rule and the build note |
+| Claude Code's Bash sandbox (2.1.331, mock API), arms `none`, C, D | `spel-simple-...` (Gradle 9.9.0) | `BUILD SUCCESSFUL` in 67-68 s, tests run (39-45 s with a warm shared home); grading 28 s |
+| Claude Code's Bash sandbox, arm `none` | `type-mismatch-...` (Gradle 9.2.1) | `BUILD SUCCESSFUL` in 112 s with `:spring-oxm:xjc` |
+
+The scripted edit is a comment, so the repository's own tests pass in the session and the commit's tests fail in the grading, as they must. Harmless noise: "Could not start the FSEvents stream".
+
+**A Gradle home per session and per grading.** Sessions and gradings each start with an empty Gradle home in the session's directory (`GRADLE_USER_HOME`): links to the installed distributions and nothing else, so no other build's logs, scans, compiled classes or caches are there, and what an agent's builds leave does not reach the grading or a
+later session. Dependencies come read-only from a frozen copy of `modules-2` (`agent_eval.py gradle-cache`, `GRADLE_RO_DEP_CACHE`, default `~/.cache/gradle-ro`; 4,909 files, 1.3 GB, downloaded artifacts and metadata only); `~/.gradle` itself is closed but for the distributions. Price: Gradle's own caches (about 560 MB, deleted with the session) and their time
+are made anew, in the session and in the grading, the same in every arm. An earlier version closed old logs and scans one by one (450 bytes of the sandbox's 1 MB command line each). Those of 23-24 November (340 files) were moved to the evaluation's cache, none deleted.
+
+**Login.** The CLI itself runs unsandboxed with the caller's normal login (macOS keychain); only what the agent executes is sandboxed. Claude Code's sandbox cannot close the keychain *services* (above), so a dedicated login remains Marc's decision. An alternative not built: a fixed helper outside the sandbox that runs one allowed Gradle command for the agent;
+it would give the agent's code (tests, build scripts) the caller's files and network, so it would need a sandbox of its own, and is not needed now.
+
+```bash
+python3 evals/agent/agent_eval.py --tasks $T index --repo spring-spel-simple-context-restricted-conversion --skip-embeddings --myc $MYC
+python3 evals/agent/agent_eval.py --tasks $T probe --label v183 --task spel-simple-context-restricted-conversion \
+    --conditions none,C,D --bash --profile realistic --timeout 400 --myc $MYC --grep SimpleEvaluationContext --callers withMethodResolvers \
+    --edit-file spring-expression/src/main/java/org/springframework/expression/spel/support/SimpleEvaluationContext.java \
+    --edit-old "public final class SimpleEvaluationContext implements EvaluationContext {" \
+    --edit-new "public final class SimpleEvaluationContext implements EvaluationContext { // probe" \
+    --edit-command "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain :spring-expression:test --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests 2>&1 | tail -15"
+```
+
 ## Replaying myceliums calls (#181)
 
 `agent_eval.py replay` measures a change to myceliums' answer format or tool

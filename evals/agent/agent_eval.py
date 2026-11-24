@@ -28,6 +28,7 @@ import datetime as dt
 import json
 import os
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
@@ -48,16 +49,19 @@ def _default_models() -> str:
 
 def cmd_fetch(args) -> int:
     repos = config.load_repos()
-    if args.repo:
-        repos = {k: v for k, v in repos.items() if k in set(args.repo)}
+    # A task file with its own pins (#183) fetches those by default.
+    only = set(args.repo or config.task_file_repos())
+    if only:
+        repos = {k: v for k, v in repos.items() if k in only}
     prep.fetch(repos)
     return 0
 
 
 def cmd_index(args) -> int:
-    only = set(args.repo) if args.repo else None
+    only = set(args.repo or config.task_file_repos()) or None
     prep.index(config.load_repos(), args.myc, args.models_dir, only, record_only=args.record_only,
-               default_config=set(args.default_config or []), skip_embeddings=args.skip_embeddings)
+               default_config=set(args.default_config or []), skip_embeddings=args.skip_embeddings,
+               base=Path(args.base).resolve() if args.base else None, record_difference=args.record_graph_difference)
     return 0
 
 
@@ -182,13 +186,29 @@ def cmd_probe(args) -> int:
             sys.exit(f"{run_dir} exists; pick another --label")
         log_dir = run_dir / "mock"
         log_dir.mkdir(parents=True)
-        api = mockapi.MockAPI(log_dir, args.grep, args.callers).start()
+        edit = None
+        if args.edit_file:
+            edit = {"file": str(config.work_root() / config.work_name(repos[task["repo"]]) / args.edit_file), "old": args.edit_old,
+                    "new": args.edit_new, "command": args.edit_command}
+        api = mockapi.MockAPI(log_dir, args.grep, args.callers, edit=edit).start()
         cfg.extra_env = mockapi.session_env(api.url)
+        if args.no_hook:
+            cfg.extra_env["AEVAL_PROBE_NO_HOOK"] = "1"
         try:
             Runner(cfg, [task], repos).run(only_tasks={task["id"]}, reps=[1], conditions=[cond])
         finally:
             api.stop()
         findings = probe.summarise(run_dir, cond)
+        rows = [json.loads(x) for x in (run_dir / "results.jsonl").read_text().splitlines() if x.strip()] \
+            if (run_dir / "results.jsonl").exists() else []
+        if rows and rows[-1].get("edit"):  # #183: what the grading made of the scripted edit
+            e = rows[-1]["edit"]
+            findings["edit"] = {k: e.get(k) for k in ("files_changed", "file_recall", "file_precision",
+                                                      "files_by_kind", "dependents", "tests_passed", "success",
+                                                      "test_overlay")}
+            findings["edit"]["test"] = {k: (e.get("test") or {}).get(k) for k in ("command", "returncode", "seconds")}
+            findings["status"] = rows[-1]["status"]
+            findings["tool_errors"] = rows[-1].get("tool_errors")
         print(json.dumps(findings, indent=1))
         ok &= not findings.get("problems")
     return 0 if ok else 1
@@ -265,6 +285,19 @@ def cmd_export(args) -> int:
     out = report.export(args.label, meta)
     print(f"exported to {out}")
     return 0
+
+
+def cmd_pilot(args) -> int:
+    """The pilot of #183: cost and time projected from arm none, and the ceiling check."""
+    from aeval import report_commit
+    drawn = config.load_json(config.EVAL_DIR / "groundtruth" / "pilot_183.json")
+    rows = {}
+    for line in (config.RUNS_DIR / args.label / "results.jsonl").read_text().splitlines():
+        if line.strip() and (r := json.loads(line)).get("final"):
+            rows[r["run_id"]] = r
+    out = report_commit.pilot(list(rows.values()), config.load_tasks(), drawn["none"])
+    print(json.dumps(out, indent=1))
+    return 1 if out["stop"] else 0
 
 
 def cmd_regrade(args) -> int:
@@ -399,6 +432,29 @@ def cmd_replay(args) -> int:
     return 1 if differ else 0
 
 
+def cmd_gradle_cache(args) -> int:
+    """Freeze the resolved dependencies of ~/.gradle for offline builds (#183)."""
+    from aeval import isolation
+    print(json.dumps(isolation.freeze_dependencies(isolation.user_gradle_home() / "caches", isolation.dependency_cache())))
+    return 0
+
+
+def _precheck_sandbox(repo: dict, tmp: Path):
+    """The grading sandbox of a session, for a precheck (#183)."""
+    from aeval import isolation
+    if not isolation.available():
+        sys.exit("--sandbox needs macOS's sandbox-exec")
+    if problem := isolation.problem(config.repo_env(repo)):
+        sys.exit(problem)
+
+    def make(work: Path):
+        env = {**config.repo_env(repo), **isolation.session_environment(tmp, "gg")}
+        prof = tmp / "grading.sb"
+        prof.write_text(isolation.grading_profile(tmp, work, env))
+        return isolation.sandboxed([], prof), isolation.session_environment(tmp, "gg")
+    return make
+
+
 def cmd_precheck_edit(args) -> int:
     """Run every edit task's test command on the pinned (parent) commit and
     record the result in the task file (#178): it must fail there."""
@@ -415,12 +471,26 @@ def cmd_precheck_edit(args) -> int:
         if args.task and t["id"] not in args.task:
             continue
         checkout = config.cache_dir() / "repos" / t["repo"]
-        rec = editgrade.precheck(t, checkout, scratch, repos[t["repo"]]["commit"],
-                                 int(t.get("test_timeout_s", 900)))
+        repo = repos[t["repo"]]
+        gold = config.gold_dir(t["repo"]) if repo.get("gold_commit") else None
+        tmp = Path(tempfile.mkdtemp(dir=config.session_root(repo))) if args.sandbox else None
+        rec = editgrade.precheck(t, checkout, scratch, repo["commit"], int(t.get("test_timeout_s", 900)),
+                                 gold=gold, env=config.repo_env(repo), gold_commit=repo.get("gold_commit"),
+                                 gold_runs=args.gold_runs, log_dir=Path(args.logs) if args.logs else None,
+                                 sandbox=_precheck_sandbox(repo, tmp) if args.sandbox else None)
+        if tmp:
+            config.remove_tree(tmp, config.session_root(repo))
         t["precheck"] = rec
-        bad += not rec["fails_on_parent"]
-        print(f"{t['id']}: test command {'fails' if rec['fails_on_parent'] else 'does NOT fail'} on the parent "
-              f"(exit {rec['returncode']}{', timed out' if rec['timed_out'] else ''})")
+        ok = rec["fails_on_parent"] and rec.get("passes_on_gold", True)
+        bad += not ok
+        line = (f"{t['id']}: test command {'fails' if rec['fails_on_parent'] else 'does NOT fail'} on the parent "
+                f"(exit {rec['returncode']}{', timed out' if rec['timed_out'] else ''}, {rec['parent_failure']}, {rec['seconds_parent']:.0f} s)")
+        if gold is not None:
+            line += (f"; {'passes' if rec['passes_on_gold'] else 'does NOT pass'} on the gold commit "
+                     f"({rec['gold_passes']}/{rec['gold_runs']} runs, {rec['gold_failure']}, {rec['seconds_gold_runs']} s)")
+        print(line, flush=True)
+        # Written after every task, so a long precheck run keeps what it has.
+        path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False) + "\n")
     return 1 if bad else 0
 
@@ -515,6 +585,11 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--repo", action="append")
     s.add_argument("--record-only", action="store_true",
                    help="describe an existing index (needs its analyze.log) instead of rebuilding it")
+    s.add_argument("--base", metavar="HOME", help="#183: an embedded index's home directory, built at the same work path: "
+                   "each selected repository's index is derived from it (newest first, each from the one before), "
+                   "embedding only changed symbols, and checked against a fresh graph-only build")
+    s.add_argument("--record-graph-difference", action="store_true", help="with --base, for measuring: record a derived "
+                   "graph that differs from a fresh one instead of stopping")
     s.add_argument("--skip-embeddings", action="store_true",
                    help="#182: no vectors (minutes instead of hours), for `run --mock-api` checks only; "
                         "a real run refuses such an index")
@@ -539,7 +614,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--condition", action="append", choices=config.CONDITIONS, help="only this condition")
     s.add_argument("--concurrency", type=int, default=3)
     s.add_argument("--max-retries", type=int, default=2, help="retries for transient API errors")
-    s.add_argument("--threshold", type=float, default=0.8, help="success = F1 >= threshold")
+    s.add_argument("--threshold", type=float, default=0.8, help="success = F1 >= threshold (answer lists; on edit tasks the tests decide)")
     s.add_argument("--max-utilization", type=float, default=0.97,
                    help="stop scheduling when the account's reported utilisation reaches this")
     s.add_argument("--max-sessions", type=int, help="hard cap on sessions launched by this invocation")
@@ -597,6 +672,14 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--models-dir", default=_default_models())
     s.add_argument("--bash", action="store_true")
     s.add_argument("--prompt-budget", action="store_true")
+    s.add_argument("--no-hook", action="store_true", help="isolated repositories (#183): leave the hook out, to show "
+                   "what Claude Code's own sandbox refuses (mock API only)")
+    s.add_argument("--edit-file", help="edit tasks (#183): file (relative to the checkout) the script reads and edits")
+    s.add_argument("--edit-old", help="text the scripted Edit replaces")
+    s.add_argument("--edit-new", help="replacement text")
+    s.add_argument("--edit-command", help="command the scripted session then runs in Bash (the task's test command); "
+                   "several separated by a line of three dashes")
+    s.add_argument("--profile", choices=sorted(config.PROFILES))
     s.set_defaults(reps=1, concurrency=1, max_retries=0, threshold=0.8, max_utilization=0.97,
                    max_sessions=None, tool_search=None, claude=None, fn=cmd_probe)
 
@@ -629,9 +712,21 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--check", action="store_true")
     s.set_defaults(fn=cmd_report)
 
+    s = sub.add_parser("pilot", help="#183: project the main run's cost and time from the pilot's sessions of arm none")
+    s.add_argument("label")
+    s.set_defaults(fn=cmd_pilot)
+
+    s = sub.add_parser("gradle-cache", help="freeze the resolved dependencies of ~/.gradle for the offline builds (#183)")
+    s.set_defaults(fn=cmd_gradle_cache)
+
     s = sub.add_parser("precheck-edit", help="check that each edit task's test command fails on the pinned "
                        "(parent) commit, and record it in the task file (#178)")
     s.add_argument("--task", action="append", help="only these task ids")
+    s.add_argument("--gold-runs", type=int, default=1, help="#183: run the tests this often on the gold commit "
+                   "(executed, not cached); all must pass, or the task is flaky")
+    s.add_argument("--logs", help="directory for the full test output of every run")
+    s.add_argument("--sandbox", action="store_true", help="#183: run under the grading sandbox and environment a session's "
+                   "test command gets")
     s.set_defaults(fn=cmd_precheck_edit)
 
     s = sub.add_parser("tokens", help="per-tool token attribution and cost of a committed run (#178)")

@@ -19,6 +19,9 @@ from .grading import grade, is_success
 from .stats import mean, median, paired_bootstrap
 from .stream import parse_transcript
 
+# What a report on edit tasks needs of a task (#183).
+EDIT_TASK_FIELDS = ("gold_files", "primary_files", "either", "equivalents", "weak_test", "strata")
+
 COMPACT_FIELDS = [
     "run_id", "task_id", "repo", "type", "condition", "rep", "attempt", "status",
     "answer", "f1", "precision", "recall", "success", "tp", "fp", "neutral", "n_gold",
@@ -40,6 +43,8 @@ COMPACT_FIELDS = [
     "attribution_method", "tokens_by_category", "tokens_by_class", "result_tokens_by_category", "thinking_tokens",
     "attribution_residual", "cost_by_category", "cost_by_class", "priced_cost_usd", "edit", "models",
     "estimated_tokens_by_category", "search_audit",
+    # isolated sessions (#183)
+    "isolation_audit", "api_calls", "weak_test",
 ]
 
 METRICS = [
@@ -75,6 +80,8 @@ def export(label: str, extra_meta: dict) -> Path:
     tasks = {t["id"]: t for t in config.load_tasks()}
     threshold = extra_meta.get("success_threshold", 0.8)
     for row in rows.values():
+        if row.get("edit") is not None:  # graded from the working copy; there is no answer to grade again (#183)
+            continue
         g = grade(tasks[row["task_id"]], row["answer"], threshold)
         row.update(f1=round(g.f1, 4), precision=round(g.precision, 4), recall=round(g.recall, 4),
                    success=is_success(g.f1, threshold), tp=g.tp, fp=g.fp, neutral=g.neutral,
@@ -96,7 +103,8 @@ def export(label: str, extra_meta: dict) -> Path:
     # The report is rendered from this snapshot, not from the live tasks.json,
     # so later edits to the task set cannot silently change a committed report.
     snapshot = [{"id": t["id"], "repo": t["repo"], "type": t["type"], "answer_kind": t["answer_kind"],
-                 "n_gold": len(t["gold"]), "question": t["question"],
+                 "n_gold": len(t["gold"] if "gold" in t else t["gold_files"]), "question": t["question"],
+                 **({k: t[k] for k in EDIT_TASK_FIELDS if k in t} if t["answer_kind"] == "diff" else {}),
                  **({"category": t["category"]} if t.get("category") else {})} for t in config.load_tasks()]
     (out_dir / "tasks_snapshot.json").write_text(json.dumps(snapshot, indent=1, ensure_ascii=False) + "\n")
     meta = dict(extra_meta)
@@ -342,6 +350,8 @@ def regrade(label: str, note: str) -> int:
     tasks = {t["id"]: t for t in config.load_tasks()}
     lines = (res_dir / "results.jsonl").read_text().splitlines()
     rows = [json.loads(x) for x in lines if x.strip()]
+    if any(r.get("edit") is not None for r in rows):
+        raise SystemExit(f"{label} has edit tasks: they are graded from the working copy and cannot be graded again")
     changed = 0
     out = []
     for row in rows:
