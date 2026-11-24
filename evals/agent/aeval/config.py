@@ -27,7 +27,9 @@ RESULTS_DIR = EVAL_DIR / "results"  # compact, committed results
 # (`--setting-sources project`) and differ only in what `myc setup-claude`
 # put there; see VARIANTS. #178 adds `D`, "myceliums only": the MCP server and
 # `Read`, with every way to search denied.
-CONDITIONS = ("with", "without", "none", "A", "C", "D", "E")
+# `none-docs` (#183) is `none` with one more sentence in the prompt of an edit task.
+CONDITIONS = ("with", "without", "none", "A", "C", "D", "E", "none-docs")
+DOCS_SENTENCE = "Also update existing documentation and tests that the change makes wrong or incomplete."
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,7 @@ class Variant:
     agent: bool = False  # ... including the code-explorer subagent, and the Agent tool
     legacy: bool = False  # the pilot's flags: no setting sources, CLAUDE.md disabled
     no_search: bool = False  # #178: Grep and Glob denied, search commands in Bash blocked by a hook
+    prompt_extra: str = ""  # #183: a sentence this arm's prompt has and no other (edit tasks only)
 
 
 VARIANTS = {
@@ -49,6 +52,7 @@ VARIANTS = {
     "C": Variant(mcp=True, setup_claude=True),
     "D": Variant(mcp=True, no_search=True),
     "E": Variant(mcp=True, setup_claude=True, agent=True),
+    "none-docs": Variant(mcp=False, prompt_extra=DOCS_SENTENCE),
 }
 
 # Claude Code's built-in subagents (2.1.329). Variant E denies them, so the

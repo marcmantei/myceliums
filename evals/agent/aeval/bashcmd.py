@@ -479,12 +479,13 @@ NO_CD = ("`cd` (the shell already stands at the top of the working copy: name fi
 
 
 def isolated_bash(command: str, extra=(), here: str | None = None, root: str | None = None,
-                  search: bool = False) -> tuple[bool, list[str]]:
+                  search: bool = False, cd: bool = False) -> tuple[bool, list[str]]:
     """The Bash policy of an isolated session: ``(ok, what is denied)``.
     ``here`` is the shell's directory, ``root`` the working copy; ``search``
     adds :data:`SEARCH_SHELL` (every arm but D). ``cd`` is refused in every arm,
     with the reason: Claude Code's permission layer refuses most commands with
-    it, without one, and an agent then gave up Bash altogether (#183)."""
+    it, without one, and an agent then gave up Bash altogether (#183). With
+    ``cd`` it is let through, and the directory followed, as before that."""
     here, root = here or root or "/", root or here or "/"
     if not _inside(here, root, root):
         return False, ["a shell outside the working copy"]
@@ -512,7 +513,7 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
             elif any(outside(w, here, root) for w in words[1:]):
                 denied.append("a path outside the working copy")
             continue
-        if prog in ("cd", "pushd", "popd"):
+        if prog in ("cd", "pushd", "popd") and not cd:
             denied.append(NO_CD)
             if any(outside(a, here, root) for a in args if not a.startswith("-")):
                 denied.append("a path outside the working copy")
@@ -547,7 +548,7 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
         if any(i not in patterns and touches_dot_git(a) for i, a in enumerate(args)):
             denied.append("a path inside .git")
             continue
-        if prog in PATH_PROGRAMS and any(_SETTINGS.search("/" + a) for a in args):
+        if prog in PATH_PROGRAMS and prog != "cd" and any(_SETTINGS.search("/" + a) for a in args):
             denied.append("Claude Code's settings")
             continue
         if prog in PATH_PROGRAMS and any("gradlew" in a or "gradle/wrapper" in a for a in args):
@@ -580,18 +581,23 @@ def isolated_bash(command: str, extra=(), here: str | None = None, root: str | N
             ok = not why
         if not ok:
             denied.extend(why)
+        elif prog == "cd":
+            target = os.path.realpath(os.path.join(here, ([a for a in args if not a.startswith("-")] or ["."])[0]))
+            if not os.path.isdir(target):
+                denied.append("`cd` to a directory that does not exist")
+            here = target
     return not denied, denied
 
 
 def isolated_tool(tool: str, inp: dict, root: str, here: str | None = None, extra=(), search: bool = False,
-                  readable=()) -> tuple[str, str] | None:
+                  readable=(), cd: bool = False) -> tuple[str, str] | None:
     """Why a tool call is refused in an isolated session, as ``(kind,
     reason)`` (``outside``, ``network``, ``gradle`` or ``other``), or None.
     ``readable``: directories outside the working copy `Read` may use (the
     session's own saved tool results)."""
     here = here or root
     if tool == "Bash":
-        ok, denied = isolated_bash(str(inp.get("command") or ""), extra, here, root, search)
+        ok, denied = isolated_bash(str(inp.get("command") or ""), extra, here, root, search, cd)
         if ok:
             return None
         text = ", ".join(dict.fromkeys(denied))
@@ -655,7 +661,7 @@ def isolated_hook(argv: list[str], stdin=sys.stdin, stdout=sys.stdout) -> int:
         readable = [os.path.join(os.path.dirname(tp), sid, "tool-results")] if tp and sid else []
         extra = json.loads(opts.get("--allow-json") or "[]")
         why = isolated_tool(str(event.get("tool_name") or ""), event.get("tool_input") or {}, root,
-                            event.get("cwd") or root, extra, search, readable)
+                            event.get("cwd") or root, extra, search, readable, opts.get("--cd") == "yes")
     except Exception as exc:  # noqa: BLE001 - a hook that cannot decide refuses
         return _deny(stdout, f"{ISOLATED_MARKER} the check failed ({type(exc).__name__})")
     if why is None:

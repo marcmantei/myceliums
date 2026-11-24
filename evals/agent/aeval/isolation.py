@@ -103,7 +103,12 @@ def freeze_dependencies(src: Path, dst: Path) -> dict:
     subprocess.run(["cp", *(["-c"] if sys.platform == "darwin" else []), "-R", str(src / "modules-2"), str(dst / "modules-2")], check=True)
     for p in [*(dst / "modules-2").rglob("*.lock"), dst / "modules-2" / "gc.properties"]:
         p.unlink(missing_ok=True)
-    files = sorted((str(p.relative_to(dst)), p.stat().st_size) for p in dst.rglob("*") if p.is_file())
+    return listing(dst)
+
+
+def listing(frozen: Path) -> dict:
+    """What a frozen copy holds (names and sizes); the hash names it."""
+    files = sorted((str(p.relative_to(frozen)), p.stat().st_size) for p in frozen.rglob("*") if p.is_file())
     return {"files": len(files), "bytes": sum(n for _, n in files),
             "listing_sha256": hashlib.sha256(json.dumps(files).encode()).hexdigest()}
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import math
 import random
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import NormalDist
 
@@ -27,6 +28,32 @@ from .stats import mean, paired_bootstrap, per_success_bootstrap, percentile
 ARMS = ("none", "C", "D")
 PAIRS = (("C", "none"), ("D", "none"), ("C", "D"))
 N_TASKS, N_REPS = 20, 3
+
+
+@dataclass(frozen=True)
+class Design:
+    """The arms of a main run and its pairs (first minus second): those that are
+    tested (Holm over them, times the primary outcomes) and those only described."""
+
+    arms: tuple[str, ...]
+    tested: tuple[tuple[str, str], ...]
+    described: tuple[tuple[str, str], ...] = ()
+
+    @property
+    def pairs(self) -> tuple[tuple[str, str], ...]:
+        return self.tested + self.described
+
+
+REGISTERED = Design(ARMS, PAIRS)
+# Registered with the arm `none-docs` (README): only a gain over the reminder counts as more than a reminder.
+CONTROLLED = Design(("none", "none-docs", "C"), (("C", "none"), ("C", "none-docs")), (("none-docs", "none"),))
+DESIGNS = {frozenset(d.arms): d for d in (REGISTERED, CONTROLLED)}
+
+
+def design_of(rows: list[dict]) -> Design:
+    return DESIGNS.get(frozenset(r["condition"] for r in rows), REGISTERED)
+
+
 SESSIONS = N_TASKS * N_REPS * len(ARMS)
 # Outcome (a): what the change needs outside the primary files' directories. ALL_TESTS adds the commit's other test
 # changes: the outcome registered first (README), now a secondary one.
@@ -175,11 +202,11 @@ def applies(rows: list[dict], tasks: list[dict]) -> bool:
     return bool(rows) and all(r.get("edit") for r in rows) and all(t.get("primary_files") and "strata" in t for t in tasks)
 
 
-def _co_primary(rows, by_id, ids, comments=False, n=10_000) -> dict:
+def _co_primary(rows, by_id, ids, comments=False, n=10_000, design: Design = REGISTERED) -> dict:
     values = {"recall": per_task(rows, lambda r: recall(by_id[r["task_id"]], r["edit"]["files_changed"], comments=comments)),
               "tokens": per_task(rows, lambda r: spend(r)[0]), "cost": per_task(rows, lambda r: spend(r)[1])}
     out = {}
-    for a, b in PAIRS:
+    for a, b in design.pairs:
         for key, v in values.items():
             ps = pairs(v, ids, a, b)
             out.setdefault(f"{a} vs {b}", {})[key] = {**paired_bootstrap(ps, n).as_dict(), "p": bootstrap_p(ps, n),
@@ -225,16 +252,16 @@ def harm_text(h: dict) -> str:
             f"and up to {h['share']:.1%} of tasks worse, each by at most everything (exact one-sided 95 % bound); tasks worse/better: {h['worse']}/{h['better']} of {h['n']}")
 
 
-def pooled(values: dict, by_id: dict, ids: list[str], n_resamples: int = 10_000, seed: int = 0) -> dict:
+def pooled(values: dict, by_id: dict, ids: list[str], n_resamples: int = 10_000, seed: int = 0, design: Design = REGISTERED) -> dict:
     """Sensitivity: the recall over all units pooled, so that a task counts with
     its number of counted dependents (a task with one counts as much as one
     with many in the registered mean). Bootstrap over tasks as everywhere."""
     weight = {t: len(counted(by_id[t])) for t in ids}
     out: dict = {"units": sum(weight.values()), "arms": {}, "pairs": {}}
-    for c in ARMS:
+    for c in design.arms:
         have = [t for t in ids if c in values.get(t, {})]
         out["arms"][c] = sum(weight[t] * values[t][c] for t in have) / sum(weight[t] for t in have) if have else float("nan")
-    for a, b in PAIRS:
+    for a, b in design.pairs:
         have = [(weight[t], values[t][a] - values[t][b]) for t in ids if a in values.get(t, {}) and b in values.get(t, {})]
         if not have:
             continue
@@ -258,28 +285,33 @@ def decision() -> dict | None:
     return json.loads(DECISION.read_text()) if DECISION.exists() else None
 
 
-def analyse(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000, sole: bool = False) -> dict:
+def analyse(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000, sole: bool = False, design: Design | None = None) -> dict:
     """``sole``: tokens are the sole primary outcome (arm ``none`` was at the
     ceiling, :func:`decide`); the recall's differences are a harm check."""
     measured(tasks)
+    design = design or design_of(rows)
     by_id = {t["id"]: t for t in tasks}
     ids = [t["id"] for t in tasks]
-    co = _co_primary(rows, by_id, ids, n=n_resamples)
-    tests = [(p, k) for p in co for k in (("tokens",) if sole else ("recall", "tokens"))]  # cost is not a test
+    co = _co_primary(rows, by_id, ids, n=n_resamples, design=design)
+    named = {f"{a} vs {b}" for a, b in design.tested}
+    tests = [(p, k) for p in co if p in named for k in (("tokens",) if sole else ("recall", "tokens"))]  # cost is not a test
     for (p, k), adj in zip(tests, holm([co[p][k]["p"] for p, k in tests])):
         co[p][k]["p_holm"] = adj
+    for p in set(co) - named:  # described, not tested
+        for k in co[p]:
+            co[p][k].pop("p", None)
     mine = per_task(rows, lambda r: recall(by_id[r["task_id"]], r["edit"]["files_changed"]))
     for p, s in co.items():
         s["recall"]["harm"] = harm_check(pairs(mine, ids, *p.split(" vs ")), s["recall"])
     secondary: dict = {}
     for key, _label, _fmt, fn in SECONDARY:
         v = per_task(rows, lambda r: fn(by_id[r["task_id"]], r))
-        secondary[key] = {"means": {c: mean([v[t][c] for t in ids if c in v.get(t, {})]) for c in ARMS},
-                          "pairs": {f"{a} vs {b}": paired_bootstrap(pairs(v, ids, a, b), n_resamples).as_dict() for a, b in PAIRS}}
+        secondary[key] = {"means": {c: mean([v[t][c] for t in ids if c in v.get(t, {})]) for c in design.arms},
+                          "pairs": {f"{a} vs {b}": paired_bootstrap(pairs(v, ids, a, b), n_resamples).as_dict() for a, b in design.pairs}}
     for key, i in (("tokens_per_solved", 0), ("cost_per_solved", 1)):
-        total = {c: [sum(spend(r)[i] for r in rows if r["condition"] == c), sum(solved(r) for r in rows if r["condition"] == c)] for c in ARMS}
+        total = {c: [sum(spend(r)[i] for r in rows if r["condition"] == c), sum(solved(r) for r in rows if r["condition"] == c)] for c in design.arms}
         ps = {}
-        for a, b in PAIRS:
+        for a, b in design.pairs:
             per = [tuple(x for c in (a, b) for x in (
                 sum(spend(r)[i] for r in rows if r["task_id"] == t and r["condition"] == c),
                 sum(solved(r) for r in rows if r["task_id"] == t and r["condition"] == c))) for t in ids]
@@ -288,11 +320,11 @@ def analyse(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000, sole
     sens = {}
     for key, _label, keep, comments in SENSITIVITY:
         sub = [t for t in ids if keep(by_id[t])]
-        sens[key] = {"n_tasks": len(sub), "pairs": _co_primary([r for r in rows if r["task_id"] in sub], by_id, sub, comments, n_resamples)}
+        sens[key] = {"n_tasks": len(sub), "pairs": _co_primary([r for r in rows if r["task_id"] in sub], by_id, sub, comments, n_resamples, design)}
     count: dict = {}
     for r in rows:
         count.setdefault((r["task_id"], r["condition"]), set()).add(r["rep"])
-    missing = [f"{t}/{c}: {N_REPS - len(count.get((t, c), ()))}" for t in ids for c in ARMS if len(count.get((t, c), ())) < N_REPS]
+    missing = [f"{t}/{c}: {N_REPS - len(count.get((t, c), ()))}" for t in ids for c in design.arms if len(count.get((t, c), ())) < N_REPS]
     missing += [f"{N_TASKS - len(ids)} tasks"] if len(ids) < N_TASKS else []
     means = {c: {"recall": mean([x for r in rows if r["condition"] == c
                                  and (x := recall(by_id[r["task_id"]], r["edit"]["files_changed"])) is not None]),
@@ -300,8 +332,8 @@ def analyse(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000, sole
                                    and (x := recall(by_id[r["task_id"]], r["edit"]["files_changed"], ("comments",))) is not None]),
                  "sessions": sum(r["condition"] == c for r in rows),
                  "solved": sum(solved(r) for r in rows if r["condition"] == c),
-                 "incomplete_usage": sum(not spend(r)[2] for r in rows if r["condition"] == c)} for c in ARMS}
-    return {"sole_primary": "tokens" if sole else None, "co_primary": co, "secondary": secondary, "pooled": pooled(mine, by_id, ids, n_resamples), "sensitivity": sens, "missing": missing, "arms": means,
+                 "incomplete_usage": sum(not spend(r)[2] for r in rows if r["condition"] == c)} for c in design.arms}
+    return {"sole_primary": "tokens" if sole else None, "co_primary": co, "secondary": secondary, "pooled": pooled(mine, by_id, ids, n_resamples, design=design), "sensitivity": sens, "missing": missing, "arms": means,
             "undefined_recall": [t for t in ids if not counted(by_id[t])]}
 
 
@@ -333,7 +365,11 @@ def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tup
     sole = bool(d["ceiling"])
     other = [f"{k} {', '.join(seen)} instead of {d[k]}" for k, seen in (
         (k, sorted({str(r.get(k)) for r in rows} - {str(d[k])})) for k in ("claude_version", "model")) if seen]
-    a = analyse(rows, tasks, n_resamples, sole)
+    design = design_of(rows)
+    a = analyse(rows, tasks, n_resamples, sole, design)
+    numbers = {2: "two", 3: "three", 4: "four", 6: "six"}
+    k = len(design.tested)
+    which = "three pairs" if not design.described else "two pairs: " + ", ".join(f"`{x}` vs `{y}`" for x, y in design.tested)
     L = ["## Registered comparisons (#183)", "",
          f"Pre-registered in the README; the recall was redefined after the pilot in arm `none` and before any result of C or D. Unit: the task ({len(tasks)}), its repetitions averaged first; paired percentile "
          f"bootstrap over tasks ({n_resamples:,} resamples), 95 % intervals not corrected. Every difference is **first minus second**: "
@@ -342,9 +378,11 @@ def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tup
          "the session touched. *Tokens*: input including cache plus output per session, unsolved sessions included. p: two-sided, the bootstrap's. Cost is shown beside the tokens and not tested.", "",
          f"The decision recorded before the main run: {d['sessions']} sessions of arm `none` (Claude Code {d['claude_version']}, {d['model']}), mean recall {d['mean_recall']:.3f}, "
          f"ceiling {CEILING:.3f}; task file sha256 {d['tasks_sha256'][:12]}. "
-         + ("**Primary outcome: tokens alone.** Holm over the three token tests; the recall is a harm check: *detected* when its 95 % interval lies entirely below zero; not detected is no evidence "
+         + (f"**Primary outcome: tokens alone.** Holm over the {numbers[k]} token tests; the recall is a harm check: *detected* when its 95 % interval lies entirely below zero; not detected is no evidence "
             "that there is none, so the largest loss not excluded stands beside it." if sole else
-            "**Co-primary outcomes: recall and tokens.** Holm over the six tests (three pairs × two outcomes).")]
+            f"**Co-primary outcomes: recall and tokens.** Holm over the {numbers[2 * k]} tests ({which} × two outcomes).")
+         + (" " + ", ".join(f"`{x}` vs `{y}`" for x, y in design.described) + " is described, not tested. **Only a gain of C over `none-docs` counts as more than a reminder**; "
+            "a gain over `none` alone does not." if design.described else "")]
     if other:
         L += ["", f"**Not the decision's setup:** {'; '.join(other)}."]
     if a["missing"]:
@@ -352,44 +390,44 @@ def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tup
     if a["undefined_recall"]:
         L += ["", f"No counted dependent, so no recall: {', '.join(a['undefined_recall'])}."]
     L += ["", "| Arm | Sessions | Solved (tests pass) | Recall, mean over sessions | Sessions without a result event |", "|---|---:|---:|---:|---:|"]
-    for c in ARMS:
+    for c in design.arms:
         m = a["arms"][c]
         L.append(f"| `{c}` | {m['sessions']} | {m['solved']} | {_num(m['recall'], 'f3')} | {m['incomplete_usage']} |")
     L += ["", "Files in which only comments or documentation text change, apart (share of them touched, mean over sessions of tasks that have any): "
-          + "; ".join(f"`{c}` {_num(a['arms'][c]['comments'], 'f3')}" for c in ARMS) + ".",
+          + "; ".join(f"`{c}` {_num(a['arms'][c]['comments'], 'f3')}" for c in design.arms) + ".",
           "", "A session without a result event (timeout, crash) counts with the calls its transcript shows; its output tokens are a lower bound.",
           "", "| Pair | Tasks (recall) | Δ recall | p | Holm p | Tokens, ratio | Δ tokens | p | Holm p | Δ cost (USD) |",
           "|---|---:|---|---:|---:|---|---|---:|---:|---|"]
     for p, s in a["co_primary"].items():
         x, y = p.split(" vs ")
-        tested = f"{_p(s['recall']['p'])} | {_p(s['recall']['p_holm'])}" if not sole else "– | –"
-        L.append(f"| `{x}` vs `{y}` | {s['recall']['n_tasks']} | {_ci(s['recall'], 'f3')} | {tested} | "
-                 f"{_ratio(s['tokens'])} | {_ci(s['tokens'], 'int')} | {_p(s['tokens']['p'])} | {_p(s['tokens']['p_holm'])} | {_ci(s['cost'], 'usd')} |")
+        told = lambda o: f"{_p(o['p'])} | {_p(o['p_holm'])}" if "p_holm" in o else "– | –"  # noqa: E731
+        L.append(f"| `{x}` vs `{y}` | {s['recall']['n_tasks']} | {_ci(s['recall'], 'f3')} | {told(s['recall'])} | "
+                 f"{_ratio(s['tokens'])} | {_ci(s['tokens'], 'int')} | {told(s['tokens'])} | {_ci(s['cost'], 'usd')} |")
     if sole:
         L += ["", "Harm check of the first arm (recall, not a test):", ""] + [
             f"* `{p}`: {harm_text(s['recall']['harm'])}." for p, s in a["co_primary"].items()]
     L += ["", "### Secondary outcomes", "", "Not tested and not corrected. Per solved task: the sum over all sessions ÷ the solved sessions, ratio first ÷ second; "
           "– where an arm solved nothing.", "",
-          "| Outcome | " + " | ".join(f"`{c}`" for c in ARMS) + " | " + " | ".join(a["co_primary"]) + " |",
-          "|---|" + "---:|" * len(ARMS) + "---|" * len(PAIRS)]
+          "| Outcome | " + " | ".join(f"`{c}`" for c in design.arms) + " | " + " | ".join(a["co_primary"]) + " |",
+          "|---|" + "---:|" * len(design.arms) + "---|" * len(design.pairs)]
     for key, label, kind, _fn in SECONDARY:
         s = a["secondary"][key]
-        L.append(f"| {label} | " + " | ".join(_num(s["means"][c], kind) for c in ARMS) + " | " + " | ".join(_ci(s["pairs"][p], kind) for p in a["co_primary"]) + " |")
+        L.append(f"| {label} | " + " | ".join(_num(s["means"][c], kind) for c in design.arms) + " | " + " | ".join(_ci(s["pairs"][p], kind) for p in a["co_primary"]) + " |")
     for key, label, kind in (("tokens_per_solved", "Tokens per solved task", "int"), ("cost_per_solved", "Cost per solved task (USD)", "usd")):
         s = a["secondary"][key]
-        L.append(f"| {label} | " + " | ".join(_num(s["means"][c], kind) for c in ARMS) + " | "
+        L.append(f"| {label} | " + " | ".join(_num(s["means"][c], kind) for c in design.arms) + " | "
                  + " | ".join(_ratio(s["pairs"][p], "ratio") for p in a["co_primary"]) + " |")
     L += ["", "### Sensitivity", "", "The co-primary differences again, not tested.", "",
           "| Analysis | Tasks | " + " | ".join(f"Δ recall, {p}" for p in a["co_primary"]) + " | " + " | ".join(f"Tokens, {p}" for p in a["co_primary"]) + " |",
-          "|---|---:|" + "---|" * (2 * len(PAIRS))]
+          "|---|---:|" + "---|" * (2 * len(design.pairs))]
     for key, label, _keep, _c in SENSITIVITY:
         s = a["sensitivity"][key]
         L.append(f"| {label} | {s['n_tasks']} | " + " | ".join(_ci(s["pairs"][p]["recall"], "f3") for p in a["co_primary"]) + " | "
                  + " | ".join(_ratio(s["pairs"][p]["tokens"]) for p in a["co_primary"]) + " |")
     pool = a["pooled"]
     L.append(f"| units pooled ({pool['units']} dependents, a task weighs as many as it has) | {len(tasks)} | "
-             + " | ".join(_ci(pool["pairs"][p], "f3") if p in pool["pairs"] else "–" for p in a["co_primary"]) + " | " + " | ".join("–" for _ in PAIRS) + " |")
-    L += ["", "Pooled recall: " + "; ".join(f"`{c}` {_num(pool['arms'][c], 'f3')}" for c in ARMS) + "."]
+             + " | ".join(_ci(pool["pairs"][p], "f3") if p in pool["pairs"] else "–" for p in a["co_primary"]) + " | " + " | ".join("–" for _ in design.pairs) + " |")
+    L += ["", "Pooled recall: " + "; ".join(f"`{c}` {_num(pool['arms'][c], 'f3')}" for c in design.arms) + "."]
     return L + [""], a
 
 

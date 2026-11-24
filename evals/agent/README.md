@@ -1738,7 +1738,7 @@ python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-repla
     --profile realistic --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
 ```
 
-Arms: `none` (no myceliums: the issue's arm A, the baseline), C (what `myc setup-claude --no-agent` installs) and D
+Arms (the control arm `none-docs` has a section of its own, below): `none` (no myceliums: the issue's arm A, the baseline), C (what `myc setup-claude --no-agent` installs) and D
 (myceliums only; search taken away). The first versions of this plan said `A,C,D`: in the harness `A` is the MCP server alone, so that
 run would have had no baseline. Every arm's Bash is the hook's allowlist (below; file operations, git, `./gradlew`
 test runs); every arm has `Bash`, `Edit` and `Write`. Realistic profile:
@@ -1998,6 +1998,28 @@ Sockets: no remote connection in 4,610 samples. One TCP listener on all interfac
 *Noise only*: the whole between-task SD is session noise and no task favours an arm. Then the difference of two arms' 3-repetition means has SD √(2/3) of it, 0.35, and 0.22 would be detectable with 80 % for one test, 0.27 at the first Holm step over six. With any task × arm effect the SD can be larger, and with one session per task the noise cannot be told from the task.
 *Closing every docs miss*, without noise: an arm that touches all docs units missed here gains **0.254** and nothing more. Its gains differ between tasks (SD 0.41 of the 20, zero in 13), which alone leaves a power of 80 % for one test and **56 % at the first Holm step over six**; noise would lower it. So even that arm would often not be told from `none`. For scale, paired SDs of 0.1, 0.2 and 0.3 give 0.08, 0.16 and 0.23 for the first Holm step over six.
 **(b):** paired differences of a finished run exist only for #182's question tasks (same repository, model and CLI generation, 3 repetitions): their SD is 0.53 of the baseline's mean for C vs `none`, 2.69 for D vs `none` and 0.98 for C vs D, so differences of 41%, 210% and 76% of the mean for the first Holm step over six; edit sessions may differ.
+
+#### Control arm `none-docs` (registered on 24 November 2026, after the 20 sessions of arm `none`, before any session of this arm)
+
+**Why.** Arm `none` misses almost only docs (2 of 13 units; 0.254 of the 0.339 that its mean (a) lacks to 1) and some forced tests (11 of 14). Before a main run asks whether myceliums changes that, one control asks whether a plain reminder does. Marc approved 20 sessions (about $4.50); the main run below is **not approved** (about $40).
+
+**The arm.** `none-docs` is `none` with one more sentence at the end of the prompt's first paragraph, after "change every file the change needs and nothing else. Do not commit.": **"Also update existing documentation and tests that the change makes wrong or incomplete."** Everything else is byte-identical: a test takes the sentence out of the 20 prompts and compares; against the mock API the first requests of the two arms (tools, system, messages, model, limits), the command line, settings, MCP configuration and grading profile are the same but for the sentence (session directories and ids aside). The prompts of `none` are those of the 20 recorded sessions, byte for byte.
+The sentence was worded by the coordinator after the misses of arm `none` were known, so it is made for them; it does ask for docs and tests, which the prompt of the other arms must not.
+
+**The 20 sessions** ([`groundtruth/run_none_docs_183.sh`](groundtruth/run_none_docs_183.sh), `--dry-run` prints the command): one per task, repetition 1, in the order of the 20 of `none` (same seed), label `2026-11-24-none-docs20`, **not pooled** with them or with a main run. Same task file, Claude Code 2.1.331, `claude-sonnet-5-5`, limits, JDK copy, frozen dependencies and working path; the script refuses when the binary, the task file, the CLI or the frozen copy is another.
+Since those 20 sessions the hook refuses `cd` with a reason. **This run keeps the old behaviour** (`run --hook-cd`): replayed on all 636 tool calls of the 25 `none` sessions (with and without search), the hook with `--cd yes` answers byte for byte as the one those 20 sessions had; without it 22 of the 1,272 answers differ. All 20 final sessions count, timeouts included; limits, login and API errors are run again or stop the run.
+
+**The comparison** (`agent_eval.py control LABEL`, [`aeval/control.py`](aeval/control.py)) is **descriptive: nothing is tested.** Paired by task, `none-docs` minus `none`: mean (a); recall by type (units, and tasks with all or any of their docs touched); the gap to 1 by type; every unit found now, missed by both and missed now only; tokens (ratio and difference), cost, wall time with and without stalls, solved; intervals are bootstraps over the 20 tasks.
+**Over-editing:** files changed outside the commit by type (docs, tests, code; places equivalent to a gold file are inside), sessions with any, and the commit's unforced tests and optional files touched. In `none`: 0 docs, 0 tests, 2 code files (one session); 3 new tests, 0 optional. No threshold is set for it; it stands beside the result. For every docs or test file found now the diff is read and it is said whether the edit covers the change, because touching a file is not the same.
+**Time drift:** `none` ran on 24 November, 10:48-12:18 UTC, at a machine load of 13-134; this arm runs later. A difference also holds session noise (one session per task) and whatever changed in between at the model's service, which cannot be told from the sentence; the two time spans are printed. A difference in (a) is therefore read for its direction and size, not for its precision.
+
+**Hypotheses and what each outcome means** (the rule is fixed; *most* is more than half):
+
+* **(i) The sentence closes most of the docs gap:** the docs part of the gap falls by more than 50 % of its 0.254, that is below 0.127. Then a reminder suffices for this failure, and no main run follows from it.
+* **(ii) It does not:** the next step is a main run with the arms `none`, `none-docs` and **C (no D)**, 20 tasks × 3 repetitions = 180 sessions, interleaved, the hook refusing `cd` in every arm. **Holm over four tests**: C vs `none` and C vs `none-docs`, each in (a) and in tokens; `none-docs` vs `none` is described, not tested. **Only a gain of C over `none-docs` counts as more than a reminder**; a gain over `none` alone does not. (a), tokens, ceiling rule, secondary outcomes, sensitivity and bootstrap stay as registered above, and the recorded decision (co-primary) holds. Whether it runs is Marc's decision.
+
+The share closed is printed with its bootstrap interval; where that interval crosses 50 % the outcome still follows the rule, and the report of these sessions says that it does. The forced tests' part of the gap (0.080) is reported in the same way and decides nothing. `report` computes the design for the arms `none`, `none-docs`, C (`report_commit.CONTROLLED`) and leaves the registered one (`none`, C, D) as it was; tests hold both.
+For scale: at paired SDs of 0.1, 0.2 and 0.3 the first Holm step over four tests detects 0.07, 0.15 and 0.22 of (a) with 80 % power (normal approximation, 20 tasks); an arm that closed every docs miss of `none` would have about 62 % power at that step without any noise.
 
 #### Warm-up
 

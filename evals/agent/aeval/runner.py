@@ -116,7 +116,7 @@ BUDGET_RULES = (
 
 # Edit tasks (#178): the answer is the change itself; see aeval/editgrade.py.
 EDIT_PROMPT_TEMPLATE = """\
-You are working in a checkout of the {repo} repository ({language}); it is your current working directory. Make the change described below in this codebase. Investigate the code with the tools you have before you edit; change every file the change needs and nothing else. Do not commit.
+You are working in a checkout of the {repo} repository ({language}); it is your current working directory. Make the change described below in this codebase. Investigate the code with the tools you have before you edit; change every file the change needs and nothing else. Do not commit.{extra}
 
 Change: {question}
 {budget}
@@ -157,14 +157,18 @@ def allowed_commands(task: dict) -> list:
     return [task["test_command"]] if task.get("test_command") else []
 
 
-def build_prompt(task: dict, repo: dict, budget_turns: int | None = None) -> str:
+def build_prompt(task: dict, repo: dict, budget_turns: int | None = None, extra: str = "") -> str:
+    """The prompt of a session, the same in every arm but for ``extra``, the one
+    sentence an arm may add (``Variant.prompt_extra``, edit tasks only)."""
+    if extra and not is_edit_task(task):
+        raise ValueError(f"{task['id']}: an arm with a sentence of its own runs edit tasks only")
     if is_edit_task(task):
         budget = ("\n" + BUDGET_RULES.format(max_turns=budget_turns, tool_turns=budget_turns - 1) + "\n"
                   if budget_turns else "")
         if repo.get("build_note"):  # the same text in every arm (#183)
             budget = "\n" + repo["build_note"] + "\n" + budget
         return EDIT_PROMPT_TEMPLATE.format(repo=repo["display_name"], language=repo["language_name"],
-                                           question=task["question"], budget=budget)
+                                           question=task["question"], budget=budget, extra=f" {extra}" if extra else "")
     rules = FORMAT_RULES[task["answer_kind"]]
     if budget_turns:
         rules += "\n\n" + BUDGET_RULES.format(max_turns=budget_turns, tool_turns=budget_turns - 1)
@@ -203,6 +207,7 @@ class RunConfig:
     profile: str = ""  # #178: the named profile (config.PROFILES) the run's limits came from
     schedule: str = "paired"  # #182: config.SCHEDULES; "interleaved" counterbalances the arms' order
     mock_api: bool = False  # #182: every session against the scripted mock API (pipeline check, no model)
+    hook_cd: bool = False  # #183: the isolated hook lets `cd` through, as it did for the 20 sessions of arm none
 
     def comparable(self) -> dict:
         """Fields that must not change when a run is resumed."""
@@ -228,6 +233,8 @@ class RunConfig:
             d.pop("schedule")
         if not d["mock_api"]:
             d.pop("mock_api")
+        if not d["hook_cd"]:
+            d.pop("hook_cd")
         return d
 
 
@@ -550,7 +557,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         script.write_bytes(NOSEARCH_HOOK.read_bytes())
         hook = " ".join(shlex.quote(x) for x in [
             sys.executable, "-I", str(script), "isolated-hook", "--root", os.path.realpath(workdir),
-            "--search", "no" if variant.no_search else "yes", "--allow-json", json.dumps(allowed_commands(item.task))])
+            "--search", "no" if variant.no_search else "yes", "--allow-json", json.dumps(allowed_commands(item.task)),
+            *(["--cd", "yes"] if self.cfg.hook_cd else [])])
         if self.cfg.extra_env.get("AEVAL_PROBE_NO_HOOK"):  # mock API only: show the layer below the hook
             hook = None
         myc = [Path(self.cfg.myc), Path(self.cfg.models_dir)] if variant.mcp else []
@@ -631,7 +639,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
     def _session(self, item: WorkItem, attempt: int) -> dict:
         task = item.task
         repo = self.repos[item.repo]
-        prompt = build_prompt(task, repo, self.cfg.max_turns if self.cfg.prompt_budget else None)
+        prompt = build_prompt(task, repo, self.cfg.max_turns if self.cfg.prompt_budget else None,
+                              config.VARIANTS[item.condition].prompt_extra)
         out_dir = self.run_dir / "sessions" / item.run_id
         out_dir.mkdir(parents=True, exist_ok=True)
         transcript = out_dir / f"attempt{attempt}.jsonl"

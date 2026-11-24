@@ -108,6 +108,7 @@ def _run_config(args) -> RunConfig:
         profile=profile,
         schedule=schedule or "paired",
         mock_api=getattr(args, "mock_api", False),
+        hook_cd=getattr(args, "hook_cd", False),
     )
 
 
@@ -282,6 +283,8 @@ def cmd_export(args) -> int:
         meta["claude_versions"] = versions
     if cfg.get("conditions"):  # runs other than the pilot's with/without
         meta["conditions"] = cfg["conditions"]
+    if cfg.get("hook_cd"):  # #183: the hook let `cd` through
+        meta["hook_cd"] = True
         # --tasks names the file the run used (it may have been renamed since).
         meta["tasks_file"] = os.path.relpath(config.tasks_file(), config.EVAL_DIR)
     out = report.export(args.label, meta)
@@ -341,6 +344,22 @@ def cmd_describe(args) -> int:
         path = config.RESULTS_DIR / args.paired_tokens_from / "results.jsonl"
         sds = report_commit.paired_token_sds([json.loads(x) for x in path.read_text().splitlines() if x.strip()])
     print(json.dumps(report_commit.describe(list(rows.values()), config.load_tasks(), sds), indent=1))
+    return 0
+
+
+def cmd_control(args) -> int:
+    """#183: the registered comparison of the control arm none-docs with the 20 recorded sessions of arm none."""
+    from aeval import control, report_commit
+    d = report_commit.decision()
+    if d is None or d["tasks_sha256"] != config.sha256_file(config.tasks_file()):
+        sys.exit("the task file is not the one of the recorded decision")
+    read = lambda p: [r for line in p.read_text().splitlines() if line.strip() and (r := json.loads(line)).get("final", True)]  # noqa: E731
+    base = read(config.RESULTS_DIR / "none20-183" / "sessions.jsonl")
+    src = config.RESULTS_DIR / args.label / "sessions.jsonl"
+    c = control.compare(base, read(src if src.exists() else config.RUNS_DIR / args.label / "results.jsonl"), config.load_tasks())
+    if (c["claude_version"], c["model"]) != (d["claude_version"], d["model"]):
+        sys.exit("not the CLI and model of the recorded decision")
+    print(json.dumps(c, indent=1) if args.json else "\n".join(control.lines(c)))
     return 0
 
 
@@ -479,6 +498,9 @@ def cmd_replay(args) -> int:
 def cmd_gradle_cache(args) -> int:
     """Freeze the resolved dependencies of ~/.gradle for offline builds (#183)."""
     from aeval import isolation
+    if args.listing:  # of the copy that is there; nothing is made
+        print(isolation.listing(isolation.dependency_cache())["listing_sha256"][:12])
+        return 0
     print(json.dumps(isolation.freeze_dependencies(isolation.user_gradle_home() / "caches", isolation.dependency_cache())))
     return 0
 
@@ -712,6 +734,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--schedule", choices=config.SCHEDULES,
                    help="session order (#182): paired (default) or interleaved (arms' order counterbalanced; "
                         "no --condition subsets); fixed by --profile realistic")
+    s.add_argument("--hook-cd", action="store_true", help="#183: the isolated hook lets `cd` through, as for the 20 sessions of arm none")
     s.add_argument("--mock-api", action="store_true",
                    help="#182: run every session against the scripted mock API (no model call, no usage) "
                         "to check the pipeline end to end")
@@ -738,6 +761,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--label", required=True)
     s.add_argument("--task", required=True)
     s.add_argument("--conditions", required=True)
+    s.add_argument("--hook-cd", action="store_true", help="as for `run`")
     s.add_argument("--grep", default="parseAccept", help="identifier the scripted Grep call searches for")
     s.add_argument("--callers", default="parseAccept", help="symbol the scripted subagent asks find_callers for")
     for flag, default in (("--model", "sonnet"), ("--effort", "medium"), ("--seed", 20261112),
@@ -801,7 +825,13 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--paired-tokens-from", help="results label whose paired token SDs give a detectable difference (e.g. 182-spring)")
     s.set_defaults(fn=cmd_describe)
 
+    s = sub.add_parser("control", help="#183: the control arm none-docs against the recorded sessions of arm none (descriptive)")
+    s.add_argument("label", help="the run's label, or the directory in results/ that holds its sessions.jsonl")
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(fn=cmd_control)
+
     s = sub.add_parser("gradle-cache", help="freeze the resolved dependencies of ~/.gradle for the offline builds (#183)")
+    s.add_argument("--listing", action="store_true", help="only print the first 12 digits of the existing copy's listing hash")
     s.set_defaults(fn=cmd_gradle_cache)
 
     s = sub.add_parser("precheck-edit", help="check that each edit task's test command fails on the pinned "
