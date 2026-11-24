@@ -424,6 +424,8 @@ def _precheck_sandbox(repo: dict):
     from aeval import isolation
     if not isolation.available():
         sys.exit("--sandbox needs macOS's sandbox-exec")
+    if problem := isolation.problem(config.repo_env(repo)):
+        sys.exit(problem)
     tmp = Path(tempfile.mkdtemp(dir=config.session_root(repo)))
 
     def make(work: Path):

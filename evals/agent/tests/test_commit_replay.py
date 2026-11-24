@@ -229,7 +229,6 @@ class GradleCommands(unittest.TestCase):
               off + ":spring-context:test --tests org.x.ApplicationEventPublisherTests",  # "Publish" in a test name
               off + "-q :spring-web:test --tests 'org.x.A*'", off + "testClasses",
               off + ":spring-web:test 2>&1 | tail -50", off + ":spring-web:test | head -n 20"]
-        ok += [off + "-x :buildSrc:checkstyleMain -x :buildSrc:checkstyleTest -x :buildSrc:validatePlugins --no-daemon :spring-web:test"]
         bad = [off + x for x in (
             "bSPP", "buildScanPub", "buildScanPublishPrevious", ":spring-core:publish", "publishToMavenLocal", "build",
             "check", "-I /tmp/i.gradle test", "-Dx=1 test", "-Pa=b test", "--init-script x test", "-p /x test",
@@ -238,7 +237,7 @@ class GradleCommands(unittest.TestCase):
         bad += ["./gradlew test", "./gradlew --offline --no-scan test", "./gradlew --offline --no-build-cache test",
                 "./gradlew --no-scan --no-build-cache test", "gradle --offline --no-scan --no-build-cache test",
                 "sh gradlew --offline --no-scan --no-build-cache test", "./gradlew --offline --no-scanX --no-build-cache test"]
-        for c in (off + "-x :spring-web:compileJava test", off + "-x checkstyleMain test", off + "-x :buildSrc:test test"):
+        for c in (off + "-x :spring-web:compileJava test", off + "-x :buildSrc:checkstyleMain test"):
             self.assertFalse(bashcmd.isolated_bash(c, rule, "/w", "/w", True)[0], c)
         for search in (False, True):  # D and the arms with search: one rule
             for c in ok:
@@ -329,6 +328,22 @@ class Isolation(unittest.TestCase):
         self.assertIsNone(self.why("Read", readable=[own], file_path=own + "/a.txt"))
         self.assertIsNotNone(self.why("Read", readable=[own], file_path=own + "/../../other/a.txt"))
 
+    def test_a_session_does_not_start_where_its_builds_would_fail(self):
+        from aeval import isolation
+        top = self.root.parent.parent
+        g, home = top / "gh", top / "jdk4"
+        (g / "daemon/9").mkdir(parents=True)
+        (home / "bin").mkdir(parents=True)
+        (home / "bin/java").write_bytes(b"\xcf\xfa binary")
+        env = {"GRADLE_USER_HOME": str(g), "JAVA_HOME": str(home)}
+        self.assertIn("make_jdk_ipv4", isolation.problem(env))
+        (home / "bin/java").write_text(f'#!/bin/sh\nexec x {isolation.IPV4} "$@"\n')
+        self.assertIsNone(isolation.problem(env))
+        for n in range(3):
+            (g / f"daemon/9/daemon-{n}.out.log").write_text("x")
+        with mock.patch.object(isolation, "MAX_CLOSED", 2):
+            self.assertIn("3 build scans", isolation.problem(env))
+
     def test_arms_differ_only_in_search(self):
         only_search = ["grep -rn 'String foo(' spring-core", "grep -rn \"a/b\" . | head -5", "grep -n '/users' a.java", "rg -n x spring-core",
                        "find . -name '*.java'", "ls spring-core", "cat a.java", "head -20 a.java", "sed -n '1,9p' a.java",
@@ -405,8 +420,7 @@ class Isolation(unittest.TestCase):
         home = os.path.realpath(Path.home())
         for closed in (home, "/private/tmp", "/private/var/folders", "/Users/Shared", "/Volumes", f"{home}/Library/Keychains",
                        f"{home}/.claude/projects", f"{home}/.claude/history.jsonl", f"{home}/.claude/.credentials.json",
-                       f"/private/tmp/claude-{os.getuid()}", f"{home}/.gradle/caches/build-cache-1",
-                       f"{home}/.gradle/daemon/**/*.out.log"):
+                       f"/private/tmp/claude-{os.getuid()}", f"{home}/.gradle/caches/build-cache-1"):
             self.assertIn(closed, fs["denyRead"])
         self.assertFalse([p for p in fs["denyRead"] if "gold" in p or "spring-history" in p or "myceliums" in p],
                          "the model is shown this list")
@@ -418,7 +432,11 @@ class Isolation(unittest.TestCase):
         g = top / "gh"
         (g / "build-scan-data/spool").mkdir(parents=True)
         (g / "build-scan-data/spool/old.scan").write_text("x")
-        self.assertEqual(isolation.earlier_scans({"GRADLE_USER_HOME": str(g)}), [str(g / "build-scan-data/spool/old.scan")])
+        (g / "daemon/9").mkdir(parents=True)
+        for f in ("daemon-1.out.log", "registry.bin"):
+            (g / "daemon/9" / f).write_text("x")
+        self.assertEqual(isolation.earlier_output({"GRADLE_USER_HOME": str(g)}),
+                         [str(g / "build-scan-data/spool/old.scan"), str(g / "daemon/9/daemon-1.out.log")])
         self.assertIn(str(g / "build-scan-data/spool/old.scan"), isolation.never({"GRADLE_USER_HOME": str(g)}))
         dist = g / "wrapper/dists/gradle-9/abc/gradle-9.9.0"
         (dist / "bin").mkdir(parents=True)
@@ -470,7 +488,7 @@ class Isolation(unittest.TestCase):
         prof = top / "p.sb"
         prof.write_text(isolation.profile([self.root, top / "tmp", top / "gradle"], [top / "jdk"], [top],
                                           [str(top / "gradle/caches/build-cache-1"), str(top / "gradle/build-scan-data"),
-                                           str(top / "gradle/daemon/**/*.out.log")], [str(top / "gradle/gradle.properties")]))
+                                           str(top / "gradle/daemon/9/d.out.log")], [str(top / "gradle/gradle.properties")]))
         def run(*cmd):
             return subprocess.run(isolation.sandboxed(list(cmd), prof), capture_output=True, text=True, cwd=self.root)
         for f, text in ((self.root / "a.java", "x"), (top / "tmp/ok", "fine"), (top / "jdk/f.txt", "secret"),

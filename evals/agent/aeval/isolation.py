@@ -89,7 +89,7 @@ def never(env: dict) -> list[str]:
     g = gradle_home(env)
     return ([str(Path.home() / n) for n in NEVER]
             + [f"/private/tmp/claude-{os.getuid()}", f"/tmp/claude-{os.getuid()}"]  # every session's command output
-            + [str(g / "caches" / "build-cache-1"), str(g / "daemon" / "**" / "*.out.log")] + earlier_scans(env))
+            + [str(g / "caches" / "build-cache-1")] + earlier_output(env))
 
 
 def unwritable(workdir: Path, env: dict) -> list[str]:
@@ -101,11 +101,32 @@ def unwritable(workdir: Path, env: dict) -> list[str]:
             + gradle_unwritable(env))
 
 
-def earlier_scans(env: dict) -> list[str]:
-    """Files of build scans stored by earlier builds (the plugin fails when it
-    cannot create files in their directories, so only the payloads are closed)."""
-    d = gradle_home(env) / "build-scan-data"
-    return sorted(str(p) for p in d.rglob("*") if p.is_file()) if d.is_dir() else []
+def earlier_output(env: dict) -> list[str]:
+    """Files earlier builds left in Gradle's home: stored build scans and daemon
+    logs. File by file: a build fails when it cannot create its own in their
+    directories, and under a pattern Claude Code's sandbox also refuses the
+    metadata of the build's own log, which Gradle 9.2 does not survive."""
+    g = gradle_home(env)
+    return sorted(str(p) for d, pat in (("build-scan-data", "*"), ("daemon", "*.out.log")) if (g / d).is_dir()
+                  for p in (g / d).rglob(pat) if p.is_file())
+
+
+IPV4 = "-Djava.net.preferIPv4Stack=true"
+# Claude Code passes its sandbox profile as one argument: about 62 kB plus 450 bytes per closed file (measured with 337
+# files, 2.1.331); macOS allows 1 MB for all arguments. Beyond the limit no command would start.
+MAX_CLOSED = 1500
+
+
+def problem(env: dict) -> str | None:
+    """Why no isolated session or graded build may start with ``env``."""
+    n = len(earlier_output(env))
+    if n > MAX_CLOSED:
+        return (f"{n} build scans and daemon logs of earlier builds in {gradle_home(env)} (at most {MAX_CLOSED} fit the "
+                "sandbox's profile): move them away")
+    java = Path(env.get("JAVA_HOME") or "/nonexistent") / "bin" / "java"
+    if java.is_file() and IPV4.encode() not in java.read_bytes()[:4096]:
+        return f"JAVA_HOME {env['JAVA_HOME']} is not the copy made by groundtruth/make_jdk_ipv4.py: Gradle's workers would fail"
+    return None
 
 
 def gradle_unwritable(env: dict) -> list[str]:
@@ -218,8 +239,8 @@ def session_environment(tmp: Path) -> dict[str, str]:
             "ZDOTDIR": str(tmp / "zdotdir"),
             # IPv4 loopback: a JVM that opens IPv6-mapped sockets (its default) is refused by the sandboxes' loopback
             # rule. JAVA_TOOL_OPTIONS reaches a JVM that Gradle starts; the launcher variable also its worker JVMs.
-            "JAVA_TOOL_OPTIONS": f"-Djava.io.tmpdir={tmp / 't'} -XX:-UsePerfData -Djava.net.preferIPv4Stack=true",
-            "JDK_JAVA_OPTIONS": f"-Djava.io.tmpdir={tmp / 't'} -XX:-UsePerfData -Djava.net.preferIPv4Stack=true"}
+            "JAVA_TOOL_OPTIONS": f"-Djava.io.tmpdir={tmp / 't'} -XX:-UsePerfData {IPV4}",
+            "JDK_JAVA_OPTIONS": f"-Djava.io.tmpdir={tmp / 't'} -XX:-UsePerfData {IPV4}"}
 
 
 # Raw text, on purpose without the hook's parser: program names, addresses, paths.

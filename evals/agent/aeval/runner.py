@@ -519,6 +519,9 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         variant = config.VARIANTS[item.condition]
         if not isolation.available():
             raise StopRun("an isolated repository (#183) needs macOS's sandbox; not found")
+        env = config.repo_env(self.repos[item.repo])
+        if problem := isolation.problem(env):
+            raise StopRun(f"{item.run_id}: {problem}")
         script = tmp / "policy" / "bashcmd.py"
         script.parent.mkdir()
         script.write_bytes(NOSEARCH_HOOK.read_bytes())
@@ -530,7 +533,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         myc = [Path(self.cfg.myc), Path(self.cfg.models_dir)] if variant.mcp else []
         path = tmp / "isolated-settings.json"
         path.write_text(json.dumps(isolation.session_settings(
-            tmp, workdir, config.repo_env(self.repos[item.repo]), myc, hook), indent=1))
+            tmp, workdir, env, myc, hook), indent=1))
         return path
 
     def _grading_profile(self, item: WorkItem, tmp: Path, workdir: Path) -> Path:

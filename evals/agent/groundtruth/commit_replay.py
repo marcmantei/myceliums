@@ -60,11 +60,6 @@ MODULE = re.compile(r"^(spring-[a-z-]+|framework-[a-z]+|integration-tests)/")
 # another arm's session or from a precheck of the gold commit.
 FLAGS = ("--offline", "--no-scan", "--no-build-cache")
 OFFLINE = " ".join(FLAGS)
-# Gradle's process-isolated workers (Worker API: checkstyle, validatePlugins) start with an empty environment, so they do
-# not get the JVM's IPv4 flag and cannot reach their daemon over loopback under the sandboxes (README). These buildSrc tasks
-# are the only ones a test run reaches; they do not change what is compiled or tested.
-BUILD_SRC_WORKERS = ("checkstyleMain", "checkstyleTest", "validatePlugins")
-EXCLUDES = " ".join(f"-x :buildSrc:{t}" for t in BUILD_SRC_WORKERS)
 # What the hook lets any arm pass to ./gradlew: all three flags, harmless
 # options, tasks by exact name (Gradle expands abbreviations, so a pattern
 # would admit `bSPP`, buildScanPublishPrevious), and --tests filters.
@@ -75,9 +70,8 @@ GRADLE_OPTIONS = ("--no-daemon", "--console=plain", *FLAGS, "-q", "--quiet", "-i
 GRADLE_ARGS = ("".join(rf"(?=(?:.* )?{f}(?: |$))" for f in FLAGS)
                + r"(?:(?:" + "|".join(re.escape(o) for o in GRADLE_OPTIONS)
                + r"|(?::(?:spring|framework|integration)-[a-z0-9-]+:)?(?:" + "|".join(GRADLE_TASKS) + ")"
-               + r"|-x :buildSrc:(?:" + "|".join(BUILD_SRC_WORKERS) + r")"
                r"|--tests [A-Za-z0-9_.*$#]+)(?: |$))+")
-BUILD_NOTE = ("The build has no network access. Run Gradle as `./gradlew " + OFFLINE + " --no-daemon " + EXCLUDES + " ...`, with "
+BUILD_NOTE = ("The build has no network access. Run Gradle as `./gradlew " + OFFLINE + " --no-daemon ...`, with "
               "fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` "
               "or `head`.")
 # A port nobody listens on: a build started without the flags cannot leave
@@ -246,8 +240,7 @@ def cmd_build(args) -> int:
         cmd = s.get("test_command") or default_test_command(files)
         if OFFLINE not in cmd:  # the spec's own commands name modules and tests only
             cmd = cmd.replace("./gradlew ", f"./gradlew {OFFLINE} ", 1)
-        cmd = cmd.replace(f"./gradlew {OFFLINE} ", f"./gradlew {OFFLINE} {EXCLUDES} ", 1)
-        first = re.search(r" :(?!buildSrc:)", cmd).start()
+        first = re.search(r" :", cmd).start()
         cmd = f"{cmd[:first]} {' '.join(compile_tasks(files))}{cmd[first:]}"
         # Build scripts only the commit's own tests need (spec): harness side, like the tests.
         build_overlay = [p for p in s.get("build_overlay", []) if p in paths]
