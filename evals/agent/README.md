@@ -348,6 +348,19 @@ python3 evals/agent/agent_eval.py --tasks evals/agent/tasks/tasks-hard.json expo
 python3 evals/agent/agent_eval.py report my-matrix
 ```
 
+**Which instruction files reach Claude Code (#200).**
+[`probe_instructions.py`](probe_instructions.py) starts one session per layout of
+`AGENTS.md`/`CLAUDE.md` files (13) and setup state against the same mock API, in a
+temporary HOME, and reports which of the texts the requests contain:
+
+```bash
+python3 evals/agent/probe_instructions.py --myc target/debug/myc
+```
+
+`legacy` emulates the routing block in `CLAUDE.md` as setup wrote it before #200;
+the script fails when `setup`, `repair` (setup over `legacy`) or `user` loses a text
+that the project alone delivers, or does not deliver the routing block once.
+
 **Results, 20 November 2026** (myc 0.3.2 at `66611980a487`, Claude Code
 2.1.329, `claude-sonnet-5-5`, `--effort medium`; 116 graded sessions over the
 20 v2 tasks; [report](results/2026-11-20-variants/REPORT.md)). Means over

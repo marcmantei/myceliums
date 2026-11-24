@@ -308,6 +308,11 @@ pub(crate) enum Commands {
         /// Pre-download the fastembed model (~100 MB)
         #[arg(long)]
         download: bool,
+        /// Repair instruction files that an older myc wrote and that hide a
+        /// project's own (CLAUDE.md over AGENTS.md, or the reverse), in the
+        /// current project and every indexed one
+        #[arg(long)]
+        fix: bool,
     },
     /// Manage global configuration
     Configure {
@@ -325,18 +330,18 @@ pub(crate) enum Commands {
     /// searches for a known symbol (reads hook JSON from stdin, never blocks)
     #[command(name = "hook-grep")]
     HookGrep,
-    /// Set up Claude Code integration: MCP server, hooks, CLAUDE.md routing
-    /// block and code-explorer subagent (project scope by default)
+    /// Set up Claude Code integration: MCP server, hooks, routing block and
+    /// code-explorer subagent (project scope by default)
     #[command(name = "setup-claude")]
     SetupClaude {
-        /// Where to install: the project (.mcp.json, .claude/, CLAUDE.md; commit
-        /// them for the team) or the user (~/.claude.json, ~/.claude/)
+        /// Where to install: the project (.mcp.json, .claude/; commit them for
+        /// the team) or the user (~/.claude.json, ~/.claude/)
         #[arg(long, value_enum, default_value = "project")]
         scope: commands::setup_claude::Scope,
         /// Project root for --scope project (default: git top level of the cwd)
         #[arg(long)]
         project: Option<PathBuf>,
-        /// Do not write the routing block into CLAUDE.md (removes an existing one)
+        /// Do not write the routing block (removes an existing one)
         #[arg(long)]
         no_routing: bool,
         /// Do not install the PreToolUse grep-redirect hook (removes an existing one)

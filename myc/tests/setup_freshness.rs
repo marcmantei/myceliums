@@ -1,9 +1,9 @@
 //! The documented order — `myc analyze`, then `myc setup-claude --scope
 //! project` — leaves an index the MCP server calls up to date (#151).
 //!
-//! `setup-claude` writes `.mcp.json`, `.claude/` and the routing block in
-//! `CLAUDE.md` after the index was built. None of it changes what the
-//! analysis indexes, so the `Index:` line must not call the index stale and
+//! `setup-claude` writes `.mcp.json` and `.claude/` after the index was built,
+//! and removes the routing block an older version left in `CLAUDE.md` (#200).
+//! None of it changes what the analysis indexes, so the `Index:` line must not call the index stale and
 //! the `analyze` tool must answer from the cache instead of re-indexing
 //! (which once ran into the client's 300 s timeout). An edit to CLAUDE.md
 //! outside the block is still a change.
@@ -153,7 +153,12 @@ fn analyze_then_setup_claude(commit_memory: bool) {
     git(&project, &["init", "-q"]);
     git(&project, &["add", "."]);
     git(&project, &["commit", "-q", "-m", "init"]);
-    std::fs::write(project.join("CLAUDE.md"), "# Project\n\nTeam notes.\n").unwrap();
+    let notes = "# Project\n\nTeam notes.\n";
+    std::fs::write(
+        project.join("CLAUDE.md"),
+        format!("{notes}\n<!-- BEGIN myceliums -->\n## Code navigation\n<!-- END myceliums -->\n"),
+    )
+    .unwrap();
     if commit_memory {
         git(&project, &["add", "CLAUDE.md"]);
         git(&project, &["commit", "-q", "-m", "notes"]);
@@ -176,11 +181,12 @@ fn analyze_then_setup_claude(commit_memory: bool) {
         ".mcp.json",
         ".claude/settings.json",
         ".claude/agents/code-explorer.md",
+        ".claude/rules/myceliums.md",
     ] {
         assert!(project.join(written).is_file(), "{written}");
     }
     let memory = std::fs::read_to_string(project.join("CLAUDE.md")).unwrap();
-    assert!(memory.contains("<!-- BEGIN myceliums -->"), "{memory}");
+    assert_eq!(memory, notes, "the block moved to .claude/rules");
 
     let (line, analyze) = index_line_and_analyze(data.path(), &project);
     assert!(
@@ -189,8 +195,8 @@ fn analyze_then_setup_claude(commit_memory: bool) {
     );
     assert!(analyze.contains("(cached)"), "{analyze}");
 
-    // CLAUDE.md is indexed: an edit outside the block is a change, and
-    // analyze re-indexes.
+    // CLAUDE.md is indexed: an edit of its text is a change, and analyze
+    // re-indexes.
     std::fs::write(
         project.join("CLAUDE.md"),
         format!("{memory}\nMore notes.\n"),

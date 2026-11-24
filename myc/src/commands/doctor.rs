@@ -1,6 +1,7 @@
 //! `myc doctor`.
 
 use crate::commands::repos::find_orphans;
+use crate::commands::{instructions, setup_claude};
 use crate::repo::{data_dir, registry_path};
 use crate::ui::format_bytes;
 use anyhow::Result;
@@ -10,8 +11,65 @@ use myceliums_core::{
     IndexEmbeddingMeta,
 };
 use myceliums_storage::RepoRegistry;
+use std::path::PathBuf;
 
-pub(crate) async fn cmd_doctor(download: bool) -> Result<()> {
+/// The projects whose instruction files are checked: the one around the
+/// working directory and every indexed one that still exists. Never the home
+/// directory.
+fn instruction_roots(registry: Option<&RepoRegistry>) -> Vec<PathBuf> {
+    let home = dirs::home_dir().and_then(|h| std::fs::canonicalize(h).ok());
+    let cwd = std::env::current_dir().ok();
+    let cwd = cwd.map(|dir| setup_claude::git_toplevel(&dir).unwrap_or(dir));
+    let indexed = registry
+        .map(|r| r.list())
+        .unwrap_or_default()
+        .into_iter()
+        .map(|repo| PathBuf::from(&repo.path));
+    let mut roots = Vec::new();
+    for root in cwd.into_iter().chain(indexed) {
+        let Ok(root) = std::fs::canonicalize(root) else {
+            continue;
+        };
+        if root.is_dir() && Some(&root) != home.as_ref() && !roots.contains(&root) {
+            roots.push(root);
+        }
+    }
+    roots
+}
+
+/// Reports instruction files that an older `myc` wrote and that hide a
+/// project's own (#200), repairing them with `fix`. Returns the number of
+/// issues left.
+fn check_instructions(registry: Option<&RepoRegistry>, fix: bool) -> u32 {
+    let home = dirs::home_dir().map(|h| std::fs::canonicalize(&h).unwrap_or(h));
+    let mut issues = 0;
+    let mut clean = true;
+    for root in instruction_roots(registry) {
+        for finding in instructions::findings(&root, home.as_deref()) {
+            clean = false;
+            if fix {
+                match instructions::repair(&root, &finding) {
+                    Ok(done) => println!("\u{2713} Instruction files repaired: {done}"),
+                    Err(e) => {
+                        println!("\u{2717} Instruction files of {}: {e:#}", root.display());
+                        issues += 1;
+                    }
+                }
+            } else if finding.hides() {
+                println!("\u{2717} Instruction files: {}", finding.describe(&root));
+                issues += 1;
+            } else {
+                println!("- Instruction files: {}", finding.describe(&root));
+            }
+        }
+    }
+    if clean {
+        println!("\u{2713} Instruction files: none hidden by myceliums");
+    }
+    issues
+}
+
+pub(crate) async fn cmd_doctor(download: bool, fix: bool) -> Result<()> {
     use myceliums_core::parser::{SourceLanguage, SourceParser};
     use std::process::Command;
 
@@ -354,6 +412,9 @@ pub(crate) async fn cmd_doctor(download: bool) -> Result<()> {
             }
         }
     }
+
+    // ── Instruction files (CLAUDE.md, AGENTS.md) ─────────────────────
+    issues += check_instructions(registry.as_ref(), fix);
 
     // ── Summary ───────────────────────────────────────────────────────
     println!();

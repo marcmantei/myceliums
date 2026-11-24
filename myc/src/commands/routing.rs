@@ -1,7 +1,9 @@
 //! The routing block: a short, versioned instruction block that `myc
-//! setup-claude` / `myc setup-codex` keep in a project's CLAUDE.md or
-//! AGENTS.md between `<!-- BEGIN myceliums -->` and `<!-- END myceliums -->`
-//! (#126, layer 1).
+//! setup-claude` keeps in a project's `.claude/rules/myceliums.md` (at user
+//! scope in `~/.claude/CLAUDE.md`) and `myc setup-codex` in its AGENTS.md,
+//! between `<!-- BEGIN myceliums -->` and `<!-- END myceliums -->` (#126,
+//! layer 1). Where a block may go without hiding the project's own
+//! instructions: [`super::instructions`] (#200).
 //!
 //! The block tells the agent which questions go to the code graph and which
 //! stay with grep. It is loaded on every turn, so it is kept under 15 lines.
@@ -23,8 +25,8 @@ pub const ROUTING_VERSION: u32 = 3;
 /// Which agent the block is written for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flavor {
-    /// Claude Code's CLAUDE.md; mentions the `code-explorer` subagent when it
-    /// is installed.
+    /// Claude Code; mentions the `code-explorer` subagent when it is
+    /// installed.
     Claude {
         /// Whether `.claude/agents/code-explorer.md` is installed alongside.
         subagent: bool,
@@ -135,10 +137,31 @@ pub fn upsert_block(text: &str, block: &str) -> Result<String> {
     Ok(out)
 }
 
-/// `text` without any managed block, or `None` when it holds none. The blank
-/// line that [`upsert_block`] put before an appended block goes too.
-pub fn remove_block(text: &str) -> Result<Option<String>> {
-    let ranges = block_ranges(text)?;
+/// Which managed blocks to remove.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Owner {
+    /// Every block.
+    Any,
+    /// Every block but one `myc setup-codex` wrote. A CLAUDE.md that links to
+    /// AGENTS.md shows Codex's block too, and that one stays.
+    Claude,
+}
+
+impl Owner {
+    fn owns(self, block: &str) -> bool {
+        match self {
+            Owner::Any => true,
+            Owner::Claude => !block.contains("written by `myc setup-codex`"),
+        }
+    }
+}
+
+/// `text` without the managed blocks of `owner`, or `None` when it holds
+/// none. The blank line that [`upsert_block`] put before an appended block
+/// goes too.
+pub fn remove_block(text: &str, owner: Owner) -> Result<Option<String>> {
+    let mut ranges = block_ranges(text)?;
+    ranges.retain(|(start, end)| owner.owns(&text[*start..*end]));
     if ranges.is_empty() {
         return Ok(None);
     }
@@ -211,15 +234,16 @@ pub fn install_block(path: &Path, block: &str) -> Result<FileChange> {
     })
 }
 
-/// Removes the managed block from the file at `path`. When `delete_if_empty`
-/// is set and nothing but whitespace remains, the file is deleted.
-pub fn uninstall_block(path: &Path, delete_if_empty: bool) -> Result<FileChange> {
+/// Removes the managed blocks of `owner` from the file at `path`. When
+/// `delete_if_empty` is set and nothing but whitespace remains, the file is
+/// deleted.
+pub fn uninstall_block(path: &Path, owner: Owner, delete_if_empty: bool) -> Result<FileChange> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(FileChange::Absent),
         Err(e) => return Err(e).with_context(|| format!("Failed to read {}", path.display())),
     };
-    let Some(rest) = remove_block(&text).with_context(|| path.display().to_string())? else {
+    let Some(rest) = remove_block(&text, owner).with_context(|| path.display().to_string())? else {
         return Ok(FileChange::Absent);
     };
     if delete_if_empty && rest.trim().is_empty() && !crate::commands::setup_claude::is_symlink(path)
@@ -298,15 +322,18 @@ mod tests {
             "trailing blank lines stay\n\n\n",
         ] {
             let with = upsert_block(original, &block()).unwrap();
-            let back = remove_block(&with).unwrap().unwrap();
+            let back = remove_block(&with, Owner::Any).unwrap().unwrap();
             assert_eq!(back, original, "round trip of {original:?}");
         }
         // Text without a final line break gets one; nothing is trimmed.
         let no_eol = upsert_block("x", &block()).unwrap();
-        assert_eq!(remove_block(&no_eol).unwrap().unwrap(), "x\n");
+        assert_eq!(remove_block(&no_eol, Owner::Any).unwrap().unwrap(), "x\n");
         let middle = format!("top\n{BEGIN}\nx\n{END}\nbottom\n");
-        assert_eq!(remove_block(&middle).unwrap().unwrap(), "top\nbottom\n");
-        assert_eq!(remove_block("no block here\n").unwrap(), None);
+        assert_eq!(
+            remove_block(&middle, Owner::Any).unwrap().unwrap(),
+            "top\nbottom\n"
+        );
+        assert_eq!(remove_block("no block here\n", Owner::Any).unwrap(), None);
     }
 
     #[test]
@@ -317,23 +344,50 @@ mod tests {
             !with.replace("\r\n", "").contains('\n'),
             "mixed line endings"
         );
-        assert_eq!(remove_block(&with).unwrap().unwrap(), original);
+        assert_eq!(remove_block(&with, Owner::Any).unwrap().unwrap(), original);
     }
 
     #[test]
     fn unbalanced_markers_are_an_error_not_a_rewrite() {
         assert!(upsert_block(&format!("{BEGIN}\nno end\n"), &block()).is_err());
-        assert!(remove_block(&format!("x\n{END}\n")).is_err());
+        assert!(remove_block(&format!("x\n{END}\n"), Owner::Any).is_err());
         assert!(upsert_block(&format!("{BEGIN}\n{BEGIN}\n{END}\n"), &block()).is_err());
     }
 
     #[test]
     fn quoted_markers_in_prose_are_not_blocks() {
         let prose = format!("The block sits between `{BEGIN}` and `{END}`.\n");
-        assert_eq!(remove_block(&prose).unwrap(), None);
+        assert_eq!(remove_block(&prose, Owner::Any).unwrap(), None);
         let out = upsert_block(&prose, &block()).unwrap();
         assert!(out.starts_with(&prose));
-        assert_eq!(remove_block(&out).unwrap().unwrap(), prose);
+        assert_eq!(remove_block(&out, Owner::Any).unwrap().unwrap(), prose);
+    }
+
+    #[test]
+    fn a_block_of_setup_codex_is_not_claudes() {
+        let codex = upsert_block("rules\n", &routing_block(Flavor::Agents)).unwrap();
+        assert_eq!(remove_block(&codex, Owner::Claude).unwrap(), None);
+        assert_eq!(
+            remove_block(&codex, Owner::Any).unwrap().unwrap(),
+            "rules\n"
+        );
+        for subagent in [true, false] {
+            let claude =
+                upsert_block("rules\n", &routing_block(Flavor::Claude { subagent })).unwrap();
+            assert_eq!(
+                remove_block(&claude, Owner::Claude).unwrap().unwrap(),
+                "rules\n"
+            );
+        }
+        // A block without the line that says who wrote it is Claude's.
+        let bare = format!("rules\n\n{BEGIN}\nold\n{END}\n");
+        assert_eq!(
+            remove_block(&bare, Owner::Claude).unwrap().unwrap(),
+            "rules\n"
+        );
+        // Both in one file: only Claude's goes.
+        let both = format!("{BEGIN}\nold\n{END}\n{codex}");
+        assert_eq!(remove_block(&both, Owner::Claude).unwrap().unwrap(), codex);
     }
 
     #[cfg(unix)]
@@ -357,14 +411,17 @@ mod tests {
         );
         assert!(is_link(&claude));
         assert!(std::fs::read_to_string(&agents).unwrap().contains(BEGIN));
-        assert_eq!(uninstall_block(&claude, true).unwrap(), FileChange::Removed);
+        assert_eq!(
+            uninstall_block(&claude, Owner::Any, true).unwrap(),
+            FileChange::Removed
+        );
         assert!(is_link(&claude));
         assert_eq!(std::fs::read_to_string(&agents).unwrap(), "shared rules\n");
 
         // Emptied through a link: the link and its target stay.
         std::fs::write(&agents, "").unwrap();
         install_block(&claude, &block()).unwrap();
-        uninstall_block(&claude, true).unwrap();
+        uninstall_block(&claude, Owner::Any, true).unwrap();
         assert!(is_link(&claude));
         assert_eq!(std::fs::read_to_string(&agents).unwrap(), "");
     }
@@ -378,14 +435,26 @@ mod tests {
             install_block(&path, &block()).unwrap(),
             FileChange::Unchanged
         );
-        assert_eq!(uninstall_block(&path, true).unwrap(), FileChange::Deleted);
+        assert_eq!(
+            uninstall_block(&path, Owner::Any, true).unwrap(),
+            FileChange::Deleted
+        );
         assert!(!path.exists());
-        assert_eq!(uninstall_block(&path, true).unwrap(), FileChange::Absent);
+        assert_eq!(
+            uninstall_block(&path, Owner::Any, true).unwrap(),
+            FileChange::Absent
+        );
 
         std::fs::write(&path, "mine\n").unwrap();
         assert_eq!(install_block(&path, &block()).unwrap(), FileChange::Updated);
-        assert_eq!(uninstall_block(&path, true).unwrap(), FileChange::Removed);
+        assert_eq!(
+            uninstall_block(&path, Owner::Any, true).unwrap(),
+            FileChange::Removed
+        );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "mine\n");
-        assert_eq!(uninstall_block(&path, true).unwrap(), FileChange::Absent);
+        assert_eq!(
+            uninstall_block(&path, Owner::Any, true).unwrap(),
+            FileChange::Absent
+        );
     }
 }

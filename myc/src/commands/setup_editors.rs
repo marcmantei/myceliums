@@ -71,11 +71,28 @@ pub(crate) async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result
         return Ok(());
     }
     let agents_md = root.join("AGENTS.md");
-    use commands::routing::{self, FileChange, Flavor};
+    use commands::instructions::{self, CodexRouting};
+    use commands::routing::{self, FileChange, Owner};
     let change = if uninstall || no_routing {
-        routing::uninstall_block(&agents_md, true)?
+        routing::uninstall_block(&agents_md, Owner::Any, true)?
     } else {
-        routing::install_block(&agents_md, &routing::routing_block(Flavor::Agents))?
+        let home = dirs::home_dir();
+        match instructions::install_codex_routing(&root, home.as_deref())? {
+            CodexRouting::Done(change) => change,
+            CodexRouting::WouldHide { hidden, removed } => {
+                let files = instructions::names(&root, &hidden);
+                if removed {
+                    println!(
+                        "  \u{2713} Routing block removed from {}: it held nothing else and hid {files}",
+                        agents_md.display()
+                    );
+                }
+                println!(
+                    "  No AGENTS.md routing block written: an AGENTS.md of its own would hide {files} from agents\n  that read one instruction file per directory (Zed, OpenCode, Codex with fallback names).\n  Create an AGENTS.md with your project's instructions (or link it to {files}) and re-run."
+                );
+                return Ok(());
+            }
+        }
     };
     let what = match change {
         FileChange::Created => "written to new file",
