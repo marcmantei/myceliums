@@ -108,6 +108,7 @@ pull requests.
 - The model cache defaults to `models/` in the data directory (`~/.myceliums/models`) instead of `.fastembed_cache/` in the working directory, so every `myc` invocation shares one copy (#157); `FASTEMBED_CACHE_DIR` and `HF_HOME` still override it. Old `.fastembed_cache/` directories can be deleted.
 
 ### Fixed
+- A background embedding job is reported as ended only after its repository lock is released (#201). It was reported first, so for a moment an `analyze` that had stopped the job and waited for its end could answer "Analysis already running"; CI saw it as a failure of `a_panicking_job_ends_as_failed`. A job that ends also no longer changes the report of the next job of the same repository.
 - **`myc analyze` no longer overflows the stack on Java code where a class extends a nested type (`class X extends Outer.Base`) (#177).** Resolving the base looked up `Outer` among X's own members. That lookup resolved X's bases again, with the recursion depth reset to 0, so spring-framework aborted after parsing.
 - **Java call binding (#177).** These five gaps were found on the #177 dev set, so they are measured there (see Added):
   - annotation elements are methods (`ann.value()` gets a target);

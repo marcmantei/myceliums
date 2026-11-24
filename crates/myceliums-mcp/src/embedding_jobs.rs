@@ -18,7 +18,9 @@
 //! A job stops between two model batches when the server stops serving
 //! ([`stop_all`]) or when an `analyze` needs the repository ([`cancel`]); it
 //! keeps what it stored, and the next `analyze` resumes it. A job that
-//! panics ends as failed, never as running forever.
+//! panics ends as failed, never as running forever. A job is reported as
+//! ended only once its lock is released and the cached graph is dropped, so
+//! whoever waited for it ([`wait_until_stopped`]) can claim the repository.
 
 use crate::analysis::RunningGuard;
 use myceliums_core::{EmbedOptions, GraphService, PendingOutcome};
@@ -264,62 +266,77 @@ fn start_with(
             started: Instant::now(),
             finished: None,
             state: JobState::Running,
-            cancel,
+            cancel: cancel.clone(),
         },
     );
     let handle = tokio::runtime::Handle::current();
-    tokio::task::spawn_blocking(move || {
-        let supervisor = Supervisor {
-            repo_id: job.repo_id.clone(),
-            service: job.service.clone(),
-            outcome: None,
-        };
-        let guard = job.guard;
-        handle.block_on(supervisor.run(work));
-        drop(guard);
-    });
+    let supervisor = Supervisor {
+        repo_id: job.repo_id,
+        service: job.service,
+        cancel,
+        guard: Some(job.guard),
+        outcome: None,
+    };
+    tokio::task::spawn_blocking(move || handle.block_on(supervisor.run(work)));
 }
 
-/// Ends a job's report however its work ends: with the outcome, as failed on
-/// an error, and — when the work panics — as failed from `Drop`, during the
-/// unwinding, so a job never stays "running". Then drops the cached graph,
-/// so reads see the vectors the job moved in.
-struct Supervisor {
+/// Ends a job however its work ends: with the outcome, as failed on an
+/// error, and — when the work panics — as failed from `Drop`, during the
+/// unwinding, so a job never stays "running".
+///
+/// The order matters (#201): first the cached graph goes, so reads see the
+/// vectors the job moved in, then the lock, then the job is reported as
+/// ended. Reported earlier, an `analyze` that stopped the job and waited for
+/// its end would find the repository still locked and fail.
+struct Supervisor<G> {
     repo_id: String,
     service: Arc<GraphService>,
+    /// The job's cancel flag, which also tells it from a later job of the
+    /// repository.
+    cancel: Arc<AtomicBool>,
+    /// The [`RunningGuard`] (tests use others).
+    guard: Option<G>,
     outcome: Option<Result<PendingOutcome, String>>,
 }
 
-impl Supervisor {
+impl<G> Supervisor<G> {
     async fn run(mut self, work: impl Future<Output = Result<PendingOutcome, String>>) {
         self.outcome = Some(work.await);
     }
 }
 
-impl Drop for Supervisor {
+impl<G> Drop for Supervisor<G> {
     fn drop(&mut self) {
         let outcome = self
             .outcome
             .take()
             .unwrap_or_else(|| Err("the embedding task panicked; see the server log".to_string()));
-        update(&self.repo_id, |job| {
-            job.finished = Some(job.started.elapsed());
-            match outcome {
-                Ok(outcome) => {
-                    job.done = outcome.embedded;
-                    job.state = if outcome.stopped {
-                        JobState::Stopped
-                    } else {
-                        JobState::Finished
-                    };
-                }
-                Err(e) => {
-                    tracing::warn!("background embedding of {} stopped: {e}", self.repo_id);
-                    job.state = JobState::Failed(e);
-                }
-            }
-        });
+        if let Err(e) = &outcome {
+            tracing::warn!("background embedding of {} stopped: {e}", self.repo_id);
+        }
         self.service.invalidate(&self.repo_id);
+        drop(self.guard.take());
+        let mut jobs = jobs();
+        // With the lock free, another job of the repository may have started
+        // already; its report is not ours to change.
+        let Some(job) = jobs
+            .get_mut(&self.repo_id)
+            .filter(|job| Arc::ptr_eq(&job.cancel, &self.cancel))
+        else {
+            return;
+        };
+        job.finished = Some(job.started.elapsed());
+        match outcome {
+            Ok(outcome) => {
+                job.done = outcome.embedded;
+                job.state = if outcome.stopped {
+                    JobState::Stopped
+                } else {
+                    JobState::Finished
+                };
+            }
+            Err(e) => job.state = JobState::Failed(e),
+        }
     }
 }
 
@@ -389,6 +406,73 @@ mod tests {
             job.state
         );
         RunningGuard::acquire(data.path(), repo_id).expect("the lock was released");
+    }
+
+    /// Runs `f` when dropped: a stand-in for the analysis lock.
+    struct OnRelease<F: FnMut()>(F);
+
+    impl<F: FnMut()> Drop for OnRelease<F> {
+        fn drop(&mut self) {
+            (self.0)();
+        }
+    }
+
+    /// Registers a running job of `repo_id` and ends it with `outcome`
+    /// (`None`: its work panicked); `on_release` runs when its lock goes.
+    fn end_job(
+        repo_id: &str,
+        outcome: Option<Result<PendingOutcome, String>>,
+        on_release: impl FnMut(),
+    ) {
+        let data = tempfile::tempdir().unwrap();
+        let running = job(0, 10, JobState::Running);
+        let cancel = running.cancel.clone();
+        jobs().insert(repo_id.to_string(), running);
+        drop(Supervisor {
+            repo_id: repo_id.to_string(),
+            service: Arc::new(GraphService::new(data.path().to_path_buf())),
+            cancel,
+            guard: Some(OnRelease(on_release)),
+            outcome,
+        });
+    }
+
+    /// #201: a job is reported as ended only after its lock is released, so
+    /// an `analyze` that waited for the end can take the lock.
+    #[test]
+    fn the_lock_is_released_before_the_end_is_reported() {
+        let stopped = PendingOutcome {
+            symbols_total: 10,
+            pending: 10,
+            embedded: 3,
+            stopped: true,
+        };
+        for (name, outcome) in [
+            ("panicked", None),
+            ("failed", Some(Err("no model".to_string()))),
+            ("stopped", Some(Ok(stopped))),
+        ] {
+            let repo_id = format!("release-order-{name}");
+            let mut running_at_release = None;
+            end_job(&repo_id, outcome, || {
+                running_at_release = Some(is_running(&repo_id));
+            });
+            assert_eq!(running_at_release, Some(true), "{name}");
+            assert!(!is_running(&repo_id), "{name}");
+        }
+    }
+
+    /// A job of the same repository that starts as soon as the lock is free
+    /// keeps its own report.
+    #[test]
+    fn an_ending_job_leaves_the_report_of_the_next_one_alone() {
+        let repo_id = "next-job";
+        end_job(repo_id, Some(Err("no model".to_string())), || {
+            jobs().insert(repo_id.to_string(), job(0, 99, JobState::Running));
+        });
+        let next = super::job(repo_id).unwrap();
+        jobs().remove(repo_id);
+        assert_eq!((next.total, next.state), (99, JobState::Running));
     }
 
     /// A cancelled job is asked to stop and reported as stopped.
