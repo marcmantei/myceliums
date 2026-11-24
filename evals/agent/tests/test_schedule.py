@@ -143,6 +143,21 @@ class UsageLimit(unittest.TestCase):
             self.assertEqual(self._status(returncode=code), ("crash", False), code)
         self.assertEqual(self._status(res, returncode=1), ("error", True))
 
+    def test_a_failed_login_is_never_final_and_stops_the_run(self):
+        for text in ("Invalid API key \u00b7 Please run /login", "Failed to authenticate. API Error: 401", "OAuth token has expired", "Credit balance is too low"):
+            self.assertEqual(self._status(self._result(text), returncode=1), ("login_error", False), text)
+        for code in (401, 403):
+            self.assertEqual(self._status({**self._result("x"), "api_error_status": code}, returncode=1), ("login_error", False))
+        self.assertEqual(self._status({**self._result("x"), "api_error_status": 400}, returncode=1), ("error", True))
+        # The words in an answer that ended well are the agent's.
+        self.assertEqual(self._status(self._result("please run /login to test", False)), ("no_answer", True))
+        r = _runner(1)
+        r._session = lambda item, attempt: {"finished_at": "2026-11-24T00:00:00", "status": "login_error", "final": False, "f1": 0.0, "tool_calls": 0,
+                                            "mcp_tool_calls": 0, "num_turns": 1, "total_input_tokens": 0, "output_tokens": 0, "wall_s": 1.0, "max_utilization": None}
+        r._append = lambda *a: None
+        with self.assertRaisesRegex(StopRun, "login failed"):
+            r._run_item(WorkItem(r.tasks[0], "none", 1), type("S", (), {"stop_reason": None})())
+
     def test_ordinary_endings_stay_final(self):
         self.assertEqual(self._status(timed_out=True), ("timeout", True))
         warn = {"type": "rate_limit_event", "rate_limit_info": {"status": "allowed_warning", "utilization": 0.9}}
