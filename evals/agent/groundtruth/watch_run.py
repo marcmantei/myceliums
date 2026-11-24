@@ -28,7 +28,9 @@ MIN_FREE_GB = 31
 def classify(line: str) -> tuple[str, str, str, str] | None:
     """``(kind, protocol, pid, address)`` of a line of ``lsof -nP -i``: ``LOOP``
     and ``LISTEN`` (loopback; pid and address left empty, one entry per
-    protocol), ``REMOTE`` and ``LISTEN-ALL`` (an address other than loopback)."""
+    protocol), ``REMOTE`` and ``LISTEN-ALL`` (an address other than loopback). A
+    TCP socket that is neither connected nor listening (``*:*``) is no listener:
+    ``UNBOUND``."""
     f = line.split()
     if len(f) < 9 or not f[1].isdigit():
         return None
@@ -36,6 +38,8 @@ def classify(line: str) -> tuple[str, str, str, str] | None:
     if "->" in name:
         remote = name.split("->")[1]
         return ("LOOP", proto, "", "") if remote.startswith(LOOPBACK) else ("REMOTE", proto, pid, remote)
+    if proto == "TCP" and not line.rstrip().endswith("(LISTEN)"):
+        return "UNBOUND", proto, pid, name
     if proto == "UDP" and name in ("*:*",):
         return "LISTEN", proto, "", ""
     return ("LISTEN", proto, "", "") if name.startswith(LOOPBACK) else ("LISTEN-ALL", proto, pid, name)

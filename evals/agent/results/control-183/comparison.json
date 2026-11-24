@@ -1,0 +1,2042 @@
+{
+ "claude_version": "2.1.331",
+ "model": "claude-sonnet-5-5",
+ "sentence": "Also update existing documentation and tests that the change makes wrong or incomplete.",
+ "docs_tasks": [
+  "beans-max-nested-path-depth",
+  "form-converter-map-payloads",
+  "jdbcclient-batch-entry-dsl",
+  "observation-record-handled-exception",
+  "retry-max-attempts-to-max-retries",
+  "servlet-response-ignore-body-flush",
+  "spel-simple-context-restricted-conversion",
+  "test-context-cache-pause-mode",
+  "type-mismatch-required-type-arg"
+ ],
+ "summary": {
+  "recorded": {
+   "sessions": 20,
+   "mean_recall": 0.66125,
+   "gap": {
+    "docs": 0.25375000000000003,
+    "remote": 0.005,
+    "forced_tests": 0.08
+   },
+   "by_type": {
+    "docs": {
+     "units": 13,
+     "touched": 2,
+     "tasks": 9,
+     "tasks_all_touched": 2,
+     "tasks_any_touched": 2
+    },
+    "remote": {
+     "units": 45,
+     "touched": 44,
+     "tasks": 14,
+     "tasks_all_touched": 13,
+     "tasks_any_touched": 14
+    },
+    "forced_tests": {
+     "units": 14,
+     "touched": 11,
+     "tasks": 7,
+     "tasks_all_touched": 4,
+     "tasks_any_touched": 4
+    }
+   },
+   "covered_by_type": {
+    "covered_strict": {
+     "docs": {
+      "units": 13,
+      "touched": 1,
+      "tasks": 9,
+      "tasks_all_touched": 1,
+      "tasks_any_touched": 1
+     },
+     "forced_tests": {
+      "units": 14,
+      "touched": 11,
+      "tasks": 7,
+      "tasks_all_touched": 4,
+      "tasks_any_touched": 4
+     }
+    },
+    "covered_lenient": {
+     "docs": {
+      "units": 13,
+      "touched": 1,
+      "tasks": 9,
+      "tasks_all_touched": 1,
+      "tasks_any_touched": 1
+     },
+     "forced_tests": {
+      "units": 14,
+      "touched": 11,
+      "tasks": 7,
+      "tasks_all_touched": 4,
+      "tasks_any_touched": 4
+     }
+    }
+   },
+   "docs_on_the_nine": {
+    "touched": 2,
+    "covered_strict": 1,
+    "covered_lenient": 1
+   },
+   "recall_all_tests": 0.4541106442577031,
+   "new_tests_touched": 3,
+   "optional_touched": 0,
+   "solved": 20,
+   "tokens_total": 5743243.0,
+   "tokens_on_the_nine": 3377254.0,
+   "usd_total": 4.4739042,
+   "wall_s_mean": 172.323,
+   "wall_net_s_mean": 172.323,
+   "api_calls_mean": 10.7,
+   "extra": {
+    "docs": {
+     "files": 0,
+     "sessions": 0
+    },
+    "tests": {
+     "files": 0,
+     "sessions": 0
+    },
+    "code": {
+     "files": 2,
+     "sessions": 1
+    }
+   },
+   "files_changed": 106,
+   "refused_by_hook": 36,
+   "refused_by_claude": 4,
+   "refused_by_claude_cd": 4,
+   "disagreements": 0,
+   "span": [
+    "2026-11-24T10:50:59.326446+00:00",
+    "2026-11-24T12:18:03.670570+00:00"
+   ]
+  },
+  "concurrent": {
+   "sessions": 9,
+   "mean_recall": 0.5472222222222222,
+   "gap": {
+    "docs": 0.4527777777777778,
+    "remote": 0.0,
+    "forced_tests": 0.0
+   },
+   "by_type": {
+    "docs": {
+     "units": 13,
+     "touched": 3,
+     "tasks": 9,
+     "tasks_all_touched": 3,
+     "tasks_any_touched": 3
+    },
+    "remote": {
+     "units": 11,
+     "touched": 11,
+     "tasks": 4,
+     "tasks_all_touched": 4,
+     "tasks_any_touched": 4
+    },
+    "forced_tests": {
+     "units": 9,
+     "touched": 9,
+     "tasks": 3,
+     "tasks_all_touched": 3,
+     "tasks_any_touched": 3
+    }
+   },
+   "covered_by_type": {
+    "covered_strict": {
+     "docs": {
+      "units": 13,
+      "touched": 3,
+      "tasks": 9,
+      "tasks_all_touched": 3,
+      "tasks_any_touched": 3
+     },
+     "forced_tests": {
+      "units": 9,
+      "touched": 9,
+      "tasks": 3,
+      "tasks_all_touched": 3,
+      "tasks_any_touched": 3
+     }
+    },
+    "covered_lenient": {
+     "docs": {
+      "units": 13,
+      "touched": 3,
+      "tasks": 9,
+      "tasks_all_touched": 3,
+      "tasks_any_touched": 3
+     },
+     "forced_tests": {
+      "units": 9,
+      "touched": 9,
+      "tasks": 3,
+      "tasks_all_touched": 3,
+      "tasks_any_touched": 3
+     }
+    }
+   },
+   "docs_on_the_nine": {
+    "touched": 3,
+    "covered_strict": 3,
+    "covered_lenient": 3
+   },
+   "recall_all_tests": 0.464161220043573,
+   "new_tests_touched": 1,
+   "optional_touched": 0,
+   "solved": 9,
+   "tokens_total": 3414091.0,
+   "tokens_on_the_nine": 3414091.0,
+   "usd_total": 2.5691426,
+   "wall_s_mean": 172.25,
+   "wall_net_s_mean": 172.25,
+   "api_calls_mean": 12.11111111111111,
+   "extra": {
+    "docs": {
+     "files": 0,
+     "sessions": 0
+    },
+    "tests": {
+     "files": 0,
+     "sessions": 0
+    },
+    "code": {
+     "files": 1,
+     "sessions": 1
+    }
+   },
+   "files_changed": 48,
+   "refused_by_hook": 22,
+   "refused_by_claude": 0,
+   "refused_by_claude_cd": 0,
+   "disagreements": 0,
+   "span": [
+    "2026-11-24T14:34:06.622335+00:00",
+    "2026-11-24T16:39:47.402034+00:00"
+   ]
+  },
+  "none-docs": {
+   "sessions": 20,
+   "mean_recall": 0.87375,
+   "gap": {
+    "docs": 0.11625,
+    "remote": 0.005,
+    "forced_tests": 0.005
+   },
+   "by_type": {
+    "docs": {
+     "units": 13,
+     "touched": 8,
+     "tasks": 9,
+     "tasks_all_touched": 4,
+     "tasks_any_touched": 6
+    },
+    "remote": {
+     "units": 45,
+     "touched": 44,
+     "tasks": 14,
+     "tasks_all_touched": 13,
+     "tasks_any_touched": 14
+    },
+    "forced_tests": {
+     "units": 14,
+     "touched": 13,
+     "tasks": 7,
+     "tasks_all_touched": 6,
+     "tasks_any_touched": 6
+    }
+   },
+   "covered_by_type": {
+    "covered_strict": {
+     "docs": {
+      "units": 13,
+      "touched": 8,
+      "tasks": 9,
+      "tasks_all_touched": 4,
+      "tasks_any_touched": 6
+     },
+     "forced_tests": {
+      "units": 14,
+      "touched": 12,
+      "tasks": 7,
+      "tasks_all_touched": 5,
+      "tasks_any_touched": 5
+     }
+    },
+    "covered_lenient": {
+     "docs": {
+      "units": 13,
+      "touched": 8,
+      "tasks": 9,
+      "tasks_all_touched": 4,
+      "tasks_any_touched": 6
+     },
+     "forced_tests": {
+      "units": 14,
+      "touched": 12,
+      "tasks": 7,
+      "tasks_all_touched": 5,
+      "tasks_any_touched": 5
+     }
+    }
+   },
+   "docs_on_the_nine": {
+    "touched": 8,
+    "covered_strict": 8,
+    "covered_lenient": 8
+   },
+   "recall_all_tests": 0.6611484593837534,
+   "new_tests_touched": 10,
+   "optional_touched": 2,
+   "solved": 20,
+   "tokens_total": 8078987.0,
+   "tokens_on_the_nine": 4287324.0,
+   "usd_total": 5.5811852,
+   "wall_s_mean": 212.56350000000003,
+   "wall_net_s_mean": 212.56350000000003,
+   "api_calls_mean": 13.5,
+   "extra": {
+    "docs": {
+     "files": 1,
+     "sessions": 1
+    },
+    "tests": {
+     "files": 5,
+     "sessions": 5
+    },
+    "code": {
+     "files": 3,
+     "sessions": 3
+    }
+   },
+   "files_changed": 132,
+   "refused_by_hook": 39,
+   "refused_by_claude": 5,
+   "refused_by_claude_cd": 4,
+   "disagreements": 1,
+   "span": [
+    "2026-11-24T14:29:42.763754+00:00",
+    "2026-11-24T16:49:58.529741+00:00"
+   ]
+  }
+ },
+ "docs_gap_closed": {
+  "touched": {
+   "recorded": 0.541871921182266,
+   "concurrent": 0.42944785276073616,
+   "interval": [
+    0.12184102262709366,
+    0.88
+   ],
+   "judged": true
+  },
+  "covered_strict": {
+   "recorded": 0.5633802816901408,
+   "concurrent": 0.42944785276073616,
+   "interval": [
+    0.189873417721519,
+    0.8888888888888888
+   ],
+   "judged": true
+  },
+  "covered_lenient": {
+   "recorded": 0.5633802816901408,
+   "concurrent": 0.42944785276073616,
+   "interval": [
+    0.189873417721519,
+    0.8888888888888888
+   ],
+   "judged": true
+  }
+ },
+ "forced_tests_gap_closed": {
+  "touched": 0.9375,
+  "covered_strict": 0.3125,
+  "covered_lenient": 0.3125
+ },
+ "difference": {
+  "recall": {
+   "n_tasks": 20,
+   "a_mean": 0.87375,
+   "a_lo": 0.7537499999999999,
+   "a_hi": 0.9687812499999996,
+   "b_mean": 0.66125,
+   "b_lo": 0.47125000000000006,
+   "b_hi": 0.83625,
+   "diff_mean": 0.2125,
+   "diff_lo": 0.0625,
+   "diff_hi": 0.38750000000000007,
+   "ratio_mean": 1.3213610586011344,
+   "ratio_lo": 1.0810372771474879,
+   "ratio_hi": 1.787037037037037
+  },
+  "recall_on_the_nine_concurrent": {
+   "n_tasks": 9,
+   "a_mean": 0.7416666666666667,
+   "a_lo": 0.5,
+   "a_hi": 0.9305555555555556,
+   "b_mean": 0.5472222222222222,
+   "b_lo": 0.26944444444444443,
+   "b_hi": 0.8139583333333323,
+   "diff_mean": 0.19444444444444445,
+   "diff_lo": 0.0,
+   "diff_hi": 0.41666666666666674,
+   "ratio_mean": 1.3553299492385786,
+   "ratio_lo": 1.0,
+   "ratio_hi": 2.368524251805984
+  },
+  "tokens": {
+   "n_tasks": 20,
+   "a_mean": 403949.35,
+   "a_lo": 305374.75625,
+   "a_hi": 509688.81875,
+   "b_mean": 287162.15,
+   "b_lo": 199286.78,
+   "b_hi": 403293.1,
+   "diff_mean": 116787.2,
+   "diff_lo": 49602.14625000001,
+   "diff_hi": 180096.41249999995,
+   "ratio_mean": 1.406694266636463,
+   "ratio_lo": 1.138457297979878,
+   "ratio_hi": 1.7190017772270363
+  },
+  "tokens_on_the_nine_concurrent": {
+   "n_tasks": 9,
+   "a_mean": 476369.3333333333,
+   "a_lo": 297382.9555555555,
+   "a_hi": 669103.8805555555,
+   "b_mean": 379343.44444444444,
+   "b_lo": 234065.74444444443,
+   "b_hi": 536572.275,
+   "diff_mean": 97025.88888888889,
+   "diff_lo": 20815.55000000002,
+   "diff_hi": 173372.72222222228,
+   "ratio_mean": 1.2557732058108586,
+   "ratio_lo": 1.0586969692643398,
+   "ratio_hi": 1.4892234284467427
+  },
+  "usd": {
+   "n_tasks": 20,
+   "a_mean": 0.27905926000000003,
+   "a_lo": 0.228020966375,
+   "a_hi": 0.33516129512500004,
+   "b_mean": 0.22369520999999998,
+   "b_lo": 0.174632807125,
+   "b_hi": 0.28232380637499993,
+   "diff_mean": 0.05536405,
+   "diff_lo": 0.034684775625000004,
+   "diff_hi": 0.07708553449999998,
+   "ratio_mean": 1.247497700107213,
+   "ratio_lo": 1.136907059161759,
+   "ratio_hi": 1.377579136077242
+  },
+  "extra_files": {
+   "n_tasks": 20,
+   "a_mean": 0.45,
+   "a_lo": 0.2,
+   "a_hi": 0.75,
+   "b_mean": 0.1,
+   "b_lo": 0.0,
+   "b_hi": 0.3,
+   "diff_mean": 0.35,
+   "diff_lo": 0.1,
+   "diff_hi": 0.6000000000000001,
+   "ratio_mean": 4.5,
+   "ratio_lo": 1.4999999999999998,
+   "ratio_hi": 6.999999999999999
+  }
+ },
+ "tasks": {
+  "api-version-deprecation-handler-handler-arg": {
+   "recall": {
+    "recorded": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "2/2",
+    "none-docs": "2/2"
+   },
+   "forced_tests": {
+    "recorded": "2/2",
+    "none-docs": "2/2"
+   },
+   "covered": {
+    "recorded": [
+     "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+     "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java"
+    ],
+    "none-docs": [
+     "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java",
+     "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 188991.0,
+    "none-docs": 210036.0
+   },
+   "usd": {
+    "recorded": 0.18613780000000002,
+    "none-docs": 0.18911809999999998
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "bean-provider-parameterized-type-reference": {
+   "recall": {
+    "recorded": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "5/5",
+    "none-docs": "5/5"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 157647.0,
+    "none-docs": 326730.0
+   },
+   "usd": {
+    "recorded": 0.15795789999999998,
+    "none-docs": 0.2283609
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "beans-max-nested-path-depth": {
+   "recall": {
+    "recorded": 0.0,
+    "concurrent": 0.0,
+    "none-docs": 0.0
+   },
+   "docs": {
+    "recorded": "0/1",
+    "concurrent": "0/1",
+    "none-docs": "0/1"
+   },
+   "remote": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc"
+    ]
+   ],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 400085.0,
+    "concurrent": 453353.0,
+    "none-docs": 726191.0
+   },
+   "usd": {
+    "recorded": 0.28898890000000005,
+    "concurrent": 0.38971630000000007,
+    "none-docs": 0.45260360000000005
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 1,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [
+     "spring-beans/src/test/java/org/springframework/beans/BeanWrapperAutoGrowingTests.java"
+    ],
+    "code": []
+   }
+  },
+  "client-builders-deep-copy-default-headers-cookies": {
+   "recall": {
+    "recorded": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "2/2",
+    "none-docs": "2/2"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 278983.0,
+    "none-docs": 682695.0
+   },
+   "usd": {
+    "recorded": 0.21594410000000003,
+    "none-docs": 0.3626908000000001
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "content-negotiation-no-fallback-mapping": {
+   "recall": {
+    "recorded": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "1/1",
+    "none-docs": "1/1"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 211427.0,
+    "none-docs": 372872.0
+   },
+   "usd": {
+    "recorded": 0.1534894,
+    "none-docs": 0.19946919999999996
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 1,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [
+     "spring-web/src/test/java/org/springframework/web/accept/ContentNegotiationManagerFactoryBeanTests.java"
+    ],
+    "code": []
+   }
+  },
+  "deferred-bean-registrar-contains-bean": {
+   "recall": {
+    "recorded": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "3/3",
+    "none-docs": "3/3"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 335208.0,
+    "none-docs": 598876.0
+   },
+   "usd": {
+    "recorded": 0.3275441,
+    "none-docs": 0.3520955
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 2
+    },
+    "none-docs": {
+     "docs": 1,
+     "tests": 0,
+     "code": 1
+    }
+   },
+   "extra_files": {
+    "docs": [
+     "framework-docs/modules/ROOT/pages/core/beans/java/programmatic-bean-registration.adoc"
+    ],
+    "tests": [],
+    "code": [
+     "spring-beans/src/main/kotlin/org/springframework/beans/factory/BeanRegistrarDsl.kt"
+    ]
+   }
+  },
+  "error-response-interceptor-with-request": {
+   "recall": {
+    "recorded": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "6/6",
+    "none-docs": "6/6"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 271660.0,
+    "none-docs": 414756.0
+   },
+   "usd": {
+    "recorded": 0.2155355,
+    "none-docs": 0.27361520000000006
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 1,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [
+     "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverProblemDetailTests.java"
+    ],
+    "code": []
+   }
+  },
+  "form-converter-map-payloads": {
+   "recall": {
+    "recorded": 0.8,
+    "concurrent": 0.8,
+    "none-docs": 0.8
+   },
+   "docs": {
+    "recorded": "0/1",
+    "concurrent": "0/1",
+    "none-docs": "0/1"
+   },
+   "remote": {
+    "recorded": "3/3",
+    "concurrent": "3/3",
+    "none-docs": "3/3"
+   },
+   "forced_tests": {
+    "recorded": "1/1",
+    "concurrent": "1/1",
+    "none-docs": "1/1"
+   },
+   "covered": {
+    "recorded": [
+     "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java"
+    ],
+    "concurrent": [
+     "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java"
+    ],
+    "none-docs": [
+     "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc"
+    ]
+   ],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 397621.0,
+    "concurrent": 403403.0,
+    "none-docs": 544248.0
+   },
+   "usd": {
+    "recorded": 0.27260680000000004,
+    "concurrent": 0.2464225,
+    "none-docs": 0.3261281
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "http-range-honor-if-range": {
+   "recall": {
+    "recorded": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "4/4",
+    "none-docs": "4/4"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 254098.0,
+    "none-docs": 315006.0
+   },
+   "usd": {
+    "recorded": 0.2181609,
+    "none-docs": 0.2456353
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "jdbcclient-batch-entry-dsl": {
+   "recall": {
+    "recorded": 1.0,
+    "concurrent": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "1/1",
+    "concurrent": "1/1",
+    "none-docs": "1/1"
+   },
+   "remote": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "forced_tests": {
+    "recorded": "3/3",
+    "concurrent": "3/3",
+    "none-docs": "3/3"
+   },
+   "covered": {
+    "recorded": [
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java"
+    ],
+    "concurrent": [
+     "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java"
+    ],
+    "none-docs": [
+     "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc",
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java",
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java",
+     "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 1177556.0,
+    "concurrent": 805114.0,
+    "none-docs": 877731.0
+   },
+   "usd": {
+    "recorded": 0.6220724,
+    "concurrent": 0.5946052,
+    "none-docs": 0.5796687
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "jsonl-media-type-support": {
+   "recall": {
+    "recorded": 0.8,
+    "none-docs": 0.8
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "8/9",
+    "none-docs": "8/9"
+   },
+   "forced_tests": {
+    "recorded": "0/1",
+    "none-docs": "0/1"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [
+    [
+     "remote",
+     "spring-web/src/main/java/org/springframework/http/codec/protobuf/ProtobufJsonEncoder.java"
+    ],
+    [
+     "forced_tests",
+     "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java"
+    ]
+   ],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 195616.0,
+    "none-docs": 254659.0
+   },
+   "usd": {
+    "recorded": 0.17788379999999998,
+    "none-docs": 0.23868229999999996
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 1,
+     "code": 1
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [
+     "spring-web/src/test/java/org/springframework/http/codec/json/JacksonJsonEncoderTests.java"
+    ],
+    "code": [
+     "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ResponseBodyEmitterReturnValueHandler.java"
+    ]
+   }
+  },
+  "message-source-default-charset": {
+   "recall": {
+    "recorded": 0.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "forced_tests": {
+    "recorded": "0/1",
+    "none-docs": "1/1"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [
+    [
+     "forced_tests",
+     "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java"
+    ]
+   ],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 137074.0,
+    "none-docs": 253025.0
+   },
+   "usd": {
+    "recorded": 0.1240616,
+    "none-docs": 0.23313990000000004
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "mime-type-parameter-names-case-insensitive": {
+   "recall": {
+    "recorded": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "1/1",
+    "none-docs": "1/1"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 170231.0,
+    "none-docs": 131066.0
+   },
+   "usd": {
+    "recorded": 0.1024792,
+    "none-docs": 0.1161103
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "observation-record-handled-exception": {
+   "recall": {
+    "recorded": 0.625,
+    "concurrent": 0.625,
+    "none-docs": 0.875
+   },
+   "docs": {
+    "recorded": "0/3",
+    "concurrent": "0/3",
+    "none-docs": "2/3"
+   },
+   "remote": {
+    "recorded": "5/5",
+    "concurrent": "5/5",
+    "none-docs": "5/5"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": [
+     "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java",
+     "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [
+    [
+     "docs",
+     "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java"
+    ],
+    [
+     "docs",
+     "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java"
+    ]
+   ],
+   "missed_by_both": [
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+    ]
+   ],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 222257.0,
+    "concurrent": 236886.0,
+    "none-docs": 467760.0
+   },
+   "usd": {
+    "recorded": 0.22285459999999999,
+    "concurrent": 0.2597902,
+    "none-docs": 0.3236812
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 1
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 1,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [
+     "spring-web/src/test/java/org/springframework/http/server/reactive/observation/ServerRequestObservationContextTests.java"
+    ],
+    "code": []
+   }
+  },
+  "retry-max-attempts-to-max-retries": {
+   "recall": {
+    "recorded": 1.0,
+    "concurrent": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "1/1",
+    "concurrent": "1/1",
+    "none-docs": "1/1"
+   },
+   "remote": {
+    "recorded": "2/2",
+    "concurrent": "2/2",
+    "none-docs": "2/2"
+   },
+   "forced_tests": {
+    "recorded": "5/5",
+    "concurrent": "5/5",
+    "none-docs": "5/5"
+   },
+   "covered": {
+    "recorded": [
+     "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+     "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+     "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java"
+    ],
+    "concurrent": [
+     "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+     "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+     "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java"
+    ],
+    "none-docs": [
+     "framework-docs/modules/ROOT/pages/core/resilience.adoc",
+     "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java",
+     "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java",
+     "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 581447.0,
+    "concurrent": 664243.0,
+    "none-docs": 875007.0
+   },
+   "usd": {
+    "recorded": 0.40513430000000006,
+    "concurrent": 0.41844450000000005,
+    "none-docs": 0.4964155
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "retryable-method-retry-event": {
+   "recall": {
+    "recorded": 0.5,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/0",
+    "none-docs": "0/0"
+   },
+   "remote": {
+    "recorded": "1/1",
+    "none-docs": "1/1"
+   },
+   "forced_tests": {
+    "recorded": "0/1",
+    "none-docs": "1/1"
+   },
+   "covered": {
+    "recorded": [],
+    "none-docs": [
+     "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "none-docs": []
+   },
+   "found_now": [
+    [
+     "forced_tests",
+     "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java"
+    ]
+   ],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 165054.0,
+    "none-docs": 231942.0
+   },
+   "usd": {
+    "recorded": 0.21039890000000003,
+    "none-docs": 0.27083759999999996
+   },
+   "solved": {
+    "recorded": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "servlet-response-ignore-body-flush": {
+   "recall": {
+    "recorded": 0.5,
+    "concurrent": 0.5,
+    "none-docs": 0.5
+   },
+   "docs": {
+    "recorded": "0/1",
+    "concurrent": "0/1",
+    "none-docs": "0/1"
+   },
+   "remote": {
+    "recorded": "1/1",
+    "concurrent": "1/1",
+    "none-docs": "1/1"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [],
+   "missed_by_both": [
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/appendix.adoc"
+    ]
+   ],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 133798.0,
+    "concurrent": 193646.0,
+    "none-docs": 212956.0
+   },
+   "usd": {
+    "recorded": 0.1363034,
+    "concurrent": 0.15161699999999997,
+    "none-docs": 0.1861212
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 1
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": [
+     "spring-webmvc/src/main/java/org/springframework/web/servlet/function/SseServerResponse.java"
+    ]
+   }
+  },
+  "spel-simple-context-restricted-conversion": {
+   "recall": {
+    "recorded": 0.0,
+    "concurrent": 0.0,
+    "none-docs": 0.5
+   },
+   "docs": {
+    "recorded": "0/2",
+    "concurrent": "0/2",
+    "none-docs": "1/2"
+   },
+   "remote": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": [
+     "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+    ]
+   ],
+   "missed_by_both": [
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/appendix.adoc"
+    ]
+   ],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 357077.0,
+    "concurrent": 458845.0,
+    "none-docs": 354680.0
+   },
+   "usd": {
+    "recorded": 0.29192520000000005,
+    "concurrent": 0.3188079000000001,
+    "none-docs": 0.2905072999999999
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "test-context-cache-pause-mode": {
+   "recall": {
+    "recorded": 0.0,
+    "concurrent": 0.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/2",
+    "concurrent": "0/2",
+    "none-docs": "2/2"
+   },
+   "remote": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": [
+     "framework-docs/modules/ROOT/pages/appendix.adoc",
+     "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/appendix.adoc"
+    ],
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc"
+    ]
+   ],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [],
+   "tokens": {
+    "recorded": 70401.0,
+    "concurrent": 121579.0,
+    "none-docs": 126370.0
+   },
+   "usd": {
+    "recorded": 0.1063511,
+    "concurrent": 0.13744689999999998,
+    "none-docs": 0.13885150000000002
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  },
+  "type-mismatch-required-type-arg": {
+   "recall": {
+    "recorded": 0.0,
+    "concurrent": 1.0,
+    "none-docs": 1.0
+   },
+   "docs": {
+    "recorded": "0/1",
+    "concurrent": "1/1",
+    "none-docs": "1/1"
+   },
+   "remote": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "forced_tests": {
+    "recorded": "0/0",
+    "concurrent": "0/0",
+    "none-docs": "0/0"
+   },
+   "covered": {
+    "recorded": [],
+    "concurrent": [
+     "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+    ],
+    "none-docs": [
+     "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+    ]
+   },
+   "undecided_units": {
+    "recorded": [],
+    "concurrent": [],
+    "none-docs": []
+   },
+   "found_now": [
+    [
+     "docs",
+     "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+    ]
+   ],
+   "missed_by_both": [],
+   "missed_now_only": [],
+   "flipped_in_none": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+   ],
+   "tokens": {
+    "recorded": 37012.0,
+    "concurrent": 77022.0,
+    "none-docs": 102381.0
+   },
+   "usd": {
+    "recorded": 0.038074300000000005,
+    "concurrent": 0.0522921,
+    "none-docs": 0.07745300000000001
+   },
+   "solved": {
+    "recorded": true,
+    "concurrent": true,
+    "none-docs": true
+   },
+   "status": {
+    "recorded": "ok",
+    "concurrent": "ok",
+    "none-docs": "ok"
+   },
+   "extra": {
+    "recorded": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "concurrent": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    },
+    "none-docs": {
+     "docs": 0,
+     "tests": 0,
+     "code": 0
+    }
+   },
+   "extra_files": {
+    "docs": [],
+    "tests": [],
+    "code": []
+   }
+  }
+ },
+ "outcome": "undecided",
+ "without_split_pair": {
+  "tasks": [
+   "retry-max-attempts-to-max-retries"
+  ],
+  "docs_gap_closed": {
+   "touched": {
+    "recorded": 0.541871921182266,
+    "concurrent": 0.42944785276073616,
+    "interval": [
+     0.132948717948718,
+     0.875
+    ],
+    "judged": true
+   },
+   "covered_strict": {
+    "recorded": 0.5633802816901408,
+    "concurrent": 0.42944785276073616,
+    "interval": [
+     0.19044903132355603,
+     0.8850397669989907
+    ],
+    "judged": true
+   },
+   "covered_lenient": {
+    "recorded": 0.5633802816901408,
+    "concurrent": 0.42944785276073616,
+    "interval": [
+     0.19044903132355603,
+     0.8850397669989907
+    ],
+    "judged": true
+   }
+  },
+  "outcome": "undecided"
+ }
+}

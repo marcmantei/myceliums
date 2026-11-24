@@ -489,6 +489,36 @@ class Comparison(unittest.TestCase):
         self.assertIn("docs", control.lines(c)[0] + "".join(control.lines(c)))
 
 
+class RecordedRun(unittest.TestCase):
+    """The control run of 24 November 2026: the comparison follows from the committed rows, keys and verdicts."""
+
+    DIR = EVAL / "results/control-183"
+
+    def setUp(self):
+        self.tasks = json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]
+        self.recorded = [json.loads(x) for x in (EVAL / "results/none20-183/sessions.jsonl").read_text().splitlines()]
+        self.run_rows = [json.loads(x) for x in (self.DIR / "sessions.jsonl").read_text().splitlines()]
+        load = lambda n: json.loads((self.DIR / "coverage" / n).read_text())  # noqa: E731
+        self.judges = [control.judged_units(load(f"key{k}.json"), load(f"verdicts{k}.json"), f"{k}") for k in (1, 2)]
+
+    def test_the_comparison_follows(self):
+        out = control.compare(self.recorded, self.run_rows, self.tasks, control.verdicts(*self.judges))
+        self.assertEqual(json.dumps(json.loads(json.dumps(out))), json.dumps(json.loads((self.DIR / "comparison.json").read_text())))
+        self.assertEqual(out["outcome"], "undecided")
+        text = "\n".join(control.lines(out))
+        self.assertEqual(text.strip(), (self.DIR / "CONTROL.md").read_text().strip())
+
+    def test_the_judges_and_the_sessions(self):
+        for j in self.judges:
+            self.assertEqual(control.judge_errors(j), [])
+        self.assertEqual(self.judges[0], self.judges[1])
+        self.assertEqual(len(self.judges[0]), 100)
+        self.assertEqual({c: sum(r["condition"] == c for r in self.run_rows) for c in ("none", "none-docs")}, {"none": 9, "none-docs": 20})
+        for f in self.DIR.rglob("*"):
+            if f.is_file():
+                self.assertNotIn("/Users/", f.read_text(), f.name)
+
+
 class ControlledDesign(unittest.TestCase):
     """The main run registered for outcome (ii): none, none-docs, C."""
 
