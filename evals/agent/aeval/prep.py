@@ -85,7 +85,8 @@ DEFAULT_EXCLUDE = ["node_modules/**", ".git/**", "target/**", "dist/**", "build/
 
 def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | None = None,
           record_only: bool = False, default_config: set[str] | None = None,
-          skip_embeddings: bool = False, base: Path | None = None, record_difference: bool = False) -> None:
+          skip_embeddings: bool = False, base: Path | None = None, record_difference: bool = False,
+          replace: bool = False) -> None:
     """Build one myceliums index per repository with ``myc analyze``.
 
     ``myc analyze`` stores its data under ``$HOME/.myceliums``; ``HOME`` is set
@@ -103,9 +104,16 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
     ``skip_embeddings`` (#182) builds the graph without vectors, for pipeline
     checks against the mock API only; ``meta.json`` says so and ``run``
     refuses such an index unless the run uses the mock API.
+
+    An index derived with ``base`` (#183) is not deleted without
+    ``replace``; nothing is touched when one of the selected repositories has one.
     """
     cache = config.cache_dir()
     order = list(repos.items())
+    kept = [n for n in repos if (not only or n in only) and is_derived(cache / "index" / n)]
+    if kept and not replace and not record_only:
+        raise SystemExit(f"derived indexes exist and would be deleted: {', '.join(kept)}; pass --replace to make them "
+                         "anew, or use another AEVAL_CACHE (nothing was changed)")
     if base is not None:
         if skip_embeddings or record_only:
             raise SystemExit("--base needs an embedded build")
@@ -183,6 +191,18 @@ def index(repos: dict[str, dict], myc: str, models_dir: str, only: set[str] | No
         }
         (cache / "index" / name / "meta.json").write_text(json.dumps(meta, indent=2) + "\n")
         print(json.dumps(meta))
+
+
+def is_derived(directory: Path) -> bool:
+    """``directory`` holds an index derived with ``--base``. A ``meta.json`` that cannot be read counts as one."""
+    if not (directory / "home").exists():
+        return False
+    try:
+        return bool(config.load_json(directory / "meta.json").get("derived"))
+    except FileNotFoundError:
+        return False  # a build that did not finish
+    except ValueError:
+        return True
 
 
 def check_base(base: Path, work: Path) -> None:

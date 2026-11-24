@@ -6,6 +6,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -225,6 +226,21 @@ PASSTHROUGH_ENV = (
     "CLAUDE_SECURESTORAGE_CONFIG_DIR", "CLAUDE_CONFIG_DIR",
     "ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN",
 )
+
+# What decides which login a session uses. A run over an isolated repository (#183) was approved for the
+# caller's normal login, so it refuses variables that bill an API key or lead to another provider. Only names
+# are looked at, also of an empty variable; no value is read, kept or printed.
+LOGIN_ENV = re.compile(r"ANTHROPIC_(API_KEY|AUTH_TOKEN)|\w*ANTHROPIC\w*_BASE_URL|CLAUDE_CODE_USE_\w+|"
+                       r"\w*(BEDROCK|VERTEX|FOUNDRY)\w*|CLAUDE_CODE_OAUTH_TOKEN|CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE_CONFIG_DIR")
+NORMAL_LOGIN = {"CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR"}
+
+
+def login_variables(environ=None) -> tuple[list[str], list[str]]:
+    """``(refused, present)``: the names in the environment that would leave
+    the normal login, and those that choose one (recorded with the run)."""
+    names = sorted(n for n in (os.environ if environ is None else environ) if LOGIN_ENV.fullmatch(n))
+    return [n for n in names if n not in NORMAL_LOGIN], [n for n in names if n in NORMAL_LOGIN]
+
 
 # Settings that keep the user's own configuration out of the session. Together
 # with `--setting-sources ""`, `--strict-mcp-config` and

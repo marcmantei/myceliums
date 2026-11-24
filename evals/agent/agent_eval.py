@@ -61,7 +61,8 @@ def cmd_index(args) -> int:
     only = set(args.repo or config.task_file_repos()) or None
     prep.index(config.load_repos(), args.myc, args.models_dir, only, record_only=args.record_only,
                default_config=set(args.default_config or []), skip_embeddings=args.skip_embeddings,
-               base=Path(args.base).resolve() if args.base else None, record_difference=args.record_graph_difference)
+               base=Path(args.base).resolve() if args.base else None, record_difference=args.record_graph_difference,
+               replace=args.replace)
     return 0
 
 
@@ -273,6 +274,7 @@ def cmd_export(args) -> int:
         "repos": repos,
         "index": prep.index_meta(),
         "sessions_launched_ledger": launched,
+        **login_meta(run_dir, rows),
         "notes": args.note or [],
     }
     versions = mixed_claude_versions(rows)
@@ -285,6 +287,17 @@ def cmd_export(args) -> int:
     out = report.export(args.label, meta)
     print(f"exported to {out}")
     return 0
+
+
+def login_meta(run_dir: Path, rows: list[dict]) -> dict:
+    """Which kind of login a run used (#183): the names of the variables that
+    choose one at each start, and what the CLI reported."""
+    path = run_dir / "login.jsonl"
+    if not path.exists():
+        return {}
+    starts = [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
+    return {"login": {"variables_present": [s["variables"] for s in starts],
+                      "api_key_source": sorted({str(r.get("api_key_source")) for r in rows})}}
 
 
 def cmd_pilot(args) -> int:
@@ -590,6 +603,8 @@ def main(argv: list[str] | None = None) -> int:
                    "embedding only changed symbols, and checked against a fresh graph-only build")
     s.add_argument("--record-graph-difference", action="store_true", help="with --base, for measuring: record a derived "
                    "graph that differs from a fresh one instead of stopping")
+    s.add_argument("--replace", action="store_true", help="#183: delete and rebuild a derived index (made with --base); "
+                   "without it `index` refuses when a selected repository has one")
     s.add_argument("--skip-embeddings", action="store_true",
                    help="#182: no vectors (minutes instead of hours), for `run --mock-api` checks only; "
                         "a real run refuses such an index")

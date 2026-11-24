@@ -323,6 +323,23 @@ class Runner:
         path.write_text(pinned + "\n")
         self.claude_version = pinned
 
+    def _real_isolated(self) -> bool:
+        """Sessions with a model (not the mock API) over an isolated repository (#183)."""
+        return not self.cfg.extra_env and any((self.repos.get(t.get("repo")) or {}).get("isolated") for t in self.tasks)
+
+    def _check_login(self) -> list[str]:
+        """Such a run uses the caller's normal login and nothing else (#183);
+        returns the names of the variables that choose it."""
+        refused, present = config.login_variables()
+        if refused:
+            raise SystemExit("this run was approved for the normal Claude login; unset " + ", ".join(refused)
+                             + " (an API key, a token or another provider would be billed)")
+        return present
+
+    def _record_login(self, present: list[str]) -> None:
+        with open(self.run_dir / "login.jsonl", "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"started": dt.datetime.now(dt.timezone.utc).isoformat(), "variables": present}) + "\n")
+
     def completed(self) -> set[str]:
         done = set()
         if self.results_path.exists():
@@ -739,6 +756,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         problems = check_isolation(init, required, variant.mcp, optional)
         if init and self.claude_version and init.get("claude_code_version") not in (None, self.claude_version):
             problems.append(f"Claude Code {init.get('claude_code_version')} ran, the run is pinned to {self.claude_version}")
+        if init and self._real_isolated() and init.get("apiKeySource") != "none":  # `none` is the normal login (#182's sessions)
+            problems.append(f"the session used an API key (apiKeySource {init.get('apiKeySource')!r}), not the normal login")
         if variant.agent and t.init and config.EXPLORER_AGENT not in (t.init.get("agents") or []):
             problems.append(f"{config.EXPLORER_AGENT} subagent not loaded: {t.init.get('agents')}")
         hooks = hook_stats(transcript.parent / "hooks")
@@ -834,6 +853,7 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             "model": (t.init or {}).get("model"),
             "models_used": t.models(),
             "claude_version": (t.init or {}).get("claude_code_version"),
+            "api_key_source": (t.init or {}).get("apiKeySource"),
             "n_tools_offered": len((t.init or {}).get("tools") or []),
             "n_mcp_tools_offered": sum(1 for x in (t.init or {}).get("tools") or [] if x.startswith("mcp__")),
             "max_utilization": t.max_utilization,
@@ -907,7 +927,10 @@ exec {shlex.quote(self.cfg.myc)} "$@"
             # time than the others' (the #171 caveat); `probe` (mock API) may.
             raise SystemExit("an interleaved run cannot be restricted to some of its conditions "
                              f"({', '.join(conditions)} of {', '.join(self.cfg.conditions)}); drop --condition")
+        login = self._check_login() if self._real_isolated() else None
         self._check_config()
+        if login is not None:
+            self._record_login(login)
         self.started_at = time.time()
         (self.cache / "tmp").mkdir(parents=True, exist_ok=True)
         done = self.completed()
