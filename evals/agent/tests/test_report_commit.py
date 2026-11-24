@@ -482,10 +482,25 @@ class Describe(unittest.TestCase):
         lo, hi = d["main_run"]["usd_95"]
         self.assertTrue(lo < 1.05 * 180 < hi)
         self.assertAlmostEqual(d["main_run"]["hours"] - d["main_run"]["hours_without_stalls"], 12 / 20 * 180 / 3600)
-        self.assertAlmostEqual(d["detectable_recall"]["paired_sd_upper"], math.sqrt(2 / 3) * d["sd_recall_between_tasks"])
+        self.assertAlmostEqual(d["recall_noise_only"]["paired_sd"], math.sqrt(2 / 3) * d["sd_recall_between_tasks"])
+        self.assertEqual(d["closing_docs_misses"]["gain"], 0)  # no docs unit is missed here
         self.assertAlmostEqual(d["detectable_tokens_share_of_mean"]["C vs none"]["one test"], rc.detectable(0.5))
         self.assertEqual(d["tasks"]["t02"]["claude_refusals"], 1)
         self.assertEqual(json.loads(json.dumps(d)), d)
+
+    def test_the_arm_that_closes_every_docs_miss(self):
+        tasks = [task(i) for i in range(1, 21)]
+        rows = [row(t, "none", touch=0 if i < 10 else 4) for i, t in enumerate(tasks)]  # ten tasks miss both docs units of four
+        c = rc.describe(rows, tasks)["closing_docs_misses"]
+        self.assertAlmostEqual(c["gain"], 0.25)
+        self.assertAlmostEqual(c["sd_over_tasks"], rc.sd([0.5] * 10 + [0.0] * 10))
+        self.assertAlmostEqual(c["power"]["one test"], rc.power(c["gain"], c["sd_over_tasks"]))
+        # The power of the detectable difference is the one it was computed for.
+        for alpha in (0.05, 0.05 / 6):
+            self.assertAlmostEqual(rc.power(rc.detectable(0.3, alpha=alpha), 0.3, alpha=alpha), 0.8, 3)
+        self.assertAlmostEqual(rc.power(0.0, 0.3), 0.05)
+        self.assertEqual(rc.power(0.1, 0.0), 1.0)
+        self.assertAlmostEqual(rc.power(0.0, 0.0), 0.05)
 
     def test_paired_token_sds(self):
         tasks = [task(i) for i in range(1, 5)]
@@ -493,6 +508,32 @@ class Describe(unittest.TestCase):
         out = rc.paired_token_sds(rows)
         self.assertAlmostEqual(out["D vs none"], 0.0)
         self.assertAlmostEqual(out["C vs none"], rc.sd([500, 500, 0, 0]) / 1000)
+
+
+class Watch(unittest.TestCase):
+    def test_listeners_and_remote_connections_name_process_and_port(self):
+        spec = importlib.util.spec_from_file_location("watch_run", EVAL / "groundtruth" / "watch_run.py")
+        w = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(w)
+        line = lambda proto, name, state="": f"java.real 4711 me  42u  IPv4 0x1234567890abcdef 0t0 {proto} {name} {state}".rstrip()  # noqa: E731
+        for proto, name, state, want in (
+                ("TCP", "127.0.0.1:5000->127.0.0.1:5001", "(ESTABLISHED)", ("LOOP", "TCP", "", "")), ("TCP", "127.0.0.1:5000", "(LISTEN)", ("LISTEN", "TCP", "", "")),
+                ("TCP", "[::1]:5000", "(LISTEN)", ("LISTEN", "TCP", "", "")), ("TCP", "*:8080", "(LISTEN)", ("LISTEN-ALL", "TCP", "4711", "*:8080")),
+                ("TCP", "192.168.1.2:8080", "(LISTEN)", ("LISTEN-ALL", "TCP", "4711", "192.168.1.2:8080")), ("UDP", "*:*", "", ("LISTEN", "UDP", "", "")),
+                ("UDP", "*:51234", "", ("LISTEN-ALL", "UDP", "4711", "*:51234")),
+                ("TCP", "10.0.0.2:5000->93.184.216.34:443", "(ESTABLISHED)", ("REMOTE", "TCP", "4711", "93.184.216.34:443"))):
+            self.assertEqual(w.classify(line(proto, name, state)), want)
+        self.assertIsNone(w.classify("COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME"))
+
+    def test_it_ends_with_the_process_and_stops_nothing_by_itself(self):
+        with tempfile.TemporaryDirectory() as d:
+            child = subprocess.Popen([sys.executable, "-I", "-c", "import time; time.sleep(1.5)"])
+            watch = subprocess.Popen([sys.executable, "-I", str(EVAL / "groundtruth" / "watch_run.py"), str(child.pid), f"{d}/log", d, "--jdk", f"{d}/no-jdk"])
+            child.wait()
+            self.assertEqual(watch.wait(timeout=20), 0)
+            text = (Path(d) / "log").read_text()
+            self.assertIn(" load ", text)
+            self.assertRegex(text, r"ended after \d+ samples")
 
 
 class RecordedDecision(unittest.TestCase):

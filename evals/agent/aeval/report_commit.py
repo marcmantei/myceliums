@@ -139,6 +139,13 @@ def detectable(sd: float, n: int = N_TASKS, alpha: float = 0.05, power: float = 
     return (z(1 - alpha / 2) + z(power)) * sd / math.sqrt(n)
 
 
+def power(diff: float, sd: float, n: int = N_TASKS, alpha: float = 0.05) -> float:
+    """Power of that two-sided test for a true mean paired difference ``diff``."""
+    nd = NormalDist()
+    z, shift = nd.inv_cdf(1 - alpha / 2), abs(diff) * math.sqrt(n) / sd if sd else float("inf") if diff else 0.0
+    return nd.cdf(shift - z) + nd.cdf(-shift - z) if math.isfinite(shift) else 1.0
+
+
 def sd(xs: list[float]) -> float:
     m = mean(xs)
     return math.sqrt(sum((x - m) ** 2 for x in xs) / (len(xs) - 1)) if len(xs) > 1 else float("nan")
@@ -450,11 +457,15 @@ def decide(rows: list[dict], tasks: list[dict], tasks_sha256: str) -> dict:
 def describe(rows: list[dict], tasks: list[dict], paired_tokens_rel_sd: dict[str, float] | None = None) -> dict:
     """What the sessions of one arm show beside the decision: recall by type
     with every missed unit, tokens, cost, wall time with and without API stalls,
-    and the main run projected from them. The detectable recall difference has
-    no paired data behind it: ``paired_sd_upper`` is the paired SD of two arms'
-    3-repetition means if every bit of the between-task SD were session noise
-    (sqrt(2/3) of it) and no task favoured an arm. The between-task SD itself is
-    not the paired SD: the part of it that is the task cancels in a pair.
+    and the main run projected from them. There is no paired data on the recall.
+    ``recall_noise_only`` is a scenario, not a bound and not power: the paired SD
+    of two arms' 3-repetition means if the whole between-task SD were session
+    noise (sqrt(2/3) of it) and no task favoured an arm. The between-task SD
+    itself is not the paired SD: the part of it that is the task cancels in a
+    pair, while an arm that helps in some tasks only adds to it.
+    ``closing_docs_misses`` is such an arm, without any noise: it touches every
+    docs unit missed here and nothing else changes; its gain, the SD of its gains
+    over the tasks and the power that leaves.
     ``paired_tokens_rel_sd``: paired SDs of another run, as a share of its mean."""
     by_id = {t["id"]: t for t in tasks}
     rows = sorted(rows, key=lambda r: r["task_id"])
@@ -474,7 +485,8 @@ def describe(rows: list[dict], tasks: list[dict], paired_tokens_rel_sd: dict[str
     for k in PRIMARY:
         have = [(len(u), sum(touched(by_id[r["task_id"]], x, r["edit"]["files_changed"]) for x in u)) for r in rows if (u := counted(by_id[r["task_id"]], (k,)))]
         kinds[k] = {"units": sum(x for x, _ in have), "touched": sum(y for _, y in have), "tasks": len(have), "mean_over_tasks": mean([y / x for x, y in have])}
-    spread, upper = sd(values), math.sqrt(2 / 3) * sd(values)
+    spread, noise = sd(values), math.sqrt(2 / 3) * sd(values)
+    gains = [sum(m["kind"] == "docs" for m in p["missed"]) / len(counted(by_id[t])) for t, p in per.items()]
     levels = {"one test": 0.05, "first Holm step, three tests": 0.05 / 3, "first Holm step, six tests": 0.05 / 6}
     usd = [p["usd"] for p in per.values()]
     secs = {k: [p[k] + (p["grading_s"] or 0) + OVERHEAD_S for p in per.values()] for k in ("wall_s", "wall_net_s")}
@@ -487,7 +499,8 @@ def describe(rows: list[dict], tasks: list[dict], paired_tokens_rel_sd: dict[str
            "main_run": {"sessions": SESSIONS, "usd": mean(usd) * SESSIONS, "usd_95": _boot(usd, SESSIONS),
                         "hours": mean(secs["wall_s"]) * SESSIONS / 3600, "hours_95": _boot(secs["wall_s"], SESSIONS / 3600),
                         "hours_without_stalls": mean(secs["wall_net_s"]) * SESSIONS / 3600},
-           "detectable_recall": {"paired_sd_upper": upper, **{k: detectable(upper, alpha=a) for k, a in levels.items()}},
+           "recall_noise_only": {"paired_sd": noise, **{k: detectable(noise, alpha=a) for k, a in levels.items()}},
+           "closing_docs_misses": {"gain": mean(gains), "sd_over_tasks": sd(gains), "power": {k: power(mean(gains), sd(gains), alpha=a) for k, a in levels.items()}},
            "tasks": per}
     if paired_tokens_rel_sd:
         out["detectable_tokens_share_of_mean"] = {pair: {"paired_rel_sd": s, **{k: detectable(s, alpha=a) for k, a in levels.items()}}

@@ -47,11 +47,20 @@
   ],
   "hours_without_stalls": 13.73475
  },
- "detectable_recall": {
-  "paired_sd_upper": 0.3466933398982804,
+ "recall_noise_only": {
+  "paired_sd": 0.3466933398982804,
   "one test": 0.21718725594453187,
   "first Holm step, three tests": 0.2508334585827469,
   "first Holm step, six tests": 0.2697705781284558
+ },
+ "closing_docs_misses": {
+  "gain": 0.25375000000000003,
+  "sd_over_tasks": 0.40670976008373394,
+  "power": {
+   "one test": 0.7968003715144186,
+   "first Holm step, three tests": 0.6540314666165061,
+   "first Holm step, six tests": 0.560386811287969
+  }
  },
  "tasks": {
   "api-version-deprecation-handler-handler-arg": {
