@@ -1,0 +1,16 @@
+{
+ "sessions": 5,
+ "solved": 5,
+ "mean_recall": 0.5444444444444445,
+ "sd_recall_between_tasks": 0.409003607095688,
+ "tokens_per_session": 258997.6,
+ "projected_usd": 37.5977268,
+ "projected_hours": 11.028599999999997,
+ "detectable_recall": {
+  "one test": 0.25622174086929594,
+  "Bonferroni, three pairs": 0.2959150855644666,
+  "first Holm step, six tests": 0.3182557229833154
+ },
+ "ceiling": false,
+ "stop": []
+}

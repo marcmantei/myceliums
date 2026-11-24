@@ -1579,8 +1579,8 @@ name is stored in the run's config, so a resumed run cannot change it.
 
 Do agents change everything a real change needs, in other modules, tests and
 docs, and does myceliums save tokens per solved task? 20 edit tasks replay
-recent spring-framework commits. **Prepared, not run**: before the first session the pilot and the
-pre-registration below are fixed. The warm-up has run and all 20 prechecks are valid.
+recent spring-framework commits. **Pilot run, main run not**: the pilot and the
+pre-registration below were fixed before the first session. The warm-up has run and all 20 prechecks are valid.
 
 **Mining** ([`groundtruth/commit_replay.py`](groundtruth/commit_replay.py)
 `mine`, over a blobless clone with history): non-merge commits on `main` since
@@ -1772,6 +1772,27 @@ bash evals/agent/groundtruth/run_pilot_183.sh --dry-run   # prints every command
 bash evals/agent/groundtruth/run_pilot_183.sh             # real sessions
 ```
 
+##### Pilot result (24 November 2026, 08:25-08:52)
+
+Seven sessions, each final at the first attempt, status ok (that hides one API error: in `beans-max-...` the answer stopped arriving for 181 s, `stream_idle_timeout`, and the CLI continued by itself; its 365 s include the stall, so without it the projection below would be 9.2 h instead of 11.0 h), Claude Code 2.1.331, `claude-sonnet-5-5`, normal login (`apiKeySource` `none`). Load of the machine 8-30 during the sessions (`none`: 13-26 on average), so wall times are upper estimates of a quiet machine's.
+Artifacts: [`results/pilot-183/`](results/pilot-183/) (`sessions.jsonl` with the five `none` rows, `pilot.json`, `checks.json`, `meta.json`); transcripts are archived outside the repository. **Not pooled, no test.**
+
+| Task (`none`) | Solved | Dependent recall | Tokens | Cost | Session s | Grading s | Mean load |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `type-mismatch-required-type-arg` | yes | 0.50 | 62,785 | $0.05 | 14 | 123 | 13 |
+| `mime-type-parameter-names-case-insensitive` | yes | 0.33 | 116,892 | $0.10 | 112 | 55 | 26 |
+| `beans-max-nested-path-depth` | yes | 0.00 | 555,475 | $0.40 | 365 | 46 | 20 |
+| `api-version-deprecation-handler-handler-arg` (weak test) | yes | 1.00 | 140,659 | $0.15 | 35 | 124 | 17 |
+| `retry-max-attempts-to-max-retries` (weak test) | yes | 0.89 | 419,177 | $0.34 | 81 | 98 | 18 |
+
+* **Main run, estimated again** (mean of the five x 180): **$38** (95 % bootstrap over the five sessions $17-59; 180 times the cheapest or dearest session $9-71) and **11.0 h** (8.0-16.2 h; 7.3-21.1 h). Below the stop limits of $288 and 24 h. It carries over what `none` measured: **C and D are not measured** and may cost more or less.
+* **Ceiling:** mean dependent recall 0.54, SD between tasks 0.41, below 0.90, so none by the rule. **The mean hides the split:** remote code 5 of 5, docs 2 of 3, tests 7 of 16 dependents. Remote code has no headroom on these tasks, and the recall as defined mostly measures whether the agent writes new tests nobody asked for: an engineer who does everything else perfectly and writes no new tests would reach about 0.64 over the 20 tasks (the reviewer's reading, not computed here). **Tests pass 5 of 5**, so that secondary outcome has no headroom on these five tasks either.
+* **Detectable difference** with that SD as a stand-in for the paired differences': 0.26 for one test, 0.30 with Bonferroni over three pairs, **0.32 for the first Holm step**. It is an SD of five tasks and of single sessions, not of differences; the number replaces the pre-registered 0.3-SD one (0.23) and nothing else.
+* **Pipeline checks** (outcomes not reported): C and D each started, reached the myceliums server and were graded. D's agent built in the session; C's did not, so building inside C was only checked with the mock API.
+* **Audit:** no disagreement, kernel refusal, protected place or flag in the seven sessions; the hook refused every call that would have left the rules before it ran (`none`: 8 calls: `..` and a path without the working copy's directory, `sed -i`, `$`, a trailing backslash). No remote Java connection in 1,404 socket samples. **Who has read what:** the agent that ran the pilot read the tool calls of all seven sessions, C and D included (arguments shortened, not the models' messages, which is why it missed the API error), and saw the log lines with C's and D's tokens and file scores. It is therefore not blind and does not change tasks, gold or wording.
+* **Found, not fixed:** Claude Code itself ("don't ask" permission mode, not the hook) refused three Bash calls that read working-copy files (two of them in `none`), and the audit does not count them; the cause is not known. `export` writes absolute home paths into `meta.json` (shown as `~` here).
+* **Nothing was changed** because of the pilot so far. The run did not re-review the gold. The independent review of the pilot's pull request found gold problems: the renamed test class of `retry-...` counts as a deleted plus an added file, so as two dependents (the agent edited the old one in place); `spring-mvc.xsd` in `jsonl-...` is documentation text counted as code; and most missed test dependents are new tests the task does not ask for. The fixes come in a separate pull request, by someone who has not seen C or D.
+
 #### Warm-up
 
 `groundtruth/warm_gradle.py` (run on 24 November, 06:30-06:51, for the 12 tasks that lacked artifacts: 12 of 12 builds ok by its log; `--dry-run` prints every command and host, `--go` starts). With the network it only **resolves and compiles**: an init script takes the actions of every test task away, in `buildSrc` too, so its class path is resolved and no test runs; a test report found afterwards stops it. It stops at the first error; a connection or read without an answer fails after 45 s, one attempt;
@@ -1959,7 +1980,7 @@ searches, runs `myc callers`, reads and edits the primary file and runs one comm
 | D | no problem; AGENTS.md | without Grep and Glob | refused; the refusal names the working copy, not this repository's checkout or the hook | answered from the index | yes |
 
 The table is the probe of 24 November (arms `none`, C, D, Claude Code's own sandbox, the derived index, shared path, the `myc` below): `myc` answers from the index in C and D and is not
-found in `none`, AGENTS.md reaches every arm, C also gets the routing block (`.claude/rules/myceliums.md`; setup writes no CLAUDE.md), no isolation problem. Gradle in the session and the grading: below. The probe was repeated in the three arms after the warm-up, on the new frozen dependencies (same binary, CLI and derived index): the same findings, `BUILD SUCCESSFUL` in 76-91 s in the sessions, no remote connection in 455 socket samples. The mock gives every answer one message id, so `api_calls` is 1 there. No real session has run.
+found in `none`, AGENTS.md reaches every arm, C also gets the routing block (`.claude/rules/myceliums.md`; setup writes no CLAUDE.md), no isolation problem. Gradle in the session and the grading: below. The probe was repeated in the three arms after the warm-up, on the new frozen dependencies (same binary, CLI and derived index): the same findings, `BUILD SUCCESSFUL` in 76-91 s in the sessions, no remote connection in 455 socket samples. The mock gives every answer one message id, so `api_calls` is 1 there. (Real sessions so far: the pilot, above.)
 
 **Binary.** C and D use `myc` built from main at `787920c` (sha256 `bf84b0e854f6`), so arm C measures the setup as it is now (#200), without a workaround. The indexes stay valid: between `388c6e1`, which built the base index and the derived ones, and `787920c` nothing under `crates/` changed
 but `crates/myceliums-mcp/src/embedding_jobs.rs` (#201: the job releases the repository's lock before it reports its end; no effect on the graph or the vectors of a complete index). Outside it: `myc/src/commands/{setup_claude,setup_editors,instructions,routing,doctor,mod}.rs`, `cli.rs`, `main.rs` and `setup/editors/claude.rs`.

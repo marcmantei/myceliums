@@ -1,0 +1,32 @@
+{
+ "note": "Pipeline checks of the pilot, facts only: outcomes (files, tests, tokens) of these two sessions are not reported (README, Pilot).",
+ "login": "apiKeySource none in every session",
+ "sessions": [
+  {
+   "run_id": "api-version-deprecation-handler-handler-arg__C__r1",
+   "arm": "C",
+   "task": "api-version-deprecation-handler-handler-arg",
+   "session_started": true,
+   "status": "ok",
+   "reached_myceliums": true,
+   "built_in_session": false,
+   "graded": true,
+   "flagged": false,
+   "cli": "2.1.331",
+   "api_key_source": "none"
+  },
+  {
+   "run_id": "retry-max-attempts-to-max-retries__D__r1",
+   "arm": "D",
+   "task": "retry-max-attempts-to-max-retries",
+   "session_started": true,
+   "status": "ok",
+   "reached_myceliums": true,
+   "built_in_session": true,
+   "graded": true,
+   "flagged": false,
+   "cli": "2.1.331",
+   "api_key_source": "none"
+  }
+ ]
+}
