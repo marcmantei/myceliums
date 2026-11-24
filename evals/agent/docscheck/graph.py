@@ -79,8 +79,10 @@ def seeds(nodes: dict, by_file: dict, files: list[dict], side: str) -> tuple[set
     return hit, decl
 
 
-def neighbourhood(nodes: dict, edges: dict, files: list[dict], side: str) -> dict:
-    """Relations from the changed symbols: ``{relation: {symbol key}}`` and the docs units that mention each."""
+def neighbourhood(nodes: dict, edges: dict, files: list[dict], side: str, member_of: bool = False) -> dict:
+    """Relations from the changed symbols: ``{relation: {symbol key}}`` and the docs units that mention each.
+
+    ``member_of``: owners and members by MEMBER_OF edges as they are (#212), instead of by line containment."""
     by_file: dict[str, list[str]] = {}
     for i, n in nodes.items():
         by_file.setdefault(n["file_path"], []).append(i)
@@ -106,12 +108,16 @@ def neighbourhood(nodes: dict, edges: dict, files: list[dict], side: str) -> dic
                       key=lambda t: (t["end_line"] - t["start_line"], t["id"]))
 
     def owner(i: str) -> str | None:
+        if member_of:
+            return next((j for j in sorted(step({i}, out, "MEMBER_OF")) if nodes[j]["kind"] in TYPES), None)
         if i not in owner_of:
             around = types_around(nodes[i])
             owner_of[i] = around[0]["id"] if around else ""
         return owner_of[i] or None
 
     def members(i: str) -> set[str]:
+        if member_of:
+            return step({i}, into, "MEMBER_OF")
         if i not in members_of:
             n = nodes[i]
             members_of[i] = {j for j in by_file[n["file_path"]] if j != i and is_code(nodes[j])

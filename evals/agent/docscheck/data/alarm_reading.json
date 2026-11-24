@@ -1,0 +1,247 @@
+{
+ "what": "20 of the dev alarms (random.Random(210).sample): does the commit leave a shown page wrong or incomplete, without changing it?",
+ "labelled_by": "agent (one reader, not reviewed)",
+ "read": "the first lines of the main-code diff and the lines of each shown page that name a changed type, member or key; the pages themselves in part for the four candidates (real and borderline)",
+ "verdicts": [
+  {
+   "sha": "89d746ddf86550dd7177159838797823f20868e1",
+   "subject": "Avoid async dispatch if completed in AsyncServerResponse",
+   "comment_only": false,
+   "pages": [
+    "web/webmvc-functional.adoc",
+    "web/webmvc/mvc-controller/ann-methods/return-types.adoc",
+    "web/webmvc/mvc-ann-async.adoc",
+    "integration/cache/annotations.adoc",
+    "integration/rest-clients.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "29e3acc88738e4b7700464fb26ad4e71e277200c",
+   "subject": "Re-enable Jetty in spring-websocket tests",
+   "comment_only": false,
+   "pages": [
+    "web/websocket/stomp/authentication.adoc",
+    "web/webflux-websocket.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "ba4d9a5230b7f541961c6a3b3a85d8fc276a4635",
+   "subject": "Add BindErrorUtils",
+   "comment_only": false,
+   "pages": [
+    "web/webflux/ann-rest-exceptions.adoc",
+    "web/webmvc/mvc-ann-rest-exceptions.adoc",
+    "core/beans/context-introduction.adoc",
+    "web/webmvc-view/mvc-freemarker.adoc",
+    "core/validation/conversion.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "969d0bd08bab519311040649f1b12a70c944d7e1",
+   "subject": "Set correct limit in DefaultDataBuffer::getNativeBuffer",
+   "comment_only": false,
+   "pages": [
+    "core/databuffer-codec.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "aefcb9d2d6ee385c14d83852bee50b0307b42ce4",
+   "subject": "Make maximum SpEL expression length configurable",
+   "comment_only": false,
+   "pages": [
+    "core/expressions/evaluation.adoc",
+    "core/expressions/language-ref/functions.adoc",
+    "core/expressions.adoc",
+    "core/expressions/language-ref/literal.adoc",
+    "core/expressions/language-ref/bean-references.adoc"
+   ],
+   "omission": "borderline",
+   "why": "evaluation.adoc describes the parser configuration by some of its settings; the new maximum length would fit, nothing becomes wrong"
+  },
+  {
+   "sha": "c1d4b610ca62733094bbe6d720aac4980fe264fa",
+   "subject": "Refine Kotlin inline class optimizations",
+   "comment_only": false,
+   "pages": [
+    "languages/kotlin/coroutines.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "20bbebb29921815ec11ec4dc289419d50a5cd319",
+   "subject": "Ensure Spring LogFactory contains all public methods from Apache LogFactory",
+   "comment_only": false,
+   "pages": [
+    "core/spring-jcl.adoc",
+    "framework-docs/src/main/java/org/springframework/docs/core/aot/hints/testing/SampleReflection.java"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "9f4d46fe3374cc1e2ca8b2616107680432650a2e",
+   "subject": "Introduce null-safe index operator in SpEL",
+   "comment_only": false,
+   "pages": [
+    "core/expressions/language-ref/operator-safe-navigation.adoc",
+    "core/expressions/language-ref/properties-arrays.adoc",
+    "core/expressions/language-ref/collection-projection.adoc",
+    "core/expressions/language-ref/collection-selection.adoc",
+    "core/expressions/evaluation.adoc"
+   ],
+   "omission": "real",
+   "why": "operator-safe-navigation.adoc lists the operators with a null-safe variant and lacks the new one; a follow-up commit (218a148898) documented it"
+  },
+  {
+   "sha": "9283fd2162d16d2654a9513e928a5ea77977e3bb",
+   "subject": "Update Javadoc for CronTriggerFactoryBean.setMisfireInstructionName()",
+   "comment_only": true,
+   "pages": [
+    "integration/scheduling.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "b510bc3baba9f8d0832527b2ce4675ea2bed1057",
+   "subject": "Reuse generated key for get+put within same cacheable operation",
+   "comment_only": false,
+   "pages": [
+    "integration/cache/annotations.adoc",
+    "integration/cache/jsr-107.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "806c83591c694c95ecd605261aa1f3e349fd12cd",
+   "subject": "Evaluate key only if necessary",
+   "comment_only": false,
+   "pages": [
+    "integration/cache/annotations.adoc",
+    "integration/cache/jsr-107.adoc",
+    "integration/cache/declarative-xml.adoc",
+    "integration/cache/strategies.adoc",
+    "integration/appendix.adoc"
+   ],
+   "omission": "borderline",
+   "why": "annotations.adoc says where #result is available; the key of a @Cacheable put is now evaluated after the method"
+  },
+  {
+   "sha": "6a8f0d6d7d4379860e0197f321f0784f8b46e5df",
+   "subject": "Add web support for Yaml via Jackson",
+   "comment_only": false,
+   "pages": [
+    "web/webmvc/mvc-config/message-converters.adoc",
+    "integration/rest-clients.adoc",
+    "web/webflux/config.adoc",
+    "web/webmvc-view/mvc-jackson.adoc",
+    "web/webflux/reactive-spring.adoc"
+   ],
+   "omission": "borderline",
+   "why": "rest-clients.adoc describes 'several implementations' of HttpMessageConverter and refers to the Javadoc for the list; the new YAML converter would fit"
+  },
+  {
+   "sha": "0e6c17f5186dfa148eca2ecdc6eee89a7edaa543",
+   "subject": "Process tokens after each feed in Jackson2Tokenizer",
+   "comment_only": false,
+   "pages": [
+    "web/webflux/reactive-spring.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "aeb77cf4e1506745db53b4514479368387e72786",
+   "subject": "Restore correct threadWithLock check without isInfoEnabled()",
+   "comment_only": false,
+   "pages": [
+    "core/beans/factory-nature.adoc",
+    "core/beans/dependencies/factory-collaborators.adoc",
+    "core/beans/definition.adoc",
+    "core/beans/factory-scopes.adoc",
+    "core/appendix/application-startup-steps.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "9f2970bc5c06b443c12b7825a3180ef2fa292474",
+   "subject": "Use non deprecated MySQL dialect for Hibernate 6+",
+   "comment_only": false,
+   "pages": [
+    "data-access/orm/jpa.adoc",
+    "data-access/orm/hibernate.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "2fbcff89199267313dcb7fe1c7fb803f38f22879",
+   "subject": "Prevent ValueLoaderEntryProcessor to be created for each get call",
+   "comment_only": false,
+   "pages": [
+    "integration/cache/annotations.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "c6e6a3e44db3ae9f05ab9fb8a6f3c607c04ea472",
+   "subject": "Link to section in reference manual",
+   "comment_only": true,
+   "pages": [
+    "core/beans/java/bean-annotation.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "69049a4b0fc109675479bf0d19b6560ee67bd4f0",
+   "subject": "Overhaul Javadoc for PathMatchingResourcePatternResolver",
+   "comment_only": true,
+   "pages": [
+    "core/resources.adoc",
+    "web/webmvc/mvc-controller/ann-requestmapping.adoc",
+    "core/beans/basics.adoc",
+    "web/webmvc/mvc-config/static-resources.adoc",
+    "web/webflux/config.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "071d6a2a5a578f981729510e24ddc8ea83d2f155",
+   "subject": "Introduce hints for finding hints by conventions",
+   "comment_only": false,
+   "pages": [
+    "framework-docs/src/main/java/org/springframework/docs/core/aot/hints/importruntimehints/SpellCheckService.java",
+    "framework-docs/src/main/java/org/springframework/docs/core/aot/hints/testing/SpellCheckServiceTests.java",
+    "core/aot.adoc",
+    "framework-docs/src/main/java/org/springframework/docs/core/aot/hints/testing/SampleReflectionRuntimeHintsTests.java",
+    "testing/testcontext-framework/aot.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  },
+  {
+   "sha": "28939e47545708be7d4b71b63e36109dd3cf78bd",
+   "subject": "Find @\u2060DisabledInAotMode on enclosing classes for @\u2060Nested tests",
+   "comment_only": false,
+   "pages": [
+    "testing/testcontext-framework/aot.adoc"
+   ],
+   "omission": "no",
+   "why": "nothing shown becomes wrong or incomplete"
+  }
+ ]
+}

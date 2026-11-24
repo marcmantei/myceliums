@@ -366,19 +366,57 @@ class Statistics(unittest.TestCase):
 
 
 class HeldOutIsGuarded(unittest.TestCase):
-    def test_evaluate(self):
-        with mock.patch.object(sys, "argv", ["evaluate", "held-out", "--hist", "x", "--work", "y", "--out", "z"]):
-            with self.assertRaisesRegex(SystemExit, "independent review"):
-                evaluate.main()
+    def run_held_out(self, *extra):
+        with mock.patch.object(sys, "argv", ["evaluate", "held-out", "--hist", "x", "--work", "y", *extra]):
+            evaluate.main()
 
-    def test_once(self):
+    def test_needs_the_review(self):
+        with self.assertRaisesRegex(SystemExit, "independent review"):
+            self.run_held_out()
+
+    def test_marker_or_result_refuses_whatever_the_key(self):
+        for name in ("MARKER", "RESULT"):
+            with tempfile.TemporaryDirectory() as d:
+                f = Path(d) / "m.json"
+                f.write_text("{}")
+                with mock.patch.object(evaluate, name, f), self.assertRaisesRegex(SystemExit, "scored once"):
+                    self.run_held_out("--i-have-the-review")
+                with mock.patch.object(evaluate, name, f), mock.patch.object(sys, "argv", ["evaluate", "lock"]):
+                    with self.assertRaisesRegex(SystemExit, "scored once"):
+                        evaluate.main()
+
+    def test_a_deleted_marker_in_the_history_refuses(self):
+        def git(*args):
+            return "abc1234" if args[0] == "log" else ""
+        with mock.patch.object(evaluate, "_git", git), self.assertRaisesRegex(SystemExit, "a commit has"):
+            evaluate.take_the_marker()
+
+    def test_an_uncommitted_or_other_lock_refuses_and_takes_no_marker(self):
+        for shown in ("", '{"key": "other"}'):
+            with tempfile.TemporaryDirectory() as d:
+                marker = Path(d) / "m.json"
+                with mock.patch.object(evaluate, "MARKER", marker), mock.patch.object(evaluate, "RESULT", Path(d) / "r.json"), \
+                        mock.patch.object(evaluate, "_git", lambda *a, s=shown: s if a[0] == "show" else ""):
+                    with self.assertRaisesRegex(SystemExit, "lock"):
+                        evaluate.take_the_marker()
+                    self.assertFalse(marker.exists())
+
+    def test_the_marker_is_taken_once(self):
         with tempfile.TemporaryDirectory() as d:
-            out = Path(d) / "h.json"
-            out.write_text("{}")
-            with mock.patch.object(sys, "argv", ["evaluate", "held-out", "--hist", "x", "--work", "y", "--out", str(out),
-                                                 "--i-have-the-review"]):
+            key = json.dumps(evaluate.protocol_key())
+            with mock.patch.object(evaluate, "MARKER", Path(d) / "m.json"), mock.patch.object(evaluate, "RESULT", Path(d) / "r.json"), \
+                    mock.patch.object(evaluate, "_git", lambda *a: key if a[0] == "show" else ""):
+                evaluate.take_the_marker()
                 with self.assertRaisesRegex(SystemExit, "scored once"):
-                    evaluate.main()
+                    evaluate.take_the_marker()
+
+    def test_held_out_cannot_be_loaded_without_the_marker(self):
+        for fn in (evaluate.load, evaluate.load_alarms):
+            with self.assertRaisesRegex(SystemExit, "one scoring"):
+                fn("held-out", Path("x"), Path("y"))
+
+    def test_committed_lock_is_current(self):
+        self.assertEqual(json.loads(evaluate.LOCK.read_text()), evaluate.protocol_key(), "run evaluate.py lock")
 
     def test_prepare(self):
         with mock.patch.object(sys, "argv", ["prepare", "--hist", "x", "--work", "y", "--myc", "m", "--models", "n",
@@ -398,6 +436,109 @@ class HeldOutIsGuarded(unittest.TestCase):
                 with self.assertRaises(SystemExit):
                     prepare.remove(p, root)
             self.assertTrue(outside.exists())
+
+
+def fake(issues, gold=("g",)):
+    c = evaluate.Commit.__new__(evaluate.Commit)
+    c.meta, c.gold = {"issues": list(issues)}, list(gold)
+    return c
+
+
+class Contenders(unittest.TestCase):
+    def test_clusters_by_issue(self):
+        cs = [fake(x) for x in (["1"], [], ["2"], ["1", "2"], ["3"])]
+        self.assertEqual(evaluate.clusters(cs), [[0, 2, 3], [1], [4]])
+        self.assertEqual(sorted(i for f in evaluate.folds(cs) for i in f), [0, 1, 2, 3, 4])
+        self.assertIn([0, 2, 3], evaluate.folds(cs))
+
+    def test_cluster_bootstrap(self):
+        d = [1.0] * 10 + [0.0] * 10
+        one = evaluate.bootstrap(d)
+        grouped = evaluate.bootstrap(d, [list(range(10)), *[[i] for i in range(10, 20)]])
+        self.assertGreater(grouped["hi"] - grouped["lo"], one["hi"] - one["lo"])
+        self.assertEqual(grouped["clusters"], 11)
+        self.assertAlmostEqual(grouped["diff"], 0.5)
+
+    def test_pick_is_by_recall_then_mrr_then_order(self):
+        m = {"a": {"recall@5": 0.5, "mrr": 0.2}, "b": {"recall@5": 0.5, "mrr": 0.3}, "c": {"recall@5": 0.4, "mrr": 0.9}}
+        self.assertEqual(evaluate.pick(m, ("a", "b", "c")), "b")
+        m["a"]["mrr"] = 0.3
+        self.assertEqual(evaluate.pick(m, ("a", "b", "c")), "a")
+
+    def test_margin_excluded(self):
+        rows = {"text": [{"recall@5": 0.5}] * 30, "myc": [{"recall@5": 0.5}] * 30, "text+myc": [{"recall@5": 0.7}] * 30}
+        r = evaluate.compare(rows)
+        self.assertTrue(r["myc - text"]["margin_excluded"])
+        self.assertFalse(r["text+myc - text"]["margin_excluded"])
+
+
+class Alarms(unittest.TestCase):
+    def test_threshold_loses_at_most_the_allowance(self):
+        cs, sc = [], {}
+        for i in range(40):
+            c = fake([])
+            c.sha = str(i)
+            c.meta["comment_only"] = i % 4 == 0
+            cs.append(c)
+            sc[c.sha] = {"g": float(i + 1), "x": 0.5}
+        with mock.patch.object(evaluate, "scores", lambda c, m, cfg: sc[c.sha]):
+            t = evaluate.tune_threshold(cs, {})
+            self.assertEqual(t, 3.0)  # two of 40 lost: 0.05
+            self.assertAlmostEqual(evaluate.recall_at(cs, {}, t), 0.95)
+            r = evaluate.alarm_report(cs, cs, {}, t)
+        self.assertEqual((r["all"]["alarms"], r["code"]["commits"], r["comment_only"]["commits"]), (38, 30, 10))
+        self.assertAlmostEqual(r["all"]["pages_per_100"], 95.0)
+        self.assertEqual(r["docs_commits_silent"], 2)
+
+    def test_wilson(self):
+        lo, hi = evaluate.wilson(4, 31)
+        self.assertAlmostEqual(lo, 0.0513, 3)
+        self.assertAlmostEqual(hi, 0.2885, 3)
+
+    def test_committed_set(self):
+        doc = json.loads((ROOT / "docscheck" / "data" / "alarms.json").read_text())
+        docs = {c["sha"] for c in json.loads((ROOT / "docscheck" / "data" / "commits.json").read_text())["commits"]}
+        for split in ("dev", "held-out"):
+            cs = [c for c in doc["commits"] if c["split"] == split]
+            self.assertEqual(len(cs), select_commits.ALARMS)
+            self.assertEqual(doc["counts"][f"comment_only_{split}"], sum(c["comment_only"] for c in cs))
+            for c in cs:
+                self.assertEqual(split == "dev", c["date"] < select_commits.SPLIT)
+                self.assertNotIn(c["sha"], docs)
+
+
+class LicenceHeaders(unittest.TestCase):
+    HEAD = "/*\n * Copyright 2002-2023 the original author.\n *\n * Licensed under the Apache License, Version 2.0\n */\n\n"
+
+    def test_ranges(self):
+        self.assertEqual(change.header(self.HEAD + JAVA), (1, 5))
+        self.assertEqual(change.header(JAVA), (0, -1))
+        self.assertEqual(change.header("/* a comment */\nclass A {}"), (0, -1))
+        xml = "<?xml version='1.0'?>\n<!--\n  ~ Copyright 2020 x\n  -->\n<a/>"
+        self.assertEqual(change.header(xml), (2, 4))
+        self.assertEqual(change.header("# Copyright 2020 x\n# more\nk=v\n"), (1, 2))
+        self.assertNotIn("Apache", change.without_header(self.HEAD + JAVA))
+        self.assertIn("<a/>", change.without_header(xml))
+        self.assertEqual(change.without_header(JAVA), JAVA)
+
+    def test_a_new_file_keeps_its_code_and_loses_its_header(self):
+        src = self.HEAD + JAVA
+        lines = src.split("\n")
+        f = {"old": None, "new": "spring-x/src/main/java/a/b/Sender.java", "old_text": "", "new_text": src, "kind": "main",
+             "hunks": [hunk(0, 0, 1, len(lines), [], lines)]}
+        g = change.strip_headers(f)
+        self.assertEqual(sum(len(h["plus"]) for h in g["hunks"]), len(lines) - 5)
+        self.assertEqual(g["hunks"][0]["ns"], 6)
+        feat = change.features([g])
+        self.assertNotIn("Apache", {t for c in feat["idents"].values() for t in c})
+        self.assertIn("getRetries", feat["members"])
+
+    def test_year_change_alone_is_no_change(self):
+        f = java_file(self.HEAD + JAVA, self.HEAD + JAVA, [hunk(2, 1, 2, 1, [" * Copyright 2002-2022"], [" * Copyright 2002-2023"])])
+        self.assertEqual(change.strip_headers(f)["hunks"], [])
+
+    def test_the_corpus_has_no_headers(self):
+        self.assertNotIn("Apache", corpus.Unit(self.HEAD + JAVA, False).idents)
 
 
 class Selection(unittest.TestCase):

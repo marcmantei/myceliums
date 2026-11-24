@@ -1,18 +1,29 @@
 """Tune on dev, report dev (#210); score held-out once with the frozen configurations.
 
-    python3 evaluate.py dev --hist HIST --work DIR --out data/dev.json       # tunes, writes the frozen configurations
-    python3 evaluate.py held-out --hist HIST --work DIR --out data/held_out.json --i-have-the-review
+    python3 evaluate.py dev --hist HIST --work DIR        # tunes, writes data/dev.json
+    python3 evaluate.py lock                              # after dev and the README: writes data/protocol.lock.json, to be committed
+    python3 evaluate.py held-out --hist HIST --work DIR --i-have-the-review
 
-Selection on dev: mean recall@5, ties by MRR, then grid order. Budget: text 120 configurations
-(grep 48, BM25 48, fusion 24), myceliums 120 (mentions 48, keyword 24, hybrid 24, fusion 24);
-text with myceliums 48 (24 with the mentions, 24 with the best myceliums method).
+Configurations: the best mean recall@5 on dev (ties by MRR, then grid order). Contenders
+(which method stands for text, myc and text+myc): the best **cross-validated** recall@5.
+Budget: text 120 configurations (grep 48, BM25 48, fusion 24), myceliums 120 (mentions 48,
+keyword 24, hybrid 24, fusion 24); text with myceliums 48 (24 with the mentions, 24 with the
+best myceliums method).
+
+Held-out is scored once. ``lock`` records a hash of the protocol (README), the commit lists,
+the dev results and this code. ``held-out`` needs that lock committed and unchanged, writes
+``data/HELD_OUT_SCORED.json`` before it reads anything of held-out, and refuses when that marker
+exists in the working tree or in any commit. Neither path is an argument.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import random
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -43,6 +54,9 @@ class Commit:
         g, s = (work / "cache" / k / f"{c['sha']}.json" for k in ("graph", "search"))
         self.graph_raw = json.loads(g.read_text()) if g.exists() else None
         self.graph = graph.merge(self.graph_raw["old"], self.graph_raw["new"]) if self.graph_raw else None
+        # The same with MEMBER_OF edges as they are (#212), to show what the workaround is worth.
+        self.graph_edges = (graph.merge(self.graph_raw["old"]["member_of"], self.graph_raw["new"]["member_of"])
+                            if self.graph_raw and "member_of" in self.graph_raw["old"] else None)
         self.search = json.loads(s.read_text()) if s.exists() else None
         self.memo: dict[tuple, dict[str, float]] = {}
 
@@ -59,6 +73,7 @@ BASE = {
     "grep": (lambda c, cfg: text.grep(c.corpus, c.features, cfg), text.GREP_GRID),
     "bm25": (lambda c, cfg: text.bm25(c.corpus, c.features, cfg), text.BM25_GRID),
     "mentions": (lambda c, cfg: graph.mentions(c.corpus, c.graph, cfg), graph.GRID),
+    "mentions-member_of": (lambda c, cfg: graph.mentions(c.corpus, c.graph_edges, cfg), graph.GRID),
     "keyword": (_search("keyword"), search.GRID),
     "hybrid": (_search("hybrid"), search.GRID),
 }
@@ -100,41 +115,113 @@ def fusion_grid(a: dict, b: dict) -> list[dict]:
     return [{"parts": parts, "fuse": f} for f in fuse.GRID]
 
 
-def tune(commits: list[Commit]) -> dict[str, dict]:
-    """Every method's tuned configuration. ``text``, ``myc`` and ``text+myc`` are the registered contenders."""
-    out = {m: best(commits, m, grid) for m, (_, grid) in BASE.items()}
-    out["text-fusion"] = best(commits, "text-fusion", fusion_grid(out["grep"], out["bm25"]))
-    out["myc-fusion"] = best(commits, "myc-fusion", fusion_grid(out["mentions"], better(out["keyword"], out["hybrid"])))
-    out["text"] = better(better(out["bm25"], out["grep"]), out["text-fusion"])
-    out["myc"] = better(better(better(out["mentions"], out["keyword"]), out["hybrid"]), out["myc-fusion"])
-    out["text+mentions"] = best(commits, "text+mentions", fusion_grid(out["text"], out["mentions"]))
-    out["text+myc-best"] = best(commits, "text+myc-best", fusion_grid(out["text"], out["myc"]))
-    out["text+myc"] = better(out["text+mentions"], out["text+myc-best"])
+TEXT = ("bm25", "grep", "text-fusion")
+MYC = ("mentions", "keyword", "hybrid", "myc-fusion")
+BOTH = ("text+mentions", "text+myc-best")
+CONTENDERS = {"text": TEXT, "myc": MYC, "text+myc": BOTH}
+
+
+def clusters(commits) -> list[list[int]]:
+    """Positions of commits that share an issue number (transitively) as one cluster, in order of first position."""
+    parent = list(range(len(commits)))
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            i = parent[i]
+        return i
+
+    by_issue: dict[str, int] = {}
+    for i, c in enumerate(commits):
+        for issue in c.meta.get("issues", ()):
+            if issue in by_issue:
+                a, b = sorted((find(i), find(by_issue[issue])))
+                parent[b] = a
+            else:
+                by_issue[issue] = i
+    out: dict[int, list[int]] = {}
+    for i in range(len(commits)):
+        out.setdefault(find(i), []).append(i)
+    return list(out.values())
+
+
+def folds(commits) -> list[list[int]]:
+    """FOLDS lists of positions; a cluster is never split."""
+    out: list[list[int]] = [[] for _ in range(FOLDS)]
+    for k, members in enumerate(clusters(commits)):
+        out[k % FOLDS] += members
     return out
 
 
-def cross_validated(commits: list[Commit]) -> dict[str, list[dict[str, float]]]:
-    """Per method, each commit scored with the configuration tuned on the other folds (by position)."""
+def cv_rows(commits: list[Commit], tuner) -> dict[str, list[dict[str, float]]]:
+    """Per method, each commit scored with what ``tuner`` chose on the other folds."""
     rows: dict[str, list] = {}
-    for fold in range(FOLDS):
-        tuned = tune([c for i, c in enumerate(commits) if i % FOLDS != fold])
-        for m, t in tuned.items():
-            rows.setdefault(m, [None] * len(commits))
-            for i, c in enumerate(commits):
-                if i % FOLDS == fold:
-                    rows[m][i] = row(c, t["method"], t["cfg"])
+    for fold in folds(commits):
+        held = set(fold)
+        for m, t in tuner([c for i, c in enumerate(commits) if i not in held]).items():
+            r = rows.setdefault(m, [None] * len(commits))
+            for i in fold:
+                r[i] = row(commits[i], t["method"], t["cfg"])
     return rows
 
 
-def bootstrap(diffs: list[float], seed: int = SEED, n: int = BOOT, alpha: float = 0.05) -> dict:
-    """Mean difference, percentile interval and a two-sided p (twice the smaller tail share at 0, at least 1/n)."""
+def pick(means: dict[str, dict[str, float]], names) -> str:
+    """The method with the best (cross-validated) recall@5, ties by MRR, then order."""
+    return max(names, key=lambda m: (means[m]["recall@5"], means[m]["mrr"], -list(names).index(m)))
+
+
+def tune(commits: list[Commit], structure: dict[str, str]) -> dict[str, dict]:
+    """Every method's tuned configuration, given which methods stand for search, text and myc (as far as chosen)."""
+    out = {m: best(commits, m, grid) for m, (_, grid) in BASE.items()}
+    out["text-fusion"] = best(commits, "text-fusion", fusion_grid(out["grep"], out["bm25"]))
+    if "search" in structure:
+        out["myc-fusion"] = best(commits, "myc-fusion", fusion_grid(out["mentions"], out[structure["search"]]))
+    if "text" in structure and "myc" in structure:
+        text_m, myc_m = out[structure["text"]], out[structure["myc"]]
+        out["text+mentions"] = best(commits, "text+mentions", fusion_grid(text_m, out["mentions"]))
+        out["text+myc-best"] = best(commits, "text+myc-best", fusion_grid(text_m, myc_m))
+    for name in CONTENDERS:
+        if name in structure:
+            out[name] = out[structure[name]]
+    return out
+
+
+def choose(commits: list[Commit]) -> tuple[dict[str, str], dict[str, dict[str, float]]]:
+    """``(structure, cross-validated means)``: the search and the three contenders by cross-validated recall@5."""
+    structure: dict[str, str] = {}
+    means: dict[str, dict[str, float]] = {}
+    for step in (("search", ("keyword", "hybrid")), None, ("text+myc", BOTH)):
+        means = {m: measure.mean(r) for m, r in cv_rows(commits, lambda cs: tune(cs, structure)).items()}
+        if step:
+            structure[step[0]] = pick(means, step[1])
+        else:
+            structure["text"], structure["myc"] = pick(means, TEXT), pick(means, MYC)
+    return structure, means
+
+
+def tune_and_choose(commits: list[Commit]) -> dict[str, dict]:
+    """Choice of the contenders and tuning together (inside a fold: nothing of the fold is used for either)."""
+    return tune(commits, choose(commits)[0])
+
+
+def bootstrap(diffs: list[float], groups: list[list[int]] | None = None, seed: int = SEED, n: int = BOOT,
+              alpha: float = 0.05) -> dict:
+    """Mean difference over commits, percentile interval and two-sided p (twice the smaller tail share at 0, at
+    least 1/n); ``groups`` (positions) are resampled as wholes."""
     rng = random.Random(seed)
-    k = len(diffs)
-    means = sorted(sum(diffs[rng.randrange(k)] for _ in range(k)) / k for _ in range(n))
+    groups = groups or [[i] for i in range(len(diffs))]
+    sums = [(sum(diffs[i] for i in g), len(g)) for g in groups]
+    k = len(sums)
+    means = []
+    for _ in range(n):
+        drawn = [sums[rng.randrange(k)] for _ in range(k)]
+        means.append(sum(s for s, _ in drawn) / sum(m for _, m in drawn))
+    means.sort()
     low = sum(m <= 0 for m in means) / n
     high = sum(m >= 0 for m in means) / n
-    return {"diff": sum(diffs) / k, "lo": percentile(means, alpha / 2), "hi": percentile(means, 1 - alpha / 2),
-            "p": max(1 / n, min(1.0, 2 * min(low, high)))}
+    mean_ = sum(diffs) / len(diffs)
+    return {"diff": mean_, "lo": percentile(means, alpha / 2), "hi": percentile(means, 1 - alpha / 2),
+            "p": max(1 / n, min(1.0, 2 * min(low, high))), "clusters": k,
+            "sd": math.sqrt(sum((d - mean_) ** 2 for d in diffs) / max(1, len(diffs) - 1))}
 
 
 def holm(ps: dict[str, float]) -> dict[str, float]:
@@ -146,11 +233,14 @@ def holm(ps: dict[str, float]) -> dict[str, float]:
     return out
 
 
-def compare(rows: dict[str, list[dict]], metric: str = "recall@5") -> dict:
-    res = {f"{a} - {b}": bootstrap([x[metric] - y[metric] for x, y in zip(rows[a], rows[b])]) for a, b in COMPARISONS}
+def compare(rows: dict[str, list[dict]], groups: list[list[int]] | None = None, pairs=COMPARISONS) -> dict:
+    """The registered comparisons (Holm over them), and whether an advantage of MARGIN is excluded."""
+    res = {f"{a} - {b}": bootstrap([x["recall@5"] - y["recall@5"] for x, y in zip(rows[a], rows[b])], groups)
+           for a, b in pairs}
     adj = holm({k: v["p"] for k, v in res.items()})
     for k, v in res.items():
         v["p_holm"] = adj[k]
+        v["margin_excluded"] = v["hi"] < MARGIN
     return res
 
 
@@ -180,6 +270,85 @@ def per_commit(c: Commit, t: dict, r: dict[str, float]) -> dict:
             "gold_rank": {short(g): top.index(g) + 1 if g in top else None for g in c.gold}}
 
 
+LOSS = 0.05  # of recall@5 that the threshold may cost on dev's docs commits
+
+
+def shown(raw: dict[str, float], threshold: float) -> list[str]:
+    """The pages a step with a threshold shows: of the best five, those with at least that score."""
+    return [p for p in fuse.ranked(raw)[:5] if raw[p] >= threshold]
+
+
+def recall_at(commits: list[Commit], cfg: dict, threshold: float) -> float:
+    return sum(len(set(shown(scores(c, "bm25", cfg), threshold)) & set(c.gold)) / len(c.gold) for c in commits) / len(commits)
+
+
+def tune_threshold(commits: list[Commit], cfg: dict) -> float:
+    """The largest raw BM25 score that loses at most LOSS recall@5 (candidates: the scores of the gold units)."""
+    floor = recall_at(commits, cfg, 0.0) - LOSS
+    cands = sorted({scores(c, "bm25", cfg)[p] for c in commits for p in c.gold if p in scores(c, "bm25", cfg)}, reverse=True)
+    return next((t for t in cands if recall_at(commits, cfg, t) >= floor - 1e-12), 0.0)
+
+
+def wilson(k: int, n: int, z: float = 1.96) -> list[float]:
+    if not n:
+        return [0.0, 1.0]
+    p, d = k / n, 1 + z * z / n
+    mid, half = (p + z * z / (2 * n)) / d, z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / d
+    return [mid - half, mid + half]
+
+
+def alarm_report(quiet: list[Commit], docs: list[Commit], cfg: dict, threshold: float) -> dict:
+    """Alarm rate and pages shown on commits without docs changes (all, code, comment-only), and recall@5 on the docs commits."""
+    out: dict = {"threshold": threshold, "recall@5": recall_at(docs, cfg, threshold), "recall@5_without": recall_at(docs, cfg, 0.0)}
+    docs_shown = [shown(scores(c, "bm25", cfg), threshold) for c in docs]
+    out["docs_commits_silent"] = sum(not s for s in docs_shown)
+    out["docs_pages_shown_per_commit"] = sum(map(len, docs_shown)) / len(docs_shown)
+    for name, part in (("all", quiet), ("code", [c for c in quiet if not c.meta["comment_only"]]),
+                       ("comment_only", [c for c in quiet if c.meta["comment_only"]])):
+        pages = [len(shown(scores(c, "bm25", cfg), threshold)) for c in part]
+        k = sum(n > 0 for n in pages)
+        out[name] = {"commits": len(part), "alarms": k, "alarm_rate": k / len(part) if part else None,
+                     "interval": wilson(k, len(part)), "pages_per_100": 100 * sum(pages) / len(part) if part else None}
+    return out
+
+
+DATA = HERE / "data"
+MARKER, LOCK, RESULT = (DATA / n for n in ("HELD_OUT_SCORED.json", "protocol.lock.json", "held_out.json"))
+
+
+def protocol_key() -> dict:
+    """Hashes of what held-out is scored with: the protocol text, the lists, dev's results, the code."""
+    readme = (HERE / "README.md").read_text()
+    parts = {"README.md#protocol": readme[readme.index("## Protocol"):readme.index("## Result on dev")].encode()}
+    for p in [DATA / n for n in ("commits.json", "alarms.json", "dev.json")] + sorted(HERE.glob("*.py")):
+        parts[str(p.relative_to(HERE))] = p.read_bytes()
+    files = {k: hashlib.sha256(v).hexdigest() for k, v in sorted(parts.items())}
+    return {"key": hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest(), "files": files}
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(["git", "-C", str(HERE), *args], capture_output=True, text=True).stdout
+
+
+def refuse_second_scoring() -> None:
+    if MARKER.exists() or RESULT.exists():
+        raise SystemExit(f"{MARKER.name} or {RESULT.name} exists: held-out is scored once")
+    if _git("log", "--all", "--format=%h", "-1", "--", str(MARKER), str(RESULT)).strip():
+        raise SystemExit(f"a commit has {MARKER.name} or {RESULT.name}: held-out is scored once")
+
+
+def take_the_marker() -> dict:
+    """Check the lock and take the one scoring, before anything of held-out is read."""
+    refuse_second_scoring()
+    key = protocol_key()
+    committed = _git("show", f"HEAD:./data/{LOCK.name}")
+    if not committed or json.loads(committed)["key"] != key["key"]:
+        raise SystemExit("the committed protocol lock is missing or not the one of these files (evaluate.py lock, commit, review)")
+    with MARKER.open("x") as f:
+        f.write(json.dumps({"key": key["key"], "commit": _git("rev-parse", "HEAD").strip()}, indent=1) + "\n")
+    return key
+
+
 def costs(commits: list[Commit], tuned: dict[str, dict]) -> dict[str, float]:
     """Medians per commit in seconds: reading the diff and the docs, then each text method; the two graph indexes
     with their export and neighbourhood; the search index derived at the same path and the tuned searches."""
@@ -203,8 +372,17 @@ def costs(commits: list[Commit], tuned: dict[str, dict]) -> dict[str, float]:
 
 
 def load(split: str, hist: Path, work: Path) -> list[Commit]:
-    doc = json.loads((HERE / "data" / "commits.json").read_text())
+    if split == "held-out" and not MARKER.exists():
+        raise SystemExit("held-out is read only by the one scoring (take_the_marker)")
+    doc = json.loads((DATA / "commits.json").read_text())
     return [Commit(c, hist, work) for c in doc["commits"] if c["split"] == split]
+
+
+def load_alarms(split: str, hist: Path, work: Path) -> list[Commit]:
+    if split == "held-out" and not MARKER.exists():
+        raise SystemExit("held-out is read only by the one scoring (take_the_marker)")
+    doc = json.loads((DATA / "alarms.json").read_text())
+    return [Commit({**c, "gold": []}, hist, work) for c in doc["commits"] if c["split"] == split]
 
 
 def rounded(x):
@@ -225,43 +403,65 @@ def table(means: dict[str, dict[str, float]], order) -> str:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("split", choices=("dev", "held-out"))
-    p.add_argument("--hist", type=Path, required=True)
-    p.add_argument("--work", type=Path, required=True)
-    p.add_argument("--out", type=Path, required=True)
+    p.add_argument("what", choices=("dev", "lock", "held-out"))
+    p.add_argument("--hist", type=Path)
+    p.add_argument("--work", type=Path)
     p.add_argument("--i-have-the-review", action="store_true")
     args = p.parse_args()
-    if args.split == "held-out":
+    if args.what == "lock":
+        refuse_second_scoring()
+        LOCK.write_text(json.dumps(protocol_key(), indent=1) + "\n")
+        return 0
+    if args.what == "held-out":
         if not args.i_have_the_review:
             raise SystemExit("held-out is scored once, after an independent review (README)")
-        if args.out.exists():
-            raise SystemExit(f"{args.out} exists: held-out is scored once")
-    commits = load(args.split, args.hist, args.work)
+        dev = json.loads((DATA / "dev.json").read_text())
+        take_the_marker()
+    commits = load(args.what, args.hist, args.work)
     if not all(c.graph and c.search for c in commits):
         raise SystemExit("not every commit is prepared (prepare.py)")
-    if args.split == "dev":
-        tuned = tune(commits)
-        cv = cross_validated(commits)
+    quiet = load_alarms(args.what, args.hist, args.work)
+    groups = clusters(commits)
+    out: dict = {"split": args.what, "commits": len(commits), "clusters": len(groups)}
+    if args.what == "dev":
+        structure, _ = choose(commits)
+        tuned = tune(commits, structure)
+        threshold = tune_threshold(commits, tuned["bm25"]["cfg"])
+        # Choice and tuning inside each fold; the registered comparisons, and against each text method.
+        nested = cv_rows(commits, tune_and_choose)
+        out["structure"] = structure
+        out["cross_validated"] = {m: measure.mean(r) for m, r in nested.items()}
+        out["comparisons_cross_validated"] = compare(nested, groups)
+        out["against_each_text_cross_validated"] = compare(
+            nested, groups, [(a, b) for a in ("text+myc", "myc") for b in ("bm25", "text-fusion", "grep")])
     else:
-        tuned = json.loads((HERE / "data" / "dev.json").read_text())["configurations"]
-        cv = None
+        structure, tuned, threshold = dev["structure"], dev["configurations"], dev["alarms"]["threshold"]
     rows = {m: [row(c, t["method"], t["cfg"]) for c in commits] for m, t in tuned.items()}
     rows["plain-grep"] = [measure.score(fuse.ranked(text.plain_grep(c.corpus, c.features)), c.gold) for c in commits]
     means = {m: measure.mean(r) for m, r in rows.items()}
-    comparisons = compare(cv or rows)
-    out = {"split": args.split, "commits": len(commits), "configurations": tuned, "means": means,
-           "comparisons": comparisons, "seconds": costs(commits, tuned),
-           "per_commit": {c.sha: {m: per_commit(c, t, rows[m][i]) for m, t in tuned.items()}
-                          for i, c in enumerate(commits)}}
-    if cv:
-        out["cross_validated"] = {m: measure.mean(r) for m, r in cv.items()}
-    else:
-        out["decision"] = decide(comparisons, means)
-    args.out.write_text(json.dumps(rounded(out), indent=1) + "\n")
+    out.update({"structure": structure, "configurations": tuned, "means": means, "comparisons": compare(rows, groups),
+                "alarms": alarm_report(quiet, commits, tuned["bm25"]["cfg"], threshold),
+                "seconds": costs(commits, tuned),
+                "per_commit": {c.sha: {m: per_commit(c, t, rows[m][i]) for m, t in tuned.items()}
+                               for i, c in enumerate(commits)},
+                "alarm_pages": {c.sha: [short(p) for p in shown(scores(c, "bm25", tuned["bm25"]["cfg"]), threshold)]
+                                for c in quiet}})
+    if args.what == "held-out":
+        out["decision"] = decide(out["comparisons"], means)
+    path = DATA / "dev.json" if args.what == "dev" else RESULT
+    # Configurations are kept exactly: held-out uses them as written.
+    path.write_text(json.dumps({**rounded({k: v for k, v in out.items() if k not in ("configurations", "alarms")}),
+                                "configurations": tuned, "alarms": out["alarms"]}, indent=1) + "\n")
+    print(structure)
     print(table(means, means))
-    if cv:
-        print("\ncross-validated\n" + table(out["cross_validated"], out["cross_validated"]))
-    print(json.dumps(rounded(comparisons), indent=1), out.get("decision", ""))
+    for k in ("cross_validated",):
+        if k in out:
+            print("\ncross-validated (choice and tuning)\n" + table(out[k], out[k]))
+    for k in ("comparisons_cross_validated", "against_each_text_cross_validated", "comparisons"):
+        if k in out:
+            print(k, json.dumps(rounded(out[k])))
+    print("alarms", json.dumps(rounded(out["alarms"])))
+    print(out.get("decision", ""))
     return 0
 
 

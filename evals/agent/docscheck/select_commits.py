@@ -1,6 +1,7 @@
 """Select the spring-framework commits of the docs check (#210).
 
     python3 -I select_commits.py HIST --out commits.json [--fetch]
+    python3 -I select_commits.py HIST --out alarms.json --alarms [--fetch]
 
 HIST is a blobless clone with history. The rule looks at commits, paths, and
 (rule 6) whether main code changes beyond comments; never at a method's output:
@@ -33,6 +34,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import random
 import re
 import sys
 from pathlib import Path
@@ -180,11 +182,62 @@ def select(hist: Path, fetch: bool) -> dict:
         split = "dev" if day(c["date"]) < dt.date.fromisoformat(SPLIT) else "held-out"
         why = neighbours(c, replayed) if split == "held-out" else None
         out.append({"sha": c["sha"], "parent": c["parent"], "date": day(c["date"]).isoformat(),
-                    "subject": c["subject"], "files": len(c["files"]),
+                    "subject": c["subject"], "issues": c["issues"], "files": len(c["files"]),
                     "split": "excluded-183" if why else split, **({"excluded": why} if why else {}), "gold": gold})
     n["split"] = {s: sum(c["split"] == s for c in out) for s in ("dev", "held-out", "excluded-183")}
     return {"head": HEAD_PIN, "since": SINCE, "split_at": SPLIT, "max_files": MAX_FILES, "max_gold": MAX_GOLD,
             "counts": n, "commits": out}
+
+
+ALARM_SEED = 210
+ALARMS = 100
+
+
+def alarms(hist: Path, fetch: bool) -> dict:
+    """The false-alarm set: ALARMS code commits without any docs change per period, drawn with ALARM_SEED.
+
+    Same range, subject and size rules as the docs set (1, 2, 3, 4); no file below ``framework-docs/`` changes,
+    of any kind; the parent has the split docs (at least 300 pages); one per subject (the oldest); held-out
+    without #183's commits and neighbours. ``comment_only`` marks commits that fail rule 6."""
+    commits = read_log(hist)
+    replay = replayed_shas()
+    replayed = [c for c in commits if c["sha"] in replay]
+    pool: dict[str, list[dict]] = {"dev": [], "held-out": []}
+    seen: set[str] = set()
+    for c in sorted(commits, key=lambda c: (day(c["date"]), c["sha"])):
+        if day(c["date"]) < dt.date.fromisoformat(SINCE) or EXCLUDE.match(c["subject"]) or len(c["files"]) > MAX_FILES:
+            continue
+        if not any(is_main(f["path"]) for f in c["files"]) or any(f["path"].startswith("framework-docs/") for f in c["files"]):
+            continue
+        if c["subject"] in seen:
+            continue
+        seen.add(c["subject"])
+        split = "dev" if day(c["date"]) < dt.date.fromisoformat(SPLIT) else "held-out"
+        if split == "held-out" and neighbours(c, replayed):
+            continue
+        pool[split].append(c)
+    null = "0" * 40
+    out, n = [], {}
+    for split, cs in pool.items():
+        n[f"pool_{split}"] = len(cs)
+        order = random.Random(f"{ALARM_SEED}:{split}").sample(cs, len(cs))
+        drawn = []
+        for c in order:
+            if len(drawn) == ALARMS:
+                break
+            if sum(bool(PAGE.match(p)) for p in gitdata.tree(hist, c["parent"], "framework-docs")) >= 300:
+                drawn.append(c)
+        need = {o for c in drawn for f in c["files"] for o in (f["old"], f["new"]) if o != null}
+        if fetch:
+            gitdata.prefetch(hist, need)
+        text = gitdata.blobs(hist, need)
+        for c in drawn:
+            code = any(changes_code(f, text) for f in c["files"] if is_main(f["path"]))
+            out.append({"sha": c["sha"], "parent": c["parent"], "date": day(c["date"]).isoformat(), "subject": c["subject"],
+                        "issues": c["issues"], "files": len(c["files"]), "split": split, "comment_only": not code})
+        n[f"drawn_{split}"] = len(drawn)
+        n[f"comment_only_{split}"] = sum(a["comment_only"] for a in out if a["split"] == split)
+    return {"head": HEAD_PIN, "seed": ALARM_SEED, "counts": n, "commits": out}
 
 
 def main() -> int:
@@ -192,8 +245,9 @@ def main() -> int:
     p.add_argument("history", type=Path)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--fetch", action="store_true", help="fetch missing blobs from the promisor remote")
+    p.add_argument("--alarms", action="store_true", help="the false-alarm set instead of the docs set")
     args = p.parse_args()
-    data = select(args.history, args.fetch)
+    data = alarms(args.history, args.fetch) if args.alarms else select(args.history, args.fetch)
     data["counts"].pop("blobs_fetched", None)
     args.out.write_text(json.dumps(data, indent=1) + "\n")
     print(json.dumps(data["counts"], indent=1))

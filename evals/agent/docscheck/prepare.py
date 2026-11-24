@@ -85,6 +85,7 @@ def graph_side(args, c: dict, files: list[dict], side: str, tree: Path) -> tuple
     nodes, edges = graph.load(out)
     out.unlink()
     g = graph.neighbourhood(nodes, edges, files, side)
+    g["member_of"] = graph.neighbourhood(nodes, edges, files, side, member_of=True)
     remove(home, args.work)
     g["index_s"], g["query_s"] = round(took, 1), round(time.time() - t, 1)
     return g, took
@@ -118,6 +119,12 @@ def do_search(args, c: dict, corpus: Corpus, f: dict, path: Path) -> None:
     home, log = args.work / "docshome", args.work / "search.log"
     home.mkdir(exist_ok=True)
     checkout(args.hist, c["parent"] + ":framework-docs", tree, idx)
+    for p in sorted((tree / "src").rglob("*")):
+        if p.is_file() and not p.is_symlink():
+            data = p.read_bytes()
+            plain = change.without_header(data.decode(errors="replace")).encode()
+            if plain != data and b"\0" not in data:
+                p.write_bytes(plain)  # as in the corpus of the text methods; the next checkout restores it
     e = env(home, args.models)
     index_s = analyze(args.myc, tree, e, log, "--strict-embeddings")
     out = {"sha": c["sha"], "index_s": round(index_s, 1), "answers": {}, "seconds": {}}

@@ -8,7 +8,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from . import gitdata
-from .change import IDENT, KEY
+from .change import IDENT, KEY, without_header
 from .select_commits import is_unit
 
 HEADING = re.compile(r"^={1,5} \S", re.M)
@@ -63,6 +63,7 @@ class Unit:
     """Token counts of one file (by blob, so shared between commits)."""
 
     def __init__(self, text: str, adoc: bool) -> None:
+        text = without_header(text)
         self.idents = count(IDENT.findall(text))
         self.keys = count(KEY.findall(text))
         if adoc:

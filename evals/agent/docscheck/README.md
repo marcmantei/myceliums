@@ -6,13 +6,27 @@ review effort (pages shown)? Many real spring-framework commits answer it; no se
 
 **Status: protocol and dev only. Held-out is not scored**; it is scored once, after an independent
 review of this directory. `prepare.py` and `evaluate.py` refuse held-out without `--i-have-the-review`,
-and `evaluate.py` refuses a second scoring.
+and `evaluate.py` scores held-out once: it needs the committed [`data/protocol.lock.json`](data/protocol.lock.json) (hashes of the
+protocol below, the commit lists, dev's results and the code) to match, takes `data/HELD_OUT_SCORED.json` before it reads anything of
+held-out, and refuses when that marker or a result exists in the working tree or in any commit. Neither path is an argument.
 
-## Protocol (24 November 2026, before any held-out result)
+## Protocol (24 November 2026, before any held-out result; amended the same day after the review of dev)
 
-What was known when this was written: the subjects and gold pages of all commits (the selection prints
+What was known when this was first written: the subjects and gold pages of all commits (the selection prints
 them; no method was run on held-out), and on dev two rounds of the text methods (the BM25 and grep grids were
-revised once after the first). No myceliums method had been scored; it gets the same one revision.
+revised once after the first). No myceliums method had been scored; it got the same one revision.
+
+### Amendments (24 November 2026, evening; after dev, before held-out, from the independent review)
+
+| What | Before | Now | Why |
+|---|---|---|---|
+| Licence headers | in the diff and in samples | cut from the diffs of all methods, from the samples of the text corpus, and from the samples and queries of the search index | 32 of 65 dev diffs held one; samples filled 42 of 325 BM25 top-5 slots; the first dev numbers understated the text methods and are replaced |
+| Contenders | best by dev recall@5 | best by **cross-validated** recall@5, for the search inside `myc-fusion` and for `text`, `myc` and `text+myc`; configurations are tuned on dev as before | selecting by the tuned score picked text-fusion over a better BM25 |
+| Margin | 0.10 | **unchanged**; also reported whether an advantage of 0.10 is excluded (upper interval end below 0.10), and the difference with its interval whatever it is | a margin lowered after dev would be fitted to it |
+| Bootstrap | over commits | over **clusters of commits that share an issue number** (cross-validation folds keep a cluster together, too) | 16 of the 84 held-out commits share an issue with another (11 pairs) |
+| Comment-only commits | out | out of the docs set; a marked stratum of the false-alarm set | a Javadoc diff is a docs edit of its own |
+| False alarms | not measured | 100 code commits without docs per period (below) | the step would run on 93 % of commits for nothing |
+| Second scoring | refused by `--out` only | lock and marker (above) | another `--out` would have scored again |
 
 ### Commits
 
@@ -83,11 +97,14 @@ Hybrid uses jina-embeddings-v2-base-code, 1,473 vectors (all sections and docume
 Recall@k and precision@k for k = 1, 3, 5, 10, MRR (first gold page), success@5 (any gold page), pages shown (a method may show fewer than 5), mean over commits; run time per commit and index cost. **Primary: recall@5.**
 
 Two registered comparisons, paired over the 84 held-out commits: `text+myc` - `text` (what myceliums adds) and `myc` - `text`. Each: mean difference, 95 %
-percentile interval of a paired bootstrap over commits (10,000, seed 210), p = twice the smaller tail share at 0, **Holm over the two**. **Clearly better:** difference >= 0.10,
-interval above 0, Holm p <= 0.05. All other numbers are described, not tested.
+percentile interval of a paired bootstrap over clusters (10,000, seed 210), p = twice the smaller tail share at 0, **Holm over the two**. **Clearly better:** difference at least 0.10,
+interval above 0, Holm p at most 0.05. Reported for each whatever the outcome: the difference with its interval, and whether an advantage of 0.10 is excluded. All other numbers are described, not tested.
 
-Power, from dev's paired differences, is given under *Result on dev*. The ceiling matters: with the text at 0.86 on dev, +0.10 needs 0.96, about the noise limit of the gold (87 % of the gold pages have a cause in the code).
-So "no clear win" is the likely outcome when the text stays at 0.86, and it decides for the text search by design.
+Expected conclusions, from dev's cross-validated pairs (numbers under *Result on dev*): at a true difference of 0.10 the point estimate is at least 0.10 in about half of the samples, so the power for "clearly better" is **about 50 %**; at a true difference of 0.2 it is near 1. "Not clearly better" is therefore **not** "no better": held-out can end with the advantage of 0.10 excluded (small advantages, close to 0), with a difference above 0 but under the margin, or with nothing excluded (wide interval), and the report says which. The gold-noise estimate sets no ceiling: the text finds 3 of the 4 pages of the noise sample that had another cause.
+
+### False alarms
+
+A CI step runs on every code commit, of which 6.5 % change a docs unit. [`data/alarms.json`](data/alarms.json): 100 code commits **without any change under `framework-docs/`** from the dev period and 100 from the held-out period (seed 210; same subject, size and main-code rules; one per subject; the parent has the split docs; held-out without #183's commits and neighbours), `comment_only` marked (12 and 8). Only `bm25` (the raw score of the best section, no fusion). A page is shown when it is among the best five and its score reaches a threshold, **tuned on dev** to lose at most 0.05 of recall@5 on the docs commits (largest score among the gold pages' scores that keeps it). Reported: alarm rate (a commit with a page shown) with Wilson interval, for all, code and comment-only commits, pages shown per 100 commits, and recall@5 at the threshold on the docs commits. Held-out is scored once, with the main result. The graph is run on these commits only if it wins the main comparison. 20 dev alarms are read for real omissions.
 
 ### Decision table
 
@@ -113,14 +130,6 @@ A win for text is a result. Cost decides nothing in the table; it stands beside 
 Graph-only index of Spring: 22 s unloaded, 50-100 s at a load of 60-130; two per commit, deleted after use (556 MB at once, one at a time); export and neighbourhood 5 s. Embedding the docs once (1,473 sections and documents): 801 s at a load of 60-130 (5 cores at
 nice 15); per commit a docs index derived at the same path (`analyze --force`, all unchanged vectors reused, 0.4 s) and about 13 s of searches. Dev: 65 x ~100 s graph and 65 x ~15 s search. Held-out: 84 x the same, about 3 h. Embedding the whole repository would take about 5 h per first index (#183) and is **not done**.
 Network: git only, 17,678 blobs in 91 s for the 65 parents; about the same again for held-out (two header-change commits).
-
-### Choices open for a decision
-
-1. The margin 0.10 near the ceiling (above); 0.05 would be easier to reach but not clearly a reason for an index.
-2. Only commits with gold are scored; what the method shows on the 93 % of code commits without docs is the adoption question of a CI step that always runs. A cheap text-only check of a threshold, or a second sample of such commits (60 and 60, text and graph, about 4 h), would answer it.
-3. Comment-only commits are out (rule 6: 80 of 254): a Javadoc diff is a docs edit; a check on it is a different step.
-4. Samples are units of their own; 1 of 65 dev and 6 of 84 held-out commits have one in the gold.
-5. The contender `text` is the fusion by dev recall@5 (0.863 against 0.859 for BM25), but under cross-validation BM25 alone is better (0.841 against 0.815): selecting by cross-validated recall@5 would make the text baseline stronger. Not applied, because the rule was registered first.
 
 ## Result on dev (65 commits, not a held-out result)
 

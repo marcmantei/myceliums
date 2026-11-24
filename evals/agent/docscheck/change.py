@@ -43,6 +43,47 @@ def is_docs(path: str) -> bool:
     return path.startswith("framework-docs/")
 
 
+LICENCE = re.compile(r"Licensed under the Apache License|Copyright (?:\(c\) )?\d{4}")
+# A leading block comment, XML comment, or run of line comments; an XML declaration may come first.
+LEAD = re.compile(r"\A\ufeff?\s*(?:<\?xml[^>]*\?>\s*)?(/\*.*?\*/|<!--.*?-->|(?:(?:#|//)[^\n]*(?:\n|\Z))+)", re.S)
+
+
+def header(source: str) -> tuple[int, int]:
+    """First and last line (from 1) of a file's licence header, ``(0, -1)`` without one."""
+    m = LEAD.match(source)
+    if not m or not LICENCE.search(m.group(1)):
+        return 0, -1
+    return source.count("\n", 0, m.start(1)) + 1, source.count("\n", 0, m.end(1) - m.group(1).endswith("\n")) + 1
+
+
+def without_header(source: str) -> str:
+    """The source without its licence header (the corpus; line numbers change)."""
+    m = LEAD.match(source)
+    return source[:m.start(1)] + source[m.end(1):] if m and LICENCE.search(m.group(1)) else source
+
+
+def strip_headers(f: dict) -> dict:
+    """The file with the changed lines of its licence header (old and new side) taken out of its hunks."""
+    out = []
+    for h in f["hunks"]:
+        for start, lines, text, (st, ln, body) in ((h["os"], h["minus"], f["old_text"], ("os", "ol", "minus")),
+                                                   (h["ns"], h["plus"], f["new_text"], ("ns", "nl", "plus"))):
+            first, last = header(text)
+            run: list[str] = []
+            at = start
+            for i, line in enumerate(lines + [None]):
+                n = start + i
+                if line is None or first <= n <= last:
+                    if run:
+                        new = {"os": 0, "ol": 0, "ns": 0, "nl": 0, "minus": [], "plus": []}
+                        new[st], new[ln], new[body] = at, len(run), run
+                        out.append(new)
+                    run, at = [], n + 1
+                else:
+                    run.append(line)
+    return {**f, "hunks": out}
+
+
 def blank(source: str) -> str:
     """Source with comments and string contents replaced by spaces (same length and lines)."""
     out, i, n = [], 0, len(source)
@@ -196,7 +237,8 @@ def read_files(hist: Path, parent: str, sha: str) -> list[dict]:
         f["old_text"] = text[old[f["old"]]].decode(errors="replace") if f["old"] in old else ""
         f["new_text"] = text[new[f["new"]]].decode(errors="replace") if f["new"] in new else ""
         f["kind"] = kind(f["new"] or f["old"])
-    return files
+    # A file whose licence header alone changes is no change; a pure rename has no hunks and stays.
+    return [g for f in files for g in (strip_headers(f),) if g["hunks"] or not f["hunks"]]
 
 
 def _overlap(s: dict, start: int, length: int) -> bool:
