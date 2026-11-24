@@ -84,7 +84,7 @@ pub(crate) async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result
         CodexRouting::Done(change) => change,
         CodexRouting::Left(text) => {
             println!("  ! {text}");
-            print_blocks_left(&project, uninstall);
+            print_blocks_left(&project, uninstall, std::slice::from_ref(&agents_md));
             return Ok(());
         }
         CodexRouting::WouldHide { hidden, removed } => {
@@ -111,14 +111,18 @@ pub(crate) async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result
         FileChange::Absent => "not present in",
     };
     println!("  \u{2713} Routing block {what} {}", agents_md.display());
-    print_blocks_left(&project, uninstall);
+    print_blocks_left(&project, uninstall, &[]);
     Ok(())
 }
 
 /// After an uninstall: the routing blocks still in the project.
-fn print_blocks_left(project: &commands::instructions::Project, uninstall: bool) {
+fn print_blocks_left(
+    project: &commands::instructions::Project,
+    uninstall: bool,
+    explained: &[std::path::PathBuf],
+) {
     if uninstall {
-        for block in commands::instructions::block_list(project) {
+        for block in commands::instructions::block_list(project, explained) {
             println!("  ! Routing block left: {block}");
         }
     }

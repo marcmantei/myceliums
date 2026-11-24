@@ -557,15 +557,29 @@ fn remove_agent(path: &Path) -> Result<FileChange> {
 pub(crate) struct Routed {
     /// For the report.
     pub line: String,
-    /// What was left as it is, why, and what to do by hand.
-    pub note: Option<String>,
+    pub note: Option<Note>,
+}
+
+/// A file that was left as it is: why, and what to do by hand.
+pub(crate) struct Note {
+    pub file: PathBuf,
+    pub text: String,
 }
 
 impl Routed {
-    fn left(note: String) -> Self {
+    fn left(note: Note) -> Self {
         Self {
             line: "left as it is, see the note below".to_string(),
             note: Some(note),
+        }
+    }
+}
+
+impl Note {
+    fn new(file: &Path, reason: &str) -> Self {
+        Self {
+            file: file.to_path_buf(),
+            text: instructions::by_hand(file, reason),
         }
     }
 }
@@ -581,15 +595,14 @@ fn memory_obstacle(targets: &Targets) -> Option<String> {
 
 /// A block that an older version left in the project's `CLAUDE.md`, and what
 /// keeps it from being removed, as a note for the user.
-fn old_block(targets: &Targets) -> Option<(PathBuf, Option<String>)> {
+fn old_block(targets: &Targets) -> Option<(PathBuf, Option<Note>)> {
     let project = targets.project.as_ref()?;
     let old = project.root.join("CLAUDE.md");
     let text = std::fs::read_to_string(&old).ok()?;
     if let Ok(None) = routing::remove_block(&text, Owner::Claude) {
         return None;
     }
-    let note = instructions::repair_obstacle(project, &old)
-        .map(|reason| instructions::by_hand(&old, &reason));
+    let note = instructions::repair_obstacle(project, &old).map(|reason| Note::new(&old, &reason));
     Some((old, note))
 }
 
@@ -598,16 +611,14 @@ fn old_block(targets: &Targets) -> Option<(PathBuf, Option<String>)> {
 /// there keeps Claude Code's only one, and nothing is changed.
 pub(crate) fn install_routing(targets: &Targets, subagent: bool) -> Result<Routed> {
     if let Some(reason) = memory_obstacle(targets) {
-        return Ok(Routed::left(instructions::by_hand(
-            &targets.memory,
-            &reason,
-        )));
+        return Ok(Routed::left(Note::new(&targets.memory, &reason)));
     }
     let old = old_block(targets);
-    if let Some((_, Some(note))) = old {
-        return Ok(Routed::left(format!(
-            "{note} Then re-run `myc setup-claude`. Until then Claude Code reads the block there."
-        )));
+    if let Some((_, Some(mut note))) = old {
+        note.text.push_str(
+            " Then re-run `myc setup-claude`. Until then Claude Code reads the block there.",
+        );
+        return Ok(Routed::left(note));
     }
     let block = routing::routing_block(Flavor::Claude { subagent });
     let change = routing::install_block(&targets.memory, &block)?;
@@ -626,10 +637,7 @@ pub(crate) fn install_routing(targets: &Targets, subagent: bool) -> Result<Route
 /// project's `CLAUDE.md`.
 fn remove_routing(targets: &Targets) -> Result<Routed> {
     if let Some(reason) = memory_obstacle(targets) {
-        return Ok(Routed::left(instructions::by_hand(
-            &targets.memory,
-            &reason,
-        )));
+        return Ok(Routed::left(Note::new(&targets.memory, &reason)));
     }
     let change = routing::uninstall_block(&targets.memory, Owner::Any, targets.delete_empty())?;
     if change == FileChange::Deleted && targets.project.is_some() {
@@ -747,11 +755,11 @@ pub fn install(
     if layers.routing {
         let Routed { line, note } = install_routing(targets, layers.agent)?;
         report.add("Routing", line);
-        report.notes.extend(note);
+        report.notes.extend(note.map(|note| note.text));
     } else {
         let Routed { line, note } = remove_routing(targets)?;
         report.add("Routing", format!("skipped (--no-routing); {line}"));
-        report.notes.extend(note);
+        report.notes.extend(note.map(|note| note.text));
     }
 
     // 4. Subagent.
@@ -808,7 +816,8 @@ pub fn uninstall(targets: &Targets, registrar: McpRegistrar) -> Result<Report> {
 
     let Routed { line, note } = remove_routing(targets)?;
     report.add("Routing", line);
-    report.notes.extend(note);
+    let explained: Vec<PathBuf> = note.iter().map(|note| note.file.clone()).collect();
+    report.notes.extend(note.map(|note| note.text));
 
     let change = remove_agent(&targets.agent)?;
     report.add("Subagent", describe(change, &targets.agent));
@@ -818,7 +827,7 @@ pub fn uninstall(targets: &Targets, registrar: McpRegistrar) -> Result<Report> {
         let _ = std::fs::remove_dir(dir);
     }
     if let Some(project) = &targets.project {
-        for block in instructions::block_list(project) {
+        for block in instructions::block_list(project, &explained) {
             report.notes.push(format!("Routing block left: {block}"));
         }
     }

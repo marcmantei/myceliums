@@ -79,9 +79,11 @@ fn projects(
 fn check_instructions(projects: &[Checked], fix: bool, all: bool) -> (Vec<String>, u32) {
     let mut lines = Vec::new();
     let mut issues = 0;
+    let mut explained = Vec::new();
     for Checked { project, current } in projects {
         for finding in instructions::findings(project) {
             let hides = !finding.hidden.is_empty();
+            let issue = finding.is_issue();
             if hides && fix && (*current || all) && finding.fix == Fix::Doctor {
                 match instructions::repair(project, &finding) {
                     Ok(done) => {
@@ -91,8 +93,9 @@ fn check_instructions(projects: &[Checked], fix: bool, all: bool) -> (Vec<String
                     Err(e) => lines.push(format!("\u{2717} Not repaired: {e:#}")),
                 }
             }
-            let mark = if hides { "\u{2717}" } else { "-" };
-            issues += u32::from(hides);
+            explained.push(finding.file.clone());
+            let mark = if issue { "\u{2717}" } else { "-" };
+            issues += u32::from(issue);
             lines.push(format!("{mark} Instruction files: {}", finding.describe()));
             let command = |dir: &Path| {
                 let dir = setup_claude::shell_quote(&dir.to_string_lossy());
@@ -111,7 +114,7 @@ fn check_instructions(projects: &[Checked], fix: bool, all: bool) -> (Vec<String
         lines.push("\u{2713} Instruction files: none hidden by myceliums".to_string());
     }
     for Checked { project, .. } in projects.iter().filter(|p| p.current) {
-        for block in instructions::block_list(project) {
+        for block in instructions::block_list(project, &explained) {
             let line = format!("- Routing block: {block}");
             if !lines.contains(&line) {
                 lines.push(line);

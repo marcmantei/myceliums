@@ -227,9 +227,8 @@ What this relies on:
 Earlier versions wrote the block into `CLAUDE.md`. Where that file did not exist
 before, it hid every `AGENTS.md`, those in subdirectories included. What reaches
 the model, from the requests Claude Code 2.1.331 sent to a mock API
-(`evals/agent/probe_instructions.py`; the files of the last column were written
-by a stand-in for `myc setup-claude`; the routing block arrived once in every
-run of the last two columns):
+(`evals/agent/probe_instructions.py`, with the debug build of `myc`; the routing
+block arrived once in every run of the last two columns):
 
 | The project has | Without myceliums | Block in `CLAUDE.md` (before) | Block in `.claude/rules/` (now) |
 |---|---|---|---|
@@ -275,7 +274,7 @@ outside git that has another instruction file.
 
 Uninstalling (`myc setup-claude --uninstall`, `myc setup-codex --uninstall`)
 lists the routing blocks that are still in the project, each with file, lines and
-what removes it. `myc doctor` lists them for the current project.
+what removes it; a file with several names is listed once. `myc doctor` lists them for the current project.
 
 **Existing installations.** `myc doctor` reports files that hide others in the
 current project, above it, in the repository's other worktrees and in every
@@ -283,6 +282,10 @@ indexed project, with the command or the steps by hand for each. `myc doctor
 --fix` repairs the plain case in the current project only, and only files that
 hide something; `--fix --all-projects` does so in every project it reports.
 Running `myc setup-claude` again moves a block that hides nothing too.
+
+At user scope the uninstall removes the block from `~/.claude/CLAUDE.md` and
+leaves the file, which is then empty if it held nothing else: setup cannot tell
+whether it created it. An empty file there hides nothing; delete it if you like.
 
 **Limits.** A symbolic link to `CLAUDE.md` is not seen when it lies in a
 directory that git ignores as a whole, in a nested repository that is no
