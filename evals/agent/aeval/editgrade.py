@@ -359,14 +359,16 @@ def wrapper_problem(checkout: Path, env: dict | None = None) -> str | None:
 
 def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: int = 900,
              gold: Path | None = None, env: dict | None = None, gold_commit: str | None = None,
-             gold_runs: int = 1, log_dir: Path | None = None) -> dict:
+             gold_runs: int = 1, log_dir: Path | None = None, sandbox=None) -> dict:
     """Run the task's test command on a fresh copy of the pinned checkout
     (the gold commit's parent) before any agent runs, with the task's
     ``test_overlay`` applied (the commit's own tests). The test must fail
     there, or passing it after a session would prove nothing. With ``gold``
     (#183) the whole reference commit is then applied to the same copy and
-    the test must pass. Returns the record ``check-tasks`` expects in the
-    task's ``precheck``."""
+    the test must pass. ``sandbox`` (a function of the working copy that
+    returns ``(prefix, extra environment)``) runs the tests as a session's
+    grading does (aeval/isolation.py). Returns the record ``check-tasks``
+    expects in the task's ``precheck``."""
     from .config import copy_tree, remove_tree
     if problem := wrapper_problem(checkout, env):
         raise SystemExit(f"{task['id']}: {problem}")
@@ -382,16 +384,20 @@ def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: 
     copy_tree(checkout, work)
     after = None
     try:
+        prefix: tuple = ()
+        if sandbox is not None:
+            prefix, extra = sandbox(work)
+            env = {**(env or {}), **extra}
         if task.get("test_overlay"):
             apply_gold(work, gold, task, task["test_overlay"])
-        res = run_test(task["test_command"], work, timeout_s, env)
+        res = run_test(task["test_command"], work, timeout_s, env, prefix)
         if gold is not None:
             apply_gold(work, gold, task)
             # Executed for real: Gradle's (remote) build cache could otherwise
             # answer, and a repetition would be up to date.
-            runs = [run_test(rerun_command(task["test_command"]), work, timeout_s, env)]
+            runs = [run_test(rerun_command(task["test_command"]), work, timeout_s, env, prefix)]
             while len(runs) < gold_runs and runs[-1]["passed"]:
-                runs.append(run_test(rerun_command(task["test_command"]), work, timeout_s, env))
+                runs.append(run_test(rerun_command(task["test_command"]), work, timeout_s, env, prefix))
             after = runs[-1]
     finally:
         remove_tree(work, scratch)
@@ -401,6 +407,8 @@ def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: 
            "parent_failure": kind, "returncode": res["returncode"], "timed_out": res["timed_out"],
            "commit": commit, "command": task["test_command"], "seconds_parent": res["seconds"],
            "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    if sandbox is not None:
+        rec["sandboxed"] = True
     if task.get("test_overlay"):
         rec["test_overlay"] = list(task["test_overlay"])
     if after is not None:

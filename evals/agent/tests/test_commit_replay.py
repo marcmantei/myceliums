@@ -229,6 +229,7 @@ class GradleCommands(unittest.TestCase):
               off + ":spring-context:test --tests org.x.ApplicationEventPublisherTests",  # "Publish" in a test name
               off + "-q :spring-web:test --tests 'org.x.A*'", off + "testClasses",
               off + ":spring-web:test 2>&1 | tail -50", off + ":spring-web:test | head -n 20"]
+        ok += [off + "-x :buildSrc:checkstyleMain -x :buildSrc:checkstyleTest -x :buildSrc:validatePlugins --no-daemon :spring-web:test"]
         bad = [off + x for x in (
             "bSPP", "buildScanPub", "buildScanPublishPrevious", ":spring-core:publish", "publishToMavenLocal", "build",
             "check", "-I /tmp/i.gradle test", "-Dx=1 test", "-Pa=b test", "--init-script x test", "-p /x test",
@@ -237,6 +238,8 @@ class GradleCommands(unittest.TestCase):
         bad += ["./gradlew test", "./gradlew --offline --no-scan test", "./gradlew --offline --no-build-cache test",
                 "./gradlew --no-scan --no-build-cache test", "gradle --offline --no-scan --no-build-cache test",
                 "sh gradlew --offline --no-scan --no-build-cache test", "./gradlew --offline --no-scanX --no-build-cache test"]
+        for c in (off + "-x :spring-web:compileJava test", off + "-x checkstyleMain test", off + "-x :buildSrc:test test"):
+            self.assertFalse(bashcmd.isolated_bash(c, rule, "/w", "/w", True)[0], c)
         for search in (False, True):  # D and the arms with search: one rule
             for c in ok:
                 self.assertEqual(bashcmd.isolated_bash(c, rule, "/w", "/w", search), (True, []), c)

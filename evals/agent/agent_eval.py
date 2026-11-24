@@ -28,6 +28,7 @@ import datetime as dt
 import json
 import os
 import subprocess
+import tempfile
 import sys
 from pathlib import Path
 
@@ -418,6 +419,21 @@ def cmd_replay(args) -> int:
     return 1 if differ else 0
 
 
+def _precheck_sandbox(repo: dict):
+    """The grading sandbox of a session, for a precheck (#183)."""
+    from aeval import isolation
+    if not isolation.available():
+        sys.exit("--sandbox needs macOS's sandbox-exec")
+    tmp = Path(tempfile.mkdtemp(dir=config.session_root(repo)))
+
+    def make(work: Path):
+        env = {**config.repo_env(repo), **isolation.session_environment(tmp)}
+        prof = tmp / "grading.sb"
+        prof.write_text(isolation.grading_profile(tmp, work, env))
+        return isolation.sandboxed([], prof), isolation.session_environment(tmp)
+    return make
+
+
 def cmd_precheck_edit(args) -> int:
     """Run every edit task's test command on the pinned (parent) commit and
     record the result in the task file (#178): it must fail there."""
@@ -438,7 +454,8 @@ def cmd_precheck_edit(args) -> int:
         gold = config.gold_dir(t["repo"]) if repo.get("gold_commit") else None
         rec = editgrade.precheck(t, checkout, scratch, repo["commit"], int(t.get("test_timeout_s", 900)),
                                  gold=gold, env=config.repo_env(repo), gold_commit=repo.get("gold_commit"),
-                                 gold_runs=args.gold_runs, log_dir=Path(args.logs) if args.logs else None)
+                                 gold_runs=args.gold_runs, log_dir=Path(args.logs) if args.logs else None,
+                                 sandbox=_precheck_sandbox(repo) if args.sandbox else None)
         t["precheck"] = rec
         ok = rec["fails_on_parent"] and rec.get("passes_on_gold", True)
         bad += not ok
@@ -677,6 +694,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--gold-runs", type=int, default=1, help="#183: run the tests this often on the gold commit "
                    "(executed, not cached); all must pass, or the task is flaky")
     s.add_argument("--logs", help="directory for the full test output of every run")
+    s.add_argument("--sandbox", action="store_true", help="#183: run under the grading sandbox and environment a session's "
+                   "test command gets")
     s.set_defaults(fn=cmd_precheck_edit)
 
     s = sub.add_parser("tokens", help="per-tool token attribution and cost of a committed run (#178)")

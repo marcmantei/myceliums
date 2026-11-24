@@ -1784,43 +1784,32 @@ of the final context and 8-30k output.
 Plus, once: the derived indexes and the prechecks. The call counts and context sizes above are assumptions; a pilot of one
 repetition would replace them. Disk: 20 parents about 2 GB, 0.87 GB per embedded index without snapshots, `~/.gradle` 8.4 GB so far.
 
-**Prechecks: 9 of 20 valid, offline; 11 pending on artifacts missing from the Gradle cache**
-(23 November, after the #182 run, one at a time). `precheck-edit --gold-runs 2` runs the tests on the parent with the
-commit's tests (must fail, and for a compile or test failure, not a resolution failure), then twice on the whole commit
-with Gradle's `--rerun`. All 9 pass both runs, none is flaky in two. Four of them were first
-misread as resolution failures (a regex that matched a harmless notice) and re-run. Earlier, 13 tasks of an older set passed online
-([records](groundtruth/commit_replay_prechecks_online.json), other commands).
+**Prechecks: 5 of 20 valid, in the grading sandbox; 3 fail there at `:spring-oxm:xjc`; 12 not run with the current commands** (24 November). `precheck-edit --gold-runs 2 --sandbox` runs the tests as a session's grading does: on the parent with the commit's tests
+(must fail, and for a compile or test failure, not a resolution failure), then twice on the whole commit with Gradle's `--rerun`. The valid tasks fail on the parent (compile or tests) and pass both runs on the commit. Earlier precheck records, online and then offline without the sandbox,
+are kept in [`groundtruth/`](groundtruth/) (`commit_replay_prechecks_online.json`); they used other commands and are history, and the offline ones without the sandbox passed for 9 tasks.
 
 | Task | Parent + commit's tests | Commit | Time on the commit |
 |---|---|---:|---:|
-| `spel-simple-context-restricted-conversion` | compile, 48 s | 2 of 2 | 18, 9 s |
-| `observation-record-handled-exception` | pending: 2 artifacts not cached | | |
-| `beans-max-nested-path-depth` | compile, 51 s | 2 of 2 | 28, 10 s |
-| `jsonl-media-type-support` | pending: 1 artifacts not cached | | |
-| `test-context-cache-pause-mode` | pending: not run | | |
-| `retry-max-attempts-to-max-retries` | compile, 47 s | 2 of 2 | 43, 13 s |
-| `fn-request-bind-pathvars-headers` | tests, 89 s | 2 of 2 | 33, 16 s |
-| `jdbcclient-batch-entry-dsl` | compile, 59 s | 2 of 2 | 16, 10 s |
-| `type-mismatch-required-type-arg` | tests, 80 s | 2 of 2 | 17, 10 s |
-| `servlet-response-ignore-body-flush` | pending: 6 artifacts not cached | | |
-| `content-negotiation-no-fallback-mapping` | tests, 68 s | 2 of 2 | 14, 10 s |
-| `client-builders-deep-copy-default-headers-cookies` | pending: 1 artifacts not cached | | |
-| `http-range-honor-if-range` | pending: 1 artifacts not cached | | |
-| `error-response-interceptor-with-request` | pending: 6 artifacts not cached | | |
-| `mime-type-parameter-names-case-insensitive` | tests, 62 s | 2 of 2 | 35, 10 s |
-| `deferred-bean-registrar-contains-bean` | pending: 1 artifacts not cached | | |
-| `api-version-deprecation-handler-handler-arg` | compile, 91 s | 2 of 2 | 51, 10 s |
-| `bean-provider-parameterized-type-reference` | pending: 1 artifacts not cached | | |
-| `message-source-default-charset` | pending: 5 artifacts not cached | | |
-| `retryable-method-retry-event` | pending: 8 artifacts not cached | | |
-
-Median 62 s on the parent (max 91 s, cold) and 28 s for the first run on the commit. Pending tasks and their coordinates:
-[`groundtruth/commit_replay_pending.json`](groundtruth/commit_replay_pending.json) (the first failing resolution of each build; more may be
-missing). Nothing was fetched: they need one online warm-up, prepared but not run
-([`groundtruth/warm_gradle.py`](groundtruth/warm_gradle.py): one command, one working and wrapper path, no scan, no build cache;
-without `--go` it lists the builds, the hosts and the estimate). `spel-big-power-result-limit` needs INTERNAL-SNAPSHOT BOMs, found missing online as
-well; its stand-in is the reserve `test-context-cache-pause-mode`. Three tasks that passed online (`jsonl-...`, `observation-...`,
-`error-response-...`) are pending because their command now compiles modules whose dependencies were never fetched.
+| `spel-simple-context-restricted-conversion` | compile, 40 s | 2 of 2 | 19, 9 s |
+| `observation-record-handled-exception` | not run with these commands | | |
+| `beans-max-nested-path-depth` | compile, 45 s | 2 of 2 | 27, 9 s |
+| `jsonl-media-type-support` | not run with these commands | | |
+| `test-context-cache-pause-mode` | not run with these commands | | |
+| `retry-max-attempts-to-max-retries` | compile, 41 s | 2 of 2 | 35, 10 s |
+| `fn-request-bind-pathvars-headers` | not run with these commands | | |
+| `jdbcclient-batch-entry-dsl` | compile, 48 s | 2 of 2 | 15, 9 s |
+| `type-mismatch-required-type-arg` | fails in the sandbox at `:spring-oxm:xjc` | | |
+| `servlet-response-ignore-body-flush` | not run with these commands | | |
+| `content-negotiation-no-fallback-mapping` | fails in the sandbox at `:spring-oxm:xjc` | | |
+| `client-builders-deep-copy-default-headers-cookies` | not run with these commands | | |
+| `http-range-honor-if-range` | not run with these commands | | |
+| `error-response-interceptor-with-request` | not run with these commands | | |
+| `mime-type-parameter-names-case-insensitive` | tests, 53 s | 2 of 2 | 32, 9 s |
+| `deferred-bean-registrar-contains-bean` | not run with these commands | | |
+| `api-version-deprecation-handler-handler-arg` | fails in the sandbox at `:spring-oxm:xjc` | | |
+| `bean-provider-parameterized-type-reference` | not run with these commands | | |
+| `message-source-default-charset` | not run with these commands | | |
+| `retryable-method-retry-event` | not run with these commands | | |
 
 **Connections, sampled with `lsof` every 0.7 s or so** over the 24 offline runs and the probe's three sessions (2,616 samples in all, all
 processes of the JDK): no remote connection; loopback TCP, a UDP socket per Gradle process (file-lock messages), and wildcard TCP listeners
@@ -1880,7 +1869,7 @@ expansion, and an incomplete list of closed places). This is the last round; the
   visible; Spring's commits may be in the model's training data.
 * Checked with the mock API, hook on and, to see the layer below it, hook off (`probe --no-hook`): 31 places by name from a Python program inside the sandbox (keychains, Claude's history, other projects and credentials file, `.ssh`, checkouts, gold, parents, the other cache, history clone,
   build cache, stored scans, `/private/tmp/claude-501`, `/Volumes`, `/Users/Shared`, the `/System/Volumes/Data` alias of the home directory, ...): all refused; loopback works; settings and wrapper files cannot be written; Gradle's home can. No connection to another machine was attempted.
-  **Gradle in the sandbox: not working yet** (see *Gradle in the sandbox* below).
+  **Gradle in the sandbox: partly** (see *Gradle in the sandbox* below).
 * **Same instructions, one CLI.** Claude Code reads AGENTS.md only where there is no CLAUDE.md, and `setup-claude`
   writes one, so C alone missed Spring's AGENTS.md (found in the #182 review): the harness makes C's CLAUDE.md import it. Six of
   the 20 parents have an AGENTS.md (`spel-simple-...`, `observation-...`, `content-negotiation-...`, `client-builders-...`,
@@ -1916,9 +1905,12 @@ searches, runs `myc callers`, reads and edits the primary file and runs one comm
 The table is the probe of 24 November (arms `none`, C, D, Claude Code's own sandbox, the repository's graph and embeddings index of v7.1.0-derived parent, shared path): `myc` answers from the index in C and D and is not
 found in `none`, AGENTS.md reaches every arm, no isolation problem. Earlier probes with other designs ran Gradle in the session and grading (23 November); the current design does not run it yet. The mock gives every answer one message id, so `api_calls` is 1 there. No real session has run.
 
-**Gradle in the sandbox.** With the offline task commands, Gradle starts, its wrapper opens its lock file, the Develocity plugin stores its data and Gradle runs `buildSrc:compileJava`, all inside Claude Code's sandbox (and in the grading profile). It then fails: Gradle's worker JVMs (checkstyle and the test executors)
-cannot connect to their own daemon over loopback. The sandboxes' loopback rule does not cover IPv4-mapped IPv6 addresses: a small Java program under the grading profile connects to `127.0.0.1` with `-Djava.net.preferIPv4Stack=true` and is refused (`Operation not permitted`) without it (Java 25). Claude Code sets that flag through
-`JAVA_TOOL_OPTIONS` for its commands; the harness adds it also through `JDK_JAVA_OPTIONS`, and the Gradle daemon picks it up, but its workers fail all the same (seen at the same step in the session and in grading); whether Gradle drops it for workers or applies another reason is not known. Until this is solved, agents cannot compile or test in the isolated sessions and no real session can start.
+**Gradle in the sandbox.** Gradle runs offline inside the grading profile and passes the nine-task prechecks where the modules allow it: with the task command the replayed commit's tests **fail on the parent and pass twice on the commit** (5 of the 8 tasks tried, `precheck-edit --sandbox`, 23 November;
+parent 40-53 s, commit 9-35 s; no remote connection in 618 socket samples). The sandboxes' loopback rule does not cover IPv4-mapped IPv6 addresses: a 10-line Java program connects to `127.0.0.1` under the profile with `-Djava.net.preferIPv4Stack=true` and is refused without it, and a Gradle daemon started by the client inherits the flag from
+`JAVA_TOOL_OPTIONS`, as do test executors. Gradle's *process-isolated* workers (Worker API) start with an **empty environment**, so they do not, whatever the build is told: neither `JDK_JAVA_OPTIONS`, `-D`, nor `org.gradle.jvmargs` reaches them (tried). Three `buildSrc` workers (checkstyle, validatePlugins) are excluded with `-x` (task commands, the
+rule of the hook, the build note of every arm; they do not change what is compiled or tested). The remaining worker is `:spring-oxm:xjc` (it generates sources that other modules need, so it cannot be excluded): **three of the eight tasks tried fail in the sandbox at it**
+(`content-negotiation-...`, `type-mismatch-...`, `api-version-...`); how many of the other twelve tasks use it is not known. **Open:** how to let a process-isolated Gradle worker use IPv4 loopback without widening the sandbox, or to prebuild `xjc`'s outputs; until then no real session can compile all tasks. `claude`'s own sandbox has not run Gradle either (the
+session probe failed at the first worker with the previous command, before the excludes).
 
 ```bash
 python3 evals/agent/agent_eval.py --tasks $T index --repo spring-spel-simple-context-restricted-conversion --skip-embeddings --myc $MYC
