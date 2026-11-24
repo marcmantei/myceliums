@@ -1772,6 +1772,27 @@ bash evals/agent/groundtruth/run_pilot_183.sh --dry-run   # prints every command
 bash evals/agent/groundtruth/run_pilot_183.sh             # real sessions
 ```
 
+##### Pilot result (24 November 2026, 08:25-08:52)
+
+Seven sessions, each final at the first attempt, status ok, Claude Code 2.1.331, `claude-sonnet-5-5`, normal login (`apiKeySource` `none`). Load of the machine 8-30 during the sessions (`none`: 13-26 on average), so wall times are upper estimates of a quiet machine's.
+Artifacts: [`results/pilot-183/`](results/pilot-183/) (`sessions.jsonl` with the five `none` rows, `pilot.json`, `checks.json`, `meta.json`); transcripts are archived outside the repository. **Not pooled, no test.**
+
+| Task (`none`) | Solved | Dependent recall | Tokens | Cost | Session s | Grading s | Mean load |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `type-mismatch-required-type-arg` | yes | 0.50 | 62,785 | $0.05 | 14 | 123 | 13 |
+| `mime-type-parameter-names-case-insensitive` | yes | 0.33 | 116,892 | $0.10 | 112 | 55 | 26 |
+| `beans-max-nested-path-depth` | yes | 0.00 | 555,475 | $0.40 | 365 | 46 | 20 |
+| `api-version-deprecation-handler-handler-arg` (weak test) | yes | 1.00 | 140,659 | $0.15 | 35 | 124 | 17 |
+| `retry-max-attempts-to-max-retries` (weak test) | yes | 0.89 | 419,177 | $0.34 | 81 | 98 | 18 |
+
+* **Main run, estimated again** (mean of the five x 180): **$38** (95 % bootstrap over the five sessions $17-59; 180 times the cheapest or dearest session $9-71) and **11.0 h** (8.0-16.2 h; 7.3-21.1 h). Below the stop limits of $288 and 24 h. It carries over what `none` measured: **C and D are not measured** and may cost more or less.
+* **Ceiling:** mean dependent recall 0.54, SD between tasks 0.41, below 0.90, so none. **Tests pass 5 of 5**, so that secondary outcome has no headroom on these five tasks.
+* **Detectable difference** with that SD as a stand-in for the paired differences': 0.26 for one test, 0.30 with Bonferroni over three pairs, **0.32 for the first Holm step**. It is an SD of five tasks and of single sessions, not of differences; the number replaces the pre-registered 0.3-SD one (0.23) and nothing else.
+* **Pipeline checks** (outcomes not reported): C started, reached the myceliums server (one call, answered with an ambiguity) and was graded; its agent ran no build in the session, so building inside C was only checked with the mock API. D started, called myceliums nine times, built and was graded.
+* **Audit:** all seven tool traces read. No disagreement, kernel refusal, protected place or flag; 20 tool calls refused by the hook (`none` 8, C 5, D 7), each before it ran: `..` and paths that left the working copy's directory out, `sed -i`, `$`, `xargs`, search programs in D. No remote Java connection in 1,404 socket samples.
+* **Found, not fixed:** Claude Code itself ("don't ask" permission mode, not the hook) refused three Bash calls that read working-copy files (`none` 2, C 1, D 0), and the audit does not count them; its cause is not known. `export` writes absolute home paths into `meta.json` (shown as `~` here).
+* **Nothing was changed** because of the pilot: no harness error that affects a grade, no wrong gold and no unclear wording was found in the five sessions.
+
 #### Warm-up
 
 `groundtruth/warm_gradle.py` (run on 24 November, 06:30-06:51, for the 12 tasks that lacked artifacts: 12 of 12 builds ok by its log; `--dry-run` prints every command and host, `--go` starts). With the network it only **resolves and compiles**: an init script takes the actions of every test task away, in `buildSrc` too, so its class path is resolved and no test runs; a test report found afterwards stops it. It stops at the first error; a connection or read without an answer fails after 45 s, one attempt;

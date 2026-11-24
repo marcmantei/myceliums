@@ -1,0 +1,423 @@
+{
+  "attempts_total": 5,
+  "bash": true,
+  "claude_version": "2.1.331",
+  "comparisons": "pairwise",
+  "conditions": [
+    "none"
+  ],
+  "date": "2026-11-24",
+  "effort": "medium",
+  "index": {
+    "spring-api-version-deprecation-handler-handler-arg": {
+      "commit": "cd67010518675a67c15d8e3cd5245e43e3f16835",
+      "communities": 2269,
+      "derived": {
+        "base": "~/.cache/myceliums-agent-eval/index/spring-retry-max-attempts-to-max-retries/home",
+        "counts": {
+          "files": 9900,
+          "mentions": 38976,
+          "relationships": 473525,
+          "symbols": 140024
+        },
+        "fresh_graph_counts": {
+          "files": 9900,
+          "mentions": 38976,
+          "relationships": 473525,
+          "symbols": 140024
+        },
+        "graph_equal": true,
+        "graph_only_phases_s": {
+          "communities": 1.6,
+          "discover": 0.2,
+          "parse": 4.9,
+          "processes": 1.0,
+          "resolve": 21.8
+        },
+        "vectors_embedded_new": 152,
+        "vectors_reused": 139872
+      },
+      "disk_bytes": 2981133554,
+      "embedded": 140024,
+      "files": 9900,
+      "index_exclude_extra": [],
+      "index_seconds": 82.4,
+      "indexed_at": "2026-11-24T00:43:07.500814+00:00",
+      "myc_sha256": "a42bffce8d3aec06821859835ab35a59bf0c6db264da317374ea5283cabfb27b",
+      "myc_version": "myc 0.3.2",
+      "peak_rss_bytes": 7638663168,
+      "phases_s": {
+        "communities": 2.7,
+        "discover": 0.1,
+        "embed": 45.8,
+        "parse": 4.8,
+        "processes": 1.0,
+        "resolve": 21.0
+      },
+      "processes": 36081,
+      "relationships": 473525,
+      "repo": "spring-api-version-deprecation-handler-handler-arg",
+      "repo_id": "spring-framework-f5cc00e9",
+      "symbols": 140024,
+      "work_path": "/private/tmp/aeval182/spring-framework"
+    },
+    "spring-beans-max-nested-path-depth": {
+      "commit": "33988a4621349b8522e94b2eadde4f28a2844065",
+      "communities": 2299,
+      "derived": {
+        "base": "~/.cache/myceliums-agent-eval/index/spring-jdbcclient-batch-entry-dsl/home",
+        "counts": {
+          "files": 10118,
+          "mentions": 39887,
+          "relationships": 485998,
+          "symbols": 143791
+        },
+        "fresh_graph_counts": {
+          "files": 10118,
+          "mentions": 39887,
+          "relationships": 485998,
+          "symbols": 143791
+        },
+        "graph_equal": true,
+        "graph_only_phases_s": {
+          "communities": 3.3,
+          "discover": 0.2,
+          "parse": 5.4,
+          "processes": 0.9,
+          "resolve": 24.2
+        },
+        "vectors_embedded_new": 314,
+        "vectors_reused": 143477
+      },
+      "disk_bytes": 2869662935,
+      "embedded": 143791,
+      "files": 10118,
+      "index_exclude_extra": [],
+      "index_seconds": 138.7,
+      "indexed_at": "2026-11-23T23:43:02.612763+00:00",
+      "myc_sha256": "a42bffce8d3aec06821859835ab35a59bf0c6db264da317374ea5283cabfb27b",
+      "myc_version": "myc 0.3.2",
+      "peak_rss_bytes": 7668547584,
+      "phases_s": {
+        "communities": 2.5,
+        "discover": 0.2,
+        "embed": 97.4,
+        "parse": 5.2,
+        "processes": 0.9,
+        "resolve": 25.7
+      },
+      "processes": 37171,
+      "relationships": 485998,
+      "repo": "spring-beans-max-nested-path-depth",
+      "repo_id": "spring-framework-f5cc00e9",
+      "symbols": 143791,
+      "work_path": "/private/tmp/aeval182/spring-framework"
+    },
+    "spring-mime-type-parameter-names-case-insensitive": {
+      "commit": "ee19b96ee9a6ba9264194268e28ebaf9705ff59d",
+      "communities": 2299,
+      "derived": {
+        "base": "~/.cache/myceliums-agent-eval/index/spring-beans-max-nested-path-depth/home",
+        "counts": {
+          "files": 10109,
+          "mentions": 39899,
+          "relationships": 485247,
+          "symbols": 143541
+        },
+        "fresh_graph_counts": {
+          "files": 10109,
+          "mentions": 39899,
+          "relationships": 485247,
+          "symbols": 143541
+        },
+        "graph_equal": true,
+        "graph_only_phases_s": {
+          "communities": 2.5,
+          "discover": 0.3,
+          "parse": 5.3,
+          "processes": 0.9,
+          "resolve": 24.5
+        },
+        "vectors_embedded_new": 378,
+        "vectors_reused": 143163
+      },
+      "disk_bytes": 3063734087,
+      "embedded": 143541,
+      "files": 10109,
+      "index_exclude_extra": [],
+      "index_seconds": 145.6,
+      "indexed_at": "2026-11-23T23:46:08.320623+00:00",
+      "myc_sha256": "a42bffce8d3aec06821859835ab35a59bf0c6db264da317374ea5283cabfb27b",
+      "myc_version": "myc 0.3.2",
+      "peak_rss_bytes": 8192212992,
+      "phases_s": {
+        "communities": 2.8,
+        "discover": 0.2,
+        "embed": 104.8,
+        "parse": 5.3,
+        "processes": 0.9,
+        "resolve": 24.7
+      },
+      "processes": 37120,
+      "relationships": 485247,
+      "repo": "spring-mime-type-parameter-names-case-insensitive",
+      "repo_id": "spring-framework-f5cc00e9",
+      "symbols": 143541,
+      "work_path": "/private/tmp/aeval182/spring-framework"
+    },
+    "spring-retry-max-attempts-to-max-retries": {
+      "commit": "771517dc36735842a129ea3a51738f0b6fcce7bd",
+      "communities": 2264,
+      "derived": {
+        "base": "~/.cache/myceliums-agent-eval/index/spring-fn-request-bind-pathvars-headers/home",
+        "counts": {
+          "files": 9901,
+          "mentions": 38974,
+          "relationships": 473606,
+          "symbols": 140050
+        },
+        "fresh_graph_counts": {
+          "files": 9901,
+          "mentions": 38974,
+          "relationships": 473606,
+          "symbols": 140050
+        },
+        "graph_equal": true,
+        "graph_only_phases_s": {
+          "communities": 1.3,
+          "discover": 0.4,
+          "parse": 4.9,
+          "processes": 0.8,
+          "resolve": 20.7
+        },
+        "vectors_embedded_new": 1017,
+        "vectors_reused": 139033
+      },
+      "disk_bytes": 2986091667,
+      "embedded": 140050,
+      "files": 9901,
+      "index_exclude_extra": [],
+      "index_seconds": 217.8,
+      "indexed_at": "2026-11-24T00:41:11.595356+00:00",
+      "myc_sha256": "a42bffce8d3aec06821859835ab35a59bf0c6db264da317374ea5283cabfb27b",
+      "myc_version": "myc 0.3.2",
+      "peak_rss_bytes": 7671332864,
+      "phases_s": {
+        "communities": 3.8,
+        "discover": 0.1,
+        "embed": 181.7,
+        "parse": 4.4,
+        "processes": 0.9,
+        "resolve": 19.8
+      },
+      "processes": 36087,
+      "relationships": 473606,
+      "repo": "spring-retry-max-attempts-to-max-retries",
+      "repo_id": "spring-framework-f5cc00e9",
+      "symbols": 140050,
+      "work_path": "/private/tmp/aeval182/spring-framework"
+    },
+    "spring-type-mismatch-required-type-arg": {
+      "commit": "f4ee120a423c069ddfc94076cc49e02ec9d797d5",
+      "communities": 2249,
+      "derived": {
+        "base": "~/.cache/myceliums-agent-eval/index/spring-retryable-method-retry-event/home",
+        "counts": {
+          "files": 9902,
+          "mentions": 39009,
+          "relationships": 474225,
+          "symbols": 140244
+        },
+        "fresh_graph_counts": {
+          "files": 9902,
+          "mentions": 39009,
+          "relationships": 474225,
+          "symbols": 140244
+        },
+        "graph_equal": true,
+        "graph_only_phases_s": {
+          "communities": 2.9,
+          "discover": 0.2,
+          "parse": 4.5,
+          "processes": 0.9,
+          "resolve": 20.4
+        },
+        "vectors_embedded_new": 639,
+        "vectors_reused": 139605
+      },
+      "disk_bytes": 2998113451,
+      "embedded": 140244,
+      "files": 9902,
+      "index_exclude_extra": [],
+      "index_seconds": 240.0,
+      "indexed_at": "2026-11-24T00:35:43.436427+00:00",
+      "myc_sha256": "a42bffce8d3aec06821859835ab35a59bf0c6db264da317374ea5283cabfb27b",
+      "myc_version": "myc 0.3.2",
+      "peak_rss_bytes": 7456620544,
+      "phases_s": {
+        "communities": 3.9,
+        "discover": 0.2,
+        "embed": 197.9,
+        "parse": 5.3,
+        "processes": 0.9,
+        "resolve": 24.8
+      },
+      "processes": 36123,
+      "relationships": 474225,
+      "repo": "spring-type-mismatch-required-type-arg",
+      "repo_id": "spring-framework-f5cc00e9",
+      "symbols": 140244,
+      "work_path": "/private/tmp/aeval182/spring-framework"
+    }
+  },
+  "label": "pilot-183",
+  "login": {
+    "api_key_source": [
+      "none"
+    ],
+    "variables_present": [
+      [
+        "CLAUDE_SECURESTORAGE_CONFIG_DIR"
+      ]
+    ]
+  },
+  "max_turns": 100,
+  "mcp_tools_offered": null,
+  "model": "claude-sonnet-5-5",
+  "model_alias": "sonnet",
+  "myc_commit": "787920c",
+  "myc_sha256": "bf84b0e854f68b7ae39401723e30e70c7ab714c86891b33bf066bf100dccf857",
+  "myc_version": "myc 0.3.2",
+  "notes": [
+    "Pilot of #183: arm none only, 5 drawn tasks, 1 repetition; never pooled with the main run. The pipeline checks in C and D are not exported (README, Pilot).",
+    "Committed copy: home directory shown as ~, only the five pilot repositories kept; rows are in sessions.jsonl (not results.jsonl) and task files are the ones at tasks/tasks-commit-replay.json, so that no pre-registered report is rendered from a pilot."
+  ],
+  "profile": "realistic",
+  "repos": {
+    "spring-api-version-deprecation-handler-handler-arg": {
+      "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
+      "commit": "cd67010518675a67c15d8e3cd5245e43e3f16835",
+      "display_name": "Spring Framework",
+      "env_from_caller": [
+        "JAVA_HOME"
+      ],
+      "gold_commit": "b128f59714b071e9b4d8a1ae9cdc63f3ff62251f",
+      "gradle": "9.2.0",
+      "isolated": true,
+      "java_toolchain": "25",
+      "language": "java",
+      "language_name": "Java",
+      "name": "spring-api-version-deprecation-handler-handler-arg",
+      "parent_date": "2025-11-05T12:23:59Z",
+      "ref": "parent of b128f59714b0",
+      "session_env": {
+        "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9",
+        "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]"
+      },
+      "url": "https://github.com/spring-projects/spring-framework.git",
+      "work_name": "spring-framework"
+    },
+    "spring-beans-max-nested-path-depth": {
+      "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
+      "commit": "33988a4621349b8522e94b2eadde4f28a2844065",
+      "display_name": "Spring Framework",
+      "env_from_caller": [
+        "JAVA_HOME"
+      ],
+      "gold_commit": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
+      "gradle": "9.7.1",
+      "isolated": true,
+      "java_toolchain": "25",
+      "language": "java",
+      "language_name": "Java",
+      "name": "spring-beans-max-nested-path-depth",
+      "parent_date": "2026-09-15T16:26:37+01:00",
+      "ref": "parent of 8ab525f6f09f",
+      "session_env": {
+        "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9",
+        "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]"
+      },
+      "url": "https://github.com/spring-projects/spring-framework.git",
+      "work_name": "spring-framework"
+    },
+    "spring-mime-type-parameter-names-case-insensitive": {
+      "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
+      "commit": "ee19b96ee9a6ba9264194268e28ebaf9705ff59d",
+      "display_name": "Spring Framework",
+      "env_from_caller": [
+        "JAVA_HOME"
+      ],
+      "gold_commit": "2028eb3694babca20cbcb95a966b50b3e6fe71ca",
+      "gradle": "9.7.1",
+      "isolated": true,
+      "java_toolchain": "25",
+      "language": "java",
+      "language_name": "Java",
+      "name": "spring-mime-type-parameter-names-case-insensitive",
+      "parent_date": "2026-08-31T17:17:01+02:00",
+      "ref": "parent of 2028eb3694ba",
+      "session_env": {
+        "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9",
+        "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]"
+      },
+      "url": "https://github.com/spring-projects/spring-framework.git",
+      "work_name": "spring-framework"
+    },
+    "spring-retry-max-attempts-to-max-retries": {
+      "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
+      "commit": "771517dc36735842a129ea3a51738f0b6fcce7bd",
+      "display_name": "Spring Framework",
+      "env_from_caller": [
+        "JAVA_HOME"
+      ],
+      "gold_commit": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
+      "gradle": "9.2.0",
+      "isolated": true,
+      "java_toolchain": "25",
+      "language": "java",
+      "language_name": "Java",
+      "name": "spring-retry-max-attempts-to-max-retries",
+      "parent_date": "2025-11-10T09:57:06+01:00",
+      "ref": "parent of 24590092efa3",
+      "session_env": {
+        "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9",
+        "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]"
+      },
+      "url": "https://github.com/spring-projects/spring-framework.git",
+      "work_name": "spring-framework"
+    },
+    "spring-type-mismatch-required-type-arg": {
+      "build_note": "The build has no network access. Run Gradle as `./gradlew --offline --no-scan --no-build-cache --no-daemon ...`, with fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` or `head`.",
+      "commit": "f4ee120a423c069ddfc94076cc49e02ec9d797d5",
+      "display_name": "Spring Framework",
+      "env_from_caller": [
+        "JAVA_HOME"
+      ],
+      "gold_commit": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
+      "gradle": "9.2.1",
+      "isolated": true,
+      "java_toolchain": "25",
+      "language": "java",
+      "language_name": "Java",
+      "name": "spring-type-mismatch-required-type-arg",
+      "parent_date": "2025-11-26T13:22:26+01:00",
+      "ref": "parent of 4847ee80b045",
+      "session_env": {
+        "DEVELOCITY_CACHE_SERVER": "http://127.0.0.1:9",
+        "GRADLE_OPTS": "-Dorg.gradle.daemon=false -Dorg.gradle.workers.max=4 -Dorg.gradle.project.kotlin.compiler.execution.strategy=in-process -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=9 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=9 -Dhttp.nonProxyHosts=localhost|127.*|[::1]"
+      },
+      "url": "https://github.com/spring-projects/spring-framework.git",
+      "work_name": "spring-framework"
+    }
+  },
+  "reps": 3,
+  "retried_runs": [],
+  "runs_final": 5,
+  "schedule": "interleaved",
+  "sessions_launched_ledger": 5,
+  "success_threshold": 0.8,
+  "tasks_file": "tasks/tasks-commit-replay.json",
+  "tasks_sha256": "50bd1353bfc6d65a8a3577e5808d22dd3086403cb64d180ce61b8de75b1e74c8",
+  "timeout_s": 2400,
+  "tool_search": null
+}

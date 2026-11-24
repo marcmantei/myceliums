@@ -1,0 +1,43 @@
+{
+ "note": "Pipeline checks of the pilot, facts only: outcomes (files, tests, tokens) of these two sessions are not reported (README, Pilot).",
+ "login": "apiKeySource none in every session",
+ "sessions": [
+  {
+   "run_id": "api-version-deprecation-handler-handler-arg__C__r1",
+   "arm": "C",
+   "task": "api-version-deprecation-handler-handler-arg",
+   "session_started": true,
+   "status": "ok",
+   "mcp_tools_offered": 9,
+   "reached_myceliums": "one MCP call reached the server (find_callers, answered with an ambiguity); no myc CLI call",
+   "built_in_session": false,
+   "why": "the agent started no Gradle build",
+   "graded": true,
+   "hook_refusals": 5,
+   "own_permission_denials": 1,
+   "kernel_refusals": 0,
+   "disagreements": 0,
+   "flagged": false,
+   "cli": "2.1.331",
+   "api_key_source": "none"
+  },
+  {
+   "run_id": "retry-max-attempts-to-max-retries__D__r1",
+   "arm": "D",
+   "task": "retry-max-attempts-to-max-retries",
+   "session_started": true,
+   "status": "ok",
+   "mcp_tools_offered": 9,
+   "reached_myceliums": "nine MCP calls, seven answered and two answered with an error (ambiguous or unknown symbol); no myc CLI call",
+   "built_in_session": true,
+   "graded": true,
+   "hook_refusals": 7,
+   "own_permission_denials": 0,
+   "kernel_refusals": 0,
+   "disagreements": 0,
+   "flagged": false,
+   "cli": "2.1.331",
+   "api_key_source": "none"
+  }
+ ]
+}
