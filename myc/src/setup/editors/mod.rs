@@ -28,11 +28,28 @@ use std::path::{Path, PathBuf};
 /// disk never leaves a truncated file (and Claude Code never reads a
 /// half-written `~/.claude.json`). A symlink is followed and its target
 /// replaced, so a `CLAUDE.md -> AGENTS.md` link survives; an existing file's
-/// permissions are kept.
+/// permissions are kept. A file with several hard links is written in place
+/// instead: a rename would split it from its other names.
 pub fn write_user_file(path: &Path, content: &str) -> Result<()> {
     let target = resolve_symlinks(path);
+    if has_hard_links(&target) {
+        return std::fs::write(&target, content)
+            .with_context(|| format!("Failed to write {}", path.display()));
+    }
     write_atomically(&target, content)
         .with_context(|| format!("Failed to write {}", path.display()))
+}
+
+/// Whether `path` is one of several names of its file.
+#[cfg(unix)]
+fn has_hard_links(path: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    std::fs::metadata(path).is_ok_and(|m| m.is_file() && m.nlink() > 1)
+}
+
+#[cfg(not(unix))]
+fn has_hard_links(_path: &Path) -> bool {
+    false
 }
 
 /// Follows symlinks from `path` to the file they finally name (which may not
@@ -226,6 +243,19 @@ mod tests {
             std::fs::read_to_string(dir.path().join("created-by-write.md")).unwrap(),
             "x"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_user_file_keeps_hard_links_together() {
+        let dir = tempfile::tempdir().unwrap();
+        let agents = dir.path().join("AGENTS.md");
+        let claude = dir.path().join("CLAUDE.md");
+        std::fs::write(&agents, "rules\n").unwrap();
+        std::fs::hard_link(&agents, &claude).unwrap();
+        write_user_file(&claude, "more\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&agents).unwrap(), "more\n");
+        assert!(same_file::is_same_file(&agents, &claude).unwrap());
     }
 
     #[test]

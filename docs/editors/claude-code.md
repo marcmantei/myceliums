@@ -32,9 +32,10 @@ Re-running `myc setup-claude` is idempotent, and an opt-out flag removes a
 layer that an earlier run installed. Your own entries in these files are kept.
 A settings or MCP file that is not valid JSON is reported and left untouched.
 
-Setup never creates or changes a project's `CLAUDE.md`, because a new one would
-make Claude Code skip the project's `AGENTS.md` files; see
-[Your own instruction files](../guides/agent-integration.md#your-own-instruction-files-200).
+Setup creates no `CLAUDE.md`, because a new one would make Claude Code skip the
+project's `AGENTS.md` files. It changes an existing one only to remove the
+routing block that an older version wrote there, and deletes it when it held
+nothing else; see [Your own instruction files](../guides/agent-integration.md#your-own-instruction-files-200).
 
 ### MCP server
 

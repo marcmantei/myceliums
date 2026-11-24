@@ -271,7 +271,7 @@ The MCP `analyze` tool does not wait for the model: it builds the graph, answers
 | `myc clean --all` | Remove ALL myceliums data (with confirmation) |
 | `myc clean --cache` | Remove the model cache |
 | `myc clean <repo>` | Remove a specific repository's data (with confirmation) |
-| `myc doctor` | Verify the installation, check all components, detect orphans, stale locks and hidden instruction files (`--fix` repairs those) |
+| `myc doctor` | Verify the installation, check all components, detect orphans, stale locks and hidden instruction files (`--fix` repairs the current project's) |
 | `myc configure` | View or update global configuration |
 | `myc delete <repo>` | Remove a repository's analysis data |
 
@@ -833,7 +833,7 @@ If an analysis is interrupted (e.g., timeout, crash, `Ctrl+C`), the data directo
 1. **MCP server** — Registered in `.mcp.json`. Claude Code spawns `myc mcp` as a background process for each session. Lightweight and idle when not queried.
 2. **SessionStart hook** — Added to `.claude/settings.json`. Runs `myc session . --yes --timeout 300` when a Claude Code session starts, ensuring the knowledge graph is fresh, and adds one line to the model's context: repository id, index freshness and the core tools. It returns at once; a missing or stale index is rebuilt in the background.
 3. **PreToolUse grep hook** — `myc hook-grep` runs before Grep and grep/rg calls; it reads the index, never blocks, and stays silent unless the pattern names a known symbol.
-4. **Routing block and subagent** — Text files only: `.claude/rules/myceliums.md` and `.claude/agents/code-explorer.md`. Your `CLAUDE.md` and `AGENTS.md` stay as they are, and Claude Code keeps reading them.
+4. **Routing block and subagent** — Text files only: `.claude/rules/myceliums.md` and `.claude/agents/code-explorer.md`. No `CLAUDE.md` is created, so Claude Code keeps reading your `AGENTS.md`; a routing block that an older version wrote into `CLAUDE.md` is moved out of it.
 
 To remove the integration: `myc setup-claude --uninstall`
 

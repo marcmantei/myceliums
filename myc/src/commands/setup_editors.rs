@@ -72,28 +72,37 @@ pub(crate) async fn cmd_setup_codex(uninstall: bool, no_routing: bool) -> Result
     }
     let agents_md = root.join("AGENTS.md");
     use commands::instructions::{self, CodexRouting};
-    use commands::routing::{self, FileChange, Owner};
+    use commands::routing::FileChange;
+    let home = dirs::home_dir();
     let change = if uninstall || no_routing {
-        routing::uninstall_block(&agents_md, Owner::Any, true)?
+        instructions::uninstall_codex_routing(&root, home.as_deref())?
     } else {
-        let home = dirs::home_dir();
         match instructions::install_codex_routing(&root, home.as_deref())? {
             CodexRouting::Done(change) => change,
             CodexRouting::WouldHide { hidden, removed } => {
                 let files = instructions::names(&root, &hidden);
+                let first = instructions::names(&root, &hidden[..1]);
                 if removed {
                     println!(
-                        "  \u{2713} Routing block removed from {}: it held nothing else and hid {files}",
+                        "  \u{2713} Routing block removed: {} held nothing else and hid {files}",
                         agents_md.display()
                     );
                 }
                 println!(
-                    "  No AGENTS.md routing block written: an AGENTS.md of its own would hide {files} from agents\n  that read one instruction file per directory (Zed, OpenCode, Codex with fallback names).\n  Create an AGENTS.md with your project's instructions (or link it to {files}) and re-run."
+                    "  No AGENTS.md routing block written. A new AGENTS.md would hide {files} from agents that\n  read one instruction file per directory (Zed, OpenCode, Codex with fallback names).\n  Codex therefore reads no instructions in this project; its myceliums MCP tools still work.\n  Your choice:\n    - let every agent read {first}, with the routing block added to it:\n        ln -s {first} AGENTS.md && myc setup-codex\n    - separate instructions for Codex, which Zed and OpenCode then read instead of {first}:\n        create AGENTS.md with your text, then myc setup-codex\n    - Codex reads {first} without the routing block, only for you:\n        project_doc_fallback_filenames = [\"{first}\"] in ~/.codex/config.toml\n    - leave it as it is"
                 );
                 return Ok(());
             }
         }
     };
+    let memory = root.join("CLAUDE.md");
+    if change != FileChange::Absent && same_file::is_same_file(&memory, &agents_md).unwrap_or(false)
+    {
+        println!(
+            "  {} and CLAUDE.md are the same file, which Claude Code reads too. If you use\n  `myc setup-claude` here, re-run it so that Claude Code gets the block once.",
+            agents_md.display()
+        );
+    }
     let what = match change {
         FileChange::Created => "written to new file",
         FileChange::Updated => "written to",

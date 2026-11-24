@@ -308,11 +308,14 @@ pub(crate) enum Commands {
         /// Pre-download the fastembed model (~100 MB)
         #[arg(long)]
         download: bool,
-        /// Repair instruction files that an older myc wrote and that hide a
+        /// Repair instruction files that an older myc wrote and that hide the
         /// project's own (CLAUDE.md over AGENTS.md, or the reverse), in the
-        /// current project and every indexed one
+        /// current project
         #[arg(long)]
         fix: bool,
+        /// With --fix: repair every indexed project too, not only the current
+        #[arg(long, requires = "fix")]
+        all_projects: bool,
     },
     /// Manage global configuration
     Configure {

@@ -209,13 +209,26 @@ can hide the project's own. Claude Code reads `AGENTS.md` files only while no
 directory or above it; `.claude/rules/` and `~/.claude/CLAUDE.md` do not count
 ([Claude Code docs](https://code.claude.com/docs/en/memory#agents-md)). So the
 routing block goes into `.claude/rules/myceliums.md`, which Claude Code loads at
-session start besides whatever else the project has, and setup does not touch
-`CLAUDE.md` or `AGENTS.md`. (Project rules need Claude Code 2.0.64 or later.)
+session start besides whatever else the project has. Setup creates no
+`CLAUDE.md`.
+
+What this relies on:
+
+- Reading `AGENTS.md` at all needs Claude Code 2.1.277 or later and the default
+  *Project instructions* setting (`claude-md-or-agents-md`), or
+  `claude-md-and-agents-md`. With `claude-md` it reads no `AGENTS.md`, with
+  `managed-only` neither that nor project rules.
+- Project rules need Claude Code 2.0.64 or later.
+- The built-in Explore, Plan and web-fetch subagents start without `CLAUDE.md`,
+  `AGENTS.md` and project rules
+  ([docs](https://code.claude.com/docs/en/sub-agents#what-loads-at-startup)), so
+  they do not get the routing block; they did not get it from `CLAUDE.md` either.
 
 Earlier versions wrote the block into `CLAUDE.md`. Where that file did not exist
 before, it hid every `AGENTS.md`, those in subdirectories included. What reaches
 the model, from the requests Claude Code 2.1.331 sent to a mock API
-(`evals/agent/probe_instructions.py`; the routing block arrived once in every
+(`evals/agent/probe_instructions.py`; the files of the last column were written
+by a stand-in for `myc setup-claude`; the routing block arrived once in every
 run of the last two columns):
 
 | The project has | Without myceliums | Block in `CLAUDE.md` (before) | Block in `.claude/rules/` (now) |
@@ -225,7 +238,7 @@ run of the last two columns):
 | `CLAUDE.md` | `CLAUDE.md` | `CLAUDE.md` | `CLAUDE.md` |
 | both | `CLAUDE.md` | `CLAUDE.md` | `CLAUDE.md` |
 | both, `CLAUDE.md` imports `@AGENTS.md` | both | both | both |
-| `CLAUDE.md` as a link to `AGENTS.md` | the one file | the one file | the one file |
+| one as a link to the other | the one file | the one file | the one file |
 | `.claude/CLAUDE.md`, with or without `AGENTS.md` | `.claude/CLAUDE.md` | `.claude/CLAUDE.md` | `.claude/CLAUDE.md` |
 | `AGENTS.md` and `CLAUDE.local.md` | `CLAUDE.local.md` | `CLAUDE.local.md` | `CLAUDE.local.md` |
 | `.claude/AGENTS.md` | `.claude/AGENTS.md` | **nothing** | `.claude/AGENTS.md` |
@@ -239,10 +252,28 @@ those in subdirectories or above the project. A `CLAUDE.md` that the project
 wrote itself still replaces its `AGENTS.md`; that is Claude Code's default and
 the project's choice.
 
-**Existing installations:** running `myc setup-claude` again, or `myc doctor
---fix`, moves the block and deletes a `CLAUDE.md` that held nothing else;
-`myc doctor` reports such files. If that `CLAUDE.md` is committed, commit its
-deletion too. `myc setup-claude --uninstall` removes the block from both places.
+**What setup changes in your files.** `myc setup-claude` removes the routing
+block that an older version wrote into `CLAUDE.md`, with the line break before
+it, and deletes a `CLAUDE.md` that held nothing else (commit the deletion if the
+file was committed). `--uninstall` and `--no-routing` do the same. Text outside
+the block stays; an older version that met a file without a final line break
+added one, which cannot be told from yours and stays. Four cases are left as
+they are, with a message:
+
+- `CLAUDE.md` is the same file as `AGENTS.md` or another instruction file
+  (symbolic or hard link): the block stays there, because other agents read it
+  under that name, and `.claude/rules/myceliums.md` is not written.
+  `myc setup-codex` refreshes it and `myc setup-codex --uninstall` removes it.
+- Another instruction file imports a `CLAUDE.md` that holds only the block.
+- The text inside the block was edited: setup and uninstall stop before they
+  change anything. Move your text outside the markers and delete the block.
+- A read-only file that holds a block: likewise.
+
+**Existing installations.** `myc doctor` reports files that hide others in the
+current project and in every indexed one, with the command that repairs each.
+`myc doctor --fix` repairs the current project only, and only files that hide
+something; `--fix --all-projects` does so in every indexed project. Running
+`myc setup-claude` again moves the block in any case.
 
 **Other agents.** Codex reads one file per directory, `AGENTS.md` before the
 names in its `project_doc_fallback_filenames`
@@ -252,11 +283,22 @@ first file of a list with `AGENTS.md` before `CLAUDE.md` and `GEMINI.md`
 `CLAUDE.md` only without an `AGENTS.md`
 ([docs](https://opencode.ai/docs/rules/)). `myc setup-codex` therefore writes
 its block into an `AGENTS.md` that has text of its own, or creates one where it
-hides nothing, and otherwise says why it wrote none. The setup of every other
-editor writes MCP configuration only.
+hides nothing. In a project that has only a `CLAUDE.md` (or `GEMINI.md`) it
+writes none, and deletes one that an older version created and that holds only
+the block. **Codex then reads no instructions in that project**, as before
+setup; its myceliums MCP tools work. The choice is yours:
 
-With both `myc setup-claude` and `myc setup-codex` in a project without a
-`CLAUDE.md`, Claude Code reads the routing block twice: from
+| You want | Do |
+|---|---|
+| every agent to read `CLAUDE.md`, with the routing block in it | `ln -s CLAUDE.md AGENTS.md && myc setup-codex` |
+| separate instructions for Codex, which Zed and OpenCode then read instead of `CLAUDE.md` | create `AGENTS.md` with your text, then `myc setup-codex` |
+| Codex to read `CLAUDE.md`, without the routing block, only on your machine | `project_doc_fallback_filenames = ["CLAUDE.md"]` in `~/.codex/config.toml` |
+| no instructions for Codex | nothing |
+
+The setup of every other editor writes MCP configuration only.
+
+With both `myc setup-claude` and `myc setup-codex` in a project that has an
+`AGENTS.md` and no `CLAUDE.md`, Claude Code reads the routing block twice: from
 `.claude/rules/myceliums.md` and in `AGENTS.md`. `myc setup-claude --no-routing`
 avoids that.
 

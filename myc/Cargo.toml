@@ -43,6 +43,9 @@ console = { workspace = true }
 notify = { workspace = true }
 notify-debouncer-mini = { workspace = true }
 rpassword = "5"
+# Whether two instruction files are one (symbolic or hard link, #200); already
+# in the tree through walkdir.
+same-file = "1"
 
 [target.'cfg(unix)'.dependencies]
 # setsid for the detached SessionStart re-index (#152); already in the tree

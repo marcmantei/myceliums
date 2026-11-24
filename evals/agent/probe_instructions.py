@@ -13,7 +13,7 @@ Setup states:
 
 * ``none``    the layout as the project has it;
 * ``legacy``  plus the routing block in ``CLAUDE.md``, as ``myc setup-claude``
-  wrote it before #200 (emulated: the text is fixed below);
+  wrote it before #200 (emulated, with the text of that version);
 * ``setup``   ``myc setup-claude --scope project`` run in the layout;
 * ``repair``  the same command run over ``legacy``;
 * ``user``    ``myc setup-claude --scope user``, writing to the temporary HOME.
@@ -43,12 +43,7 @@ from pathlib import Path
 from aeval import mockapi
 
 SUBDIR_FILE = "packages/app/code.txt"
-BLOCK = """<!-- BEGIN myceliums -->
-<!-- v3, written by `myc setup-claude`: edits inside these markers are overwritten; `myc setup-claude --uninstall` removes them -->
-## Code navigation: myceliums
-Structural questions go to the myceliums code graph first, not grep/rg:
-<!-- END myceliums -->
-"""
+BLOCK = (Path(__file__).resolve().parents[2] / "myc/tests/data/routing_block_v3.md").read_text()
 BLOCK_TEXT = "Structural questions go to the myceliums code graph first"
 
 
@@ -66,6 +61,7 @@ LAYOUTS: dict[str, dict[str, str]] = {
     "both": {"AGENTS.md": "", "CLAUDE.md": ""},
     "both, CLAUDE.md imports AGENTS.md": {"AGENTS.md": "", "CLAUDE.md": "@AGENTS.md\n\n" + _text("CLAUDE.md")},
     "CLAUDE.md -> AGENTS.md": {"AGENTS.md": "", "CLAUDE.md": "-> AGENTS.md"},
+    "AGENTS.md -> CLAUDE.md": {"CLAUDE.md": "", "AGENTS.md": "-> CLAUDE.md"},
     ".claude/CLAUDE.md": {".claude/CLAUDE.md": ""},
     "AGENTS.md + .claude/CLAUDE.md": {"AGENTS.md": "", ".claude/CLAUDE.md": ""},
     "AGENTS.md + CLAUDE.local.md": {"AGENTS.md": "", "CLAUDE.local.md": ""},

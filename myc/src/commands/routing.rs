@@ -37,33 +37,57 @@ pub enum Flavor {
 
 /// The block, markers included, with `\n` line endings.
 pub fn routing_block(flavor: Flavor) -> String {
-    let (setup, also) = match flavor {
-        Flavor::Claude { subagent: true } => (
-            "myc setup-claude",
-            "The myceliums MCP tools and the `code-explorer` subagent answer the same questions.",
-        ),
-        Flavor::Claude { subagent: false } => (
-            "myc setup-claude",
-            "The myceliums MCP tools (`find_callers`, `find_callees`, `impact_of_change`, `search_code`) answer the same questions.",
-        ),
-        Flavor::Agents => (
-            "myc setup-codex",
-            "The myceliums MCP tools (`find_callers`, `find_callees`, `impact_of_change`, `search_code`) answer the same questions.",
-        ),
+    render(ROUTING_VERSION, flavor)
+}
+
+/// The block as version `version` of it read. Earlier versions are kept so
+/// that a block someone edited can be told from one we wrote
+/// ([`is_unedited`]).
+fn render(version: u32, flavor: Flavor) -> String {
+    let setup = match flavor {
+        Flavor::Claude { .. } => "myc setup-claude",
+        Flavor::Agents => "myc setup-codex",
+    };
+    let also = match flavor {
+        Flavor::Claude { subagent: true } => {
+            "The myceliums MCP tools and the `code-explorer` subagent answer the same questions."
+        }
+        _ if version < 2 => "The myceliums MCP tools (`get_callers`, `get_callees`, `context_search`) answer the same questions.",
+        _ => "The myceliums MCP tools (`find_callers`, `find_callees`, `impact_of_change`, `search_code`) answer the same questions.",
+    };
+    let heuristic = if version < 3 {
+        ""
+    } else {
+        "Graph answers are heuristic: when completeness matters, or a result says `Incomplete` or lists calls without an edge, read the source before answering.\n"
     };
     format!(
         "{BEGIN}\n\
-         <!-- v{ROUTING_VERSION}, written by `{setup}`: edits inside these markers are overwritten; `{setup} --uninstall` removes them -->\n\
+         <!-- v{version}, written by `{setup}`: edits inside these markers are overwritten; `{setup} --uninstall` removes them -->\n\
          ## Code navigation: myceliums\n\
          Structural questions go to the myceliums code graph first, not grep/rg:\n\
          - callers / callees of X: `myc callers X`, `myc callees X` (`--depth 3` for chains)\n\
          - what breaks if X or a file changes: `myc impact X`, `myc impact path/to/file`\n\
          - where or how something is implemented: `myc context \"<question>\"`\n\
          {also}\n\
-         Graph answers are heuristic: when completeness matters, or a result says `Incomplete` or lists calls without an edge, read the source before answering.\n\
+         {heuristic}\
          grep/rg stay right for string literals, config values, log messages and non-code files.\n\
          {END}\n"
     )
+}
+
+/// Whether `block` (markers included) is a text some version of `myc` wrote.
+fn is_unedited(block: &str) -> bool {
+    let block = block.replace("\r\n", "\n");
+    let block = block.trim_end();
+    (1..=ROUTING_VERSION).any(|version| {
+        [
+            Flavor::Claude { subagent: true },
+            Flavor::Claude { subagent: false },
+            Flavor::Agents,
+        ]
+        .into_iter()
+        .any(|flavor| render(version, flavor).trim_end() == block)
+    })
 }
 
 /// Byte ranges of every managed block in `text`, each from the start of its
@@ -101,7 +125,8 @@ fn block_ranges(text: &str) -> Result<Vec<(usize, usize)>> {
 /// `text` with the managed block set to `block`.
 ///
 /// An existing block is replaced in place (extra copies are dropped);
-/// otherwise the block is appended after a blank line. CRLF files get CRLF.
+/// otherwise the block is appended, after a blank line when the text ends
+/// with a line break. CRLF files get CRLF.
 pub fn upsert_block(text: &str, block: &str) -> Result<String> {
     let block = if text.contains("\r\n") {
         block.replace('\n', "\r\n")
@@ -110,16 +135,12 @@ pub fn upsert_block(text: &str, block: &str) -> Result<String> {
     };
     let ranges = block_ranges(text)?;
     if ranges.is_empty() {
-        // One blank line separates the block from the text before it: a line
-        // break after the last line (when missing) plus one more.
-        // `remove_block` takes exactly that one extra line break away again.
+        // A blank line separates the block from the text before it. Text
+        // without a final line break gets that break alone, so that
+        // `remove_block` can tell the two and restore either.
         let mut out = text.to_string();
         if !out.is_empty() {
-            let nl = newline_of(text);
-            if !out.ends_with('\n') {
-                out.push_str(nl);
-            }
-            out.push_str(nl);
+            out.push_str(newline_of(text));
         }
         out.push_str(&block);
         return Ok(out);
@@ -157,7 +178,7 @@ impl Owner {
 }
 
 /// `text` without the managed blocks of `owner`, or `None` when it holds
-/// none. The blank line that [`upsert_block`] put before an appended block
+/// none. The line break that [`upsert_block`] put before an appended block
 /// goes too.
 pub fn remove_block(text: &str, owner: Owner) -> Result<Option<String>> {
     let mut ranges = block_ranges(text)?;
@@ -174,10 +195,10 @@ pub fn remove_block(text: &str, owner: Owner) -> Result<Option<String>> {
     let rest = &text[last..];
     if rest.trim().is_empty() {
         // The block was at the end: drop the one line break `upsert_block`
-        // added as a separator, and nothing else of the user's text.
-        let separator = format!("{nl}{nl}", nl = newline_of(text));
-        if out.ends_with(&separator) {
-            out.truncate(out.len() - separator.len() / 2);
+        // added, and nothing else of the user's text.
+        let nl = newline_of(text);
+        if out.ends_with(nl) {
+            out.truncate(out.len() - nl.len());
         }
     }
     out.push_str(rest);
@@ -210,6 +231,41 @@ pub enum FileChange {
     Absent,
 }
 
+/// Fails, when the managed blocks of `owner` in the file at `path` cannot be
+/// replaced or removed: unbalanced markers, a block someone edited, or a
+/// read-only file. Setup checks every file before it changes the first.
+pub fn check(path: &Path, owner: Owner) -> Result<()> {
+    let found = check_unedited(path, owner)?;
+    let read_only = std::fs::metadata(path).is_ok_and(|m| m.permissions().readonly());
+    if found && read_only {
+        bail!(
+            "{} is read-only and holds a myceliums block. Nothing was changed; make it writable, then re-run",
+            path.display()
+        );
+    }
+    Ok(())
+}
+
+/// Whether the file at `path` holds a managed block of `owner`; fails on
+/// unbalanced markers and on a block that no version of `myc` wrote.
+pub fn check_unedited(path: &Path, owner: Owner) -> Result<bool> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e).with_context(|| format!("Failed to read {}", path.display())),
+    };
+    let mut ranges = block_ranges(&text).with_context(|| path.display().to_string())?;
+    ranges.retain(|(start, end)| owner.owns(&text[*start..*end]));
+    let edited = |(start, end): &(usize, usize)| !is_unedited(&text[*start..*end]);
+    if ranges.iter().any(edited) {
+        bail!(
+            "{}: the text between `{BEGIN}` and `{END}` was edited (or written by a newer myc). Nothing was changed. Move your own text outside the markers, delete the block, then re-run",
+            path.display()
+        );
+    }
+    Ok(!ranges.is_empty())
+}
+
 /// Writes or refreshes the managed block in the file at `path`.
 pub fn install_block(path: &Path, block: &str) -> Result<FileChange> {
     let existing = match std::fs::read_to_string(path) {
@@ -221,6 +277,10 @@ pub fn install_block(path: &Path, block: &str) -> Result<FileChange> {
     let updated = upsert_block(current, block).with_context(|| path.display().to_string())?;
     if existing.is_some() && updated == current {
         return Ok(FileChange::Unchanged);
+    }
+    check(path, Owner::Any)?;
+    if std::fs::metadata(path).is_ok_and(|m| m.permissions().readonly()) {
+        bail!("{} is read-only; nothing was changed", path.display());
     }
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
@@ -246,6 +306,7 @@ pub fn uninstall_block(path: &Path, owner: Owner, delete_if_empty: bool) -> Resu
     let Some(rest) = remove_block(&text, owner).with_context(|| path.display().to_string())? else {
         return Ok(FileChange::Absent);
     };
+    check(path, owner)?;
     if delete_if_empty && rest.trim().is_empty() && !crate::commands::setup_claude::is_symlink(path)
     {
         std::fs::remove_file(path)
@@ -293,10 +354,10 @@ mod tests {
         let twice = upsert_block(&once, &block()).unwrap();
         assert_eq!(once, twice);
         assert_eq!(upsert_block("", &block()).unwrap(), block());
-        // A file without a trailing newline still gets a blank separator line.
+        // A file without a trailing newline gets just that.
         assert!(upsert_block("x", &block())
             .unwrap()
-            .starts_with("x\n\n<!-- BEGIN"));
+            .starts_with("x\n<!-- BEGIN"));
     }
 
     #[test]
@@ -319,15 +380,20 @@ mod tests {
             "# Project\n\nSome rules.\n",
             "",
             "only line\n",
+            "no final line break",
+            "\n",
+            "crlf\r\n",
+            "crlf\r\nno final line break",
             "trailing blank lines stay\n\n\n",
         ] {
             let with = upsert_block(original, &block()).unwrap();
             let back = remove_block(&with, Owner::Any).unwrap().unwrap();
             assert_eq!(back, original, "round trip of {original:?}");
         }
-        // Text without a final line break gets one; nothing is trimmed.
-        let no_eol = upsert_block("x", &block()).unwrap();
-        assert_eq!(remove_block(&no_eol, Owner::Any).unwrap().unwrap(), "x\n");
+        // A block of an older version: those added a final line break to text
+        // without one, and a blank line.
+        let old = format!("x\n\n{}", block());
+        assert_eq!(remove_block(&old, Owner::Any).unwrap().unwrap(), "x\n");
         let middle = format!("top\n{BEGIN}\nx\n{END}\nbottom\n");
         assert_eq!(
             remove_block(&middle, Owner::Any).unwrap().unwrap(),
@@ -361,6 +427,71 @@ mod tests {
         let out = upsert_block(&prose, &block()).unwrap();
         assert!(out.starts_with(&prose));
         assert_eq!(remove_block(&out, Owner::Any).unwrap().unwrap(), prose);
+    }
+
+    #[test]
+    fn every_version_of_the_block_is_known_and_edits_are_not() {
+        for version in 1..=ROUTING_VERSION {
+            for flavor in [
+                Flavor::Claude { subagent: true },
+                Flavor::Claude { subagent: false },
+                Flavor::Agents,
+            ] {
+                let text = render(version, flavor);
+                assert!(is_unedited(&text) && is_unedited(&text.replace('\n', "\r\n")));
+                assert!(is_unedited(text.trim_end()));
+                assert!(!is_unedited(&text.replace("grep/rg stay", "grep stays")));
+                assert!(!is_unedited(
+                    &text.replace(END, "- my own rule\n<!-- END myceliums -->")
+                ));
+            }
+        }
+        // What was written in fact, word for word.
+        let v1 = render(1, Flavor::Agents);
+        assert!(v1.contains("`context_search`") && !v1.contains("heuristic"));
+        let v2 = render(2, Flavor::Agents);
+        assert!(v2.contains("`search_code`") && !v2.contains("heuristic"));
+        assert_eq!(v2.lines().count() + 1, block().lines().count());
+        assert!(is_unedited(&old_block_v3()));
+    }
+
+    /// The block as `myc setup-claude` at f472dae wrote it, copied.
+    fn old_block_v3() -> String {
+        include_str!("../../tests/data/routing_block_v3.md").to_string()
+    }
+
+    #[test]
+    fn an_edited_or_read_only_block_is_refused_and_left_as_it_is() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("AGENTS.md");
+        let edited = format!(
+            "rules\n\n{}",
+            block().replace(END, "- mine\n<!-- END myceliums -->")
+        );
+        std::fs::write(&path, &edited).unwrap();
+        for result in [
+            install_block(&path, &block()).map(|_| ()),
+            uninstall_block(&path, Owner::Any, true).map(|_| ()),
+            check(&path, Owner::Claude),
+        ] {
+            let error = format!("{:#}", result.unwrap_err());
+            assert!(error.contains("was edited"), "{error}");
+        }
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), edited);
+
+        let old = format!("rules\n\n{}", render(1, Flavor::Agents));
+        std::fs::write(&path, &old).unwrap();
+        let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&path, permissions).unwrap();
+        for result in [
+            install_block(&path, &block()).map(|_| ()),
+            uninstall_block(&path, Owner::Any, true).map(|_| ()),
+        ] {
+            let error = format!("{:#}", result.unwrap_err());
+            assert!(error.contains("read-only"), "{error}");
+        }
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), old);
     }
 
     #[test]

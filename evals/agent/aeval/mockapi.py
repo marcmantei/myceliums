@@ -24,7 +24,7 @@ body (never the headers) and answers with a fixed script:
    and token pipeline sees a real answer.
 
 What the recorded requests show is what ``probe`` reports: which memory files
-reached the context (project CLAUDE.md yes, ``~/.claude/CLAUDE.md`` no),
+reached the context (project CLAUDE.md and ``.claude/rules`` yes, ``~/.claude/CLAUDE.md`` no),
 which tools were sent with full schemas, what the hooks added, which agents
 the ``Agent`` tool offers and which tools the subagent got.
 """

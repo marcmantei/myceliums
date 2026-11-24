@@ -156,7 +156,7 @@ fn analyze_then_setup_claude(commit_memory: bool) {
     let notes = "# Project\n\nTeam notes.\n";
     std::fs::write(
         project.join("CLAUDE.md"),
-        format!("{notes}\n<!-- BEGIN myceliums -->\n## Code navigation\n<!-- END myceliums -->\n"),
+        format!("{notes}\n{}", include_str!("data/routing_block_v3.md")),
     )
     .unwrap();
     if commit_memory {

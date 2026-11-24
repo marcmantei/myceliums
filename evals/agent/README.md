@@ -312,7 +312,7 @@ writes into the working copy takes effect:
 |---|---|
 | `none` | no MCP server (calibration only) |
 | `A` | the myceliums MCP server, default core toolset (9 tools with `_meta["anthropic/alwaysLoad"]`) |
-| `C` | A + `myc setup-claude --scope project --no-agent` run in the working copy: routing block in `CLAUDE.md`; SessionStart, PostToolUse and PreToolUse grep-redirect hooks in `.claude/settings.json` |
+| `C` | A + `myc setup-claude --scope project --no-agent` run in the working copy: routing block (in `CLAUDE.md`; since #200 in `.claude/rules/myceliums.md`); SessionStart, PostToolUse and PreToolUse grep-redirect hooks in `.claude/settings.json` |
 | `E` | C + the `code-explorer` subagent (`myc setup-claude --scope project`) and the `Agent` tool; Claude Code's built-in subagents are denied (`--disallowedTools Agent(Explore),…`), so E adds exactly that one subagent |
 
 B (routing only) and D (C without the core tools loaded up front) were left
@@ -329,7 +329,7 @@ a local stand-in for the Messages API with a fixed script (a Grep call, a
 delegation to `code-explorer`, a `find_callers` call by the subagent) and a
 dummy API key, so no model is called. It records the request bodies (never
 the headers) and reports what the session was given. For 2.1.329 it showed:
-the project `CLAUDE.md` (routing block) reaches the context in C and E and
+the project `CLAUDE.md` (routing block, before #200) reaches the context in C and E and
 `~/.claude/CLAUDE.md` in no condition; the 9 core tools are sent with full
 schemas in A, C and E (none deferred); the grep hook's hint reaches the
 context; the SessionStart hook's `systemMessage` does not (it is shown to the
@@ -350,7 +350,7 @@ python3 evals/agent/agent_eval.py report my-matrix
 
 **Which instruction files reach Claude Code (#200).**
 [`probe_instructions.py`](probe_instructions.py) starts one session per layout of
-`AGENTS.md`/`CLAUDE.md` files (13) and setup state against the same mock API, in a
+`AGENTS.md`/`CLAUDE.md` files (14) and setup state against the same mock API, in a
 temporary HOME, and reports which of the texts the requests contain:
 
 ```bash
@@ -1214,7 +1214,7 @@ the McNemar tests corrected. The two rows with C are confounded (#200, below).
   and D had Spring's own `AGENTS.md` (4,262 characters: build, code style, Javadoc,
   tests, commits, and one line on where reference docs and their snippets live, which
   the docs tasks ask about) in their context, C did not: the `CLAUDE.md` that
-  `myc setup-claude` writes takes its place. Seen in the probe's requests: the
+  `myc setup-claude` then wrote took its place. Seen in the probe's requests: the
   text is in all of A's and D's and in none of C's. Its size, from first-call
   usage at equal prompt length against #163's `none` sessions (same CLI, no
   instruction file): 1,804 tokens. With it added to each of C's model calls and

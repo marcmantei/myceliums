@@ -451,12 +451,13 @@ myc configure --reset
 
 ### `myc doctor`
 
-Check the health of the Myceliums installation. Verifies registry integrity, data directory state, orphaned data, stale locks, and, for the current project and every indexed one, instruction files an older `myc` wrote that hide the project's own (`CLAUDE.md` over `AGENTS.md`, or the reverse).
+Check the health of the Myceliums installation. Verifies registry integrity, data directory state, orphaned data, stale locks, and, for the current project and every indexed one, instruction files an older `myc` wrote that hide the project's own (`CLAUDE.md` over `AGENTS.md`, or the reverse), each with the command that repairs it.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--download` | bool | `false` | Pre-download the configured embedding model |
-| `--fix` | bool | `false` | Repair those instruction files: move the routing block out of `CLAUDE.md` into `.claude/rules/myceliums.md`, delete a `CLAUDE.md` or `AGENTS.md` that held only the block. Text outside the block is never changed |
+| `--fix` | bool | `false` | Repair such files in the current project (the git top level of the working directory, and the directory itself): move the routing block of a `CLAUDE.md` that holds nothing else into `.claude/rules/myceliums.md` and delete that `CLAUDE.md`; delete an `AGENTS.md` that holds only the block of `myc setup-codex`. Nothing else is changed: a `CLAUDE.md` with text of its own, a block someone edited, a read-only file, and a file that another instruction file links to or imports are reported only |
+| `--all-projects` | bool | `false` | With `--fix`: the same in every indexed project |
 
 ```bash
 myc doctor

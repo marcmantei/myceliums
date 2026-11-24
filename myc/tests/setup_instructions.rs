@@ -7,10 +7,8 @@
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
-const OLD_BLOCK: &str = "<!-- BEGIN myceliums -->\n\
-<!-- v3, written by `myc setup-claude`: edits inside these markers are overwritten; `myc setup-claude --uninstall` removes them -->\n\
-## Code navigation: myceliums\n\
-<!-- END myceliums -->\n";
+/// The block as older versions wrote it into CLAUDE.md.
+const OLD_BLOCK: &str = include_str!("data/routing_block_v3.md");
 
 /// A project in a temporary home, so no real file is read or written.
 struct Project {
@@ -108,6 +106,8 @@ fn doctor_finds_and_fixes_an_old_installation() {
         "{found}"
     );
     assert_eq!(p.read("CLAUDE.md").as_deref(), Some(OLD_BLOCK), "no change");
+    let out = p.myc(&["doctor", "--all-projects"]);
+    assert_eq!(out.status.code(), Some(2), "--all-projects needs --fix");
 
     let fixed = p.doctor(&["--fix"]);
     assert!(fixed.contains("repaired"), "{fixed}");
@@ -131,6 +131,11 @@ fn setup_codex_creates_no_agents_md_beside_a_claude_md() {
     let p = Project::new(&[("CLAUDE.md", "rules\n")]);
     let out = p.ok(&["setup-codex"]);
     assert!(out.contains("would hide CLAUDE.md"), "{out}");
+    assert!(
+        out.contains("Codex therefore reads no instructions in this project"),
+        "{out}"
+    );
+    assert!(out.contains("ln -s CLAUDE.md AGENTS.md"), "{out}");
     assert_eq!(p.read("AGENTS.md"), None);
 
     // With text of its own, AGENTS.md gets the block and uninstall takes it
@@ -141,4 +146,24 @@ fn setup_codex_creates_no_agents_md_beside_a_claude_md() {
     p.ok(&["setup-codex", "--uninstall"]);
     assert_eq!(p.read("AGENTS.md").as_deref(), Some("agents rules\n"));
     assert_eq!(p.read("CLAUDE.md").as_deref(), Some("rules\n"));
+}
+
+/// The first choice that `setup-codex` offers: one file for every agent.
+#[cfg(unix)]
+#[test]
+fn setup_codex_then_setup_claude_share_one_file() {
+    let p = Project::new(&[("CLAUDE.md", "rules\n")]);
+    std::os::unix::fs::symlink("CLAUDE.md", p.root.join("AGENTS.md")).unwrap();
+    let out = p.ok(&["setup-codex"]);
+    assert!(out.contains("are the same file"), "{out}");
+    let shared = p.read("CLAUDE.md").unwrap();
+    assert!(shared.contains("BEGIN myceliums"), "{shared}");
+
+    let out = p.ok(&["setup-claude"]);
+    assert!(out.contains("which is the same file as AGENTS.md"), "{out}");
+    p.ok(&["setup-claude", "--uninstall"]);
+    assert_eq!(p.read("AGENTS.md"), Some(shared));
+    p.ok(&["setup-codex", "--uninstall"]);
+    assert_eq!(p.read("CLAUDE.md").as_deref(), Some("rules\n"));
+    assert!(p.root.join("AGENTS.md").is_symlink());
 }
