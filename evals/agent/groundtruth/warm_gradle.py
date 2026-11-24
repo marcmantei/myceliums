@@ -10,10 +10,12 @@ and test tasks there without ``--offline``, with an init script
 (:data:`INIT`) that takes the actions of every test task away, also in
 ``buildSrc``: its inputs are compiled and its runtime class path is resolved
 (downloaded), and **no test runs**. A report of a run test stops the warm-up.
-The build logic of the commit (buildSrc, plugins, code generators) does run.
+The build logic of the commit (buildSrc, plugins, code generators, annotation
+processors) **does run, unsandboxed and with the network**, as in any online build.
 Tests run afterwards: offline, sandboxed, with the JDK copy (below).
 
-It stops at the first error and says what to do. No ``--continue``, no build
+It stops at the first error and says what to do; a build that takes longer than
+20 minutes is killed with everything it started (a blocked daemon too). No ``--continue``, no build
 scan, no build cache (local or remote; the remote one's address is a closed
 port), no JDK download. A connection or a read that does not answer fails
 within about a minute (:data:`NETWORK`: 45 s each, one attempt); so does one a

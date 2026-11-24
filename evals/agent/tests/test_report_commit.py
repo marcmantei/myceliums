@@ -1,10 +1,13 @@
 """#183: the registered analysis on synthetic sessions with known answers."""
 
+import hashlib
 import importlib.util
 import json
 import math
+import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -12,7 +15,7 @@ from unittest import mock
 EVAL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(EVAL))
 
-from aeval import config, isolation, report, report_commit as rc  # noqa: E402
+from aeval import config, editgrade, isolation, report, report_commit as rc  # noqa: E402
 
 N = 400  # resamples: enough for direction and determinism
 
@@ -27,9 +30,9 @@ def task(i: int, **kw) -> dict:
             "primary_files": files[:1], "strata": {"agents_md": i % 2 == 0, "size": "M", "docs": True}, **kw}
 
 
-def row(t: dict, cond: str, rep: int = 1, touch: int = 5, ok: bool = True, tokens: int = 1000, **kw) -> dict:
+def row(t: dict, cond: str, rep: int = 1, touch: int = 4, ok: bool = True, tokens: int = 1000, **kw) -> dict:
     """A session that edits the primary file and the first ``touch`` counted dependents."""
-    changed = t["primary_files"] + [f for f, _ in rc.dependents(t)][:touch]
+    changed = t["primary_files"] + [u["path"] for u in rc.counted(t)][:touch]
     return {"run_id": f"{t['id']}__{cond}__r{rep}", "task_id": t["id"], "condition": cond, "rep": rep, "repo": "r", "type": "edit", "status": "ok",
             "final": True, "total_input_tokens": tokens - 100, "output_tokens": 100, "cost_usd": tokens / 1e4, "api_calls": 10, "wall_s": 60.0,
             "f1": 0.5, "precision": 1.0, "recall": 0.5, "success": ok, "num_turns": 3, "tool_calls": 4, "mcp_tool_calls": 0, "attempt": 1,
@@ -44,28 +47,66 @@ def run(tasks, make, reps=3):
 class Recall(unittest.TestCase):
     def test_counted_dependents(self):
         t = task(1)
-        self.assertEqual([k for _, k in rc.dependents(t)], ["docs", "docs", "remote", "remote", "tests"])
-        self.assertEqual(len(rc.dependents(t, comments=False)), 4)
-        every = [f for f, _ in rc.dependents(t)]
-        self.assertEqual(rc.recall(t, every), 1.0)
+        self.assertEqual([u["kind"] for u in rc.counted(t)], ["docs", "docs", "remote", "tests"])
+        self.assertEqual([u["kind"] for u in rc.counted(t, comments=True)], ["docs", "docs", "remote", "comments", "tests"])
+        every = [u["path"] for u in rc.counted(t)]
+        self.assertEqual((rc.recall(t, every), rc.recall(t, every, comments=True)), (1.0, 0.8))
         self.assertEqual(rc.recall(t, []), 0.0)
         self.assertEqual(rc.recall(t, every[:1], ("docs",)), 0.5)
         self.assertEqual(rc.recall(t, ["m1/src/main/java/a/Near.java", *t["primary_files"]]), 0.0)  # beside a primary file: not counted
         self.assertIsNone(rc.recall({**t, "primary_files": [g["path"] for g in t["gold_files"]]}, []))
 
+    def test_only_code_can_be_comment_only(self):
+        t = task(1)
+        for g in t["gold_files"]:
+            g["comment_only"] = True
+        self.assertEqual([u["kind"] for u in rc.counted(t)], ["docs", "docs", "tests"])
+        near = next(u for u in editgrade.dependents(t) if u["path"].endswith("Near.java"))
+        self.assertEqual((near["kind"], near["near"]), ("comments", True))  # apart, and not in the sensitivity analysis
+        self.assertEqual(len(rc.counted(t, comments=True)), 5)
+
     def test_either_and_equivalents(self):
         t = task(1)
-        r = "m1/src/main/java/b/R.java"
-        self.assertNotIn(r, [f for f, _ in rc.dependents({**t, "either": [r]})])
-        eq = {**t, "equivalents": [[r, "m1/src/main/java/b/Other.java"]]}
-        self.assertEqual(rc.recall(eq, ["m1/src/main/java/b/Other.java"]), rc.recall(t, [r]))
-        self.assertEqual(rc.precision(eq, ["m1/src/main/java/b/Other.java", r]), 1.0)  # one place, not two
+        r, other = "m1/src/main/java/b/R.java", "m1/src/main/java/b/Other.java"
+        self.assertNotIn(r, [u["path"] for u in rc.counted({**t, "either": [r]})])
+        eq = {**t, "gold_files": t["gold_files"] + [{"path": other, "status": "M"}], "equivalents": [[r, other]]}
+        self.assertEqual(len(rc.counted(eq)), len(rc.counted(t)))  # one dependent, not two
+        for changed in ([r], [other], [r, other]):
+            self.assertEqual((rc.recall(eq, changed), rc.precision(eq, changed)), (0.25, 1.0))
         self.assertEqual((rc.precision(t, []), rc.precision(t, [r, "x"])), (0.0, 0.5))
+
+    def test_the_hand_example(self):
+        """deferred-bean-registrar: a reader/post-processor pair is one dependent. 10 counted, 11 with the comment-only file."""
+        t = next(t for t in json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"] if t["id"].startswith("deferred-bean"))
+        pair = t["equivalents"][0]
+        rest = [u["path"] for u in rc.counted(t, comments=True) if u["path"] not in pair]
+        for one in (pair[:1], pair[1:], pair):
+            self.assertEqual((rc.recall(t, one, comments=True), rc.recall(t, one)), (1 / 11, 1 / 10))
+            dep = editgrade.grade_edit(t, one, {"passed": True})["dependents"]
+            self.assertEqual((dep["n"], len(dep["forgotten"]), dep["by_kind"]["remote"]["n"], len(dep["by_kind"]["remote"]["forgotten"])), (10, 9, 3, 2))
+        self.assertEqual((rc.recall(t, rest, comments=True), rc.recall(t, rest)), (10 / 11, 9 / 10))
+        dep = editgrade.grade_edit(t, rest, {"passed": True})["dependents"]
+        self.assertEqual((len(dep["forgotten"]), dep["by_kind"]["remote"]["n"], dep["by_kind"]["comments"]), (1, 3, {"n": 1, "forgotten": []}))
+
+    def test_grading_and_report_agree_on_every_task(self):
+        differ = []
+        for f in ("tasks-commit-replay.json", "tasks-commit-replay-reserve.json"):
+            for t in json.loads((EVAL / "tasks" / f).read_text())["tasks"]:
+                paths = [g["path"] for g in t["gold_files"]]
+                for changed in ([], paths, t["primary_files"], paths[::2], paths[1::2], paths[:1]):
+                    by = editgrade.grade_edit(t, changed, {"passed": True})["dependents"]["by_kind"]
+                    n = sum(by[k]["n"] for k in ("docs", "tests", "remote"))
+                    missed = sum(len(by[k]["forgotten"]) for k in ("docs", "tests", "remote"))
+                    self.assertEqual(n, len(rc.counted(t)), t["id"])
+                    self.assertAlmostEqual(rc.recall(t, changed), 1 - missed / n, msg=t["id"])
+                if f == "tasks-commit-replay.json" and len(rc.counted(t)) != len(rc.counted(t, comments=True)):
+                    differ.append(t["id"].split("-")[0])
+        self.assertEqual(differ, ["spel", "test", "deferred", "message", "retryable"])
 
     def test_the_task_set_has_a_counted_dependent_everywhere(self):
         for f in ("tasks-commit-replay.json", "tasks-commit-replay-reserve.json"):
             for t in json.loads((EVAL / "tasks" / f).read_text())["tasks"]:
-                self.assertTrue(rc.dependents(t), t["id"])
+                self.assertTrue(rc.counted(t), t["id"])
                 self.assertIn("agents_md", t["strata"])
 
 
@@ -74,15 +115,15 @@ class Analysis(unittest.TestCase):
         self.tasks = [task(i) for i in range(1, 21)]
 
     def test_known_differences_and_their_sign(self):
-        """C touches 4 of 5, none 2 of 5, D 2 of 5; C spends half, D the same as none."""
-        touch, tokens = {"none": 2, "C": 4, "D": 2}, {"none": 2000, "C": 1000, "D": 2000}
+        """C touches 3 of 4, none and D 1 of 4; C spends half, D the same as none."""
+        touch, tokens = {"none": 1, "C": 3, "D": 1}, {"none": 2000, "C": 1000, "D": 2000}
         a = rc.analyse(run(self.tasks, lambda t, c, r: row(t, c, r, touch[c], tokens=tokens[c])), self.tasks, N)
         co = a["co_primary"]
         self.assertEqual(list(co), ["C vs none", "D vs none", "C vs D"])
-        self.assertAlmostEqual(co["C vs none"]["recall"]["diff_mean"], 0.4)  # first minus second: positive favours C
+        self.assertAlmostEqual(co["C vs none"]["recall"]["diff_mean"], 0.5)  # first minus second: positive favours C
         self.assertAlmostEqual(co["C vs none"]["tokens"]["diff_mean"], -1000)  # negative: C spends less
         self.assertAlmostEqual(co["C vs none"]["tokens"]["ratio_mean"], 0.5)
-        self.assertAlmostEqual(co["C vs D"]["recall"]["diff_mean"], 0.4)
+        self.assertAlmostEqual(co["C vs D"]["recall"]["diff_mean"], 0.5)
         self.assertAlmostEqual(co["C vs none"]["cost"]["diff_mean"], -0.1)
         self.assertAlmostEqual(co["D vs none"]["recall"]["diff_mean"], 0.0)
         for key in ("recall", "tokens"):
@@ -97,8 +138,8 @@ class Analysis(unittest.TestCase):
 
     def test_repetitions_are_averaged_within_a_task_first(self):
         """One task with many more sessions in one arm must not weigh more."""
-        rows = run(self.tasks[:2], lambda t, c, r: row(t, c, r, 5 if t["id"] == "t01" and c == "C" else 0))
-        rows += [row(self.tasks[0], "C", r, 5) for r in range(4, 40)]
+        rows = run(self.tasks[:2], lambda t, c, r: row(t, c, r, 4 if t["id"] == "t01" and c == "C" else 0))
+        rows += [row(self.tasks[0], "C", r, 4) for r in range(4, 40)]
         s = rc.analyse(rows, self.tasks[:2], N)["co_primary"]["C vs none"]["recall"]
         self.assertAlmostEqual(s["diff_mean"], 0.5)
         self.assertEqual(s["n_tasks"], 2)
@@ -130,17 +171,18 @@ class Analysis(unittest.TestCase):
 
     def test_sensitivity_subsets(self):
         tasks = [task(i, **({"weak_test": "x"} if i <= 5 else {})) for i in range(1, 21)]
-        # C touches everything but the comment-only file, the others nothing more than the primary.
+        # C touches every counted dependent and not the comment-only file, the others nothing more than the primary.
         def make(t, c, r):
             out = row(t, c, r, 0)
             if c == "C":
-                out["edit"]["files_changed"] += [f for f, _ in rc.dependents(t, comments=False)]
+                out["edit"]["files_changed"] += [u["path"] for u in rc.counted(t)]
             return out
         a = rc.analyse(run(tasks, make), tasks, N)
         s = a["sensitivity"]
-        self.assertEqual({k: v["n_tasks"] for k, v in s.items()}, {"strong": 15, "no_comments": 20, "agents_md": 10})
-        self.assertAlmostEqual(a["co_primary"]["C vs none"]["recall"]["diff_mean"], 0.8)
-        self.assertAlmostEqual(s["no_comments"]["pairs"]["C vs none"]["recall"]["diff_mean"], 1.0)
+        self.assertEqual({k: v["n_tasks"] for k, v in s.items()}, {"strong": 15, "comments": 20, "agents_md": 10})
+        self.assertAlmostEqual(a["co_primary"]["C vs none"]["recall"]["diff_mean"], 1.0)
+        self.assertAlmostEqual(s["comments"]["pairs"]["C vs none"]["recall"]["diff_mean"], 0.8)
+        self.assertEqual(a["arms"]["C"]["comments"], 0.0)
         self.assertNotIn("p_holm", s["strong"]["pairs"]["C vs none"]["recall"])
 
     def test_missing_sessions_are_said(self):
@@ -199,7 +241,7 @@ class Pilot(unittest.TestCase):
         out = rc.pilot([row(t, "none", touch=k) for t, k in zip(tasks, (0, 1, 2, 3, 4))], tasks, ids)
         self.assertAlmostEqual(out["projected_usd"], 0.1 * 180)
         self.assertAlmostEqual(out["projected_hours"], (60 + 30 + rc.OVERHEAD_S) * 180 / 3600)
-        self.assertAlmostEqual(out["mean_recall"], 0.4)
+        self.assertAlmostEqual(out["mean_recall"], 0.5)
         self.assertEqual((out["ceiling"], out["stop"]), (False, []))
         high = rc.pilot([row(t, "none", tokens=20000, wall_s=600.0) for t in tasks], tasks, ids)
         self.assertEqual((high["ceiling"], len(high["stop"])), (True, 2))
@@ -244,6 +286,26 @@ class WarmUp(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.w.online_command("./gradlew :a:test")
         self.assertIn("test.actions = []", self.w.INIT)
+
+    def test_the_offline_record_is_of_this_init_script(self):
+        rec = json.loads((EVAL / "groundtruth/warm_init_check.json").read_text())
+        self.assertEqual(rec["init_sha256"], hashlib.sha256(self.w.INIT.encode()).hexdigest())
+        self.assertTrue(all(r["returncode"] == 0 and r["test_reports"] == 0 for r in rec["builds"]))
+
+    def test_a_timeout_kills_what_the_command_started(self):
+        """Also a process that left the group, as Gradle's daemon does."""
+        with tempfile.TemporaryDirectory() as d:
+            pids = Path(d) / "pids"
+            child = f"import os,time;os.setsid();open({str(pids)!r},'a').write(str(os.getpid())+chr(10));time.sleep(60)"
+            cmd = f"{sys.executable} -I -c \"{child}\" & echo $! >> {pids}; echo started; sleep 60"
+            out = editgrade.run_test(cmd, Path(d), timeout_s=2)
+            self.assertEqual((out["timed_out"], out["passed"], out["returncode"]), (True, False, None))
+            self.assertIn("started", out["output"])
+            self.assertLess(out["seconds"], 20)
+            time.sleep(0.3)
+            for p in set(pids.read_text().split()):
+                alive = subprocess.run(["ps", "-o", "stat=", "-p", p], capture_output=True, text=True).stdout.strip()
+                self.assertIn(alive[:1], ("", "Z"), p)
 
     def test_a_test_report_is_noticed(self):
         with tempfile.TemporaryDirectory() as d:

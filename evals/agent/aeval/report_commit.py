@@ -15,7 +15,7 @@ import math
 import random
 from statistics import NormalDist
 
-from .editgrade import file_kind, gold_paths, representative
+from .editgrade import dependents, gold_paths, representative, touched
 from .stats import mean, paired_bootstrap, per_success_bootstrap
 
 ARMS = ("none", "C", "D")
@@ -28,36 +28,18 @@ OVERHEAD_S = 10  # copying the working copy and the index, beside the session an
 
 
 # ---- one session -------------------------------------------------------------
-def dependents(task: dict, comments: bool = True) -> list[tuple[str, str]]:
-    """``(gold file, kind)`` of the dependents the co-primary recall counts:
-    gold files other than the primary ones that are ``docs``, ``tests`` or
-    ``remote`` (code outside the primary files' directories). Not counted:
-    code beside a primary file, build scripts, and files whose part can go
-    into a primary file (``either``). ``comments=False`` also leaves out code
-    files in which only comments change."""
-    primary = set(task.get("primary_files") or [])
-    dirs = {p.rpartition("/")[0] for p in primary}
-    either = set(task.get("either") or [])
-    only = {g["path"] for g in task.get("gold_files") or [] if isinstance(g, dict) and g.get("comment_only")}
-    out = []
-    for f in sorted(set(gold_paths(task)) - primary - either):
-        kind = file_kind(f)
-        if kind == "code":
-            if f.rpartition("/")[0] in dirs or f.endswith((".gradle", ".gradle.kts")):
-                continue
-            if not comments and f in only:
-                continue
-            kind = "remote"
-        out.append((f, kind))
-    return out
+def counted(task: dict, kinds: tuple[str, ...] = ("docs", "tests", "remote"), comments: bool = False) -> list[dict]:
+    """The dependents (:func:`editgrade.dependents`, the grading's own) the
+    co-primary recall counts: ``docs``, ``tests`` and ``remote``. ``comments``
+    (a sensitivity analysis) adds the code files in which only comments change
+    and that would be ``remote``, not those beside a primary file."""
+    return [u for u in dependents(task) if u["kind"] in kinds or comments and u["kind"] == "comments" and not u["near"]]
 
 
-def recall(task: dict, changed: list[str], kinds: tuple[str, ...] = ("docs", "tests", "remote"), comments: bool = True) -> float | None:
-    """Share of those dependents the session touched (equivalent places count
-    as one, as in the grading); None where the task has none."""
-    deps = [f for f, k in dependents(task, comments) if k in kinds]
-    touched = {representative(task, f) for f in changed}
-    return sum(representative(task, f) in touched for f in deps) / len(deps) if deps else None
+def recall(task: dict, changed: list[str], kinds: tuple[str, ...] = ("docs", "tests", "remote"), comments: bool = False) -> float | None:
+    """Share of those dependents the session touched; None where the task has none."""
+    units = counted(task, kinds, comments)
+    return sum(touched(task, u, changed) for u in units) / len(units) if units else None
 
 
 def precision(task: dict, changed: list[str]) -> float:
@@ -147,9 +129,9 @@ SECONDARY = (  # key, label, format, value of a session
     ("wall_s", "Wall time per session (s)", "f1", lambda t, r: r.get("wall_s")),
 )
 SENSITIVITY = (  # key, label, tasks kept, comment-only dependents counted
-    ("strong", "without weakly tested tasks", lambda t: not t.get("weak_test"), True),
-    ("no_comments", "without comment-only dependents", lambda t: True, False),
-    ("agents_md", "only tasks whose parent has AGENTS.md", lambda t: bool((t.get("strata") or {}).get("agents_md")), True),
+    ("strong", "without weakly tested tasks", lambda t: not t.get("weak_test"), False),
+    ("comments", "with comment-only dependents", lambda t: True, True),
+    ("agents_md", "only tasks whose parent has AGENTS.md", lambda t: bool((t.get("strata") or {}).get("agents_md")), False),
 )
 
 
@@ -157,7 +139,7 @@ def applies(rows: list[dict], tasks: list[dict]) -> bool:
     return bool(rows) and all(r.get("edit") for r in rows) and all(t.get("primary_files") and "strata" in t for t in tasks)
 
 
-def _co_primary(rows, by_id, ids, comments=True, n=10_000) -> dict:
+def _co_primary(rows, by_id, ids, comments=False, n=10_000) -> dict:
     values = {"recall": per_task(rows, lambda r: recall(by_id[r["task_id"]], r["edit"]["files_changed"], comments=comments)),
               "tokens": per_task(rows, lambda r: spend(r)[0]), "cost": per_task(rows, lambda r: spend(r)[1])}
     out = {}
@@ -201,11 +183,13 @@ def analyse(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> d
     missing += [f"{N_TASKS - len(ids)} tasks"] if len(ids) < N_TASKS else []
     means = {c: {"recall": mean([x for r in rows if r["condition"] == c
                                  and (x := recall(by_id[r["task_id"]], r["edit"]["files_changed"])) is not None]),
+                 "comments": mean([x for r in rows if r["condition"] == c
+                                   and (x := recall(by_id[r["task_id"]], r["edit"]["files_changed"], ("comments",))) is not None]),
                  "sessions": sum(r["condition"] == c for r in rows),
                  "solved": sum(solved(r) for r in rows if r["condition"] == c),
                  "incomplete_usage": sum(not spend(r)[2] for r in rows if r["condition"] == c)} for c in ARMS}
     return {"co_primary": co, "secondary": secondary, "sensitivity": sens, "missing": missing, "arms": means,
-            "undefined_recall": [t for t in ids if not dependents(by_id[t])]}
+            "undefined_recall": [t for t in ids if not counted(by_id[t])]}
 
 
 def _num(x: float, kind: str, signed: bool = False) -> str:
@@ -232,7 +216,7 @@ def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tup
          f"Pre-registered in the README before the pilot. Unit: the task ({len(tasks)}), its repetitions averaged first; paired percentile "
          f"bootstrap over tasks ({n_resamples:,} resamples), 95 % intervals not corrected. Every difference is **first minus second**: "
          "a positive recall difference favours the first arm, a negative token difference favours it (it spends less). *Recall*: share "
-         "of the dependents (docs, tests, code outside the primary files' directories) the session touched. *Tokens*: input including "
+         "of the dependents (docs, tests, code outside the primary files' directories; not code files in which only comments change) the session touched. *Tokens*: input including "
          "cache plus output per session, unsolved sessions included. p: two-sided, the bootstrap's; Holm over the six tests "
          "(three pairs × two outcomes). Cost is shown beside the tokens and not tested."]
     if a["missing"]:
@@ -243,7 +227,9 @@ def lines(rows: list[dict], tasks: list[dict], n_resamples: int = 10_000) -> tup
     for c in ARMS:
         m = a["arms"][c]
         L.append(f"| `{c}` | {m['sessions']} | {m['solved']} | {_num(m['recall'], 'f3')} | {m['incomplete_usage']} |")
-    L += ["", "A session without a result event (timeout, crash) counts with the calls its transcript shows; its output tokens are a lower bound.",
+    L += ["", "Code files in which only comments change, apart (share of them touched, mean over sessions of tasks that have any): "
+          + "; ".join(f"`{c}` {_num(a['arms'][c]['comments'], 'f3')}" for c in ARMS) + ".",
+          "", "A session without a result event (timeout, crash) counts with the calls its transcript shows; its output tokens are a lower bound.",
           "", "| Pair | Tasks | Δ recall | p | Holm p | Tokens, ratio | Δ tokens | p | Holm p | Δ cost (USD) |",
           "|---|---:|---|---:|---:|---|---|---:|---:|---|"]
     for p, s in a["co_primary"].items():

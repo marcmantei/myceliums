@@ -35,7 +35,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import config
-from .editgrade import apply_gold, changed_files, gold_paths, grade_edit, run_test, snapshot, wrapper_problem
+from .editgrade import apply_gold, changed_files, gold_paths, grade_edit, representative, run_test, snapshot, wrapper_problem
 from . import isolation
 from .prep import strip_history
 from .grading import Grade, extract_answer, grade, is_success
@@ -778,7 +778,8 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         cli = myc_cli_calls(t.tool_calls)
         usage = t.usage()
         if g is None:
-            missed = sorted(set(gold_paths(item.task)) - set(edit["files_changed"]))
+            hit = {representative(item.task, f) for f in edit["files_changed"]}
+            missed = sorted(f for f in gold_paths(item.task) if representative(item.task, f) not in hit)
             g = Grade(edit["file_precision"], edit["file_recall"], edit["file_f1"],
                       len(edit["files_changed"]) - len(edit["files_extra"]), len(edit["files_extra"]), 0,
                       len(item.task.get("gold_files") or []), len(edit["files_changed"]), True,

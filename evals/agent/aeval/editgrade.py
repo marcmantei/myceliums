@@ -34,10 +34,10 @@ Grading, after the session, from ``git status`` of the working copy:
   directory than every primary file: another module) and ``local`` (code next
   to a primary file). Without ``primary_files`` every gold file would be a
   dependent and the metric would equal 1 − recall, so it is not reported
-  (``None``). Commit-replay tasks (#183) report two kinds of dependent apart:
-  ``comments`` (gold files that change in comments or imports only),
+  (``None``). Commit-replay tasks (#183) report three kinds apart, in none of
+  the others and not in ``n``: ``comments`` (code files that change in comments or imports only),
   ``build`` (Gradle scripts) and ``either`` (files whose part of the change can
-  as well go into a primary file: not counted). ``other_module`` (#183) counts the code dependents in another
+  as well go into a primary file). ``equivalents`` count as one dependent. ``other_module`` (#183) counts the code dependents in another
   Gradle/Maven module than every primary file (the path before ``/src/``).
 
 A session succeeds when the test command passes; without one, when the
@@ -53,9 +53,11 @@ import json
 import os
 import re
 import shutil
-import zipfile
+import signal
 import subprocess
+import tempfile
 import time
+import zipfile
 from pathlib import Path
 
 KINDS = ("code", "tests", "docs")
@@ -207,15 +209,15 @@ def grade_edit(task: dict, changed: list[str], tests: dict | None, threshold: fl
         g = {f for f in gold if file_kind(f) == kind}
         c = {f for f in got if file_kind(f) == kind}
         if g or c:
-            by_kind[kind] = _prf(g, c)
+            by_kind[kind] = _prf({representative(task, f) for f in g}, {representative(task, f) for f in c})
+    one = lambda fs: {representative(task, f) for f in fs}  # noqa: E731
     # #183: code whose code changes: without comment-only files and build scripts (on both sides).
     if "strata" in task:
         skip = {x["path"] for x in task["gold_files"] if x.get("comment_only")}
         keep = lambda fs: {f for f in fs if file_kind(f) == "code" and f not in skip and ".gradle" not in f.rsplit("/", 1)[-1]}  # noqa: E731
-        one = lambda fs: {representative(task, f) for f in fs}  # noqa: E731
         by_kind["code_changed"] = _prf(one(keep(gold)), one(keep(got)))
     forgotten = forgotten_dependents(task, got)
-    overall = _prf(gold, got)
+    overall = _prf(one(gold), one(got))
     passed = None if tests is None else bool(tests.get("passed"))
     if passed is not None:
         success = passed
@@ -235,47 +237,78 @@ def grade_edit(task: dict, changed: list[str], tests: dict | None, threshold: fl
     }
 
 
+def dependents(task: dict) -> list[dict]:
+    """The task's dependents: gold files other than ``primary_files``, as units
+    ``{"path", "kind", "near", "files"}``. The one definition the grading and
+    the reports use (#183):
+
+    * a group of ``equivalents`` is **one** unit: touched when any of its files
+      is, and one in every denominator;
+    * ``kind``: ``docs``, ``tests``, ``remote`` (code outside the primary
+      files' directories) or ``local`` (``near``: beside a primary file); and,
+      only in tasks that mark them (``strata``), ``comments`` (**code** files in
+      which nothing but comments changes; docs and tests never are), ``build``
+      (Gradle scripts) and ``either`` (its part can go into a primary file).
+      The last three are reported apart: not in ``n``, not forgotten, not in
+      ``remote``."""
+    primary = set(task.get("primary_files") or [])
+    dirs = {p.rpartition("/")[0] for p in primary}
+    entries = [g for g in task.get("gold_files") or [] if isinstance(g, dict)]
+    apart = "strata" in task and any("status" in g for g in entries)
+    only = {g["path"] for g in entries if g.get("comment_only")}
+    either = set(task.get("either") or [])
+    groups: dict[str, list[str]] = {}
+    for f in sorted(set(gold_paths(task)) - primary):
+        groups.setdefault(representative(task, f), []).append(f)
+    out = []
+    for rep, files in sorted(groups.items()):
+        f = files[0]
+        kind = file_kind(f)
+        near = kind == "code" and f.rpartition("/")[0] in dirs
+        if kind == "code":
+            kind = ("local" if near else "remote") if not apart else (
+                "comments" if set(files) <= only else "build" if f.endswith((".gradle", ".gradle.kts"))
+                else "either" if set(files) <= either else "local" if near else "remote")
+        elif apart and set(files) <= either:
+            kind = "either"
+        out.append({"path": f, "kind": kind, "near": near, "files": files})
+    return out
+
+
+APART = ("comments", "build", "either")
+
+
+def touched(task: dict, unit: dict, changed) -> bool:
+    """Whether a session that changed these files touched the dependent: one of
+    its files, or an equivalent place."""
+    group = next((set(g) for g in task.get("equivalents") or [] if unit["path"] in g), set())
+    return bool((group | set(unit["files"])) & set(changed))
+
+
 def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
-    """Dependents (gold files other than ``primary_files``) the agent did not
-    touch, by kind; None without ``primary_files``."""
+    """Dependents (:func:`dependents`) the agent did not touch, by kind; None
+    without ``primary_files``."""
     primary = task.get("primary_files")
     if not primary:
         return None
-    primary = set(primary)
-    primary_dirs = {p.rsplit("/", 1)[0] if "/" in p else "" for p in primary}
     primary_modules = {module_of(p) for p in primary}
-    comments = {g["path"] for g in task.get("gold_files") or [] if isinstance(g, dict) and g.get("comment_only")}
+    units = dependents(task)
     # Reported apart only where a task marks them (#183).
-    kinds = ("docs", "tests", "remote", "local") + (("comments", "build", "either") if any(
-        isinstance(g, dict) and "status" in g for g in task.get("gold_files") or []) and "strata" in task else ())
+    marked = "strata" in task and any(isinstance(g, dict) and "status" in g for g in task.get("gold_files") or [])
+    kinds = ("docs", "tests", "remote", "local") + (APART if marked else ())
     out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in kinds},
            "other_module": {"n": 0, "forgotten": []}}
-    touched = {representative(task, f) for f in changed}
-    either = set(task.get("either") or [])
-    for f in sorted(set(gold_paths(task)) - primary):
-        kind = file_kind(f)
-        if kind == "code":
-            kind = "local" if (f.rsplit("/", 1)[0] if "/" in f else "") in primary_dirs else "remote"
-            if "comments" in kinds and f in comments:
-                kind = "comments"
-            elif "build" in kinds and f.endswith((".gradle", ".gradle.kts")):
-                kind = "build"
-            elif "either" in kinds and f in either:
-                # Its part of the change can as well go into a primary file, which every solution edits: the file list
-                # cannot tell, so it is reported apart and neither counted nor forgotten.
-                out["by_kind"]["either"]["n"] += 1
-                if f not in changed:
-                    out["by_kind"]["either"]["forgotten"].append(f)
-                continue
+    for u in units:
+        missed = [] if touched(task, u, changed) else [u["path"]]
+        out["by_kind"][u["kind"]]["n"] += 1
+        out["by_kind"][u["kind"]]["forgotten"] += missed
+        if u["kind"] in APART:
+            continue
         out["n"] += 1
-        out["by_kind"][kind]["n"] += 1
-        far = kind in ("remote", "local") and module_of(f) is not None and module_of(f) not in primary_modules
-        out["other_module"]["n"] += far
-        if representative(task, f) not in touched:
-            out["forgotten"].append(f)
-            out["by_kind"][kind]["forgotten"].append(f)
-            if far:
-                out["other_module"]["forgotten"].append(f)
+        out["forgotten"] += missed
+        if u["kind"] in ("remote", "local") and module_of(u["path"]) is not None and module_of(u["path"]) not in primary_modules:
+            out["other_module"]["n"] += 1
+            out["other_module"]["forgotten"] += missed
     return out
 
 
@@ -449,6 +482,28 @@ def rerun_command(command: str) -> str:
     return re.sub(r"(:[\w-]+:test)(?=\s|$)", r"\1 --rerun", command)
 
 
+def kill_tree(pid: int) -> None:
+    """Kill a process's group and every descendant, also one that left the
+    group (Gradle's daemon)."""
+    parents: dict[int, list[int]] = {}
+    for line in subprocess.run(["ps", "-Ao", "pid=,ppid="], capture_output=True, text=True).stdout.splitlines():
+        child, parent = map(int, line.split())
+        parents.setdefault(parent, []).append(child)
+    todo, found = [pid], []
+    while todo:
+        found.append(todo.pop())
+        todo += parents.get(found[-1], [])
+    try:
+        os.killpg(pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+    for p in found:
+        try:
+            os.kill(p, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+
+
 def run_test(command: str, workdir: Path, timeout_s: int = 900, env: dict | None = None,
              prefix=()) -> dict:
     """Run a task's test command in the working copy (``/bin/sh -c``), keeping
@@ -457,11 +512,19 @@ def run_test(command: str, workdir: Path, timeout_s: int = 900, env: dict | None
     ``prefix`` runs it inside a sandbox (aeval/isolation.py)."""
     started = time.time()
     base = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/tmp")}
-    try:
-        res = subprocess.run([*prefix, "/bin/sh", "-c", command], cwd=workdir, capture_output=True, text=True,
-                             timeout=timeout_s, env={**base, **(env or {})})
-        rc, out, timed_out = res.returncode, (res.stdout or "") + (res.stderr or ""), False
-    except subprocess.TimeoutExpired as exc:
-        rc, out, timed_out = None, str(exc.stdout or "") + str(exc.stderr or ""), True
+    with tempfile.TemporaryFile() as log:  # a file, not a pipe: a survivor could hold a pipe open
+        proc = subprocess.Popen([*prefix, "/bin/sh", "-c", command], cwd=workdir, stdout=log, stderr=subprocess.STDOUT,
+                                stdin=subprocess.DEVNULL, env={**base, **(env or {})}, start_new_session=True)
+        try:
+            rc, timed_out = proc.wait(timeout=timeout_s), False
+        except subprocess.TimeoutExpired:
+            kill_tree(proc.pid)
+            proc.wait()
+            rc, timed_out = None, True
+        except BaseException:  # Ctrl-C: the new session does not receive it
+            kill_tree(proc.pid)
+            raise
+        log.seek(0)
+        out = log.read().decode("utf-8", "replace")
     return {"command": command, "passed": rc == 0, "returncode": rc, "timed_out": timed_out,
             "seconds": round(time.time() - started, 2), "output_tail": out[-2000:], "output": out}

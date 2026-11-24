@@ -1624,13 +1624,13 @@ in one module 5, two 10, three or more 5; 10 with docs. The split is computed fr
 the diffs: a file in which only comments, Javadoc or imports change does not count for a
 module (six tasks have such gold files; the mining filter and the first versions of this
 table counted them). Grading reports these files and Gradle scripts as their own
-kinds of dependent (`comments`, `build`) and the code recall also without them (`code_changed`).
+kinds of dependent (`comments`, `build`), in no other kind and not among the forgotten, and the code recall also without them (`code_changed`).
 
 **What the test commands enforce** (an agent's reading of the diffs and tests, nothing was run): in 8 tasks at least one gold dependent
 can stay as at the parent and the command still passes (`weak_test` in the task file says which; `bean-provider-...` is one of them because only the
 demanded abstract method enforces its five, and `api-version-...` because no test checks which handler is passed); `untested` notes other unchecked behaviour. The report gives success and file recall with
 and without those 8. `spel-simple-...`, `test-context-...` and `type-mismatch-...` have no code dependent to find at all, so they measure docs and
-tests only. Where a part of the change has several valid places (`equivalents`: the reader or the post-processor in `deferred-bean-registrar-...`), they count as one file, in recall and precision. In `beans-max-nested-path-depth`
+tests only. Where a part of the change has several valid places (`equivalents`: the reader or the post-processor in `deferred-bean-registrar-...`), they count as one, everywhere: found when either is edited, one in the denominator. In `beans-max-nested-path-depth`
 three dependents can go into a primary file, which every solution edits: the file list cannot tell, so they are reported apart (`either`) and neither counted nor forgotten.
 
 **Descriptions** were drafted by agents from the commit message, the linked
@@ -1735,7 +1735,8 @@ Arms `none`, C, D; 20 tasks × 3 repetitions × 3 arms = 180 sessions; the task 
 final session counts, also one that ran into the time or turn limit; only infrastructure failures (API errors, a killed CLI, a usage limit) are run again.
 
 * **Co-primary outcomes.** (a) **Recall over the dependents**: the share of the replayed commit's docs, tests and remote code files (outside the
-  directories of the primary files, not build scripts) that the session changed; equivalent places count as one, files whose part can go into a primary file (`either`) do not count (`aeval/report_commit.py`).
+  directories of the primary files) that the session changed. **Not counted:** code files in which only comments or imports change (`comments`; docs files never are), Gradle scripts, and files whose part can go into a primary file (`either`). Equivalent places are one dependent, found when any of them is edited.
+  Grading and report use one function (`editgrade.dependents`). The comment rule and the counting of equivalents were fixed on 24 November 2026, before any session; they change the denominators of five tasks (`spel-simple-...`, `test-context-...`, `deferred-...`, `message-source-...`, `retryable-...`) and of the `deferred-...` pair.
   (b) **Tokens per session**, unsolved sessions included: input with cache plus output; the CLI's cost estimate is shown beside it and not tested.
   A session without a result event (timeout) counts with the calls its transcript shows, its output as a lower bound; the report says how many.
 * **Secondary outcomes**, not tested: docs recall alone; tests pass, which is also success (an edit session succeeds when the task's test command passes, nothing else); tokens and cost per solved task; precision (share of the changed files that the commit changed); API calls; wall time.
@@ -1743,7 +1744,7 @@ final session counts, also one that ran into the time or turn limit; only infras
   Paired percentile bootstrap over the tasks (10,000 resamples, seed 0), two-sided p by inverting it; **Holm over the six tests** (three pairs × two co-primary outcomes) at 5 %. With 20 tasks the percentile bootstrap is slightly liberal. Intervals are 95 % and not corrected.
 * **Detectable difference** (two-sided 5 %, power 80 %, 20 tasks, normal approximation): at an SD of 0.3 of the tasks' paired recall differences 0.19 for one test, 0.22 with Bonferroni over three pairs, 0.23 for the first Holm step over six tests. The SD is a guess; the pilot replaces the number only (it
   has one arm, so its SD between tasks is a stand-in), nothing else. A difference that is not significant is not evidence of none.
-* **Sensitivity**, not tested: without the 8 weakly tested tasks; without comment-only dependents; only the 6 tasks whose parent has an AGENTS.md (`strata.agents_md`).
+* **Sensitivity**, not tested: without the 8 weakly tested tasks; **with** the comment-only code files that lie outside the primary files' directories (`deferred-...`: 11 instead of 10 dependents); only the 6 tasks whose parent has an AGENTS.md (`strata.agents_md`).
 * **Validity limits:** Spring Framework is public and its commits are likely in the model's training data, in every arm alike; agents have no scripting (Bash is an allowlist without interpreters) and work in a sandbox, so they are not
   agents as in daily use; D has its search tools blocked, so C vs D and D vs `none` measure myceliums *instead of* search, C vs `none` beside it; one project, one language, one model.
 
@@ -1771,7 +1772,7 @@ python3 evals/agent/agent_eval.py --tasks $T run --label pilot-183-check-D --con
 #### Warm-up
 
 `groundtruth/warm_gradle.py` (not run; `--dry-run` prints every command and host, `--go` starts). With the network it only **resolves and compiles**: an init script takes the actions of every test task away, in `buildSrc` too, so its class path is resolved and no test runs; a test report found afterwards stops it. It stops at the first error; a connection or read without an answer fails after 45 s, one attempt;
-no `--continue`, no JDK download. Java connects itself, not through another program, so that the machine's firewall sees it as what it is; the list of hosts is informative and **the firewall is the enforcement**. Tested offline in the grading profile on two tasks (Gradle 9.2.1 and 9.9.0): compiled, class paths resolved for the module's and buildSrc's test tasks, no test report. Afterwards `gradle-cache` (it refuses Spring Framework artifacts other than
+a build over 20 minutes is killed with everything it started; no `--continue`, no JDK download. **The commit's build logic (buildSrc, plugins, code generators, annotation processors) does run, unsandboxed and with the network**, as in any online build. Java connects itself, not through another program, so that the machine's firewall sees it as what it is; the list of hosts is informative and **the firewall is the enforcement**. The init script was tested offline in the grading profile on two tasks (Gradle 9.2.1 and 9.9.0; record: [`groundtruth/warm_init_check.json`](groundtruth/warm_init_check.json)): compiled, class paths resolved for the module's and buildSrc's test tasks, no test report. The timeouts were not exercised. Afterwards `gradle-cache` (it refuses Spring Framework artifacts other than
 BOM metadata), then the prechecks, offline and sandboxed.
 
 **Index plan: derive, do not rebuild.** `myc` has no command that updates an

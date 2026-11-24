@@ -1,0 +1,31 @@
+{
+ "date": "2026-11-24",
+ "what": "warm_gradle.py's init script, offline, in the grading profile, with the JDK copy and an empty Gradle home, on the replayed commit's tree: the online command with --offline and the init script at another path. The run's retry property was still org.gradle.internal.repository.max.retries, which the Gradle jars do not know; the command now has max.tentatives and network.retry.max.attempts. Timeouts and retries were not exercised (no network).",
+ "init_sha256": "47bd5c1a3a85c0367777a1ef79f054fe9fd8e21ceca14c82b730def365761233",
+ "socket_samples": 186,
+ "remote_connections": 0,
+ "builds": [
+  {
+   "task": "type-mismatch-required-type-arg",
+   "gradle": "9.2.1",
+   "returncode": 0,
+   "seconds": 95.5,
+   "test_reports": 0,
+   "resolved": {
+    ":test (buildSrc)": 95,
+    ":spring-webmvc:test": 187
+   }
+  },
+  {
+   "task": "spel-simple-context-restricted-conversion",
+   "gradle": "9.9.0",
+   "returncode": 0,
+   "seconds": 56.1,
+   "test_reports": 0,
+   "resolved": {
+    ":test (buildSrc)": 92,
+    ":spring-expression:test": 47
+   }
+  }
+ ]
+}

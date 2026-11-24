@@ -270,6 +270,7 @@ class GradleCommands(unittest.TestCase):
         self.assertEqual(g["dependents"]["by_kind"]["comments"], {"n": 1, "forgotten": ["n/src/main/java/b/Doc.java"]})
         self.assertEqual(g["dependents"]["by_kind"]["build"], {"n": 1, "forgotten": ["n/n.gradle"]})
         self.assertEqual(g["dependents"]["other_module"], {"n": 1, "forgotten": []})
+        self.assertEqual((g["dependents"]["n"], g["dependents_forgotten"], g["dependents"]["by_kind"]["remote"]["n"]), (1, [], 1))
 
 
 class Isolation(unittest.TestCase):
@@ -672,7 +673,8 @@ class Grading(unittest.TestCase):
         one = editgrade.grade_edit(task, [A, C], {"passed": True})
         self.assertEqual((one["dependents_forgotten"], one["files_by_kind"]["code_changed"]["recall"]), ([], 1.0))
         none = editgrade.grade_edit(task, [A], {"passed": True})
-        self.assertEqual(len(none["dependents_forgotten"]), 2)
+        self.assertEqual(len(none["dependents_forgotten"]), 1)  # one dependent, whichever place
+        self.assertEqual((none["dependents"]["n"], none["dependents"]["by_kind"]["remote"]["n"]), (1, 1))
         self.assertEqual(none["files_by_kind"]["code_changed"]["recall"], 0.5)
         # One of a group is one hit: precision is not inflated by the place that was not used.
         noisy = editgrade.grade_edit(task, [A, C, X, X.replace("X", "Y")], {"passed": True})["files_by_kind"]["code_changed"]
