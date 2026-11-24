@@ -37,7 +37,8 @@ Grading, after the session, from ``git status`` of the working copy:
   (``None``). Commit-replay tasks (#183) report three kinds apart, in none of
   the others and not in ``n``: ``comments`` (code files that change in comments or imports only),
   ``build`` (Gradle scripts) and ``either`` (files whose part of the change can
-  as well go into a primary file). ``equivalents`` count as one dependent. ``other_module`` (#183) counts the code dependents in another
+  as well go into a primary file); and test files the change does not force
+  (``new_tests``; ``forced_tests`` are the dependents, aeval/forced.py). ``equivalents`` count as one dependent. ``other_module`` (#183) counts the code dependents in another
   Gradle/Maven module than every primary file (the path before ``/src/``).
 
 A session succeeds when the test command passes; without one, when the
@@ -47,6 +48,7 @@ reaches the run's success threshold.
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -62,6 +64,7 @@ from pathlib import Path
 
 KINDS = ("code", "tests", "docs")
 _DOC_EXT = (".md", ".adoc", ".rst")
+_DOC_MODULE = re.compile(r"^framework-docs/")
 _DOC_DIR = re.compile(r"(^|/)(docs|framework-docs)/")
 _MAIN_SET = re.compile(r"(^|/)src/main/")
 _TEST_SET = re.compile(r"(^|/)src/(test|testFixtures|integrationTest)/")
@@ -72,6 +75,8 @@ _TEST_NAME = re.compile(r"(^test_.*\.py$|_test\.(py|go)$|\.(test|spec)\.[cm]?[jt
 def file_kind(path: str) -> str:
     """``code``, ``tests`` or ``docs`` by path, first rule that matches:
 
+    0. Spring's documentation module is docs, its sample code (``src/main``,
+       included in the pages) too (#183);
     1. a Java/Gradle source set decides: ``src/main/**`` is code (also inside
        a module named ``spring-test/``), ``src/test/**``, ``src/testFixtures/**``
        and ``src/integrationTest/**`` are tests (fixtures count as tests);
@@ -85,6 +90,8 @@ def file_kind(path: str) -> str:
     4. everything else is code.
     """
     name = path.rsplit("/", 1)[-1]
+    if _DOC_MODULE.search(path):
+        return "docs"
     if _MAIN_SET.search(path):
         return "code"
     if _TEST_SET.search(path):
@@ -178,16 +185,18 @@ def report_lines(rows: list[dict]) -> list[str]:
     def part(r, key, field="recall"):
         return ((r["edit"].get("files_by_kind") or {}).get(key) or {}).get(field)
 
-    def kept(r, key):
-        k = ((r["edit"].get("dependents") or {}).get("by_kind") or {}).get(key) or {}
-        return 1 - len(k["forgotten"]) / k["n"] if k.get("n") else None
+    def kept(r, *keys):
+        by = (r["edit"].get("dependents") or {}).get("by_kind") or {}
+        n = sum((by.get(k) or {}).get("n", 0) for k in keys)
+        return 1 - sum(len(by[k]["forgotten"]) for k in keys if k in by) / n if n else None
 
     out = ["## Edit tasks", "",
            "Means over sessions. *Success* is the test command. A task is weakly tested when its test command does not "
            "enforce every gold dependent (`weak_test` in the task file); its success says less, so the table gives both. "
-           "*Code*: recall of gold files whose code changes; *remote*, *docs*, *tests*: share of those dependents touched.",
-           "", "| Condition | Tasks | Sessions | Success | Code | Code precision | Remote | Docs | Tests |",
-           "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+           "*Code*: recall of gold files whose code changes; *remote*, *docs*, *forced tests*: share of those dependents touched; *new tests*: the commit's "
+           "other test changes, which the change does not need (aeval/forced.py).",
+           "", "| Condition | Tasks | Sessions | Success | Code | Code precision | Remote | Docs | Forced tests | New tests |",
+           "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for name, keep in (("all", lambda r: True), ("without weakly tested", lambda r: not r.get("weak_test"))):
         for c in sorted({r["condition"] for r in rows}):
             own = [r for r in rows if r["condition"] == c and keep(r)]
@@ -196,7 +205,7 @@ def report_lines(rows: list[dict]) -> list[str]:
                            f"{mean([part(r, 'code_changed') for r in own])} | "
                            f"{mean([part(r, 'code_changed', 'precision') for r in own])} | "
                            f"{mean([kept(r, 'remote') for r in own])} | {mean([kept(r, 'docs') for r in own])} | "
-                           f"{mean([kept(r, 'tests') for r in own])} |")
+                           f"{mean([kept(r, 'tests', 'forced_tests') for r in own])} | {mean([kept(r, 'new_tests') for r in own])} |")
     return out + [""]
 
 
@@ -245,18 +254,24 @@ def dependents(task: dict) -> list[dict]:
     * a group of ``equivalents`` is **one** unit: touched when any of its files
       is, and one in every denominator;
     * ``kind``: ``docs``, ``tests``, ``remote`` (code outside the primary
-      files' directories) or ``local`` (``near``: beside a primary file); and,
+      files' directories) or ``local`` (``near``: beside a primary file); in
+      tasks with a ``forced_tests`` list (measured, aeval/forced.py) a test
+      unit is ``forced_tests`` when a file of it is on the list, else
+      ``new_tests``; and,
       only in tasks that mark them (``strata``), ``comments`` (**code** files in
       which nothing but comments changes; docs and tests never are), ``build``
       (Gradle scripts) and ``either`` (its part can go into a primary file).
-      The last three are reported apart: not in ``n``, not forgotten, not in
-      ``remote``."""
+      ``optional``: code or docs the stated change does not affect
+      (``groundtruth/affected_183.json``). These four and ``new_tests`` are
+      reported apart: not in ``n``, not forgotten, not in ``remote``."""
     primary = set(task.get("primary_files") or [])
     dirs = {p.rpartition("/")[0] for p in primary}
     entries = [g for g in task.get("gold_files") or [] if isinstance(g, dict)]
     apart = "strata" in task and any("status" in g for g in entries)
     only = {g["path"] for g in entries if g.get("comment_only")}
     either = set(task.get("either") or [])
+    optional = set(task.get("optional") or [])
+    forced = set(task["forced_tests"]) if "forced_tests" in task else None
     groups: dict[str, list[str]] = {}
     for f in sorted(set(gold_paths(task)) - primary):
         groups.setdefault(representative(task, f), []).append(f)
@@ -268,14 +283,18 @@ def dependents(task: dict) -> list[dict]:
         if kind == "code":
             kind = ("local" if near else "remote") if not apart else (
                 "comments" if set(files) <= only else "build" if f.endswith((".gradle", ".gradle.kts"))
-                else "either" if set(files) <= either else "local" if near else "remote")
+                else "either" if set(files) <= either else "optional" if set(files) <= optional else "local" if near else "remote")
         elif apart and set(files) <= either:
             kind = "either"
+        elif apart and kind == "docs" and set(files) <= optional:
+            kind = "optional"
+        elif kind == "tests" and forced is not None:
+            kind = "forced_tests" if forced & set(files) else "new_tests"
         out.append({"path": f, "kind": kind, "near": near, "files": files})
     return out
 
 
-APART = ("comments", "build", "either")
+APART = ("comments", "build", "either", "optional", "new_tests")
 
 
 def touched(task: dict, unit: dict, changed) -> bool:
@@ -295,7 +314,8 @@ def forgotten_dependents(task: dict, changed: set[str]) -> dict | None:
     units = dependents(task)
     # Reported apart only where a task marks them (#183).
     marked = "strata" in task and any(isinstance(g, dict) and "status" in g for g in task.get("gold_files") or [])
-    kinds = ("docs", "tests", "remote", "local") + (APART if marked else ())
+    tests = ("forced_tests",) if "forced_tests" in task else ("tests",)
+    kinds = ("docs", *tests, "remote", "local") + (tuple(k for k in APART if k not in ("new_tests", "optional") or "forced_tests" in task) if marked else ())
     out = {"n": 0, "forgotten": [], "by_kind": {k: {"n": 0, "forgotten": []} for k in kinds},
            "other_module": {"n": 0, "forgotten": []}}
     for u in units:
@@ -390,6 +410,27 @@ def wrapper_problem(checkout: Path, env: dict | None = None) -> str | None:
             f"Put the zip there first; no Gradle was started")
 
 
+@contextlib.contextmanager
+def precheck_copy(checkout: Path, scratch: Path):
+    """A fresh working copy at the one path every precheck uses (a firewall knows
+    a wrapper by its path), removed afterwards; one at a time."""
+    from .config import copy_tree, remove_tree
+    work = scratch / "precheck-work"
+    lock = open(scratch.with_name(scratch.name + ".precheck.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        raise SystemExit("another precheck is running; prechecks share one working path") from None
+    if work.exists():  # left by an interrupted precheck
+        remove_tree(work, scratch)
+    copy_tree(checkout, work)
+    try:
+        yield work
+    finally:
+        remove_tree(work, scratch)
+        lock.close()
+
+
 def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: int = 900,
              gold: Path | None = None, env: dict | None = None, gold_commit: str | None = None,
              gold_runs: int = 1, log_dir: Path | None = None, sandbox=None) -> dict:
@@ -402,21 +443,10 @@ def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: 
     returns ``(prefix, extra environment)``) runs the tests as a session's
     grading does (aeval/isolation.py). Returns the record ``check-tasks``
     expects in the task's ``precheck``."""
-    from .config import copy_tree, remove_tree
     if problem := wrapper_problem(checkout, env):
         raise SystemExit(f"{task['id']}: {problem}")
-    # One fixed path for every task: a firewall knows a wrapper by its path.
-    work = scratch / "precheck-work"
-    lock = open(scratch.with_name(scratch.name + ".precheck.lock"), "w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        raise SystemExit("another precheck is running; prechecks share one working path") from None
-    if work.exists():  # left by an interrupted precheck
-        remove_tree(work, scratch)
-    copy_tree(checkout, work)
     after = None
-    try:
+    with precheck_copy(checkout, scratch) as work:
         prefix: tuple = ()
         if sandbox is not None:
             prefix, extra = sandbox(work)
@@ -432,9 +462,6 @@ def precheck(task: dict, checkout: Path, scratch: Path, commit: str, timeout_s: 
             while len(runs) < gold_runs and runs[-1]["passed"]:
                 runs.append(run_test(rerun_command(task["test_command"]), work, timeout_s, env, prefix))
             after = runs[-1]
-    finally:
-        remove_tree(work, scratch)
-        lock.close()
     kind = failure_kind(res)
     rec = {"fails_on_parent": not res["passed"] and kind not in ("timeout", "infrastructure", "no_tests"),
            "parent_failure": kind, "returncode": res["returncode"], "timed_out": res["timed_out"],

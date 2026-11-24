@@ -1,0 +1,478 @@
+{
+ "description": "#183: one verdict per dependent (82 units: remote code, docs and measured forced tests): is the file affected by the stated change at all? A test forced by a failing assertion counts only where the task text states the behaviour it contradicts (quote from the text); one forced by compilation stays. An agent's judgement, with the reviewer's of pull request #206; no arm's result was used. `commit_replay.py build` reads `counts`.",
+ "tasks": {
+  "spel-simple-context-restricted-conversion": {
+   "framework-docs/modules/ROOT/pages/appendix.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "lists the Spring properties; the text adds one"
+   },
+   "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "describes what SimpleEvaluationContext supports and its conversions, which change by default"
+   }
+  },
+  "observation-record-handled-exception": {
+   "framework-docs/modules/ROOT/pages/integration/observability.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "tells users to set the error on the context and what is recorded, the practice the text calls insufficient"
+   },
+   "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java": {
+    "kind": "docs",
+    "counts": true,
+    "why": "sample of exactly the idiom the text calls insufficient (findCurrent(..).setError); borderline, it still compiles"
+   },
+   "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java": {
+    "kind": "docs",
+    "counts": true,
+    "why": "sample of exactly the idiom the text calls insufficient (findObservationContext(..).setError); borderline, it still compiles"
+   },
+   "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityExceptionHandler.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "records server errors itself; the text: WebFlux's own exception handling should use the new methods"
+   },
+   "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityExceptionHandlerTests.java": {
+    "kind": "forced_tests",
+    "counts": false,
+    "why": "The text demands that Observation.error is called once at completion; it does not say that the context stays without the error until then, which is what the parent's assertion (context.getError() right after handling) contradicts. Setting it at once and reporting at completion satisfies the text and leaves this test green.",
+    "measured": "fails"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/annotation/ResponseStatusExceptionResolver.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "records server errors itself; the text: Spring MVC's own exception handling should use the new methods"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolver.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "records server errors itself; the text: Spring MVC's own exception handling should use the new methods"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandler.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "records server errors itself; the text: Spring MVC's own exception handling should use the new methods"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolver.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "records server errors itself; the text: Spring MVC's own exception handling should use the new methods"
+   },
+   "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/annotation/ResponseStatusExceptionResolverTests.java": {
+    "kind": "forced_tests",
+    "counts": false,
+    "why": "The text demands that Observation.error is called once at completion; it does not say that the context stays without the error until then, which is what the parent's assertion (context.getError() right after handling) contradicts. Setting it at once and reporting at completion satisfies the text and leaves this test green.",
+    "measured": "fails"
+   },
+   "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverErrorViewTests.java": {
+    "kind": "forced_tests",
+    "counts": false,
+    "why": "The text demands that Observation.error is called once at completion; it does not say that the context stays without the error until then, which is what the parent's assertion (context.getError() right after handling) contradicts. Setting it at once and reporting at completion satisfies the text and leaves this test green.",
+    "measured": "fails"
+   },
+   "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverProblemDetailTests.java": {
+    "kind": "forced_tests",
+    "counts": false,
+    "why": "The text demands that Observation.error is called once at completion; it does not say that the context stays without the error until then, which is what the parent's assertion (context.getError() right after handling) contradicts. Setting it at once and reporting at completion satisfies the text and leaves this test green.",
+    "measured": "fails"
+   },
+   "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java": {
+    "kind": "forced_tests",
+    "counts": false,
+    "why": "The text demands that Observation.error is called once at completion; it does not say that the context stays without the error until then, which is what the parent's assertion (context.getError() right after handling) contradicts. Setting it at once and reporting at completion satisfies the text and leaves this test green.",
+    "measured": "fails"
+   },
+   "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolverTests.java": {
+    "kind": "forced_tests",
+    "counts": false,
+    "why": "The text demands that Observation.error is called once at completion; it does not say that the context stays without the error until then, which is what the parent's assertion (context.getError() right after handling) contradicts. Setting it at once and reporting at completion satisfies the text and leaves this test green.",
+    "measured": "fails"
+   }
+  },
+  "beans-max-nested-path-depth": {
+   "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "says nested properties can be set \"to an unlimited depth\", which becomes wrong"
+   }
+  },
+  "form-converter-map-payloads": {
+   "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "says form data is read from and written into a MultiValueMap, which is no longer all"
+   },
+   "spring-test/src/main/java/org/springframework/test/web/client/match/ContentRequestMatchers.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "does not compile: the converter's read returns Object"
+   },
+   "spring-test/src/main/java/org/springframework/test/web/servlet/request/AbstractMockHttpServletRequestBuilder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "does not compile: the converter's read returns Object"
+   },
+   "spring-web/src/main/java/org/springframework/web/filter/FormContentFilter.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "does not compile: the converter's read returns Object"
+   },
+   "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   }
+  },
+  "jsonl-media-type-support": {
+   "framework-docs/modules/ROOT/pages/testing/webtestclient.adoc": {
+    "kind": "docs",
+    "counts": false,
+    "why": "names ndjson only as an example (\"such as\") of infinite streams; stays true"
+   },
+   "framework-docs/modules/ROOT/pages/web/webflux/reactive-spring.adoc": {
+    "kind": "docs",
+    "counts": false,
+    "why": "names ndjson only as an example (\"such as\", \"for example\") of a streaming media type, in both places; both stay true"
+   },
+   "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-async.adoc": {
+    "kind": "docs",
+    "counts": false,
+    "why": "names ndjson only as an example (\"such as\") of a streaming media type; stays true"
+   },
+   "spring-web/src/main/java/org/springframework/http/codec/json/GsonEncoder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it"
+   },
+   "spring-web/src/main/java/org/springframework/http/codec/json/Jackson2CodecSupport.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it"
+   },
+   "spring-web/src/main/java/org/springframework/http/codec/json/Jackson2JsonEncoder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it"
+   },
+   "spring-web/src/main/java/org/springframework/http/codec/json/JacksonJsonDecoder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it"
+   },
+   "spring-web/src/main/java/org/springframework/http/codec/json/JacksonJsonEncoder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it"
+   },
+   "spring-web/src/main/java/org/springframework/http/codec/json/KotlinSerializationJsonDecoder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it"
+   },
+   "spring-web/src/main/java/org/springframework/http/codec/json/KotlinSerializationJsonEncoder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it"
+   },
+   "spring-web/src/main/java/org/springframework/http/codec/protobuf/ProtobufJsonEncoder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it"
+   },
+   "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "asserts the exact list of supported media types; the text puts jsonl into it",
+    "measured": "fails",
+    "quote": "The JSON codecs list it among their default supported MIME types, directly after application/x-ndjson"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/ReactiveTypeHandler.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "the text: Spring MVC streams application/jsonl just as application/x-ndjson"
+   }
+  },
+  "test-context-cache-pause-mode": {
+   "framework-docs/modules/ROOT/pages/appendix.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "lists the Spring properties; the text adds one"
+   },
+   "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "describes the pausing of inactive contexts, which can now be turned off"
+   }
+  },
+  "retry-max-attempts-to-max-retries": {
+   "framework-docs/modules/ROOT/pages/core/resilience.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "uses the renamed names in text and samples"
+   },
+   "spring-context/src/main/java/org/springframework/resilience/retry/AbstractRetryInterceptor.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls the renamed builder method; does not compile"
+   },
+   "spring-context/src/main/java/org/springframework/resilience/retry/MethodRetrySpec.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "public record of the retry API with the concept in its component; borderline, the text does not list it"
+   },
+   "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   },
+   "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   },
+   "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   },
+   "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   },
+   "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   }
+  },
+  "jdbcclient-batch-entry-dsl": {
+   "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "describes and shows add(), which the text removes"
+   },
+   "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   },
+   "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   },
+   "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   }
+  },
+  "type-mismatch-required-type-arg": {
+   "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "lists the message arguments of TypeMismatchException; the text adds {2}"
+   }
+  },
+  "servlet-response-ignore-body-flush": {
+   "framework-docs/modules/ROOT/pages/appendix.adoc": {
+    "kind": "docs",
+    "counts": true,
+    "why": "lists the Spring properties; the text adds one"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/HttpHeadersReturnValueHandler.java": {
+    "kind": "remote",
+    "counts": false,
+    "why": "the parent's getBody() writes the headers and never flushes, so the change does not affect it (its flush() does not flush either as long as the body is unused)"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/StreamingResponseBodyReturnValueHandler.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "flushes the body stream, which becomes a no-op; the text: streaming must keep working by flushing the response"
+   }
+  },
+  "content-negotiation-no-fallback-mapping": {
+   "spring-webflux/src/main/java/org/springframework/web/reactive/accept/ParameterContentTypeResolver.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "the text: apply to the parameter-based strategy in WebFlux; it adds the fallback to its mappings"
+   }
+  },
+  "client-builders-deep-copy-default-headers-cookies": {
+   "spring-test/src/main/java/org/springframework/test/web/reactive/server/DefaultWebTestClientBuilder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "clone/mutate share the value lists; the text: the other HTTP client builders must be fixed in the same way"
+   },
+   "spring-webflux/src/main/java/org/springframework/web/reactive/function/client/DefaultWebClientBuilder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "clone/mutate share the value lists; the text: the other HTTP client builders must be fixed in the same way"
+   }
+  },
+  "http-range-honor-if-range": {
+   "spring-web/src/main/java/org/springframework/http/codec/ResourceHttpMessageWriter.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "answers Range for resource responses itself; the text: consistently in MVC and WebFlux"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/function/DefaultEntityResponseBuilder.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "answers Range for resource responses itself; the text: consistently in MVC and WebFlux"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/AbstractMessageConverterMethodProcessor.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "answers Range for resource responses itself; the text: consistently in MVC and WebFlux"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/resource/ResourceHttpRequestHandler.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "answers Range for resource responses itself; the text: consistently in MVC and WebFlux"
+   }
+  },
+  "error-response-interceptor-with-request": {
+   "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/AbstractMessageWriterResultHandler.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls the interceptors; the text: all framework calls use the request-aware variant and pass the current request, which only the caller has"
+   },
+   "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandler.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls the interceptors; the text: all framework calls use the request-aware variant and pass the current request, which only the caller has"
+   },
+   "spring-webflux/src/main/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandler.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls the interceptors; the text: all framework calls use the request-aware variant and pass the current request, which only the caller has"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/AbstractMessageConverterMethodProcessor.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls the interceptors; the text: all framework calls use the request-aware variant and pass the current request, which only the caller has"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessor.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls the interceptors; the text: all framework calls use the request-aware variant and pass the current request, which only the caller has"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessor.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls the interceptors; the text: all framework calls use the request-aware variant and pass the current request, which only the caller has"
+   }
+  },
+  "mime-type-parameter-names-case-insensitive": {
+   "spring-web/src/main/java/org/springframework/http/MediaType.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "compares the quality factor's name; named in the text"
+   }
+  },
+  "deferred-bean-registrar-contains-bean": {
+   "spring-beans/src/main/java/org/springframework/beans/factory/support/BeanRegistryAdapter.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "implements BeanRegistry, which gets three methods"
+   },
+   "spring-context/src/main/java/org/springframework/context/annotation/ConfigurationClassBeanDefinitionReader.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "one of the two places where imported registrars run; the text: deferred ones at the end"
+   },
+   "spring-context/src/main/java/org/springframework/context/support/GenericApplicationContext.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "runs programmatically registered registrars; the text: deferred ones at the end"
+   }
+  },
+  "api-version-deprecation-handler-handler-arg": {
+   "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   },
+   "spring-webflux/src/main/java/org/springframework/web/reactive/handler/AbstractHandlerMapping.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls deprecation handling and is the only place that has the handler"
+   },
+   "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "does not compile (measured)",
+    "measured": "compile"
+   },
+   "spring-webmvc/src/main/java/org/springframework/web/servlet/handler/AbstractHandlerMapping.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "calls deprecation handling and is the only place that has the handler"
+   }
+  },
+  "bean-provider-parameterized-type-reference": {
+   "spring-beans/src/main/java/org/springframework/beans/factory/support/DefaultListableBeanFactory.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "implements BeanFactory, and the text makes the new method abstract"
+   },
+   "spring-beans/src/main/java/org/springframework/beans/factory/support/StaticListableBeanFactory.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "implements BeanFactory, and the text makes the new method abstract"
+   },
+   "spring-context/src/main/java/org/springframework/context/support/AbstractApplicationContext.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "implements BeanFactory, and the text makes the new method abstract"
+   },
+   "spring-context/src/main/java/org/springframework/jndi/support/SimpleJndiBeanFactory.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "implements BeanFactory, and the text makes the new method abstract"
+   },
+   "spring-test/src/main/java/org/springframework/test/web/servlet/setup/StubWebApplicationContext.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "implements BeanFactory, and the text makes the new method abstract"
+   }
+  },
+  "message-source-default-charset": {
+   "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "asserts the late NoSuchMessageException for an invalid charset name; the text says it goes away",
+    "measured": "fails",
+    "quote": "an invalid charset name now fails at configuration time with an UnsupportedCharsetException rather than surfacing later as a NoSuchMessageException"
+   }
+  },
+  "retryable-method-retry-event": {
+   "spring-context/src/main/java/org/springframework/resilience/annotation/RetryAnnotationBeanPostProcessor.java": {
+    "kind": "remote",
+    "counts": true,
+    "why": "creates the interceptor and is the bean that can be given the application's event publisher"
+   },
+   "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java": {
+    "kind": "forced_tests",
+    "counts": true,
+    "why": "asserts the old interruption message; the text gives the new one",
+    "measured": "fails",
+    "quote": "should carry the message \"Interrupted during back-off for retryable operation '<name>'; aborting execution\""
+   }
+  }
+ }
+}

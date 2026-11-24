@@ -259,6 +259,60 @@ class GradleCommands(unittest.TestCase):
         sp = commit_replay.spread(files, frozenset({"spring-webmvc/src/main/java/C.java"}))
         self.assertEqual(sp["code_modules"], ["spring-web"])
 
+    def test_documentation_text_and_renames_by_rule(self):
+        """#183: an XML schema in which only documentation text changes is comment-only; a rename is one dependent."""
+        xsd = ('<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"><!-- c --><xsd:element name="{n}"><xsd:annotation><xsd:documentation>'
+               '{d}</xsd:documentation></xsd:annotation></xsd:element></xsd:schema>')
+        self.assertEqual(commit_replay.schema_text(xsd.format(n="a", d="old")), commit_replay.schema_text(xsd.format(n="a", d="new <![CDATA[<b>]]>")))
+        self.assertNotEqual(commit_replay.schema_text(xsd.format(n="a", d="old")), commit_replay.schema_text(xsd.format(n="b", d="old")))
+        with tempfile.TemporaryDirectory() as tmp:
+            up, body = Path(tmp) / "up", "".join(f"line {i}\n" for i in range(20))
+            up.mkdir()
+            for name, text in (("Old.java", body), ("Gone.java", "nothing alike\n"), ("a.xsd", xsd.format(n="a", d="old")), ("b.xsd", xsd.format(n="a", d="x"))):
+                (up / name).write_text(text)
+            _git("init", "-q", cwd=up)
+            _git("add", ".", cwd=up)
+            _git(*GIT_ID, "commit", "-qm", "parent", cwd=up)
+            (up / "Old.java").rename(up / "New.java")
+            (up / "New.java").write_text(body + "one more\n")
+            (up / "Gone.java").unlink()
+            (up / "Other.java").write_text("quite different text\n" * 5)
+            (up / "a.xsd").write_text(xsd.format(n="a", d="new"))
+            (up / "b.xsd").write_text(xsd.format(n="b", d="x"))
+            _git("add", "-A", ".", cwd=up)
+            _git(*GIT_ID, "commit", "-qm", "gold", cwd=up)
+            sha = _rev(up)
+            self.assertEqual(commit_replay.renames(up, sha), [["Old.java", "New.java"]])
+            self.assertEqual([commit_replay.comment_only(up, sha, "M", f) for f in ("a.xsd", "b.xsd")], [True, False])
+        self.assertEqual(editgrade.file_kind("framework-docs/src/main/java/a/Sample.java"), "docs")  # the pages include it
+        self.assertEqual(editgrade.file_kind("spring-web/src/main/resources/a.xsd"), "code")
+
+    def test_forced_and_new_tests(self):
+        task = {"strata": {}, "primary_files": ["m/src/main/java/a/A.java"], "forced_tests": ["m/src/test/java/a/OldTests.java"],
+                "equivalents": [["m/src/test/java/a/OldTests.java", "m/src/test/java/a/RenamedTests.java"]],
+                "gold_files": [{"path": "m/src/main/java/a/A.java", "status": "M"}, {"path": "m/src/test/java/a/OldTests.java", "status": "D"},
+                               {"path": "m/src/test/java/a/RenamedTests.java", "status": "A"}, {"path": "m/src/test/java/a/MoreTests.java", "status": "M"}]}
+        dep = editgrade.grade_edit(task, ["m/src/main/java/a/A.java"], {"passed": True})["dependents"]
+        self.assertEqual((dep["n"], len(dep["forgotten"])), (1, 1))  # the new test is no dependent and not forgotten
+        self.assertEqual((dep["by_kind"]["forced_tests"]["n"], dep["by_kind"]["new_tests"]), (1, {"n": 1, "forgotten": ["m/src/test/java/a/MoreTests.java"]}))
+        for one in ("OldTests", "RenamedTests"):  # edited in place or renamed
+            dep = editgrade.grade_edit(task, [f"m/src/test/java/a/{one}.java"], {"passed": True})["dependents"]
+            self.assertEqual(dep["forgotten"], [])
+        docs = "framework-docs/modules/a.adoc"
+        opt = {**task, "gold_files": [*task["gold_files"], {"path": docs, "status": "M"}, {"path": "n/src/main/java/b/B.java", "status": "M"}]}
+        dep = editgrade.grade_edit(opt | {"optional": [docs, "n/src/main/java/b/B.java"]}, [], {"passed": True})["dependents"]
+        self.assertEqual((dep["n"], dep["by_kind"]["optional"]["n"], dep["by_kind"]["docs"]["n"], dep["by_kind"]["remote"]["n"]), (1, 2, 0, 0))
+        self.assertEqual(editgrade.grade_edit(opt, [], {"passed": True})["dependents"]["n"], 3)
+        plain = editgrade.grade_edit({k: v for k, v in task.items() if k != "forced_tests"}, [], {"passed": True})["dependents"]
+        self.assertEqual((plain["n"], plain["by_kind"]["tests"]["n"]), (2, 2))  # without a measured record: as before
+        self.assertNotIn("new_tests", plain["by_kind"])
+        repos = {"r": {"name": "r", "commit": "c"}}
+        base = {"id": "t", "repo": "r", "type": "edit", "answer_kind": "diff", "question": "q", "rationale": "r", **task}
+        self.assertEqual(check_tasks([base], repos, check_evidence=False), [])
+        self.assertTrue(any("optional must name" in p for p in check_tasks([base | {"optional": ["m/src/main/java/a/A.java"]}], repos, check_evidence=False)))
+        for bad in ("m/src/test/java/a/RenamedTests.java", "m/src/main/java/a/A.java"):  # new, not a test
+            self.assertTrue(any("forced_tests must name" in p for p in check_tasks([base | {"forced_tests": [bad]}], repos, check_evidence=False)))
+
     def test_comment_and_build_dependents_are_reported_apart(self):
         task = {"strata": {}, "primary_files": ["m/src/main/java/a/A.java"], "gold_files": [
             {"path": "m/src/main/java/a/A.java", "status": "M"}, {"path": "n/src/main/java/b/B.java", "status": "M"},
@@ -428,6 +482,11 @@ class Isolation(unittest.TestCase):
         def run(event):
             return subprocess.run([sys.executable, "-I", str(script), "isolated-hook", "--root", str(self.root),
                                    "--search", "no", "--allow-json", "[]"], input=event, capture_output=True, text=True)
+        no = json.loads(run(json.dumps({"tool_name": "Bash", "tool_input": {"command": "curl x"}, "cwd": str(self.root)})).stdout)
+        offered = no["hookSpecificOutput"]["permissionDecisionReason"].split("Bash allows ")[1].split(", and Gradle")[0].split(", ")
+        self.assertNotIn("cd", offered)  # the prompt says not to use it; the hook still lets it through
+        self.assertIn("cp", offered)
+        self.assertTrue(bashcmd.isolated_bash("cd spring-core", [], str(self.root), str(self.root), False)[0])
         ok = run(json.dumps({"tool_name": "Read", "tool_input": {"file_path": "a.java"}, "cwd": str(self.root)}))
         self.assertEqual((ok.returncode, ok.stdout), (0, ""))
         for event in (json.dumps({"tool_name": "Read", "tool_input": {"file_path": str(self.secret / "f")},
@@ -628,6 +687,34 @@ class Isolation(unittest.TestCase):
         import ast  # the audit must not share the hook's parser
         names = {n.module for n in ast.walk(ast.parse(Path(isolation.__file__).read_text())) if isinstance(n, ast.ImportFrom)}
         self.assertNotIn("bashcmd", names)
+
+    def test_audit_counts_claude_codes_own_refusals_and_api_stalls(self):
+        """#183: what Claude Code's permission layer refused, not the hook, and answers that stopped arriving."""
+        from aeval import isolation
+        no = "Permission to use Bash has been denied because Claude Code is running in don't ask mode. IMPORTANT: ..."
+        use = lambda i, name, inp: {"type": "assistant", "timestamp": f"2026-11-24T07:00:0{i}Z", "message": {"content": [  # noqa: E731
+            {"type": "tool_use", "id": i, "name": name, "input": inp}]}}
+        said = lambda i, text, error=True: {"type": "user", "timestamp": f"2026-11-24T07:00:0{i}.500Z", "message": {"content": [  # noqa: E731
+            {"type": "tool_result", "tool_use_id": i, "content": text, "is_error": error}]}}
+        events = [
+            use("1", "Bash", {"command": "cd a && sed -n 1,2p B.java"}), {"type": "system", "subtype": "permission_denied", "tool_use_id": "1"}, said("1", no),
+            use("2", "Bash", {"command": "grep -n x abcd.java"}), said("2", [{"type": "text", "text": no}]),  # without the event; no `cd`
+            use("3", "Bash", {"command": "cd ..; ls"}), said("3", "PreToolUse:Bash hook error: " + bashcmd.ISOLATED_MARKER + " x"),
+            use("4", "Bash", {"command": "grep -rn 'denied' ."}), said("4", "a.java: Permission to use Bash has been denied", False),
+            {"type": "assistant", "timestamp": "2026-11-24T07:03:04.500Z", "error": "server_error", "is_api_error_message": True, "api_error": "stream_idle_timeout",
+             "message": {"model": "<synthetic>", "content": [{"type": "text", "text": "API Error: The response stopped arriving."}]}},
+            {"type": "assistant", "timestamp": "2026-11-24T07:03:10Z", "error": "overloaded", "is_api_error_message": True, "message": {"content": []}},
+            {"type": "system", "subtype": "api_retry"}, {"type": "stream_event", "message": "text"}, ["x"]]
+        path = self.root.parent / "t2.jsonl"
+        path.write_text("".join(json.dumps(e) + "\n" for e in events))
+        a = isolation.audit(str(path), str(self.root))
+        self.assertEqual((a["claude_refusals"], a["claude_refusals_cd"], a["refused_calls"]), (2, 1, 1))
+        self.assertEqual([x.split(":")[0] for x in a["claude_refused"]], ["Bash", "Bash"])
+        self.assertEqual((a["api_errors"], a["api_error_names"], a["api_stalls"], a["api_stall_s"], a["api_retries"]),
+                         (2, ["stream_idle_timeout", "overloaded"], 1, 180.0, 1))
+        self.assertFalse(a["flagged"])
+        s = isolation.summarise([{"condition": "none", "isolation_audit": a}, {"condition": "none", "isolation_audit": a}])
+        self.assertIn("| 4 (2) | 4 | 2 | 360 |", "\n".join(isolation.report_lines(s)))
 
     def test_parser_accounts_for_everything_or_refuses(self):
         rule = [{"prefix": "./gradlew", "args": commit_replay.GRADLE_ARGS}]
@@ -998,7 +1085,12 @@ class TaskFile(unittest.TestCase):
                         self.assertNotRegex(t["question"], rf"(?<![A-Za-z.]){cls}(?![A-Za-z])", t["id"])
                 self.assertIn("-Dhttps.proxyHost=127.0.0.1", r["session_env"]["GRADLE_OPTS"])
                 self.assertEqual(r["session_env"]["DEVELOCITY_CACHE_SERVER"], "http://127.0.0.1:9")
-                self.assertIn("--offline --no-scan --no-build-cache", build_prompt(t, r))
+                prompt = build_prompt(t, r)
+                self.assertIn("--offline --no-scan --no-build-cache", prompt)
+                self.assertIn("name files by paths relative to the working copy and do not use `cd`", prompt)
+                rest = prompt.replace(t["question"], "").lower()
+                for word in (" doc", " test ", "tests "):  # what the metric counts is not asked for (Gradle's `test` task aside)
+                    self.assertNotIn(word, rest.replace(":test --tests", ""), t["id"])
                 q = t["question"].lower()
                 for word in ("framework-docs", ".adoc", ".java", "src/main", "src/test"):
                     self.assertNotIn(word, q, (t["id"], word))

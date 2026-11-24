@@ -1,0 +1,2237 @@
+{
+ "description": "#183: which test files of each replayed commit the change itself forces, measured by `agent_eval.py forced-tests` (aeval/forced.py). JDK: groundtruth/jdk_ipv4.json; dependencies: ~/.cache/gradle-ro (README).",
+ "tasks": {
+  "api-version-deprecation-handler-handler-arg": {
+   "commit": "cd67010518675a67c15d8e3cd5245e43e3f16835",
+   "files": {
+    "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 1
+      },
+      "P": {
+       "failed": [],
+       "run": 1
+      }
+     },
+     "evidence": [
+      "line 56: method handleVersion in class StandardApiVersionDeprecationHandler cannot be applied to given types;"
+     ],
+     "forced": true,
+     "gold_sha256": "eb3bf1aaf7b5346b06194b9d1a4bf95e57c90bfc8dd0b6a85f3bbe6f37c034eb",
+     "outcome": "compile",
+     "parent_sha256": "f08622546d2e11797fa7bda2a3112199455e0ebfb2af44e8f12394e4b850fa39",
+     "status": "M"
+    },
+    "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 1
+      },
+      "P": {
+       "failed": [],
+       "run": 1
+      }
+     },
+     "evidence": [
+      "line 57: method handleVersion in class StandardApiVersionDeprecationHandler cannot be applied to given types;"
+     ],
+     "forced": true,
+     "gold_sha256": "e83b9722e68e4994bf22234cd7790d2f8955ec83a00cdbb8463629cc4ca15b58",
+     "outcome": "compile",
+     "parent_sha256": "00959631e734a11e1004efc288812ce056de9ed50eaf5d41c1d67738e6ffdf6d",
+     "status": "M"
+    }
+   },
+   "gold_commit": "b128f59714b071e9b4d8a1ae9cdc63f3ff62251f",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:19:33Z",
+   "state_sha256": "99f97e269e7eaf4f5d17c25ad18b9c05cda1c164d48797e9f655fe37ef3b6795",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "failure": "compile",
+     "log_sha256": "50ebe80f82c53f5ed1f5d7a8587722b067f39550d6f4b82ef4aecd5bad3579e3",
+     "returncode": 1,
+     "seconds": 146.34,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "failure": null,
+     "log_sha256": "09476cc6548eefdd1cc5992ea4ead7b1fbaca181389adb2961ccb4a87b58c14b",
+     "returncode": 0,
+     "seconds": 34.34,
+     "step": "X1",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.accept.StandardApiVersionDeprecationHandlerTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.accept.StandardApiVersionDeprecationHandlerTests",
+     "failure": null,
+     "log_sha256": "74010d1ac3c7d09d0310e34fd64eb8683af0919e9a6b212e0fec96475dcce24f",
+     "returncode": 0,
+     "seconds": 14.3,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.accept.StandardApiVersionDeprecationHandlerTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.accept.StandardApiVersionDeprecationHandlerTests",
+     "failure": null,
+     "log_sha256": "50b71c2b4eee66badebd5d7d3101d78db59324445227af84c47436b10dbab225",
+     "returncode": 0,
+     "seconds": 43.25,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "bean-provider-parameterized-type-reference": {
+   "commit": "6503f354047d9252b85b41e35cb09935e126ca4e",
+   "files": {
+    "spring-beans/src/test/java/org/springframework/beans/factory/support/BeanFactoryGenericsTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.factory.support.BeanFactoryGenericsTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 47
+      },
+      "P": {
+       "failed": [],
+       "run": 47
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "3d93832c553d30c5c34c38f132b9904a9c54401302103bbaea668779d9c5fc3f",
+     "outcome": "passes",
+     "parent_sha256": "8b5b730279e86b52f5027643997d4d8f5758ee0333e9a78e5256825bb5f5bf5e",
+     "status": "M",
+     "tests_run": 47
+    }
+   },
+   "gold_commit": "2e4ca413829f279f7ce3aa637582cb8b97b9b3ca",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:23:35Z",
+   "state_sha256": "b7c9bfeeec1acba4ba073abc5fd18430bf588ef19916017e3b24635eeb08a038",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:compileJava :spring-beans:compileTestJava :spring-context:compileJava :spring-context:compileTestJava :spring-test:compileJava :spring-test:compileTestJava",
+     "failure": null,
+     "log_sha256": "7a9f02974bf531015566945e087d1eef8f1d126daa888f9416c4d5b881172885",
+     "returncode": 0,
+     "seconds": 137.58,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.factory.support.BeanFactoryGenericsTests",
+     "failure": null,
+     "log_sha256": "8f1ee81cc615ae465d4657a2fd8c72e5c27490c1f554ecfccd35ae01b823e592",
+     "returncode": 0,
+     "seconds": 10.15,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.factory.support.BeanFactoryGenericsTests",
+     "failure": null,
+     "log_sha256": "042ddeb3c09e120b8b9bad556fe8f1ebd4be093b1a54d29684912e89c5a7522c",
+     "returncode": 0,
+     "seconds": 15.35,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.factory.support.BeanFactoryGenericsTests",
+     "failure": null,
+     "log_sha256": "056a30ae6b5cf11d5c15ac1bacc65c2eaf0191c3d7a3038d5bf88c86109b62aa",
+     "returncode": 0,
+     "seconds": 27.64,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "beans-max-nested-path-depth": {
+   "commit": "33988a4621349b8522e94b2eadde4f28a2844065",
+   "files": {
+    "spring-beans/src/test/java/org/springframework/beans/AbstractPropertyAccessorTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --rerun --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 228
+      },
+      "P": {
+       "failed": [],
+       "run": 227
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "d59bfffa942b6e27ef9e674eb5063251984e3253fca4033a97d7c23122154594",
+     "outcome": "passes",
+     "parent_sha256": "e54020836c18f0e0fa16d1acfa68ab09604721044ff56c0cee26be2782f27f4d",
+     "status": "M",
+     "tests_run": 227
+    },
+    "spring-beans/src/test/java/org/springframework/beans/BeanWrapperTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --rerun --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 121
+      },
+      "P": {
+       "failed": [],
+       "run": 120
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "eb9ad75e1b53e1f677074a48c9d33d77b4e24fb7a15945d852b494a31b3a5391",
+     "outcome": "passes",
+     "parent_sha256": "e25b5d8963e849b57e5b07fbdfe6b0941549f68249f12447d5df4488398f9206",
+     "status": "M",
+     "tests_run": 120
+    },
+    "spring-context/src/test/java/org/springframework/validation/DataBinderConstructTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --rerun --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 18
+      },
+      "P": {
+       "failed": [],
+       "run": 16
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "64f9cb56171c8fa2c6e98532b56c70ed1e1f111bf8d893a75f6f23e01f826a60",
+     "outcome": "passes",
+     "parent_sha256": "945e5948c92b4eadbb9bca01170a5660a1231ef0f6f4a8968a9497b0fa7f01a0",
+     "status": "M",
+     "tests_run": 16
+    },
+    "spring-context/src/test/java/org/springframework/validation/DataBinderFieldAccessTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --rerun --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 8
+      },
+      "P": {
+       "failed": [],
+       "run": 7
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "dcc464bb138d157150c8b87d9fad03d8af71511cd22991e6ccd48cdf2a49d27d",
+     "outcome": "passes",
+     "parent_sha256": "9a12f046af7cb63e9d8625b2777d5ad16f4979935ce11554d1d40544d10cc53a",
+     "status": "M",
+     "tests_run": 7
+    },
+    "spring-context/src/test/java/org/springframework/validation/DataBinderTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --rerun --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 84
+      },
+      "P": {
+       "failed": [],
+       "run": 81
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "0c5670d8beed94ddf608dfe67e1bdcf3f64d9eee10cbeb7a7b9f078140a2389d",
+     "outcome": "passes",
+     "parent_sha256": "55b25cae2e2a18e5f6e668070ede5867f469e6df63ef479e551e260a6d897055",
+     "status": "M",
+     "tests_run": 81
+    }
+   },
+   "gold_commit": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:34:26Z",
+   "state_sha256": "a758e35c4313d174204dda780347682b8fe961ef43ea9e1874a906abc6613930",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:compileJava :spring-beans:compileTestJava :spring-context:compileJava :spring-context:compileTestJava",
+     "failure": null,
+     "log_sha256": "9fd8463688b087b634d1fd1ec2009618d7ff8fd640e9d75cd7c88a43cff64d13",
+     "returncode": 0,
+     "seconds": 83.03,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --rerun --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+     "failure": null,
+     "log_sha256": "ed09c5c8bcb926a6227be49bb5fd0806fdef99abc2d620d6243652acde2463b9",
+     "returncode": 0,
+     "seconds": 11.09,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --rerun --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+     "failure": null,
+     "log_sha256": "8f998495e1cda50a8fd76ac68aa9d5436cea76348c607b5a120b9bee069ddb6e",
+     "returncode": 0,
+     "seconds": 13.1,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:test --rerun --tests org.springframework.beans.BeanWrapperTests --tests org.springframework.beans.DirectFieldAccessorTests :spring-context:test --rerun --tests org.springframework.validation.DataBinderConstructTests --tests org.springframework.validation.DataBinderFieldAccessTests --tests org.springframework.validation.DataBinderTests",
+     "failure": null,
+     "log_sha256": "7feaeb9fcde31c5b84b39fea0612d8a05b269eab2eddb0bcc35ba373bb9d614e",
+     "returncode": 0,
+     "seconds": 24.53,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "client-builders-deep-copy-default-headers-cookies": {
+   "commit": "0c575d443dbdff69349a2369f40491c002dc2c96",
+   "files": {
+    "spring-test/src/test/java/org/springframework/test/web/reactive/server/MockServerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.web.reactive.server.MockServerTests :spring-web:test --rerun --tests org.springframework.web.client.RestClientBuilderTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.function.client.DefaultWebClientTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 6
+      },
+      "P": {
+       "failed": [],
+       "run": 4
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "74ceacd00f85d4c7a14cdd5a3c5670f15a7d40200841c97f5ac9dbe668634518",
+     "outcome": "passes",
+     "parent_sha256": "5ea088798074311a46f2c0615cc11fd6b127bbf15c31cc6967a9c92cfd447033",
+     "status": "M",
+     "tests_run": 4
+    },
+    "spring-web/src/test/java/org/springframework/web/client/RestClientBuilderTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.web.reactive.server.MockServerTests :spring-web:test --rerun --tests org.springframework.web.client.RestClientBuilderTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.function.client.DefaultWebClientTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 19
+      },
+      "P": {
+       "failed": [],
+       "run": 18
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "3a0653de91e98f8ac1a5a5a9ee8a5bc8532a53d52f15ec04bba8a54535c309db",
+     "outcome": "passes",
+     "parent_sha256": "0abc72134454db55590cfccd7d9baa8a7f5dcb5900552fa18f44e59f4dc00106",
+     "status": "M",
+     "tests_run": 18
+    },
+    "spring-webflux/src/test/java/org/springframework/web/reactive/function/client/DefaultWebClientTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.web.reactive.server.MockServerTests :spring-web:test --rerun --tests org.springframework.web.client.RestClientBuilderTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.function.client.DefaultWebClientTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 26
+      },
+      "P": {
+       "failed": [],
+       "run": 25
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "f6f927f209ebff7e8b94f57c08ed59f6dd1f363a367132b7502d22c94c24b6c2",
+     "outcome": "passes",
+     "parent_sha256": "957b10067896ab4a702fe6ade6c67fc0767855a62e277a55db48da155aea6d49",
+     "status": "M",
+     "tests_run": 25
+    }
+   },
+   "gold_commit": "4cf6335372556d4f6ccc3a0166318c5f19037e8f",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:04:20Z",
+   "state_sha256": "a528d32d4eb6604f64dfac4532c824420fde7319f4dbe42c7e115dcec5c14608",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:compileJava :spring-test:compileTestJava :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava",
+     "failure": null,
+     "log_sha256": "d0f4f4567cbb630d7a1fea8f0d8379c3e598e11d76a3c3c67f79987b6309f4d2",
+     "returncode": 0,
+     "seconds": 131.4,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.web.reactive.server.MockServerTests :spring-web:test --rerun --tests org.springframework.web.client.RestClientBuilderTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.function.client.DefaultWebClientTests",
+     "failure": null,
+     "log_sha256": "05febd66b20a738cb071753e957687f95b0e9e70f776fea6540c70889b982be3",
+     "returncode": 0,
+     "seconds": 14.34,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.web.reactive.server.MockServerTests :spring-web:test --rerun --tests org.springframework.web.client.RestClientBuilderTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.function.client.DefaultWebClientTests",
+     "failure": null,
+     "log_sha256": "1b97f98edad43a1cdf6338c12edb8543d4ee785c4c6abfe6915c522ea4056aaf",
+     "returncode": 0,
+     "seconds": 15.69,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.web.reactive.server.MockServerTests :spring-web:test --rerun --tests org.springframework.web.client.RestClientBuilderTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.function.client.DefaultWebClientTests",
+     "failure": null,
+     "log_sha256": "fd0540ca077350c4b36af506429d73c2c7aa3980da4f29cff389635af0f1cf97",
+     "returncode": 0,
+     "seconds": 20.52,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "content-negotiation-no-fallback-mapping": {
+   "commit": "b6fdd4317e8086b02ecb8a5c7d62e5397d0ddda0",
+   "files": {
+    "spring-web/src/test/java/org/springframework/web/accept/MappingContentNegotiationStrategyTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.accept.MappingContentNegotiationStrategyTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.accept.ParameterContentTypeResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 6
+      },
+      "P": {
+       "failed": [],
+       "run": 5
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "86e6dd682b7b930cf234fa920205ee06aa7c1a235316266ec4376820d9e5b3c7",
+     "outcome": "passes",
+     "parent_sha256": "4ee530321edc920b00ab470d3a19e44e3436a43e3a52bbee63b0d75e6d623aea",
+     "status": "M",
+     "tests_run": 5
+    },
+    "spring-webflux/src/test/java/org/springframework/web/reactive/accept/ParameterContentTypeResolverTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.accept.MappingContentNegotiationStrategyTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.accept.ParameterContentTypeResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 8
+      },
+      "P": {
+       "failed": [],
+       "run": 5
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "f8b0adce5b6afdab8948d1a3a9a3d243427ef3b45be7cf223235f437f9bb5e57",
+     "outcome": "passes",
+     "parent_sha256": "c58e2ddd85bb7f87bb2a98b1fc66b04137c136e1fc43ee5dfdd5e785b2161e84",
+     "status": "M",
+     "tests_run": 5
+    }
+   },
+   "gold_commit": "7fbdbd6eb7665be6a66562d26b26ffcfb600ee32",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:01:45Z",
+   "state_sha256": "949005e1ad14fd2b45d017e7634cc221482edacdeec7ad6e591231c1dec88c2a",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava",
+     "failure": null,
+     "log_sha256": "64a9cb82fe0d3c2a8277ec634431e7a06c05fecf55175d672fa3b2504cd6e3f0",
+     "returncode": 0,
+     "seconds": 108.2,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.accept.MappingContentNegotiationStrategyTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.accept.ParameterContentTypeResolverTests",
+     "failure": null,
+     "log_sha256": "d2047d33a688d0a38f3e263f289fd97a1675987c997dd41ebf6b458792d2c3ec",
+     "returncode": 0,
+     "seconds": 13.13,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.accept.MappingContentNegotiationStrategyTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.accept.ParameterContentTypeResolverTests",
+     "failure": null,
+     "log_sha256": "09bce7491036ccca720b43efeaf363f98444fceef73f273c262ccbaccaef95e5",
+     "returncode": 0,
+     "seconds": 13.98,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.accept.MappingContentNegotiationStrategyTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.accept.ParameterContentTypeResolverTests",
+     "failure": null,
+     "log_sha256": "6f51d668a00540b0cc30a95ba21a0e28017c5235b027fbe3590383677ffdc622",
+     "returncode": 0,
+     "seconds": 15.02,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "deferred-bean-registrar-contains-bean": {
+   "commit": "99e7543a7faefb0b22a5cfb3e308e2b7e9075e61",
+   "files": {
+    "spring-context/src/test/java/org/springframework/context/annotation/beanregistrar/BeanRegistrarConfigurationTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.annotation.beanregistrar.BeanRegistrarConfigurationTests --tests org.springframework.context.support.GenericApplicationContextTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 10
+      },
+      "P": {
+       "failed": [],
+       "run": 6
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "e2930b2bc8bac0ecdbdb40ad53f801a1c08d3fdfbda174d1d794a9f9f140a728",
+     "outcome": "passes",
+     "parent_sha256": "30ed406dbe4da1597746a653cabf8ae3c93c653eeb8e102919d192edfe4fae9e",
+     "status": "M",
+     "tests_run": 6
+    },
+    "spring-context/src/test/java/org/springframework/context/support/GenericApplicationContextTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.annotation.beanregistrar.BeanRegistrarConfigurationTests --tests org.springframework.context.support.GenericApplicationContextTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 42
+      },
+      "P": {
+       "failed": [],
+       "run": 38
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "e1359b28b5b075904316cdc76fc8a5cf1dd5f1eea8edaf3ccd6d1d5c00d0a200",
+     "outcome": "passes",
+     "parent_sha256": "61fc55224cc6bd02db737250af77af7620ba03e35bb2fabd33e07ebf85d936a7",
+     "status": "M",
+     "tests_run": 38
+    },
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/beans/factory/MyDeferredBeanRegistrar.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "dc5bf0c6b38058649048d4adc909c7d07156984ff4e4a0a0f06a0d094f194944",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    },
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/beans/factory/MyRegularBeanRegistrar.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "eb4c6367b9c1ad921d7699dfaac4014d8262ebb098dd945ee6c6508c9375a710",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    },
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/MyDeferredBeanRegistrarConfiguration.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "54938bbce6ff7f69071b1c8e437d548b3e60149bc25b8afafa28e524d59c6e3e",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    },
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/MyRegularBeanRegistrarConfiguration.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "feb45bb0303ab3c8fe543f51d7fb635f06f4d463adf9c10645d43e8f504180c6",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    },
+    "spring-context/src/testFixtures/java/org/springframework/context/testfixture/context/annotation/registrar/TestBeanConfiguration.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "a4877aa0246fb08d3f19d7d2fc55f4d93e99032a1c160d1c2e1df06bf190afe9",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    }
+   },
+   "gold_commit": "7502b923922d02109b5a3c861033715f973dc3cd",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:17:03Z",
+   "state_sha256": "a7b973b24fd6eccb5bc94a6a0d309829a32ada0fe308f21b6ebc744e24607f36",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-beans:compileJava :spring-beans:compileTestJava :spring-context:compileJava :spring-context:compileTestJava",
+     "failure": null,
+     "log_sha256": "250e7c6f4e1aea0a8d409c1bc0fcace0f49d334d721537896208e2edb8dd0a17",
+     "returncode": 0,
+     "seconds": 95.86,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.annotation.beanregistrar.BeanRegistrarConfigurationTests --tests org.springframework.context.support.GenericApplicationContextTests",
+     "failure": null,
+     "log_sha256": "6e0ad5e5e776369044f5ebe461410969d5e9722ffaf8a61a1aad88c3112c3a38",
+     "returncode": 0,
+     "seconds": 10.74,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.annotation.beanregistrar.BeanRegistrarConfigurationTests --tests org.springframework.context.support.GenericApplicationContextTests",
+     "failure": null,
+     "log_sha256": "215fc05512926627457689a1780e526cfbbdf342ce429b93c5a86d91d96669f7",
+     "returncode": 0,
+     "seconds": 13.36,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.annotation.beanregistrar.BeanRegistrarConfigurationTests --tests org.springframework.context.support.GenericApplicationContextTests",
+     "failure": null,
+     "log_sha256": "2fe8e312b9c28f476daafc87d53c9ac3e498c7cdab22e94fd489cadd5a4105a4",
+     "returncode": 0,
+     "seconds": 26.32,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "error-response-interceptor-with-request": {
+   "commit": "7ae82b88d608ddb83cc891a140598714c9c34f9d",
+   "files": {
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseBodyResultHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 5
+      },
+      "P": {
+       "failed": [],
+       "run": 4
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "5ed6ee8b254370d80a190f2d816a63455d0a61bf3aaf7392ed11affa254b5719",
+     "outcome": "passes",
+     "parent_sha256": "9a154cbdf7ce6716e5d84dd5a41bdb3d21408773adeae164f8ed47a9c59c6524",
+     "status": "M",
+     "tests_run": 4
+    },
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityResultHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 23
+      },
+      "P": {
+       "failed": [],
+       "run": 22
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "8bd4bea467c46091c8d6260acb67d968bd17e118788f10cb13ceef69f0333411",
+     "outcome": "passes",
+     "parent_sha256": "5d01183c92cbdc6892cf44a55b52a92d732511b88a7224477087c5d0b4ea38b1",
+     "status": "M",
+     "tests_run": 22
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 10
+      },
+      "P": {
+       "failed": [],
+       "run": 9
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "7b6a2dc5bde474bbca2a82ddd7c3de95370c4f9305a823c6d4bc2afba44b2005",
+     "outcome": "passes",
+     "parent_sha256": "e8e35e1d920c97036623bc22ca551caf56bfaf4ad4a9de16620fc7796f9ab387",
+     "status": "M",
+     "tests_run": 9
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/RequestResponseBodyMethodProcessorTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 52
+      },
+      "P": {
+       "failed": [],
+       "run": 51
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "afb725bcbb4a5a3c8f4920b3e4558ba48d59d50b13e7a59cb522673d06be338d",
+     "outcome": "passes",
+     "parent_sha256": "ea2236466f25b34fe029a077cd7b3c2b74a6d843022e567bb24cf72a1481eb1b",
+     "status": "M",
+     "tests_run": 51
+    }
+   },
+   "gold_commit": "d70220eb5de0e10211e1a843b292cc54bed0c365",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:11:16Z",
+   "state_sha256": "79d9a01a39ca98db5432aef4171d6e35810be292e5f478f946903ff16f5387e6",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "failure": null,
+     "log_sha256": "8cf3d088e3e80b0ac5c4ef7905a873810390e2da03008bfa748f5a1eb4f43f02",
+     "returncode": 0,
+     "seconds": 124.72,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+     "failure": null,
+     "log_sha256": "4df48ec514cf8146a0eb4696248e3781450b54a7b779e3b0fe9436dd874ab2e7",
+     "returncode": 0,
+     "seconds": 14.74,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+     "failure": null,
+     "log_sha256": "7deccd7416b6c18f628ec6c0f7291359ca16209437bb98a5d988246d24625d74",
+     "returncode": 0,
+     "seconds": 15.2,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseBodyResultHandlerTests --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityResultHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorTests --tests org.springframework.web.servlet.mvc.method.annotation.RequestResponseBodyMethodProcessorTests",
+     "failure": null,
+     "log_sha256": "dd8b9782ab835a27c31313e51636b0678a6773ed66231bb5fd955ebab4d77d79",
+     "returncode": 0,
+     "seconds": 27.43,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "form-converter-map-payloads": {
+   "commit": "abc3cfc7be0ef6dc051e26876b635c1a72ae1ae2",
+   "files": {
+    "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:compileJava :spring-test:compileTestJava :spring-web:compileJava :spring-web:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 13
+      },
+      "P": {
+       "failed": [],
+       "run": 9
+      }
+     },
+     "evidence": [
+      "line 103: incompatible types: Object cannot be converted to MultiValueMap<String,String>"
+     ],
+     "forced": true,
+     "gold_sha256": "fbccc2351de05dfa66d907c6fe7b95fb8afd2136c40ed3141ac10627c5283ef3",
+     "outcome": "compile",
+     "parent_sha256": "afae8f7d828f880a7a3ef70250b57e8cb5dff7f97e703a1c8e55a9cfb347bf22",
+     "status": "M"
+    }
+   },
+   "gold_commit": "ab8de8ec4b004e80979af6e4391e28a8a5da4f8e",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:42:02Z",
+   "state_sha256": "c2b4564672aae9a91ba5385176f2a08860964aaeb3d959d5d57b9b5454d99d29",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:compileJava :spring-test:compileTestJava :spring-web:compileJava :spring-web:compileTestJava",
+     "failure": "compile",
+     "log_sha256": "b63f15ca9039fea2741b1fd1f365070e130c98d7f0b7d2435b812c1ed9aa419a",
+     "returncode": 1,
+     "seconds": 134.11,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:compileJava :spring-test:compileTestJava :spring-web:compileJava :spring-web:compileTestJava",
+     "failure": null,
+     "log_sha256": "d9481dcf181a9de2dd1a157698c9ea9132fb7c8719cc353fbe84bc913c9cacdd",
+     "returncode": 0,
+     "seconds": 17.26,
+     "step": "X1",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.converter.FormHttpMessageConverterTests",
+     "failure": null,
+     "log_sha256": "24aa467e22c80effa16cbbaae43565eb6df7e785ed55fb3c88d85932a61ea75a",
+     "returncode": 0,
+     "seconds": 11.24,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.converter.FormHttpMessageConverterTests",
+     "failure": null,
+     "log_sha256": "8cb75d6f4dcebfec64920f631edccb3462bc8fe777e7e5f17167b760e75eb352",
+     "returncode": 0,
+     "seconds": 14.16,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "http-range-honor-if-range": {
+   "commit": "749aa1f6a9bd70b637f01b0e2dceb1103cd1c5f1",
+   "files": {
+    "spring-web/src/test/java/org/springframework/http/HttpRangeTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 23
+      },
+      "P": {
+       "failed": [],
+       "run": 17
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "303183ccd44c5037a22c61ad63a014816a83f830cfc398ac094809869be78505",
+     "outcome": "passes",
+     "parent_sha256": "fb4b895d4255990664dc907e365c54ab46e0be262de776f7ecb54da9e12955db",
+     "status": "M",
+     "tests_run": 17
+    },
+    "spring-web/src/test/java/org/springframework/http/codec/ResourceHttpMessageWriterTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 8
+      },
+      "P": {
+       "failed": [],
+       "run": 7
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "5971a3ba66437ec217f24475b36be6b903a88eac2cd5a8b523d0144c3a47136f",
+     "outcome": "passes",
+     "parent_sha256": "674328ef7bf65e7e7ed89f305ff17398de5a8ff07ed17dba74baccd89bf720c0",
+     "status": "M",
+     "tests_run": 7
+    },
+    "spring-webflux/src/test/java/org/springframework/web/reactive/resource/ResourceWebHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 59
+      },
+      "P": {
+       "failed": [],
+       "run": 58
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "4f9f2c392051da26445cf96ebadd287707e90c77a844f78d114470b0b83cf3f4",
+     "outcome": "passes",
+     "parent_sha256": "bd73a6500f30b99a32b7bc6fe97aee951f352d7a11a8aa54f581a08059d74801",
+     "status": "M",
+     "tests_run": 58
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/function/ResourceHandlerFunctionTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 7
+      },
+      "P": {
+       "failed": [],
+       "run": 5
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "b279932e74c04300cb2948db04c1dad834d199a22b826fc380c2594ea4dcadf4",
+     "outcome": "passes",
+     "parent_sha256": "04f60eeb02373e5bdb53a6458eace26beae5874badf816d8638559d1879d79dd",
+     "status": "M",
+     "tests_run": 5
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/HttpEntityMethodProcessorMockTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 43
+      },
+      "P": {
+       "failed": [],
+       "run": 41
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "98c5e7d3b8b1b0341f566c4be2654ffabd4b7e0ff823100955c7aedea52fbee3",
+     "outcome": "passes",
+     "parent_sha256": "a646ffa84398223e062ac9e86218bb8afed85263468afca0b45459c98308f648",
+     "status": "M",
+     "tests_run": 41
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/resource/ResourceHttpRequestHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 47
+      },
+      "P": {
+       "failed": [],
+       "run": 45
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "ca718985182d75c0284705477f216a700433a4e195692994e282a04c354d4e35",
+     "outcome": "passes",
+     "parent_sha256": "e9654efd20069a46b520e5e6cab4bf6550b80697776d3a907f2a16182b93d3dc",
+     "status": "M",
+     "tests_run": 45
+    }
+   },
+   "gold_commit": "8ab533263994e92f9660c9917a07cd3d8f8e769b",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:07:26Z",
+   "state_sha256": "87556a893de907bc80cf9037d28bc7b3cd5d4b16669ade12637eae95834210cd",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "failure": null,
+     "log_sha256": "c77408bf0e021d0da48e46f3a208d074b06ef4e33e4af74b020dc5f95e359d6b",
+     "returncode": 0,
+     "seconds": 140.68,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "failure": null,
+     "log_sha256": "e0c9a207992f16eecc9ec32da144c93b924d469698e7098ab7d7a232528b5611",
+     "returncode": 0,
+     "seconds": 17.07,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "failure": null,
+     "log_sha256": "50775e44e4c1e2297c53896db58dcf0bffc5e1182e0c801cae7c171cc94d106c",
+     "returncode": 0,
+     "seconds": 19.89,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.HttpRangeTests --tests org.springframework.http.codec.ResourceHttpMessageWriterTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.resource.ResourceWebHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.function.ResourceHandlerFunctionTests --tests org.springframework.web.servlet.mvc.method.annotation.HttpEntityMethodProcessorMockTests --tests org.springframework.web.servlet.resource.ResourceHttpRequestHandlerTests",
+     "failure": null,
+     "log_sha256": "39c9a0b1f4b71b60a2920cddc20fa708789e06515577b9b71a89ec2b0b1655d1",
+     "returncode": 0,
+     "seconds": 47.83,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "jdbcclient-batch-entry-dsl": {
+   "commit": "223a5562bebba968a4b948cc6cd97a372d3fc6bb",
+   "files": {
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-jdbc:compileJava :spring-jdbc:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 24
+      },
+      "P": {
+       "failed": [],
+       "run": 24
+      }
+     },
+     "evidence": [
+      "line 343: cannot find symbol",
+      "line 370: cannot find symbol",
+      "line 419: cannot find symbol",
+      "... 6 errors"
+     ],
+     "forced": true,
+     "gold_sha256": "b5963997a11f4c0843aa40c77537b2387e87418922db32f7045fdc428a446987",
+     "outcome": "compile",
+     "parent_sha256": "efa6a498ff74481c233850770b41fe36f7c01df31a9d9746686224b636f3c9f0",
+     "status": "M"
+    },
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-jdbc:compileJava :spring-jdbc:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 37
+      },
+      "P": {
+       "failed": [],
+       "run": 29
+      }
+     },
+     "evidence": [
+      "line 159: cannot find symbol",
+      "line 173: cannot find symbol",
+      "line 187: cannot find symbol",
+      "... 18 errors"
+     ],
+     "forced": true,
+     "gold_sha256": "47b72e18d4ad684ed44e9fd77bb278be9e3f6b9ceb038658dca11789c5d734d1",
+     "outcome": "compile",
+     "parent_sha256": "0d28005244a08e1516db19b1463e8bf38c23cdffcfcc0e9b7c3e4a8c95052f0a",
+     "status": "M"
+    },
+    "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-jdbc:compileJava :spring-jdbc:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 26
+      },
+      "P": {
+       "failed": [],
+       "run": 26
+      }
+     },
+     "evidence": [
+      "line 409: cannot find symbol",
+      "line 436: cannot find symbol",
+      "line 485: cannot find symbol",
+      "... 6 errors"
+     ],
+     "forced": true,
+     "gold_sha256": "d4a15e53af3b642a8c7e61564bf3621d3263baaaaef593e4d73b341529192bdb",
+     "outcome": "compile",
+     "parent_sha256": "167498960269b39811738a63ff26e80e5fc69814f10045ca77076aeea15d2054",
+     "status": "M"
+    }
+   },
+   "gold_commit": "833ab4d48fdaf64f7b234f6dac76d4cced14390c",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:52:26Z",
+   "state_sha256": "15b4c1d9f671fb43e8abfd9601127f8a32753de9db8b67f7c71826c070dda4cf",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-jdbc:compileJava :spring-jdbc:compileTestJava",
+     "failure": "compile",
+     "log_sha256": "e91215107c6a69511fe52d1049534705af8d87f0d76a69d513dcc645a4c599da",
+     "returncode": 1,
+     "seconds": 89.35,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-jdbc:compileJava :spring-jdbc:compileTestJava",
+     "failure": null,
+     "log_sha256": "9fb838c8bae370a25ac0d63d2255ab449c86dbb2d3e1296d176e7dcb37dd175f",
+     "returncode": 0,
+     "seconds": 14.07,
+     "step": "X1",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-jdbc:test --rerun --tests org.springframework.jdbc.core.simple.JdbcClientIndexedParameterTests --tests org.springframework.jdbc.core.simple.JdbcClientIntegrationTests --tests org.springframework.jdbc.core.simple.JdbcClientNamedParameterTests",
+     "failure": null,
+     "log_sha256": "ccec223e1d8c20d9675ccba5c63ec46592a0cc1362d4092a7888491508660be2",
+     "returncode": 0,
+     "seconds": 16.47,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-jdbc:test --rerun --tests org.springframework.jdbc.core.simple.JdbcClientIndexedParameterTests --tests org.springframework.jdbc.core.simple.JdbcClientIntegrationTests --tests org.springframework.jdbc.core.simple.JdbcClientNamedParameterTests",
+     "failure": null,
+     "log_sha256": "05ba09be83a3405406bd52047e2d9e2348a90de0ba5e001ea0b856a58248d02b",
+     "returncode": 0,
+     "seconds": 19.78,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "jsonl-media-type-support": {
+   "commit": "e2b9b19970bb88913cfb6530857f964d2b01187a",
+   "files": {
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.view.HttpMessageWriterViewTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 7
+      },
+      "P": {
+       "failed": [],
+       "run": 7
+      }
+     },
+     "evidence": [
+      "HttpMessageWriterViewTests.supportedMediaTypes(): org.opentest4j.AssertionFailedError: "
+     ],
+     "forced": true,
+     "gold_sha256": "c59f5406934dae5b5642ab954043fc5f7727fa3eaf6b513f4a26ae38352482b0",
+     "outcome": "fails",
+     "parent_sha256": "deff7d730b413e02495810eb58527ef8597bb3b3b351b72f3d690cee140b5c3a",
+     "status": "M",
+     "tests_run": 7
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ReactiveTypeHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.view.HttpMessageWriterViewTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 20
+      },
+      "P": {
+       "failed": [],
+       "run": 19
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "e1f75328b07677345fef524727075290115ad1f03a33fca7eb92689ea7784e98",
+     "outcome": "passes",
+     "parent_sha256": "d8043c388f4482ffe367473c86442cf1a573d9c4ed71b3d831d112ddd5930a2f",
+     "status": "M",
+     "tests_run": 19
+    }
+   },
+   "gold_commit": "22e4d84993105c1975d6afe16d34467772c7c676",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:45:04Z",
+   "state_sha256": "460223068681aa7335ca28bebcd0f58ba6e5fee7b443f0fc484d0f59f4b12293",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "failure": null,
+     "log_sha256": "fcbeb847e99a7db67cd185be0f0e9b941648ebef236da2cd8582e55a2dc903e2",
+     "returncode": 0,
+     "seconds": 117.04,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.view.HttpMessageWriterViewTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandlerTests",
+     "failure": "tests",
+     "log_sha256": "6c5f335b07a16d2ee2fc486b7f9401b4ad20e56e83293d93a9b934043d4b62dc",
+     "returncode": 1,
+     "seconds": 13.55,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.view.HttpMessageWriterViewTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandlerTests",
+     "failure": "tests",
+     "log_sha256": "105ab38b543c85e88584f5c8398d1829aa73ad9386190ae23dec8b49b6e7ad01",
+     "returncode": 1,
+     "seconds": 15.92,
+     "step": "XT-again",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.view.HttpMessageWriterViewTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandlerTests",
+     "failure": null,
+     "log_sha256": "883276c0a52d45b23acfca66bf1cec6c0e554dcf50b3f3314f4e5e145853e7dc",
+     "returncode": 0,
+     "seconds": 17.18,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.view.HttpMessageWriterViewTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ReactiveTypeHandlerTests",
+     "failure": null,
+     "log_sha256": "6521c238590b6b8d4a52811b963b3c4af52ec919055c62dbfee7595021eaadb9",
+     "returncode": 0,
+     "seconds": 36.35,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "message-source-default-charset": {
+   "commit": "3c6f1b35ba72c87309e32f591c6afef4294c99c5",
+   "files": {
+    "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.support.ResourceBundleMessageSourceTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 33
+      },
+      "P": {
+       "failed": [],
+       "run": 32
+      }
+     },
+     "evidence": [
+      "ResourceBundleMessageSourceTests.resourceBundleMessageSourceWithInappropriateDefaultCharset(): java.nio.charset.UnsupportedCharsetException: argh"
+     ],
+     "forced": true,
+     "gold_sha256": "6f46e1f149225585011ba00e566f9889dc0b0c24eab678ba1b7f4ba8a66e3ff4",
+     "outcome": "fails",
+     "parent_sha256": "48c63a9e476c7bef76b3113695fe8c10c8df27e5f7a8f32c5eb861a765de5926",
+     "status": "M",
+     "tests_run": 32
+    }
+   },
+   "gold_commit": "02af3e7a17db9f63ced52425d06558eb50deb495",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:26:50Z",
+   "state_sha256": "9e5e1749e52032dc1cb85e23180a48cf341faa011072a17c1deabc4f601597be",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "failure": null,
+     "log_sha256": "aed97a07aee23173b2915c361598c63d0a8f616272a138ec9143bbf0d6cea483",
+     "returncode": 0,
+     "seconds": 98.61,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.support.ResourceBundleMessageSourceTests",
+     "failure": "tests",
+     "log_sha256": "8f216a2e44bd4d9300f977a14c570b6ec65a6d595a98955a624eeab0720bae90",
+     "returncode": 1,
+     "seconds": 12.68,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.support.ResourceBundleMessageSourceTests",
+     "failure": "tests",
+     "log_sha256": "52ba1d7b9f48bbc33cf83db713208ec956eb7169d1a85c5ae828f06f430dd96e",
+     "returncode": 1,
+     "seconds": 14.67,
+     "step": "XT-again",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.support.ResourceBundleMessageSourceTests",
+     "failure": null,
+     "log_sha256": "72929cef2155925f43a7a75ffaaca5efe50871959719bbb137aa725c0c40028f",
+     "returncode": 0,
+     "seconds": 21.76,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.context.support.ResourceBundleMessageSourceTests",
+     "failure": null,
+     "log_sha256": "7f032e237e521d2dbbbf737d06483845dfc9898aa6888d2373ffdb7af5dc3290",
+     "returncode": 0,
+     "seconds": 28.29,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "mime-type-parameter-names-case-insensitive": {
+   "commit": "ee19b96ee9a6ba9264194268e28ebaf9705ff59d",
+   "files": {
+    "spring-core/src/test/java/org/springframework/util/MimeTypeTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-core:test --rerun --tests org.springframework.util.MimeTypeTests :spring-web:test --rerun --tests org.springframework.http.MediaTypeTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 55
+      },
+      "P": {
+       "failed": [],
+       "run": 53
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "9466befe5e0094477644da98cf2789032b30e761e9f63f3134a92ff8696dcdc7",
+     "outcome": "passes",
+     "parent_sha256": "9deacf52defa7e1cac7a0035e618e4e3f767e7b9e31e8257ec726247a6e4f890",
+     "status": "M",
+     "tests_run": 53
+    },
+    "spring-web/src/test/java/org/springframework/http/MediaTypeTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-core:test --rerun --tests org.springframework.util.MimeTypeTests :spring-web:test --rerun --tests org.springframework.http.MediaTypeTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 31
+      },
+      "P": {
+       "failed": [],
+       "run": 28
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "7afbc136f1c79efcd22197bfd2c9c0fd0a0f258e48ac9206fde61069569a54fe",
+     "outcome": "passes",
+     "parent_sha256": "d713bf1b8ca058d6bbb588a247c0b1573783dfddd8a51ae43a5721fed9d63b90",
+     "status": "M",
+     "tests_run": 28
+    }
+   },
+   "gold_commit": "2028eb3694babca20cbcb95a966b50b3e6fe71ca",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:14:24Z",
+   "state_sha256": "857896db1acbc3231aee5ea3d7354829037473ef22037c4ad99f45a798fe1929",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-core:compileJava :spring-core:compileTestJava :spring-web:compileJava :spring-web:compileTestJava",
+     "failure": null,
+     "log_sha256": "4ecd263f7c554bbfe094c38956d1a452f30271ecbe014658fd831bd4d7886ae8",
+     "returncode": 0,
+     "seconds": 100.38,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-core:test --rerun --tests org.springframework.util.MimeTypeTests :spring-web:test --rerun --tests org.springframework.http.MediaTypeTests",
+     "failure": null,
+     "log_sha256": "e631a6e36736f0a9edcd6d932237d063f76645b371078d1852172303c07b2626",
+     "returncode": 0,
+     "seconds": 11.78,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-core:test --rerun --tests org.springframework.util.MimeTypeTests :spring-web:test --rerun --tests org.springframework.http.MediaTypeTests",
+     "failure": null,
+     "log_sha256": "d1ce6d13f6a1316ed7d0fc95f8e625d07ba18b68a871d80b6b7d1ca52d7efd23",
+     "returncode": 0,
+     "seconds": 15.32,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-core:test --rerun --tests org.springframework.util.MimeTypeTests :spring-web:test --rerun --tests org.springframework.http.MediaTypeTests",
+     "failure": null,
+     "log_sha256": "91191cf06665629bacb5dbe4c3cf7fb80f9c1e68e13394c1e1c43bd4ea7947b8",
+     "returncode": 0,
+     "seconds": 27.17,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "observation-record-handled-exception": {
+   "commit": "49678a69abe284fbce7c83de90e4be01925c7474",
+   "files": {
+    "spring-web/src/test/java/org/springframework/web/filter/ServerHttpObservationFilterTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 15
+      },
+      "P": {
+       "failed": [],
+       "run": 12
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "d0ab6e9f1fa7631a3649fb703205641c029d8dd2f8fcf1559c6d4557be8cd05c",
+     "outcome": "passes",
+     "parent_sha256": "249fe701a07d4429b67c9d1eea3d1b3ac6a592b04d5bbbaf0b42aa9552890cd1",
+     "status": "M",
+     "tests_run": 12
+    },
+    "spring-web/src/test/java/org/springframework/web/server/adapter/HttpWebHandlerAdapterObservabilityTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 6
+      },
+      "P": {
+       "failed": [],
+       "run": 4
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "9bc77ebe9f5cf75ac1b13775a842019ba7fb0cb59a6d8599da9ea8d81cd40ac8",
+     "outcome": "passes",
+     "parent_sha256": "8057a06742df7ef06538bcfd7e6fe9aa6de2acecf3363f8d0ded37140782e653",
+     "status": "M",
+     "tests_run": 4
+    },
+    "spring-webflux/src/test/java/org/springframework/web/reactive/result/method/annotation/ResponseEntityExceptionHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 18
+      },
+      "P": {
+       "failed": [],
+       "run": 18
+      }
+     },
+     "evidence": [
+      "ResponseEntityExceptionHandlerTests.serverErrorIsRecordedOnObservation(): java.lang.AssertionError: ",
+      "ResponseEntityExceptionHandlerTests.serverErrorResponseIsRecordedOnObservation(): java.lang.AssertionError: "
+     ],
+     "forced": true,
+     "gold_sha256": "506de73f285b4fb4cabbd3f7abf94776782fd9d5b3ff501b72a58a4f56ca723a",
+     "outcome": "fails",
+     "parent_sha256": "565e597d6ac5a5b7a87eda09a4968f42d673f2b60bb11352ffc107a5336d4838",
+     "status": "M",
+     "tests_run": 18
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/ObservedExchange.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "a7282b1cd2704df3a669386affb16bf33b59b02c619e5ad9b250491c345b830c",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/annotation/ResponseStatusExceptionResolverTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 15
+      },
+      "P": {
+       "failed": [],
+       "run": 15
+      }
+     },
+     "evidence": [
+      "ResponseStatusExceptionResolverTests.serverErrorResponseStatusExceptionIsRecordedOnObservation(): java.lang.AssertionError: ",
+      "ResponseStatusExceptionResolverTests.serverErrorResponseStatusIsRecordedOnObservation(): java.lang.AssertionError: ",
+      "ResponseStatusExceptionResolverTests.nestedServerErrorResponseStatusIsRecordedOnObservation(): java.lang.AssertionError: "
+     ],
+     "forced": true,
+     "gold_sha256": "bd2383071cde4113ffc034870e5fe58b4e37e3839f3caf3be1bd2e3e6e897baf",
+     "outcome": "fails",
+     "parent_sha256": "c3fd651429544c87ebd8bbda2849658aac1d0fe10e272cca3bcca04f2048876b",
+     "status": "M",
+     "tests_run": 15
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverErrorViewTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 16
+      },
+      "P": {
+       "failed": [],
+       "run": 16
+      }
+     },
+     "evidence": [
+      "ExceptionHandlerExceptionResolverErrorViewTests.serverErrorRenderedAsViewIsRecorded(): java.lang.AssertionError: "
+     ],
+     "forced": true,
+     "gold_sha256": "878382f3ecde7c2404a30df13ee78dd1f599724cbce2aa7b2ac9615e7de14a84",
+     "outcome": "fails",
+     "parent_sha256": "b4c3eb058b2670544f607a15748364a6a8dafcc577cf1847836bc285602736b4",
+     "status": "M",
+     "tests_run": 16
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ExceptionHandlerExceptionResolverProblemDetailTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 16
+      },
+      "P": {
+       "failed": [],
+       "run": 16
+      }
+     },
+     "evidence": [
+      "ExceptionHandlerExceptionResolverProblemDetailTests.localExceptionHandlerThatRethrows(): java.lang.AssertionError: ",
+      "ExceptionHandlerExceptionResolverProblemDetailTests.unknownException(): java.lang.AssertionError: ",
+      "ExceptionHandlerExceptionResolverProblemDetailTests.disconnectedClient(): java.lang.AssertionError: "
+     ],
+     "forced": true,
+     "gold_sha256": "a02fc0585a7673a00b2094b9e679c5da9934018ca1cadf9c2cc299ac550aef5c",
+     "outcome": "fails",
+     "parent_sha256": "570b5bc3f3ed59efb6f40d17c472f2a1f2fdce92e68ac759d2220e1c2b3296da",
+     "status": "M",
+     "tests_run": 16
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 37
+      },
+      "P": {
+       "failed": [],
+       "run": 37
+      }
+     },
+     "evidence": [
+      "ResponseEntityExceptionHandlerTests.writeFailureFromLostConnectionIsRecordedOnObservation(): java.lang.AssertionError: ",
+      "ResponseEntityExceptionHandlerTests.serverErrorIsRecordedOnObservation(): java.lang.AssertionError: ",
+      "ResponseEntityExceptionHandlerTests.serverErrorResponseIsRecordedOnObservation(): java.lang.AssertionError: "
+     ],
+     "forced": true,
+     "gold_sha256": "eab7c49384f90b5c941ffb720bb514d3a6b1afc594366eeea9dfc14c03727267",
+     "outcome": "fails",
+     "parent_sha256": "d2f1cd127f659112c4c76826b3327f10961b2480bb60debe06956b97dacbdbd9",
+     "status": "M",
+     "tests_run": 37
+    },
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/support/DefaultHandlerExceptionResolverTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 22
+      },
+      "P": {
+       "failed": [],
+       "run": 22
+      }
+     },
+     "evidence": [
+      "DefaultHandlerExceptionResolverTests.serviceUnavailableErrorResponseIsRecordedOnObservation(): java.lang.AssertionError: ",
+      "DefaultHandlerExceptionResolverTests.serverErrorResponseIsRecordedOnObservation(): java.lang.AssertionError: "
+     ],
+     "forced": true,
+     "gold_sha256": "201e708cb571d7d97ebe8a586818eda1d2762ec17f5e2365c0db5cba26ca48f1",
+     "outcome": "fails",
+     "parent_sha256": "6b102d1d889f2609057654dbbc14993590670ff35122537a17f5ab2fbd71c41e",
+     "status": "M",
+     "tests_run": 22
+    }
+   },
+   "gold_commit": "297c74d29c0704e0879ce121ba3789b677abb9ff",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:38:42Z",
+   "state_sha256": "933ae4eb7d30959402b3727a41cdc63df98ed9d632e0aa6895da1306a69a1c25",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :framework-docs:compileJava :framework-docs:compileTestJava :spring-web:compileJava :spring-web:compileTestJava :spring-webflux:compileJava :spring-webflux:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "failure": null,
+     "log_sha256": "10edbe58c0d332efa5851720112b32df665d1340c4eb213282e056b1ca8829d7",
+     "returncode": 0,
+     "seconds": 116.47,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "failure": "tests",
+     "log_sha256": "4318cc5b862788e1124a009f2a2909bef077aeeeaeb910224edd161c58b3ab93",
+     "returncode": 1,
+     "seconds": 14.6,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "failure": "tests",
+     "log_sha256": "9c30a4b8c5827df8b7b83c1ed6b7f1274897429df2768cc547b0ab90462d3271",
+     "returncode": 1,
+     "seconds": 12.34,
+     "step": "XT-again",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "failure": null,
+     "log_sha256": "ffc03f3d56ba38b5801333906910e02d6a01e191752be70c80fbf683a62a8031",
+     "returncode": 0,
+     "seconds": 14.49,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.web.filter.ServerHttpObservationFilterTests --tests org.springframework.web.server.adapter.HttpWebHandlerAdapterObservabilityTests :spring-webflux:test --rerun --tests org.springframework.web.reactive.result.method.annotation.ResponseEntityExceptionHandlerTests :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.annotation.ResponseStatusExceptionResolverTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverErrorViewTests --tests org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolverProblemDetailTests --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests --tests org.springframework.web.servlet.mvc.support.DefaultHandlerExceptionResolverTests",
+     "failure": null,
+     "log_sha256": "156993cc3ea8ceb2bb94d62545afc6cca0fe868748e734271d7e0e6e5efe16b1",
+     "returncode": 0,
+     "seconds": 37.92,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "retry-max-attempts-to-max-retries": {
+   "commit": "771517dc36735842a129ea3a51738f0b6fcce7bd",
+   "files": {
+    "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 15
+      },
+      "P": {
+       "failed": [],
+       "run": 15
+      }
+     },
+     "evidence": [
+      "line 414: cannot find symbol",
+      "line 359: cannot find symbol"
+     ],
+     "forced": true,
+     "gold_sha256": "9df6742cb892443a224663e8241e53fbfb705f7c881553714e6526fc2b6cd8eb",
+     "outcome": "compile",
+     "parent_sha256": "2ccdb49d5969166d2f8c1abb8c605aa1a5b6d31431d9ca242f6ae3390fbc6ff6",
+     "status": "M"
+    },
+    "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 12
+      },
+      "P": {
+       "failed": [],
+       "run": 12
+      }
+     },
+     "evidence": [
+      "line 324: cannot find symbol",
+      "line 336: cannot find symbol",
+      "line 347: cannot find symbol",
+      "... 7 errors"
+     ],
+     "forced": true,
+     "gold_sha256": "3171f87369e6441baf123962def6c5dfe4743516866f603dcc01266a76b7fbfb",
+     "outcome": "compile",
+     "parent_sha256": "4dce0413213ccc22522d5c509678156929346e60acde5ede36a3734dc53352b9",
+     "status": "M"
+    },
+    "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "controls": {
+      "P": {
+       "failed": [],
+       "run": 4
+      }
+     },
+     "evidence": [
+      "line 42: cannot find symbol",
+      "line 59: cannot find symbol",
+      "line 72: cannot find symbol",
+      "... 4 errors"
+     ],
+     "forced": true,
+     "gold_sha256": null,
+     "outcome": "compile",
+     "parent_sha256": "1115f9cdf0b750c9e0ffe3b8ca08837a2c4edea9005e84867e3e8b7b45dbe0cb",
+     "status": "D"
+    },
+    "spring-core/src/test/java/org/springframework/core/retry/MaxRetriesRetryPolicyTests.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "1b4d16678994e174e3a9c148f0a3c12676fed5801e3d9bcd7d304f1796fd2b31",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    },
+    "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 21
+      },
+      "P": {
+       "failed": [],
+       "run": 21
+      }
+     },
+     "evidence": [
+      "line 69: cannot find symbol",
+      "line 75: cannot find symbol",
+      "line 116: cannot find symbol",
+      "... 4 errors"
+     ],
+     "forced": true,
+     "gold_sha256": "a2b05dfc6c117f68a67c23ec7d56b4f095a9b3d0e9e7fe576979c8f09c318b08",
+     "outcome": "compile",
+     "parent_sha256": "4b35ae9389c3ede89eedc74b4aa1b81c78b66bcf6fb024b8fc91e379b241ba93",
+     "status": "M"
+    },
+    "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 12
+      },
+      "P": {
+       "failed": [],
+       "run": 12
+      }
+     },
+     "evidence": [
+      "line 60: cannot find symbol",
+      "line 119: cannot find symbol",
+      "line 141: cannot find symbol",
+      "... 7 errors"
+     ],
+     "forced": true,
+     "gold_sha256": "8bdd44395ace36708b4d751687f89df9d7091376ea50831152f45b718f49409d",
+     "outcome": "compile",
+     "parent_sha256": "9ff6f0bd3dbf2bbc0c657b9e356b58a9c2e0c5a524037eb5125fa1e3f3292aff",
+     "status": "M"
+    }
+   },
+   "gold_commit": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:31:46Z",
+   "state_sha256": "eb633b7389f5c12795eba55336b47aa6a041b096a91a31fb2fce2c1453298402",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "failure": "compile",
+     "log_sha256": "dafc126a569da159c9e92b90488c5f0297fb5996c0ece510cb5228eece948b16",
+     "returncode": 1,
+     "seconds": 88.53,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "failure": null,
+     "log_sha256": "f37830a655c0db7e524c11c78b2418de9a98579f71b3b16da561adf272670d15",
+     "returncode": 0,
+     "seconds": 22.93,
+     "step": "X1",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.RetryPolicyTests --tests org.springframework.core.retry.RetryTemplateTests",
+     "failure": null,
+     "log_sha256": "eb1ff0c77f7f404df10419b8ac1627a16b77466334f28c6a952d1ae6a6a0f823",
+     "returncode": 0,
+     "seconds": 11.8,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.MaxAttemptsRetryPolicyTests --tests org.springframework.core.retry.RetryPolicyTests --tests org.springframework.core.retry.RetryTemplateTests",
+     "failure": null,
+     "log_sha256": "631f68f301beab0d2bff2ffc59f5cff6fbd3f8db55639a5074391f8c8ffda747",
+     "returncode": 0,
+     "seconds": 33.37,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "retryable-method-retry-event": {
+   "commit": "fc1ff88ede379eab3796b5645695c846d3c36180",
+   "files": {
+    "spring-context/src/test/java/org/springframework/resilience/MethodRetryEventListener.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "3991b9238ecaa284c2a63b44e66896b13953872852d2da20c57bc306bdc330ce",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    },
+    "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.RetryTemplateTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 22
+      },
+      "P": {
+       "failed": [],
+       "run": 21
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "3b3d6850dd6cc98bf8093ca8e6410d8f5ad897f3c85b6fa418b8e05361858419",
+     "outcome": "passes",
+     "parent_sha256": "16589083bb46713227708b07386e41249d7158bdec3bb61cbff7e267838606fe",
+     "status": "M",
+     "tests_run": 21
+    },
+    "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.RetryTemplateTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 21
+      },
+      "P": {
+       "failed": [],
+       "run": 20
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "e040e1b1e54de6418c8f6e46af0263c45fb5ef118d01e159cd88f2ae7964ed20",
+     "outcome": "passes",
+     "parent_sha256": "19a95e0d27f626ec0f7bc90157a72d0112b046f6c4f89c3d37f4b3f4d0c0ad30",
+     "status": "M",
+     "tests_run": 20
+    },
+    "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.RetryTemplateTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 24
+      },
+      "P": {
+       "failed": [],
+       "run": 24
+      }
+     },
+     "evidence": [
+      "RetryTemplateTests.retryableWithInterruptionDuringSleep(): java.lang.AssertionError: "
+     ],
+     "forced": true,
+     "gold_sha256": "db9f5f33fe8e1848233dfe9f0e1d1e10f0d521316344c8b69b58009c2d102959",
+     "outcome": "fails",
+     "parent_sha256": "2a4a6cb64592e9151d231cbde7824ad71771beb943cd898f4968004e5ef1ec35",
+     "status": "M",
+     "tests_run": 24
+    }
+   },
+   "gold_commit": "92a43c007ad33b594b5a16a57ed625ceb2fbdac7",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T09:29:50Z",
+   "state_sha256": "daa3b40f317d31a1a1e567593b62e76dd66fc923b83b6114f99a782dd7760f7e",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:compileJava :spring-context:compileTestJava :spring-core:compileJava :spring-core:compileTestJava",
+     "failure": null,
+     "log_sha256": "c85d5f50abf72472a69e5734f684bbe2306e5777dae92f0f44850bb701825f48",
+     "returncode": 0,
+     "seconds": 102.44,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.RetryTemplateTests",
+     "failure": "tests",
+     "log_sha256": "97e052ef5679c4d1cdf65c7a1d79db175a7cbed4ffec3f955f12d2eecfaf9e83",
+     "returncode": 1,
+     "seconds": 13.77,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.RetryTemplateTests",
+     "failure": "tests",
+     "log_sha256": "fd1f49fd5311d6b3c4c12e7b2b934c6e5b66ad79f23bfb44d1dc7e48b217804c",
+     "returncode": 1,
+     "seconds": 12.63,
+     "step": "XT-again",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.RetryTemplateTests",
+     "failure": null,
+     "log_sha256": "4690953856b8180e8310d6a6f8e369251efa7f5959f4eca7aa94696c9a8db69b",
+     "returncode": 0,
+     "seconds": 23.47,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-context:test --rerun --tests org.springframework.resilience.ReactiveRetryInterceptorTests --tests org.springframework.resilience.RetryInterceptorTests :spring-core:test --rerun --tests org.springframework.core.retry.RetryTemplateTests",
+     "failure": null,
+     "log_sha256": "18b0f793d232911fc1d8b56a691a14a9256cdc4b2af24b08566c5808f04d046e",
+     "returncode": 0,
+     "seconds": 31.98,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "servlet-response-ignore-body-flush": {
+   "commit": "f2b64ad09c50f69c2ffb0c13715254300a7ed915",
+   "files": {
+    "spring-web/src/test/java/org/springframework/http/server/ServletServerHttpResponseTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.server.ServletServerHttpResponseTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 9
+      },
+      "P": {
+       "failed": [],
+       "run": 7
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "2ae002e430f787d4427de504693e089f0e1883b09250f03d5cb8c8c7ed78fa2e",
+     "outcome": "passes",
+     "parent_sha256": "4693da3c19a1e1378c420bc0591b170cc5224545cc9c4f0f8e2647572722ac75",
+     "status": "M",
+     "tests_run": 7
+    }
+   },
+   "gold_commit": "e0b54e244e7ac9f48f720bcbdcc869e2400fe35c",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:58:17Z",
+   "state_sha256": "017790e22a854e9eaa9dcaebae5c0c95ce5d53f4daa8857b39c2c81f8aa94c56",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:compileJava :spring-web:compileTestJava :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "failure": null,
+     "log_sha256": "4fa992b5b3259dca892227874764609b618fdc17dcaab343bd0964dcde542fd5",
+     "returncode": 0,
+     "seconds": 133.64,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.server.ServletServerHttpResponseTests",
+     "failure": null,
+     "log_sha256": "437133bd6e72496a7ea21a996f8283c31c5006a1c6a81444a230acb784a612de",
+     "returncode": 0,
+     "seconds": 14.77,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.server.ServletServerHttpResponseTests",
+     "failure": null,
+     "log_sha256": "5b9c5ae6cb8d8d35aaa2476c0377c5f43732528ebf0c6ae7269acc85c7fb414f",
+     "returncode": 0,
+     "seconds": 28.44,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-web:test --rerun --tests org.springframework.http.server.ServletServerHttpResponseTests",
+     "failure": null,
+     "log_sha256": "618d6be692f687cd7f528c99cc189ba27914d31994c796bd6e2cc4f090e57a7f",
+     "returncode": 0,
+     "seconds": 27.45,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "spel-simple-context-restricted-conversion": {
+   "commit": "5e1e150f2bb3475a5a8e1147507b86716e61e3a5",
+   "files": {
+    "spring-expression/src/test/java/org/springframework/expression/spel/support/SimpleEvaluationContextTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-expression:test --rerun --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 21
+      },
+      "P": {
+       "failed": [],
+       "run": 7
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "128f19e190335820be7a2400afe0bc567e04eb3e243f3b6cdedad839c034caaa",
+     "outcome": "passes",
+     "parent_sha256": "484437304bb0e2080506041f364a029744e0f342079c8d272cb9e33122513eb3",
+     "status": "M",
+     "tests_run": 7
+    }
+   },
+   "gold_commit": "d41495720cbabe30844e65c12765eacf806d2653",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:36:47Z",
+   "state_sha256": "16601364360542ad6171fff63903ec0f7718e4d584074fd5bcee82ae63f4d839",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-core:compileJava :spring-core:compileTestJava :spring-expression:compileJava :spring-expression:compileTestJava",
+     "failure": null,
+     "log_sha256": "ac12814035685b79378dcc4578fa1bc5c2fdfdfe5b6d4e4b747447e03e6d32e2",
+     "returncode": 0,
+     "seconds": 76.09,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-expression:test --rerun --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests",
+     "failure": null,
+     "log_sha256": "a7ce5939261fba59972bb803ffb8c69ae72e52b0695b143443eaa9b7aa40ae23",
+     "returncode": 0,
+     "seconds": 10.59,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-expression:test --rerun --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests",
+     "failure": null,
+     "log_sha256": "ef7484339e00ed43f8a58d4f7c5f0f666cd98bac2beb47e6e456c739975c2cc8",
+     "returncode": 0,
+     "seconds": 10.63,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-expression:test --rerun --tests org.springframework.expression.spel.support.SimpleEvaluationContextTests",
+     "failure": null,
+     "log_sha256": "34e2738cfa8c8046f5ab7817bc9f877944c23efd51cb5451b6da799f65a2a79e",
+     "returncode": 0,
+     "seconds": 14.16,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "test-context-cache-pause-mode": {
+   "commit": "d3a385d2225f622fe164953e1ac76e0e4bc5967c",
+   "files": {
+    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCachePauseModeTests.java": {
+     "controls": {},
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "4918eac5b5f64cb9d265cf5d333a9036b6b3eb1bd513d1eee05abbf2845cf890",
+     "outcome": "new",
+     "parent_sha256": null,
+     "status": "A"
+    },
+    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.context.cache.ContextCacheTests --tests org.springframework.test.context.cache.ContextCacheUtilsTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 9
+      },
+      "P": {
+       "failed": [],
+       "run": 9
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "feb35f131960f510ab453ac5cf7e3b03b35f1faae338b905bb4938fdc20c6c28",
+     "outcome": "passes",
+     "parent_sha256": "bda84b174c1f9829941385f4a467a511c808015a255892167bd3ba57317692ac",
+     "status": "M",
+     "tests_run": 9
+    },
+    "spring-test/src/test/java/org/springframework/test/context/cache/ContextCacheUtilsTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.context.cache.ContextCacheTests --tests org.springframework.test.context.cache.ContextCacheUtilsTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 26
+      },
+      "P": {
+       "failed": [],
+       "run": 7
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "1460058b79c5259dce68e8bd49b637bae5e0faa6e098bfc9af3b876809ce6d1f",
+     "outcome": "passes",
+     "parent_sha256": "8ca09d887ca743dc7dc71d78587d1163b8bfd6822c3fe24a9ef279c75e7c51b3",
+     "status": "M",
+     "tests_run": 7
+    }
+   },
+   "gold_commit": "9711db787e0db5e7d569119491e723c720b684a2",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:48:28Z",
+   "state_sha256": "f929a37da0d575d21c8def9a7395f4a1f50b2772d4e0faca7625ea7467ea980b",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-core:compileJava :spring-core:compileTestJava :spring-test:compileJava :spring-test:compileTestJava",
+     "failure": null,
+     "log_sha256": "7be6425e70284f3e985653feaae38577ccd8baeafc4c8ad6b920e98736d88b6c",
+     "returncode": 0,
+     "seconds": 169.95,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.context.cache.ContextCacheTests --tests org.springframework.test.context.cache.ContextCacheUtilsTests",
+     "failure": null,
+     "log_sha256": "edcf5cd2578655dd8c4bf4b27309fd70b3ea80156ea39e72282a2832ee68c0c4",
+     "returncode": 0,
+     "seconds": 15.73,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.context.cache.ContextCacheTests --tests org.springframework.test.context.cache.ContextCacheUtilsTests",
+     "failure": null,
+     "log_sha256": "45fd8447066627120132d3a545962d2b3cc4fa959baecfb2dc70f0f88ad020f6",
+     "returncode": 0,
+     "seconds": 16.65,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-test:test --rerun --tests org.springframework.test.context.cache.ContextCacheTests --tests org.springframework.test.context.cache.ContextCacheUtilsTests",
+     "failure": null,
+     "log_sha256": "68411faced809d0d6b40edc2a9826c390dfa81327b0d69119246db2ca129843f",
+     "returncode": 0,
+     "seconds": 31.5,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  },
+  "type-mismatch-required-type-arg": {
+   "commit": "f4ee120a423c069ddfc94076cc49e02ec9d797d5",
+   "files": {
+    "spring-webmvc/src/test/java/org/springframework/web/servlet/mvc/method/annotation/ResponseEntityExceptionHandlerTests.java": {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests",
+     "controls": {
+      "G": {
+       "failed": [],
+       "run": 29
+      },
+      "P": {
+       "failed": [],
+       "run": 29
+      }
+     },
+     "evidence": [],
+     "forced": false,
+     "gold_sha256": "676524afed3ccaa8ab8cba199f5a23ce0dfe87dba30e6c91dce86a4e90fc4508",
+     "outcome": "passes",
+     "parent_sha256": "25f8f5130e1419cd83a82349aef8cff55396b020772b65dab6afa3d142f10586",
+     "status": "M",
+     "tests_run": 29
+    }
+   },
+   "gold_commit": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
+   "notes": [],
+   "sandboxed": true,
+   "started": "2026-11-24T08:54:50Z",
+   "state_sha256": "fbbaecb0ec1514ae694c1ad1c3578de44ffa1995a1785ed06f54d5d7646f2e5e",
+   "steps": [
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webmvc:compileJava :spring-webmvc:compileTestJava",
+     "failure": null,
+     "log_sha256": "bf3fbe3110995cbd9f73813774afa1ae3685d46f4381ebadf76759f181bfaca6",
+     "returncode": 0,
+     "seconds": 150.47,
+     "step": "X",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests",
+     "failure": null,
+     "log_sha256": "d1aaeabbc2319536e1743084787267bcf75fc46d2a34d8af3b652d94dc9195a1",
+     "returncode": 0,
+     "seconds": 13.85,
+     "step": "XT",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests",
+     "failure": null,
+     "log_sha256": "3e9f5d5d43f632ab6c587cfb832c431bd6b176d6d6b025e750e7318456772741",
+     "returncode": 0,
+     "seconds": 16.65,
+     "step": "G",
+     "timed_out": false
+    },
+    {
+     "command": "./gradlew --offline --no-scan --no-build-cache --no-daemon --console=plain --continue :spring-webmvc:test --rerun --tests org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandlerTests",
+     "failure": null,
+     "log_sha256": "1b31d4c3f70ec2d50d64de25f66ac52f0702cb87df86c54c0f5958b74b1eaa8c",
+     "returncode": 0,
+     "seconds": 22.61,
+     "step": "P",
+     "timed_out": false
+    }
+   ]
+  }
+ }
+}

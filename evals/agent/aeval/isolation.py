@@ -38,6 +38,7 @@ network while it runs; Spring's commits are public and may be in the model's tra
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 import os
@@ -290,20 +291,45 @@ def scan(text: str, root: str) -> set[str]:
     return kinds
 
 
+# Claude Code's own permission layer ("don't ask" mode refuses what it would have asked about), not the hook.
+_CLAUDE_REFUSAL = re.compile(r"Permission to use \w+\b.{0,400}? has been denied", re.S)
+_CD = re.compile(r"(?:^|[;&|(\n])\s*cd(?:\s|$)")
+
+
+def _time(ev: dict) -> float | None:
+    try:
+        return dt.datetime.fromisoformat(ev["timestamp"]).timestamp()
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def audit(path: str, root: str) -> dict:
     """Attempts to leave the working copy or reach the network, per kind:
     ``attempts``, ``blocked`` (the hook refused) and ``ran``. A call that
     this scan suspects and the hook let run is a *disagreement*: kept, for
     review, because the scan also meets search patterns. Also: calls the hook
     refused, refusals by the kernel, and protected places that show up in
-    results or edits."""
+    results or edits.
+
+    Two things that are no attempt to leave and flag nothing: calls that
+    **Claude Code itself** refused, not the hook (``claude_refusals``, those
+    with a ``cd`` in the command apart, the calls in ``claude_refused``), and API
+    trouble inside the session: ``api_errors`` (answers the CLI made up for a
+    failed call, by name in ``api_error_names``), of them ``api_stalls`` (the
+    answer stopped arriving, ``stream_idle_timeout``) with ``api_stall_s``, the
+    seconds since the last event before it, so that wall times can be
+    corrected; ``api_retries`` (the CLI's own retry events)."""
     root = os.path.realpath(root)
     places = [str(p) for p in (config.cache_dir(), config.EVAL_DIR.parent.parent, Path.home() / "SYNC",
                                Path.home() / ".claude", Path.home() / ".cache" / "myc-java" / "spring-history")]
     own = re.compile(r"[^\s\"']*/aeval-run-[^/\s\"']*")  # this session's own directory, which its tools may name
     out: dict = {f"{k}_{w}": 0 for k in KINDS for w in ("attempts", "blocked", "ran")}
     out.update(refused_calls=0, kernel_refusals=0, protected_in_results=0, edits_naming_protected=0, tool_calls=0,
-               disagreements=0, to_review=[])
+               disagreements=0, to_review=[], claude_refusals=0, claude_refusals_cd=0, claude_refused=[],
+               api_errors=0, api_error_names=[], api_stalls=0, api_stall_s=0.0, api_retries=0)
+    calls: dict[str, tuple[str, dict]] = {}
+    denied: set[str] = set()
+    last: float | None = None
     waiting: dict[str, tuple[set[str], str]] = {}
     with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
@@ -311,12 +337,28 @@ def audit(path: str, root: str) -> dict:
                 ev = json.loads(line)
             except ValueError:
                 continue
+            if not isinstance(ev, dict):
+                continue
+            now = _time(ev)
+            if ev.get("api_error") or ev.get("is_api_error_message"):
+                name = str(ev.get("api_error") or ev.get("error") or "unknown")
+                out["api_errors"] += 1
+                out["api_error_names"].append(name)
+                if name == "stream_idle_timeout":
+                    out["api_stalls"] += 1
+                    out["api_stall_s"] = round(out["api_stall_s"] + (now - last if now is not None and last is not None else 0.0), 1)
+            last = now if now is not None else last
+            if ev.get("type") == "system":
+                out["api_retries"] += ev.get("subtype") == "api_retry"
+                if ev.get("subtype") == "permission_denied":
+                    denied.add(str(ev.get("tool_use_id")))
             content = (ev.get("message") or {}).get("content") if ev.get("type") in ("assistant", "user") else None
             for b in content if isinstance(content, list) else []:
                 if not isinstance(b, dict):
                     continue
                 if b.get("type") == "tool_use":
                     name, inp = b.get("name") or "", b.get("input") or {}
+                    calls[str(b.get("id"))] = (name, inp)
                     out["tool_calls"] += 1
                     kinds = _kinds(name, inp, root)
                     for k in kinds:
@@ -330,6 +372,11 @@ def audit(path: str, root: str) -> dict:
                     text = text if isinstance(text, str) else json.dumps(text)
                     refused = MARKER in text
                     out["refused_calls"] += refused
+                    said = b.get("content")
+                    if isinstance(said, list):
+                        said = "\n".join(str(x.get("text") or "") for x in said if isinstance(x, dict))
+                    if not refused and b.get("is_error") and _CLAUDE_REFUSAL.match(said or ""):
+                        denied.add(str(b.get("tool_use_id")))
                     out["kernel_refusals"] += not refused and "Operation not permitted" in text
                     out["protected_in_results"] += not refused and any(p in own.sub("", text) for p in places)
                     kinds, shown = waiting.pop(b.get("tool_use_id"), (set(), ""))
@@ -339,6 +386,12 @@ def audit(path: str, root: str) -> dict:
                         out["disagreements"] += 1
                         if len(out["to_review"]) < 20:
                             out["to_review"].append(f"{'+'.join(sorted(kinds))} {shown}")
+    for i in sorted(denied):
+        name, inp = calls.get(i, ("?", {}))
+        out["claude_refusals"] += 1
+        out["claude_refusals_cd"] += name == "Bash" and bool(_CD.search(str(inp.get("command") or "")))
+        if len(out["claude_refused"]) < 20:
+            out["claude_refused"].append(f"{name}: {json.dumps(inp, ensure_ascii=False)[:300]}")
     out["flagged"] = bool(out["disagreements"] or out["kernel_refusals"] or out["protected_in_results"]
                           or out["edits_naming_protected"])
     return out
@@ -379,7 +432,7 @@ def summarise(rows: list[dict]) -> dict:
         s = out.setdefault(r["condition"], {"sessions": 0, "flagged": 0})
         s["sessions"] += 1
         for k, v in a.items():
-            if k != "to_review":
+            if not isinstance(v, list):
                 s[k] = s.get(k, 0) + (bool(v) if k == "flagged" else v)
     return out
 
@@ -393,13 +446,16 @@ def report_lines(summary: dict) -> list[str]:
              "flags (refused / ran); refusals by the kernel; protected places in results or edits. A call the scan "
              "suspects and the hook let run is a disagreement: the scan also meets search patterns, so each is listed "
              "in the session's row (`to_review`) and has to be read. Flagged: a session with a disagreement, a kernel "
-             "refusal, or a protected place in a result or an edit.", "",
+             "refusal, or a protected place in a result or an edit. Not flagged: calls Claude Code itself refused, not the hook "
+             "(those with `cd` in the command in brackets), and answers of the API that stopped arriving, with the seconds they cost.", "",
              "| Condition | Sessions | Refused calls | Outside: refused / ran | Network: refused / ran | "
-             "Gradle: refused / ran | Disagreements | Kernel refusals | Protected in results | In edits | Flagged |",
-             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+             "Gradle: refused / ran | Disagreements | Kernel refusals | Protected in results | In edits | Flagged | "
+             "Claude Code's refusals (cd) | API errors | Stalls | Stalled s |",
+             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for c, a in sorted(summary.items()):
         lines.append(f"| `{c}` | {a['sessions']} | {a['refused_calls']} | {a['outside_blocked']} / {a['outside_ran']} | "
                      f"{a['network_blocked']} / {a['network_ran']} | {a['gradle_blocked']} / {a['gradle_ran']} | "
                      f"{a['disagreements']} | {a['kernel_refusals']} | {a['protected_in_results']} | "
-                     f"{a['edits_naming_protected']} | {a['flagged']} |")
+                     f"{a['edits_naming_protected']} | {a['flagged']} | {a.get('claude_refusals', 0)} ({a.get('claude_refusals_cd', 0)}) | "
+                     f"{a.get('api_errors', 0)} | {a.get('api_stalls', 0)} | {a.get('api_stall_s', 0):.0f} |")
     return lines + [""]

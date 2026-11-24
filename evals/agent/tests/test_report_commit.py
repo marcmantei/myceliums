@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import random
 import subprocess
 import sys
 import tempfile
@@ -21,13 +22,13 @@ N = 400  # resamples: enough for direction and determinism
 
 
 def task(i: int, **kw) -> dict:
-    """One primary file, two docs, one test, two remote files (one of them comments only), one beside the primary."""
+    """One primary file, two docs, a forced and an unforced test, two remote files (one of them comments only), one beside the primary."""
     d = f"m{i}"
     files = [f"{d}/src/main/java/a/P.java", f"{d}/src/main/java/a/Near.java", f"{d}/src/main/java/b/R.java", f"{d}/src/main/java/c/Comment.java",
-             f"{d}/src/test/java/a/PTests.java", "framework-docs/x.adoc", "framework-docs/y.adoc"]
+             f"{d}/src/test/java/a/PTests.java", f"{d}/src/test/java/a/MoreTests.java", "framework-docs/x.adoc", "framework-docs/y.adoc"]
     gold = [{"path": f, "status": "M", **({"comment_only": True} if "Comment" in f else {})} for f in files]
     return {"id": f"t{i:02d}", "repo": "r", "type": "edit", "answer_kind": "diff", "question": "q", "n_gold": len(gold), "gold_files": gold,
-            "primary_files": files[:1], "strata": {"agents_md": i % 2 == 0, "size": "M", "docs": True}, **kw}
+            "primary_files": files[:1], "forced_tests": files[4:5], "strata": {"agents_md": i % 2 == 0, "size": "M", "docs": True}, **kw}
 
 
 def row(t: dict, cond: str, rep: int = 1, touch: int = 4, ok: bool = True, tokens: int = 1000, **kw) -> dict:
@@ -35,9 +36,14 @@ def row(t: dict, cond: str, rep: int = 1, touch: int = 4, ok: bool = True, token
     changed = t["primary_files"] + [u["path"] for u in rc.counted(t)][:touch]
     return {"run_id": f"{t['id']}__{cond}__r{rep}", "task_id": t["id"], "condition": cond, "rep": rep, "repo": "r", "type": "edit", "status": "ok",
             "final": True, "total_input_tokens": tokens - 100, "output_tokens": 100, "cost_usd": tokens / 1e4, "api_calls": 10, "wall_s": 60.0,
-            "f1": 0.5, "precision": 1.0, "recall": 0.5, "success": ok, "num_turns": 3, "tool_calls": 4, "mcp_tool_calls": 0, "attempt": 1,
+            "f1": 0.5, "precision": 1.0, "recall": 0.5, "success": ok, "claude_version": "2.1.331", "model": "m", "num_turns": 3, "tool_calls": 4, "mcp_tool_calls": 0, "attempt": 1,
             "tool_calls_by_name": {"Read": 4}, "tool_errors": {}, "first_tool": "Read", "answer": None,
             "edit": {"files_changed": changed, "success": ok, "tests_passed": ok, "test": {"seconds": 30.0}}, **kw}
+
+
+def decided(path: Path, tasks_file: Path, **kw) -> None:
+    path.write_text(json.dumps({"ceiling": False, "mean_recall": 0.5, "sessions": 20, "claude_version": "2.1.331", "model": "m",
+                                "tasks_sha256": hashlib.sha256(tasks_file.read_bytes()).hexdigest(), **kw}))
 
 
 def run(tasks, make, reps=3):
@@ -47,8 +53,9 @@ def run(tasks, make, reps=3):
 class Recall(unittest.TestCase):
     def test_counted_dependents(self):
         t = task(1)
-        self.assertEqual([u["kind"] for u in rc.counted(t)], ["docs", "docs", "remote", "tests"])
-        self.assertEqual([u["kind"] for u in rc.counted(t, comments=True)], ["docs", "docs", "remote", "comments", "tests"])
+        self.assertEqual([u["kind"] for u in rc.counted(t)], ["docs", "docs", "remote", "forced_tests"])
+        self.assertEqual([u["kind"] for u in rc.counted(t, comments=True)], ["docs", "docs", "remote", "comments", "forced_tests"])
+        self.assertEqual(sorted(u["kind"] for u in rc.counted(t, rc.ALL_TESTS)), ["docs", "docs", "forced_tests", "new_tests", "remote"])
         every = [u["path"] for u in rc.counted(t)]
         self.assertEqual((rc.recall(t, every), rc.recall(t, every, comments=True)), (1.0, 0.8))
         self.assertEqual(rc.recall(t, []), 0.0)
@@ -60,7 +67,7 @@ class Recall(unittest.TestCase):
         t = task(1)
         for g in t["gold_files"]:
             g["comment_only"] = True
-        self.assertEqual([u["kind"] for u in rc.counted(t)], ["docs", "docs", "tests"])
+        self.assertEqual([u["kind"] for u in rc.counted(t)], ["docs", "docs", "forced_tests"])
         near = next(u for u in editgrade.dependents(t) if u["path"].endswith("Near.java"))
         self.assertEqual((near["kind"], near["near"]), ("comments", True))  # apart, and not in the sensitivity analysis
         self.assertEqual(len(rc.counted(t, comments=True)), 5)
@@ -76,15 +83,16 @@ class Recall(unittest.TestCase):
         self.assertEqual((rc.precision(t, []), rc.precision(t, [r, "x"])), (0.0, 0.5))
 
     def test_the_hand_example(self):
-        """deferred-bean-registrar: a reader/post-processor pair is one dependent. 10 counted, 11 with the comment-only file."""
+        """deferred-bean-registrar: a reader/post-processor pair is one dependent. 3 counted (no test is forced), 4 with the comment-only file, 10 with the new tests."""
         t = next(t for t in json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"] if t["id"].startswith("deferred-bean"))
         pair = t["equivalents"][0]
         rest = [u["path"] for u in rc.counted(t, comments=True) if u["path"] not in pair]
         for one in (pair[:1], pair[1:], pair):
-            self.assertEqual((rc.recall(t, one, comments=True), rc.recall(t, one)), (1 / 11, 1 / 10))
+            self.assertEqual((rc.recall(t, one, comments=True), rc.recall(t, one), rc.recall(t, one, rc.ALL_TESTS)), (1 / 4, 1 / 3, 1 / 10))
             dep = editgrade.grade_edit(t, one, {"passed": True})["dependents"]
-            self.assertEqual((dep["n"], len(dep["forgotten"]), dep["by_kind"]["remote"]["n"], len(dep["by_kind"]["remote"]["forgotten"])), (10, 9, 3, 2))
-        self.assertEqual((rc.recall(t, rest, comments=True), rc.recall(t, rest)), (10 / 11, 9 / 10))
+            self.assertEqual((dep["n"], len(dep["forgotten"]), dep["by_kind"]["remote"]["n"], len(dep["by_kind"]["remote"]["forgotten"])), (3, 2, 3, 2))
+            self.assertEqual(len(dep["by_kind"]["new_tests"]["forgotten"]), 7)
+        self.assertEqual((rc.recall(t, rest, comments=True), rc.recall(t, rest)), (3 / 4, 2 / 3))
         dep = editgrade.grade_edit(t, rest, {"passed": True})["dependents"]
         self.assertEqual((len(dep["forgotten"]), dep["by_kind"]["remote"]["n"], dep["by_kind"]["comments"]), (1, 3, {"n": 1, "forgotten": []}))
 
@@ -94,20 +102,49 @@ class Recall(unittest.TestCase):
             for t in json.loads((EVAL / "tasks" / f).read_text())["tasks"]:
                 paths = [g["path"] for g in t["gold_files"]]
                 for changed in ([], paths, t["primary_files"], paths[::2], paths[1::2], paths[:1]):
-                    by = editgrade.grade_edit(t, changed, {"passed": True})["dependents"]["by_kind"]
-                    n = sum(by[k]["n"] for k in ("docs", "tests", "remote"))
-                    missed = sum(len(by[k]["forgotten"]) for k in ("docs", "tests", "remote"))
-                    self.assertEqual(n, len(rc.counted(t)), t["id"])
-                    self.assertAlmostEqual(rc.recall(t, changed), 1 - missed / n, msg=t["id"])
+                    dep = editgrade.grade_edit(t, changed, {"passed": True})["dependents"]
+                    by = dep["by_kind"]
+                    for kinds in (rc.PRIMARY, rc.ALL_TESTS):
+                        n = sum(by[k]["n"] for k in kinds if k in by)
+                        missed = sum(len(by[k]["forgotten"]) for k in kinds if k in by)
+                        self.assertEqual(n, len(rc.counted(t, kinds)), t["id"])
+                        self.assertAlmostEqual(rc.recall(t, changed, kinds) if n else 0, 1 - missed / n if n else 0, msg=t["id"])
+                        self.assertEqual(rc.recall(t, changed, kinds) is None, n == 0)
+                    if "forced_tests" in t:  # new tests are apart: no dependents, never forgotten
+                        self.assertEqual(dep["n"], len(rc.counted(t)) + by["local"]["n"], t["id"])
+                        self.assertNotIn("tests", by)
                 if f == "tasks-commit-replay.json" and len(rc.counted(t)) != len(rc.counted(t, comments=True)):
                     differ.append(t["id"].split("-")[0])
-        self.assertEqual(differ, ["spel", "test", "deferred", "message", "retryable"])
+        self.assertEqual(differ, ["spel", "jsonl", "test", "deferred", "message", "retryable"])
 
     def test_the_task_set_has_a_counted_dependent_everywhere(self):
         for f in ("tasks-commit-replay.json", "tasks-commit-replay-reserve.json"):
             for t in json.loads((EVAL / "tasks" / f).read_text())["tasks"]:
-                self.assertTrue(rc.counted(t), t["id"])
+                self.assertTrue(rc.counted(t, rc.ALL_TESTS), t["id"])
                 self.assertIn("agents_md", t["strata"])
+                if f == "tasks-commit-replay.json":
+                    self.assertTrue(rc.counted(t), t["id"])
+
+    def test_the_numbers_by_type_are_the_registered_ones(self):
+        """groundtruth/dependents_183.json, fixed with the pre-registration. A change here changes a registered denominator."""
+        tasks = json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]
+        registered = json.loads((EVAL / "groundtruth/dependents_183.json").read_text())
+        self.assertEqual({t["id"]: rc.by_type(t) for t in tasks}, registered)
+        self.assertEqual({k: sum(v[k] for v in registered.values()) for k in rc.KINDS},
+                         {"docs": 13, "remote": 45, "forced_tests": 14, "new_tests": 49, "optional": 4, "local": 10, "comments": 8, "build": 1, "either": 3})
+
+    def test_the_pilot_in_arm_none_scored_again(self):
+        d = EVAL / "results/pilot-183"
+        tasks = {t["id"]: t for t in json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]}
+        again = json.loads((d / "rescored_none.json").read_text())
+        rows = [json.loads(x) for x in (d / "sessions.jsonl").read_text().splitlines()]
+        self.assertEqual({r["condition"] for r in rows}, {"none"})
+        for r in rows:
+            e, t, changed = again["tasks"][r["task_id"]], tasks[r["task_id"]], r["edit"]["files_changed"]
+            self.assertEqual(e["recall"], rc.recall(t, changed))
+            self.assertAlmostEqual(e["recall_all_tests"], rc.recall(t, changed, rc.ALL_TESTS), 4)
+        out = rc.pilot(rows, list(tasks.values()), [r["task_id"] for r in rows])
+        self.assertEqual((out["mean_recall"], out["mean_recall_all_tests"]), (again["summary"]["mean_recall"], again["summary"]["mean_recall_all_tests"]))
 
 
 class Analysis(unittest.TestCase):
@@ -134,7 +171,123 @@ class Analysis(unittest.TestCase):
         self.assertNotIn("p_holm", co["C vs none"]["cost"])  # shown, not tested
         self.assertEqual(sum("p_holm" in s[k] for s in co.values() for k in s), 6)
         self.assertEqual((a["missing"], a["undefined_recall"]), ([], []))
-        self.assertEqual(a, rc.analyse(run(self.tasks, lambda t, c, r: row(t, c, r, touch[c], tokens=tokens[c])), self.tasks, N))
+        again = rc.analyse(run(self.tasks, lambda t, c, r: row(t, c, r, touch[c], tokens=tokens[c])), self.tasks, N)
+        self.assertEqual(json.dumps(a), json.dumps(again))  # as text: undefined ratios are nan
+        self.assertEqual(a["sole_primary"], None)
+        self.assertIn("recall_all_tests", a["secondary"])
+        self.assertNotIn("p_holm", str(a["secondary"]))
+
+    def test_tokens_as_the_sole_primary_outcome(self):
+        """At the ceiling: Holm over the three token tests, the recall as a harm check."""
+        touch, tokens = {"none": 4, "C": 2, "D": 4}, {"none": 2000, "C": 1000, "D": 2000}
+        rows = run(self.tasks, lambda t, c, r: row(t, c, r, touch[c], tokens=tokens[c]))
+        a = rc.analyse(rows, self.tasks, N, sole=True)
+        self.assertEqual(sum("p_holm" in s[k] for s in a["co_primary"].values() for k in s), 3)
+        self.assertNotIn("p_holm", a["co_primary"]["C vs none"]["recall"])
+        harm = {p: s["recall"]["harm"] for p, s in a["co_primary"].items()}
+        self.assertEqual({p: h["detected"] for p, h in harm.items()}, {"C vs none": True, "D vs none": False, "C vs D": True})
+        both = rc.analyse(rows, self.tasks, N)["co_primary"]
+        p = a["co_primary"]["C vs none"]["tokens"]["p"]
+        self.assertAlmostEqual(a["co_primary"]["C vs none"]["tokens"]["p_holm"], min(1.0, 3 * p))
+        self.assertGreater(both["C vs none"]["tokens"]["p_holm"], a["co_primary"]["C vs none"]["tokens"]["p_holm"])
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(rc, "DECISION", Path(d) / "decision.json"), \
+                mock.patch.object(config, "tasks_file", lambda: Path(d) / "tasks.json"):
+            (Path(d) / "tasks.json").write_text("{}")
+            with self.assertRaisesRegex(SystemExit, "no recorded decision"):  # never a silent default
+                rc.lines(rows, self.tasks, N)
+            for ceiling, value in ((True, 0.9499), (False, 0.8996)):
+                decided(rc.DECISION, Path(d) / "tasks.json", ceiling=ceiling, mean_recall=value)
+                text, b = rc.lines(rows, self.tasks, N)
+                text = "\n".join(text)
+                self.assertEqual(b["sole_primary"], "tokens" if ceiling else None)
+                self.assertEqual("Primary outcome: tokens alone" in text, ceiling)
+                self.assertEqual("Co-primary outcomes: recall and tokens" in text, not ceiling)
+                self.assertIn(f"mean recall {value:.3f}, ceiling 0.900", text)
+                self.assertEqual("* `C vs none`: harm detected; largest loss not excluded: 0.500 (lower bound of the 95 % interval) and up to 100.0% of tasks worse, each by "
+                                 "at most everything (exact one-sided 95 % bound); tasks worse/better: 20/0 of 20." in text, ceiling)
+                self.assertEqual("* `D vs none`: harm not detected; largest loss not excluded: 0.000 (lower bound of the 95 % interval) and up to 13.9% of tasks worse" in text, ceiling)
+                self.assertNotIn("no harm", text)
+                self.assertNotIn("Not the decision's setup", text)
+            with self.subTest("another CLI"):
+                text = "\n".join(rc.lines([{**r, "claude_version": "2.1.400"} for r in rows], self.tasks, N)[0])
+                self.assertIn("Not the decision's setup:** claude_version 2.1.400 instead of 2.1.331", text)
+            (Path(d) / "tasks.json").write_text("{} ")
+            with self.assertRaisesRegex(SystemExit, "task file"):
+                rc.lines(rows, self.tasks, N)
+
+    def test_the_harm_check_says_what_it_does_not_exclude(self):
+        def h(ps):
+            return rc.harm_check(ps, rc.paired_bootstrap(ps, N).as_dict())
+        tie = h([(1.0, 1.0)] * 20)
+        self.assertEqual((tie["detected"], tie["worse"], tie["better"], tie["loss"]), (False, 0, 0, 0.0))
+        self.assertAlmostEqual(tie["share"], 1 - 0.05 ** (1 / 20))
+        one = h([(1.0 - 1 / 11, 1.0)] + [(1.0, 1.0)] * 19)
+        self.assertAlmostEqual(one["share"], 0.2161, 4)  # 1 of 20
+        for x, share in ((tie, "13.9%"), (one, "21.6%")):  # both bounds, always
+            self.assertIn("(lower bound of the 95 % interval)", rc.harm_text(x))
+            self.assertIn(f"up to {share} of tasks worse", rc.harm_text(x))
+        self.assertGreater(one["loss"], 0)
+        some = h([(0.0, 1.0)] * 2 + [(1.0, 0.0)] + [(1.0, 1.0)] * 17)
+        self.assertEqual((some["detected"], some["worse"], some["better"]), (False, 2, 1))
+        self.assertGreater(some["loss"], 0.1)
+        self.assertIn("harm not detected; largest loss not excluded: ", rc.harm_text(some))
+        self.assertIn("tasks worse/better: 2/1 of 20", rc.harm_text(some))
+        self.assertTrue(h([(0.5, 1.0)] * 20)["detected"])
+        self.assertEqual(rc.harm_text(h([])), "no task has both arms")
+
+    def test_the_exact_share_bound(self):
+        self.assertAlmostEqual(rc.share_bound(0, 20), 1 - 0.05 ** (1 / 20))
+        self.assertAlmostEqual(rc.share_bound(1, 2), math.sqrt(0.95))  # P(at most 1 of 2) = 1 - p^2 = 0.05
+        self.assertEqual(rc.share_bound(20, 20), 1.0)
+        bounds = [rc.share_bound(k, 20) for k in range(21)]
+        self.assertEqual(bounds, sorted(bounds))
+        self.assertTrue(all(b > k / 20 for k, b in enumerate(bounds[:-1])))
+
+    def test_no_stated_bound_shrinks_when_a_task_gets_worse(self):
+        rng = random.Random(7)
+        def h(ps):
+            return rc.harm_check(ps, rc.paired_bootstrap(ps, N).as_dict())
+        starts = [[(1.0, 1.0)] * 20] + [[(rng.choice((0, 0.5, 1.0)), rng.choice((0, 0.5, 1.0))) for _ in range(20)] for _ in range(5)]
+        for ps in starts:
+            before = h(ps)
+            for i in rng.sample(range(20), 20):
+                for step in (1 / 11, 1.0):
+                    ps = [(max(0.0, a - step), b) if k == i else (a, b) for k, (a, b) in enumerate(ps)]
+                    after = h(ps)
+                    self.assertGreaterEqual(after["loss"], before["loss"] - 1e-12)
+                    self.assertGreaterEqual(after["share"], before["share"] - 1e-12)
+                    before = after
+
+    def test_pooled_units(self):
+        """A one-unit task that fails costs the mean 1/20, the pooled recall one unit."""
+        tasks = self.tasks[1:] + [{**self.tasks[0], "gold_files": self.tasks[0]["gold_files"][:3], "forced_tests": []}]  # one counted dependent
+        rows = run(tasks, lambda t, c, r: row(t, c, r, 0 if t["id"] == "t01" and c == "C" else 4))
+        a = rc.analyse(rows, tasks, N)
+        self.assertAlmostEqual(a["co_primary"]["C vs none"]["recall"]["diff_mean"], -1 / 20)
+        self.assertEqual(a["pooled"]["units"], 19 * 4 + 1)
+        self.assertAlmostEqual(a["pooled"]["pairs"]["C vs none"]["diff_mean"], -1 / 77)
+        self.assertAlmostEqual(a["pooled"]["arms"]["C"], 76 / 77)
+        self.assertEqual(a["pooled"]["pairs"]["D vs none"], {"n_tasks": 20, "diff_mean": 0.0, "diff_lo": 0.0, "diff_hi": 0.0})
+
+    def test_a_task_without_a_measured_record_is_refused(self):
+        tasks = [{k: v for k, v in t.items() if k != "forced_tests"} if t["id"] == "t07" else t for t in self.tasks]
+        with self.assertRaisesRegex(SystemExit, "t07"):
+            rc.analyse(run(tasks, lambda t, c, r: row(t, c, r)), tasks, N)
+
+    def test_new_tests_move_the_secondary_outcome_only(self):
+        def make(t, c, r):
+            out = row(t, c, r, 2)
+            if c == "C":
+                out["edit"]["files_changed"].append(next(u["path"] for u in rc.counted(t, ("new_tests",))))
+            return out
+        a = rc.analyse(run(self.tasks, make), self.tasks, N)
+        self.assertEqual(a["co_primary"]["C vs none"]["recall"]["diff_mean"], 0)
+        self.assertAlmostEqual(a["secondary"]["recall_all_tests"]["pairs"]["C vs none"]["diff_mean"], 0.2)
+        self.assertEqual((a["secondary"]["new_tests"]["means"]["C"], a["secondary"]["new_tests"]["means"]["none"]), (1.0, 0.0))
+
+    def test_wall_time_without_stalls(self):
+        r = row(self.tasks[0], "none", isolation_audit={"api_stall_s": 12.5})
+        self.assertEqual((rc.wall_net(r), rc.wall_net(row(self.tasks[0], "none"))), (47.5, 60.0))
 
     def test_repetitions_are_averaged_within_a_task_first(self):
         """One task with many more sessions in one arm must not weigh more."""
@@ -158,7 +311,9 @@ class Analysis(unittest.TestCase):
         self.assertEqual(per["means"]["none"], 1000)
         self.assertTrue(math.isnan(per["means"]["D"]) and math.isnan(per["pairs"]["D vs none"]["ratio"]))
         self.assertEqual(a["secondary"]["success"]["means"]["D"], 0.0)
-        text = "\n".join(rc.lines(rows, self.tasks, N)[0])
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(rc, "DECISION", Path(d) / "decision.json"):
+            decided(rc.DECISION, config.tasks_file())
+            text = "\n".join(rc.lines(rows, self.tasks, N)[0])
         self.assertIn("| Tokens per solved task | 1,000 | 1,000 | – |", text)
         self.assertNotIn("nan", text)
 
@@ -218,13 +373,20 @@ class Report(unittest.TestCase):
                 report.export("x", {"conditions": ["none", "C", "D"], "comparisons": "pairwise", "success_threshold": 0.8, "reps": 3, "repos": {}})
                 kept = [json.loads(x) for x in (d / "results/x/results.jsonl").read_text().splitlines()]
                 self.assertEqual({r["condition"]: r["success"] for r in kept}, {"none": False, "C": True, "D": False})
-                with mock.patch.object(rc, "lines", lambda a, b, n: rc_lines(a, b, 100)):
+                with mock.patch.object(rc, "lines", lambda a, b, n: rc_lines(a, b, 100)), mock.patch.object(rc, "DECISION", d / "decision.json"):
+                    with self.assertRaisesRegex(SystemExit, "no recorded decision"):
+                        report.write_report("x")
+                    self.assertFalse((d / "results/x/REPORT.md").exists())
+                    decided(rc.DECISION, d / "tasks.json")
                     report.write_report("x")
                     self.assertTrue(report.write_report("x", check=True))
                 text = (d / "results/x/REPORT.md").read_text()
                 with self.assertRaises(SystemExit):
                     report.regrade("x", "note")
         self.assertIn("## Registered comparisons (#183)", text)
+        self.assertIn("Recall with new tests (the outcome registered first)", text)
+        self.assertIn("| units pooled (80 dependents, a task weighs as many as it has) | 20 |", text)
+        self.assertNotIn("Not the decision's setup", text)
         for other in ("F1 ≥", "Pairwise comparisons", "McNemar", "## By task type", "gold sets"):
             self.assertNotIn(other, text)
         self.assertIn("Success rate (the task's tests pass)", text)
@@ -266,6 +428,42 @@ class Pilot(unittest.TestCase):
         self.assertEqual(len({strata[t] for t in rec["none"]}), 5)
         tasks = {t["id"] for t in json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]}
         self.assertLessEqual(set(rec["none"]), tasks)
+
+
+class Decision(unittest.TestCase):
+    def setUp(self):
+        self.tasks = [task(i) for i in range(1, 21)]
+
+    def test_the_rule_at_the_threshold(self):
+        """20 sessions of none, one per task; 0.90 is already a ceiling, the unrounded mean decides."""
+        for full, want in ((16, 0.9), (15, 0.875), (20, 1.0)):
+            d = rc.decide([row(t, "none", touch=4 if i < full else 2) for i, t in enumerate(self.tasks)], self.tasks, "h")
+            self.assertAlmostEqual(d["mean_recall"], want)
+            self.assertEqual((d["ceiling"], d["primary"]), (want >= 0.9, ["tokens"] if want >= 0.9 else ["recall", "tokens"]))
+        self.assertEqual((d["sessions"], len(d["per_task"]), d["shown"]), (20, 20, "1.000"))
+        self.assertEqual((d["claude_version"], d["model"], d["tasks_sha256"]), ("2.1.331", "m", "h"))
+        for mean_recall, ceiling in ((0.9 - 1e-10, True), (0.9 - 1e-8, False), (0.8996, False)):  # 0.8996 would round to 0.90
+            with mock.patch.object(rc, "recall", lambda *a, **k: mean_recall):
+                self.assertEqual(rc.decide([row(t, "none") for t in self.tasks], self.tasks, "h")["ceiling"], ceiling, mean_recall)
+
+    def test_timeouts_and_unsolved_sessions_count(self):
+        rows = [row(t, "none", touch=0 if i == 0 else 4, ok=i > 0, status="timeout" if i == 0 else "ok") for i, t in enumerate(self.tasks)]
+        d = rc.decide(rows, self.tasks, "h")
+        self.assertEqual((d["mean_recall"], d["solved"], d["ceiling"], d["statuses"]), (0.95, 19, True, {"ok": 19, "timeout": 1}))
+
+    def test_only_the_registered_sessions(self):
+        rows = [row(t, "none") for t in self.tasks]
+        bad = (rows[:-1], rows + rows[:1], rows[:-1] + [row(self.tasks[-1], "C")], rows[:-1] + [row(self.tasks[-1], "none", final=False)],
+               rows[:-1] + [row(self.tasks[-1], "none", 2)], rows[:-1] + [row(self.tasks[-1], "none", claude_version="2.1.400")],
+               rows[:-1] + [row(self.tasks[-1], "none", model="other")], [{k: v for k, v in r.items() if k != "model"} for r in rows])
+        for b in bad:
+            with self.assertRaises(SystemExit):
+                rc.decide(b, self.tasks, "h")
+        with self.assertRaises(SystemExit):
+            rc.decide(rows[:5], self.tasks[:5], "h")  # the pilot is not this check
+        empty = self.tasks[1:] + [{**self.tasks[0], "gold_files": self.tasks[0]["gold_files"][:1], "forced_tests": []}]
+        with self.assertRaisesRegex(SystemExit, "no counted dependent: t01"):
+            rc.decide([row(t, "none") for t in empty], empty, "h")
 
 
 class WarmUp(unittest.TestCase):

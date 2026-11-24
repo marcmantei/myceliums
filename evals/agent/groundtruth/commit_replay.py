@@ -25,7 +25,15 @@ hand (the spec); ``build`` derives everything else from the commit:
 * one pinned repository per task (``repos`` in the task file): the parent,
   with ``gold_commit`` the replayed commit;
 * ``gold_files``: the commit's name-status against its parent (renames as
-  delete + add);
+  delete + add, and each as a group of ``equivalents``, so one dependent:
+  :func:`renames`), ``comment_only`` where only comments or documentation
+  text change (:func:`comment_only`);
+* ``forced_tests``: the commit's test files that had to change, from the
+  measured record ``forced_tests.json`` (aeval/forced.py; the 20 tasks only);
+  one that fails (and compiles) only with a verdict in ``affected_183.json``
+  that the task text states what it contradicts;
+* ``optional``: code and docs dependents that the stated change does not
+  affect at all, from the same verdicts;
 * ``test_overlay``: the commit's test files (fixtures included), written
   over the working copy (or deleted) before the test command runs;
 * ``test_command``: ``./gradlew``, main and test compilation of every module
@@ -46,6 +54,7 @@ import random
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -74,7 +83,9 @@ GRADLE_ARGS = ("".join(rf"(?=(?:.* )?{f}(?: |$))" for f in FLAGS)
                r"|--tests [A-Za-z0-9_.*$#]+)(?: |$))+")
 BUILD_NOTE = ("The build has no network access. Run Gradle as `./gradlew " + OFFLINE + " --no-daemon ...`, with "
               "fully qualified task paths such as `:spring-core:test --tests ...`; the output may be piped to `tail` "
-              "or `head`.")
+              "or `head`. In shell commands, name files by paths relative to the working copy and do not use `cd`.")
+FORCED = Path(__file__).resolve().with_name("forced_tests.json")
+AFFECTED = Path(__file__).resolve().with_name("affected_183.json")
 # A port nobody listens on: a build started without the flags cannot leave
 # the machine either (not verified yet with a real build).
 NOWHERE = "127.0.0.1"
@@ -112,12 +123,31 @@ def code_text(source: str) -> str:
     return "".join("".join(ln for ln in s.splitlines() if not ln.strip().startswith("import ")).split())
 
 
+def schema_text(source: str) -> str:
+    """An XML schema without its documentation elements, XML comments and
+    white space around text."""
+    def walk(e):
+        kids = [walk(c) for c in e if not str(e.tag).endswith("}annotation") or not str(c.tag).endswith("}documentation")]
+        return [e.tag, sorted(e.attrib.items()), (e.text or "").strip(), kids]
+    return json.dumps(walk(ET.fromstring(source)))
+
+
 def comment_only(hist: Path, sha: str, status: str, path: str) -> bool:
-    """A modified source file whose code is the same before and after the
-    commit: only comments, Javadoc or imports (for Javadoc links) changed."""
-    if status != "M" or not path.endswith((".java", ".kt")):
+    """A modified file whose code is the same before and after the commit:
+    source in which only comments, Javadoc or imports (for Javadoc links)
+    changed, or an XML schema in which only documentation text did."""
+    text = code_text if path.endswith((".java", ".kt")) else schema_text if path.endswith(".xsd") else None
+    if status != "M" or text is None:
         return False
-    return code_text(git(hist, "show", f"{sha}^:{path}")) == code_text(git(hist, "show", f"{sha}:{path}"))
+    return text(git(hist, "show", f"{sha}^:{path}")) == text(git(hist, "show", f"{sha}:{path}"))
+
+
+def renames(hist: Path, sha: str) -> list[list[str]]:
+    """``[old, new]`` of every file git calls renamed (its default similarity,
+    50 %). ``name_status`` lists both, but they are one change: editing the old
+    file in place and renaming it are equivalent."""
+    out = git(hist, "show", "--format=", "--name-status", "--find-renames=50%", "--diff-filter=R", sha)
+    return [line.split("\t")[1:3] for line in out.splitlines() if line.startswith("R")]
 
 
 def spread(files: list[tuple[str, str]], comments: frozenset[str] = frozenset()) -> dict:
@@ -216,6 +246,8 @@ def cmd_build(args) -> int:
     spec = json.loads(Path(args.spec).read_text())
     out_path = Path(args.out)
     old = {t["id"]: t for t in json.loads(out_path.read_text())["tasks"]} if out_path.exists() else {}
+    measured = json.loads(FORCED.read_text())["tasks"] if FORCED.exists() else {}
+    verdicts = json.loads(AFFECTED.read_text())["tasks"] if AFFECTED.exists() else {}
     repos, tasks = [], []
     for s in spec["tasks"]:
         if s.get("drop") or bool(s.get("reserve")) != args.reserve:
@@ -246,6 +278,12 @@ def cmd_build(args) -> int:
         # Build scripts only the commit's own tests need (spec): harness side, like the tests.
         build_overlay = [p for p in s.get("build_overlay", []) if p in paths]
         overlay = [p for _, p in files if file_kind(p) == "tests"] + build_overlay
+        equivalents = [*s.get("equivalents", []), *renames(hist, sha)]
+        forced = measured.get(s["id"])
+        judged = verdicts.get(s["id"], {})
+        optional = sorted(p for p, v in judged.items() if not v["counts"] and v["kind"] != "forced_tests")
+        if forced and (forced["commit"], forced["gold_commit"]) != (parent, sha):
+            raise SystemExit(f"{s['id']}: the forced-tests record is of another commit")
         sp = spread(files, comments)
         task = {
             "id": s["id"], "repo": name, "type": "edit", "answer_kind": "diff",
@@ -257,7 +295,10 @@ def cmd_build(args) -> int:
             "test_command": cmd, "test_overlay": overlay,
             **({"build_overlay": build_overlay} if build_overlay else {}),
             "allowed_commands": [{"prefix": "./gradlew", "args": GRADLE_ARGS}],
-            **({"equivalents": s["equivalents"]} if s.get("equivalents") else {}),
+            **({"equivalents": equivalents} if equivalents else {}),
+            **({"forced_tests": sorted(p for p, f in forced["files"].items() if f["forced"] and (
+                f["outcome"] != "fails" or judged[p]["counts"]))} if forced else {}),
+            **({"optional": optional} if optional else {}),
             **({"either": s["either"]} if s.get("either") else {}),
             **({"untested": s["untested"]} if s.get("untested") else {}),
             **({"weak_test": s["weak_test"]} if s.get("weak_test") else {}),
@@ -310,6 +351,17 @@ def cmd_pilot(args) -> int:
     return 0
 
 
+def cmd_dependents(args) -> int:
+    """The registered number of dependents by type and task (a test compares the task file with it)."""
+    from aeval import report_commit
+    tasks = json.loads(Path(args.tasks).read_text())["tasks"]
+    report_commit.measured(tasks)
+    out = {t["id"]: report_commit.by_type(t) for t in tasks}
+    Path(args.out).write_text(json.dumps(out, indent=1) + "\n")
+    print({k: sum(v[k] for v in out.values()) for k in report_commit.KINDS})
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -328,6 +380,10 @@ def main() -> int:
     s.add_argument("tasks")
     s.add_argument("out")
     s.set_defaults(fn=cmd_pilot)
+    s = sub.add_parser("dependents", help="write the registered number of dependents by type and task")
+    s.add_argument("tasks")
+    s.add_argument("out")
+    s.set_defaults(fn=cmd_dependents)
     args = p.parse_args()
     return args.fn(args)
 

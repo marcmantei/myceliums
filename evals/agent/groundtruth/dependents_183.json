@@ -1,0 +1,222 @@
+{
+ "spel-simple-context-restricted-conversion": {
+  "docs": 2,
+  "remote": 0,
+  "forced_tests": 0,
+  "new_tests": 1,
+  "optional": 0,
+  "local": 0,
+  "comments": 1,
+  "build": 0,
+  "either": 0
+ },
+ "observation-record-handled-exception": {
+  "docs": 3,
+  "remote": 5,
+  "forced_tests": 0,
+  "new_tests": 9,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 1,
+  "either": 0
+ },
+ "beans-max-nested-path-depth": {
+  "docs": 1,
+  "remote": 0,
+  "forced_tests": 0,
+  "new_tests": 5,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 3
+ },
+ "form-converter-map-payloads": {
+  "docs": 1,
+  "remote": 3,
+  "forced_tests": 1,
+  "new_tests": 0,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "jsonl-media-type-support": {
+  "docs": 0,
+  "remote": 9,
+  "forced_tests": 1,
+  "new_tests": 1,
+  "optional": 3,
+  "local": 0,
+  "comments": 1,
+  "build": 0,
+  "either": 0
+ },
+ "test-context-cache-pause-mode": {
+  "docs": 2,
+  "remote": 0,
+  "forced_tests": 0,
+  "new_tests": 3,
+  "optional": 0,
+  "local": 0,
+  "comments": 1,
+  "build": 0,
+  "either": 0
+ },
+ "retry-max-attempts-to-max-retries": {
+  "docs": 1,
+  "remote": 2,
+  "forced_tests": 5,
+  "new_tests": 0,
+  "optional": 0,
+  "local": 1,
+  "comments": 1,
+  "build": 0,
+  "either": 0
+ },
+ "jdbcclient-batch-entry-dsl": {
+  "docs": 1,
+  "remote": 0,
+  "forced_tests": 3,
+  "new_tests": 0,
+  "optional": 0,
+  "local": 1,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "type-mismatch-required-type-arg": {
+  "docs": 1,
+  "remote": 0,
+  "forced_tests": 0,
+  "new_tests": 1,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "servlet-response-ignore-body-flush": {
+  "docs": 1,
+  "remote": 1,
+  "forced_tests": 0,
+  "new_tests": 1,
+  "optional": 1,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "content-negotiation-no-fallback-mapping": {
+  "docs": 0,
+  "remote": 1,
+  "forced_tests": 0,
+  "new_tests": 2,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "client-builders-deep-copy-default-headers-cookies": {
+  "docs": 0,
+  "remote": 2,
+  "forced_tests": 0,
+  "new_tests": 3,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "http-range-honor-if-range": {
+  "docs": 0,
+  "remote": 4,
+  "forced_tests": 0,
+  "new_tests": 6,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "error-response-interceptor-with-request": {
+  "docs": 0,
+  "remote": 6,
+  "forced_tests": 0,
+  "new_tests": 4,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "mime-type-parameter-names-case-insensitive": {
+  "docs": 0,
+  "remote": 1,
+  "forced_tests": 0,
+  "new_tests": 2,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "deferred-bean-registrar-contains-bean": {
+  "docs": 0,
+  "remote": 3,
+  "forced_tests": 0,
+  "new_tests": 7,
+  "optional": 0,
+  "local": 0,
+  "comments": 1,
+  "build": 0,
+  "either": 0
+ },
+ "api-version-deprecation-handler-handler-arg": {
+  "docs": 0,
+  "remote": 2,
+  "forced_tests": 2,
+  "new_tests": 0,
+  "optional": 0,
+  "local": 6,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "bean-provider-parameterized-type-reference": {
+  "docs": 0,
+  "remote": 5,
+  "forced_tests": 0,
+  "new_tests": 1,
+  "optional": 0,
+  "local": 0,
+  "comments": 0,
+  "build": 0,
+  "either": 0
+ },
+ "message-source-default-charset": {
+  "docs": 0,
+  "remote": 0,
+  "forced_tests": 1,
+  "new_tests": 0,
+  "optional": 0,
+  "local": 2,
+  "comments": 1,
+  "build": 0,
+  "either": 0
+ },
+ "retryable-method-retry-event": {
+  "docs": 0,
+  "remote": 1,
+  "forced_tests": 1,
+  "new_tests": 3,
+  "optional": 0,
+  "local": 0,
+  "comments": 2,
+  "build": 0,
+  "either": 0
+ }
+}

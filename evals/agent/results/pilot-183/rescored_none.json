@@ -1,0 +1,160 @@
+{
+ "note": "For information: the five sessions of arm none, scored with the task file and the code of 24 November 2026 after the metric change (forced tests, corrected classifications). sessions.jsonl and pilot.json are unchanged; the refusals and stalls come from the transcripts. Not pooled, no test.",
+ "tasks": {
+  "api-version-deprecation-handler-handler-arg": {
+   "recall": 1.0,
+   "recall_all_tests": 1.0,
+   "remote": {
+    "n": 2,
+    "touched": 2
+   },
+   "docs": {
+    "n": 0,
+    "touched": 0
+   },
+   "forced_tests": {
+    "n": 2,
+    "touched": 2
+   },
+   "new_tests": {
+    "n": 0,
+    "touched": 0
+   },
+   "wall_s": 34.59,
+   "wall_net_s": 34.59,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "claude_refusals": 1,
+   "claude_refusals_cd": 1,
+   "hook_refusals": 1
+  },
+  "beans-max-nested-path-depth": {
+   "recall": 0.0,
+   "recall_all_tests": 0.0,
+   "remote": {
+    "n": 0,
+    "touched": 0
+   },
+   "docs": {
+    "n": 1,
+    "touched": 0
+   },
+   "forced_tests": {
+    "n": 0,
+    "touched": 0
+   },
+   "new_tests": {
+    "n": 5,
+    "touched": 0
+   },
+   "wall_s": 365.12,
+   "wall_net_s": 184.52,
+   "api_stalls": 1,
+   "api_stall_s": 180.6,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "hook_refusals": 3
+  },
+  "mime-type-parameter-names-case-insensitive": {
+   "recall": 1.0,
+   "recall_all_tests": 0.3333,
+   "remote": {
+    "n": 1,
+    "touched": 1
+   },
+   "docs": {
+    "n": 0,
+    "touched": 0
+   },
+   "forced_tests": {
+    "n": 0,
+    "touched": 0
+   },
+   "new_tests": {
+    "n": 2,
+    "touched": 0
+   },
+   "wall_s": 111.8,
+   "wall_net_s": 111.8,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "hook_refusals": 2
+  },
+  "retry-max-attempts-to-max-retries": {
+   "recall": 1.0,
+   "recall_all_tests": 1.0,
+   "remote": {
+    "n": 2,
+    "touched": 2
+   },
+   "docs": {
+    "n": 1,
+    "touched": 1
+   },
+   "forced_tests": {
+    "n": 5,
+    "touched": 5
+   },
+   "new_tests": {
+    "n": 0,
+    "touched": 0
+   },
+   "wall_s": 81.21,
+   "wall_net_s": 81.21,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "claude_refusals": 1,
+   "claude_refusals_cd": 1,
+   "hook_refusals": 2
+  },
+  "type-mismatch-required-type-arg": {
+   "recall": 1.0,
+   "recall_all_tests": 0.5,
+   "remote": {
+    "n": 0,
+    "touched": 0
+   },
+   "docs": {
+    "n": 1,
+    "touched": 1
+   },
+   "forced_tests": {
+    "n": 0,
+    "touched": 0
+   },
+   "new_tests": {
+    "n": 1,
+    "touched": 0
+   },
+   "wall_s": 13.91,
+   "wall_net_s": 13.91,
+   "api_stalls": 0,
+   "api_stall_s": 0.0,
+   "claude_refusals": 0,
+   "claude_refusals_cd": 0,
+   "hook_refusals": 0
+  }
+ },
+ "summary": {
+  "sessions": 5,
+  "solved": 5,
+  "mean_recall": 0.8,
+  "sd_recall_between_tasks": 0.4472135954999579,
+  "mean_recall_all_tests": 0.5666666666666667,
+  "wall_s_per_session": 121.326,
+  "wall_net_s_per_session": 85.206,
+  "tokens_per_session": 258997.6,
+  "projected_usd": 37.5977268,
+  "projected_hours": 11.028599999999997,
+  "projected_hours_without_stalls": 9.222599999999998,
+  "detectable_recall": {
+   "one test": 0.28015852181129675,
+   "Bonferroni, three pairs": 0.3235601033391424,
+   "first Holm step, six tests": 0.3479878507049665
+  },
+  "ceiling": false,
+  "stop": []
+ }
+}

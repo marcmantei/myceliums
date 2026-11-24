@@ -1580,7 +1580,7 @@ name is stored in the run's config, so a resumed run cannot change it.
 Do agents change everything a real change needs, in other modules, tests and
 docs, and does myceliums save tokens per solved task? 20 edit tasks replay
 recent spring-framework commits. **Pilot run, main run not**: the pilot and the
-pre-registration below were fixed before the first session. The warm-up has run and all 20 prechecks are valid.
+first pre-registration were fixed before the first session; the recall was redefined after the pilot in arm `none`, without using any outcome of C or D (*Pre-registration*). The warm-up has run and all 20 prechecks are valid.
 
 **Mining** ([`groundtruth/commit_replay.py`](groundtruth/commit_replay.py)
 `mine`, over a blobless clone with history): non-merge commits on `main` since
@@ -1600,10 +1600,10 @@ It does not see sockets opened by main code or libraries alone; the socket sampl
 | Task | Commit | Files (code/tests/docs) | Modules whose code changes | Comment-only files | Docs | Weakly tested | Primary files |
 |---|---|---:|---:|---:|---|---|---:|
 | `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 1 | 1 | yes |  | 1 |
-| `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 |  | yes | yes | 2 |
+| `observation-record-handled-exception` | 297c74d29c | 20 (8/9/3) | 3 |  | yes | yes | 2 |
 | `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 |  | yes |  | 3 |
 | `form-converter-map-payloads` | ab8de8ec4b | 6 (4/1/1) | 2 |  | yes |  | 1 |
-| `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 |  | yes | yes | 1 |
+| `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 | 1 | yes | yes | 1 |
 | `test-context-cache-pause-mode` | 9711db787e | 9 (4/3/2) | 1 | 1 | yes |  | 3 |
 | `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | 1 | yes | yes | 2 |
 | `jdbcclient-batch-entry-dsl` | 833ab4d48f | 6 (2/3/1) | 1 |  | yes |  | 1 |
@@ -1622,9 +1622,20 @@ It does not see sockets opened by main code or libraries alone; the socket sampl
 Spread: 6 small (≤ 5 files), 10 medium (6-12), 4 large (13-20); main code changes
 in one module 5, two 10, three or more 5; 10 with docs. The split is computed from
 the diffs: a file in which only comments, Javadoc or imports change does not count for a
-module (six tasks have such gold files; the mining filter and the first versions of this
+module (seven tasks have such gold files; the mining filter and the first versions of this
 table counted them). Grading reports these files and Gradle scripts as their own
 kinds of dependent (`comments`, `build`), in no other kind and not among the forgotten, and the code recall also without them (`code_changed`).
+
+**Classifications corrected by rule** (24 November, after the pilot; the rules are code in `commit_replay.py` and `editgrade.py` and were run over all 20 tasks and the reserves; they change three tasks, no reserve):
+
+| Rule | Task and file | Before | Now | Why |
+|---|---|---|---|---|
+| a file git calls renamed (50 % similar) is one dependent (`renames`) | `retry-max-attempts-...`: `MaxAttemptsRetryPolicyTests` → `MaxRetriesRetryPolicyTests` | two dependents, deleted + added | one (`equivalents`) | editing the old file in place and renaming it are the same change; the only rename in the 29 |
+| an XML schema in which only documentation elements change is comment-only (`schema_text`) | `jsonl-...`: `spring-mvc.xsd` | remote code | `comments` | the diff is one sentence of `xsd:documentation`; the only schema in the 29 |
+| the documentation module is docs, its sample code too (`file_kind`) | `observation-...`: two `framework-docs/src/main/java/.../UserController.java` | remote code | docs | the pages include the samples; counted either way, so (a) does not change, the split does (docs 3, code modules 3). Mining ran with the old rule |
+
+Looked for and not found: generated files (by path and by marker), files that change in white space, licence header or imports only beyond those already marked (Javadoc imports in `deferred-...`), other renames. The Gradle script of `observation-...` was already apart (`build`).
+Not touched, because no rule tells them apart: annotations and casts that a signature change needs (`form-converter-...`) are code.
 
 **What the test commands enforce** (an agent's reading of the diffs and tests, nothing was run): in 8 tasks at least one gold dependent
 can stay as at the parent and the command still passes (`weak_test` in the task file says which; `bean-provider-...` is one of them because only the
@@ -1665,8 +1676,8 @@ and noted in the spec.
 
 **What the build derives** (`commit_replay.py build`): one pin per task in the
 task file's own `repos` (the parent; `gold_commit` the replayed commit),
-`gold_files` (the commit's name-status, renames as delete + add),
-`test_overlay` (the commit's test files, fixtures included; for
+`gold_files` (the commit's name-status, renames as delete + add and as one `equivalents` group),
+`forced_tests` (below), `test_overlay` (the commit's test files, fixtures included; for
 `observation-record-handled-exception` also the Gradle script that gives its overlaid tests
 their test dependency), the test command (`./gradlew --offline --no-scan --no-build-cache`, main and
 test compilation of **every module the commit changes sources in**, then `:module:test --tests ...`
@@ -1689,6 +1700,7 @@ such as `bSPP`, and `--tests` with a class or method pattern) and the strata.
 * `precheck-edit` applies the overlay to the parent (the test must fail),
   then the whole commit (it must pass), and records both exit codes and run
   times; `check-tasks` refuses a task without both.
+* `forced-tests` ([`aeval/forced.py`](aeval/forced.py)) measures which of the commit's test changes the change itself forces (below).
 * The repository's `session_env` (`GRADLE_OPTS`: no Gradle daemon, Kotlin
   compiler in process, so no daemon outlives a session) and the caller's
   `JAVA_HOME` (`env_from_caller`; `$JAVA_HOME/bin` first on `PATH`) reach
@@ -1714,9 +1726,14 @@ python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 
 python3 evals/agent/agent_eval.py gradle-cache               # after the warm-up: freeze ~/.gradle's dependencies
 python3 evals/agent/agent_eval.py --tasks $T precheck-edit --gold-runs 2 --sandbox   # needs a warm Gradle cache: the commands are offline
 python3 evals/agent/agent_eval.py --tasks $T check-tasks
+python3 evals/agent/agent_eval.py --tasks $T forced-tests --logs DIR   # once, about an hour; the record is committed. Then `commit_replay.py build` and `dependents`.
 MYC=$HOME/.cache/myceliums-agent-eval/bin/myc-787920c
 # Once. The 20 derived indexes exist; `index` refuses to delete a derived index, `--replace` rebuilds them (4,942 s for the 20 last time).
 # python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models --base $BASE_HOME
+# Before the main run: one session of arm none per task, then the registered decision (recorded once).
+python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-none20 --conditions none --rep 1 \
+    --profile realistic --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
+python3 evals/agent/agent_eval.py --tasks $T ceiling 2026-11-xx-none20 --write
 python3 evals/agent/agent_eval.py --tasks $T run --label 2026-11-xx-commit-replay --conditions none,C,D \
     --profile realistic --bash --timeout 2400 --concurrency 1 --myc $MYC --models-dir ~/.cache/myceliums-eval-models
 ```
@@ -1732,26 +1749,126 @@ parent at one shared path (`work_name`: `spring-framework` under `AEVAL_WORK_ROO
 fresh copy of that parent's index. The path is shared because of the index
 (below); its price is that **sessions run one at a time**.
 
-#### Pre-registration (24 November 2026, before the pilot and any other session)
+#### Pre-registration (24 November 2026; first before the pilot, outcome (a) redefined the same day after it)
 
 Arms `none`, C, D; 20 tasks × 3 repetitions × 3 arms = 180 sessions; the task is the unit of analysis (its repetitions averaged first). Every
 final session counts, also one that ran into the time or turn limit; only infrastructure failures (API errors, a killed CLI, a usage limit) are run again.
 
-* **Co-primary outcomes.** (a) **Recall over the dependents**: the share of the replayed commit's docs, tests and remote code files (outside the
-  directories of the primary files) that the session changed. **Not counted:** code files in which only comments or imports change (`comments`; docs files never are), Gradle scripts, and files whose part can go into a primary file (`either`). Equivalent places are one dependent, found when any of them is edited.
-  Grading and report use one function (`editgrade.dependents`). The comment rule and the counting of equivalents were fixed on 24 November 2026, before any session; they change the denominators of five tasks (`spel-simple-...`, `test-context-...`, `deferred-...`, `message-source-...`, `retryable-...`) and of the `deferred-...` pair.
-  (b) **Tokens per session**, unsolved sessions included: input with cache plus output; the CLI's cost estimate is shown beside it and not tested.
+**What changed, when and why.** Until the pilot, (a) was the recall over *all* dependents: docs, remote code and every test file of the commit. The pilot's five sessions of arm `none` (24 November, 08:25-08:52) and the independent
+review of its pull request showed that this mostly measures new tests the commit's author added and nobody asked for: a perfect engineer who adds none would average 0.64 over the 20 tasks (the review's number; computed here: 0.642, with the corrections above and all measured forced tests counted).
+On 24 November 2026, after those sessions and **without using any outcome of C or D, and before any C or D session that counts**, (a) was redefined to what the change needs; the old (a) stays as a named secondary outcome. Corrections, forced tests and rules were made by an agent that has seen no C or D transcript, result or run directory
+(the agent that ran the pilot's two pipeline checks in C and D had; what the reviewer and the coordinator saw of them is not known to it). **The bias this brings:** (a) now discards an arm's effect on writing tests nobody asked for, in either direction; only the secondary outcomes show it.
+It was chosen knowing that arm `none` missed most of those tests, and it moves `none` towards the ceiling (in the five pilot sessions, with the corrected gold, from 0.57 to 0.80), so it makes "tokens alone" (decision rule) more likely. Ten tasks have at most two counted dependents, five of them one, so per task (a) is coarse and those five carry 25 % of the mean (*Sensitivity*: units pooled).
+
+* **Outcome (a): recall over remote code + docs + forced tests**: the share of the replayed commit's code files outside the directories of the primary files, docs files and forced test files that the session changed. **Forced** has a measured and a judged part: that a test file does not compile or fails is **measured** (*Forced tests*, below); whether a failing one counts, because the task text states what it contradicts, and whether a code or docs file is affected at all are **judged** (*Is the file affected*, below). One that does not compile counts without a judgement.
+  **Not counted:** every other test file of the commit (`new_tests`), also one that fails without the text stating why; code and docs the stated change does not affect (`optional`, *Is the file affected*); files in which only comments, imports or documentation text change (`comments`; docs files never are), Gradle scripts, code beside a primary file, and files whose part can go into a primary file (`either`). Equivalent places are one dependent, found when any of them is edited.
+  Grading and report use one function (`editgrade.dependents`). The numbers per task are fixed: the table below and [`groundtruth/dependents_183.json`](groundtruth/dependents_183.json) (a unit test compares them with the task file).
+* **Outcome (b): tokens per session**, unsolved sessions included: input with cache plus output; the CLI's cost estimate is shown beside it and not tested.
   A session without a result event (timeout) counts with the calls its transcript shows, its output as a lower bound; the report says how many.
-* **Secondary outcomes**, not tested: docs recall alone; tests pass, which is also success (an edit session succeeds when the task's test command passes, nothing else); tokens and cost per solved task; precision (share of the changed files that the commit changed); API calls; wall time.
+* **Decision rule, before the main run:** one session of arm `none` per task (20 sessions, a label of their own, not pooled with the pilot or the main run; all 20 final sessions count, timeouts and turn limits included). The **unrounded** mean over the 20 tasks of their (a) decides, with the threshold 0.90 − 1e-9; it is shown with three decimals:
+  **at or above it, tokens become the sole primary outcome** (Holm over the three pairs) and (a) is a **harm check**, reported for each pair as "harm detected" (the 95 % interval of the difference lies entirely below zero) or "harm not detected", always with the number of tasks worse/better and **two bounds on the loss not excluded**: the interval's lower bound, and the exact one-sided 95 % bound (Clopper-Pearson) on the share of worse tasks, each of which loses at most everything (none of 20 worse: 13.9 %; one: 21.6 %).
+  The interval alone cannot contain a loss where no task is worse, and choosing between the two by the data would let the bound shrink when a task gets worse; both together never do (a test). "Not detected" is never evidence of none.
+  **Below it, (a) and (b) stay co-primary** (Holm over six tests: three pairs × two outcomes). `agent_eval.py ceiling LABEL --write` computes it and records it once (`groundtruth/decision_183.json`: the mean, each task's recall, the sessions' statuses, the task file's sha256, the Claude Code version and the model, of which there must be one each). **`report` refuses without that record**, or when the task file is another one, and says when the run's CLI or model differ from it. These 20 sessions change nothing else. **Whether a main run happens at all is Marc's decision.**
+* **Secondary outcomes**, not tested: the **recall with new tests (the outcome registered first)**: docs + remote code (the optional ones included) + all test files; the share of the new tests alone; docs, remote and forced-test recall alone; tests pass, which is also success (an edit session succeeds when the task's test command passes, nothing else); tokens and cost per solved task; precision (share of the changed files that the commit changed); API calls; wall time, as measured and without API stalls (*Refused reads and API stalls*).
 * **Comparisons:** C vs `none`, D vs `none`, C vs D. Every difference is **first minus second**: a positive recall difference favours the first arm, a negative token difference favours it.
-  Paired percentile bootstrap over the tasks (10,000 resamples, seed 0), two-sided p by inverting it; **Holm over the six tests** (three pairs × two co-primary outcomes) at 5 %. With 20 tasks the percentile bootstrap is slightly liberal. Intervals are 95 % and not corrected.
-* **Detectable difference** (two-sided 5 %, power 80 %, 20 tasks, normal approximation): at an SD of 0.3 of the tasks' paired recall differences 0.19 for one test, 0.22 with Bonferroni over three pairs, 0.23 for the first Holm step over six tests. The SD is a guess; the pilot replaces the number only (it
-  has one arm, so its SD between tasks is a stand-in), nothing else. A difference that is not significant is not evidence of none.
-* **Sensitivity**, not tested: without the 8 weakly tested tasks; **with** the comment-only code files that lie outside the primary files' directories (`deferred-...`: 11 instead of 10 dependents); only the 6 tasks whose parent has an AGENTS.md (`strata.agents_md`).
+  Paired percentile bootstrap over the tasks (10,000 resamples, seed 0), two-sided p by inverting it; Holm as above at 5 %. With 20 tasks the percentile bootstrap is slightly liberal. Intervals are 95 % and not corrected.
+* **Detectable difference** (two-sided 5 %, power 80 %, 20 tasks, normal approximation): at an SD of 0.3 of the tasks' paired recall differences 0.19 for one test, 0.22 with Bonferroni over three pairs, 0.23 for the first Holm step over six tests. The SD is a guess; the pilot's (0.45, below) is one of five tasks and of single sessions, not of differences. A difference that is not significant is not evidence of none.
+* **Sensitivity**, not tested: without the 8 weakly tested tasks; **with** the comment-only files that lie outside the primary files' directories; only the 6 tasks whose parent has an AGENTS.md (`strata.agents_md`); the recall over all units **pooled** (a task weighs as many as it has counted dependents).
 * **Validity limits:** Spring Framework is public and its commits are likely in the model's training data, in every arm alike; agents have no scripting (Bash is an allowlist without interpreters) and work in a sandbox, so they are not
   agents as in daily use; D has its search tools blocked, so C vs D and D vs `none` measure myceliums *instead of* search, C vs `none` beside it; one project, one language, one model.
+  Forced by compilation is relative to the commit's implementation too: another correct one (an alias kept) may leave such a test green, so an agent can be right and miss it. Which files a change affects is an agent's reading (*Is the file affected*).
 
-`agent_eval.py report` computes exactly these (tests on synthetic sessions: known differences, ties, an arm that solves nothing, missing sessions).
+`agent_eval.py report` computes exactly these (tests on synthetic sessions: known differences, ties, an arm that solves nothing, missing sessions, the decision on both sides of 0.90 and what it refuses, the report without a decision, the harm check with and without a worse task, units pooled, an arm that touches new tests only).
+
+**Forced tests** ([`aeval/forced.py`](aeval/forced.py), `agent_eval.py forced-tests`; record: [`groundtruth/forced_tests.json`](groundtruth/forced_tests.json)). The commit's non-test files are written over the parent. A test file of the commit is forced when its **parent version** does not compile there or a test in it fails there; a test file that is new in the commit never is, and a renamed one counts as the deleted one.
+All modules the commit changes sources in are compiled; files with errors are replaced by the commit's version and the compilation repeated (one error can hide another), then the tests of the others run in their parent version (an abstract test class through its subclasses). Failing tests ran twice and had to fail alike. Two controls per file: its tests pass on the untouched parent and, in the commit's version, on the whole commit.
+Anything else would have been *unclear*, listed and not used. Run on 24 November, 09:31-10:32, offline in the grading sandbox with the JDK copy and the frozen dependencies, one task at a time (84 Gradle runs, 60 minutes, load 20-147 from other work): **no unclear file, no infrastructure failure, no control that failed, no difference between the two runs of the 4 failing test runs**; no connection but loopback in the socket samples.
+Per file the record has the command, the outcome, the first errors or failing tests, the tests run in the controls and the hashes of both versions; per task the commits, every command with exit code, time and the hash of its log, and a hash over the sources it depends on (a test compares it where the checkouts exist). To run one again: the run block's `forced-tests --task ID --out NEW.json`.
+
+Test files by outcome (compile: does not compile; fails; passes: not forced; new), then **the registered dependents by type** (units: equivalents count once, so the rename in `retry-...` is one; (a) = remote + docs + forced; the types after it are not counted; *fails* that the text does not state count as new tests, see below):
+
+| Task | Compile | Fails | Passes | New | Remote code | Docs | Forced tests | **(a)** | New tests | Optional | Local | Comments | Build | Either |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `spel-simple-context-restricted-conversion` | 0 | 0 | 1 | 0 | 0 | 2 | 0 | **2** | 1 | 0 | 0 | 1 | 0 | 0 |
+| `observation-record-handled-exception` | 0 | 6 | 2 | 1 | 5 | 3 | 0 | **8** | 9 | 0 | 0 | 0 | 1 | 0 |
+| `beans-max-nested-path-depth` | 0 | 0 | 5 | 0 | 0 | 1 | 0 | **1** | 5 | 0 | 0 | 0 | 0 | 3 |
+| `form-converter-map-payloads` | 1 | 0 | 0 | 0 | 3 | 1 | 1 | **5** | 0 | 0 | 0 | 0 | 0 | 0 |
+| `jsonl-media-type-support` | 0 | 1 | 1 | 0 | 9 | 0 | 1 | **10** | 1 | 3 | 0 | 1 | 0 | 0 |
+| `test-context-cache-pause-mode` | 0 | 0 | 2 | 1 | 0 | 2 | 0 | **2** | 3 | 0 | 0 | 1 | 0 | 0 |
+| `retry-max-attempts-to-max-retries` | 5 | 0 | 0 | 1 | 2 | 1 | 5 | **8** | 0 | 0 | 1 | 1 | 0 | 0 |
+| `jdbcclient-batch-entry-dsl` | 3 | 0 | 0 | 0 | 0 | 1 | 3 | **4** | 0 | 0 | 1 | 0 | 0 | 0 |
+| `type-mismatch-required-type-arg` | 0 | 0 | 1 | 0 | 0 | 1 | 0 | **1** | 1 | 0 | 0 | 0 | 0 | 0 |
+| `servlet-response-ignore-body-flush` | 0 | 0 | 1 | 0 | 1 | 1 | 0 | **2** | 1 | 1 | 0 | 0 | 0 | 0 |
+| `content-negotiation-no-fallback-mapping` | 0 | 0 | 2 | 0 | 1 | 0 | 0 | **1** | 2 | 0 | 0 | 0 | 0 | 0 |
+| `client-builders-deep-copy-default-headers-cookies` | 0 | 0 | 3 | 0 | 2 | 0 | 0 | **2** | 3 | 0 | 0 | 0 | 0 | 0 |
+| `http-range-honor-if-range` | 0 | 0 | 6 | 0 | 4 | 0 | 0 | **4** | 6 | 0 | 0 | 0 | 0 | 0 |
+| `error-response-interceptor-with-request` | 0 | 0 | 4 | 0 | 6 | 0 | 0 | **6** | 4 | 0 | 0 | 0 | 0 | 0 |
+| `mime-type-parameter-names-case-insensitive` | 0 | 0 | 2 | 0 | 1 | 0 | 0 | **1** | 2 | 0 | 0 | 0 | 0 | 0 |
+| `deferred-bean-registrar-contains-bean` | 0 | 0 | 2 | 5 | 3 | 0 | 0 | **3** | 7 | 0 | 0 | 1 | 0 | 0 |
+| `api-version-deprecation-handler-handler-arg` | 2 | 0 | 0 | 0 | 2 | 0 | 2 | **4** | 0 | 0 | 6 | 0 | 0 | 0 |
+| `bean-provider-parameterized-type-reference` | 0 | 0 | 1 | 0 | 5 | 0 | 0 | **5** | 1 | 0 | 0 | 0 | 0 | 0 |
+| `message-source-default-charset` | 0 | 1 | 0 | 0 | 0 | 0 | 1 | **1** | 0 | 0 | 2 | 1 | 0 | 0 |
+| `retryable-method-retry-event` | 0 | 1 | 2 | 1 | 1 | 0 | 1 | **2** | 3 | 0 | 0 | 2 | 0 | 0 |
+| **all** | 11 | 9 | 35 | 9 | 45 | 13 | 14 | **72** | 49 | 4 | 10 | 8 | 1 | 3 |
+
+**Is the file affected by the stated change at all?** (24 November, after the review of the pull request that redefined (a); [`groundtruth/affected_183.json`](groundtruth/affected_183.json), one verdict per unit, an agent's with the reviewer's on three of its points; no session's result was used.) Forced is measured against the commit's implementation, and a commit may touch files its change does not need. Two rules:
+
+* A test forced by a **failing assertion** counts only where the task text states the behaviour it contradicts (the verdict quotes it, a test looks for the quote in the text); one forced by **compilation** stays. Of nine failing files three stay (`jsonl`, `message-source`, `retryable`); the six of `observation-...` go to the new tests.
+* A code or docs file that the stated change does not affect is `optional`: apart, in no recall but the outcome registered first. Four of the 62: `HttpHeadersReturnValueHandler` (named in `weak_test` before, corrected) and the three `jsonl` pages, which name a media type only as an example and stay true.
+
+82 units asked, **72 count** (45 remote, 13 docs, 14 forced tests; the reviewer's 75 before the three pages). Three verdicts are borderline and say so: the two `UserController` samples and `MethodRetrySpec`. By the reviewer's estimate a perfect engineer who adds no new tests reached about 0.95 of the (a) before these two rules and about 0.99 after.
+
+| Task | Files | Kind (measured) | Counts | Why |
+|---|---|---|---|---|
+| `spel-simple-context-restricted-conversion` | `appendix.adoc` | docs | yes | lists the Spring properties; the text adds one |
+| `spel-simple-context-restricted-conversion` | `evaluation.adoc` | docs | yes | describes what SimpleEvaluationContext supports and its conversions, which change by default |
+| `observation-record-handled-exception` | `observability.adoc` | docs | yes | tells users to set the error on the context and what is recorded, the practice the text calls insufficient |
+| `observation-record-handled-exception` | `reactive/UserController.java` | docs | yes | sample of exactly the idiom the text calls insufficient (findCurrent(..).setError); borderline, it still compiles |
+| `observation-record-handled-exception` | `servlet/UserController.java` | docs | yes | sample of exactly the idiom the text calls insufficient (findObservationContext(..).setError); borderline, it still compiles |
+| `observation-record-handled-exception` | `ResponseEntityExceptionHandler.java` | remote | yes | records server errors itself; the text: WebFlux's own exception handling should use the new methods |
+| `observation-record-handled-exception` | `ResponseEntityExceptionHandlerTests.java`, `ResponseStatusExceptionResolverTests.java`, `ExceptionHandlerExceptionResolverErrorViewTests.java`, `ExceptionHandlerExceptionResolverProblemDetailTests.java`, `ResponseEntityExceptionHandlerTests.java`, `DefaultHandlerExceptionResolverTests.java` | forced tests (fails) | **no** | The text demands that Observation.error is called once at completion; it does not say that the context stays without the error until then, which is what the parent's assertion (context.getError() right after handling) contradicts. Setting it at once and reporting at completion satisfies the text and leaves this test green. |
+| `observation-record-handled-exception` | `ResponseStatusExceptionResolver.java`, `ExceptionHandlerExceptionResolver.java`, `ResponseEntityExceptionHandler.java`, `DefaultHandlerExceptionResolver.java` | remote | yes | records server errors itself; the text: Spring MVC's own exception handling should use the new methods |
+| `beans-max-nested-path-depth` | `data-binding.adoc` | docs | yes | says nested properties can be set "to an unlimited depth", which becomes wrong |
+| `form-converter-map-payloads` | `message-converters.adoc` | docs | yes | says form data is read from and written into a MultiValueMap, which is no longer all |
+| `form-converter-map-payloads` | `ContentRequestMatchers.java`, `AbstractMockHttpServletRequestBuilder.java`, `FormContentFilter.java` | remote | yes | does not compile: the converter's read returns Object |
+| `form-converter-map-payloads` | `FormHttpMessageConverterTests.java` | forced tests (compile) | yes | does not compile (measured) |
+| `jsonl-media-type-support` | `webtestclient.adoc` | docs | **no** | names ndjson only as an example ("such as") of infinite streams; stays true |
+| `jsonl-media-type-support` | `reactive-spring.adoc` | docs | **no** | names ndjson only as an example ("such as", "for example") of a streaming media type, in both places; both stay true |
+| `jsonl-media-type-support` | `mvc-ann-async.adoc` | docs | **no** | names ndjson only as an example ("such as") of a streaming media type; stays true |
+| `jsonl-media-type-support` | `GsonEncoder.java`, `Jackson2CodecSupport.java`, `Jackson2JsonEncoder.java`, `JacksonJsonDecoder.java`, `JacksonJsonEncoder.java`, `KotlinSerializationJsonDecoder.java`, `KotlinSerializationJsonEncoder.java`, `ProtobufJsonEncoder.java` | remote | yes | names application/x-ndjson among its defaults or streaming types; the text: jsonl everywhere it is supported, listed directly after it |
+| `jsonl-media-type-support` | `HttpMessageWriterViewTests.java` | forced tests (fails) | yes | asserts the exact list of supported media types; the text puts jsonl into it (“The JSON codecs list it among their default supported MIME types, directly after application/x-ndjson”) |
+| `jsonl-media-type-support` | `ReactiveTypeHandler.java` | remote | yes | the text: Spring MVC streams application/jsonl just as application/x-ndjson |
+| `test-context-cache-pause-mode` | `appendix.adoc` | docs | yes | lists the Spring properties; the text adds one |
+| `test-context-cache-pause-mode` | `caching.adoc` | docs | yes | describes the pausing of inactive contexts, which can now be turned off |
+| `retry-max-attempts-to-max-retries` | `resilience.adoc` | docs | yes | uses the renamed names in text and samples |
+| `retry-max-attempts-to-max-retries` | `AbstractRetryInterceptor.java` | remote | yes | calls the renamed builder method; does not compile |
+| `retry-max-attempts-to-max-retries` | `MethodRetrySpec.java` | remote | yes | public record of the retry API with the concept in its component; borderline, the text does not list it |
+| `retry-max-attempts-to-max-retries` | `ReactiveRetryInterceptorTests.java`, `RetryInterceptorTests.java`, `MaxAttemptsRetryPolicyTests.java`, `RetryPolicyTests.java`, `RetryTemplateTests.java` | forced tests (compile) | yes | does not compile (measured) |
+| `jdbcclient-batch-entry-dsl` | `core.adoc` | docs | yes | describes and shows add(), which the text removes |
+| `jdbcclient-batch-entry-dsl` | `JdbcClientIndexedParameterTests.java`, `JdbcClientIntegrationTests.java`, `JdbcClientNamedParameterTests.java` | forced tests (compile) | yes | does not compile (measured) |
+| `type-mismatch-required-type-arg` | `mvc-ann-rest-exceptions.adoc` | docs | yes | lists the message arguments of TypeMismatchException; the text adds {2} |
+| `servlet-response-ignore-body-flush` | `appendix.adoc` | docs | yes | lists the Spring properties; the text adds one |
+| `servlet-response-ignore-body-flush` | `HttpHeadersReturnValueHandler.java` | remote | **no** | the parent's getBody() writes the headers and never flushes, so the change does not affect it (its flush() does not flush either as long as the body is unused) |
+| `servlet-response-ignore-body-flush` | `StreamingResponseBodyReturnValueHandler.java` | remote | yes | flushes the body stream, which becomes a no-op; the text: streaming must keep working by flushing the response |
+| `content-negotiation-no-fallback-mapping` | `ParameterContentTypeResolver.java` | remote | yes | the text: apply to the parameter-based strategy in WebFlux; it adds the fallback to its mappings |
+| `client-builders-deep-copy-default-headers-cookies` | `DefaultWebTestClientBuilder.java`, `DefaultWebClientBuilder.java` | remote | yes | clone/mutate share the value lists; the text: the other HTTP client builders must be fixed in the same way |
+| `http-range-honor-if-range` | `ResourceHttpMessageWriter.java`, `DefaultEntityResponseBuilder.java`, `AbstractMessageConverterMethodProcessor.java`, `ResourceHttpRequestHandler.java` | remote | yes | answers Range for resource responses itself; the text: consistently in MVC and WebFlux |
+| `error-response-interceptor-with-request` | `AbstractMessageWriterResultHandler.java`, `ResponseBodyResultHandler.java`, `ResponseEntityResultHandler.java`, `AbstractMessageConverterMethodProcessor.java`, `HttpEntityMethodProcessor.java`, `RequestResponseBodyMethodProcessor.java` | remote | yes | calls the interceptors; the text: all framework calls use the request-aware variant and pass the current request, which only the caller has |
+| `mime-type-parameter-names-case-insensitive` | `MediaType.java` | remote | yes | compares the quality factor's name; named in the text |
+| `deferred-bean-registrar-contains-bean` | `BeanRegistryAdapter.java` | remote | yes | implements BeanRegistry, which gets three methods |
+| `deferred-bean-registrar-contains-bean` | `ConfigurationClassBeanDefinitionReader.java` | remote | yes | one of the two places where imported registrars run; the text: deferred ones at the end |
+| `deferred-bean-registrar-contains-bean` | `GenericApplicationContext.java` | remote | yes | runs programmatically registered registrars; the text: deferred ones at the end |
+| `api-version-deprecation-handler-handler-arg` | `StandardApiVersionDeprecationHandlerTests.java`, `StandardApiVersionDeprecationHandlerTests.java` | forced tests (compile) | yes | does not compile (measured) |
+| `api-version-deprecation-handler-handler-arg` | `AbstractHandlerMapping.java`, `AbstractHandlerMapping.java` | remote | yes | calls deprecation handling and is the only place that has the handler |
+| `bean-provider-parameterized-type-reference` | `DefaultListableBeanFactory.java`, `StaticListableBeanFactory.java`, `AbstractApplicationContext.java`, `SimpleJndiBeanFactory.java`, `StubWebApplicationContext.java` | remote | yes | implements BeanFactory, and the text makes the new method abstract |
+| `message-source-default-charset` | `ResourceBundleMessageSourceTests.java` | forced tests (fails) | yes | asserts the late NoSuchMessageException for an invalid charset name; the text says it goes away (“an invalid charset name now fails at configuration time with an UnsupportedCharsetException rather than surfacing later as a NoSuchMessageException”) |
+| `retryable-method-retry-event` | `RetryAnnotationBeanPostProcessor.java` | remote | yes | creates the interceptor and is the bean that can be given the application's event publisher |
+| `retryable-method-retry-event` | `RetryTemplateTests.java` | forced tests (fails) | yes | asserts the old interruption message; the text gives the new one (“should carry the message "Interrupted during back-off for retryable operation '<name>'; aborting execution"”) |
+
+**Refused reads and API stalls.** In the pilot's `none` sessions Claude Code's own permission layer ("don't ask" mode), not the hook, refused two Bash calls that only read working-copy files. Both combine `cd` with relative paths, one with `sed -n` and a second `cd`, the other with a redirection to `/dev/null`; a third call with two `cd` and relative `grep`s ran, and no read without `cd` used either, so **the cause is likely but not proven**.
+Chosen: one sentence more in the build note, so in the prompt of **all** arms: "In shell commands, name files by paths relative to the working copy and do not use `cd`." It asks for no docs and no tests (a test checks the prompt around the description for those words). The hook still lets `cd` through, but its refusal text no longer lists it as allowed. The settings were **not** changed: `autoAllowBashIfSandboxed` might let such calls through, but it removes the check that stands behind the hook and would need a new probe of the sandbox with the CLI.
+The audit counts per session `claude_refusals` (the CLI's `permission_denied` events or the refusal's text), those with a `cd` (`claude_refusals_cd`) and the calls themselves, so that the sessions to come show whether the sentence helps and whether `cd` is the cause; and `api_errors`, of them `api_stalls` (`stream_idle_timeout`) with `api_stall_s`, the seconds since the last event before the stall. Wall times are reported with and without them (the figure is an upper bound: it includes the time a good answer would have taken to begin).
+On the five `none` transcripts it finds the two refusals, the one stall (180.6 s, `beans-max-...`), and leaves every other number of the audit as it was.
 
 #### Pilot
 
@@ -1762,7 +1879,7 @@ final session counts, also one that ran into the time or turn limit; only infras
 * It may change only **harness errors, wrong gold, or unclear wording**, each with a written rationale and a re-check (precheck, leakage review). It **never drops or changes a task because of how an arm did**.
 * Its sessions are **never pooled** with the main run, which runs all 20 tasks afresh.
 * Afterwards cost and time of the main run are estimated again: the mean of the five × 180 sessions. **Stop and report** when that is above **$288 or 24 h**. (The estimate below has 36 h in its middle row, so the time limit is expected to bite unless sessions are shorter than 8 minutes.)
-* **Ceiling:** a mean dependent recall of 0.90 or more in `none`. Then say so; the tasks are not changed.
+* **Ceiling:** a mean dependent recall of 0.90 or more in `none`. Then say so; the tasks are not changed. (The decision that follows from it is made on 20 other sessions: *Pre-registration*, decision rule.)
 
 The commands are [`groundtruth/run_pilot_183.sh`](groundtruth/run_pilot_183.sh) (bash; the same commands that stood here, where zsh passed the unquoted options as one word and `$MYC` was not set). It sets the environment of the run block, checks the `myc` binary's hash and the CLI's version (2.1.331) before each run,
 and stops at the first failure; a report above the limits stops the main run, not the two pipeline checks.
@@ -1773,6 +1890,8 @@ bash evals/agent/groundtruth/run_pilot_183.sh             # real sessions
 ```
 
 ##### Pilot result (24 November 2026, 08:25-08:52)
+
+*The numbers of this section are the ones registered first (recall over all dependents); "Scored again" at its end has the redefined outcome.*
 
 Seven sessions, each final at the first attempt, status ok (that hides one API error: in `beans-max-...` the answer stopped arriving for 181 s, `stream_idle_timeout`, and the CLI continued by itself; its 365 s include the stall, so without it the projection below would be 9.2 h instead of 11.0 h), Claude Code 2.1.331, `claude-sonnet-5-5`, normal login (`apiKeySource` `none`). Load of the machine 8-30 during the sessions (`none`: 13-26 on average), so wall times are upper estimates of a quiet machine's.
 Artifacts: [`results/pilot-183/`](results/pilot-183/) (`sessions.jsonl` with the five `none` rows, `pilot.json`, `checks.json`, `meta.json`); transcripts are archived outside the repository. **Not pooled, no test.**
@@ -1790,8 +1909,20 @@ Artifacts: [`results/pilot-183/`](results/pilot-183/) (`sessions.jsonl` with the
 * **Detectable difference** with that SD as a stand-in for the paired differences': 0.26 for one test, 0.30 with Bonferroni over three pairs, **0.32 for the first Holm step**. It is an SD of five tasks and of single sessions, not of differences; the number replaces the pre-registered 0.3-SD one (0.23) and nothing else.
 * **Pipeline checks** (outcomes not reported): C and D each started, reached the myceliums server and were graded. D's agent built in the session; C's did not, so building inside C was only checked with the mock API.
 * **Audit:** no disagreement, kernel refusal, protected place or flag in the seven sessions; the hook refused every call that would have left the rules before it ran (`none`: 8 calls: `..` and a path without the working copy's directory, `sed -i`, `$`, a trailing backslash). No remote Java connection in 1,404 socket samples. **Who has read what:** the agent that ran the pilot read the tool calls of all seven sessions, C and D included (arguments shortened, not the models' messages, which is why it missed the API error), and saw the log lines with C's and D's tokens and file scores. It is therefore not blind and does not change tasks, gold or wording.
-* **Found, not fixed:** Claude Code itself ("don't ask" permission mode, not the hook) refused three Bash calls that read working-copy files (two of them in `none`), and the audit does not count them; the cause is not known. `export` writes absolute home paths into `meta.json` (shown as `~` here).
-* **Nothing was changed** because of the pilot so far. The run did not re-review the gold. The independent review of the pilot's pull request found gold problems: the renamed test class of `retry-...` counts as a deleted plus an added file, so as two dependents (the agent edited the old one in place); `spring-mvc.xsd` in `jsonl-...` is documentation text counted as code; and most missed test dependents are new tests the task does not ask for. The fixes come in a separate pull request, by someone who has not seen C or D.
+* **Found, not fixed there** (the audit counts them now, see *Refused reads*): Claude Code itself ("don't ask" permission mode, not the hook) refused three Bash calls that read working-copy files (two of them in `none`), and the audit does not count them; the cause is not known. `export` writes absolute home paths into `meta.json` (shown as `~` here).
+* **Nothing was changed** because of the pilot so far. The run did not re-review the gold. The independent review of the pilot's pull request found gold problems: the renamed test class of `retry-...` counts as a deleted plus an added file, so as two dependents (the agent edited the old one in place); `spring-mvc.xsd` in `jsonl-...` is documentation text counted as code; and most missed test dependents are new tests the task does not ask for. The fixes came in a separate pull request, by someone who has not seen C or D (*Classifications corrected by rule*, *Forced tests*).
+
+**Scored again, for information** (arm `none` only, the same five sessions, corrected gold and redefined (a); [`results/pilot-183/rescored_none.json`](results/pilot-183/rescored_none.json); `sessions.jsonl` and `pilot.json` are unchanged):
+
+| Task (`none`) | (a) | Remote | Docs | Forced tests | New tests | Recall with new tests | Wall s | Without stall | Refused by Claude Code (`cd`) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `api-version-deprecation-handler-handler-arg` | 1.00 | 2/2 | – | 2/2 | – | 1.00 | 35 | 35 | 1 (1) |
+| `beans-max-nested-path-depth` | 0.00 | – | 0/1 | – | 0/5 | 0.00 | 365 | 185 | 0 (0) |
+| `mime-type-parameter-names-case-insensitive` | 1.00 | 1/1 | – | – | 0/2 | 0.33 | 112 | 112 | 0 (0) |
+| `retry-max-attempts-to-max-retries` | 1.00 | 2/2 | 1/1 | 5/5 | – | 1.00 | 81 | 81 | 1 (1) |
+| `type-mismatch-required-type-arg` | 1.00 | – | 1/1 | – | 0/1 | 0.50 | 14 | 14 | 0 (0) |
+
+Mean (a) 0.80, SD between the five tasks 0.45; recall with new tests 0.57 (0.54 before the corrected classifications). `beans-max-...` has one counted dependent, a docs page, and the session did not touch it. Projection of the main run without the stall 9.2 h. Five tasks say nothing about the decision rule, which needs the 20 sessions.
 
 #### Warm-up
 
@@ -1939,7 +2070,7 @@ expansion, an incomplete list of closed places, and a keychain opened to every c
   myceliums is therefore partly a result against a restricted baseline, above all for `retry-max-attempts-to-max-retries`.
 * **Audit** per session, with raw-text tests that share no code with the hook (program names, addresses, absolute and parent paths, Gradle flags): what was refused, what
   ran although the scan suspects it (*disagreements*, kept in `to_review` and to be read, because the scan also meets search patterns), kernel refusals, protected places in
-  results or edits. `TOKENS.md` counts them per arm, with the hook's refusals.
+  results or edits; also calls Claude Code itself refused and API stalls (*Refused reads and API stalls*). `TOKENS.md` counts them per arm, with the hook's refusals.
 * **Threat model.** A cooperative agent told to work in its checkout, audited per session. Not covered: **macOS's security services**: inside Claude Code's sandbox, lookups of `com.apple.SecurityServer` and
   `com.apple.securityd.xpc` succeed (2.1.331; `secd`, `securityd`, `trustd.agent` and the token service do not), and its settings can only add services, not remove them. The keychain *files* are closed; whether these services would hand anything
   to a process that cannot read them was not tried. `claude`, the myceliums server and the hooks run with the user's access. A listener a test opens on all interfaces could be reached from the local network while it runs (no task's own tests do; the agent may run others). Names of files outside may stay

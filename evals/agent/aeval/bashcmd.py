@@ -654,7 +654,8 @@ def isolated_hook(argv: list[str], stdin=sys.stdin, stdout=sys.stdout) -> int:
         return _deny(stdout, f"{ISOLATED_MARKER} the check failed ({type(exc).__name__})")
     if why is None:
         return 0
-    progs = sorted(D_ALLOWED) + ["head/tail as pipes"] + (sorted(SEARCH_SHELL) if search else [])
+    # `cd` is let through, but not offered: Claude Code's own layer refuses many calls with it, and the prompt says not to.
+    progs = sorted(set(D_ALLOWED) - {"cd"}) + ["head/tail as pipes"] + (sorted(SEARCH_SHELL) if search else [])
     return _deny(stdout, ISOLATED_MESSAGE.format(why=why[1], root=root, progs=", ".join(progs)))
 
 
