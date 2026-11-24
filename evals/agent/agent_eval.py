@@ -78,6 +78,11 @@ def cmd_check_tasks(args) -> int:
     return 1 if problems else 0
 
 
+def _planned(path: str | None) -> tuple:
+    """The sessions of a committed plan file (#183), in order: ``(task, condition, rep)``."""
+    return tuple((s["task"], s["condition"], s["rep"]) for s in config.load_json(Path(path))["sessions"]) if path else ()
+
+
 def _run_config(args) -> RunConfig:
     conditions = tuple(args.conditions.split(",")) if args.conditions else ("with", "without")
     for c in conditions:
@@ -109,6 +114,7 @@ def _run_config(args) -> RunConfig:
         schedule=schedule or "paired",
         mock_api=getattr(args, "mock_api", False),
         hook_cd=getattr(args, "hook_cd", False),
+        plan=_planned(getattr(args, "plan", None)),
     )
 
 
@@ -283,10 +289,12 @@ def cmd_export(args) -> int:
         meta["claude_versions"] = versions
     if cfg.get("conditions"):  # runs other than the pilot's with/without
         meta["conditions"] = cfg["conditions"]
-    if cfg.get("hook_cd"):  # #183: the hook let `cd` through
-        meta["hook_cd"] = True
         # --tasks names the file the run used (it may have been renamed since).
         meta["tasks_file"] = os.path.relpath(config.tasks_file(), config.EVAL_DIR)
+    if cfg.get("hook_cd"):  # #183: the hook let `cd` through
+        meta["hook_cd"] = True
+    if cfg.get("plan"):  # #183: the sessions and their order came from a committed file
+        meta["planned_sessions"] = len(cfg["plan"])
     out = report.export(args.label, meta)
     print(f"exported to {out}")
     return 0
@@ -347,19 +355,67 @@ def cmd_describe(args) -> int:
     return 0
 
 
-def cmd_control(args) -> int:
-    """#183: the registered comparison of the control arm none-docs with the 20 recorded sessions of arm none."""
-    from aeval import control, report_commit
+def _control_rows(label: str) -> tuple[list[dict], list[dict]]:
+    """``(recorded, control run)`` final rows; refuses another task file than the recorded decision's."""
+    from aeval import report_commit
     d = report_commit.decision()
     if d is None or d["tasks_sha256"] != config.sha256_file(config.tasks_file()):
         sys.exit("the task file is not the one of the recorded decision")
     read = lambda p: [r for line in p.read_text().splitlines() if line.strip() and (r := json.loads(line)).get("final", True)]  # noqa: E731
-    base = read(config.RESULTS_DIR / "none20-183" / "sessions.jsonl")
-    src = config.RESULTS_DIR / args.label / "sessions.jsonl"
-    c = control.compare(base, read(src if src.exists() else config.RUNS_DIR / args.label / "results.jsonl"), config.load_tasks())
+    src = config.RESULTS_DIR / label / "sessions.jsonl"
+    return read(config.RESULTS_DIR / "none20-183" / "sessions.jsonl"), read(src if src.exists() else config.RUNS_DIR / label / "results.jsonl")
+
+
+def cmd_control(args) -> int:
+    """#183: the registered comparison of the control arm none-docs with arm none (recorded and concurrent)."""
+    from aeval import control, report_commit
+    recorded, run = _control_rows(args.label)
+    covered = None
+    if args.key or args.verdicts:
+        if not (args.key and args.verdicts):
+            sys.exit("--key and --verdicts go together")
+        covered = control.verdicts(config.load_json(Path(args.key)), config.load_json(Path(args.verdicts)))
+    c, d = control.compare(recorded, run, config.load_tasks(), covered), report_commit.decision()
     if (c["claude_version"], c["model"]) != (d["claude_version"], d["model"]):
         sys.exit("not the CLI and model of the recorded decision")
     print(json.dumps(c, indent=1) if args.json else "\n".join(control.lines(c)))
+    return 0
+
+
+def cmd_control_plan(args) -> int:
+    """#183: write the control run's sessions in order (once; a test compares the file with the rule)."""
+    from aeval import control
+    out = Path(args.out)
+    if out.exists():
+        sys.exit(f"{out} exists")
+    out.write_text(json.dumps({"seed": control.PLAN_SEED, "sessions": control.plan(config.load_tasks())}, indent=1) + "\n")
+    return 0
+
+
+def cmd_coverage_sheet(args) -> int:
+    """#183: what the blind judge gets (sheet.json) and the key that stays apart (key.json)."""
+    from aeval import control
+    recorded, run = _control_rows(args.label)
+    tasks = config.load_tasks()
+    repo = {t["id"]: t["repo"] for t in tasks}
+    runs = {control.RECORDED: (config.RUNS_DIR / args.recorded_runs, "none"), control.CONCURRENT: (config.RUNS_DIR / args.label, "none"),
+            control.NEW: (config.RUNS_DIR / args.label, "none-docs")}
+
+    def diff_of(s: str, task: str) -> str:
+        base, arm = runs[s]
+        return (base / "sessions" / f"{task}__{arm}__r1" / "changes.diff").read_text()
+
+    def parent_of(task: str, path: str) -> str | None:
+        f = config.cache_dir() / "repos" / repo[task] / path
+        return f.read_text() if f.is_file() else None
+
+    criteria = config.load_json(config.EVAL_DIR / "groundtruth" / "coverage_183.json")["units"]
+    items, key = control.sheet(control.load(recorded, run, tasks), tasks, criteria, diff_of, parent_of)
+    out = Path(args.out)
+    out.mkdir(parents=True)
+    (out / "sheet.json").write_text(json.dumps(items, indent=1, ensure_ascii=False) + "\n")
+    (out / "key.json").write_text(json.dumps(key, indent=1) + "\n")
+    print(f"{len(items)} items; the judge gets sheet.json only")
     return 0
 
 
@@ -735,6 +791,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="session order (#182): paired (default) or interleaved (arms' order counterbalanced; "
                         "no --condition subsets); fixed by --profile realistic")
     s.add_argument("--hook-cd", action="store_true", help="#183: the isolated hook lets `cd` through, as for the 20 sessions of arm none")
+    s.add_argument("--plan", metavar="FILE", help="#183: run exactly the sessions of this file, in its order (groundtruth/control_plan_183.json)")
     s.add_argument("--mock-api", action="store_true",
                    help="#182: run every session against the scripted mock API (no model call, no usage) "
                         "to check the pipeline end to end")
@@ -825,10 +882,22 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--paired-tokens-from", help="results label whose paired token SDs give a detectable difference (e.g. 182-spring)")
     s.set_defaults(fn=cmd_describe)
 
-    s = sub.add_parser("control", help="#183: the control arm none-docs against the recorded sessions of arm none (descriptive)")
+    s = sub.add_parser("control", help="#183: the control arm none-docs against arm none, recorded and concurrent (descriptive)")
     s.add_argument("label", help="the run's label, or the directory in results/ that holds its sessions.jsonl")
+    s.add_argument("--key", help="key.json of the coverage sheet")
+    s.add_argument("--verdicts", help="the judge's {item: {criterion: true|false}}")
     s.add_argument("--json", action="store_true")
     s.set_defaults(fn=cmd_control)
+
+    s = sub.add_parser("control-plan", help="#183: write the sessions of the control run in order")
+    s.add_argument("out")
+    s.set_defaults(fn=cmd_control_plan)
+
+    s = sub.add_parser("coverage-sheet", help="#183: the shuffled sheet for the judge of the coverage, and its key")
+    s.add_argument("label")
+    s.add_argument("--recorded-runs", default="2026-11-24-none20", help="label of the recorded sessions in runs/")
+    s.add_argument("--out", required=True, help="a new directory")
+    s.set_defaults(fn=cmd_coverage_sheet)
 
     s = sub.add_parser("gradle-cache", help="freeze the resolved dependencies of ~/.gradle for the offline builds (#183)")
     s.add_argument("--listing", action="store_true", help="only print the first 12 digits of the existing copy's listing hash")

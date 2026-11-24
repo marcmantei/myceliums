@@ -1,0 +1,422 @@
+{
+ "description": "#183: when a docs or forced-test unit counts as covered, not only touched. Written on 24 November 2026 before any session of the control run, from the parent's file, the task text and the commit's file, by an agent that had seen the recorded 20 sessions of arm none (their tool calls and summaries; of the files judged here it had read no diff). All criteria of a unit must hold for the file as the session left it; wording is free. `absent`/`present` are regular expressions checked mechanically on that file (the commit's file meets them, the parent's breaks at least one where a unit has any); the text is judged blind to the arm.",
+ "units": {
+  "spel-simple-context-restricted-conversion": {
+   "framework-docs/modules/ROOT/pages/appendix.adoc": {
+    "wrong": "lists the Spring properties; the new one is missing",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The list of Spring properties has an entry for `spring.expression.reflectiveConversion`.",
+      "present": "spring\\.expression\\.reflectiveConversion"
+     },
+     {
+      "id": "c2",
+      "text": "The entry says what it does: SimpleEvaluationContext uses the standard (reflective, unrestricted) conversion by default again."
+     }
+    ]
+   },
+   "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc": {
+    "wrong": "describes SimpleEvaluationContext without the restriction",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The page says that by default SimpleEvaluationContext does not convert by reflectively invoking constructors or methods (or: uses a restricted conversion service)."
+     },
+     {
+      "id": "c2",
+      "text": "The page names `withConverter(...)` as the way to add a conversion.",
+      "present": "withConverter"
+     }
+    ]
+   }
+  },
+  "observation-record-handled-exception": {
+   "framework-docs/modules/ROOT/pages/integration/observability.adoc": {
+    "wrong": "tells users, in the Servlet and in the Reactive section, to set the error field on the ObservationContext themselves",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The Servlet section no longer tells users to set the error field on the context; it tells them to record the exception (the new method, by name or through the included sample)."
+     },
+     {
+      "id": "c2",
+      "text": "The Reactive section does the same."
+     },
+     {
+      "id": "c3",
+      "text": "The old instruction is gone.",
+      "absent": "set the error field on the"
+     }
+    ]
+   },
+   "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java": {
+    "wrong": "uses findCurrent(..).setError",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The sample records the exception with the new method.",
+      "absent": "\\.setError\\(|context\\.setError",
+      "present": "recordHandledException\\("
+     },
+     {
+      "id": "c2",
+      "text": "It passes the exchange's attributes and the exception."
+     }
+    ]
+   },
+   "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java": {
+    "wrong": "uses findObservationContext(..).setError",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The sample records the exception with the new method.",
+      "absent": "\\.setError\\(|context\\.setError",
+      "present": "recordHandledException\\("
+     },
+     {
+      "id": "c2",
+      "text": "It passes the request and the exception."
+     }
+    ]
+   }
+  },
+  "beans-max-nested-path-depth": {
+   "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc": {
+    "wrong": "says nested properties can be set \"to an unlimited depth\"",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The page no longer says that the depth is unlimited.",
+      "absent": "unlimited depth"
+     },
+     {
+      "id": "c2",
+      "text": "The page says that the nesting depth is limited, with the default 100, and that the limit can be set (`setMaxNestedPathDepth` or `maxNestedPathDepth`).",
+      "present": "[mM]axNestedPathDepth"
+     }
+    ]
+   }
+  },
+  "form-converter-map-payloads": {
+   "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc": {
+    "wrong": "says form data is read from and written into a MultiValueMap<String, String> only",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The FormHttpMessageConverter entry says that a plain Map is supported as well (for reading and writing)."
+     },
+     {
+      "id": "c2",
+      "text": "A plain Map type is named.",
+      "present": "(?<![A-Za-z])Map(?:<|`| )"
+     }
+    ]
+   },
+   "spring-web/src/test/java/org/springframework/http/converter/FormHttpMessageConverterTests.java": {
+    "wrong": "assigns the result of read(..) to a MultiValueMap (does not compile) and expects canWrite(*/*)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The result of `read(...)` is handled as Object (cast or checked).",
+      "absent": "MultiValueMap<String, String> result = this\\.converter\\.read\\(null"
+     },
+     {
+      "id": "c2",
+      "text": "The expectation that `*/*` can be written is gone or reversed.",
+      "absent": "assertCanWrite\\(MediaType\\.ALL\\)"
+     },
+     {
+      "id": "c3",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   }
+  },
+  "jsonl-media-type-support": {
+   "spring-webflux/src/test/java/org/springframework/web/reactive/result/view/HttpMessageWriterViewTests.java": {
+    "wrong": "asserts the exact list of supported media types without JSON Lines",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The asserted list contains the new media type after NDJSON.",
+      "present": "APPLICATION_JSONL|application/jsonl"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   }
+  },
+  "test-context-cache-pause-mode": {
+   "framework-docs/modules/ROOT/pages/appendix.adoc": {
+    "wrong": "lists the Spring properties; the new one is missing",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The list of Spring properties has an entry for `spring.test.context.cache.pause`.",
+      "present": "spring\\.test\\.context\\.cache\\.pause"
+     },
+     {
+      "id": "c2",
+      "text": "The entry says that it sets the pause mode of the context cache (whether inactive contexts are paused)."
+     }
+    ]
+   },
+   "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc": {
+    "wrong": "describes the pausing of inactive contexts as if it could not be turned off",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The page names the property `spring.test.context.cache.pause`.",
+      "present": "spring\\.test\\.context\\.cache\\.pause"
+     },
+     {
+      "id": "c2",
+      "text": "The page says that pausing can be disabled with it and gives the value (`never`).",
+      "present": "(?i)\\bnever\\b"
+     }
+    ]
+   }
+  },
+  "retry-max-attempts-to-max-retries": {
+   "framework-docs/modules/ROOT/pages/core/resilience.adoc": {
+    "wrong": "uses maxAttempts and withMaxAttempts in text and samples",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "No text or sample uses the old names.",
+      "absent": "maxAttempts|withMaxAttempts"
+     },
+     {
+      "id": "c2",
+      "text": "The samples use the new names (`maxRetries`, `withMaxRetries`) and the text around them still says the same as the samples (numbers, meaning).",
+      "present": "maxRetries"
+     }
+    ]
+   },
+   "spring-context/src/test/java/org/springframework/resilience/ReactiveRetryInterceptorTests.java": {
+    "wrong": "annotations use maxAttempts (does not compile)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "No @Retryable uses the old attribute.",
+      "absent": "@Retryable\\([^)]*maxAttempts"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   },
+   "spring-context/src/test/java/org/springframework/resilience/RetryInterceptorTests.java": {
+    "wrong": "annotations use maxAttempts and maxAttemptsString (does not compile)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "No @Retryable uses the old attributes.",
+      "absent": "@Retryable\\([^)]*maxAttempts"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   },
+   "spring-core/src/test/java/org/springframework/core/retry/MaxAttemptsRetryPolicyTests.java": {
+    "wrong": "uses the renamed factory and builder methods (does not compile); renaming the file is not required",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The old factory and builder methods are not used.",
+      "absent": "withMaxAttempts\\(|\\.maxAttempts\\("
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   },
+   "spring-core/src/test/java/org/springframework/core/retry/RetryPolicyTests.java": {
+    "wrong": "uses the renamed methods (does not compile) and the old messages",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The old methods and messages are not used.",
+      "absent": "RetryPolicy\\.withMaxAttempts\\(|builder\\(\\)\\.maxAttempts\\(|Invalid maxAttempts|maxAttempts, delay"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   },
+   "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java": {
+    "wrong": "uses the renamed methods (does not compile)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The old methods are not used.",
+      "absent": "withMaxAttempts\\(|\\.maxAttempts\\("
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   }
+  },
+  "jdbcclient-batch-entry-dsl": {
+   "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc": {
+    "wrong": "describes and shows the removed add() style",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "Neither text nor sample uses `add()` to separate entries.",
+      "absent": "\\.add\\(\\)|`add\\(\\)`"
+     },
+     {
+      "id": "c2",
+      "text": "Text and sample define entries with `entry(...)`.",
+      "present": "\\.entry\\(|`entry\\("
+     }
+    ]
+   },
+   "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIndexedParameterTests.java": {
+    "wrong": "uses the removed batch methods (does not compile)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The removed style is not used.",
+      "absent": "\\.add\\(\\)"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   },
+   "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientIntegrationTests.java": {
+    "wrong": "uses the removed batch methods (does not compile)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The removed style is not used.",
+      "absent": "\\.add\\(\\)"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing batch tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled (a test of the removed trailing-add() behaviour may go)."
+     }
+    ]
+   },
+   "spring-jdbc/src/test/java/org/springframework/jdbc/core/simple/JdbcClientNamedParameterTests.java": {
+    "wrong": "uses the removed batch methods (does not compile)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The removed style is not used.",
+      "absent": "\\.add\\(\\)"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   }
+  },
+  "type-mismatch-required-type-arg": {
+   "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc": {
+    "wrong": "lists the message arguments of TypeMismatchException as {0} and {1} only",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The TypeMismatchException row lists `{2}`."
+     },
+     {
+      "id": "c2",
+      "text": "It says what it is: the (simple) name of the required type."
+     }
+    ]
+   }
+  },
+  "servlet-response-ignore-body-flush": {
+   "framework-docs/modules/ROOT/pages/appendix.adoc": {
+    "wrong": "lists the Spring properties; the new one is missing",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The list of Spring properties has an entry for `spring.http.response.flush.enabled`.",
+      "present": "spring\\.http\\.response\\.flush\\.enabled"
+     },
+     {
+      "id": "c2",
+      "text": "The entry says what it does: flush calls on the body stream reach the Servlet response again (ignored by default)."
+     }
+    ]
+   }
+  },
+  "api-version-deprecation-handler-handler-arg": {
+   "spring-web/src/test/java/org/springframework/web/accept/StandardApiVersionDeprecationHandlerTests.java": {
+    "wrong": "calls handleVersion without the handler (does not compile)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The call passes a handler.",
+      "absent": "handleVersion\\(\"1\\.1\", request, response\\)"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   },
+   "spring-webflux/src/test/java/org/springframework/web/reactive/accept/StandardApiVersionDeprecationHandlerTests.java": {
+    "wrong": "calls handleVersion without the handler (does not compile)",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The call passes a handler.",
+      "absent": "handleVersion\\(\"1\\.1\", exchange\\)"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   }
+  },
+  "message-source-default-charset": {
+   "spring-context/src/test/java/org/springframework/context/support/ResourceBundleMessageSourceTests.java": {
+    "wrong": "expects NoSuchMessageException after setDefaultEncoding with an invalid charset name",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "No test of a resource-bundle message source expects NoSuchMessageException for an invalid charset name any more; if such a test is kept, it expects UnsupportedCharsetException when the name is set."
+     },
+     {
+      "id": "c2",
+      "text": "The file's other tests are kept, not deleted, emptied or disabled."
+     }
+    ]
+   }
+  },
+  "retryable-method-retry-event": {
+   "spring-core/src/test/java/org/springframework/core/retry/RetryTemplateTests.java": {
+    "wrong": "asserts the old interruption message",
+    "criteria": [
+     {
+      "id": "c1",
+      "text": "The interruption message asserted is the new one (or a pattern that only the new one needs).",
+      "absent": "retryable operation '\\.\\+\\?'\\\"\\)"
+     },
+     {
+      "id": "c2",
+      "text": "The file's existing tests are kept: adapted or replaced by an equivalent, not deleted, emptied or disabled."
+     }
+    ]
+   }
+  }
+ }
+}

@@ -1,7 +1,7 @@
 #!/bin/bash
-# The control arm of #183 exactly as pre-registered (README, "Control arm"): 20 sessions of arm `none-docs`, one per task,
-# with the command of the 20 sessions of arm `none` but for the arm, the label and --hook-cd (the hook of that run let `cd`
-# through). Real sessions on the caller's normal login; resumable. `--dry-run` prints the command and starts nothing.
+# The control run of #183 exactly as pre-registered (README, "Control arm"): 20 sessions of arm `none-docs` and 9 concurrent
+# ones of arm `none`, in the order of control_plan_183.json, with the command of the 20 recorded sessions of arm `none` but
+# for the arms, the label, the plan and --hook-cd (the hook of that run let `cd` through). Real sessions on the caller's normal login; resumable. `--dry-run` prints the command and starts nothing.
 # Run it detached: caffeinate -ims bash run_none_docs_183.sh. Clean stop: touch runs/<label>/STOP.
 set -euo pipefail
 
@@ -13,7 +13,7 @@ case "${1-}" in
 esac
 
 EVAL=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-LABEL=2026-11-24-none-docs20
+LABEL=2026-11-24-control-none-docs
 MYC=${AEVAL_CACHE:-$HOME/.cache/myceliums-agent-eval}/bin/myc-787920c
 MYC_SHA=bf84b0e854f68b7ae39401723e30e70c7ab714c86891b33bf066bf100dccf857
 CLAUDE_VERSION=2.1.331
@@ -22,8 +22,8 @@ FROZEN=cc17a8254506                                                           # 
 export AEVAL_WORK_ROOT=/private/tmp/aeval182 AEVAL_PROTECT=/private/tmp/aeval183
 export JAVA_HOME=$HOME/.cache/myc-java/jdk-ipv4/Contents/Home
 T=$EVAL/tasks/tasks-commit-replay.json
-run=(python3 "$EVAL/agent_eval.py" --tasks "$T" run --label "$LABEL" --conditions none-docs --rep 1 --profile realistic --bash --timeout 2400
-  --concurrency 1 --max-sessions 24 --hook-cd --myc "$MYC" --models-dir "$HOME/.cache/myceliums-eval-models")
+run=(python3 "$EVAL/agent_eval.py" --tasks "$T" run --label "$LABEL" --conditions none,none-docs --plan "$EVAL/groundtruth/control_plan_183.json" --profile realistic --bash --timeout 2400
+  --concurrency 1 --max-sessions 35 --hook-cd --myc "$MYC" --models-dir "$HOME/.cache/myceliums-eval-models")
 
 sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
 ready() {

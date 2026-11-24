@@ -208,6 +208,7 @@ class RunConfig:
     schedule: str = "paired"  # #182: config.SCHEDULES; "interleaved" counterbalances the arms' order
     mock_api: bool = False  # #182: every session against the scripted mock API (pipeline check, no model)
     hook_cd: bool = False  # #183: the isolated hook lets `cd` through, as it did for the 20 sessions of arm none
+    plan: tuple = ()  # #183: the sessions, in order, as (task, condition, rep); empty: the schedule decides
 
     def comparable(self) -> dict:
         """Fields that must not change when a run is resumed."""
@@ -235,6 +236,9 @@ class RunConfig:
             d.pop("mock_api")
         if not d["hook_cd"]:
             d.pop("hook_cd")
+        d["plan"] = [list(x) for x in d["plan"]]
+        if not d["plan"]:
+            d.pop("plan")
         return d
 
 
@@ -381,6 +385,11 @@ class Runner:
         sessions of all arms are thus spread evenly over the run's time,
         and no arm is systematically the first or last of its block.
         """
+        if self.cfg.plan:
+            by_id = {t["id"]: t for t in self.tasks}
+            if bad := [x for x in self.cfg.plan if x[0] not in by_id or x[1] not in self.cfg.conditions] or len(set(self.cfg.plan)) < len(self.cfg.plan):
+                raise SystemExit(f"the plan names a session twice, or a task or condition the run does not have: {bad}")
+            return [WorkItem(by_id[t], c, rep) for t, c, rep in self.cfg.plan]
         rng = random.Random(self.cfg.seed)
         items: list[WorkItem] = []
         for rep in range(1, self.cfg.reps + 1):
@@ -737,6 +746,10 @@ exec {shlex.quote(self.cfg.myc)} "$@"
                                         capture_output=True).returncode != 0]
         if untracked:
             (out_dir / "untracked.txt").write_text("\n".join(untracked) + "\n")
+            with open(out_dir / "changes.diff", "a") as fh:  # new files too: what the session left is all in this one file
+                for f in untracked:
+                    fh.write(subprocess.run(["git", "-C", str(workdir), "diff", "--no-index", "--", "/dev/null", f], capture_output=True,
+                                            text=True, errors="replace").stdout)
         tests = None
         overlay = item.task.get("test_overlay") or []
         if item.task.get("test_command"):

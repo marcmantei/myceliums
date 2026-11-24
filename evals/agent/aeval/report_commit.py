@@ -51,7 +51,12 @@ DESIGNS = {frozenset(d.arms): d for d in (REGISTERED, CONTROLLED)}
 
 
 def design_of(rows: list[dict]) -> Design:
-    return DESIGNS.get(frozenset(r["condition"] for r in rows), REGISTERED)
+    """The registered design of these arms. A missing or foreign arm is refused:
+    another design would answer another question."""
+    arms = frozenset(r["condition"] for r in rows)
+    if arms not in DESIGNS:
+        raise SystemExit(f"the arms {', '.join(sorted(arms)) or '-'} are no registered design ({'; '.join(', '.join(d.arms) for d in DESIGNS.values())})")
+    return DESIGNS[arms]
 
 
 SESSIONS = N_TASKS * N_REPS * len(ARMS)

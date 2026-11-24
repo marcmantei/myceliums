@@ -4,6 +4,7 @@ import importlib.util
 import io
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -14,6 +15,7 @@ from unittest import mock
 EVAL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(EVAL))
 
+import agent_eval  # noqa: E402
 from aeval import bashcmd, config, control, report, report_commit as rc, report_variants  # noqa: E402
 from aeval.runner import RunConfig, Runner, WorkItem, build_prompt  # noqa: E402
 
@@ -66,18 +68,38 @@ class Arm(unittest.TestCase):
 
     def test_the_schedule_knows_it(self):
         tasks = [{"id": f"t{i:02d}", "repo": "r", "answer_kind": "diff"} for i in range(20)]
-        plan = lambda conds, reps: Runner(RunConfig(label="x", conditions=conds, reps=reps, schedule="interleaved"), tasks, {"r": {"name": "r"}}).plan()  # noqa: E731
-        # The 20 sessions come in the order of the 20 of arm none (same seed).
-        self.assertEqual([i.task["id"] for i in plan(("none",), 3)[:20]], [i.task["id"] for i in plan(("none-docs",), 3)[:20]])
-        full = plan(("none", "none-docs", "C"), 3)
+        full = Runner(RunConfig(label="x", conditions=("none", "none-docs", "C"), reps=3, schedule="interleaved"), tasks, {"r": {"name": "r"}}).plan()
         self.assertEqual(len(full), 180)
         for k in range(0, 180, 3):  # the three arms of a task are adjacent
             self.assertEqual({i.condition for i in full[k:k + 3]}, {"none", "none-docs", "C"})
             self.assertEqual(len({(i.task["id"], i.rep) for i in full[k:k + 3]}), 1)
 
+    def test_the_29_sessions_and_their_order(self):
+        tasks = json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]
+        rec = json.loads((EVAL / "groundtruth/control_plan_183.json").read_text())
+        self.assertEqual(rec["sessions"], control.plan(tasks, rec["seed"]))
+        s = [(x["task"], x["condition"], x["rep"]) for x in rec["sessions"]]
+        nine = control.docs_tasks(tasks)
+        self.assertEqual((len(s), len(set(s)), len(nine)), (29, 29, 9))
+        self.assertEqual(sorted(t for t, c, _ in s if c == "none-docs"), sorted(t["id"] for t in tasks))
+        self.assertEqual(sorted(t for t, c, _ in s if c == "none"), nine)
+        first = [c for k, (t, c, _) in enumerate(s) if t in nine and (k == 0 or s[k - 1][0] != t)]
+        self.assertEqual(first, ["none", "none-docs"] * 4 + ["none"])  # the pairs are adjacent, the arm that comes first alternates
+        runner = Runner(RunConfig(label="x", conditions=("none", "none-docs"), reps=3, schedule="interleaved", plan=tuple(s)), tasks, {t["repo"]: {"name": t["repo"]} for t in tasks})
+        self.assertEqual([(i.task["id"], i.condition, i.rep) for i in runner.plan()], s)
+        self.assertEqual(json.loads(json.dumps(runner.cfg.comparable()))["plan"], [list(x) for x in s])
+        for bad in (s + s[:1], [("nope", "none", 1)], [(s[0][0], "C", 1)]):
+            runner.cfg.plan = tuple(bad)
+            with self.assertRaises(SystemExit):
+                runner.plan()
+        args = mock.Mock(plan=str(EVAL / "groundtruth/control_plan_183.json"))
+        self.assertEqual(list(agent_eval._planned(args.plan)), s)
+        self.assertEqual(agent_eval._planned(None), ())
+
     def test_old_run_configs_are_unchanged(self):
         c = RunConfig(label="x", conditions=("none",)).comparable()
         self.assertNotIn("hook_cd", c)
+        self.assertNotIn("plan", c)
         self.assertTrue(RunConfig(label="x", hook_cd=True).comparable()["hook_cd"])
 
 
@@ -110,90 +132,225 @@ class Hook(unittest.TestCase):
                         mock.patch("aeval.isolation.session_environment", lambda tmp, g="gh": {}), \
                         mock.patch("aeval.isolation.session_settings", lambda tmp, w, env, myc, hook: {"hook": hook}):
                     hook = json.loads(r._isolated_settings(WorkItem(t, "none-docs", 1), Path(d), Path(d) / "w").read_text())["hook"]
-                import shlex
                 words = shlex.split(hook)
                 self.assertEqual(words[words.index("--allow-json") + 2:], want)
                 self.assertEqual(words[words.index("--search") + 1], "yes")
 
 
+class Export(unittest.TestCase):
+    def test_the_task_file_is_recorded_with_and_without_the_flags(self):
+        for more, want in (({}, {}), ({"hook_cd": True, "plan": [["t", "none", 1]]}, {"hook_cd": True, "planned_sessions": 1})):
+            with tempfile.TemporaryDirectory() as d:
+                d = Path(d)
+                (d / "runs/x").mkdir(parents=True)
+                (d / "myc").write_text("x")
+                (d / "tasks.json").write_text(json.dumps({"tasks": []}))
+                (d / "runs/x/results.jsonl").write_text("")
+                cfg = {"label": "x", "model": "sonnet", "effort": "medium", "max_turns": 100, "timeout_s": 1, "reps": 1, "success_threshold": 0.8,
+                       "tool_search": None, "myc": str(d / "myc"), "conditions": ["none"], **more}
+                (d / "runs/x/config.json").write_text(json.dumps(cfg))
+                got = {}
+                with mock.patch.object(config, "RUNS_DIR", d / "runs"), mock.patch.object(config, "tasks_file", lambda: d / "tasks.json"), \
+                        mock.patch.object(config, "load_repos", lambda: {}), mock.patch.object(agent_eval.prep, "index_meta", lambda: {}), \
+                        mock.patch.object(agent_eval.report, "export", lambda label, meta: got.update(meta) or d):
+                    agent_eval.cmd_export(mock.Mock(label="x", date="2026-11-24", myc_commit="c", note=None))
+                self.assertEqual(got["tasks_file"], os.path.relpath(d / "tasks.json", config.EVAL_DIR))
+                self.assertEqual({k: got[k] for k in ("hook_cd", "planned_sessions") if k in got}, want)
+
+
+def _diff(path, old, new):
+    import difflib
+    body = "".join(difflib.unified_diff(old.splitlines(True), new.splitlines(True), f"a/{path}" if old else "/dev/null", f"b/{path}" if new else "/dev/null"))
+    return f"diff --git a/{path} b/{path}\nindex 1..2 100644\n{body}"
+
+
+class Coverage(unittest.TestCase):
+    def test_a_file_is_rebuilt_from_its_diff(self):
+        old = "".join(f"line {i}\n" for i in range(60))
+        new = old.replace("line 3\n", "").replace("line 30\n", "line thirty\nand one more\n").replace("line 59\n", "the end\n")
+        both = _diff("x/a.adoc", "p\n", "q\n") + _diff("x/b.adoc", old, new) + _diff("x/b.adoc.txt", "1\n", "2\n")
+        self.assertEqual(control.after(old, control.file_diff(both, "x/b.adoc")), new)
+        self.assertEqual(control.after(None, _diff("n", "", "a\nb\n")), "a\nb\n")
+        self.assertIsNone(control.after("a\n", _diff("n", "a\n", "")))
+        self.assertEqual(control.file_diff(both, "x/c.adoc"), "")
+        with self.assertRaises(ValueError):
+            control.after(old.replace("line 30", "other"), control.file_diff(both, "x/b.adoc"))
+
+    def test_the_criteria_are_for_every_unit_and_nothing_else(self):
+        tasks = json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]
+        rec = json.loads((EVAL / "groundtruth/coverage_183.json").read_text())["units"]
+        self.assertEqual({(t["id"], u["path"]) for t in tasks for u in control.units(t)}, {(t, p) for t, v in rec.items() for p in v})
+        self.assertEqual(sum(len(v) for v in rec.values()), 27)
+        for v in rec.values():
+            for x in v.values():
+                self.assertTrue(x["wrong"])
+                self.assertEqual([c["id"] for c in x["criteria"]], [f"c{i}" for i in range(1, len(x["criteria"]) + 1)])
+                self.assertTrue(all(set(c) <= {"id", "text", "absent", "present"} and c["text"] for c in x["criteria"]))
+
+    def test_the_commit_meets_the_mechanical_criteria_and_the_parent_does_not(self):
+        tasks = {t["id"]: t for t in json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]}
+        rec, seen = json.loads((EVAL / "groundtruth/coverage_183.json").read_text())["units"], 0
+        for i, v in rec.items():
+            t = tasks[i]
+            for p, x in v.items():
+                parent, mech = config.cache_dir() / "repos" / t["repo"] / p, [c for c in x["criteria"] if "absent" in c or "present" in c]
+                group = next((g for g in t.get("equivalents") or [] if p in g), [p])
+                gold = [f for f in (config.gold_dir(t["repo"]) / "files" / q for q in group) if f.is_file()]
+                if not parent.is_file() or not gold or not mech:
+                    continue
+                seen += 1
+                self.assertTrue(all(control.mechanical(c, gold[-1].read_text()) for c in mech), p)
+                self.assertFalse(all(control.mechanical(c, parent.read_text()) for c in mech), p)
+        if not seen:
+            self.skipTest("no checkouts here")
+
+    def test_the_sheet_is_blind_and_complete(self):
+        tasks = [syn.task(i) for i in range(1, 21)]
+        crit = {t["id"]: {u["path"]: {"wrong": "w", "criteria": [{"id": "c1", "text": "has new", "present": "new"}, {"id": "c2", "text": "reads well"}]} for u in control.units(t)} for t in tasks}
+        row = lambda t, c, k: syn.row(t, c, touch=k)  # noqa: E731
+        sets = {control.RECORDED: {t["id"]: row(t, "none", 1) for t in tasks}, control.CONCURRENT: {t["id"]: row(t, "none", 0) for t in tasks[:9]},
+                control.NEW: {t["id"]: row(t, "none-docs", 4) for t in tasks}}
+        diff_of = lambda s, i: "".join(_diff(u["path"], "old\n", ("new" if s == control.NEW else "other") + "\n") for t in tasks if t["id"] == i for u in control.units(t))  # noqa: E731
+        items, key = control.sheet(sets, tasks, crit, diff_of, lambda i, p: "old\n", seed=5)
+        self.assertEqual(len(items), 20 * 1 + 20 * 3)  # touched docs and forced tests only: no remote code, nothing untouched
+        self.assertEqual([x["item"] for x in items], sorted(key))
+        self.assertEqual(control.sheet(sets, tasks, crit, diff_of, lambda i, p: "old\n", seed=5), (items, key))
+        blob = json.dumps(items)
+        for word in ("none-docs", "recorded", "concurrent", "mechanical", "absent", "present\"", "__r1", "run_id"):
+            self.assertNotIn(word, blob)
+        self.assertEqual({k for x in items for k in x}, {"item", "task", "unit", "change", "wrong_before", "criteria", "diff", "file_after"})
+        order = [key[x["item"]]["set"] for x in items]
+        self.assertNotEqual(order, sorted(order))  # shuffled
+        self.assertTrue(all(k["mechanical"] == {"c1": k["set"] == control.NEW, "c2": True} for k in key.values()))
+        judged = {n: {"c1": True, "c2": True} for n in key}
+        v = control.verdicts(key, judged)
+        self.assertEqual({s for (s, _, _), ok in v.items() if ok}, {control.NEW})  # the mechanical part counts too
+        one = next(n for n in key if key[n]["set"] == control.NEW)
+        judged[one]["c2"] = False
+        self.assertEqual(sum(control.verdicts(key, judged).values()), 59)
+        for bad in ({n: x for n, x in judged.items() if n != one}, {**judged, "999": {}}, {**judged, one: {"c1": True}}, {**judged, one: {"c1": 1, "c2": "yes"}}):
+            with self.assertRaises(SystemExit):
+                control.verdicts(key, bad)
+
+    def test_a_renamed_test_is_one_item_with_the_file_that_is_left(self):
+        t = {**syn.task(1), "equivalents": [["m1/src/test/java/a/PTests.java", "m1/src/test/java/a/QTests.java"]]}
+        crit = {"t01": {u["path"]: {"wrong": "w", "criteria": [{"id": "c1", "text": "x", "absent": "old"}]} for u in control.units(t)}}
+        old, new = t["equivalents"][0]
+        r = syn.row(t, "none-docs", touch=0)
+        r["edit"]["files_changed"] += [old, new]
+        both = _diff(old, "old\n", "") + _diff(new, "", "fresh\n")
+        items, key = control.sheet({control.NEW: {"t01": r}}, [t], crit, lambda s, i: both, lambda i, p: "old\n" if p == old else None)
+        self.assertEqual([(x["unit"], x["file_after"]) for x in items], [(old, "fresh\n")])
+        self.assertTrue(key["001"]["mechanical"]["c1"])
+
+
 class Comparison(unittest.TestCase):
     def setUp(self):
-        self.tasks = [syn.task(i) for i in range(1, 21)]  # docs, docs, remote, forced test
+        self.tasks = [syn.task(i) for i in range(1, 21)]  # docs, docs, remote, forced test; every task has docs
+        self.ids = [t["id"] for t in self.tasks]
 
     def rows(self, cond, touch, **kw):
-        return [syn.row(t, cond, touch=touch(i) if callable(touch) else touch, finished_at=f"2026-11-24T1{i % 10}:00:00", **kw) for i, t in enumerate(self.tasks)]
+        return [syn.row(t, cond, touch=touch, finished_at=f"2026-11-24T1{i % 10}:00:00", **kw) for i, t in enumerate(self.tasks)]
 
-    def drop(self, rows, word):
+    def without_docs(self, rows, tasks=None):
         for r in rows:
-            r["edit"]["files_changed"] = [f for f in r["edit"]["files_changed"] if word not in f]
+            if tasks is None or r["task_id"] in tasks:
+                r["edit"]["files_changed"] = [f for f in r["edit"]["files_changed"] if "adoc" not in f]
         return rows
 
-    def test_types_missed_units_and_the_rule(self):
-        base = self.drop(self.rows("none", 4), "adoc")  # every docs unit missed
-        half = self.rows("none-docs", 4)
-        for r in half[:10]:
-            r["edit"]["files_changed"] = [f for f in r["edit"]["files_changed"] if "adoc" not in f]
-        c = control.compare(base, half, self.tasks, 300)
-        self.assertEqual((c["summary"]["none"]["gap"]["docs"], c["summary"]["none-docs"]["gap"]["docs"]), (0.5, 0.25))
-        self.assertEqual((c["gap_closed"]["docs"], c["outcome"]), (0.5, "ii"))  # exactly half is not most
-        self.assertEqual(c["gap_closed"]["remote"], None)  # nothing was missing
-        self.assertAlmostEqual(c["difference"]["recall"]["diff_mean"], 0.25)  # first minus second: none-docs minus none
-        self.assertEqual(c["summary"]["none-docs"]["by_type"]["docs"], {"units": 40, "touched": 20, "tasks": 20, "tasks_all_touched": 10, "tasks_any_touched": 10})
-        self.assertEqual([k for k, _ in c["tasks"]["t20"]["found_now"]], ["docs", "docs"])
-        self.assertEqual(len(c["tasks"]["t01"]["missed_by_both"]), 2)
-        half[0]["edit"]["files_changed"] += ["framework-docs/x.adoc"]
-        c = control.compare(base, half, self.tasks, 300)
-        self.assertEqual(c["outcome"], "i")
-        lo, hi = c["docs_gap_closed_95"]
-        self.assertTrue(0 <= lo < c["gap_closed"]["docs"] < hi <= 1)
-        text = "\n".join(control.lines(c))
-        self.assertIn("Outcome (i)", text)
-        self.assertIn("The interval contains 0.50: the rule decides by the point, the data do not.", text)
-        clear = control.lines(control.compare(base, self.rows("none-docs", 4), self.tasks, 300))
-        self.assertNotIn("The interval contains", "\n".join(clear))
-        self.assertIn("nothing is tested", text)
-        self.assertIn(SENTENCE, text)
-        self.assertIn("drift", text)
-        self.assertNotIn("nan", text)
-        self.assertEqual(json.dumps(json.loads(json.dumps(c))), json.dumps(c))  # as text: a ratio to nothing is nan
-        worse = self.drop(self.rows("none-docs", 4), "/b/R.java")
-        c = control.compare(self.rows("none", 4), worse, self.tasks, 300)
-        self.assertEqual((c["outcome"], c["gap_closed"]["docs"], len(c["tasks"]["t01"]["missed_now_only"])), ("ii", None, 1))
+    def compare(self, recorded, concurrent, new, covered=True, n=300):
+        """``covered``: True (every touched unit is), False, or the units that are not (``(set, task, path)``)."""
+        v = None
+        if covered is not None:
+            v = {(s, i, u["path"]): covered is True or covered is not False and (s, i, u["path"]) not in covered
+                 for s in (control.RECORDED, control.CONCURRENT, control.NEW) for i, t in zip(self.ids, self.tasks) for u in control.units(t)}
+        return control.compare(recorded, concurrent + new, self.tasks, v, n)
 
-    def test_the_rule(self):
-        self.assertEqual([control.outcome(x) for x in (None, -0.2, 0.0, 0.5, 0.500001, 1.0)], ["ii", "ii", "ii", "ii", "i", "i"])
-        for k in ("i", "ii"):
-            self.assertIn(f"Outcome ({k})", control.MEANING[k])
+    def test_the_registered_rule(self):
+        S = lambda a, b, c, d, iv=((0.6, 1.0), (0.6, 1.0)), judged=True: control.outcome({  # noqa: E731
+            "touched": {"recorded": a, "concurrent": b, "interval": iv[0], "judged": True}, "covered": {"recorded": c, "concurrent": d, "interval": iv[1], "judged": judged}})
+        low = ((0.0, 0.4), (0.0, 0.4))
+        self.assertEqual(S(0.9, 0.8, 0.7, 0.6), "i")
+        self.assertEqual(S(0.2, 0.1, 0.0, -0.3, low), "ii")
+        self.assertEqual(S(0.9, 0.8, 0.3, 0.2, ((0.6, 1.0), (0.0, 0.4))), "undecided")  # touched yes, covered no
+        self.assertEqual(S(0.9, 0.4, 0.9, 0.4), "undecided")  # the two bases disagree
+        self.assertEqual(S(0.9, 0.9, 0.9, 0.9, ((0.5, 1.0), (0.6, 1.0))), "undecided")  # an interval contains 50 %, at its end too
+        self.assertEqual(S(0.4, 0.4, 0.4, 0.4, ((0.0, 0.4), (0.1, 0.5))), "undecided")
+        self.assertEqual(S(0.5, 0.5, 0.5, 0.5, low), "ii")  # exactly half is not most
+        self.assertEqual(S(0.9, None, 0.9, 0.9), "undecided")  # a base without a docs gap
+        self.assertEqual(S(0.9, 0.9, None, None, ((0.6, 1.0), None), judged=False), "unjudged")
+        for k in ("i", "ii", "undecided", "unjudged"):
+            self.assertIn(k, control.MEANING)
+        self.assertIn("says nothing about tokens", control.MEANING["i"])
+        self.assertNotIn("no main run", control.MEANING["i"])
         self.assertIn("Holm over four tests (C vs `none`, C vs `none-docs`; recall and tokens)", control.MEANING["ii"])
 
+    def test_types_bases_and_outcome(self):
+        rec, con = self.without_docs(self.rows("none", 4)), self.without_docs(self.rows("none", 4))
+        new = self.without_docs(self.rows("none-docs", 4), self.ids[:4])  # 16 of 20 tasks find their docs
+        c = self.compare(rec, con, new)
+        self.assertEqual((c["summary"]["recorded"]["gap"]["docs"], c["summary"]["none-docs"]["gap"]["docs"]), (0.5, 0.1))
+        for w in ("touched", "covered"):
+            x = c["docs_gap_closed"][w]
+            self.assertAlmostEqual(x["recorded"], 0.8)
+            self.assertAlmostEqual(x["concurrent"], 0.8)
+            self.assertTrue(0.5 < x["interval"][0] < 0.8 < x["interval"][1] <= 1)
+        self.assertEqual(c["outcome"], "i")
+        self.assertAlmostEqual(c["difference"]["recall"]["diff_mean"], 0.4)  # none-docs minus none
+        self.assertEqual(c["summary"]["none-docs"]["by_type"]["docs"], {"units": 40, "touched": 32, "tasks": 20, "tasks_all_touched": 16, "tasks_any_touched": 16})
+        self.assertEqual([k for k, _ in c["tasks"]["t20"]["found_now"]], ["docs", "docs"])
+        self.assertEqual(len(c["tasks"]["t01"]["missed_by_both"]), 2)
+        text = "\n".join(control.lines(c))
+        for want in ("Outcome (i)", "nothing is tested", SENTENCE, "drift", "| touched units | 0.80 |", "| covered units | 0.80 |", "docs: units covered | 0/40 | 0/40 | 32/40"):
+            self.assertIn(want, text)
+        self.assertNotIn("nan", text)
+        # Found, but not covered: half of the new units.
+        bad = {(control.NEW, i, f"framework-docs/{f}.adoc") for i in self.ids[4:] for f in "xy"}
+        c = self.compare(rec, con, new, covered=bad)
+        self.assertEqual((c["docs_gap_closed"]["covered"]["recorded"], c["outcome"]), (0.0, "undecided"))
+        self.assertEqual(self.compare(rec, con, new, covered=None)["outcome"], "unjudged")
+        self.assertIn("No outcome yet", "\n".join(control.lines(self.compare(rec, con, new, covered=None))))
+        c = self.compare(rec, con, self.without_docs(self.rows("none-docs", 4)))
+        self.assertEqual((c["outcome"], c["docs_gap_closed"]["touched"]["recorded"]), ("ii", 0.0))
+        c = self.compare(rec, self.rows("none", 4), new)  # the concurrent none found everything: no gap to close there
+        self.assertEqual((c["outcome"], c["docs_gap_closed"]["touched"]["concurrent"]), ("undecided", None))
+        self.assertEqual(len(c["tasks"]["t07"]["flipped_in_none"]), 2)  # noise and drift are seen
+        with self.assertRaisesRegex(SystemExit, "no verdict"):
+            control.compare(rec, con + new, self.tasks, {}, 10)
+
     def test_over_editing_by_type(self):
-        base, new = self.rows("none", 4), self.rows("none-docs", 4)
+        rec, con, new = self.rows("none", 4), self.rows("none", 4), self.rows("none-docs", 4)
         new[0]["edit"]["files_changed"] += ["framework-docs/z.adoc", "README.md", "m1/src/test/java/a/XTests.java", "m1/src/main/java/z/Z.java"]
         new[1]["edit"]["files_changed"] += ["framework-docs/z.adoc", "m2/src/test/java/a/MoreTests.java"]  # the second is in the commit: a new test
-        c = control.compare(base, new, self.tasks, 100)
+        c = self.compare(rec, con, new, n=50)
         self.assertEqual(c["summary"]["none-docs"]["extra"], {"docs": {"files": 3, "sessions": 2}, "tests": {"files": 1, "sessions": 1}, "code": {"files": 1, "sessions": 1}})
         self.assertEqual(c["tasks"]["t01"]["extra_files"]["docs"], ["README.md", "framework-docs/z.adoc"])
-        self.assertEqual((c["summary"]["none-docs"]["new_tests_touched"], c["summary"]["none"]["new_tests_touched"]), (1, 0))
+        self.assertEqual((c["summary"]["none-docs"]["new_tests_touched"], c["summary"]["recorded"]["new_tests_touched"]), (1, 0))
         t = {**self.tasks[0], "equivalents": [["m1/src/main/java/b/R.java", "m1/src/main/java/b/Other.java"]]}
         self.assertEqual(control.extra_files(t, ["m1/src/main/java/b/Other.java"]), {"docs": [], "tests": [], "code": []})
 
     def test_only_the_registered_sessions(self):
-        base, new = self.rows("none", 4), self.rows("none-docs", 4)
-        bad = ((base[:-1], new), (base, new[:-1]), (base, new + new[:1]), (new, base), (base, base), (base, [{**new[0], "rep": 2}, *new[1:]]),
-               (base, [{**new[0], "final": False}, *new[1:]]), (base, [{**r, "claude_version": "2.1.400"} for r in new]), (base, [{**r, "model": "other"} for r in new]))
-        for b, n in bad:
+        rec, con, new = self.rows("none", 4), self.rows("none", 4), self.rows("none-docs", 4)
+        bad = ((rec[:-1], con, new), (rec, con[:-1], new), (rec, con, new[:-1]), (rec, con, new + new[:1]), (new, con, new), (rec, con, [{**new[0], "rep": 2}, *new[1:]]),
+               (rec, con, [{**new[0], "final": False}, *new[1:]]), (rec, con, [{**r, "claude_version": "2.1.400"} for r in new]),
+               (rec, [{**r, "model": "other"} for r in con], new), (rec, [{**con[0], "condition": "C"}, *con[1:]], new))
+        for x in bad:
             with self.assertRaises(SystemExit):
-                control.compare(b, n, self.tasks, 10)
+                self.compare(*x, n=10)
 
     def test_against_the_recorded_sessions(self):
-        base = [json.loads(x) for x in (EVAL / "results/none20-183/sessions.jsonl").read_text().splitlines()]
+        rec = [json.loads(x) for x in (EVAL / "results/none20-183/sessions.jsonl").read_text().splitlines()]
         tasks = json.loads((EVAL / "tasks/tasks-commit-replay.json").read_text())["tasks"]
-        c = control.compare(base, [{**r, "condition": "none-docs"} for r in base], tasks, 100)
-        s = c["summary"]["none"]
+        nine = control.docs_tasks(tasks)
+        run = [r for r in rec if r["task_id"] in nine] + [{**r, "condition": "none-docs"} for r in rec]
+        c = control.compare(rec, run, tasks, None, 100)
+        s = c["summary"]["recorded"]
         self.assertEqual({k: round(v, 5) for k, v in s["gap"].items()}, {"docs": 0.25375, "remote": 0.005, "forced_tests": 0.08})  # the gap the rule is about
         self.assertEqual((s["by_type"]["docs"]["touched"], s["by_type"]["docs"]["units"], s["by_type"]["docs"]["tasks_all_touched"], s["by_type"]["docs"]["tasks"]), (2, 13, 2, 9))
         self.assertEqual(s["extra"], {"docs": {"files": 0, "sessions": 0}, "tests": {"files": 0, "sessions": 0}, "code": {"files": 2, "sessions": 1}})
-        self.assertEqual((c["gap_closed"]["docs"], c["outcome"]), (0.0, "ii"))
+        self.assertEqual((s["new_tests_touched"], s["optional_touched"]), (3, 0))
+        self.assertEqual((c["docs_gap_closed"]["touched"]["recorded"], c["docs_gap_closed"]["touched"]["concurrent"], c["outcome"]), (0.0, 0.0, "unjudged"))
+        self.assertIn("docs", control.lines(c)[0] + "".join(control.lines(c)))
 
 
 class ControlledDesign(unittest.TestCase):
@@ -233,7 +390,9 @@ class ControlledDesign(unittest.TestCase):
     def test_the_registered_design_of_before_is_unchanged(self):
         rows = [syn.row(t, c, r, 2) for t in self.tasks for c in rc.ARMS for r in (1, 2, 3)]
         self.assertIs(rc.design_of(rows), rc.REGISTERED)
-        self.assertIs(rc.design_of(rows[:1]), rc.REGISTERED)
+        for part in (rows[:1], [r for r in rows if r["condition"] != "D"], [], [{"condition": "A"}]):  # an arm is missing or foreign: refused, no silent default
+            with self.assertRaisesRegex(SystemExit, "no registered design"):
+                rc.design_of(part)
         self.assertEqual((rc.REGISTERED.arms, rc.REGISTERED.pairs, rc.REGISTERED.described), (("none", "C", "D"), rc.PAIRS, ()))
         with tempfile.TemporaryDirectory() as d, mock.patch.object(rc, "DECISION", Path(d) / "decision.json"):
             syn.decided(rc.DECISION, config.tasks_file())
@@ -270,13 +429,15 @@ class Script(unittest.TestCase):
     def test_the_command_is_that_of_arm_none_but_for_three_things(self):
         out = subprocess.run(["/bin/bash", str(self.SCRIPT), "--dry-run"], capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "HOME": "/h"})
         self.assertEqual((out.returncode, out.stderr), (0, ""))
-        words = next(x for x in out.stdout.splitlines() if x.startswith("+")).split()
+        words = shlex.split(next(x for x in out.stdout.splitlines() if x.startswith("+")))
         for drop in ("--hook-cd",):
             words.remove(drop)
         got = {w: words[i + 1] for i, w in enumerate(words[:-1]) if w.startswith("--")}
-        self.assertEqual((got.pop("--conditions"), got.pop("--label")), ("none-docs", "2026-11-24-none-docs20"))
-        self.assertEqual({k: v for k, v in got.items() if k in ("--rep", "--profile", "--timeout", "--concurrency", "--max-sessions")},
-                         {"--rep": "1", "--profile": "realistic", "--timeout": "2400", "--concurrency": "1", "--max-sessions": "24"})
+        self.assertEqual((got.pop("--conditions"), got.pop("--label")), ("none,none-docs", "2026-11-24-control-none-docs"))
+        self.assertEqual({k: v for k, v in got.items() if k in ("--profile", "--timeout", "--concurrency", "--max-sessions")},
+                         {"--profile": "realistic", "--timeout": "2400", "--concurrency": "1", "--max-sessions": "35"})
+        self.assertTrue(got["--plan"].endswith("/groundtruth/control_plan_183.json"))
+        self.assertNotIn("--rep", words)
         self.assertIn("--bash", words)
         self.assertEqual(subprocess.run(["/bin/bash", str(self.SCRIPT), "--x"], capture_output=True).returncode, 64)
 

@@ -1,0 +1,150 @@
+{
+ "seed": 183,
+ "sessions": [
+  {
+   "task": "error-response-interceptor-with-request",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "servlet-response-ignore-body-flush",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "servlet-response-ignore-body-flush",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "test-context-cache-pause-mode",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "test-context-cache-pause-mode",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "form-converter-map-payloads",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "form-converter-map-payloads",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "deferred-bean-registrar-contains-bean",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "content-negotiation-no-fallback-mapping",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "observation-record-handled-exception",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "observation-record-handled-exception",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "jsonl-media-type-support",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "retryable-method-retry-event",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "spel-simple-context-restricted-conversion",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "spel-simple-context-restricted-conversion",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "retry-max-attempts-to-max-retries",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "retry-max-attempts-to-max-retries",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "http-range-honor-if-range",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "bean-provider-parameterized-type-reference",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "type-mismatch-required-type-arg",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "type-mismatch-required-type-arg",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "mime-type-parameter-names-case-insensitive",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "jdbcclient-batch-entry-dsl",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "jdbcclient-batch-entry-dsl",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "message-source-default-charset",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "api-version-deprecation-handler-handler-arg",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "beans-max-nested-path-depth",
+   "condition": "none",
+   "rep": 1
+  },
+  {
+   "task": "beans-max-nested-path-depth",
+   "condition": "none-docs",
+   "rep": 1
+  },
+  {
+   "task": "client-builders-deep-copy-default-headers-cookies",
+   "condition": "none-docs",
+   "rep": 1
+  }
+ ]
+}
