@@ -1,0 +1,2388 @@
+{
+ "head": "9a156f878af1b9fdc24397328794f7f79d4e1693",
+ "seed": 210,
+ "counts": {
+  "pool_dev": 1368,
+  "drawn_dev": 100,
+  "comment_only_dev": 12,
+  "pool_held-out": 2149,
+  "drawn_held-out": 100,
+  "comment_only_held-out": 8
+ },
+ "commits": [
+  {
+   "sha": "29e3acc88738e4b7700464fb26ad4e71e277200c",
+   "parent": "5d454390f0f7f3e3b6d69c303e12013a483fed36",
+   "date": "2023-09-13",
+   "subject": "Re-enable Jetty in spring-websocket tests",
+   "issues": [],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "b510bc3baba9f8d0832527b2ce4675ea2bed1057",
+   "parent": "b6364e366598c79abba58acbce5806eadda821a4",
+   "date": "2023-12-10",
+   "subject": "Reuse generated key for get+put within same cacheable operation",
+   "issues": [
+    "31789"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "aeb77cf4e1506745db53b4514479368387e72786",
+   "parent": "18dc7d73d6938e92529786fd626347464ac2a922",
+   "date": "2024-02-28",
+   "subject": "Restore correct threadWithLock check without isInfoEnabled()",
+   "issues": [
+    "23501"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "1e4275a0f9fb0a0277cab5e13a7049eb40032b1c",
+   "parent": "33fbd7141d46c281cdc0a26d4bdeb21b00bdb5d3",
+   "date": "2024-04-24",
+   "subject": "Implement optional get<list>() methods in EvaluationContext as default methods",
+   "issues": [],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "a45d438f05d35eeb95dd685054ef9485743291df",
+   "parent": "cabc41bcd684a56d2a07e6fc04b3c4fba11113ca",
+   "date": "2023-05-25",
+   "subject": "Enforce JPA bootstrap failure for incomplete Hibernate Validator setup",
+   "issues": [
+    "30549"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "8f3b7484e2868e331e7f8a449cf088acb85ca860",
+   "parent": "d708343a05cb1904242947d77cae42da14f5fd46",
+   "date": "2024-05-02",
+   "subject": "Add testing support for WebMvc.fn",
+   "issues": [
+    "30477"
+   ],
+   "files": 9,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "2fc78dfb69a12550548aef4f415498b7a8f1197f",
+   "parent": "e52ee01ec8eac712808b1de8aba9670876c7e8ac",
+   "date": "2024-03-25",
+   "subject": "Perform NullAway build-time checks in spring-jms",
+   "issues": [
+    "32475"
+   ],
+   "files": 5,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "be45481d701581efb69a990116d190a3879d0d1e",
+   "parent": "5680d2063744380583bdc58fca0a17ac382beaa4",
+   "date": "2024-02-25",
+   "subject": "Return unique set from ContentCachingResponseWrapper.getHeaderNames()",
+   "issues": [
+    "32039",
+    "32317"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "80f3be6577c47eb24e8664d3fd3821729c2908be",
+   "parent": "946082f8062cf859a30c461ace18ccc6e5dd2872",
+   "date": "2024-03-11",
+   "subject": "Replace getJvmErasure by getClassifier",
+   "issues": [
+    "32334"
+   ],
+   "files": 3,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "c6e6a3e44db3ae9f05ab9fb8a6f3c607c04ea472",
+   "parent": "bc2895a30bb37b339c3630d296119eb1ae09dec5",
+   "date": "2024-02-18",
+   "subject": "Link to section in reference manual",
+   "issues": [],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "2fbcff89199267313dcb7fe1c7fb803f38f22879",
+   "parent": "f79bc7b14ddadd4fac101860ddded2f20d032c0f",
+   "date": "2023-09-18",
+   "subject": "Prevent ValueLoaderEntryProcessor to be created for each get call",
+   "issues": [
+    "31250"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "2c9ed4608f74f76d8bbc59f3445e7ed6416507b6",
+   "parent": "3ada9a0c798965d2b8d7787454cba6abddb51cc5",
+   "date": "2024-05-13",
+   "subject": "Improve RequestAttributesThreadLocalAccessor",
+   "issues": [
+    "32296"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "9f4d46fe3374cc1e2ca8b2616107680432650a2e",
+   "parent": "2a1abb555301ecd4a4a7fed79f1e0dc623235f5a",
+   "date": "2024-03-23",
+   "subject": "Introduce null-safe index operator in SpEL",
+   "issues": [
+    "29847"
+   ],
+   "files": 3,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "ea66883d7986337e6135a9493d0a45fb65d188c7",
+   "parent": "35372e5e72f950ad07e67b9efd5ab76acb07675f",
+   "date": "2023-10-10",
+   "subject": "Detect use of deprecated API",
+   "issues": [
+    "29597"
+   ],
+   "files": 12,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "4d8f6c1b418ad14e1780b11baa3bc3871d33b8b2",
+   "parent": "7150c23e93651f77265066734eecc200f616911a",
+   "date": "2023-05-26",
+   "subject": "Support parsing long millisecond timestamps in `InstantFormatter`",
+   "issues": [
+    "30312",
+    "30546"
+   ],
+   "files": 3,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "a596c0e226d04b98373aec81c38bd41c8a722a7c",
+   "parent": "462ef95904e5dcf2b6ed7806ffc0247305aec55f",
+   "date": "2023-12-05",
+   "subject": "Introduce overloaded MockPart constructor that accepts the Content-Type",
+   "issues": [
+    "31757"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "0e6c17f5186dfa148eca2ecdc6eee89a7edaa543",
+   "parent": "1afea0b144e3fabf138f5ebb4b9f84f75f7d279a",
+   "date": "2023-12-06",
+   "subject": "Process tokens after each feed in Jackson2Tokenizer",
+   "issues": [
+    "31747"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "e12eb9436da160478ed3ce9590058067e295c1f9",
+   "parent": "23162bb3060bc4166bbed8f2452e9abe44a3b3ca",
+   "date": "2023-10-02",
+   "subject": "Fix description of default behavior in BeanPropertyRowMapper",
+   "issues": [
+    "29285"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "bcff7d74cd8745dea9fd80839bceb11f850bf3f3",
+   "parent": "170d6bfdad95ff5af894b2b0aae9a247f239477b",
+   "date": "2023-07-31",
+   "subject": "Replace map entry traversal with switch expression",
+   "issues": [
+    "30851"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "c052a0259238ee577a00a55abeb771fb967de440",
+   "parent": "5ad853ef5b31e410ca1677d8cbeff0b8ff438023",
+   "date": "2023-06-07",
+   "subject": "Ignore null message when introspecting resource cleanup failure",
+   "issues": [
+    "30597"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "298d6e4db0b021c73552f1d43a6d4b4cc54c4c63",
+   "parent": "955112be0ed3e14b8400f7cf2733bf5d03c45dbc",
+   "date": "2023-10-10",
+   "subject": "Fix unused import error in ReactorClientHttpConnector",
+   "issues": [],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "5dc26460fbeeb321ae379a53b378716d65b6f854",
+   "parent": "542502b2b6e22b7cdefb6436fc9a2272e88abf48",
+   "date": "2024-01-29",
+   "subject": "Eagerly initialize ZERO_NANOS constant",
+   "issues": [],
+   "files": 3,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "6a8f0d6d7d4379860e0197f321f0784f8b46e5df",
+   "parent": "246e4977a2386cebafd1489766086501928b4215",
+   "date": "2024-03-11",
+   "subject": "Add web support for Yaml via Jackson",
+   "issues": [
+    "32345"
+   ],
+   "files": 11,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "4235a11c4f137e92d48bb20336c1d2323ecdac20",
+   "parent": "966b0a92c6282356a0a3ebc2609bd0e4999f33fb",
+   "date": "2023-09-13",
+   "subject": "Throw IllegalArgumentException for unsupported Duration values",
+   "issues": [
+    "31210"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "6efc99fdd804e89ce93fd0fa09555fa5c22d0b5e",
+   "parent": "9465ff0334998882b7756a4cc8c5d9bf0b562c71",
+   "date": "2023-10-17",
+   "subject": "Harmonize BeanRegistrationAotContribution class names",
+   "issues": [],
+   "files": 5,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "03907095776eadf67a04dbaf62ffb3fe32125232",
+   "parent": "9f2970bc5c06b443c12b7825a3180ef2fa292474",
+   "date": "2023-12-22",
+   "subject": "Use proper Oracle dialect for Hibernate 6+",
+   "issues": [
+    "31892"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "871f705bca8da88c95966b9ab37d9aefa0dd24ca",
+   "parent": "22b41c33bab1f1c609e7948136d233ad233ac3e2",
+   "date": "2024-02-21",
+   "subject": "Remove ComponentScan duplicate condition",
+   "issues": [
+    "27077"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "5680d2063744380583bdc58fca0a17ac382beaa4",
+   "parent": "87873818920a0081103c9e30bc7b6b3a248b0a16",
+   "date": "2024-02-24",
+   "subject": "Honor Content-[Type|Length] headers from wrapped response again",
+   "issues": [
+    "32039",
+    "32317"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "3b899fe7e256e1c46ed083d58f949f04f0846ea2",
+   "parent": "c91041b6759c9a94ecaf89a54f6055fb3ca68c5c",
+   "date": "2023-07-10",
+   "subject": "Handle JDBC warnings in case of a statement exception as well",
+   "issues": [
+    "23106"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "dec5265354a1b7596211d3b6f3834d5c217419db",
+   "parent": "579dbc48d7551a1388e3038c7e9dbf280ea18fde",
+   "date": "2024-03-07",
+   "subject": "Use wrapped response in HandlerFunctionAdapter",
+   "issues": [
+    "32340"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "999b5d4462f979b8dda2b0cb975ae939eacd1c61",
+   "parent": "6299a9dfc9f6644b04e032c990612cd4ae1295d4",
+   "date": "2023-10-24",
+   "subject": "Better error reporting when instance does not match factory method",
+   "issues": [
+    "28897"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "e00a882333ed06c682a59f92aa45657434b03df1",
+   "parent": "3ed5a90b7cecb76e896dc45c75d58943a9f81741",
+   "date": "2023-12-21",
+   "subject": "Complete Jetty frame callback when opcode is not PONG",
+   "issues": [
+    "11088",
+    "31869"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "20bbebb29921815ec11ec4dc289419d50a5cd319",
+   "parent": "26f006509f38ca40d7677c728cb5e560ae92aae9",
+   "date": "2023-06-21",
+   "subject": "Ensure Spring LogFactory contains all public methods from Apache LogFactory",
+   "issues": [
+    "30668"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "220995b830863fe1870ab558ef21d0ad50fce1d1",
+   "parent": "e344f3f869681a5ead3a00679bae553528a07b50",
+   "date": "2023-06-14",
+   "subject": "Move HandlerMethodValidator to web.method.annotation package",
+   "issues": [
+    "29825"
+   ],
+   "files": 4,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "6691ff207244ef46cdf18e16df17f3cd19c9ce2a",
+   "parent": "9c6e55939eb90d99629771752f0d6c9b420e58de",
+   "date": "2024-01-19",
+   "subject": "Reject multiple @\u2060HttpExchange declarations in HTTP interface clients",
+   "issues": [
+    "32049"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "85704c890e1ff05e33a43cd5a4c318affc513341",
+   "parent": "7681200ee7b939ac9771f434c8ab9ae5ac482dd9",
+   "date": "2023-07-27",
+   "subject": "Use DispatchExceptionHandler for handler errors",
+   "issues": [
+    "30930"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "f6045e8e11b3898681b6c81e351a24ef62228ae3",
+   "parent": "f0a3f776c2e724f5dc668525bf950e3d119fdd88",
+   "date": "2023-06-11",
+   "subject": "Move context failure tracking to the ContextCache",
+   "issues": [
+    "14182"
+   ],
+   "files": 5,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "32c0540424da2c9d79923f587ef660d594f2f521",
+   "parent": "c8169e5cad0bd616e251aa9c004eb2cdca081a59",
+   "date": "2023-08-25",
+   "subject": "Improve @Autowired method injection on mixed nullability args",
+   "issues": [
+    "17215"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "b9221656ccb079636b4e4ad1415d5b69b8f15b92",
+   "parent": "c30f6aa42799fda498cc29081bb9e1dd6c82af8f",
+   "date": "2023-06-14",
+   "subject": "Declare ClassLoader for DeserializingConverter constructor as nullable",
+   "issues": [
+    "30670"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "eaf54b54c3689844078af1f8d12e1b60e870e215",
+   "parent": "c596ff5c387e5a1bfcb3658fa3e4a82e496e4c74",
+   "date": "2023-08-06",
+   "subject": "Detect illegal bean definition override during classpath scanning",
+   "issues": [
+    "25952"
+   ],
+   "files": 6,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "28939e47545708be7d4b71b63e36109dd3cf78bd",
+   "parent": "fc81cc5cda57a0a9d63cf6085523cc7cd1ff8ffb",
+   "date": "2023-10-16",
+   "subject": "Find @\u2060DisabledInAotMode on enclosing classes for @\u2060Nested tests",
+   "issues": [
+    "30834"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "7f615fd8af27ba6e0a24a42d26bf7373b6c217f8",
+   "parent": "33b1ff5d2790a23375c924dff1ad5cb0e4a215f1",
+   "date": "2023-11-11",
+   "subject": "Fix reference in deprecation message of parseForwardedFor",
+   "issues": [],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "c98bebd6d37357c1205eb0e19d5f39093fe5140b",
+   "parent": "d0ffc16efcffb09fd404919017f3176058094a9b",
+   "date": "2024-02-23",
+   "subject": "Spring cleaning: add missing @\u2060Override annotations",
+   "issues": [],
+   "files": 8,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "23ecb501371a2e95c7c1e0ba6e4d5476766a10a7",
+   "parent": "3d33d2baa9de61b07908695d3c4f1a9bcc8b0490",
+   "date": "2023-06-23",
+   "subject": "Optimize KotlinReflectionParameterNameDiscoverer",
+   "issues": [
+    "30725"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "d4ac90dae0fecbcd96e07c48c041a9c905c048d0",
+   "parent": "11a416156b71b11977d0792c90fe3b46358c050b",
+   "date": "2023-06-26",
+   "subject": "Support nested constructors in DataBinder",
+   "issues": [
+    "20806"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "8f579b31444acd90b0061a45516771ebb3e9cd1d",
+   "parent": "14689256c4b87f32a37f30c3146d1433273fb506",
+   "date": "2024-04-25",
+   "subject": "Make SpelNode compilation aware",
+   "issues": [
+    "32707"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "69049a4b0fc109675479bf0d19b6560ee67bd4f0",
+   "parent": "194747a80cf6e7ff4ded1d71f1a0e417aee5823d",
+   "date": "2023-11-19",
+   "subject": "Overhaul Javadoc for PathMatchingResourcePatternResolver",
+   "issues": [],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "9ac5eb0f55c5b49797949ae8186906f8f5dea2a7",
+   "parent": "ff14c5121dbaa97bbabe127de9e62ac62aa0392a",
+   "date": "2023-10-25",
+   "subject": "Support ETag generation on ResourceWebHandler",
+   "issues": [
+    "29031"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "79cc0ec4aa591d2e3ed68a5325ebc5e2cf8b4944",
+   "parent": "fdfa4284de17b51ea2caa609a9003b9b978b6f4b",
+   "date": "2024-01-10",
+   "subject": "Make prepareSynchronization overridable again",
+   "issues": [
+    "32000"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "2f7046f572176f419f1a57db101cc4895afaec30",
+   "parent": "3b8dd0a5acd9a6757d4849ccf2d5baf6c654ea57",
+   "date": "2023-07-31",
+   "subject": "Deprecate org.springframework.core.Constants utility",
+   "issues": [
+    "30851"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "34477b4f03f02e8b3eed6a5c52612fe9ce7f4b87",
+   "parent": "d41f546c43e6f18fd62ee6eab234d90e71203b34",
+   "date": "2023-08-17",
+   "subject": "Schedule FreeMarker template lookup on bounded elastic scheduler",
+   "issues": [
+    "30903"
+   ],
+   "files": 5,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "0ac04a7f86a80e48cc2f50711b2ac089f2c8552f",
+   "parent": "370a4ee8b34fd1c169e92b4756ce62043003e13f",
+   "date": "2024-04-29",
+   "subject": "Include original exception message in dependency initialization exception",
+   "issues": [
+    "32470"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "80faa94afc52bd97b7e8cdfd6e40d2d48a682a18",
+   "parent": "67d2b2566e46027c7f5afe939f2cca152a2bb781",
+   "date": "2024-05-23",
+   "subject": "Support Map in FormHttpMessageConverter",
+   "issues": [
+    "32826"
+   ],
+   "files": 5,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "19fec0633fa9928d671e0bdda74ed7d26681f374",
+   "parent": "729dc0b67155360806151e50b70c5bd5aa5df267",
+   "date": "2024-03-08",
+   "subject": "Local root directory and jar caching in PathMatchingResourcePatternResolver",
+   "issues": [
+    "21190"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "9f2970bc5c06b443c12b7825a3180ef2fa292474",
+   "parent": "232225b2aab29910f62d7d6a441cdb0af4269177",
+   "date": "2023-12-22",
+   "subject": "Use non deprecated MySQL dialect for Hibernate 6+",
+   "issues": [
+    "31889"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "806c83591c694c95ecd605261aa1f3e349fd12cd",
+   "parent": "fd17df91fdbd7203ff12a7c24da360995883443c",
+   "date": "2023-07-14",
+   "subject": "Evaluate key only if necessary",
+   "issues": [
+    "22769"
+   ],
+   "files": 7,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "4a6c3e8f5dda538c07d41f424e6f15a51c410ada",
+   "parent": "f77713b7e0402c7747877ca2d6d0f7f0ea9b146b",
+   "date": "2023-11-30",
+   "subject": "Fix reactive retrieval of cached null value for empty Mono",
+   "issues": [
+    "31722"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "6bb9775309040ad8580d9c73823203ac68da8980",
+   "parent": "eae53560e4dc63d6e9cc3531a85bb4fd1d922a15",
+   "date": "2023-12-12",
+   "subject": "Declare isStatic and releaseTarget as default methods on TargetSource",
+   "issues": [
+    "31820"
+   ],
+   "files": 11,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "ba4d9a5230b7f541961c6a3b3a85d8fc276a4635",
+   "parent": "e83594a2a3d3380946684af451dbd55dd9fa187c",
+   "date": "2023-07-03",
+   "subject": "Add BindErrorUtils",
+   "issues": [
+    "30644"
+   ],
+   "files": 5,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "9283fd2162d16d2654a9513e928a5ea77977e3bb",
+   "parent": "544f5945924eaa07ae6c67c68792257f7fcc738b",
+   "date": "2023-07-16",
+   "subject": "Update Javadoc for CronTriggerFactoryBean.setMisfireInstructionName()",
+   "issues": [],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "43c2e51d6e3607a6882b848685cbd9bbfad8fe69",
+   "parent": "66b8f369dc146945edfd7f8c457d170b0507861b",
+   "date": "2023-12-14",
+   "subject": "Document BytecodeProviderImpl substitution related issue",
+   "issues": [
+    "29549",
+    "31051"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "44a37000ecec0a0f546f4426a09ff15c9b2517e8",
+   "parent": "53fe5fafed3be4c7916746cae1bb101e906cfea4",
+   "date": "2023-11-10",
+   "subject": "HandlerMappingIntrospector exposes Filter for caching",
+   "issues": [
+    "31588"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "021161ea3865a55e32f5b02cc8ffa1131fc70f9b",
+   "parent": "019c34f4803f357ac2d522446a806f823c207555",
+   "date": "2023-07-25",
+   "subject": "Make bean property method accessible as well (for non-public types)",
+   "issues": [
+    "19877"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "aefcb9d2d6ee385c14d83852bee50b0307b42ce4",
+   "parent": "120c228b7064d606163fae4067602b7e8d868ae1",
+   "date": "2023-05-10",
+   "subject": "Make maximum SpEL expression length configurable",
+   "issues": [
+    "30380"
+   ],
+   "files": 4,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "52ae97cffc6bd31466afcf48d36c7cf90e72489f",
+   "parent": "c7ca5c81c319f9676436f96becdb72307ea3e1a5",
+   "date": "2023-06-09",
+   "subject": "Make test context failure threshold configurable",
+   "issues": [
+    "14182"
+   ],
+   "files": 3,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "25a1e8d414a294a8d3e0d062eb9a01f295209cee",
+   "parent": "8c6287ef7bbb4a464680cf82d180529a2949a369",
+   "date": "2023-06-02",
+   "subject": "Reset common caches before LifecycleProcessor-initiated checkpoint",
+   "issues": [
+    "29921"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "89d746ddf86550dd7177159838797823f20868e1",
+   "parent": "3ddc512108214227f7eebeded7c5338f01eebfb8",
+   "date": "2024-02-22",
+   "subject": "Avoid async dispatch if completed in AsyncServerResponse",
+   "issues": [
+    "32223"
+   ],
+   "files": 5,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "4339c8eac2c153d621d922f47ab7dfa90ad21d4a",
+   "parent": "233b59f1441d672a415331ebcb8f5618ac831dcf",
+   "date": "2024-02-23",
+   "subject": "Spring cleaning: use diamond operator",
+   "issues": [],
+   "files": 18,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "734d113b11369dd2ca0b7cba09197374dba257f2",
+   "parent": "0a7166234d673fc89bb970988e0062ac9951688b",
+   "date": "2023-09-06",
+   "subject": "Ensure configuration methods in SimpleJdbcInsert support method chaining",
+   "issues": [
+    "31177"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "2317bef021c93c59c07ac983c5d90d5031649faf",
+   "parent": "ce5189a0a03e78cdd6c2ada96b8d692d663e0340",
+   "date": "2023-06-08",
+   "subject": "Add missing @Nullable in DefaultJmsListenerContainerFactory",
+   "issues": [
+    "30620"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "a6ff95a69c765b029ce0dca960345cc4360f5a58",
+   "parent": "f7c3e6480aa48b9470716e054bd154baae612804",
+   "date": "2023-08-03",
+   "subject": "Restore restrictive getTypeForFactoryBeanFromAttributes check",
+   "issues": [
+    "29799",
+    "30987"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "24457660e3841f7989afd8863485334ba745513e",
+   "parent": "f1fb8cf03ec7ef1cb5fca4198ad7ec78eb09c3e2",
+   "date": "2023-06-21",
+   "subject": "Ensure Spring `LogFactory` contains all public methods from Apache `LogFactory` (#30668)",
+   "issues": [
+    "30668"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "2e07f9ab33d882876f46912fcea08030b2593d49",
+   "parent": "dd23b1d156e34934a27772d80b3c1c07584c27a5",
+   "date": "2023-12-07",
+   "subject": "DefaultWebClient exposes full URI template as request attribute",
+   "issues": [
+    "30027"
+   ],
+   "files": 6,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "996e66abdbaad866f0eab40bcf5628cdea92e046",
+   "parent": "96d90811900bc19b0276d67f12a90cad82a1b1f7",
+   "date": "2024-03-26",
+   "subject": "Perform NullAway build-time checks in spring-test",
+   "issues": [
+    "32475"
+   ],
+   "files": 27,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "eebdff23e7b40c25e6e461d273bba155d74f2a2d",
+   "parent": "a2000dba33fdd7195198a45cc350e4baea3be619",
+   "date": "2024-02-12",
+   "subject": "Fix supportsRequestAttributes for RestClientAdapter",
+   "issues": [
+    "32232"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "dc242df53378bfcc51fcdbe59e205235845d975d",
+   "parent": "c05b4bcd71a6192f973dcb46e8df97de1184b7ea",
+   "date": "2024-04-09",
+   "subject": "Prevent compilation warnings with `@Nullable`",
+   "issues": [
+    "27183"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "b4131ce1318788be9ecca2e939b017329ef34039",
+   "parent": "0f707706f1ef669c72b3796ac9a44f17ff363e6b",
+   "date": "2024-02-15",
+   "subject": "Support \"--\" end of options in SimpleCommandLineArgsParser",
+   "issues": [
+    "31513"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "91eb2be44cc40c33ee4e003c8cad509ff29b392e",
+   "parent": "d4ac90dae0fecbcd96e07c48c041a9c905c048d0",
+   "date": "2023-06-27",
+   "subject": "Remove no longer supported protected methods",
+   "issues": [
+    "26721"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "c1d4b610ca62733094bbe6d720aac4980fe264fa",
+   "parent": "5f601ceb4585fbb2e868ac9a6c50789b0e8b8263",
+   "date": "2024-03-07",
+   "subject": "Refine Kotlin inline class optimizations",
+   "issues": [
+    "32334"
+   ],
+   "files": 3,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "b2757d9a21d1a0dccbb19ef39fd3ab8a6bda36e9",
+   "parent": "655b4aacb7331c80612726550e7cb72e038d2b2c",
+   "date": "2023-11-24",
+   "subject": "Add Javadoc to MockHttpServletResponse#getErrorMessage",
+   "issues": [
+    "31386"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "d9b88261425cb98357008bb8116926abf8295851",
+   "parent": "d529eee88922991954381f8f6873d09bd85546be",
+   "date": "2023-08-22",
+   "subject": "Get content as String for ContentCachingRequestWrapper",
+   "issues": [
+    "30709"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "dc5a21fbd1d59a573b7385cdeb92d3bc103672a1",
+   "parent": "e1c8a84fec02373b79f9023880a8a8c3dd8ef593",
+   "date": "2024-01-16",
+   "subject": "Remove outdated note",
+   "issues": [
+    "20606"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "86b764d4d2588b89ae9ca10b019ce268521db9de",
+   "parent": "38a0e17edec7a8dc8ac51f7c7cfea898673711b2",
+   "date": "2023-09-28",
+   "subject": "Expose public shouldHandle(ApplicationEvent) method",
+   "issues": [
+    "31295"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "e73798003385a75fdbe10839f3d7480016848316",
+   "parent": "93fa01004cbfcc998bd6188f6df6960706273af0",
+   "date": "2023-05-09",
+   "subject": "Ensure chunks released on cancel in StringDecoder",
+   "issues": [
+    "30299"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "120ea0a51c63171e624ca55dbd7cae627d53a042",
+   "parent": "c46d6286ee3ca66be76f276ee0b6b19234e3e7e4",
+   "date": "2024-02-13",
+   "subject": "Update user info pattern",
+   "issues": [
+    "32211"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "a97ff390884ba1002f09c7402aed95f1135eefa0",
+   "parent": "d46c26d90329c3419ece77b3e11e3986e6184726",
+   "date": "2023-09-20",
+   "subject": "Add reflection hint on Publisher for bean destroy support",
+   "issues": [
+    "31278"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "88c2a25f126d2b2c212cdf564c0094977fac8e23",
+   "parent": "dd76ed7a0a4673df98ceedf8b2709d7d13d4f361",
+   "date": "2023-08-09",
+   "subject": "Add support for Kotlin value classes in BeanUtils",
+   "issues": [
+    "28638"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "b76664e75736524c2791f85de9e1eca050681988",
+   "parent": "ae1382385147e4f8f8cd1fd0c6f748fc3e51d562",
+   "date": "2023-07-05",
+   "subject": "Support arrays, collections, & maps in ObjectUtils.nullSafeConciseToString()",
+   "issues": [
+    "30810"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "c4831d2586de5563a637ef307d017f4d8314b2e5",
+   "parent": "e4569defd9bc8bd4e59e32ba21f741e7198f7c30",
+   "date": "2024-01-12",
+   "subject": "Document that Conditions can be ordered",
+   "issues": [
+    "32019"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "7dc0653f38a0ac653bf29068dbc4bca632530eea",
+   "parent": "d39034754fc99862fc80eb8bd860004afd4b6d5a",
+   "date": "2023-09-05",
+   "subject": "Revise quoted identifier support in SimpleJdbcInsert",
+   "issues": [
+    "13874",
+    "24013"
+   ],
+   "files": 9,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "b13963ee81a7aab4360f7e9e91c226de721aa6ea",
+   "parent": "43cc18a5a1ed1821c9e182a628445dddd2ee424b",
+   "date": "2024-04-12",
+   "subject": "Reject private JUnit Jupiter lifecycle methods annotated with @\u2060Autowired",
+   "issues": [
+    "32627"
+   ],
+   "files": 3,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "341ac76209a0a5ad34cb80385179040d47636974",
+   "parent": "8ff102115a9825bcec6426b10754163a44583bb5",
+   "date": "2024-02-06",
+   "subject": "Rely on HashSet for uniqueness of mapped names",
+   "issues": [
+    "32199"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "9728b8cefd1adb2ad92772a3015150eac19a5d7f",
+   "parent": "6ca01e15cf9bbbb059c585b60f36c193551255bd",
+   "date": "2023-09-10",
+   "subject": "Use Method#isDefault to find default methods in interfaces",
+   "issues": [
+    "31197"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "969d0bd08bab519311040649f1b12a70c944d7e1",
+   "parent": "a8fb16b47cc64d77ffdd83275aa7038a92cef767",
+   "date": "2024-02-20",
+   "subject": "Set correct limit in DefaultDataBuffer::getNativeBuffer",
+   "issues": [
+    "30967"
+   ],
+   "files": 2,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "071d6a2a5a578f981729510e24ddc8ea83d2f155",
+   "parent": "d7d02926546a26d40b728f352d8a784843400597",
+   "date": "2023-06-09",
+   "subject": "Introduce hints for finding hints by conventions",
+   "issues": [
+    "30491"
+   ],
+   "files": 4,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "1dc9dffc70308252a00bb56b1b37c67b52ba1ed2",
+   "parent": "0226580773dc8c8b3f4554f5e42d818d96544b25",
+   "date": "2023-07-04",
+   "subject": "Restore full representation of rejected value in FieldError.toString()",
+   "issues": [
+    "30799"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "e52ee01ec8eac712808b1de8aba9670876c7e8ac",
+   "parent": "2b1eb488fcfeb2f58291b471d4e921ca5ccfd343",
+   "date": "2024-03-25",
+   "subject": "Perform NullAway build-time checks in spring-web",
+   "issues": [
+    "32475"
+   ],
+   "files": 17,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "4c343ef796deec273a611802f76a37d362ecbd61",
+   "parent": "a1f4cdf54ed775b239fe7e7e0d4b3075f849d14a",
+   "date": "2023-09-19",
+   "subject": "Add missing reflection hints on Kotlin classes",
+   "issues": [],
+   "files": 3,
+   "split": "dev",
+   "comment_only": false
+  },
+  {
+   "sha": "ad05b02ff5ff60df337aa17091316ebe50911afe",
+   "parent": "430a24e6bc9079192a0eabd4ac690f09361342a2",
+   "date": "2023-07-06",
+   "subject": "Update Javadoc for ObjectUtils.nullSafeConciseToString()",
+   "issues": [
+    "30810"
+   ],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "28398624bfdb84c1101a929620079e621dc3a05a",
+   "parent": "da3b59e7a9d34b538c6023ccab6956fe284cc9d1",
+   "date": "2024-05-15",
+   "subject": "Avoid cyclic package import for javadoc reference",
+   "issues": [],
+   "files": 1,
+   "split": "dev",
+   "comment_only": true
+  },
+  {
+   "sha": "e88b70e6ad09ab7565bedded8d22eddc026f147a",
+   "parent": "1ad05db877fa3189e23aa591810abe3496686492",
+   "date": "2025-06-30",
+   "subject": "Slice bean registrations in separate file if necessary",
+   "issues": [
+    "35044"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "5be36ce8cec5bcd45526651574760eb2b4cbaa8f",
+   "parent": "2f8ff7eb410f8015f7cfd5c9ed8cc766024af993",
+   "date": "2025-01-14",
+   "subject": "Specify generic type nullness in spring-r2dbc",
+   "issues": [
+    "34140"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "15ef2b21f072c218cfb7dbc857ed8089b9652301",
+   "parent": "48971139c020def9136a67a349abcdded2f46ef7",
+   "date": "2026-08-18",
+   "subject": "Handle synchronous exceptions from AsynchronousFileChannel#read",
+   "issues": [
+    "36184",
+    "37143"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "36fd82f32f03cfcded746522a501bcc1c8b24fa2",
+   "parent": "0f26f42da7dc77d0f5b6b640e4268ae3fe9b16ef",
+   "date": "2025-01-12",
+   "subject": "Defensively resolve JarFile from JarURLConnection",
+   "issues": [
+    "34216"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "fb423d66e37451485d2e883dc9d3a38303837e15",
+   "parent": "20b35f068a00cca6005ce731f2cca3034d0adb02",
+   "date": "2025-03-25",
+   "subject": "Add ClassFile variant for class metadata reading",
+   "issues": [
+    "33616"
+   ],
+   "files": 13,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "9252e741e17d2a810bf084235016692779518ecc",
+   "parent": "5271f5b8a16ff641ed820a5bb046c9731870c478",
+   "date": "2024-10-22",
+   "subject": "Default webmvc handling of disconnected client errors",
+   "issues": [
+    "33753"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "b8f71b23214c60a62273eb5f69a4bf90d23a4b60",
+   "parent": "27221581a125341fc3e77b460eacdd9cb54159b2",
+   "date": "2025-09-08",
+   "subject": "Add DataFieldMaxValueIncrementer for SQLite (migrated from Spring Batch)",
+   "issues": [
+    "35440"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "782a442f538c3dc76ec4be2bb9ddbfdba82fd3f1",
+   "parent": "ae6d93a9c31b580d2a05dbd0d3d70832e5255e82",
+   "date": "2026-10-05",
+   "subject": "Add support for JPA 4.0 package and module descriptor discovery",
+   "issues": [
+    "37316"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "8b66eca9322c61437a0ec70b1996c836522fdf09",
+   "parent": "e8c122c00a4655516436c95131ca5a489aeb7130",
+   "date": "2024-06-07",
+   "subject": "Harmonize OverrideMetadata implementations",
+   "issues": [],
+   "files": 11,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "40ea92621dcdb04519e8a245096a0924b9e3a33f",
+   "parent": "b0149b842b9fda8faa38edd8b096ba586f561f25",
+   "date": "2026-08-19",
+   "subject": "Correct supported media types in ProtobufJsonEncoder",
+   "issues": [
+    "37154"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "2e9e45ee55ab90acf44efe4db8d88d98e3cac5b8",
+   "parent": "b3dc75265d3ec11a080df86ee77dba7428b9f23f",
+   "date": "2025-06-25",
+   "subject": "Restore translation of IllegalArgumentException for JPA",
+   "issues": [
+    "35111"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "b9cf03f8f021ea4ad31d09ad463d48c4dbfa66e2",
+   "parent": "08a789cee9e8dd54180af269926a1b070963fd67",
+   "date": "2024-11-21",
+   "subject": "Construct consistent error messages in BeanOverrideBeanFactoryPostProcessor",
+   "issues": [],
+   "files": 5,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "0e84761871c7f35051c8185774517b21c88987e1",
+   "parent": "5d0fc72eb22c1825a508c75428a509641314159c",
+   "date": "2025-06-18",
+   "subject": "Return Builder from sslInfo() builder method for MockServerHttpRequest",
+   "issues": [
+    "35075"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "52af43d6d2ffcd1a5145b423baa3fa8a70a71ed7",
+   "parent": "859b97ce05d43238e0b7d596b1ab3c09c334a67f",
+   "date": "2024-06-06",
+   "subject": "Handle ResponseStatusException thrown by MVC functional endpoints",
+   "issues": [
+    "32689"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "8e2b27e5d894fa9c32598c18aeb3e6dbb06c8a5c",
+   "parent": "b734156f3237dfaeef34dfb86a3819f28f8d1c9d",
+   "date": "2024-08-08",
+   "subject": "WebFlux support for SSE with multiline fragments",
+   "issues": [
+    "33194"
+   ],
+   "files": 9,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "8a1a9d2ab2676c7602a0dbf2962062c165e31ed2",
+   "parent": "394a97d7e047a4675f76502ca1689e108a42eced",
+   "date": "2026-02-08",
+   "subject": "Fix nullability annotation in JdbcTemplate",
+   "issues": [],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "a22d204681c575c3f61c325d205a96fb92ea8e7a",
+   "parent": "f27382cfb6af887360d0e0f3be2bd3b77fa48eb9",
+   "date": "2025-04-14",
+   "subject": "Remove duplicate words in Java source code",
+   "issues": [],
+   "files": 10,
+   "split": "held-out",
+   "comment_only": true
+  },
+  {
+   "sha": "96f7d50abfff287b13625009d3118937a26c36ec",
+   "parent": "2697aea15ffffd7baa3f1aa0818d16161cad6547",
+   "date": "2025-01-07",
+   "subject": "Remove unneeded NullAway warning suppressions",
+   "issues": [
+    "1113",
+    "28797"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "2732b603dcd1af6c4b3667d371545fded8bc75a3",
+   "parent": "db4696ceae2a6f31146f90331b58edcfdb86c621",
+   "date": "2025-07-30",
+   "subject": "Update RestTestClient builder hierarchy",
+   "issues": [
+    "34428"
+   ],
+   "files": 13,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "e8e24e65d25dc54b951f1a4c9a869d74b6b10f95",
+   "parent": "9a002a77b2d60d53f2278c4859c226b17a2583bd",
+   "date": "2026-02-13",
+   "subject": "Detect all common size exceptions from Tomcat and Commons FileUpload 2.x",
+   "issues": [
+    "36317"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "6bb0bb8991c1ae3e8d8c1d51d5914131072b0aa2",
+   "parent": "30bdbb143882cec06030e28dc781a2f898973909",
+   "date": "2026-11-03",
+   "subject": "Allow self-populating lists within auto-grow limit",
+   "issues": [
+    "37036",
+    "37634"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "97d5f7f07d0842f73a534bc11f861544d18733b7",
+   "parent": "733e695e18919371a3e9d8c8bb82d6bddda6c26f",
+   "date": "2025-05-07",
+   "subject": "Fix filtering in HttpServiceProxyRegistryFactoryBean",
+   "issues": [
+    "34867"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "640e5705831beed32fd5c0490ef19c194ed62a95",
+   "parent": "66f33a82651b6cfaec8e85a5f5af9a8bc285d5ca",
+   "date": "2024-12-11",
+   "subject": "Minor refactoring in ServerSentEvent",
+   "issues": [
+    "33975"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "ff9a34927133059bef680c26f85129a1021513e9",
+   "parent": "6aeb9d16e83c69d980f48a4a4f052bf52f31dfd0",
+   "date": "2025-10-07",
+   "subject": "Introduce findAnnotatedBeans(ListableBeanFactory) in ControllerAdviceBean",
+   "issues": [
+    "35571"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "1fb04cb83a605717cc9fd237ea62de11875f4e68",
+   "parent": "4375e59a28426de4dac18a5b5d4f474e8656699a",
+   "date": "2025-06-19",
+   "subject": "Add support for configuring SslInfo in WebTestClient",
+   "issues": [
+    "35042"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "bd7007227c12490a6a4da96afa09c1f2637aa6d9",
+   "parent": "e8f873a3493bf845ee54e42b4b9135d0fbf60a41",
+   "date": "2025-05-02",
+   "subject": "Provide a working example instead of unclear placeholders",
+   "issues": [
+    "34828"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": true
+  },
+  {
+   "sha": "6de624d537065562beb50ac6437ae33e413311c9",
+   "parent": "0c319a89d767582ad25fd8c8abb24025f37368a3",
+   "date": "2024-07-10",
+   "subject": "Provide a template method to expose the currently invoked factory method",
+   "issues": [
+    "33192"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "265299c790fcec55d2f3de12b91e43e2361523e7",
+   "parent": "5715b2a783b383c7cae214c2e37efb43f48d924f",
+   "date": "2024-07-18",
+   "subject": "Restore source and binary compatibility in MockMvc",
+   "issues": [
+    "33229"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "f4a73b79b844486da5d39f4c0b7b997c72eb56ca",
+   "parent": "289c35c82973bfc59684d34896677e2841104232",
+   "date": "2024-08-12",
+   "subject": "Avoid CacheAspectSupport#findInCaches fall through to reactive handler",
+   "issues": [
+    "33371"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "628261d5bb3a8559f1c05ca2e613cdf0f0858517",
+   "parent": "715d33f001928f2fc7ccde0e673440e15f16a8a7",
+   "date": "2026-05-05",
+   "subject": "Do not warn against Root Servlet context location",
+   "issues": [
+    "36692"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "005c4db17ffbaf2eaf8162bc45b78b96c9a891d4",
+   "parent": "30a972c0b10544b6d687d9c1c36241696c9d5b78",
+   "date": "2026-10-05",
+   "subject": "Add ProblemDetailExceptionHandler",
+   "issues": [
+    "37398"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "cdbaa7f3a7b236d0df567b618564d1d00aa74769",
+   "parent": "d1b0bdb3d558410a735f43741f36febd4d7f9f01",
+   "date": "2026-02-05",
+   "subject": "Early support for JPA 4.0 EntityAgent (autowiring a shared proxy)",
+   "issues": [
+    "36025"
+   ],
+   "files": 10,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "96deb272110a28ef48d585a84aea0ecda34fce8d",
+   "parent": "a0542f023c0befdf8bf322cacdd3820a994e145a",
+   "date": "2025-08-08",
+   "subject": "Make `type` in `ProblemDetail` nullable",
+   "issues": [
+    "35294"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "f19f1a667cc502abb28cb846bcef513de8d93995",
+   "parent": "69207c6c16848706431541b23b2924bc7a9d53ee",
+   "date": "2025-12-05",
+   "subject": "Add support for package-private BeanRegistrar",
+   "issues": [
+    "35803"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "b2c84ac0380690638ab3b0127a9b92229af1736c",
+   "parent": "03896844297854b34c4b0dfc0b9467e238902b15",
+   "date": "2025-10-13",
+   "subject": "Adapt to Reactor 3.8 JSpecify annotations",
+   "issues": [
+    "35501"
+   ],
+   "files": 15,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "fd95ab16baa2353416e96bddbd979169a9618260",
+   "parent": "ba13cae6ccad7cac1f881859efd334b64835abc8",
+   "date": "2026-08-19",
+   "subject": "Use verified property names when constructing Property instances in SpEL",
+   "issues": [
+    "36911",
+    "37123"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "22ecab5aab80eb09a3e099264fb4bece8f860558",
+   "parent": "a7c43d90fd4edc9759e61c3e0b9bed3f85f09a3e",
+   "date": "2025-10-16",
+   "subject": "Fix code snippets in Javadoc for exchangeSuccessfully()",
+   "issues": [
+    "35642"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": true
+  },
+  {
+   "sha": "85e011058f529c328475c47b5988390ae038e47c",
+   "parent": "6bb0bb8991c1ae3e8d8c1d51d5914131072b0aa2",
+   "date": "2026-11-04",
+   "subject": "Add and correct `@since` tags for auto-grow APIs",
+   "issues": [
+    "37639"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": true
+  },
+  {
+   "sha": "db5809f968aa31816bbad5f84b1e4307a2f9a31a",
+   "parent": "d890a38f3cdcbaf42573351b0ac86217dc0f4dce",
+   "date": "2025-05-22",
+   "subject": "Remove obsolete @\u2060Contract declaration for StreamUtils.drain()",
+   "issues": [
+    "34933"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "a54618b4988e3d60858c71f40719aad029b2078a",
+   "parent": "d37030b9e192078e72ea09d4b4eaa22374bcf2b8",
+   "date": "2025-11-12",
+   "subject": "Simplify HttpHeaders(HttpHeaders) constructor",
+   "issues": [],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "6561490fd9b9b8f2fa7b879c7cd37ff5fed30bf2",
+   "parent": "5c68f3f4ef8a3d7b93443b68f04778dedfb03eed",
+   "date": "2024-06-17",
+   "subject": "Expose isClosed() method on AbstractApplicationContext",
+   "issues": [
+    "33058"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "ad00aebaa3ae436b79c8b3457aa6425401356db8",
+   "parent": "d07ed31fed1cd88b6d078c1f9e2e4edd5fc5c056",
+   "date": "2025-07-07",
+   "subject": "Improve Javadoc for caching annotations",
+   "issues": [],
+   "files": 4,
+   "split": "held-out",
+   "comment_only": true
+  },
+  {
+   "sha": "9ed3c034f54325707c56dbca2f1206b3107e2be2",
+   "parent": "001fc8e5852c2ad8eceb309fba74b5a5b4dc0057",
+   "date": "2025-10-14",
+   "subject": "AbstractMockHttpServletRequestBuilder uses HttpHeaders internally",
+   "issues": [
+    "35576"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "1911ca728d8827d9a558c0ea6ecca8354434e9ff",
+   "parent": "f4a73b79b844486da5d39f4c0b7b997c72eb56ca",
+   "date": "2024-08-12",
+   "subject": "Support invoking bridged suspending functions in AopUtils",
+   "issues": [
+    "33045"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "c98f314665a27f88dbb8168db650c1598cafad72",
+   "parent": "d22924c728cdaa9d24a9d36fe87af8d21d9eceaa",
+   "date": "2024-10-22",
+   "subject": "Throw ParseException for unsupported character in SpEL expression",
+   "issues": [
+    "33767"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "945f3fb5ac7fae3ae9cbc0a16f2df5a8e957ae63",
+   "parent": "2aa0bad432ec7f23cca37c2c541368776463c177",
+   "date": "2025-06-16",
+   "subject": "Revise RetryTemplate for alignment with Reactor",
+   "issues": [
+    "35057"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "78f05d8f8e8d65a8fbc669aef54c5db439ad2167",
+   "parent": "996b337f37234ce9e8fcee89f6f0b4e29e5f3c4f",
+   "date": "2026-06-27",
+   "subject": "Address deprecation warnings",
+   "issues": [],
+   "files": 30,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "fa01e9c566b4f212ce995ad3a67cc69830c83604",
+   "parent": "431d726dc6e2449cf012012ea3a2da0072a5387d",
+   "date": "2024-11-29",
+   "subject": "Use response decorator to check if error handled",
+   "issues": [
+    "33980"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "a0e43b1f4646c1583ebe447a0c56f59e8a4b49c9",
+   "parent": "ec383f69f2e7c7ef62e9779c16dcd654f6fc72be",
+   "date": "2024-07-17",
+   "subject": "Add support for making MapAccessor read-only",
+   "issues": [
+    "33222"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "19dd488dd7fd6fecec6acb1f28210ed0572237e8",
+   "parent": "a68d60768e7a7430aab5d7538f7863ccf19f500c",
+   "date": "2025-11-10",
+   "subject": "Prevent Kotlin Serialization codecs side effects",
+   "issues": [
+    "35761"
+   ],
+   "files": 19,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "bb7a8006c5e1051eb966a4ed5aff68f9f55a286e",
+   "parent": "ba56c1a8f449680ea4f216b76d6898b77e2b5678",
+   "date": "2025-02-07",
+   "subject": "Fix @\u2060Nullable declaration in DataBinder on 6.2.x",
+   "issues": [],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "bae022a0fcd477f925fe97dc76f1599d6ee4ce34",
+   "parent": "325c3e1ec763861488ba4008601b29888bfd6a07",
+   "date": "2026-06-22",
+   "subject": "Perform nextKey within synchronization",
+   "issues": [
+    "36959"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "f03b76a53dfd87e53db0c4c72f37e2a87c94f7c2",
+   "parent": "d5a7fc9a9ce32a94176620be4d9d6b070a260b9c",
+   "date": "2026-10-03",
+   "subject": "Copy cookies in RenderingResponse.from()",
+   "issues": [
+    "22481",
+    "37378"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "1b7ccbce2aa0eb999a6b4507d95ecea3e7621c85",
+   "parent": "e184860ca423b067f0ad62857b244a138cc5a409",
+   "date": "2025-01-07",
+   "subject": "Deprecate PathResource variant",
+   "issues": [
+    "34206"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "be11e73d2c5898623d869d71ec24c1ba9e10ee5a",
+   "parent": "4747ab67e6baa01005375583662c89c1d99c3ebc",
+   "date": "2024-12-26",
+   "subject": "Refine null-safety in the spring-expression module",
+   "issues": [
+    "34156"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "1bb0fdda6bc74a318d01cbeb9d612b4486460803",
+   "parent": "6507367d10ce03d569227df9141c161365800e31",
+   "date": "2026-02-10",
+   "subject": "Move validation group determination to ValidationAnnotationUtils",
+   "issues": [
+    "36274"
+   ],
+   "files": 7,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "e92bf760557376ed544cc0b7fac9b3da5395a4c5",
+   "parent": "19fdc0b77c32be6b748acc722bca0461cd79572f",
+   "date": "2026-09-04",
+   "subject": "validate samesite attribute in ResponseCookie",
+   "issues": [],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "7785f94c4c2b7a35d80c28f197c87c54fffc6564",
+   "parent": "4f6f2c0d41d036c4473e63d34f6d6979c6113bb6",
+   "date": "2024-06-05",
+   "subject": "Revise and align Reactor client lifecycle management",
+   "issues": [
+    "32945"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "00399dc1b3bf49c7c79d2258f2d171edba99b50e",
+   "parent": "e33adadc62d6851e664aa5ec366c5a8448a68e03",
+   "date": "2025-06-18",
+   "subject": "Reject null for returned CompletableFuture (avoiding subsequent NPE)",
+   "issues": [
+    "34708"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "e8f873a3493bf845ee54e42b4b9135d0fbf60a41",
+   "parent": "b943817f3e12c7080a8b8f38354e938eb8859095",
+   "date": "2025-05-02",
+   "subject": "Ensure Bean Overrides are discovered once in hierarchies",
+   "issues": [
+    "33925",
+    "34324",
+    "34844"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "f993e9710d44729c5d767077ae754605f05af014",
+   "parent": "822001c6a4dad0201c008088e709caf70fe23d2e",
+   "date": "2026-04-03",
+   "subject": "Align with JDK by throwing TypeNotPresentException in MergedAnnotations",
+   "issues": [
+    "36593"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "f1cbbd2aa80476dc570d3bdf23d589a9a2544a37",
+   "parent": "c73e76cf2ecf9007b9b68d56f94f1cc3dbb48b95",
+   "date": "2024-10-07",
+   "subject": "Remove redundant array length check",
+   "issues": [
+    "33655"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "6e9758700a4946be1dca85ca937ef2603e291301",
+   "parent": "37e8aa76e9a97a71765b000c354766b5df2a01ea",
+   "date": "2026-03-10",
+   "subject": "Guard against invalid id/event values in Server Sent Events",
+   "issues": [
+    "36440"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "b8f9913aa1dcfd52caa08e12063ae5066a2e2f3b",
+   "parent": "e741d6edbb3d7f9e4369e0d2266f1bc44ddb7a39",
+   "date": "2024-07-24",
+   "subject": "Add AOT/Native support",
+   "issues": [
+    "29555"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "60e5abff7f65b1cceb006e9ed35561b15b6e14e7",
+   "parent": "21bb726934c9eeb12ec3c020df41ad628e9dde3f",
+   "date": "2026-09-04",
+   "subject": "Enforce \"data: \" prefix for outgoing SSE data payloads",
+   "issues": [
+    "37242"
+   ],
+   "files": 22,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "7dc78a4318dd421d63d3edba6580fbc3d5b01b33",
+   "parent": "f15c12a190080872e069c0321a1c888a4806028d",
+   "date": "2025-10-15",
+   "subject": "Align default order between @EnableAsync and @EnableResilientMethods",
+   "issues": [
+    "35643"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "bb7ea37f1b3d47a4309bfacd7511cd1c6f4c2297",
+   "parent": "9e0d1c734ed935781fe8d1e75daf2115cfcd9148",
+   "date": "2026-09-17",
+   "subject": "Drain pending writes before evicting in ConcurrentLruCache.clear()",
+   "issues": [
+    "37286",
+    "37287"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "1b56f58999046051d76a653922c3ab72b4db9cf7",
+   "parent": "3eb93a4873ac35333c6ee1cab3a1ac5073a8ba64",
+   "date": "2026-08-28",
+   "subject": "Use depth-aware bracket parsing in PropertyAccessorUtils",
+   "issues": [
+    "36999"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "044258f08554ac9e0b71491e1d3d18f6b1d1e449",
+   "parent": "36d9357f94b73b39026e2fd0a555db6963ae1e04",
+   "date": "2025-03-31",
+   "subject": "Support abstract @\u2060Configuration classes without @\u2060Bean methods again",
+   "issues": [
+    "34486",
+    "34663"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "30a972c0b10544b6d687d9c1c36241696c9d5b78",
+   "parent": "782a442f538c3dc76ec4be2bb9ddbfdba82fd3f1",
+   "date": "2026-10-05",
+   "subject": "Add support for Hibernate 8.0's BeanContainer SPI revision",
+   "issues": [
+    "37381"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "62f1814d7cbe0ad1b6e7b7a2a70a02cb9ffa3d53",
+   "parent": "6f6e0d45a924faaf76a9027877b1f24a936f0781",
+   "date": "2025-05-26",
+   "subject": "Remove [set|with]Property(String, String) variants from MockEnvironment",
+   "issues": [
+    "34947",
+    "34948"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "18ee8adaebfaa8b4f14ffc71339d5b313f60681c",
+   "parent": "5a3bad6d61c521ef9385d2902b9fdc4b322cfa33",
+   "date": "2025-07-31",
+   "subject": "Check resolver set when API version config customized",
+   "issues": [
+    "35256"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "cc5ae239156bb9553263b3a825fb34dfeb5f5265",
+   "parent": "dbd47ff4f9a7cf241eda414ca7be6af9db55aae6",
+   "date": "2025-04-05",
+   "subject": "Suppress rollback attempt in case of timeout (connection closed)",
+   "issues": [
+    "34714"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "0676c958f7a5ba7069000c9a880ae1d869ccad61",
+   "parent": "482519d03bc86bd7bbfccac449bb9eb347142996",
+   "date": "2026-02-26",
+   "subject": "Log warning for ignored default context configuration in tests",
+   "issues": [
+    "31456",
+    "36390",
+    "36392"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "5aa15923cfc3e8ee7d67fbf2c634388fd42a7322",
+   "parent": "25b4e29f5e742dfaa834cce52f46367970f6f6bb",
+   "date": "2025-07-11",
+   "subject": "Make targetBeanName field in AbstractBeanFactoryBasedTargetSource protected",
+   "issues": [
+    "35172"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "e7402bc365acdbbbbb8c9aa6f0502cdd8f0f6f85",
+   "parent": "49ef150c5dd225634df4160fcaec28e301ca3139",
+   "date": "2025-04-18",
+   "subject": "Remove obsolete RmiInvocationWrapperRTD.xml file",
+   "issues": [
+    "34779"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "dc2c8d6094ba662eeb1b9f4bad34be52703312c4",
+   "parent": "46dccd8f9737e827a9581237809a030b6924ebc6",
+   "date": "2024-06-11",
+   "subject": "Add execution metadata to tasks and scheduled tasks",
+   "issues": [
+    "24560"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "a8e6143f1aa0ca0ebbb9b6e2afd20f447ad909d8",
+   "parent": "7fbdbd6eb7665be6a66562d26b26ffcfb600ee32",
+   "date": "2026-11-13",
+   "subject": "Mandatory origin check in WebSocketHttpRequestHandler",
+   "issues": [],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "0f2308e85f327600653b0f3f8aaf4e0e3131b4aa",
+   "parent": "ee804ee8fb2ca5ddd446460f87193489f86cd211",
+   "date": "2025-04-04",
+   "subject": "Implement micro performance optimizations",
+   "issues": [
+    "34717"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "fa2a58b9dbefe3a284e1a517e11f583b46c37ec8",
+   "parent": "83ca2c0cff43f28fc4ddba3f229636ea1f7e628e",
+   "date": "2024-07-10",
+   "subject": "Ensure varargs component type for MethodHandle is not null in SpEL",
+   "issues": [
+    "33193"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "1d2351c87b4f278d1de4980e3c2bcbc754146283",
+   "parent": "02dc4b6342441b31cd7c7a1f4ded64ea832362f0",
+   "date": "2026-02-09",
+   "subject": "Optimize single PathPattern match",
+   "issues": [
+    "36275"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "61d5413c23cc820b6f2f4408c29408b8b1736ea8",
+   "parent": "08e6d762d283346eb146830827766e0845ba314c",
+   "date": "2025-11-27",
+   "subject": "Tighten cacheable decision behind @Lazy injection point",
+   "issues": [
+    "35917"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "0c688742e102faebcb18bed1b84fe84f635b40d6",
+   "parent": "7de1dc826a26a15a17207248e1ea833fadeee40a",
+   "date": "2024-12-10",
+   "subject": "Fix custom scheduler support for @Scheduled methods",
+   "issues": [
+    "24560",
+    "34058"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "1a0b577bfcb9adf57ee9c1c10c3af9f3159ec76c",
+   "parent": "e191c34078008d7d044490060c8558d8e4010fb7",
+   "date": "2024-10-14",
+   "subject": "Do not support relative static resource paths",
+   "issues": [
+    "33687"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "159e23730c3a10a48d91bc5c0fdcbb95c528312e",
+   "parent": "8931b75b958144b1496da1b163553acd03e11ebd",
+   "date": "2024-09-20",
+   "subject": "Fix Javadoc @\u2060since tags in JettyCoreRequestUpgradeStrategy",
+   "issues": [
+    "32097",
+    "33569"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": true
+  },
+  {
+   "sha": "ab236c7741dcf8ea9da738d1407a623bcd12bf0d",
+   "parent": "61adf2dd255b2b32ccba7f051f8b11f40b567056",
+   "date": "2024-07-01",
+   "subject": "Re-enable async dispatches in Observation Filter",
+   "issues": [
+    "32730",
+    "33091"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "b85993c7cb524391b52e4910281489f64f30f546",
+   "parent": "228662ad9f24514975bf2c88db541f6dffa35cb4",
+   "date": "2025-10-19",
+   "subject": "Add test for HibernatePersistenceConfiguration",
+   "issues": [
+    "35662"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": true
+  },
+  {
+   "sha": "d97288a74e5a59f19055cc029e5c063ecf9309c4",
+   "parent": "28f9adf88e65752ab9bb974f44df19f5f49371d9",
+   "date": "2025-06-27",
+   "subject": "Improve Javadoc and tests for BackOff strategies",
+   "issues": [],
+   "files": 5,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "d94e04d97afaa745bcbd1d7ec5609d5256517255",
+   "parent": "5a44897c55f29dddc5e945c182a4584aab1e7fb1",
+   "date": "2025-01-06",
+   "subject": "Minor refactoring in WebAsyncManager",
+   "issues": [
+    "34192"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "4ee0a8ee3321df8055dce16eb645aca8bf6f1ee5",
+   "parent": "f3908832c5fa14f8d303fa205648dde13a82ecb4",
+   "date": "2025-11-25",
+   "subject": "Refine Kotlin Serialization codec type checks",
+   "issues": [
+    "35885"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "ddec8d26534bc443653fdb2bad43efb94d41ecf5",
+   "parent": "1aede291bb13a07f8f47e946a778ea216eda9cc8",
+   "date": "2024-11-28",
+   "subject": "Add missing `@Contract` annotation to ObjectUtils#isEmpty",
+   "issues": [
+    "33984"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "22bd8bd704390ee618f19d32e5ecc6ad1cd0b39c",
+   "parent": "9b10bb5e08cef036e1933ce75feb5ab83e44d57d",
+   "date": "2026-02-17",
+   "subject": "Skip serialization of potentially non-serializable cached state",
+   "issues": [
+    "36346"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "06721ba6c0cebc94c16a60d84b832a4d4ef67479",
+   "parent": "b6a5402d885c41c911b42d35b3cd9e1f13d63ebf",
+   "date": "2025-02-26",
+   "subject": "Lenient fallback when cached WeakReference returns null",
+   "issues": [
+    "34423"
+   ],
+   "files": 1,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "eed0a3ff59751682bc0effae661ca5e500ed75da",
+   "parent": "a8ac54120dd7220d3460e44a4d77b719cd234846",
+   "date": "2025-05-26",
+   "subject": "Allow access to env from SupplierContextDsl",
+   "issues": [
+    "34943"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "36815f4021ef087a771da600a6725e5d5d714f85",
+   "parent": "3b1b7ff594427181dc2acef81961674a39a1c57b",
+   "date": "2026-02-28",
+   "subject": "Add support for JPA 4.0 FlushModeType.EXPLICIT",
+   "issues": [
+    "36401"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "5044b70a4038f2ae29cee262f63fb0e940297bda",
+   "parent": "ff28d2d47af53a6fbf9fd04a15fdb9c920264412",
+   "date": "2024-12-08",
+   "subject": "Remove deprecated MediaType entries",
+   "issues": [
+    "33809"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "290c9c4a1941d7c810ec1d54de92b47f96f9f26f",
+   "parent": "e01ad5a08df593f58ce3a946a84eae1565a2821a",
+   "date": "2025-04-02",
+   "subject": "Use form charset in ServletServerHttpRequest",
+   "issues": [
+    "34675"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "e19e17eca5895c224190f6e6d43065ae99d60f29",
+   "parent": "fd23ae2393fe2251a4250a2830f9324dba1c06ca",
+   "date": "2026-09-28",
+   "subject": "Add missing enclosing single quotes in Javadoc",
+   "issues": [
+    "37338"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": true
+  },
+  {
+   "sha": "7bb19fcde85f6964d83b8d7df8f06c7bb6a142c0",
+   "parent": "18d6a55e3edbdfb3ef45d47fe7fe2c26cce83c26",
+   "date": "2025-06-09",
+   "subject": "Refine Kotlin Serialization hint registration",
+   "issues": [
+    "34979"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  },
+  {
+   "sha": "8810913f301dce7563649b9f13679cb9cb59f59d",
+   "parent": "83ab71725fcffd7494aba14a079c9e1fc73bb2be",
+   "date": "2025-02-04",
+   "subject": "Prevent further configuration once SqlCall is compiled",
+   "issues": [
+    "33729"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "comment_only": false
+  }
+ ]
+}

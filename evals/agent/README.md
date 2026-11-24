@@ -2366,6 +2366,10 @@ session runs in `dontAsk` permission mode without any allow rule, so the call
 is denied, and `--max-turns 1` ends it. Accuracy per pass, agreement between
 passes and the most frequent confusions go to `TOOLSEL.md`.
 
+## Docs to check for a code diff (#210)
+
+Which documentation pages must be looked at for a code diff, without an LLM: text search against myceliums' graph and search on real spring-framework commits. Protocol, harness and the dev result are in [`docscheck/README.md`](docscheck/README.md); held-out is not scored.
+
 ## Limits
 
 * Outcome eval at scale (#163): one repetition (each task, condition and

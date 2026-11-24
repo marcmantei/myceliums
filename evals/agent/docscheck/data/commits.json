@@ -1,0 +1,2574 @@
+{
+ "head": "9a156f878af1b9fdc24397328794f7f79d4e1693",
+ "since": "2023-04-25",
+ "split_at": "2024-06-01",
+ "max_files": 40,
+ "max_gold": 10,
+ "counts": {
+  "non_merge_in_range": 7582,
+  "main_and_docs_unit": 341,
+  "subject": 271,
+  "files": 255,
+  "gold_paths": 254,
+  "code_change": 174,
+  "gold_content": 174,
+  "unique_subject": 172,
+  "split": {
+   "dev": 65,
+   "held-out": 84,
+   "excluded-183": 23
+  }
+ },
+ "commits": [
+  {
+   "sha": "033548a760dd20e892b263be8ff64e4a02b72b31",
+   "parent": "e416dfdbc003218e2fb25df5c5d69e65aa695d0d",
+   "date": "2023-05-05",
+   "subject": "Remove default blockTimeout on interface clients",
+   "issues": [
+    "30403"
+   ],
+   "files": 6,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc",
+    "framework-docs/modules/ROOT/pages/rsocket.adoc"
+   ]
+  },
+  {
+   "sha": "906c54faffc75721b98f9b9cf63d35edd81f7b4f",
+   "parent": "d3c3088c6ba27a5a6d7f458a76f5d91320aaf828",
+   "date": "2023-05-05",
+   "subject": "Add SpEL support for registered MethodHandles",
+   "issues": [
+    "27099",
+    "30045"
+   ],
+   "files": 9,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions.adoc",
+    "framework-docs/modules/ROOT/pages/core/expressions/language-ref.adoc",
+    "framework-docs/modules/ROOT/pages/core/expressions/language-ref/functions.adoc"
+   ]
+  },
+  {
+   "sha": "993a69d3a9fff202b731e69b4655535cd4647faa",
+   "parent": "944305b9f16f64480aaf2ed227cdd276990cf8f8",
+   "date": "2023-05-10",
+   "subject": "Deprecate spring context indexer",
+   "issues": [
+    "30431"
+   ],
+   "files": 9,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/core/beans/classpath-scanning.adoc"
+   ]
+  },
+  {
+   "sha": "96a429a5613c1fee2b011e42d4a401ab3506a588",
+   "parent": "e5ee369e70e0a8ca04437f502649b11171a1c741",
+   "date": "2023-05-22",
+   "subject": "Move reactive server instrumentation\u00a0out of WebFilter",
+   "issues": [
+    "30013"
+   ],
+   "files": 16,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc",
+    "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java"
+   ]
+  },
+  {
+   "sha": "4c8f1910c82c340135082f3947f7dd9b611d6849",
+   "parent": "3b364c2a3d046e499807adcbc43b1a85f3ffff3c",
+   "date": "2023-05-23",
+   "subject": "Align HibernateJpaVendorAdapter with Hibernate ORM 6.2",
+   "issues": [
+    "30288"
+   ],
+   "files": 7,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/orm/hibernate.adoc"
+   ]
+  },
+  {
+   "sha": "35052f2113274be6ebad0714b9f29fd8dea6b0db",
+   "parent": "53f891226eac0b413877b9a4c5ce4355e67f6301",
+   "date": "2023-06-05",
+   "subject": "Support `@Scheduled` fixedDelay/fixedRate on Publisher-returning methods",
+   "issues": [
+    "23533",
+    "28515"
+   ],
+   "files": 7,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/scheduling.adoc"
+   ]
+  },
+  {
+   "sha": "1f068fcdb8bc1b7fff390c46149ba459993a9f7e",
+   "parent": "85d81024a40c9b392bd1159e294c7ead9c6dc55c",
+   "date": "2023-06-13",
+   "subject": "Rename checkpoint property to \"spring.context.checkpoint\"",
+   "issues": [
+    "30606"
+   ],
+   "files": 2,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/checkpoint-restore.adoc"
+   ]
+  },
+  {
+   "sha": "9c7b5cb3f5cc4aac3b4e8ae9499b2753b85696f7",
+   "parent": "53828cbfadab2b835530716cc461336f1d21d908",
+   "date": "2023-06-14",
+   "subject": "Add ProblemDetail \"type\" message code",
+   "issues": [
+    "30566"
+   ],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/ann-rest-exceptions.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+   ]
+  },
+  {
+   "sha": "aa2028127f4e3f3a2f47d54b0fefb9b24f84dce7",
+   "parent": "a82659c8375066419711ed29dfd125cfa45f70bb",
+   "date": "2023-06-14",
+   "subject": "Overhaul TestExecutionListener for Micrometer ObservationRegistry",
+   "issues": [
+    "30658"
+   ],
+   "files": 9,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/tel-config.adoc"
+   ]
+  },
+  {
+   "sha": "089d938e15688b75cc8780a30211bfc84bfbdebf",
+   "parent": "c00508d6cf2408d06a0447ed193ad96466d0d7b4",
+   "date": "2023-06-19",
+   "subject": "Set throwExceptionIfNoHandlerFound=true and deprecate",
+   "issues": [
+    "29491"
+   ],
+   "files": 7,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-servlet/sequence.adoc"
+   ]
+  },
+  {
+   "sha": "09cb844421db3bd3475a5bdb0de244775f4c8185",
+   "parent": "842569c9e519ec7d11fc86691577cee067c7ef47",
+   "date": "2023-06-19",
+   "subject": "Instrument Scheduled methods for observability",
+   "issues": [
+    "29883"
+   ],
+   "files": 14,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "c2e3fed8dcda5abc8a5f4ad4939344f8f44121c1",
+   "parent": "91eb2be44cc40c33ee4e003c8cad509ff29b392e",
+   "date": "2023-06-27",
+   "subject": "Align observations of @Scheduled with OTel conventions",
+   "issues": [
+    "30721"
+   ],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "268f3c853eb51b20a6a45d5cd6a646ff8e57ff38",
+   "parent": "bf82ed718674317672d9f86ac3b7668226986753",
+   "date": "2023-07-06",
+   "subject": "Add RestTemplate support for HTTP interface client",
+   "issues": [
+    "30117"
+   ],
+   "files": 21,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc"
+   ]
+  },
+  {
+   "sha": "f0fe58f0ecb8054ba6b4ddc9a7907f75e0292307",
+   "parent": "8fb412ea742f23f7cc9e47c7404c8ff63ef6c151",
+   "date": "2023-07-08",
+   "subject": "Move observation support classes to scheduling.support package",
+   "issues": [
+    "29883"
+   ],
+   "files": 14,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "8b77ed164d56e3a50ec9085c781f9d35da1a85e9",
+   "parent": "3a8c40fd2f29c80db58fbe5f75904146f3f9d618",
+   "date": "2023-07-11",
+   "subject": "Add RestClientAdapter",
+   "issues": [
+    "30869"
+   ],
+   "files": 4,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc"
+   ]
+  },
+  {
+   "sha": "b016f385e1d1f8b4bffc9e45a19a2a4ffbc6dec9",
+   "parent": "f40d1f232974105c8a404c47faa9ef0dca0c5588",
+   "date": "2023-07-12",
+   "subject": "Add BlockingExecutionConfigurer to WebFlux config",
+   "issues": [
+    "30678"
+   ],
+   "files": 10,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/config.adoc"
+   ]
+  },
+  {
+   "sha": "ce80637891148bb9a23b7f2b6626f99a98564d35",
+   "parent": "78d0dbb5191ac52528a1bd0d33d401065b40ba4c",
+   "date": "2023-07-27",
+   "subject": "Add option for graceful shutdown (setTaskTerminationTimeout)",
+   "issues": [
+    "30956"
+   ],
+   "files": 4,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/scheduling.adoc"
+   ]
+  },
+  {
+   "sha": "4cd9e2e9b0bce3e6a08d08b80b3271c0ec63c829",
+   "parent": "376223c87d65ab9dde30e0ede6a6da536c44a25f",
+   "date": "2023-07-28",
+   "subject": "Support `@RSocketExchange` for annotated responders",
+   "issues": [
+    "30936"
+   ],
+   "files": 3,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/rsocket.adoc"
+   ]
+  },
+  {
+   "sha": "450cc212a2a06d68914ceb934de00179d0580b71",
+   "parent": "a9d100eeee697531c34e9e91d520392be336018e",
+   "date": "2023-08-01",
+   "subject": "Support for transactional listeners with reactive transactions",
+   "issues": [
+    "21025",
+    "27515",
+    "30244"
+   ],
+   "files": 10,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/transaction/event.adoc"
+   ]
+  },
+  {
+   "sha": "3e5aa8d7344f3ec42a460bec36f8f24f937a2753",
+   "parent": "1bfcaecc9be49a3e26ce355f5a4cb877791d6366",
+   "date": "2023-08-03",
+   "subject": "Fail on error by default during test AOT processing",
+   "issues": [
+    "30977"
+   ],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/aot.adoc"
+   ]
+  },
+  {
+   "sha": "04cce0bafd21c3f6b8f427ab2eac75ffadefb585",
+   "parent": "b80872b762e1270ddf63caace91c20c71e25a5af",
+   "date": "2023-08-04",
+   "subject": "Support custom properties file formats in @TestPropertySource",
+   "issues": [
+    "30981"
+   ],
+   "files": 24,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/property-sources.adoc"
+   ]
+  },
+  {
+   "sha": "d1d5b54f123dc78e872f8819677ac8d92be5969e",
+   "parent": "646fd3edccb7b0bb14c28269b0e17039c4aca3ef",
+   "date": "2023-08-04",
+   "subject": "Support @HttpExchange for server-side handling",
+   "issues": [
+    "30980"
+   ],
+   "files": 8,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-methods.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-methods.adoc"
+   ]
+  },
+  {
+   "sha": "92410395e3e2eeb8b0b4495465f883a8796d34fa",
+   "parent": "d03af155161ccc783b95ce3c0ab39d7f53b7796a",
+   "date": "2023-08-12",
+   "subject": "Remove outdated documentation references to WebLogic/WebSphere",
+   "issues": [
+    "22093"
+   ],
+   "files": 8,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/aop/using-aspectj.adoc",
+    "framework-docs/modules/ROOT/pages/data-access/transaction/application-server-integration.adoc",
+    "framework-docs/modules/ROOT/pages/data-access/transaction/declarative/annotations.adoc",
+    "framework-docs/modules/ROOT/pages/integration/jms/jca-message-endpoint-manager.adoc"
+   ]
+  },
+  {
+   "sha": "2c895974b245783f187e2e332858a5f2f48fde08",
+   "parent": "bfeca4a0bf0f02f06e42413065b5cc651ae94963",
+   "date": "2023-08-13",
+   "subject": "Add observability support for JMS",
+   "issues": [
+    "30335"
+   ],
+   "files": 12,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "1f544f113a2988cf9d6f5dc88e90ad8de7b45425",
+   "parent": "3a38bb48b5626ac6743b6d93aba35b189f598c84",
+   "date": "2023-08-16",
+   "subject": "Support resource patterns in @TestPropertySource locations",
+   "issues": [
+    "21325",
+    "31055"
+   ],
+   "files": 7,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/property-sources.adoc"
+   ]
+  },
+  {
+   "sha": "35fc2df94860e0d59c4399d8b6f01c7a57fe9c5d",
+   "parent": "22fd6df711c1d8e3b33cce49b0d03f34e405e7f3",
+   "date": "2023-08-25",
+   "subject": "Instrument RestClient for Observability",
+   "issues": [
+    "31114"
+   ],
+   "files": 6,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "4e2d9252e5467f6b0a3cadd2085caeb4d45a3c61",
+   "parent": "e239753a1b3e119c6c6bde28da5ceaf97915edfa",
+   "date": "2023-08-27",
+   "subject": "Allow component name to be specified in @[Rest]ControllerAdvice",
+   "issues": [
+    "21108",
+    "31089"
+   ],
+   "files": 7,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/classpath-scanning.adoc"
+   ]
+  },
+  {
+   "sha": "ff104b6de03801248c117fc574f7e7327c1fd4cc",
+   "parent": "d189e169cc90f81d92dc6f2183afd7b1fd4a1f33",
+   "date": "2023-08-27",
+   "subject": "Look up @Component stereotype names using @AliasFor semantics",
+   "issues": [
+    "20615",
+    "31089"
+   ],
+   "files": 8,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/classpath-scanning.adoc"
+   ]
+  },
+  {
+   "sha": "bfd918d16c4042c2dbfcecaea4c5b063b11d63a5",
+   "parent": "2d377155abf1f7a2445d75a629678e7fa01297fc",
+   "date": "2023-08-28",
+   "subject": "Deprecate convention-based @Component stereotype names in favor of @AliasFor",
+   "issues": [
+    "31089",
+    "31093"
+   ],
+   "files": 7,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/classpath-scanning.adoc"
+   ]
+  },
+  {
+   "sha": "f5a356c9c63dd17a66d8bd7145cf2c86ab7052be",
+   "parent": "d47c7f95526fc4e2c0495a663fcc7bd58a5bc6a7",
+   "date": "2023-08-29",
+   "subject": "Add ContextPropagatingTaskDecorator",
+   "issues": [
+    "31130"
+   ],
+   "files": 9,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/context-introduction.adoc",
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "b068742ec8803334d4d2a91484aadf60c1e8ef4f",
+   "parent": "6597727c863cbfd884d3099fc14994b5bc979c77",
+   "date": "2023-09-04",
+   "subject": "Support method validation for Lists in WebMvc and WebFlux",
+   "issues": [
+    "31120"
+   ],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/validation/beanvalidation.adoc"
+   ]
+  },
+  {
+   "sha": "dfea3d05aa4abd0493a2714c0a77edd13a4a2f18",
+   "parent": "8dd857a84d7f5d8c7903f445303906c887c70281",
+   "date": "2023-09-08",
+   "subject": "Revise support for JSR-330 and Jakarta @Inject for autowiring test constructors",
+   "issues": [
+    "29851"
+   ],
+   "files": 8,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-junit-jupiter.adoc"
+   ]
+  },
+  {
+   "sha": "ed83461021374bb7b3df654b8f37c1b56d3288dd",
+   "parent": "41904d46ad04990ea5d0c297212e0eab24ab7efa",
+   "date": "2023-09-10",
+   "subject": "Support parameter injection in @[Before|After]Transaction methods",
+   "issues": [
+    "30736",
+    "31199"
+   ],
+   "files": 6,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/support-classes.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/tx.adoc"
+   ]
+  },
+  {
+   "sha": "1f8913a96ca202707720c704efc3c3345af0fbdc",
+   "parent": "29e3acc88738e4b7700464fb26ad4e71e277200c",
+   "date": "2023-09-13",
+   "subject": "Support Jetty WebSocket server parameters",
+   "issues": [
+    "30344"
+   ],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/websocket/server.adoc"
+   ]
+  },
+  {
+   "sha": "8f6c56fe9a62b4849d158019a8d1a3482962519e",
+   "parent": "e63e3a6d28b9bcf01c144894ea9e1e6ec929c219",
+   "date": "2023-09-13",
+   "subject": "Support for one-time tasks with just @Scheduled(initialDelay=...)",
+   "issues": [
+    "31211"
+   ],
+   "files": 10,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/scheduling.adoc"
+   ]
+  },
+  {
+   "sha": "a220c545fc1d4f6d8d7f0cc01d7c8089c70389a4",
+   "parent": "99a50e7cea9d1c7791e40401595204e4446ce929",
+   "date": "2023-09-13",
+   "subject": "Support declarative ContextCustomizerFactory registration in the TCF",
+   "issues": [
+    "26148"
+   ],
+   "files": 27,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-junit-jupiter.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-meta.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management.adoc"
+   ]
+  },
+  {
+   "sha": "4128f4d5c999563b8a9036f65167a326039392fd",
+   "parent": "2fbcff89199267313dcb7fe1c7fb803f38f22879",
+   "date": "2023-09-18",
+   "subject": "Print JVM restoration time in DefaultLifecycleProcessor",
+   "issues": [
+    "31252"
+   ],
+   "files": 2,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/checkpoint-restore.adoc"
+   ]
+  },
+  {
+   "sha": "3277b0d6ac6075135308ac6f8412376cb4b61b83",
+   "parent": "9eb39e182eecf6f311c37f9e30e306821867b903",
+   "date": "2023-10-11",
+   "subject": "Handle STOMP messages to user destination in order",
+   "issues": [
+    "31395"
+   ],
+   "files": 9,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/websocket/stomp/ordered-messages.adoc"
+   ]
+  },
+  {
+   "sha": "0cd196e3dde20fc5c2a03f2f67cd3706bb3973fd",
+   "parent": "364186e6999a343bb06154419518035b2f252dce",
+   "date": "2023-10-13",
+   "subject": "Add UriBuilderFactoryArgumentResolver",
+   "issues": [
+    "31413"
+   ],
+   "files": 15,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc"
+   ]
+  },
+  {
+   "sha": "84c28995fb2ffa96d2b76d1ad968ba76a00bf1a1",
+   "parent": "925fa0272b76c765d3f9dee2bd5d54c66bd849c9",
+   "date": "2023-10-25",
+   "subject": "Improve documentation for the default profile",
+   "issues": [
+    "29071"
+   ],
+   "files": 3,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/environment.adoc"
+   ]
+  },
+  {
+   "sha": "c18784678df489d06a70e54fcddb5e3821d4b00c",
+   "parent": "51cdff591c940689693e5d1ecd9524b6fdbc3a3c",
+   "date": "2023-11-16",
+   "subject": "Reduce allocations in server conventions",
+   "issues": [],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "3b4c7a890608bf006d0424355ad82cf8815c98da",
+   "parent": "2e07f9ab33d882876f46912fcea08030b2593d49",
+   "date": "2023-12-07",
+   "subject": "Revise LazyConnectionDataSourceProxy for late connection properties check",
+   "issues": [
+    "19688",
+    "21415",
+    "29931",
+    "31785"
+   ],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/jdbc/connections.adoc",
+    "framework-docs/modules/ROOT/pages/data-access/orm/hibernate.adoc",
+    "framework-docs/modules/ROOT/pages/data-access/orm/jpa.adoc"
+   ]
+  },
+  {
+   "sha": "2eba3510f714cb8f0373a72cee32091a349adb83",
+   "parent": "56afd38148d78523be37e8d17a22271d5c6eed2a",
+   "date": "2023-12-08",
+   "subject": "Annotate generated classes with @Generated",
+   "issues": [
+    "30824"
+   ],
+   "files": 4,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/aot.adoc"
+   ]
+  },
+  {
+   "sha": "a155a6b3e21ba01abc9d207d8e1225755adb7d11",
+   "parent": "a338a16b29a326e2e8fef7deb2c4e100ac9c941f",
+   "date": "2023-12-27",
+   "subject": "Document target method expectations for ReactiveTransactionManager",
+   "issues": [
+    "23277"
+   ],
+   "files": 3,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/transaction/declarative/tx-decl-explained.adoc"
+   ]
+  },
+  {
+   "sha": "ec5f566ba51b6475b79e7d5dd7f825bfdc6c87b2",
+   "parent": "2d6b77336bd945cfefd9e66cd50b0443c7fead9b",
+   "date": "2024-01-02",
+   "subject": "Fix Scheduled observation convention for lambdas",
+   "issues": [
+    "31918"
+   ],
+   "files": 3,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "785598629abda944343a02307ad82a79bb31b589",
+   "parent": "3452354a115b2fafaabe827686441381e106a6dd",
+   "date": "2024-01-09",
+   "subject": "Make max length of SpEL expressions in an ApplicationContext configurable",
+   "issues": [
+    "31952"
+   ],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "699da7c383fc594ef76fcc23a26983f8eadbfd7b",
+   "parent": "5bf74cae11becd7184a7702744dcd5e19a184985",
+   "date": "2024-01-17",
+   "subject": "Log warning if multiple @\u2060RequestMapping annotations are declared",
+   "issues": [
+    "31962"
+   ],
+   "files": 12,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-requestmapping.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-requestmapping.adoc"
+   ]
+  },
+  {
+   "sha": "18ea43c905ba1f8ee94177199ef4f8b44ccd2bf1",
+   "parent": "bcccba50c1fcd8ff757fe0d1c03a4a1713a98b1b",
+   "date": "2024-02-15",
+   "subject": "Allow customizations of embedded database connections",
+   "issues": [
+    "21160"
+   ],
+   "files": 8,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/jdbc/embedded-database-support.adoc"
+   ]
+  },
+  {
+   "sha": "5bd1c1fddb6065606a303a6f3ef93b8aa2228f9d",
+   "parent": "5d22aa97701271ad58e8b3d42ebd53064df4e13d",
+   "date": "2024-02-15",
+   "subject": "Add ThreadLocalAccessor for LocaleContext and RequestAttributes",
+   "issues": [
+    "32243"
+   ],
+   "files": 7,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-async.adoc"
+   ]
+  },
+  {
+   "sha": "e3aa5b6b1154345c231acc7950d74cd56d7420c4",
+   "parent": "00e05e603d4423d33c99dadeb52fef26be71dfb8",
+   "date": "2024-02-15",
+   "subject": "Use new implementation in PropertyPlaceholderHelper",
+   "issues": [
+    "9628"
+   ],
+   "files": 24,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/annotation-config/value-annotations.adoc"
+   ]
+  },
+  {
+   "sha": "380184e85a6b4340c2553a5812e0bb464de20692",
+   "parent": "5cba32df3253955eac7135d144ed9c0c3518d174",
+   "date": "2024-03-03",
+   "subject": "Support SpEL compilation of #root or #this with non-public type",
+   "issues": [
+    "32356"
+   ],
+   "files": 3,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/language-ref/variables.adoc"
+   ]
+  },
+  {
+   "sha": "7d4c8a403e411d8e807c1d669a1257fc132ddaf6",
+   "parent": "eb01cc0d9dd5766422a56d297e176e37dde71093",
+   "date": "2024-03-05",
+   "subject": "Introduce configurable default rollback rules",
+   "issues": [
+    "23473"
+   ],
+   "files": 12,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/transaction/declarative/annotations.adoc"
+   ]
+  },
+  {
+   "sha": "14a461e7951d0a173f58f9cd55c613517ce26ff3",
+   "parent": "6461eec582dc259dba2b6ee9b56ffbdcc50ce2f5",
+   "date": "2024-03-06",
+   "subject": "Consider type-level qualifier annotations for transaction manager selection",
+   "issues": [
+    "24291"
+   ],
+   "files": 6,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/transaction/declarative/annotations.adoc"
+   ]
+  },
+  {
+   "sha": "38d5c0fed66494648cea05207f3427209aad6299",
+   "parent": "3577e3b7587aaa44510f461a7ba015c3c9543313",
+   "date": "2024-03-08",
+   "subject": "Add RFC-7807 response interception",
+   "issues": [
+    "31822"
+   ],
+   "files": 21,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/ann-rest-exceptions.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+   ]
+  },
+  {
+   "sha": "76d00d78db8586b47af06bfb4ca38e50f82e85ab",
+   "parent": "bf014ef18ba7ee88a8df3a6136d96bfb15d2abcc",
+   "date": "2024-03-12",
+   "subject": "Support splitting STOMP messages in WebSocketStompClient",
+   "issues": [
+    "31970"
+   ],
+   "files": 6,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/websocket/stomp/client.adoc"
+   ]
+  },
+  {
+   "sha": "29d307e2113ecb16627d0ba5a6082c720f3a09c0",
+   "parent": "4c7735016b2edb6766261c2882e17ff3662d607f",
+   "date": "2024-03-20",
+   "subject": "Clear ApplicationContext cache after a test class completes if necessary",
+   "issues": [
+    "30954"
+   ],
+   "files": 6,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/tel-config.adoc"
+   ]
+  },
+  {
+   "sha": "5698191ba063adf3a8fdd4e422a7798468004010",
+   "parent": "7d197972e010b9e1e42606fce942a1016b4617a0",
+   "date": "2024-03-20",
+   "subject": "Rename listener to CommonCachesTestExecutionListener",
+   "issues": [
+    "30954"
+   ],
+   "files": 10,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/tel-config.adoc"
+   ]
+  },
+  {
+   "sha": "7a74e459464deae786e79aa9a977068a37bc5b49",
+   "parent": "8af3eb1aea2c1d6e4baddd8d01d4f56475891c24",
+   "date": "2024-04-02",
+   "subject": "Make use of bean definition overriding more visible",
+   "issues": [
+    "31288"
+   ],
+   "files": 17,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/definition.adoc"
+   ]
+  },
+  {
+   "sha": "2d33aac35038ef9f6773ff60f542975a051e7e42",
+   "parent": "711ddd1ac698128095c611164df57d0c201f567c",
+   "date": "2024-04-10",
+   "subject": "Improve Bean Overriding support, testing and documentation",
+   "issues": [],
+   "files": 36,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-beanoverriding.adoc"
+   ]
+  },
+  {
+   "sha": "0eb937a8662a70228d190c4030c77fb924b2e79d",
+   "parent": "6250b64766eb64a7f25984aa2ac33838bd7d5925",
+   "date": "2024-05-08",
+   "subject": "Document limitations of CGLIB proxy class generation in JPMS module setups",
+   "issues": [
+    "32671"
+   ],
+   "files": 3,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/aop/proxying.adoc"
+   ]
+  },
+  {
+   "sha": "a86612a254267cbaebde626ddd6a8bd9db65429b",
+   "parent": "fc07946e6043e31152ecfb25dddfcbbcd811cb4a",
+   "date": "2024-05-14",
+   "subject": "Use by-type semantics in bean overriding if no explicit name is provided",
+   "issues": [
+    "32761"
+   ],
+   "files": 19,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc"
+   ]
+  },
+  {
+   "sha": "e509385eae29056621071b653e81fa8c0382b625",
+   "parent": "b7aafda8723dfb555cda4211209654cd35aab709",
+   "date": "2024-05-14",
+   "subject": "Add InputStreamResource(InputStreamSource) constructor for lambda expressions",
+   "issues": [
+    "32802"
+   ],
+   "files": 5,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-methods/responsebody.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-methods/responseentity.adoc"
+   ]
+  },
+  {
+   "sha": "6cdb34410bf14aacb08bf9d3b47d22daed821824",
+   "parent": "7d8279afeca760223d128e0a5ae57399ae02d2cc",
+   "date": "2024-05-15",
+   "subject": "Register DynamicPropertyRegistry as singleton bean in test ApplicationContext",
+   "issues": [
+    "32271"
+   ],
+   "files": 15,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/dynamic-property-sources.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/property-sources.adoc"
+   ]
+  },
+  {
+   "sha": "4d4b343815c013caa1452b2b9bf27a71031e66b1",
+   "parent": "991be14847cb5448aca94b555266ae2a5ce2b8d7",
+   "date": "2024-05-20",
+   "subject": "Support Content Negotiation with @ExceptionHandler",
+   "issues": [
+    "31936"
+   ],
+   "files": 25,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-exceptions.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-exceptionhandler.adoc"
+   ]
+  },
+  {
+   "sha": "d5c7a5e2dbb3ca9864792745e7b98da9d07cc2c8",
+   "parent": "b17d1c5124bd9697716db1c06904e7cc5bf85186",
+   "date": "2024-05-21",
+   "subject": "Bean overriding by type uses isAutowireCandidate for matching",
+   "issues": [
+    "32822"
+   ],
+   "files": 12,
+   "split": "dev",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc"
+   ]
+  },
+  {
+   "sha": "f4f89aa2a405c58f85f8517e763c7ea440351e22",
+   "parent": "23160a43dd5d7a34e51b4b6918c9eb6a3831ecdf",
+   "date": "2024-06-05",
+   "subject": "Add headers to data binding values",
+   "issues": [
+    "32676"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-methods/modelattrib-method-args.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-methods/modelattrib-method-args.adoc"
+   ]
+  },
+  {
+   "sha": "7b9cbd78761428d2607fd12e63ee0b3e5112ba43",
+   "parent": "0758ae5ead0af4d33fcdf7fd3d02e691d4a3fb5b",
+   "date": "2024-06-06",
+   "subject": "Add support for Kotlin BeanPostProcessor beans",
+   "issues": [
+    "32946"
+   ],
+   "files": 9,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/validation/beanvalidation.adoc"
+   ]
+  },
+  {
+   "sha": "96302a71029f074eb2e1b481620f514c515fb641",
+   "parent": "5787bc569d7526d46f46a06bc56577426e7cc81d",
+   "date": "2024-06-10",
+   "subject": "Stop using a conventional suffix for TestBean factory methods",
+   "issues": [
+    "32940"
+   ],
+   "files": 12,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc"
+   ]
+  },
+  {
+   "sha": "28f62abda44c607997c5a32ba3fbd857a092ab4e",
+   "parent": "4c7374797e193291f84b5e8eda97372799f004fe",
+   "date": "2024-06-11",
+   "subject": "Use the field name as a fallback qualifier for Bean Overriding",
+   "issues": [
+    "32939"
+   ],
+   "files": 10,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc"
+   ]
+  },
+  {
+   "sha": "60b5bbe33466e905dee828804e3f19b344b47861",
+   "parent": "c36e270481436c5a83b8f89a60bd033345035d1f",
+   "date": "2024-06-11",
+   "subject": "Introduce request attributes in RestClient",
+   "issues": [
+    "32027"
+   ],
+   "files": 21,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc"
+   ]
+  },
+  {
+   "sha": "4e2fb308f6516cc8e2617ecef195dccdbb680ed9",
+   "parent": "5f765fc8cebb400c25f1c0e45a58e924424d5c22",
+   "date": "2024-06-24",
+   "subject": "Document contentLength() behavior for InputStreamResource and custom subclasses",
+   "issues": [
+    "33089"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-methods/responseentity.adoc"
+   ]
+  },
+  {
+   "sha": "b64edb2d2abf5068a0d5fa0289a809aa53803f0f",
+   "parent": "ce53443cf0e00633d604e7d6673bda686749b3ed",
+   "date": "2024-06-29",
+   "subject": "Update Content-Type based on encoding in MVC FreeMarkerView",
+   "issues": [
+    "33119"
+   ],
+   "files": 12,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc-view/mvc-freemarker.adoc"
+   ]
+  },
+  {
+   "sha": "cc002875c42a2f8d36cbe9b5859fe381b5b53de5",
+   "parent": "c2f8d4803f25f04df3a2739562aa2ff59b834bad",
+   "date": "2024-06-30",
+   "subject": "Support fully-qualified factory method names in @\u2060TestBean",
+   "issues": [
+    "33125"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc"
+   ]
+  },
+  {
+   "sha": "abcad5dbcf139f316f8fdee129eee6ca9d40b39d",
+   "parent": "384d0e4fd5b472ce06a65a095f6b34c5fc6390da",
+   "date": "2024-07-03",
+   "subject": "Support property placeholders in @\u2060Sql script paths",
+   "issues": [
+    "33114"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/executing-sql.adoc"
+   ]
+  },
+  {
+   "sha": "93587da394b9a366826f344516a95b7dc02cefcd",
+   "parent": "f1658079a5503eb4df191a27a2782b2e7a02bb4f",
+   "date": "2024-07-08",
+   "subject": "Introduce ReflectiveScan",
+   "issues": [
+    "33132"
+   ],
+   "files": 25,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/aot.adoc"
+   ]
+  },
+  {
+   "sha": "0bb309f433ce134cdf5f048df9eaa73b5cee5a63",
+   "parent": "e8630f34094cba75051401145b386314f36b191b",
+   "date": "2024-07-19",
+   "subject": "Instrument @JmsListener session for response messages",
+   "issues": [
+    "33221"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  },
+  {
+   "sha": "c92e043bbc3543f3533ec24d873befb105c43ec1",
+   "parent": "d219362eb1d125bf104d14a0dd4be045557da6af",
+   "date": "2024-07-23",
+   "subject": "Support multiple style of parsing/printing Durations",
+   "issues": [
+    "22013",
+    "22474",
+    "30396"
+   ],
+   "files": 13,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/validation/format.adoc",
+    "framework-docs/modules/ROOT/pages/web/webflux/config.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-config/conversion.adoc"
+   ]
+  },
+  {
+   "sha": "38453910cd131c3f790c29f4299fa3da987566cf",
+   "parent": "1f2c6c33acfc4bbdb7507eecc1dcfa289717e572",
+   "date": "2024-07-29",
+   "subject": "Add DatabaseClient bind variant for list of parameters",
+   "issues": [
+    "33274"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/r2dbc.adoc"
+   ]
+  },
+  {
+   "sha": "1c893e63541b5b79c995bb0d57eb104c825b8767",
+   "parent": "bc05474271581c8aed6380bf4fe927c6cfc7e4d7",
+   "date": "2024-08-07",
+   "subject": "Add `@MockitoBeanSettings`, use MockitoSession with strict stubs default",
+   "issues": [
+    "33318"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc"
+   ]
+  },
+  {
+   "sha": "bf5e218b3580df20e6df129eadead4721e1f4f03",
+   "parent": "b61eee7fb0ca8cc66a6ce36e2c73af0f6ddfb82e",
+   "date": "2024-08-09",
+   "subject": "Add support for headers in `@HttpExchange`",
+   "issues": [
+    "33309"
+   ],
+   "files": 14,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc",
+    "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-requestmapping.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-requestmapping.adoc"
+   ]
+  },
+  {
+   "sha": "51de84e1480c5192882a949b7d3036184575e957",
+   "parent": "4ac4c1b868bd17d5b12fa3d796e6729500829691",
+   "date": "2024-08-12",
+   "subject": "Reject null for non-optional arguments",
+   "issues": [
+    "33339"
+   ],
+   "files": 14,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc",
+    "framework-docs/modules/ROOT/pages/rsocket.adoc"
+   ]
+  },
+  {
+   "sha": "cac623b3f46e98b41b2769aa7f9eb2105bcc5d91",
+   "parent": "c5f51aab67fba8c8d113028ca05a1a5ca119c9fe",
+   "date": "2024-08-22",
+   "subject": "Refer to the \"Java Module System\" instead of \"Jigsaw\"",
+   "issues": [],
+   "files": 5,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/classpath-scanning.adoc",
+    "framework-docs/modules/ROOT/pages/core/resources.adoc",
+    "framework-docs/modules/ROOT/pages/overview.adoc"
+   ]
+  },
+  {
+   "sha": "e7b52cf8b2943db0fef3680662c3575fee0efb76",
+   "parent": "78028cde056f5ee97dc8a785a81851dccad8163c",
+   "date": "2024-09-11",
+   "subject": "Introduce DynamicPropertyRegistrar to replace DynamicPropertyRegistry bean",
+   "issues": [
+    "33501"
+   ],
+   "files": 16,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/dynamic-property-sources.adoc"
+   ]
+  },
+  {
+   "sha": "d79258ac7349d6ce9fb2574bb399b1d51c172def",
+   "parent": "4e9b5030550b77ad6d3affb1efecdf8722f18b10",
+   "date": "2024-09-29",
+   "subject": "Reject non-singletons in Test Bean Override support",
+   "issues": [
+    "33602"
+   ],
+   "files": 10,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc"
+   ]
+  },
+  {
+   "sha": "1c87e4795df252a08d790b4898ba4d1ade43343f",
+   "parent": "30dc86810e2a14357bce4f2e5a6fd2faa0c0dac2",
+   "date": "2024-09-30",
+   "subject": "Introduce enforceOverride flag in @\u2060TestBean and @\u2060MockitoBean",
+   "issues": [
+    "33613"
+   ],
+   "files": 12,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc"
+   ]
+  },
+  {
+   "sha": "ef0a21ec7a024cd995f16448483683883d384b24",
+   "parent": "6c62965cbbabe20564e30d97ac67c71c81109e95",
+   "date": "2024-10-07",
+   "subject": "Update documentation for URI parsing types",
+   "issues": [
+    "33639"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/partials/web/web-uris.adoc"
+   ]
+  },
+  {
+   "sha": "1afcb2220557f4362e55fafa7abcc5a4934f1450",
+   "parent": "381b16fba2550a29b169434a2e8940d2489d59ff",
+   "date": "2024-10-09",
+   "subject": "Change enforceOverride flag to false in @\u2060TestBean and @\u2060MockitoBean",
+   "issues": [
+    "33613"
+   ],
+   "files": 12,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc"
+   ]
+  },
+  {
+   "sha": "0e8316e704e23e194214906203d9333a2808eb68",
+   "parent": "1b8f2c46c16a40dbfac604ff17cc4f747e6fd679",
+   "date": "2024-10-10",
+   "subject": "Add value attribute alias to @\u2060MockitoBean and @\u2060MockitoSpyBean",
+   "issues": [
+    "33680"
+   ],
+   "files": 12,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc"
+   ]
+  },
+  {
+   "sha": "67cb3c77ecb060f69079728cf09c573a9a396664",
+   "parent": "7ea43bb25259b8e842ac5425a68900022a19683f",
+   "date": "2024-10-15",
+   "subject": "Rename BeanOverrideStrategy enum constants",
+   "issues": [
+    "33701"
+   ],
+   "files": 22,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc"
+   ]
+  },
+  {
+   "sha": "6f79c7e70f554669d4ad1379b9bfe2dd84512743",
+   "parent": "c261ca3102414053677c40cf17f4b70b28b4b170",
+   "date": "2024-10-16",
+   "subject": "Remove support for Mockito annotations and `MockitoSession`",
+   "issues": [
+    "33318",
+    "33692"
+   ],
+   "files": 14,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/tel-config.adoc"
+   ]
+  },
+  {
+   "sha": "c0c78bd67e3f6eb14938120ec456d23c74da5bea",
+   "parent": "ab4fe5a29cee520695cccdc7b777df0f5d29d788",
+   "date": "2024-10-16",
+   "subject": "Rename OverrideMetadata for Bean Overrides",
+   "issues": [
+    "33702"
+   ],
+   "files": 37,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc"
+   ]
+  },
+  {
+   "sha": "a0af708c036be0bb7054e15f5fd26eaae7b6f39e",
+   "parent": "d8c153a9d118ca508dccff846b14b672137d4d47",
+   "date": "2024-10-23",
+   "subject": "Add cookie support to RestClient",
+   "issues": [
+    "33697"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc"
+   ]
+  },
+  {
+   "sha": "d8c153a9d118ca508dccff846b14b672137d4d47",
+   "parent": "1ba773170d1fa814558a4837ca67a1d1785369cc",
+   "date": "2024-10-23",
+   "subject": "Remove support for Resin Servlet container",
+   "issues": [
+    "33772"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/orm/jpa.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-config/default-servlet-handler.adoc"
+   ]
+  },
+  {
+   "sha": "3b82733e1f464d3abc6a65741c456641734a350a",
+   "parent": "ba8024d07730b072cc1d1e8f020d8edab9ce95b4",
+   "date": "2024-10-24",
+   "subject": "Support @\u2060Mockito[Spy]Bean & @\u2060TestBean w/ @\u2060DirtiesContext \"before method\" modes",
+   "issues": [
+    "33783"
+   ],
+   "files": 11,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/tel-config.adoc"
+   ]
+  },
+  {
+   "sha": "81d89f478aa2441ecfa90907ba21b7cc20152059",
+   "parent": "52e813d0ad2a5d3439c1880b481b6942a138a8dc",
+   "date": "2024-10-28",
+   "subject": "Relax singleton enforcement for Bean Overrides in the TestContext framework",
+   "issues": [
+    "33602",
+    "33800"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc"
+   ]
+  },
+  {
+   "sha": "fa21dffcf8f8500b0712a998740b63a17e14ac05",
+   "parent": "323de1208acf00ebd3bb022055a381907f3c2de4",
+   "date": "2024-10-29",
+   "subject": "Restore traditional AspectJ behavior through \"spring.aop.ajc.ignore=true\"",
+   "issues": [
+    "33704"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc"
+   ]
+  },
+  {
+   "sha": "3569cfe9903825c57c8c53f8f5149a4328c64d9d",
+   "parent": "8b66d3c79a33a22fa2b39644f6bb1738fb0caa58",
+   "date": "2024-11-20",
+   "subject": "Reject static Bean Override fields for @\u2060MockitoBean, @\u2060TestBean, etc.",
+   "issues": [
+    "33922"
+   ],
+   "files": 9,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc"
+   ]
+  },
+  {
+   "sha": "81ea35c72690434c06a0d196180e64373663063d",
+   "parent": "186f909c966c9e11aa1134e457a9897b41475e60",
+   "date": "2024-11-27",
+   "subject": "Update method names in FragmentsRendering",
+   "issues": [
+    "33974"
+   ],
+   "files": 11,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux-view.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-view/mvc-fragments.adoc"
+   ]
+  },
+  {
+   "sha": "ba312f6c7cf5a069323c2c732d0be7aa19910067",
+   "parent": "0759129c14788f733fa7f5b20a0028fb638d2f49",
+   "date": "2024-11-29",
+   "subject": "Update AOT support after RuntimeHints changes",
+   "issues": [
+    "33847"
+   ],
+   "files": 31,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/src/main/java/org/springframework/docs/core/aot/hints/testing/SampleReflectionRuntimeHintsTests.java"
+   ]
+  },
+  {
+   "sha": "3db1b94465ae21ecca8adccb9bdc1cfba286a958",
+   "parent": "c5eefaa5f3a1b669a491c1094f88fcfd5cff0c21",
+   "date": "2024-12-12",
+   "subject": "Replace spring-jcl with regular Apache Commons Logging 1.3",
+   "issues": [
+    "32459"
+   ],
+   "files": 19,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/spring-jcl.adoc"
+   ]
+  },
+  {
+   "sha": "4b9f1732f17fecc44b0aa01bd63daaed4e34fdc8",
+   "parent": "2e6046a65549d9523a35fe416c52c4f7bd9038e4",
+   "date": "2024-12-17",
+   "subject": "Remove remaining Spring MVC trailing slash matching",
+   "issues": [
+    "34036"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/filters.adoc"
+   ]
+  },
+  {
+   "sha": "4fd368b1afb1141426a5df99829966f347987d26",
+   "parent": "f094c461728faecafc22378e0e870df65e6d7b77",
+   "date": "2024-12-17",
+   "subject": "Deprecate mvc XML configuration namespace",
+   "issues": [
+    "34063"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-config/enable.adoc"
+   ]
+  },
+  {
+   "sha": "7f4da52cc5a537e000a99b895d0b92bdc323d1ab",
+   "parent": "e9946937e7ac17ddaff5480eee37de1c4ff691d0",
+   "date": "2024-12-17",
+   "subject": "Remove Spring MVC path extension content negotiation",
+   "issues": [
+    "34036"
+   ],
+   "files": 21,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-requestmapping.adoc"
+   ]
+  },
+  {
+   "sha": "41a9db376da65ccd0318b90140bb1193682b26af",
+   "parent": "62d9600cdd9ecf6eb2d224a2c1bb29d834edaa83",
+   "date": "2024-12-19",
+   "subject": "Deprecate pathExtension routing predicates",
+   "issues": [
+    "34103"
+   ],
+   "files": 16,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux-functional.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-functional.adoc"
+   ]
+  },
+  {
+   "sha": "cd2fbb1ec59d465afdcfac5d0973e855050766ef",
+   "parent": "e8745522fc7a2dcdafd469d8cbb4dc18b642285f",
+   "date": "2025-01-07",
+   "subject": "Properly resolve @\u2060TestBean factory method within class hierarchy",
+   "issues": [
+    "34204"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc"
+   ]
+  },
+  {
+   "sha": "9181cce65f17ad2c41861444d0c8417adecf36a1",
+   "parent": "8b6523a35b3b4f3f2bd68487b26209a4ae4185b1",
+   "date": "2025-01-15",
+   "subject": "Support @\u2060MockitoBean at the type level on test classes",
+   "issues": [
+    "33925"
+   ],
+   "files": 36,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc"
+   ]
+  },
+  {
+   "sha": "b8c51a2767953ae465b39629c9e41a7508f54da6",
+   "parent": "9cfece0d54275f2fa2f7f9c781915acef9d486c4",
+   "date": "2025-01-15",
+   "subject": "Additional theme removal updates",
+   "issues": [
+    "33809"
+   ],
+   "files": 21,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/basics.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/web-scoped-beans.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-servlet/sequence.adoc",
+    "framework-docs/src/main/kotlin/org/springframework/docs/web/webmvc/mvcconfig/mvcconfiginterceptors/WebConfiguration.kt",
+    "framework-docs/src/main/resources/org/springframework/docs/web/webmvc/mvcconfig/mvcconfiginterceptors/WebConfiguration.xml"
+   ]
+  },
+  {
+   "sha": "1115be581a69b36e3c1e76f85180b8913db08bcd",
+   "parent": "d83be7c33a9d7926409ccecdaf499708dc35842e",
+   "date": "2025-01-21",
+   "subject": "Add primitive type support to Nullness",
+   "issues": [
+    "34261"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/null-safety.adoc"
+   ]
+  },
+  {
+   "sha": "70778095613142bb901bed7d21b93163f4b0c4a9",
+   "parent": "6ded25ba28b11a1237c1a9053ddc1c91bfd31d71",
+   "date": "2025-02-11",
+   "subject": "Configure Kotlin JSON converters as Jackson alternative",
+   "issues": [
+    "34410"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc"
+   ]
+  },
+  {
+   "sha": "2c05e991b547f3622eb0e1a4e7169786ba97975c",
+   "parent": "d3d951e44bb4f1a2889d8c8c7c3f345724b7ed68",
+   "date": "2025-03-12",
+   "subject": "Revise SpEL internals and documentation",
+   "issues": [
+    "20433"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/language-ref/operator-safe-navigation.adoc"
+   ]
+  },
+  {
+   "sha": "68fce29ae9ec8c1d8662b55c64b8af64fbfc450a",
+   "parent": "1780e30a434916b545377173f12e496c131d55ba",
+   "date": "2025-03-12",
+   "subject": "Support Optional with null-safe and Elvis operators in SpEL expressions",
+   "issues": [
+    "20433"
+   ],
+   "files": 9,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/language-ref/operator-elvis.adoc",
+    "framework-docs/modules/ROOT/pages/core/expressions/language-ref/operator-safe-navigation.adoc"
+   ]
+  },
+  {
+   "sha": "03ae97b2ebe2ff97ed3f78253758fb3cf6cacbbd",
+   "parent": "e34cdc2a558752435e3db9b14fd927e83720d7f2",
+   "date": "2025-05-13",
+   "subject": "Introduce Spring property for default escape character for placeholders",
+   "issues": [
+    "34315",
+    "34861",
+    "34865",
+    "9628"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/core/beans/annotation-config/value-annotations.adoc",
+    "framework-docs/modules/ROOT/pages/core/beans/factory-extension.adoc",
+    "framework-docs/modules/ROOT/pages/languages/kotlin/spring-projects-in.adoc"
+   ]
+  },
+  {
+   "sha": "9f7a321c44a0ca0c632620ef0acfb47a8fa9f9ec",
+   "parent": "02af9e5ceedccf2326b5123c59c59d100e0f9447",
+   "date": "2025-06-05",
+   "subject": "Support streaming with HTTP interfaces + RestClient",
+   "issues": [
+    "32358"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc"
+   ]
+  },
+  {
+   "sha": "40eb9c2c81744156adeb65c09880138af3e244d3",
+   "parent": "482cfb0b18f9a23498af560a9f51be507f697030",
+   "date": "2025-06-25",
+   "subject": "Add docs for API version deprecation support",
+   "issues": [
+    "35049"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux-versioning.adoc",
+    "framework-docs/modules/ROOT/pages/web/webflux/config.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-versioning.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-config/api-version.adoc"
+   ]
+  },
+  {
+   "sha": "1982c7e0200c81dcc5af985445434cc3f940cf4b",
+   "parent": "340468cf4b2137064e18d733b83f103f46bad10c",
+   "date": "2025-07-07",
+   "subject": "Support 404 handling for HttpExchange interfaces",
+   "issues": [
+    "32105"
+   ],
+   "files": 7,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc"
+   ]
+  },
+  {
+   "sha": "b59dca9c7f2b309c7e312549ecd7b801e8062741",
+   "parent": "ddaf13b8ed7f557b97b128979e8a7fbacf41ddb4",
+   "date": "2025-07-11",
+   "subject": "Align HttpMessageConverters builder with WebFlux codecs variants",
+   "issues": [
+    "33894",
+    "35187"
+   ],
+   "files": 17,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/src/main/java/org/springframework/docs/web/webmvc/mvcconfig/mvcconfigmessageconverters/WebConfiguration.java",
+    "framework-docs/src/main/kotlin/org/springframework/docs/web/webmvc/mvcconfig/mvcconfigmessageconverters/WebConfiguration.kt"
+   ]
+  },
+  {
+   "sha": "dbe89abd7b39217044b3e021b4fe740c7ef88a4b",
+   "parent": "f3757cedb9ccd0ec12a08fdcca617ca433eaa0aa",
+   "date": "2025-07-14",
+   "subject": "Pause unused application contexts in the TestContext framework",
+   "issues": [
+    "28312",
+    "35168",
+    "35171"
+   ],
+   "files": 23,
+   "split": "excluded-183",
+   "excluded": "issue of 9711db787e",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc"
+   ]
+  },
+  {
+   "sha": "d06255214eee2de8e62812ffe7ee206e842c80ec",
+   "parent": "ed2cad3af072be5861c02663abc4c4c37fd4a762",
+   "date": "2025-07-25",
+   "subject": "Support wildcard path elements at the start of path patterns",
+   "issues": [
+    "35213"
+   ],
+   "files": 12,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/controller/ann-requestmapping.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-requestmapping.adoc"
+   ]
+  },
+  {
+   "sha": "c7fbf7809fbbbd408be8cd668f2eab0b9111b733",
+   "parent": "7316aab04803af173e89f2cfbce0963c2e058423",
+   "date": "2025-07-26",
+   "subject": "Provide @WebSocketScope annotation and public SCOPE_WEBSOCKET constant",
+   "issues": [
+    "35235"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/websocket/stomp/scope.adoc"
+   ]
+  },
+  {
+   "sha": "08ccf46399b76bffb4b9347a8848e25d424bf167",
+   "parent": "18ee8adaebfaa8b4f14ffc71339d5b313f60681c",
+   "date": "2025-07-31",
+   "subject": "Rename request param version strategy to query param",
+   "issues": [
+    "35263"
+   ],
+   "files": 7,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux-versioning.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-versioning.adoc"
+   ]
+  },
+  {
+   "sha": "87838aa4c5ee4377b437616ce0c387762995af32",
+   "parent": "da361699a46bbe1d00e3fd9dd207f9ff2fe4148b",
+   "date": "2025-07-31",
+   "subject": "PathApiVersionResolver is not nullable",
+   "issues": [
+    "35265"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux-versioning.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-versioning.adoc"
+   ]
+  },
+  {
+   "sha": "ec87d90c9b08a9df94930233a245884098d8b879",
+   "parent": "149d468ce49c61b8261711bbe0a217270bc50e9c",
+   "date": "2025-08-01",
+   "subject": "Post process outgoing messages in JMS clients",
+   "issues": [
+    "35271"
+   ],
+   "files": 11,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/jms/sending.adoc"
+   ]
+  },
+  {
+   "sha": "d128dd26163cf6c0cf703d257a62a0fd84dd1a8e",
+   "parent": "dc26aaa0ecd483ff22b5127c44a134f66024dcd7",
+   "date": "2025-08-22",
+   "subject": "Make StartupStep AutoCloseable",
+   "issues": [
+    "35277"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/context-introduction.adoc"
+   ]
+  },
+  {
+   "sha": "736383e6cb4cc47485f872f8a2ba2e6a0f5b3660",
+   "parent": "e93a6a723097e7e8e353c7ad79c5b3f78ddf3e0e",
+   "date": "2025-09-08",
+   "subject": "Remove HttpServiceClient annotation",
+   "issues": [
+    "35431"
+   ],
+   "files": 9,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc"
+   ]
+  },
+  {
+   "sha": "ef2a403df673b64b5e3f6a8f4039681d3aed9429",
+   "parent": "21e52a4283c037d445299e304c398c1ffed8fd77",
+   "date": "2025-09-09",
+   "subject": "Add PropagationContextElement Kotlin operator",
+   "issues": [
+    "35185"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/languages/kotlin/coroutines.adoc"
+   ]
+  },
+  {
+   "sha": "2faed3cdbb206bb5a92b3bd64bb18b2ad3501900",
+   "parent": "20e1149dde7ff042154e4098d49939a886661c3e",
+   "date": "2025-09-12",
+   "subject": "Refine PropagationContextElement",
+   "issues": [
+    "35469"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/languages/kotlin/coroutines.adoc",
+    "framework-docs/src/main/kotlin/org/springframework/docs/languages/kotlin/coroutines/propagation/ContextPropagationSample.kt"
+   ]
+  },
+  {
+   "sha": "20aac6dd8d0819f953e71a89ebc2be31e1955726",
+   "parent": "d84bf1840886841a41967c1880d85c9cde907d44",
+   "date": "2025-09-23",
+   "subject": "Add Gson codecs for WebFlux",
+   "issues": [
+    "27131"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/reactive-spring.adoc"
+   ]
+  },
+  {
+   "sha": "30db2e4fb5e993ba6ada58d2d55ca4e82297e615",
+   "parent": "ff9a34927133059bef680c26f85129a1021513e9",
+   "date": "2025-10-07",
+   "subject": "Support Bean Overrides for non-singletons",
+   "issues": [
+    "32933",
+    "33602",
+    "33800",
+    "35574"
+   ],
+   "files": 15,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-testbean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc"
+   ]
+  },
+  {
+   "sha": "97ae5fde7ca43ae5a799c3853ff352d64b39c595",
+   "parent": "58940794cf18e89e54763d1b630aa985030e3eda",
+   "date": "2025-10-09",
+   "subject": "Match against exception causes in @\u2060Retryable and RetryPolicy",
+   "issues": [
+    "35583",
+    "35592"
+   ],
+   "files": 9,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/resilience.adoc"
+   ]
+  },
+  {
+   "sha": "e6481a011bb770773405db6f3a93fd07fb738dd7",
+   "parent": "2e4ca413829f279f7ce3aa637582cb8b97b9b3ca",
+   "date": "2025-10-15",
+   "subject": "Deprecate \"feed\" and \"document\" view packages",
+   "issues": [
+    "35451"
+   ],
+   "files": 13,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc-view/mvc-document.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-view/mvc-feeds.adoc"
+   ]
+  },
+  {
+   "sha": "4880ed5c33ff01e5bed3fef4798d64408a908571",
+   "parent": "b1cd508016f27ebcf3d21557a42f6d1afeffb434",
+   "date": "2025-10-30",
+   "subject": "Deprecate the lang XML namespace",
+   "issues": [
+    "35719"
+   ],
+   "files": 9,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/beans/factory-extension.adoc",
+    "framework-docs/modules/ROOT/pages/languages/dynamic.adoc",
+    "framework-docs/modules/ROOT/pages/languages/groovy.adoc"
+   ]
+  },
+  {
+   "sha": "715bc68c164ab5a2486c25e29f62b4ecbb860d11",
+   "parent": "9c24f7ba8c7555bac418e040a5ad4f5a751eb65c",
+   "date": "2025-10-30",
+   "subject": "Rename methods in FragmentsRendering",
+   "issues": [
+    "33974"
+   ],
+   "files": 11,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux-view.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-view/mvc-fragments.adoc"
+   ]
+  },
+  {
+   "sha": "af026c0373e0a6ff7452ab8bb8949ff6c77a6ab1",
+   "parent": "03c5ea25f522bce9ebc688b3c8fabf8dc63429c6",
+   "date": "2025-10-31",
+   "subject": "Review HttpMessageConverters semantics in Builder",
+   "issues": [
+    "35704"
+   ],
+   "files": 10,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/src/main/java/org/springframework/docs/web/webmvc/mvcconfig/mvcconfigmessageconverters/WebConfiguration.java",
+    "framework-docs/src/main/kotlin/org/springframework/docs/web/webmvc/mvcconfig/mvcconfigmessageconverters/WebConfiguration.kt"
+   ]
+  },
+  {
+   "sha": "02e928e4e39a6c2b26503fe97c05d201d291c9d2",
+   "parent": "7445f542f4c0a2bf48617fdeb131f1f6aad04130",
+   "date": "2025-11-05",
+   "subject": "Docs for the WebTestClient AssertJ integration",
+   "issues": [
+    "35737"
+   ],
+   "files": 2,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/webtestclient.adoc"
+   ]
+  },
+  {
+   "sha": "285182be270235934617c9816f5e9ac6bd89aa2b",
+   "parent": "8bb63081a87cadb7fbf8ba306187564b9d2f0b1c",
+   "date": "2025-11-05",
+   "subject": "Relax multiple segment matching constraints in PathPattern",
+   "issues": [
+    "35213",
+    "35686"
+   ],
+   "files": 5,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/partials/web/uri-patterns.adoc"
+   ]
+  },
+  {
+   "sha": "24590092efa313cd56b3a9a0752a5b54f2fe03a1",
+   "parent": "771517dc36735842a129ea3a51738f0b6fcce7bd",
+   "date": "2025-11-10",
+   "subject": "Rename maxAttempts to maxRetries in @\u2060Retryable and RetryPolicy",
+   "issues": [
+    "35772"
+   ],
+   "files": 13,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/resilience.adoc"
+   ]
+  },
+  {
+   "sha": "4847ee80b0450f6328d319f9dc853dbda8258b3a",
+   "parent": "f4ee120a423c069ddfc94076cc49e02ec9d797d5",
+   "date": "2025-11-26",
+   "subject": "Add required type to TypeMismatchException message args",
+   "issues": [
+    "35837"
+   ],
+   "files": 3,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+   ]
+  },
+  {
+   "sha": "a9a404266c25a82b0f3a4286053f69ce0c8fb008",
+   "parent": "b29f4ed37edf0da0f41dc19c4ac56ba0d445fca6",
+   "date": "2025-11-26",
+   "subject": "Data binding from pathvars and headers in fn handlers",
+   "issues": [
+    "35800"
+   ],
+   "files": 7,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux-functional.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-functional.adoc"
+   ]
+  },
+  {
+   "sha": "e99791f2894fed50179c7788592829dc5da54403",
+   "parent": "658775b914ab753783bcf01762c882f5822f660f",
+   "date": "2025-12-10",
+   "subject": "Improve i18n-support for NoResourceFoundException.",
+   "issues": [
+    "35758"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+   ]
+  },
+  {
+   "sha": "6939cb90df382d825b6d4ca5c6953fadeeb07ff8",
+   "parent": "3ddaf51f5d9ac9f1ce35dc81e7e8fbd41781eeb8",
+   "date": "2026-01-02",
+   "subject": "Add ServerRequest.bindAndAwait Kotlin extension",
+   "issues": [
+    "36092"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/src/main/kotlin/org/springframework/docs/web/webfluxfnrequest/RequestHandler.kt"
+   ]
+  },
+  {
+   "sha": "9711db787e0db5e7d569119491e723c720b684a2",
+   "parent": "d3a385d2225f622fe164953e1ac76e0e4bc5967c",
+   "date": "2026-01-11",
+   "subject": "Introduce Spring property to disable context pausing for tests",
+   "issues": [
+    "35168",
+    "36044",
+    "36117"
+   ],
+   "files": 9,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc"
+   ]
+  },
+  {
+   "sha": "fa404063ab16ee72134a65af4a2204cb9f11b532",
+   "parent": "948af8bcc6c5fd612cd3190f3a33df234dbc0dd4",
+   "date": "2026-01-14",
+   "subject": "Avoid unnecessary pausing of application contexts for tests",
+   "issues": [
+    "36044",
+    "36117"
+   ],
+   "files": 10,
+   "split": "excluded-183",
+   "excluded": "issue of 9711db787e",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/ctx-management/caching.adoc"
+   ]
+  },
+  {
+   "sha": "e0b54e244e7ac9f48f720bcbdcc869e2400fe35c",
+   "parent": "f2b64ad09c50f69c2ffb0c13715254300a7ed915",
+   "date": "2026-02-24",
+   "subject": "Ignore flushes on ServletServerHttpResponse output stream",
+   "issues": [
+    "36385"
+   ],
+   "files": 5,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc"
+   ]
+  },
+  {
+   "sha": "5eb0e99d5842b6bbdb99d06d50eba7b6ba5c700d",
+   "parent": "17699103dc776778a527cddbb8f8859bd6cbf418",
+   "date": "2026-03-15",
+   "subject": "Fix common typos and grammatical mistakes",
+   "issues": [
+    "36471"
+   ],
+   "files": 25,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/aot.adoc",
+    "framework-docs/modules/ROOT/pages/core/beans/annotation-config/autowired-qualifiers.adoc",
+    "framework-docs/modules/ROOT/pages/core/expressions/language-ref/properties-arrays.adoc",
+    "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bootstrapping.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc-view/mvc-freemarker.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-controller/ann-exceptionhandler.adoc"
+   ]
+  },
+  {
+   "sha": "22e4d84993105c1975d6afe16d34467772c7c676",
+   "parent": "e2b9b19970bb88913cfb6530857f964d2b01187a",
+   "date": "2026-03-17",
+   "subject": "Add support for \"application/jsonl\" JSON lines",
+   "issues": [
+    "36485"
+   ],
+   "files": 16,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/webtestclient.adoc",
+    "framework-docs/modules/ROOT/pages/web/webflux/reactive-spring.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-async.adoc"
+   ]
+  },
+  {
+   "sha": "43b01382ed5768ee62a174b6f72c2089e000a0d7",
+   "parent": "3a35c4dbd03d5aaee860b3235b1ba7aaca51b1a7",
+   "date": "2026-03-22",
+   "subject": "Support global ExtensionContext scope configuration for SpringExtension",
+   "issues": [
+    "35697",
+    "36460"
+   ],
+   "files": 7,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-junit-jupiter.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/support-classes.adoc"
+   ]
+  },
+  {
+   "sha": "ab8de8ec4b004e80979af6e4391e28a8a5da4f8e",
+   "parent": "abc3cfc7be0ef6dc051e26876b635c1a72ae1ae2",
+   "date": "2026-03-26",
+   "subject": "Support Map payloads in FormHttpMessageConverter",
+   "issues": [
+    "36408"
+   ],
+   "files": 6,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc"
+   ]
+  },
+  {
+   "sha": "abc3cfc7be0ef6dc051e26876b635c1a72ae1ae2",
+   "parent": "44302aca93ba37d0f302fe85550bea20f3132bdd",
+   "date": "2026-03-26",
+   "subject": "Move multipart support to dedicated converter",
+   "issues": [
+    "36255",
+    "36256"
+   ],
+   "files": 22,
+   "split": "excluded-183",
+   "excluded": "main file of ab8de8ec4b",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/rest-clients.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/message-converters.adoc"
+   ]
+  },
+  {
+   "sha": "f9523a785b456e0167133489233b3ff8b786a67e",
+   "parent": "955f9d3ea9d960ea10d98df907877f6aab2e46ef",
+   "date": "2026-03-29",
+   "subject": "Support @\u2060MockitoBean and @\u2060MockitoSpyBean on test constructor parameters",
+   "issues": [
+    "36096"
+   ],
+   "files": 31,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/annotations/integration-spring/annotation-mockitobean.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/bean-overriding.adoc",
+    "framework-docs/modules/ROOT/pages/testing/testcontext-framework/support-classes.adoc"
+   ]
+  },
+  {
+   "sha": "c9c137ec5126c9e2732a2c8beb9cb8210c83fbfc",
+   "parent": "b7a1157e66185c0c39ad165cb5b8b2299efc3c03",
+   "date": "2026-03-31",
+   "subject": "Create and use RestClientXhrTransport",
+   "issues": [
+    "36566"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/websocket/fallback.adoc"
+   ]
+  },
+  {
+   "sha": "9c8535f5e4f8e38c48a43043d3976db1408c7ed9",
+   "parent": "829add3aa9d533ad8bde73d8283a2f6354ce1866",
+   "date": "2026-04-15",
+   "subject": "Compile SpEL expressions that use Optional with null-safe & Elvis operators",
+   "issues": [
+    "20433",
+    "36330",
+    "36331"
+   ],
+   "files": 8,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "cdc3c526408d84dee9c9d8f687b77fe2c063267c",
+   "parent": "0c60266986197a191ff33eb498ebc8bac3dc933f",
+   "date": "2026-06-15",
+   "subject": "Replace isAssignableFrom() with isInstance() where feasible",
+   "issues": [
+    "36899"
+   ],
+   "files": 31,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/jmx/notifications.adoc"
+   ]
+  },
+  {
+   "sha": "4bcae5305d629670767c26b0085c838d9bbf47c5",
+   "parent": "3f632382d6b6e91176e81281f4e9272f7f491757",
+   "date": "2026-07-29",
+   "subject": "Deprecate setDisallowedFields in DataBinder",
+   "issues": [
+    "36816"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/partials/web/web-data-binding-model-design.adoc"
+   ]
+  },
+  {
+   "sha": "8a92c19e4dc7de87a6dfc7ce85920c6a2446320d",
+   "parent": "ee1874ac52a0da4fda8ca9c315d9119f2b7f986e",
+   "date": "2026-08-14",
+   "subject": "Limit result size of BigDecimal/BigInteger power operations in SpEL",
+   "issues": [],
+   "files": 8,
+   "split": "excluded-183",
+   "excluded": "main file of 37c8f41633",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "8473ec3e25e508107693701bb26ebe43fdabe23a",
+   "parent": "89047909ea4bcda166c1f6d69fabb8d2cfde5073",
+   "date": "2026-08-21",
+   "subject": "Add a configurable limit for maximum nesting depth in SpEL expressions",
+   "issues": [
+    "36723"
+   ],
+   "files": 5,
+   "split": "excluded-183",
+   "excluded": "main file of 37c8f41633",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "fb240829b3ce4a893f77612b6557eaf014ea389a",
+   "parent": "68d438c9ffea359847829b624918d779b1bcf60d",
+   "date": "2026-08-21",
+   "subject": "Align SpEL's default max auto-grow size with Spring data binding",
+   "issues": [
+    "36995"
+   ],
+   "files": 3,
+   "split": "excluded-183",
+   "excluded": "main file of 37c8f41633",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "37c8f41633d9274cf4bdba631ad0472380858994",
+   "parent": "0e9a1d72f5f834cbd40dea023d5dace49704b25a",
+   "date": "2026-08-22",
+   "subject": "Introduce a builder for SpelParserConfiguration",
+   "issues": [
+    "37187"
+   ],
+   "files": 11,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "8ab525f6f09f1b6739982164da36d7d95d02a99f",
+   "parent": "33988a4621349b8522e94b2eadde4f28a2844065",
+   "date": "2026-09-16",
+   "subject": "Add a configurable limit for maximum nested property path depth",
+   "issues": [
+    "37252"
+   ],
+   "files": 12,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc"
+   ]
+  },
+  {
+   "sha": "94e6e0ce68b16155f235a278df004ba3a711f015",
+   "parent": "2e6e620ee1865dcf57b0d6061ada13bbe9d98f92",
+   "date": "2026-09-18",
+   "subject": "Add batch update support to JdbcClient",
+   "issues": [
+    "37216"
+   ],
+   "files": 4,
+   "split": "excluded-183",
+   "excluded": "main file of 833ab4d48f",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc"
+   ]
+  },
+  {
+   "sha": "26de3401023ed963d0ebde52f12c8e8d78de6404",
+   "parent": "9637d12785a386352b9c6c8e50974762c7041415",
+   "date": "2026-09-21",
+   "subject": "Stop truncating Flux results to first element with @\u2060CacheEvict",
+   "issues": [
+    "37309"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/cache/annotations.adoc"
+   ]
+  },
+  {
+   "sha": "833ab4d48fdaf64f7b234f6dac76d4cced14390c",
+   "parent": "223a5562bebba968a4b948cc6cd97a372d3fc6bb",
+   "date": "2026-09-28",
+   "subject": "Introduce entry-based DSL for JdbcClient batch updates",
+   "issues": [
+    "37341"
+   ],
+   "files": 6,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/data-access/jdbc/core.adoc"
+   ]
+  },
+  {
+   "sha": "105c39bab7e68a7a158e3440857f8015b8a5fab9",
+   "parent": "846521d8c5f8150f43e3aca48d698ed65f133f81",
+   "date": "2026-10-02",
+   "subject": "Document `type` support in JSP `<form:input>` and point to `<form:password>`",
+   "issues": [
+    "37376"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webmvc-view/mvc-jsp.adoc"
+   ]
+  },
+  {
+   "sha": "7ae82b88d608ddb83cc891a140598714c9c34f9d",
+   "parent": "6ee47df968cf0ed340a97c861b2f4e1a86e0ecc3",
+   "date": "2026-10-06",
+   "subject": "Reject Kotlin default values in proxied configurations",
+   "issues": [
+    "37350"
+   ],
+   "files": 3,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/languages/kotlin/spring-projects-in.adoc"
+   ]
+  },
+  {
+   "sha": "ac6528854d3f8947fc9a24d2174d861accac9484",
+   "parent": "84f085f9c8730448b8f00b3e3ad68c873568ec82",
+   "date": "2026-10-06",
+   "subject": "No longer set instance field of ProblemDetail",
+   "issues": [
+    "35969"
+   ],
+   "files": 13,
+   "split": "excluded-183",
+   "excluded": "main file of d70220eb5d",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/web/webflux/ann-rest-exceptions.adoc",
+    "framework-docs/modules/ROOT/pages/web/webmvc/mvc-ann-rest-exceptions.adoc"
+   ]
+  },
+  {
+   "sha": "4a085aab58591e8c1eb36d19d96414d0fa62f081",
+   "parent": "cbe1b88e5800ebd0b824dc08f5e69a95aa2f2eb9",
+   "date": "2026-10-11",
+   "subject": "Compile String concatenation with non-String operands in SpEL",
+   "issues": [
+    "37433"
+   ],
+   "files": 4,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "3a73c04eae39c272c6d4d9263755ff0824c4cfb4",
+   "parent": "4dea36c5872b3ad9ac9357a9cd8a077264f88a39",
+   "date": "2026-10-15",
+   "subject": "Support JsonUnit for JSON comparison in spring-test",
+   "issues": [
+    "37490"
+   ],
+   "files": 20,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/testing/mockmvc/assertj/assertions.adoc",
+    "framework-docs/modules/ROOT/pages/testing/resttestclient.adoc",
+    "framework-docs/modules/ROOT/pages/testing/webtestclient.adoc"
+   ]
+  },
+  {
+   "sha": "5744db18f0a4e42e28ea512ced80897cfeb115c0",
+   "parent": "792e39f90461f2042931ee64bfc911343bcb043c",
+   "date": "2026-11-04",
+   "subject": "Deprecate AutoPopulatingList for removal",
+   "issues": [
+    "37639"
+   ],
+   "files": 6,
+   "split": "held-out",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc",
+    "framework-docs/modules/ROOT/pages/core/validation/data-binding.adoc"
+   ]
+  },
+  {
+   "sha": "b83db743084358782504649ec9a43c489214d8d6",
+   "parent": "43bbaa9e9679eac410185cc1f0fef802922e2173",
+   "date": "2026-11-06",
+   "subject": "Lower default maximum nesting depth for SpEL expressions to 200",
+   "issues": [
+    "37651"
+   ],
+   "files": 3,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "297c74d29c0704e0879ce121ba3789b677abb9ff",
+   "parent": "49678a69abe284fbce7c83de90e4be01925c7474",
+   "date": "2026-11-10",
+   "subject": "Report handled exceptions to the observation",
+   "issues": [
+    "37658"
+   ],
+   "files": 20,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc",
+    "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/reactive/UserController.java",
+    "framework-docs/src/main/java/org/springframework/docs/integration/observability/httpserver/servlet/UserController.java"
+   ]
+  },
+  {
+   "sha": "5e1e150f2bb3475a5a8e1147507b86716e61e3a5",
+   "parent": "6f969f6a5a960316c4ea7efcc51e27c108cb4be7",
+   "date": "2026-11-13",
+   "subject": "Track each element in SpEL selection operations",
+   "issues": [],
+   "files": 8,
+   "split": "excluded-183",
+   "excluded": "main file of b83db74308",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "d41495720cbabe30844e65c12765eacf806d2653",
+   "parent": "5e1e150f2bb3475a5a8e1147507b86716e61e3a5",
+   "date": "2026-11-13",
+   "subject": "Restrict type conversion in SimpleEvaluationContext",
+   "issues": [],
+   "files": 5,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/appendix.adoc",
+    "framework-docs/modules/ROOT/pages/core/expressions/evaluation.adoc"
+   ]
+  },
+  {
+   "sha": "d49f37cd91d6576cfd79fc6c7fb216f54012eb20",
+   "parent": "0d60a7194cec11ade74de90517a915c8b5b57000",
+   "date": "2026-11-13",
+   "subject": "Align client observation conventions with docs",
+   "issues": [],
+   "files": 5,
+   "split": "excluded-183",
+   "excluded": "replayed",
+   "gold": [
+    "framework-docs/modules/ROOT/pages/integration/observability.adoc"
+   ]
+  }
+ ]
+}
