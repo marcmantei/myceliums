@@ -376,12 +376,26 @@ class Isolation(unittest.TestCase):
                               ("mcp__myceliums__analyze", {"path": str(self.root)}), ("ToolSearch", {"query": "x"})):
                 self.assertIsNone(self.why(tool, search, **inp), (tool, inp))
             for cmd in ("git status", "git diff", "git log --oneline -3", "myc callers MimeType.valueOf | head -20",
-                        "git diff | tail -n 5", "mkdir x", "cd spring-core", "rm a.java", "pwd"):
+                        "git diff | tail -n 5", "mkdir x", "rm a.java", "pwd"):
                 self.assertIsNone(self.why("Bash", search, command=cmd), (search, cmd))
         # The session's own saved results, and nothing beside them.
         own = str(self.root.parent.parent / "p" / "sid" / "tool-results")
         self.assertIsNone(self.why("Read", readable=[own], file_path=own + "/a.txt"))
         self.assertIsNotNone(self.why("Read", readable=[own], file_path=own + "/../../other/a.txt"))
+
+    def test_cd_is_refused_with_the_reason_in_every_arm(self):
+        """Not left to Claude Code's permission layer, which gives none (#183)."""
+        for search in (False, True):
+            for cmd in ("cd spring-core", "cd spring-core && git status", "git status; cd .", "cd", "cd -", f"cd {self.root}", "(cd spring-core; git diff)", "pushd spring-core",
+                        "mkdir x\ncd x"):
+                kind, why = self.why("Bash", search, command=cmd)
+                self.assertEqual((kind, bashcmd.NO_CD in why), ("other", True), (search, cmd))
+            self.assertEqual(self.why("Bash", search, command=f"cd {self.secret}")[0], "outside")
+            for cmd in ("git log --oneline -- spring-core", "mkdir cd", "rm cd/a.java", 'git commit -m "cd spring-core"', "myc search 'cd x'"):  # the word alone is no program
+                self.assertIsNone(self.why("Bash", search, command=cmd), (search, cmd))
+        self.assertIsNone(self.why("Bash", command="grep -rn 'cd ' spring-core"))
+        self.assertIsNone(self.why("Bash", command="grep -rn x a.java | head -3"))
+        self.assertTrue(bashcmd.allowed("cd src && git status", (), str(self.root))[0])  # arm D outside #183 keeps it
 
     def test_a_session_does_not_start_where_its_builds_would_fail(self):
         from aeval import isolation
@@ -484,9 +498,13 @@ class Isolation(unittest.TestCase):
                                    "--search", "no", "--allow-json", "[]"], input=event, capture_output=True, text=True)
         no = json.loads(run(json.dumps({"tool_name": "Bash", "tool_input": {"command": "curl x"}, "cwd": str(self.root)})).stdout)
         offered = no["hookSpecificOutput"]["permissionDecisionReason"].split("Bash allows ")[1].split(", and Gradle")[0].split(", ")
-        self.assertNotIn("cd", offered)  # the prompt says not to use it; the hook still lets it through
+        self.assertNotIn("cd", offered)
         self.assertIn("cp", offered)
-        self.assertTrue(bashcmd.isolated_bash("cd spring-core", [], str(self.root), str(self.root), False)[0])
+        no = json.loads(run(json.dumps({"tool_name": "Bash", "tool_input": {"command": "cd spring-core; ls"}, "cwd": str(self.root)})).stdout)
+        self.assertEqual(no["hookSpecificOutput"]["permissionDecision"], "deny")
+        reason = no["hookSpecificOutput"]["permissionDecisionReason"]  # what the model reads
+        self.assertTrue(reason.startswith(bashcmd.ISOLATED_MARKER + " `cd` (the shell already stands at the top of the working copy: name files by paths relative to it"), reason)
+        self.assertIn("Bash itself works", reason)
         ok = run(json.dumps({"tool_name": "Read", "tool_input": {"file_path": "a.java"}, "cwd": str(self.root)}))
         self.assertEqual((ok.returncode, ok.stdout), (0, ""))
         for event in (json.dumps({"tool_name": "Read", "tool_input": {"file_path": str(self.secret / "f")},
