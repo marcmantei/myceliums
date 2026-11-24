@@ -4,7 +4,7 @@
 //! `instructions.rs`); what Claude Code loads is checked with
 //! `evals/agent/probe_instructions.py`.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 
 const OLD_BLOCK: &str = "<!-- BEGIN myceliums -->\n\
