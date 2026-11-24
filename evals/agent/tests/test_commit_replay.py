@@ -539,20 +539,28 @@ class Isolation(unittest.TestCase):
             self.assertIn(needed, text)
         self.assertNotIn("models", text.split("(deny network-outbound)")[0].split("(allow file-read-data file-read-xattr (")[-1])
 
-    def test_c_imports_the_projects_agents_md(self):
-        from aeval.runner import Runner, RunConfig, WorkItem
+    def test_c_keeps_the_projects_agents_md(self):
+        """The harness adds no instruction file of its own, and refuses a myc whose setup hides AGENTS.md (before #200)."""
+        from aeval.runner import Runner, RunConfig, StopRun, WorkItem
         r = Runner(RunConfig(label="x", conditions=("C",), claude="claude"), [], {})
-        for agents in (True, False):
-            w, out, b = (self.root.parent / f"{n}{agents}" for n in ("w", "o", "b"))
+        for name, to, agents, ok in (("new", ".claude/rules/myceliums.md", True, True), ("old", "CLAUDE.md", True, False),
+                                     ("none", "CLAUDE.md", False, True)):
+            w, out, b = (self.root.parent / f"{n}-{name}" for n in ("w", "o", "b"))
             for d in (w, out, b):
                 d.mkdir()
             if agents:
                 (w / "AGENTS.md").write_text("Spring's own rules\n")
-            (b / "myc").write_text(f"#!/bin/sh\nmkdir -p {w}/.claude; echo routing > {w}/CLAUDE.md; echo '{{}}' > {w}/.claude/settings.json\n")
+            (b / "myc").write_text(f"#!/bin/sh\nmkdir -p {w}/.claude/rules; echo '<!-- BEGIN myceliums -->' > {w}/{to}; "
+                                   f"echo '{{}}' > {w}/.claude/settings.json\n")
             (b / "myc").chmod(0o755)
-            for _ in range(2):  # idempotent
-                r._setup_claude(WorkItem({"id": "t", "repo": "r"}, "C", 1), w, b, {}, out)
-            self.assertEqual((w / "CLAUDE.md").read_text(), "@AGENTS.md\n\nrouting\n" if agents else "routing\n")
+            setup = lambda: r._setup_claude(WorkItem({"id": "t", "repo": "r"}, "C", 1), w, b, {}, out)  # noqa: B023,E731
+            if not ok:
+                with self.assertRaises(StopRun):
+                    setup()
+                continue
+            setup()
+            self.assertEqual((w / to).read_text(), "<!-- BEGIN myceliums -->\n")
+            self.assertEqual((w / "CLAUDE.md").exists(), to == "CLAUDE.md")
 
     def test_one_claude_version_per_run(self):
         from aeval.runner import Runner, RunConfig, WorkItem

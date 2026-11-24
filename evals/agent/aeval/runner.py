@@ -454,16 +454,16 @@ exec {shlex.quote(self.cfg.myc)} "$@"
         cmd = [str(bin_dir / "myc"), "setup-claude", "--scope", "project", "--project", str(workdir)]
         if not variant.agent:
             cmd.append("--no-agent")
+        claude_md = (workdir / "CLAUDE.md").exists()
         res = subprocess.run(cmd, env={**env, "PATH": f"{bin_dir}:{config.SYSTEM_PATH}"},
                              capture_output=True, text=True, timeout=120)
         (out_dir / "setup-claude.txt").write_text(res.stdout + res.stderr)
         if res.returncode != 0:
             raise StopRun(f"{item.run_id}: myc setup-claude failed: {res.stderr.strip()[:300]}")
-        # Claude Code reads a project's AGENTS.md only when there is no CLAUDE.md, and setup-claude writes one: without
-        # the import, C alone would miss the project's own instructions (found in the #182 review).
-        agents, claude_md = workdir / "AGENTS.md", workdir / "CLAUDE.md"
-        if agents.exists() and claude_md.exists() and "@AGENTS.md" not in claude_md.read_text():
-            claude_md.write_text("@AGENTS.md\n\n" + claude_md.read_text())
+        # Claude Code reads a project's AGENTS.md only when there is no CLAUDE.md. Before #200 setup-claude wrote one, and C
+        # alone missed the project's own instructions (found in the #182 review).
+        if (workdir / "AGENTS.md").exists() and (workdir / "CLAUDE.md").exists() and not claude_md:
+            raise StopRun(f"{item.run_id}: setup-claude hides the project's AGENTS.md (myc before #200)")
         # Keep what the agent will load, for the record.
         snap = out_dir / "setup-files"
         for rel in (*ROUTING_FILES, ".mcp.json", ".claude/settings.json", f".claude/agents/{config.EXPLORER_AGENT}.md"):

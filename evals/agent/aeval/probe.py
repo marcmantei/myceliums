@@ -114,7 +114,7 @@ def summarise(run_dir: Path, condition: str) -> dict:
         "test_results": [x for x in (_tool_result_text(main, f"toolu_probe_test{n or ''}")[:260] for n in range(12)) if x],
     }
     problems = []
-    # Every arm must see the project's own instructions (AGENTS.md), C through setup-claude's CLAUDE.md too.
+    # Every arm must see the project's own instructions (AGENTS.md), C beside setup-claude's routing block.
     work = config.work_root() / findings_work(run_dir)
     agents = work / "AGENTS.md"
     findings["agents_md_loaded"] = None

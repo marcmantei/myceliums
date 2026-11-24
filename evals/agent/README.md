@@ -1590,19 +1590,22 @@ tests, at least two build modules touched (`framework-docs` counts), and a
 parent that builds with the Java 25 toolchain: **151 candidates**. 34 were
 picked for a public API or behaviour change a description can state
 (no pure refactoring or deprecation), and stratified by files, code modules
-and docs; 20 are the task set, 11 are reserves
+and docs; 20 are the task set, 9 are reserves
 (`tasks/tasks-commit-replay-reserve.json`) that replace tasks whose precheck
-fails.
+fails. **No task's tests listen on all interfaces:** a static closure over the test sources that each task's `--tests` classes reach (imports,
+same package) finds server sockets in two, both on `0.0.0.0` (`AbstractHttpServer`): `fn-request-bind-pathvars-headers`, replaced by
+`form-converter-map-payloads` (same size, modules and docs strata; chosen before its precheck ran), and the reserve `problemdetail-no-instance-from-path`, dropped.
+It does not see sockets opened by main code or libraries alone; the socket samples of the eight tasks run saw loopback TCP listeners only.
 
 | Task | Commit | Files (code/tests/docs) | Modules whose code changes | Comment-only files | Docs | Weakly tested | Primary files |
 |---|---|---:|---:|---:|---|---|---:|
 | `spel-simple-context-restricted-conversion` | d41495720c | 5 (2/1/2) | 1 | 1 | yes |  | 1 |
 | `observation-record-handled-exception` | 297c74d29c | 20 (10/9/1) | 4 |  | yes | yes | 2 |
 | `beans-max-nested-path-depth` | 8ab525f6f0 | 12 (6/5/1) | 2 |  | yes |  | 3 |
+| `form-converter-map-payloads` | ab8de8ec4b | 6 (4/1/1) | 2 |  | yes |  | 1 |
 | `jsonl-media-type-support` | 22e4d84993 | 16 (11/2/3) | 2 |  | yes | yes | 1 |
 | `test-context-cache-pause-mode` | 9711db787e | 9 (4/3/2) | 1 | 1 | yes |  | 3 |
 | `retry-max-attempts-to-max-retries` | 24590092ef | 13 (6/6/1) | 2 | 1 | yes | yes | 2 |
-| `fn-request-bind-pathvars-headers` | a9a404266c | 7 (3/2/2) | 2 |  | yes | yes | 1 |
 | `jdbcclient-batch-entry-dsl` | 833ab4d48f | 6 (2/3/1) | 1 |  | yes |  | 1 |
 | `type-mismatch-required-type-arg` | 4847ee80b0 | 3 (1/1/1) | 1 |  | yes |  | 1 |
 | `servlet-response-ignore-body-flush` | e0b54e244e | 5 (3/1/1) | 2 |  | yes | yes | 1 |
@@ -1623,10 +1626,10 @@ module (six tasks have such gold files; the mining filter and the first versions
 table counted them). Grading reports these files and Gradle scripts as their own
 kinds of dependent (`comments`, `build`) and the code recall also without them (`code_changed`).
 
-**What the test commands enforce** (an agent's reading of the diffs and tests, nothing was run): in 9 tasks at least one gold dependent
+**What the test commands enforce** (an agent's reading of the diffs and tests, nothing was run): in 8 tasks at least one gold dependent
 can stay as at the parent and the command still passes (`weak_test` in the task file says which; `bean-provider-...` is one of them because only the
 demanded abstract method enforces its five, and `api-version-...` because no test checks which handler is passed); `untested` notes other unchecked behaviour. The report gives success and file recall with
-and without those 9. `spel-simple-...`, `test-context-...` and `type-mismatch-...` have no code dependent to find at all, so they measure docs and
+and without those 8. `spel-simple-...`, `test-context-...` and `type-mismatch-...` have no code dependent to find at all, so they measure docs and
 tests only. Where a part of the change has several valid places (`equivalents`: the reader or the post-processor in `deferred-bean-registrar-...`), they count as one file, in recall and precision. In `beans-max-nested-path-depth`
 three dependents can go into a primary file, which every solution edits: the file list cannot tell, so they are reported apart (`either`) and neither counted nor forgotten.
 
@@ -1655,7 +1658,7 @@ but wrong facts in all three (for `deferred-bean-registrar-contains-bean` one th
 change); all three now have its text, which the second PR review checked, and `weak_test` in the task file lists the gold
 dependents their test commands do not enforce. The seventh, a reserve, had to name a
 dependent (a Kotlin extension its module's tests compile against) and was
-dropped (11 reserves are left). No human has reviewed the descriptions.
+dropped. No human has reviewed the descriptions.
 Scope words an issue would use ("for both Spring MVC and WebFlux") are allowed
 and noted in the spec.
 
@@ -1706,6 +1709,7 @@ export AEVAL_PROTECT=/private/tmp/aeval183   # scratch of the preparation (conte
 export JAVA_HOME=$HOME/.cache/myc-java/jdk-ipv4/Contents/Home   # JDK 25, the copy of make_jdk_ipv4.py: offline only; the warm-up uses the original
 T=evals/agent/tasks/tasks-commit-replay.json
 python3 evals/agent/agent_eval.py --tasks $T fetch           # 20 parents (~100 MB each) + gold files
+python3 evals/agent/agent_eval.py gradle-cache               # after the warm-up: freeze ~/.gradle's dependencies
 python3 evals/agent/agent_eval.py --tasks $T precheck-edit --gold-runs 2 --sandbox   # needs a warm Gradle cache: the commands are offline
 python3 evals/agent/agent_eval.py --tasks $T check-tasks
 python3 evals/agent/agent_eval.py --tasks $T index --myc $MYC --models-dir ~/.cache/myceliums-eval-models --base $BASE_HOME
@@ -1759,7 +1763,7 @@ the path test's seconds are slow; working on a copy of the #182 index. A reviewe
   under the new path's id, and so did a copied data directory. So a worktree at another path cannot use a base index today (#198/#184).
 * **Disk:** 0.87 GB per embedded index. `myc diff` keeps ten graph snapshots of about 190 MB beside it (3.1 GB in all after ten updates). They hold **earlier analyses' graphs**: an
   index derived newest-first would show a session symbols of later commits. The harness removes them from derived indexes and from every session's copy, and `myc diff` is off the Bash allowlist.
-* The task parents lie before v7.1.0, so their derivation runs **backwards** in history; the figures above are the forward case. All 31 parents (20 kept, 11 reserves) were derived from the base: the kept 20 in 4292 s in all (median 157 s, at most 869 s, of which a fresh graph-only comparison build ~30 s), re-embedding a median 396 (at most 4773) of 139k-146k symbols. Each equals a fresh graph-only build in symbols, files, relationships and mentions, has exactly the parent's commit, one generation and, after stripping, no snapshots; 0.88 GB each without snapshots (27 GB for 31). For 8 of 9 tasks with a checkable name the parent's index has no symbol the commit introduces (the positive control finds it in the v7.1.0 index; the ninth, the deferred registrar's interface, was removed again before v7.1.0). `groundtruth/derived_indexes.json` has the numbers per parent.
+* The task parents lie before v7.1.0, so their derivation runs **backwards** in history; the figures above are the forward case. All 31 parents (20 kept, 9 reserves, 2 dropped later) were derived from the base: the kept 20 in 4942 s in all (median 169 s, at most 869 s, of which a fresh graph-only comparison build ~30 s), re-embedding a median 472 (at most 4773) of 139k-146k symbols. Each equals a fresh graph-only build in symbols, files, relationships and mentions, has exactly the parent's commit, one generation and, after stripping, no snapshots; 0.88 GB each without snapshots (27 GB for 31). For 8 of 9 tasks with a checkable name the parent's index has no symbol the commit introduces (the positive control finds it in the v7.1.0 index; the ninth, the deferred registrar's interface, was removed again before v7.1.0). `groundtruth/derived_indexes.json` has the numbers per parent.
 
 **Budget estimate** (not measured; from #163/#171 scaled to edit tasks).
 #163/#171 question sessions with Bash at 40 turns: 8 turns, 100-136k input
@@ -1784,30 +1788,30 @@ of the final context and 8-30k output.
 Plus, once: the derived indexes and the prechecks. The call counts and context sizes above are assumptions; a pilot of one
 repetition would replace them. Disk: 20 parents about 2 GB, 0.87 GB per embedded index without snapshots, `~/.gradle` 8.4 GB so far.
 
-**Prechecks: 8 of 20 valid, in the grading sandbox; 12 not run** (24 November, JDK copy): 10 wait for artifacts that are not in the Gradle cache, the stand-in `test-context-cache-pause-mode` was never built here, `fn-request-bind-pathvars-headers` see below. `precheck-edit --gold-runs 2 --sandbox` runs the tests as a session's grading does:
-on the parent with the commit's tests (must fail, and for a compile or test failure, not a resolution failure), then twice on the whole commit with Gradle's `--rerun`. Every task tried fails on the parent and passes both runs on the commit, with the buildSrc checks and `:spring-oxm:xjc`
-included; only loopback TCP and one UDP socket per Gradle process in 800 socket samples. `fn-request-bind-pathvars-headers` starts HTTP servers on `0.0.0.0` (the repository's `AbstractHttpServer`), and macOS's sandbox allows a wildcard bind even under a loopback-only rule (bind tested, no listener), so it needs a decision or a
-reserve in its place. Earlier records used other commands: the online ones are in [`groundtruth/`](groundtruth/) (`commit_replay_prechecks_online.json`), the offline ones without a sandbox (9 tasks valid) only in this branch's history.
+**Prechecks: 8 of 20 valid, in the grading sandbox; 12 wait for artifacts that are not in the Gradle cache** (24 November; JDK copy, a Gradle home of its own per task, below). `precheck-edit --gold-runs 2 --sandbox` runs the tests as a session's grading does:
+on the parent with the commit's tests (must fail, and for a compile or test failure, not a resolution failure), then twice on the whole commit with Gradle's `--rerun`. All 8 that could be built fail on the parent and pass both runs on the commit, buildSrc's checks and `:spring-oxm:xjc` included;
+loopback TCP and one UDP socket per Gradle process in 1,393 socket samples, no remote connection. The times include what an empty Gradle home costs (25-50 s on the first build, beside a compiler at low priority). What the others lack: `groundtruth/commit_replay_pending.json` (first failing resolutions only).
+Earlier records used other commands: the online ones are in [`groundtruth/`](groundtruth/) (`commit_replay_prechecks_online.json`), the offline ones without a sandbox only in this branch's history.
 
 | Task | Parent + commit's tests | Commit | Time on the commit |
 |---|---|---:|---:|
-| `spel-simple-context-restricted-conversion` | compile, 37 s | 2 of 2 | 16, 8 s |
+| `spel-simple-context-restricted-conversion` | compile, 74 s | 2 of 2 | 25, 12 s |
 | `observation-record-handled-exception` | not run: artifacts missing offline | | |
-| `beans-max-nested-path-depth` | compile, 41 s | 2 of 2 | 24, 8 s |
+| `beans-max-nested-path-depth` | compile, 74 s | 2 of 2 | 29, 10 s |
+| `form-converter-map-payloads` | not run: artifacts missing offline | | |
 | `jsonl-media-type-support` | not run: artifacts missing offline | | |
-| `test-context-cache-pause-mode` | not run: stand-in, never built here | | |
-| `retry-max-attempts-to-max-retries` | compile, 41 s | 2 of 2 | 35, 10 s |
-| `fn-request-bind-pathvars-headers` | not run: wildcard listeners | | |
-| `jdbcclient-batch-entry-dsl` | compile, 44 s | 2 of 2 | 14, 9 s |
-| `type-mismatch-required-type-arg` | tests, 70 s | 2 of 2 | 14, 9 s |
+| `test-context-cache-pause-mode` | not run: artifacts missing offline | | |
+| `retry-max-attempts-to-max-retries` | compile, 76 s | 2 of 2 | 45, 12 s |
+| `jdbcclient-batch-entry-dsl` | compile, 78 s | 2 of 2 | 17, 10 s |
+| `type-mismatch-required-type-arg` | tests, 116 s | 2 of 2 | 17, 10 s |
 | `servlet-response-ignore-body-flush` | not run: artifacts missing offline | | |
-| `content-negotiation-no-fallback-mapping` | tests, 59 s | 2 of 2 | 12, 9 s |
+| `content-negotiation-no-fallback-mapping` | tests, 99 s | 2 of 2 | 15, 10 s |
 | `client-builders-deep-copy-default-headers-cookies` | not run: artifacts missing offline | | |
 | `http-range-honor-if-range` | not run: artifacts missing offline | | |
 | `error-response-interceptor-with-request` | not run: artifacts missing offline | | |
-| `mime-type-parameter-names-case-insensitive` | tests, 49 s | 2 of 2 | 30, 8 s |
+| `mime-type-parameter-names-case-insensitive` | tests, 86 s | 2 of 2 | 38, 9 s |
 | `deferred-bean-registrar-contains-bean` | not run: artifacts missing offline | | |
-| `api-version-deprecation-handler-handler-arg` | compile, 68 s | 2 of 2 | 34, 8 s |
+| `api-version-deprecation-handler-handler-arg` | compile, 115 s | 2 of 2 | 45, 10 s |
 | `bean-provider-parameterized-type-reference` | not run: artifacts missing offline | | |
 | `message-source-default-charset` | not run: artifacts missing offline | | |
 | `retryable-method-retry-event` | not run: artifacts missing offline | | |
@@ -1846,9 +1850,9 @@ expansion, and an incomplete list of closed places). This is the last round; the
 * **What runs where.** `claude` itself runs as in daily use and in #182 (login, token refresh, API), not in a sandbox of ours: an earlier version wrapped it and had to open the login
   keychain to every child process. Confined is what the agent executes, through settings passed with `--settings`, which a repository's files cannot loosen:
 * **Bash:** Claude Code's own sandbox (Seatbelt; `failIfUnavailable`, `allowUnsandboxedCommands: false`, no excluded commands). Under the home directory, `/private/tmp`, the temporary directories,
-  `/Volumes` and `/Users/Shared` commands and their children (a test the agent wrote, run by Gradle) read only the working copy, the session's own temporary directory, the JDK and Gradle's home without
-  build cache, stored scans and daemon logs, and in C and D the `myc` binary, models and this session's index copy; they write only the working copy, that directory and Gradle's home, not `.claude`, `.mcp.json`,
-  the wrapper, git hooks and configuration, or Gradle's init scripts and properties. No network but loopback. The model is shown these lists, so they name whole regions, and session directories are neutral (`/private/tmp/ag/...`).
+  `/Volumes` and `/Users/Shared` commands and their children (a test the agent wrote, run by Gradle) read only the working copy, the session's own temporary directory and Gradle home, the JDK, the installed Gradle
+  distributions and the frozen dependencies, and in C and D the `myc` binary, models and this session's index copy; they write only the working copy, that directory and that Gradle home, not `.claude`, `.mcp.json`,
+  the wrapper, git hooks and configuration. No network but loopback. The model is shown these lists, so they name whole regions, and session directories are neutral (`/private/tmp/ag/...`).
 * **Read, Grep, Glob, Edit, Write** run inside `claude`: `blockReads/WritesOutsideWorkingDirectories`, deny rules, and the hook, on canonical paths.
 * **Hook** (PreToolUse on every tool, one script): tool calls stay in the working copy; no settings, `.git` or wrapper files; Bash is an allowlist without interpreters, wrappers or network
   programs, and a command the parser cannot fully account for (any expansion, an open quote, a continuation line) is refused, as is `..`;
@@ -1866,13 +1870,13 @@ expansion, and an incomplete list of closed places). This is the last round; the
   results or edits. `TOKENS.md` counts them per arm, with the hook's refusals.
 * **Threat model.** A cooperative agent told to work in its checkout, audited per session. Not covered: **macOS's security services**: inside Claude Code's sandbox, lookups of `com.apple.SecurityServer` and
   `com.apple.securityd.xpc` succeed (2.1.331; `secd`, `securityd`, `trustd.agent` and the token service do not), and its settings can only add services, not remove them. The keychain *files* are closed; whether these services would hand anything
-  to a process that cannot read them was not tried. `claude`, the myceliums server and the hooks run with the user's access. Gradle's home is shared and writable, so a session could leave something in its caches for a later one. Names of files outside may stay
+  to a process that cannot read them was not tried. `claude`, the myceliums server and the hooks run with the user's access. A listener a test opens on all interfaces could be reached from the local network while it runs (no task's own tests do; the agent may run others). Names of files outside may stay
   visible; Spring's commits may be in the model's training data.
 * Checked with the mock API, hook on and, to see the layer below it, hook off (`probe --no-hook`): 31 places by name from a Python program inside the sandbox (keychains, Claude's history, other projects and credentials file, `.ssh`, checkouts, gold, parents, the other cache, history clone,
-  build cache, stored scans, `/private/tmp/claude-501`, `/Volumes`, `/Users/Shared`, the `/System/Volumes/Data` alias of the home directory, ...): all refused; loopback works; settings and wrapper files cannot be written; Gradle's home can. No connection to another machine was attempted.
-  **Gradle in the sandbox: partly** (see *Gradle in the sandbox* below).
-* **Same instructions, one CLI.** Claude Code reads AGENTS.md only where there is no CLAUDE.md, and `setup-claude`
-  writes one, so C alone missed Spring's AGENTS.md (found in the #182 review): the harness makes C's CLAUDE.md import it. Six of
+  build cache, stored scans, `/private/tmp/claude-501`, `/Volumes`, `/Users/Shared`, the `/System/Volumes/Data` alias of the home directory, ...): all refused; loopback works; settings and wrapper files cannot be written. No connection to another machine was attempted.
+  Gradle in the sandbox: see below.
+* **Same instructions, one CLI.** Claude Code reads AGENTS.md only where there is no CLAUDE.md. Until #200 `setup-claude`
+  wrote one, so C alone missed Spring's AGENTS.md (found in the #182 review); now its block is in `.claude/rules/myceliums.md`. The harness adds nothing and refuses a `myc` whose setup hides AGENTS.md. Six of
   the 20 parents have an AGENTS.md (`spel-simple-...`, `observation-...`, `content-negotiation-...`, `client-builders-...`,
   `http-range-...`, `error-response-...`). A run uses one Claude Code binary (the file behind the link), refuses a resume or a
   session with another version, and keeps auto-update off. Rows carry `api_calls` (model calls; the CLI's `num_turns` is tool calls + 1). The hook
@@ -1903,24 +1907,30 @@ searches, runs `myc callers`, reads and edits the primary file and runs one comm
 | C | no problem; AGENTS.md and the routing block | the same + 9 myceliums tools | Grep ran | answered from the index | yes; setup-claude's files not counted |
 | D | no problem; AGENTS.md | without Grep and Glob | refused; the refusal names neither the checkout nor the hook | answered from the index | yes |
 
-The table is the probe of 24 November (arms `none`, C, D, Claude Code's own sandbox, the repository's graph and embeddings index of v7.1.0-derived parent, shared path): `myc` answers from the index in C and D and is not
-found in `none`, AGENTS.md reaches every arm, no isolation problem. Gradle in the session and the grading: below. The mock gives every answer one message id, so `api_calls` is 1 there. No real session has run.
+The table is the probe of 24 November (arms `none`, C, D, Claude Code's own sandbox, the derived index, shared path, the `myc` below): `myc` answers from the index in C and D and is not
+found in `none`, AGENTS.md reaches every arm, C also gets the routing block (`.claude/rules/myceliums.md`; setup writes no CLAUDE.md), no isolation problem. Gradle in the session and the grading: below. The mock gives every answer one message id, so `api_calls` is 1 there. No real session has run.
+
+**Binary.** All arms use `myc` built from main at `787920c` (sha256 `bf84b0e854f6`), so arm C measures the setup as it is now (#200), without a workaround. The indexes stay valid: between `388c6e1`, which built the base index and the derived ones, and `787920c` nothing under `crates/` changed
+but `crates/myceliums-mcp/src/embedding_jobs.rs` (#201: the job releases the repository's lock before it reports its end; no effect on the graph or the vectors of a complete index). Outside it: `myc/src/commands/{setup_claude,setup_editors,instructions,routing,doctor}.rs`, `cli.rs`, `main.rs` and `setup/editors/claude.rs`.
+`Cargo.lock` is the same.
 
 **Gradle in the sandbox.** The sandboxes' loopback rule does not cover IPv4-mapped IPv6 addresses, which a JVM uses by default: a 10-line Java program reaches `127.0.0.1` with `-Djava.net.preferIPv4Stack=true` and is refused without it. Environment variables and system properties reach the
 daemon and the test executors, but not Gradle's process-isolated workers (checkstyle, validatePlugins, `:spring-oxm:xjc`); that they start with an empty environment is inferred from this, not read in Gradle's source. So builds in prechecks, sessions and grading, in every arm, run on a **copy of the JDK** made by
 [`groundtruth/make_jdk_ipv4.py`](groundtruth/make_jdk_ipv4.py): its `bin/java` is a two-line script that runs the renamed launcher with the flag. Nothing else differs; the original is untouched ([`groundtruth/jdk_ipv4.json`](groundtruth/jdk_ipv4.json): hashes of the two changed files and of the original tree). A session or a sandboxed
-precheck with another JDK is refused. **The copy is for offline builds only**; the warm-up uses the original JDK, with the same Gradle home. Checked offline by command line only: clients, daemons, workers and test executors all ran from the copy with the flag (none from the original), and `javaToolchains` lists the copy ("Current JVM")
+precheck with another JDK is refused. **The copy is for offline builds only**; the warm-up uses the original JDK (it refuses the copy) and `~/.gradle`. Checked offline by command line only: clients, daemons, workers and test executors all ran from the copy with the flag (none from the original), and `javaToolchains` lists the copy ("Current JVM")
 and no other JDK. With it:
 
 | | Task | Result |
 |---|---|---|
 | Grading profile | the 8 tasks above | valid; buildSrc's checkstyle and validatePlugins run, the former `-x` excludes are gone from the commands, the hook's rule and the build note |
-| Claude Code's Bash sandbox (2.1.331, mock API), arms `none`, C, D | `spel-simple-...` (Gradle 9.9.0) | `BUILD SUCCESSFUL` in 39-45 s, tests run |
-| Claude Code's Bash sandbox, arm `none` | `type-mismatch-...` (Gradle 9.2.1) | `BUILD SUCCESSFUL` in 67 s with `:spring-oxm:xjc` |
+| Claude Code's Bash sandbox (2.1.331, mock API), arms `none`, C, D | `spel-simple-...` (Gradle 9.9.0) | `BUILD SUCCESSFUL` in 67-68 s, tests run (39-45 s with a warm shared home); grading 28 s |
+| Claude Code's Bash sandbox, arm `none` | `type-mismatch-...` (Gradle 9.2.1) | `BUILD SUCCESSFUL` in 112 s with `:spring-oxm:xjc` |
 
-The scripted edit is a comment, so the repository's own tests pass in the session and the commit's tests fail in the grading, as they must. Harmless noise in every build: "Could not start the FSEvents stream", "Unable to store build scan data" (earlier scans are closed). Two limits: (1) **Space:** earlier builds' scans and daemon logs are closed file by file (a
-pattern made Gradle 9.2.1 fail on its own log), each costs about 450 bytes of the sandbox's command line, each build adds about three, and macOS allows 1 MB: with 340 now there is room for roughly 390 builds up to the harness's limit of 1,500 files, less than a 180-session run may need. The run then stops with a message and continues after they are moved
-away; better move them away before the run. (2) **Inbound:** the grading profile closes outgoing connections only; a test that listens on all interfaces could be reached from the local network while it runs (`fn-request-...`, not run; the other tests open loopback listeners only).
+The scripted edit is a comment, so the repository's own tests pass in the session and the commit's tests fail in the grading, as they must. Harmless noise: "Could not start the FSEvents stream".
+
+**A Gradle home per session and per grading.** Sessions and gradings each start with an empty Gradle home in the session's directory (`GRADLE_USER_HOME`): links to the installed distributions and nothing else, so no other build's logs, scans, compiled classes or caches are there, and what an agent's builds leave does not reach the grading or a
+later session. Dependencies come read-only from a frozen copy of `modules-2` (`agent_eval.py gradle-cache`, `GRADLE_RO_DEP_CACHE`, default `~/.cache/gradle-ro`; 4,909 files, 1.3 GB, downloaded artifacts and metadata only); `~/.gradle` itself is closed but for the distributions. Price: Gradle's own caches (about 560 MB, deleted with the session) and their time
+are made anew, in the session and in the grading, the same in every arm. An earlier version closed old logs and scans one by one (450 bytes of the sandbox's 1 MB command line each). Those of 23-24 November (340 files) were moved to the evaluation's cache, none deleted.
 
 **Login.** The CLI itself runs unsandboxed with the caller's normal login (macOS keychain); only what the agent executes is sandboxed. Claude Code's sandbox cannot close the keychain *services* (above), so a dedicated login remains Marc's decision. An alternative not built: a fixed helper outside the sandbox that runs one allowed Gradle command for the agent;
 it would give the agent's code (tests, build scripts) the caller's files and network, so it would need a sandbox of its own, and is not needed now.
